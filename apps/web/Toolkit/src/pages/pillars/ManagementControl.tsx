@@ -218,6 +218,7 @@ export default function ManagementControl() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
   const [formState, setFormState] = useState<EmployeeFormState>({ ...defaultFormState });
+  const [nameError, setNameError] = useState(false);
 
   const [showForeignOnly, setShowForeignOnly] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -256,7 +257,9 @@ export default function ManagementControl() {
   };
 
   const handleAdd = () => {
-    if (!formState.name) {
+    if (!formState.name.trim()) {
+      setNameError(true);
+      setActiveTab("basic");
       toast({ title: "Invalid input", description: "Name is required.", variant: "destructive" });
       return;
     }
@@ -304,11 +307,14 @@ export default function ManagementControl() {
       annualSalary: emp.annualSalary || 0,
       votingRightsPercent: emp.votingRightsPercent || 0,
     });
+    setNameError(false);
     setIsEditOpen(true);
   };
 
   const handleEditSave = () => {
-    if (!editingId || !formState.name) {
+    if (!editingId || !formState.name.trim()) {
+      setNameError(true);
+      setActiveTab("basic");
       toast({ title: "Invalid input", description: "Name is required.", variant: "destructive" });
       return;
     }
@@ -503,12 +509,17 @@ export default function ManagementControl() {
       <TabsContent value="basic" className="space-y-4 py-4">
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="emp-name" className="text-right">Name</Label>
-          <Input 
-            id="emp-name" 
-            value={formState.name} 
-            onChange={e => setFormState({...formState, name: e.target.value})} 
-            className="col-span-3" 
-          />
+          <div className="col-span-3 space-y-1">
+            <Input
+              id="emp-name"
+              value={formState.name}
+              onChange={e => { setFormState({...formState, name: e.target.value}); if (nameError) setNameError(false); }}
+              aria-invalid={nameError}
+              aria-describedby={nameError ? "emp-name-error" : undefined}
+              className={cn(nameError && "border-destructive focus-visible:ring-destructive")}
+            />
+            {nameError && <p id="emp-name-error" className="text-xs text-destructive">Name is required.</p>}
+          </div>
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="emp-id" className="text-right">ID Number</Label>
@@ -744,7 +755,7 @@ export default function ManagementControl() {
             Bulk Upload
           </Button>
 
-          <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setFormState({ ...defaultFormState }); setActiveTab("basic"); } }}>
+          <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setFormState({ ...defaultFormState }); setActiveTab("basic"); setNameError(false); } }}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -775,7 +786,7 @@ export default function ManagementControl() {
         </div>
       )}
 
-      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setFormState({ ...defaultFormState }); setActiveTab("basic"); } }}>
+      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setFormState({ ...defaultFormState }); setActiveTab("basic"); setNameError(false); } }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
