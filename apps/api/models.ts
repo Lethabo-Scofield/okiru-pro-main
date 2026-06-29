@@ -37,6 +37,15 @@ const clientSchema = new Schema({
   industryNorm: { type: Number, default: null },
   logo: { type: String, default: null },
   pipelineOverrides: { type: Schema.Types.Mixed, default: null },
+  // Persisted via PATCH /api/clients/:id but previously dropped by the strict
+  // schema: FSC sub-sector, ESD graduation/jobs bonuses, and AFS (FSC) data.
+  fscSubSector: { type: String, default: null },
+  graduationBonus: { type: Boolean, default: false },
+  jobsCreatedBonus: { type: Boolean, default: false },
+  jobsCreatedCount: { type: Number, default: 0 },
+  graduationEvidence: { type: String, default: '' },
+  jobsCreatedEvidence: { type: String, default: '' },
+  afs: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "clients" });
 
