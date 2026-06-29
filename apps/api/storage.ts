@@ -259,6 +259,11 @@ export class DatabaseStorage implements IStorage {
     return clean<TrainingProgram>(doc);
   }
 
+  async updateTrainingProgram(id: string, data: Partial<InsertTrainingProgram>): Promise<TrainingProgram | undefined> {
+    const doc = await TrainingProgramModel.findOneAndUpdate({ id }, { $set: data }, { returnDocument: 'after' }).lean();
+    return doc ? clean<TrainingProgram>(doc) : undefined;
+  }
+
   async deleteTrainingProgram(id: string): Promise<void> {
     await TrainingProgramModel.deleteOne({ id });
   }
