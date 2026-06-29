@@ -67,6 +67,18 @@ const shareholderSchema = new Schema({
   blackWomenOwnership: { type: Number, default: 0 },
   shares: { type: Number, default: 0 },
   shareValue: { type: Number, default: 0 },
+  // Modern Shareholder fields the Toolkit form captures (were dropped: strict schema).
+  // Some are not yet read by ownership scoring (Wave 3); persisting them now prevents
+  // data loss and unblocks the scoring fix without a second round-trip.
+  shareholderId: { type: String, default: '' },
+  ownershipType: { type: String, default: 'shareholder' },
+  votingRightsPercent: { type: Number, default: 0 },
+  economicInterestPercent: { type: Number, default: 0 },
+  isDesignatedGroup: { type: Boolean, default: false },
+  designatedGroupType: { type: String, default: '' },
+  blackNewEntrant: { type: Boolean, default: false },
+  yearsHeld: { type: Number, default: 0 },
+  graduationFactor: { type: Number, default: 0 },
 }, { collection: "shareholders" });
 
 const ownershipDataSchema = new Schema({
@@ -99,13 +111,43 @@ const employeeSchema = new Schema({
 const trainingProgramSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
   clientId: { type: String, required: true, index: true },
-  name: { type: String, required: true },
-  category: { type: String, required: true },
+  // Legacy fields kept for backward compatibility with already-persisted docs.
+  name: { type: String, required: false, default: '' },
+  category: { type: String, required: false, default: '' },
   cost: { type: Number, default: 0 },
   employeeId: { type: String, default: null },
   isEmployed: { type: Boolean, default: false },
   isBlack: { type: Boolean, default: false },
   municipality: { type: String, default: '' },
+  // Modern TrainingProgram fields the Toolkit form + scoring use (were dropped).
+  programName: { type: String, default: '' },
+  trainingProvider: { type: String, default: '' },
+  categoryCode: { type: String, default: '' },
+  learnerName: { type: String, default: '' },
+  learnerIdNumber: { type: String, default: '' },
+  gender: { type: String, default: '' },
+  race: { type: String, default: '' },
+  isDisabled: { type: Boolean, default: false },
+  isForeign: { type: Boolean, default: false },
+  employmentStatus: { type: String, default: '' },
+  isYesEmployee: { type: Boolean, default: false },
+  isCompleted: { type: Boolean, default: false },
+  isAbsorbed: { type: Boolean, default: false },
+  transactionDate: { type: String, default: '' },
+  startDate: { type: String, default: '' },
+  endDate: { type: String, default: '' },
+  courseCost: { type: Number, default: 0 },
+  travelCost: { type: Number, default: 0 },
+  accommodationCost: { type: Number, default: 0 },
+  cateringCost: { type: Number, default: 0 },
+  stationeryCost: { type: Number, default: 0 },
+  facilityCost: { type: Number, default: 0 },
+  salaryCost: { type: Number, default: 0 },
+  otherCosts: { type: Number, default: 0 },
+  totalCost: { type: Number, default: 0 },
+  isAbet: { type: Boolean, default: false },
+  isMandatory: { type: Boolean, default: false },
+  isBursary: { type: Boolean, default: false },
 }, { collection: "trainingPrograms" });
 
 const supplierSchema = new Schema({
