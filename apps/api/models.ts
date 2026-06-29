@@ -78,6 +78,13 @@ const employeeSchema = new Schema({
   isDisabled: { type: Boolean, default: false },
   annualSalary: { type: Number, default: 0 },
   votingRightsPercent: { type: Number, default: 0 },
+  // Captured by the form/import and needed for foreign-national exclusion and
+  // active-during-measurement-period filtering (were dropped: strict schema).
+  idNumber: { type: String, default: '' },
+  isForeign: { type: Boolean, default: false },
+  province: { type: String, default: '' },
+  hireDate: { type: String, default: '' },
+  terminationDate: { type: String, default: '' },
 }, { collection: "employees" });
 
 const trainingProgramSchema = new Schema({

@@ -1128,6 +1128,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           isForeign: coerceYesNo(e.isForeign),
           annualSalary: e.annualSalary ?? 0,
           votingRightsPercent: e.votingRightsPercent ?? 0,
+          idNumber: e.idNumber || undefined,
+          province: e.province || undefined,
+          hireDate: e.hireDate || undefined,
+          terminationDate: e.terminationDate || undefined,
         })),
       };
 
@@ -1581,6 +1585,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         name: employee.name, gender: employee.gender, race: employee.race,
         designation: employee.designation, isDisabled: employee.isDisabled,
         annualSalary: employee.annualSalary, votingRightsPercent: employee.votingRightsPercent,
+        idNumber: employee.idNumber, isForeign: employee.isForeign, province: employee.province,
+        hireDate: employee.hireDate, terminationDate: employee.terminationDate,
       }).catch(console.error);
     }
   },
@@ -1610,6 +1616,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
             name: emp.name, gender: emp.gender, race: emp.race,
             designation: emp.designation, isDisabled: emp.isDisabled,
             annualSalary: emp.annualSalary, votingRightsPercent: emp.votingRightsPercent,
+            idNumber: emp.idNumber, isForeign: emp.isForeign, province: emp.province,
+            hireDate: emp.hireDate, terminationDate: emp.terminationDate,
           })
         )
       ).catch(console.error);
