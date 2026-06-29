@@ -32,6 +32,20 @@ const FULL_ACCESS: PillarPermission = {
   canReplaceOnImport: true,
 };
 
+// Fail-closed state used when the caller IS in a workspace context but we could
+// not confirm a membership (fetch error, or the user isn't a member). Previously
+// these cases silently returned FULL_ACCESS — the RBAC bypass flagged by the
+// audit (A2/B15). Read-only is the safest non-blocking default.
+const NO_ACCESS: PillarPermission = {
+  loading: false,
+  role: "viewer",
+  canEdit: false,
+  canDelete: false,
+  canImport: false,
+  canExport: true,
+  canReplaceOnImport: false,
+};
+
 function pillarInScope(pillar: string, scopes: string[]): boolean {
   if (scopes.includes(pillar)) return true;
   if (pillar === "management" && scopes.includes("employmentEquity")) return true;
@@ -138,6 +152,7 @@ export function usePillarPermission(
     displayRole?: WorkspaceDisplayRole | null;
     pillarScopes: string[] | null;
   } | null>(null);
+  const [fetchError, setFetchError] = useState(false);
 
   const pillarKey = useMemo(() => {
     const mapped = sectionKeyToPillar(pillarKeyOrSection);
@@ -155,6 +170,7 @@ export function usePillarPermission(
 
     let cancelled = false;
     setLoading(true);
+    setFetchError(false);
 
     fetch(`${API_BASE}/api/workspaces/${encodeURIComponent(workspaceId)}/members`, {
       credentials: "include",
@@ -174,7 +190,10 @@ export function usePillarPermission(
         );
       })
       .catch(() => {
-        if (!cancelled) setMember(null);
+        if (!cancelled) {
+          setMember(null);
+          setFetchError(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -200,8 +219,10 @@ export function usePillarPermission(
         canReplaceOnImport: false,
       };
     }
-    if (!member) return FULL_ACCESS;
+    // Fail-closed: workspace context but membership couldn't be confirmed (fetch
+    // error or user isn't a member of this workspace) → read-only, not full.
+    if (!member) return NO_ACCESS;
     const display = resolveDisplayRole(member.role, member.displayRole);
     return permissionsFromMember(display, member.pillarScopes, pillarKey, foundation);
-  }, [workspaceId, user, loading, member, pillarKey, foundation, clientCreatedByUserId]);
+  }, [workspaceId, user, loading, member, pillarKey, foundation, clientCreatedByUserId, fetchError]);
 }
