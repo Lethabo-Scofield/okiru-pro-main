@@ -101,6 +101,19 @@ function parseCertificateListJson(json: unknown): CertificateRow[] {
   return [];
 }
 
+function parseCertificateListEnvelope(json: unknown): { items: CertificateRow[]; total: number | null } {
+  const items = parseCertificateListJson(json);
+  if (json && typeof json === 'object') {
+    const o = json as Record<string, unknown>;
+    const data = o.data;
+    if (data && typeof data === 'object' && typeof (data as { total?: unknown }).total === 'number') {
+      return { items, total: (data as { total: number }).total };
+    }
+    if (typeof o.total === 'number') return { items, total: o.total };
+  }
+  return { items, total: Array.isArray(json) ? items.length : null };
+}
+
 function parseCertStatsJson(json: unknown): CertStats | null {
   if (!json || typeof json !== 'object') return null;
   const o = json as Record<string, unknown>;
@@ -331,10 +344,36 @@ export default function CertificateHub() {
   const loadAllCerts = useCallback(async () => {
     setAllCertsLoading(true);
     try {
-      const res = await fetch('/api/certificates/list');
-      if (!res.ok) throw new Error(`Error ${res.status}`);
-      const raw = await res.json();
-      setAllCerts(parseCertificateListJson(raw));
+      const pageSize = 200;
+      let offset = 0;
+      let total: number | null = null;
+      const rows: CertificateRow[] = [];
+      const seen = new Set<string>();
+
+      while (total == null || offset < total) {
+        const params = new URLSearchParams({
+          limit: String(pageSize),
+          offset: String(offset),
+          sort: 'verified',
+        });
+        const res = await fetch(`/api/certificates/list?${params.toString()}`);
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+        const raw = await res.json();
+        const page = parseCertificateListEnvelope(raw);
+        total = page.total ?? rows.length + page.items.length;
+
+        for (const cert of page.items) {
+          const key = cert.id || cert.fileName || cert.name;
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          rows.push(cert);
+        }
+
+        if (page.items.length === 0) break;
+        offset += page.items.length;
+      }
+
+      setAllCerts(rows);
     } catch (err: any) {
       toast({ title: 'Could not load certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
     } finally {
@@ -343,8 +382,10 @@ export default function CertificateHub() {
   }, [toast]);
 
   const loadStats = useCallback(async () => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
     try {
-      const res = await fetch('/api/certificates/stats');
+      const res = await fetch('/api/certificates/stats', { signal: controller.signal });
       if (res.ok) {
         const raw = await res.json();
         const next = parseCertStatsJson(raw);
@@ -352,21 +393,25 @@ export default function CertificateHub() {
       }
     } catch {
       // non-fatal
+    } finally {
+      window.clearTimeout(timeout);
     }
   }, []);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      await Promise.all([loadAllCerts(), loadStats()]);
+      await loadAllCerts();
       setLoading(false);
+      void loadStats();
     })();
   }, [loadAllCerts, loadStats]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadAllCerts(), loadStats()]);
+    await loadAllCerts();
     setRefreshing(false);
+    void loadStats();
   }, [loadAllCerts, loadStats]);
 
   const reviewCount = useMemo(() => allCerts.filter(needsReview).length, [allCerts]);
@@ -443,7 +488,8 @@ export default function CertificateHub() {
       }
       toast({ title: 'Certificate uploaded', description: `${values.supplierName} added to the public registry.` });
       setShowUpload(false);
-      await Promise.all([loadAllCerts(), loadStats()]);
+      await loadAllCerts();
+      void loadStats();
     } catch (err: any) {
       toast({ title: 'Upload failed', description: err.message || 'Please try again', variant: 'destructive' });
     } finally {
@@ -658,12 +704,13 @@ export default function CertificateHub() {
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
               {fieldCoverage.map((field) => (
-                <div key={field.label} className="min-w-0 rounded-md bg-black/30 px-2.5 py-2">
+                <div
+                  key={field.label}
+                  className="min-w-0 rounded-md bg-black/30 px-2.5 py-2"
+                  title={`${field.value.toLocaleString()} of ${allCerts.length.toLocaleString()} loaded certificates`}
+                >
                   <div className="truncate text-[10px] uppercase tracking-wide text-[#636366]">{field.label}</div>
-                  <div className="mt-0.5 text-[13px] font-medium text-white">
-                    {field.value.toLocaleString()}
-                    <span className="ml-1 text-[10px] font-normal text-[#636366]">/ {allCerts.length.toLocaleString()}</span>
-                  </div>
+                  <div className="mt-0.5 truncate text-[13px] font-medium text-white">{field.value.toLocaleString()}</div>
                 </div>
               ))}
             </div>
