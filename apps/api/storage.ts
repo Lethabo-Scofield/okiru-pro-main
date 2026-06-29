@@ -273,6 +273,11 @@ export class DatabaseStorage implements IStorage {
     return clean<Supplier>(doc);
   }
 
+  async updateSupplier(id: string, data: Partial<InsertSupplier>): Promise<Supplier | undefined> {
+    const doc = await SupplierModel.findOneAndUpdate({ id }, { $set: data }, { returnDocument: 'after' }).lean();
+    return doc ? clean<Supplier>(doc) : undefined;
+  }
+
   async deleteSupplier(id: string): Promise<void> {
     await SupplierModel.deleteOne({ id });
   }
