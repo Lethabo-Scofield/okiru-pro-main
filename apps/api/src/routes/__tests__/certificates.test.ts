@@ -24,6 +24,9 @@ import fs from 'fs';
 import type { AddressInfo } from 'net';
 
 // ---- Mocks (hoisted) -------------------------------------------------------
+const mongoConnectedMock = vi.hoisted(() => vi.fn(() => false));
+const certificateFindMock = vi.hoisted(() => vi.fn());
+const certificateCountDocumentsMock = vi.hoisted(() => vi.fn(async () => 0));
 
 vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req: any, res: any, next: any) => {
@@ -39,15 +42,15 @@ vi.mock('../../middleware/auth.js', () => ({
   verifyResourceOwnership: async () => true,
 }));
 
-vi.mock('../../../db.js', () => ({ isMongoConnected: () => false }));
+vi.mock('../../../db.js', () => ({ isMongoConnected: mongoConnectedMock }));
 
 vi.mock('../../../models.js', () => {
   const noop = {
     create: vi.fn(async (x: any) => x),
-    find: () => ({ sort: () => ({ skip: () => ({ limit: () => ({ lean: async () => [] }) }), limit: () => ({ lean: async () => [] }) }) }),
+    find: certificateFindMock,
     findOne: vi.fn(async () => null),
     updateOne: vi.fn(async () => ({})),
-    countDocuments: vi.fn(async () => 0),
+    countDocuments: certificateCountDocumentsMock,
     deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
   };
   return {
@@ -327,6 +330,20 @@ beforeEach(() => {
   runCertificateTextExtractionRetryJob.mockClear();
   runCertificateEnrichmentJob.mockClear();
   delete process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION;
+  mongoConnectedMock.mockReturnValue(false);
+  certificateCountDocumentsMock.mockResolvedValue(0);
+  certificateFindMock.mockReturnValue({
+    sort: vi.fn(() => ({
+      skip: vi.fn(() => ({
+        limit: vi.fn(() => ({
+          lean: vi.fn(async () => []),
+        })),
+      })),
+      limit: vi.fn(() => ({
+        lean: vi.fn(async () => []),
+      })),
+    })),
+  });
 
   // Wipe disk store so each test starts with a deterministic baseline.
   // We then re-seed only what each test needs. Note: the in-memory Map
@@ -402,6 +419,96 @@ describe('Public certificates registry', () => {
     });
     expect(r.body.data).toMatchObject({ total: 3, limit: 2, offset: 0 });
     expect(r.body.data.items).toHaveLength(2);
+  });
+
+  it('GET /list?limit=5 uses Mongo pagination without loading the full collection', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'mongo-1',
+        blobName: 'certs/acme.pdf',
+        fileName: 'acme.pdf',
+        supplierName: 'Acme Fast Co',
+        vatNumber: '4123456789',
+        companySize: 'QSE',
+        sectorCode: 'ICT',
+        sectorName: 'Information & Communications Technology',
+        bbbeeLevel: 2,
+        blackOwnership: 51,
+        blackWomenOwnership: 26,
+        expiryDate: new Date('2030-01-01T00:00:00Z'),
+        extractionStatus: 'completed',
+        enrichmentStatus: 'completed',
+        reviewFields: [],
+        verified: true,
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(2759);
+
+    const r = await call('GET', '/api/certificates/list?limit=5&offset=10');
+
+    expect(r.status).toBe(200);
+    expect(certificateFindMock).toHaveBeenCalledTimes(1);
+    expect(certificateFindMock.mock.calls[0][1]).not.toHaveProperty('extractedText');
+    expect(skip).toHaveBeenCalledWith(10);
+    expect(limit).toHaveBeenCalledWith(5);
+    expect(lean).toHaveBeenCalledTimes(1);
+    expect(r.body.data).toMatchObject({ total: 2759, limit: 5, offset: 10 });
+    expect(r.body.data.items).toHaveLength(1);
+    expect(r.body.data.items[0]).toMatchObject({
+      id: 'mongo-1',
+      company: 'Acme Fast Co',
+      companyName: 'Acme Fast Co',
+      size: 'QSE',
+      sector: { code: 'ICT', name: 'Information & Communications Technology' },
+      vatNumber: '4123456789',
+      bbbeeLevel: 2,
+      ownership: { black: 51, blackWomen: 26 },
+      expiryDate: '2030-01-01',
+      extractionStatus: 'completed',
+      reviewRequired: false,
+    });
+  });
+
+  it('GET /list hides non-Okiru legacy sector codes and marks them for review', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'mongo-legacy-sector',
+        blobName: 'certs/generic.pdf',
+        fileName: 'generic.pdf',
+        supplierName: 'Generic Legacy Co',
+        companySize: 'Generic Enterprise',
+        sectorCode: 'GENERIC',
+        sectorName: 'Generic Codes',
+        extractionStatus: 'completed',
+        enrichmentStatus: 'completed',
+        reviewFields: [],
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(1);
+
+    const r = await call('GET', '/api/certificates/list?limit=5&offset=0');
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.items[0]).toMatchObject({
+      id: 'mongo-legacy-sector',
+      sector: { code: null, name: null },
+      sectorCode: null,
+      sectorName: null,
+      reviewRequired: true,
+    });
   });
 
   it('GET /list?sort=verified surfaces verified certificates first', async () => {
@@ -870,6 +977,53 @@ describe('Internal extraction coverage/retry endpoints', () => {
         expiryDateCount: 941,
       },
     });
+  });
+
+  it('returns a focused review queue without extracted text and flags legacy sectors', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'review-1',
+        blobName: 'certs/generic.pdf',
+        fileName: 'generic.pdf',
+        supplierName: 'Legacy Generic Co',
+        sectorCode: 'GENERIC',
+        sectorName: 'Generic Codes',
+        extractionStatus: 'completed',
+        extractionMode: 'ocr',
+        extractedTextLength: 2000,
+        enrichmentStatus: 'review_required',
+        reviewFields: ['bbbeeLevel'],
+        fieldConfidence: {},
+        auditLog: [{ reviewFields: ['bbbeeLevel'] }],
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock
+      .mockResolvedValueOnce(1)
+      .mockResolvedValue(0);
+
+    const r = await call('GET', '/api/certificates/review-queue?limit=5', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    expect(certificateFindMock.mock.calls[0][1]).not.toHaveProperty('extractedText');
+    expect(r.body).toMatchObject({ total: 1, limit: 5, offset: 0 });
+    expect(r.body.items[0]).toMatchObject({
+      id: 'review-1',
+      companyName: 'Legacy Generic Co',
+      reviewFields: expect.arrayContaining(['bbbeeLevel', 'sectorCode']),
+      values: {
+        sectorCode: null,
+        sectorName: null,
+      },
+    });
+    expect(r.body.items[0]).not.toHaveProperty('extractedText');
   });
 
   it('passes usable-text mode through enrich-missing when requested', async () => {

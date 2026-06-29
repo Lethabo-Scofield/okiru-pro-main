@@ -389,6 +389,10 @@ certificateMetadataSchema.index({ expiryDate: 1 });
 certificateMetadataSchema.index({ status: 1 });
 certificateMetadataSchema.index({ bbbeeLevel: 1 });
 certificateMetadataSchema.index({ verified: 1, updatedAt: -1 });
+certificateMetadataSchema.index({ updatedAt: -1 });
+certificateMetadataSchema.index({ blackOwnership: 1 });
+certificateMetadataSchema.index({ sectorCode: 1, updatedAt: -1 });
+certificateMetadataSchema.index({ companySize: 1, updatedAt: -1 });
 
 export const CertificateMetadataModel = mongoose.models.CertificateMetadata || mongoose.model("CertificateMetadata", certificateMetadataSchema);
 

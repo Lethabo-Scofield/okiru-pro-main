@@ -360,6 +360,22 @@ function parseBoolean(raw: string): boolean | null {
   return null;
 }
 
+function parseBbbeeLevelValue(raw: string): number | null {
+  const normalized = raw.trim().toLowerCase().replace(/[()]/g, '');
+  const words: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+  };
+  const level = words[normalized] ?? Number(normalized);
+  return Number.isInteger(level) && level >= 1 && level <= 8 ? level : null;
+}
+
 function extractCompanyName(text: string, fileName: string, reviews: ReviewField[]): FieldCandidate | null {
   const patterns = [
     /(?:company\s*name|enterprise\s*name|registered\s*(?:company\s*)?name|entity\s*name|supplier\s*name|name\s*of\s*(?:entity|company|enterprise|organisation))[:\s]+([^\n\r]{3,140})/i,
@@ -426,9 +442,15 @@ function extractRegistrationNumber(text: string, reviews: ReviewField[]): FieldC
 }
 
 function extractVat(text: string, reviews: ReviewField[]): FieldCandidate | null {
-  const matches = [...text.matchAll(/(?:vat|value\s*added\s*tax|tax\s*registration)(?:\s*(?:no|number|nr\.?|reg\.?\s*(?:no\.?|number)?))?[:\s#-]*(4[\d\s-]{9,16})/gi)];
+  const matches = [...text.matchAll(/(?:\bvat\b|\bvat\s*(?:no|number|nr)\b|\bvat(?:no|number|nr)\b|\bvalue\s*added\s*tax\b|\btax\s*(?:registration|reg|no|number)\b)(?:[^0-9A-Za-z]{0,40}|\s*(?:no|number|nr|reg|registration)?\s*[:#.[\]-]?\s*)([4oO][0-9oOIl|sSbB.\s\-/]{8,30})/gi)];
   for (const m of matches) {
-    const digits = m[1].replace(/\D/g, '');
+    const digits = m[1]
+      .replace(/[oO]/g, '0')
+      .replace(/[Il|]/g, '1')
+      .replace(/[sS]/g, '5')
+      .replace(/[bB]/g, '8')
+      .replace(/\D/g, '')
+      .slice(0, 10);
     if (digits.length === 10 && digits.startsWith('4')) {
       return {
         field: 'vatNumber',
@@ -470,15 +492,20 @@ function extractTaxNumber(text: string, reviews: ReviewField[]): FieldCandidate 
 }
 
 function extractBbbeeLevel(text: string, reviews: ReviewField[]): FieldCandidate | null {
+  if (isSwornAffidavitText(text)) return null;
+  const levelValue = String.raw`(one|two|three|four|five|six|seven|eight|[1-8])`;
   const patterns = [
-    /(?:b-?bbee|broad\s*based\s*black\s*economic\s*empowerment|bee)\s*(?:status\s*)?(?:level|contributor\s*level)[:\s-]*(?:level\s*)?(\d)\b/i,
-    /(?:level\s*(\d)\s*(?:b-?bbee|bee)\s*(?:contributor|status)?)/i,
+    new RegExp(String.raw`(?:b-?bbee|broad\s*based\s*black\s*economic\s*empowerment|bee)\s*(?:status\s*)?(?:level|contributor\s*level)[:\s-]*(?:a\s*)?(?:level\s*)?${levelValue}\b`, 'i'),
+    new RegExp(String.raw`(?:b-?bbee|bee)\s*status[:\s-]*(?:level\s*)?${levelValue}\b`, 'i'),
+    new RegExp(String.raw`\bleve[lI|]\s+${levelValue}(?:\s*\(\s*[1-8]\s*\))?\s+(?:b-?bbee\s+)?(?:contributor|status)\b`, 'i'),
+    new RegExp(String.raw`\bleve[lI|]\s+${levelValue}(?:\s*\(\s*[1-8]\s*\))?\s+contributor\s+to\s+b-?bbee\b`, 'i'),
+    new RegExp(String.raw`\ba\s+leve[lI|]\s+${levelValue}\s+contributor\s+to\s+b-?bbee\b`, 'i'),
   ];
   for (const p of patterns) {
     const m = p.exec(text);
     if (!m) continue;
-    const level = Number(m[1]);
-    if (Number.isInteger(level) && level >= 1 && level <= 8) {
+    const level = parseBbbeeLevelValue(m[1]);
+    if (level) {
       return {
         field: 'bbbeeLevel',
         mongoField: 'bbbeeLevel',
@@ -489,7 +516,7 @@ function extractBbbeeLevel(text: string, reviews: ReviewField[]): FieldCandidate
       };
     }
     pushReview(reviews, 'bbbeeLevel', 'B-BBEE level label found but level was outside 1-8', {
-      value: level,
+      value: m[1],
       evidence: textSnippet(text, m.index, m[0].length),
     });
   }
@@ -508,7 +535,7 @@ function extractBbbeeLevelStatus(text: string): FieldCandidate | null {
       source: 'text',
     };
   }
-  const level = extractBbbeeLevel(text, []);
+  const level = extractBbbeeLevel(text, []) ?? extractDerivedSwornAffidavitLevel(text);
   if (!level) return null;
   return {
     field: 'bbbeeLevelStatus',
@@ -619,19 +646,34 @@ function extractCompanySizeFromFilename(fileName: string): FieldCandidate | null
 }
 
 function parsePercent(raw: string): number | null {
-  const n = Number(raw.replace(',', '.'));
+  const normalized = raw
+    .replace(',', '.')
+    .replace(/[cC]/g, '0')
+    .replace(/[oOQ©]/g, '0')
+    .replace(/[lI|]/g, '1')
+    .replace(/[dD]/g, '0')
+    .replace(/[^\d.]/g, '');
+  const n = Number(normalized);
   if (!Number.isFinite(n) || n < 0 || n > 100) return null;
   return n;
 }
 
 function extractOwnership(text: string, field: 'blackOwnership' | 'blackWomenOwnership', reviews: ReviewField[]): FieldCandidate | null {
   const label = field === 'blackWomenOwnership'
-    ? /black\s+wom(?:en|an)\s*(?:ownership|shareholding|economic\s*interest)?/i
-    : /black\s*(?:ownership|shareholding|economic\s*interest)/i;
-  const patterns = [
-    new RegExp(`${label.source}[^\\d%]{0,70}(\\d{1,3}(?:[.,]\\d+)?)\\s*%`, 'i'),
-    new RegExp(`(\\d{1,3}(?:[.,]\\d+)?)\\s*%[^\\n\\r]{0,70}${label.source}`, 'i'),
+    ? /black\s*(?:wom(?:en|an)|female)\s*(?:ownership|shareholding|economic\s*interest|owned)?/i
+    : /black\s*(?:ownership|shareholding|economic\s*interest|owned)/i;
+  const percent = String.raw`([0-9oOQ©dDlI|]{1,3}(?:[.,]\d+)?)`;
+  const swornPercent = String.raw`([0-9A-Za-zÂ©|]{1,3}(?:[.,]\d+)?)`;
+  const affidavitPatterns = [
+    new RegExp(`(?:enterprise|measured\\s+entity|entity)\\s+is\\s+${swornPercent}[^\\n\\r%]{0,10}%[^\\n\\r]{0,90}${label.source}`, 'i'),
+    new RegExp(`(?:enterprise|measured\\s+entity|entity)[^\\n\\r]{0,80}${label.source}[^\\n\\r%]{0,40}${swornPercent}[^\\n\\r%]{0,10}%`, 'i'),
   ];
+  const patterns = isSwornAffidavitText(text)
+    ? affidavitPatterns
+    : [
+        new RegExp(`${label.source}[^\\n\\r%]{0,70}${percent}[^\\n\\r%]{0,10}%`, 'i'),
+        new RegExp(`${percent}[^\\n\\r%]{0,10}%[^\\n\\r]{0,90}${label.source}`, 'i'),
+      ];
   for (const p of patterns) {
     const m = p.exec(text);
     if (!m) continue;
@@ -650,6 +692,75 @@ function extractOwnership(text: string, field: 'blackOwnership' | 'blackWomenOwn
       value: m[1],
       evidence: textSnippet(text, m.index, m[0].length),
     });
+  }
+  return null;
+}
+
+function isSwornAffidavitText(text: string): boolean {
+  return /\bsworn\s+affidavit\b|\bdeponent\b|\bcommissioner\s+of\s+oaths\b/i.test(text);
+}
+
+function isExemptMicroEnterpriseText(text: string): boolean {
+  return /\bexempt(?:ed)?\s+micro\s+enterprise\b|\bEME\b/i.test(text);
+}
+
+function addMonthsUtc(date: Date, months: number): Date | null {
+  const next = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()));
+  if (next.getUTCDate() !== date.getUTCDate()) return null;
+  return validDate(next.getUTCFullYear(), next.getUTCMonth(), next.getUTCDate());
+}
+
+function hasReliableOwnershipEvidenceForDerivedLevel(candidate: FieldCandidate): boolean {
+  const m = /(?:enterprise|measured\s+entity|entity)\s+is\s+([0-9oOQ©cCdDlI|]{1,3}(?:[.,]\d+)?)[^\n\r%]{0,10}%[^\n\r]{0,90}black\s*(?:ownership|shareholding|economic\s*interest|owned)/i.exec(candidate.evidence);
+  return Boolean(m);
+}
+
+function extractDerivedSwornAffidavitLevel(text: string): FieldCandidate | null {
+  if (!isSwornAffidavitText(text) || !isExemptMicroEnterpriseText(text)) return null;
+  const ownership = extractOwnership(text, 'blackOwnership', []);
+  if (!ownership || typeof ownership.value !== 'number') return null;
+  if (!hasReliableOwnershipEvidenceForDerivedLevel(ownership)) return null;
+  const ownershipPct = ownership.value;
+  const level = ownershipPct >= 100 ? 1 : ownershipPct >= 51 ? 2 : 4;
+  return {
+    field: 'bbbeeLevel',
+    mongoField: 'bbbeeLevel',
+    value: level,
+    confidence: 0.9,
+    evidence: `Sworn EME affidavit ownership rule. ${ownership.evidence}`,
+    source: 'text',
+  };
+}
+
+function extractSwornAffidavitExpiryDate(text: string, reviews: ReviewField[]): FieldCandidate | null {
+  if (!isSwornAffidavitText(text)) return null;
+  if (!/valid\s+for\s+(?:a\s+)?period\s+of\s+12\s+months\s+from\s+the\s+date\s+signed/i.test(text)) return null;
+
+  const signedDatePatterns = [
+    /date\s+created[:\s-]*([^\n\r]{6,30})/gi,
+    /(?:date\s+signed|signed\s+on|sworn\s+(?:before\s+me\s+)?(?:on|at)?)[^\n\r]{0,40}?(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2}|\d{1,2}\s+[A-Za-z]+\s+20\d{2})/gi,
+  ];
+
+  for (const p of signedDatePatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = p.exec(text)) != null) {
+      const signedDate = parseDateStrict(m[1]);
+      const expiryDate = signedDate ? addMonthsUtc(signedDate, 12) : null;
+      if (expiryDate) {
+        return {
+          field: 'expiryDate',
+          mongoField: 'expiryDate',
+          value: expiryDate,
+          confidence: 0.89,
+          evidence: textSnippet(text, m.index, m[0].length),
+          source: 'text',
+        };
+      }
+      pushReview(reviews, 'expiryDate', 'Sworn affidavit signed date was found but could not be safely converted to 12-month expiry', {
+        value: m[1],
+        evidence: textSnippet(text, m.index, m[0].length),
+      });
+    }
   }
   return null;
 }
@@ -874,30 +985,34 @@ function extractContactDetails(text: string): FieldCandidate | null {
 
 function extractSector(text: string): FieldCandidate[] {
   const checks: Array<{ code: string; name: string; patterns: RegExp[] }> = [
-    { code: 'GENERIC', name: 'Generic Codes', patterns: [/\bgeneric\s+codes?\b/i, /\bcodes?\s+of\s+good\s+practice\b/i] },
-    { code: 'FSC', name: 'Financial Sector', patterns: [/\bfinancial\s+sector\s+code\b/i, /\bFSC\b/i] },
-    { code: 'ICT', name: 'Information and Communications Technology', patterns: [/\binformation\s+(?:and|&)\s+communications?\s+technology\b/i, /\bICT\s+sector\b/i] },
-    { code: 'CONSTRUCTION', name: 'Construction', patterns: [/\bconstruction\s+sector\s+code\b/i] },
-    { code: 'TRANSPORT', name: 'Transport', patterns: [/\btransport\s+sector\s+code\b/i] },
-    { code: 'FORESTRY', name: 'Forestry', patterns: [/\bforestry\s+sector\s+code\b/i] },
-    { code: 'TOURISM', name: 'Tourism', patterns: [/\btourism\s+sector\s+code\b/i] },
-    { code: 'PROPERTY', name: 'Property', patterns: [/\bproperty\s+sector\s+code\b/i] },
+    { code: 'FSC', name: 'Financial Sector Code', patterns: [/\bfinancial\s+sector\s+code\b/i, /\bFSC\b/i] },
+    { code: 'ICT', name: 'Information & Communications Technology', patterns: [/\binformation\s+(?:and|&)\s+communications?\s+technology\b/i, /\bICT\s+sector\b/i] },
     { code: 'AGRI', name: 'AgriBEE', patterns: [/\bagri(?:culture)?\s*bee\b/i, /\bagricultural?\s+sector\s+code\b/i, /\bagriculture\b/i] },
-    { code: 'MAC', name: 'Marketing, Advertising and Communication', patterns: [/\bmarketing,\s*advertising\s+and\s+communication\b/i, /\bMAC\s+sector\b/i] },
-    { code: 'RCOGP', name: 'Retail, Construction, Oil & Gas, Property', patterns: [/\bretail\s+sector\s+code\b/i, /\boil\s*(?:&|and)\s*gas\b/i] },
+    {
+      code: 'RCOGP',
+      name: 'Retail, Construction, Oil & Gas, Property',
+      patterns: [
+        /\bB[-\s]?BBEE\b[^\n\r]{0,120}\b(?:general|generic)\b/i,
+        /\b(?:general|generic)\s*[-–—]?\s*(?:EME|QSE|scorecard|certificate|revised\s+codes?)\b/i,
+        /\bB[-\s]?BBEE\s+(?:exempt(?:ed)?\s+micro\s+enterprise|qualifying\s+small\s+enterprise)\s*[-–—]\s*general\b/i,
+        /\bretail\s+sector\s+code\b/i,
+        /\bconstruction\s+sector\s+code\b/i,
+        /\boil\s*(?:&|and)\s*gas\b/i,
+        /\bproperty\s+sector\s+code\b/i,
+      ],
+    },
   ];
   for (const check of checks) {
     for (const p of check.patterns) {
       const m = p.exec(text);
       if (!m) continue;
       const resolved = resolveOkiruHubSector(check.code);
-      const code = resolved?.sectorCode ?? check.code;
-      const name = resolved?.sectorName ?? check.name;
+      if (!resolved) continue;
       return [
         {
           field: 'sectorCode',
           mongoField: 'sectorCode',
-          value: code,
+          value: resolved.sectorCode,
           confidence: 0.88,
           evidence: textSnippet(text, m.index, m[0].length),
           source: 'trusted_mapping',
@@ -905,7 +1020,7 @@ function extractSector(text: string): FieldCandidate[] {
         {
           field: 'sectorName',
           mongoField: 'sectorName',
-          value: name,
+          value: resolved.sectorName,
           confidence: 0.88,
           evidence: textSnippet(text, m.index, m[0].length),
           source: 'trusted_mapping',
@@ -1014,6 +1129,7 @@ export function collectFieldCandidates(text: string, fileName: string, fields: E
   add(extractVat(text, reviews));
   if (fields.includes('taxNumber')) add(extractTaxNumber(text, reviews));
   add(extractBbbeeLevel(text, reviews));
+  add(extractDerivedSwornAffidavitLevel(text));
   add(extractBbbeeLevelStatus(text));
   if (fields.includes('certificateType')) add(extractCertificateType(text));
   if (fields.includes('procurementRecognition')) add(extractProcurementRecognition(text, reviews));
@@ -1026,6 +1142,7 @@ export function collectFieldCandidates(text: string, fileName: string, fields: E
   if (fields.includes('valueAddingSupplier')) add(extractSupplierStatus(text, 'valueAddingSupplier'));
   if (fields.includes('issueDate')) add(extractIssueDate(text, reviews));
   add(extractExpiryDate(text, reviews));
+  add(extractSwornAffidavitExpiryDate(text, reviews));
   if (fields.includes('measurementPeriod')) add(extractMeasurementPeriod(text));
   if (fields.includes('certificateNumber')) add(extractCertificateNumber(text));
   if (fields.includes('verificationAgency')) add(extractVerificationAgency(text));
@@ -1180,45 +1297,22 @@ async function calculateCoverage(fields: EnrichmentField[]): Promise<Record<Enri
 }
 
 export async function countPresentCertificateField(field: string): Promise<number> {
-  const result = await CertificateMetadataModel.aggregate([
-    {
-      $match: {
-        $expr: {
-          $and: [
-            { $ne: [`$${field}`, null] },
-            { $ne: [`$${field}`, ''] },
-          ],
-        },
-      },
-    },
-    { $count: 'count' },
-  ]);
-  return Number(result[0]?.count ?? 0);
+  return CertificateMetadataModel.countDocuments({
+    [field]: { $exists: true, $nin: [null, ''] },
+  });
 }
 
 export async function countPresentAnyCertificateField(fields: string[]): Promise<number> {
-  const result = await CertificateMetadataModel.aggregate([
-    {
-      $match: {
-        $expr: {
-          $or: fields.map((field) => ({
-            $and: [
-              { $ne: [`$${field}`, null] },
-              { $ne: [`$${field}`, ''] },
-            ],
-          })),
-        },
-      },
-    },
-    { $count: 'count' },
-  ]);
-  return Number(result[0]?.count ?? 0);
+  return CertificateMetadataModel.countDocuments({
+    $or: fields.map((field) => ({
+      [field]: { $exists: true, $nin: [null, ''] },
+    })),
+  });
 }
 
 export async function calculateProductionFieldCoverage(): Promise<Record<string, number>> {
   const fieldMap: Record<string, string> = {
     companyCount: 'supplierName',
-    sectorCount: 'sectorCode',
     vatNumberCount: 'vatNumber',
     bbbeeLevelCount: 'bbbeeLevel',
     companySizeCount: 'companySize',
@@ -1230,6 +1324,9 @@ export async function calculateProductionFieldCoverage(): Promise<Record<string,
   ] as const));
   return {
     ...Object.fromEntries(entries),
+    sectorCount: await CertificateMetadataModel.countDocuments({
+      sectorCode: { $in: OKIRU_HUB_SECTORS.map((sector) => sector.code) },
+    }),
     ownershipCount: await countPresentAnyCertificateField(['blackOwnership', 'blackWomenOwnership']),
     blackOwnershipCount: await countPresentCertificateField('blackOwnership'),
     blackWomenOwnershipCount: await countPresentCertificateField('blackWomenOwnership'),

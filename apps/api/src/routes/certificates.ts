@@ -41,7 +41,7 @@ import {
 import { ok, fail, failWith } from '../utils/apiResponse.js';
 import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
-import { resolveOkiruHubSector } from '../services/okiruHubSectors.js';
+import { OKIRU_HUB_SECTORS, resolveOkiruHubSector } from '../services/okiruHubSectors.js';
 import {
   ENRICHMENT_FIELDS,
   PRODUCTION_CERTIFICATE_FIELDS,
@@ -140,6 +140,101 @@ function invalidateListAndStatsCache() {
       responseCache.delete(k);
     }
   }
+}
+
+const LIST_SAFE_PROJECTION = {
+  _id: 0,
+  id: 1,
+  blobName: 1,
+  fileName: 1,
+  supplierName: 1,
+  vatNumber: 1,
+  companySize: 1,
+  sectorCode: 1,
+  sectorName: 1,
+  bbbeeLevel: 1,
+  bbbeeLevelStatus: 1,
+  blackOwnership: 1,
+  blackWomenOwnership: 1,
+  expiryDate: 1,
+  extractionStatus: 1,
+  enrichmentStatus: 1,
+  reviewFields: 1,
+  verified: 1,
+  slug: 1,
+  status: 1,
+  updatedAt: 1,
+} as const;
+
+function dateOnly(value: unknown): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
+  company: string;
+  size: string | null;
+  sector: { code: string | null; name: string | null };
+  ownership: { black: number | null; blackWomen: number | null };
+  extractionStatus: string | null;
+  reviewRequired: boolean;
+} {
+  const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
+  const fileName = typeof doc.fileName === 'string' && doc.fileName.trim()
+    ? doc.fileName
+    : blobBasename(blobName);
+  const companyName = typeof doc.supplierName === 'string' && doc.supplierName.trim()
+    ? doc.supplierName.trim()
+    : 'Unknown company (metadata missing)';
+  const expiryDate = dateOnly(doc.expiryDate);
+  const status = expiryDate ? statusFromExpiryDate(new Date(expiryDate)) : (doc.status || 'unknown');
+  const sector = resolveOkiruHubSector(doc.sectorCode);
+  const reviewRequired = doc.enrichmentStatus === 'review_required'
+    || doc.enrichmentStatus === 'failed'
+    || (!!doc.sectorCode && !sector)
+    || (Array.isArray(doc.reviewFields) && doc.reviewFields.length > 0);
+
+  return {
+    id: doc.id ?? null,
+    slug: doc.slug || buildCertSlug(companyName, doc.id ?? null),
+    name: blobName,
+    fileName,
+    company: companyName,
+    companyName,
+    size: doc.companySize ?? null,
+    companySize: doc.companySize ?? null,
+    sector: {
+      code: sector?.sectorCode ?? null,
+      name: sector?.sectorName ?? null,
+    },
+    sectorCode: sector?.sectorCode ?? null,
+    sectorName: sector?.sectorName ?? null,
+    vatNumber: doc.vatNumber ?? null,
+    bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
+    bbbeeLevelStatus: doc.bbbeeLevelStatus ?? null,
+    ownership: {
+      black: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+      blackWomen: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+    },
+    blackOwnership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+    blackWomenOwnership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+    expiryDate,
+    extractionStatus: doc.extractionStatus ?? null,
+    reviewRequired,
+    enrichmentStatus: doc.enrichmentStatus ?? null,
+    reviewFields: Array.isArray(doc.reviewFields) ? doc.reviewFields : [],
+    status,
+    lastModified: dateOnly(doc.updatedAt),
+    verified: doc.verified === true,
+    metadataComplete: Boolean(doc.supplierName),
+    certificateNumber: null,
+  };
 }
 
 async function getPublicCertificatesCached(): Promise<PublicCertificate[]> {
@@ -416,6 +511,7 @@ router.get('/download', async (req: Request, res: Response) => {
 
 router.get('/list', async (req: Request, res: Response) => {
   try {
+    const startedAt = Date.now();
     const search = (req.query.search as string || '').trim();
     const status = (req.query.status as string || '').trim();
     const size = (req.query.size as string || '').trim();
@@ -435,6 +531,87 @@ router.get('/list', async (req: Request, res: Response) => {
     const cacheKey = `list:${search}|${status}|${size}|${sector}|${minOwnership ?? ''}|${maxOwnership ?? ''}|${sort}|${limit ?? 'all'}|${offset}`;
     const cached = getCached<unknown>(cacheKey);
     if (cached) return res.json(cached);
+
+    if (wantsPagination && isMongoConnected()) {
+      const mongoFilter: Record<string, unknown> = {};
+      if (status && status !== 'all') mongoFilter.status = status;
+      if (size && size !== 'all') mongoFilter.companySize = new RegExp(`^${escapeRegExp(size)}$`, 'i');
+      if (sector && sector !== 'all') mongoFilter.sectorCode = sector.toUpperCase();
+      if (typeof minOwnership === 'number' || typeof maxOwnership === 'number') {
+        mongoFilter.blackOwnership = {
+          ...(typeof minOwnership === 'number' ? { $gte: minOwnership } : {}),
+          ...(typeof maxOwnership === 'number' ? { $lte: maxOwnership } : {}),
+        };
+      }
+      if (search) {
+        const searchRegex = new RegExp(escapeRegExp(search), 'i');
+        const numericSearch = Number(search);
+        const expirySearch = /^\d{4}$/.test(search)
+          ? {
+              expiryDate: {
+                $gte: new Date(`${search}-01-01T00:00:00.000Z`),
+                $lt: new Date(`${Number(search) + 1}-01-01T00:00:00.000Z`),
+              },
+            }
+          : /^\d{4}-\d{2}-\d{2}$/.test(search)
+            ? {
+                expiryDate: {
+                  $gte: new Date(`${search}T00:00:00.000Z`),
+                  $lt: new Date(new Date(`${search}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000),
+                },
+              }
+            : null;
+        mongoFilter.$or = [
+          { supplierName: searchRegex },
+          { vatNumber: searchRegex },
+          { companySize: searchRegex },
+          { sectorCode: searchRegex },
+          { sectorName: searchRegex },
+          { bbbeeLevelStatus: searchRegex },
+          ...(expirySearch ? [expirySearch] : []),
+          ...(Number.isFinite(numericSearch) ? [
+            { bbbeeLevel: numericSearch },
+            { blackOwnership: numericSearch },
+            { blackWomenOwnership: numericSearch },
+          ] : []),
+        ];
+      }
+
+      const sortSpec: Record<string, 1 | -1> = sort === 'recent'
+        ? { updatedAt: -1, id: 1 }
+        : sort === 'expiring'
+          ? { expiryDate: 1, id: 1 }
+          : { verified: -1, updatedAt: -1, id: 1 };
+
+      const queryStartedAt = Date.now();
+      const [docs, total] = await Promise.all([
+        CertificateMetadataModel.find(mongoFilter, LIST_SAFE_PROJECTION)
+          .sort(sortSpec)
+          .skip(offset)
+          .limit(limit ?? 50)
+          .lean(),
+        CertificateMetadataModel.countDocuments(mongoFilter),
+      ]);
+      const queryMs = Date.now() - queryStartedAt;
+      const buildStartedAt = Date.now();
+      const items = (docs as Record<string, unknown>[]).map(listSafeRowFromMongo);
+      const buildMs = Date.now() - buildStartedAt;
+      const payload = ok({ items, total, limit: limit ?? 50, offset });
+
+      logger.info('Listed certificates fast path', {
+        total,
+        returned: items.length,
+        search: search || '(all)',
+        status: status || '(any)',
+        sort,
+        queryMs,
+        buildMs,
+        durationMs: Date.now() - startedAt,
+      });
+
+      setCached(cacheKey, payload);
+      return res.json(payload);
+    }
 
     const all = await loadAllRows();
     const filtered = applyFilters(all, { search, status, size, sector, minOwnership, maxOwnership });
@@ -462,6 +639,7 @@ router.get('/list', async (req: Request, res: Response) => {
       status: status || '(any)',
       sort,
       paginated: wantsPagination,
+      durationMs: Date.now() - startedAt,
     });
 
     if (wantsPagination) {
@@ -948,6 +1126,133 @@ router.get('/extraction-coverage', async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('Certificate extraction coverage failed', err instanceof Error ? err : new Error(String(err)));
     return res.status(500).json({ message: 'Certificate extraction coverage failed', error: err.message });
+  }
+});
+
+const REVIEW_QUEUE_FIELDS = [
+  'companyName',
+  'sectorCode',
+  'vatNumber',
+  'bbbeeLevel',
+  'companySize',
+  'blackOwnership',
+  'blackWomenOwnership',
+  'expiryDate',
+] as const;
+
+router.get('/review-queue', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'MongoDB is not connected.' });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const requestedField = typeof req.query.field === 'string' ? req.query.field : null;
+    const validSectorCodes = OKIRU_HUB_SECTORS.map((sector) => sector.code);
+    const reviewFilter: Record<string, unknown> = {
+      $or: [
+        { enrichmentStatus: 'review_required' },
+        { reviewFields: { $exists: true, $ne: [] } },
+        { extractionStatus: { $in: ['text_too_short', 'failed', 'unsupported'] } },
+        { sectorCode: { $nin: [...validSectorCodes, null, ''] } },
+      ],
+    };
+    if (requestedField && REVIEW_QUEUE_FIELDS.includes(requestedField as typeof REVIEW_QUEUE_FIELDS[number])) {
+      reviewFilter.reviewFields = requestedField;
+    }
+
+    const projection = {
+      _id: 0,
+      id: 1,
+      blobName: 1,
+      fileName: 1,
+      supplierName: 1,
+      sectorCode: 1,
+      sectorName: 1,
+      vatNumber: 1,
+      bbbeeLevel: 1,
+      companySize: 1,
+      blackOwnership: 1,
+      blackWomenOwnership: 1,
+      expiryDate: 1,
+      extractionStatus: 1,
+      extractionMode: 1,
+      extractedTextLength: 1,
+      extractionError: 1,
+      enrichmentStatus: 1,
+      reviewFields: 1,
+      fieldConfidence: 1,
+      auditLog: { $slice: -1 },
+      updatedAt: 1,
+    };
+
+    const [docs, total, fieldCounts] = await Promise.all([
+      CertificateMetadataModel.find(reviewFilter, projection)
+        .sort({ updatedAt: -1, id: 1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      CertificateMetadataModel.countDocuments(reviewFilter),
+      Promise.all(REVIEW_QUEUE_FIELDS.map(async (field) => {
+        const fieldFilter = field === 'sectorCode'
+          ? { ...reviewFilter, $or: [{ reviewFields: 'sectorCode' }, { sectorCode: { $nin: [...validSectorCodes, null, ''] } }] }
+          : { ...reviewFilter, reviewFields: field };
+        return [field, await CertificateMetadataModel.countDocuments(fieldFilter)] as const;
+      })),
+    ]);
+
+    const items = docs.map((doc: any) => {
+      const sector = resolveOkiruHubSector(doc.sectorCode);
+      const reviewFields = new Set<string>(Array.isArray(doc.reviewFields) ? doc.reviewFields : []);
+      if (doc.sectorCode && !sector) reviewFields.add('sectorCode');
+      if (doc.extractionStatus && ['text_too_short', 'failed', 'unsupported'].includes(doc.extractionStatus)) {
+        reviewFields.add('extractedText');
+      }
+      const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
+      const fileName = typeof doc.fileName === 'string' && doc.fileName.trim() ? doc.fileName : blobBasename(blobName);
+      return {
+        id: doc.id ?? null,
+        blobName,
+        fileName,
+        companyName: doc.supplierName ?? null,
+        reviewFields: Array.from(reviewFields),
+        extractionStatus: doc.extractionStatus ?? null,
+        extractionMode: doc.extractionMode ?? null,
+        extractedTextLength: doc.extractedTextLength ?? 0,
+        extractionError: doc.extractionError ?? null,
+        enrichmentStatus: doc.enrichmentStatus ?? null,
+        values: {
+          sectorCode: sector?.sectorCode ?? null,
+          sectorName: sector?.sectorName ?? null,
+          vatNumber: doc.vatNumber ?? null,
+          bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
+          companySize: doc.companySize ?? null,
+          blackOwnership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+          blackWomenOwnership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+          expiryDate: dateOnly(doc.expiryDate),
+        },
+        fieldConfidence: doc.fieldConfidence ?? {},
+        latestAudit: Array.isArray(doc.auditLog) ? doc.auditLog[0] ?? null : null,
+        reviewUrl: `/certificates?reviewBlob=${encodeURIComponent(blobName)}`,
+        previewUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=inline`,
+        downloadUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=attachment`,
+      };
+    });
+
+    return res.json({
+      total,
+      limit,
+      offset,
+      productionFields: REVIEW_QUEUE_FIELDS,
+      fieldCounts: Object.fromEntries(fieldCounts),
+      items,
+    });
+  } catch (err: any) {
+    logger.error('Certificate review queue failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate review queue failed', error: err.message });
   }
 });
 

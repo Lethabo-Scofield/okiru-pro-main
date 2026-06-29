@@ -32,6 +32,7 @@ export function sectorDisplayLabel(code: string | null | undefined, name?: strin
   if (!code) return '—';
   const match = OKIRU_HUB_SECTORS.find((s) => s.code === code);
   if (match) return match.label;
+  if (!OKIRU_HUB_SECTORS.some((s) => s.code === code)) return 'Needs review';
   if (name) return `${code} — ${name}`;
   return code;
 }
