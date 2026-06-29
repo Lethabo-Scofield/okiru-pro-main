@@ -166,8 +166,16 @@ router.get('/:id/data', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ),
       management: { employees: employeesData },
       skills: { leviableAmount: client.leviableAmount || 0, trainingPrograms: trainingProgramsData },
       procurement: { tmps: procurementDataResult?.tmps || 0, suppliers: suppliersData },
-      esd: { contributions: esdData },
+      esd: {
+        contributions: esdData,
+        graduationBonus: (client as any).graduationBonus ?? false,
+        jobsCreatedBonus: (client as any).jobsCreatedBonus ?? false,
+        jobsCreatedCount: (client as any).jobsCreatedCount ?? 0,
+        graduationEvidence: (client as any).graduationEvidence ?? '',
+        jobsCreatedEvidence: (client as any).jobsCreatedEvidence ?? '',
+      },
       sed: { contributions: sedData },
+      afs: (client as any).afs ?? undefined,
       scenarios: scenariosData,
     });
   } catch (error: unknown) {

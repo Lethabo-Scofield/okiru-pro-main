@@ -1732,6 +1732,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   updateAfs: (data) => {
     set((state) => ({ afs: { ...state.afs, ...data } }));
     get()._recalculateAll();
+    const clientId = get().activeClientId;
+    if (clientId) {
+      api.updateClient(clientId, { afs: get().afs }).catch(console.error);
+    }
   },
 
   setFscSubSector: (subSector) => {
@@ -1751,6 +1755,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       esd: { ...state.esd, graduationBonus, jobsCreatedBonus, jobsCreatedCount, graduationEvidence, jobsCreatedEvidence },
     }));
     get()._recalculateAll();
+    const clientId = get().activeClientId;
+    if (clientId) {
+      api.updateClient(clientId, { graduationBonus, jobsCreatedBonus, jobsCreatedCount, graduationEvidence, jobsCreatedEvidence }).catch(console.error);
+    }
   },
 
   updateFinancials: (revenue, npat, leviableAmount, industryNorm) => {
