@@ -13,6 +13,14 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   return res.json(result);
 });
 
+router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
+  const doc = await FinancialYearModel.findOne({ id: String(req.params.id) }).lean();
+  if (!doc) return res.status(404).json({ message: "Financial year not found" });
+  if (!(await verifyResourceOwnership(req, res, doc.clientId))) return;
+  const result = await storage.updateFinancialYear(String(req.params.id), req.body);
+  return res.json(result);
+});
+
 router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   const doc = await FinancialYearModel.findOne({ id: String(req.params.id) }).lean();
   if (!doc) return res.status(404).json({ message: "Financial year not found" });

@@ -1536,6 +1536,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   },
   updateFinancialYear: (id, data) => {
     set((state) => ({ client: { ...state.client, financialHistory: state.client.financialHistory.map(y => y.id === id ? { ...y, ...data } : y) } }));
+    api.updateFinancialYear(id, data).catch(console.error);
   },
   removeFinancialYear: (id) => {
     set((state) => ({ client: { ...state.client, financialHistory: state.client.financialHistory.filter(y => y.id !== id) } }));
