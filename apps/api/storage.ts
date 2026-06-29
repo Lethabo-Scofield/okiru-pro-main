@@ -245,6 +245,13 @@ export class DatabaseStorage implements IStorage {
     return clean<Employee>(doc);
   }
 
+  async createEmployeesBulk(rows: InsertEmployee[]): Promise<Employee[]> {
+    if (!rows.length) return [];
+    const stamped = rows.map((r) => ({ id: uuid(), ...r }));
+    const docs = await EmployeeModel.insertMany(stamped);
+    return docs.map((d) => clean<Employee>(d.toObject ? d.toObject() : d));
+  }
+
   async updateEmployee(id: string, data: Partial<InsertEmployee>): Promise<Employee | undefined> {
     const doc = await EmployeeModel.findOneAndUpdate({ id }, { $set: data }, { returnDocument: 'after' }).lean();
     return doc ? clean<Employee>(doc) : undefined;

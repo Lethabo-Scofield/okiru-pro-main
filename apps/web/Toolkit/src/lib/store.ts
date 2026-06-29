@@ -1607,17 +1607,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      Promise.all(
-        employees.map(emp =>
-          api.addEmployee(state.activeClientId!, {
-            name: emp.name, gender: emp.gender, race: emp.race,
-            designation: emp.designation, isDisabled: emp.isDisabled,
-            annualSalary: emp.annualSalary, votingRightsPercent: emp.votingRightsPercent,
-            idNumber: emp.idNumber, isForeign: emp.isForeign, province: emp.province,
-            hireDate: emp.hireDate, terminationDate: emp.terminationDate,
-          })
-        )
-      ).catch(console.error);
+      // Single round-trip via the bulk endpoint (insertMany). Send the full
+      // Employee shape sans local id so the schema does the rest.
+      const payload = employees.map(({ id: _id, ...rest }) => rest);
+      api.bulkAddEmployees(state.activeClientId, payload).catch(console.error);
     }
   },
 

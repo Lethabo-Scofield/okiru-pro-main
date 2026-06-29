@@ -14,6 +14,18 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   return res.json(result);
 });
 
+// Bulk-create employees (the client's bulk import path — the previous endpoint
+// was dead, so the store fell back to N individual POSTs).
+router.post('/bulk', requireAuth, async (req: Request, res: Response) => {
+  if (!(await verifyClientAccess(req, res))) return;
+  const clientId = String(req.params.clientId);
+  const rows: any[] = Array.isArray(req.body?.employees) ? req.body.employees : [];
+  if (!rows.length) return res.json({ inserted: 0, employees: [] });
+  const stamped = rows.map((r) => ({ ...r, clientId }));
+  const inserted = await storage.createEmployeesBulk(stamped);
+  return res.json({ inserted: inserted.length, employees: inserted });
+});
+
 router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   // 404 on unknown id rather than a silent no-op update.
   const doc = await EmployeeModel.findOne({ id: String(req.params.id) }).lean();
