@@ -6,7 +6,7 @@ import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger("Clients");
-import { requireAuth, verifyClientAccess } from '../middleware/auth.js';
+import { requireAuth, verifyClientAccess, verifyPillarAccess } from '../middleware/auth.js';
 import { PERMISSIONS, requirePermission, recordAudit } from '../security/index.js';
 import { ClientModel } from '../../models.js';
 import { fanOutClientMetaBackSync } from '../services/workbookBackSyncFanout.js';
@@ -100,6 +100,37 @@ router.patch('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), a
     patch: req.body ?? {},
   });
   return res.json(client);
+});
+
+// PATCH /api/clients/:id/ownership — sets companyValue / outstandingDebt /
+// yearsHeld. The Toolkit calls this via api.updateOwnership and the data ends
+// up on the ownershipData collection. Previously this PATCH path didn't exist
+// on apps/api OR apps/web — the route in shareholders.ts is mounted at
+// /api/shareholders/:clientId/ownership which the Toolkit doesn't hit. Result:
+// every "update valuation" silently 404'd in prod. Adding the canonical path
+// here so client.companyValue actually saves.
+router.patch('/:id/ownership', requireAuth, async (req: Request, res: Response) => {
+  if (!(await verifyClientAccess(req, res))) return;
+  if (!(await verifyPillarAccess(req, res, 'ownership'))) return;
+  const clientId = String(req.params.id);
+  const result = await storage.upsertOwnershipData(clientId, req.body);
+  // Workbook back-sync — companyValue / outstandingDebt land in the
+  // financial-information section meta (see clientPatchToWorkbookMeta).
+  fanOutClientMetaBackSync({ companyId: clientId, patch: req.body ?? {} });
+  return res.json(result);
+});
+
+// PATCH /api/clients/:id/procurement — sets TMPS. Same broken-path story as
+// ownership above. The shareholders.ts route handles it for /api/shareholders/:clientId/procurement,
+// but the Toolkit calls /api/clients/:id/procurement.
+router.patch('/:id/procurement', requireAuth, async (req: Request, res: Response) => {
+  if (!(await verifyClientAccess(req, res))) return;
+  if (!(await verifyPillarAccess(req, res, 'procurement'))) return;
+  const clientId = String(req.params.id);
+  const tmps = Number(req.body?.tmps ?? 0);
+  const result = await storage.upsertProcurementData(clientId, tmps);
+  fanOutClientMetaBackSync({ companyId: clientId, patch: { tmps } });
+  return res.json(result);
 });
 
 router.delete('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_DELETE), async (req: Request, res: Response) => {
