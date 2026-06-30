@@ -14,8 +14,46 @@
  * Phase 1 of the sync plan: closes the "I edited X on Toolkit, workbook still
  * shows old data" gap for the 6 highest-traffic entity types.
  */
-import mongoose from 'mongoose';
+import mongoose, { Schema } from 'mongoose';
 import { WorkbookModel } from '../shared/schema';
+
+// Read-only view onto the workbook_backsync_outbox collection that apps/api
+// owns (its writer is workbookBackSyncFanout.ts on apps/api). We declare the
+// same collection here so apps/web can query depth/oldest for the admin
+// health endpoint without crossing the apps/api boundary.
+const outboxSchema = new Schema({
+  companyId: { type: String, index: true },
+  kind: { type: String },
+  payload: { type: Schema.Types.Mixed },
+  attempts: { type: Number },
+  nextAttemptAt: { type: Date, index: true },
+  lastError: { type: String },
+  createdAt: { type: Date },
+}, { collection: 'workbook_backsync_outbox', strict: false });
+const OutboxReadModel = mongoose.models.WorkbookBackSyncOutboxRead
+  || mongoose.model('WorkbookBackSyncOutboxRead', outboxSchema);
+
+const MAX_ATTEMPTS_HEALTH = 8;
+export async function getOutboxHealth(): Promise<{ depth: number; gaveUp: number; oldest: Date | null; sample: any[] }> {
+  const [depth, gaveUp, oldest, sample] = await Promise.all([
+    OutboxReadModel.countDocuments({}),
+    OutboxReadModel.countDocuments({ attempts: { $gt: MAX_ATTEMPTS_HEALTH } }),
+    OutboxReadModel.findOne({}).sort({ createdAt: 1 }).select({ createdAt: 1 }).lean() as any,
+    OutboxReadModel.find({}).sort({ createdAt: -1 }).limit(5).lean() as any,
+  ]);
+  return {
+    depth,
+    gaveUp,
+    oldest: (oldest && (oldest as any).createdAt) ?? null,
+    sample: (sample ?? []).map((s: any) => ({
+      companyId: s.companyId,
+      kind: s.kind,
+      attempts: s.attempts,
+      lastError: s.lastError,
+      nextAttemptAt: s.nextAttemptAt,
+    })),
+  };
+}
 import {
   entityToWorkbookRow,
   compositeKey,

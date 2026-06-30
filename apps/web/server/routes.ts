@@ -1404,6 +1404,21 @@ export async function registerRoutes(
     next();
   }
 
+  // Phase 6 observability — workbook back-sync outbox health. Returns queue
+  // depth, gave-up count, oldest entry timestamp, and the last 5 entries so
+  // operators can spot drift recovery without DB shell access. Mounted here
+  // (not on apps/api) because the ingress sends /api/admin/* to web.
+  app.get("/api/admin/workbook-backsync/health", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const { getOutboxHealth } = await import("./workbookBackSync");
+      const health = await getOutboxHealth();
+      res.json(health);
+    } catch (err: any) {
+      logger.error("Workbook back-sync health query failed", err);
+      res.status(500).json({ message: err?.message ?? "failed" });
+    }
+  });
+
   app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res) => {
     try {
       const users = await storage.getAllUsers();
