@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Award, Trophy, TrendingUp, CheckCircle2, XCircle, Shield, ArrowLeft, Download, Loader2 } from "lucide-react";
 import { useSearch } from "wouter";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { CalculatorConfigBanner } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useAuth } from "@toolkit/lib/auth";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
@@ -45,13 +46,9 @@ export default function ScorecardSummary() {
 
   const hasConfig = !!calculatorConfig?.pillarConfigs;
   const cfg = calculatorConfig;
-  const [waitingForConfig, setWaitingForConfig] = useState(false);
-
-  useEffect(() => {
-    if (!isLoaded || hasConfig || !activeClientId) return;
-    setWaitingForConfig(true);
-    loadCalculatorConfig(activeClientId).finally(() => setWaitingForConfig(false));
-  }, [isLoaded, hasConfig, activeClientId, loadCalculatorConfig]);
+  // The CalculatorConfigBanner now drives auto-load + retry, so the previous
+  // ad-hoc waitingForConfig state is unnecessary. The hasConfig guards on each
+  // useMemo above still handle render-time defensively.
 
   const ownResult = useMemo(() => {
     try { return hasConfig ? calculateOwnershipScore(ownership, cfg!) : null; } catch { return null; }
@@ -72,7 +69,7 @@ export default function ScorecardSummary() {
     try { return hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null; } catch { return null; }
   }, [sed, client.npat, cfg, hasConfig]);
 
-  if (!isLoaded || (waitingForConfig && !hasConfig)) {
+  if (!isLoaded) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto flex flex-col items-center justify-center gap-4 py-24">
@@ -206,6 +203,7 @@ export default function ScorecardSummary() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-8 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <CalculatorConfigBanner />
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

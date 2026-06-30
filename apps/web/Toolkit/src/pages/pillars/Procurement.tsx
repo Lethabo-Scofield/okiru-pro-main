@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { round2 } from "@toolkit/lib/calculators/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
@@ -179,7 +180,7 @@ export default function Procurement() {
     toast({ title: "Supplier Updated", description: `${editSup.name} has been updated.` });
   };
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateProcurementScore(procurement, calculatorConfig);
 
   // Issue 3: Added isForeignSupplier to form fields

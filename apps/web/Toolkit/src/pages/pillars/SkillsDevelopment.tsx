@@ -6,6 +6,7 @@ import { calculateSkillsScore, resolveSkillsSpendTargets } from "@toolkit/lib/ca
 import { isBlackRace } from "@toolkit/lib/calculators/shared";
 import { getEAPTargets } from "@toolkit/lib/calculators/eapTargets";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -424,7 +425,7 @@ export default function SkillsDevelopment() {
     toast({ title: "Intervention Updated", description: `${formState.programName} for ${formState.learnerName}` });
   };
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
   const score = calculateSkillsScore(skills, calculatorConfig, client.eapProvince);
 

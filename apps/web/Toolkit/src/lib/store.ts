@@ -164,23 +164,29 @@ function normalizeFraction(v: unknown): number {
   return Math.max(0, n);
 }
 
-/** Fetch sector-specific calculator config from API (authoritative pillar weightings). */
+/** Fetch sector-specific calculator config from API (authoritative pillar weightings).
+ * Returns a tagged result so callers can distinguish network failures from
+ * server-side 404/5xx (Q4 verification: previously a bare null swallowed both
+ * cases, leaving the user with no UI signal).
+ */
 async function fetchSectorCalculatorConfig(
   sectorCode: string,
   scorecardType: string,
-): Promise<CalculatorConfig | null> {
+): Promise<{ config: CalculatorConfig | null; failure: 'network' | 'server' | null }> {
   try {
     const res = await fetch(
       `${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`,
     );
     if (res.ok) {
       const data = await res.json();
-      if (data.success && data.config) return data.config as CalculatorConfig;
+      if (data.success && data.config) return { config: data.config as CalculatorConfig, failure: null };
+      return { config: null, failure: 'server' };
     }
+    return { config: null, failure: 'server' };
   } catch (error) {
     console.error('[store] Failed to fetch sector calculator config:', error);
+    return { config: null, failure: 'network' };
   }
-  return null;
 }
 
 function hasValidPillarConfigs(config: CalculatorConfig | null | undefined): boolean {
@@ -288,11 +294,22 @@ export interface PipelineOverrides {
   subMinimumsMet?: boolean;
 }
 
+export type CalculatorConfigStatus = 'idle' | 'loading' | 'ready' | 'error';
+export interface CalculatorConfigErrorInfo {
+  reason: 'network' | 'server' | 'invalid-config' | 'unknown-sector' | 'fsc-no-subsector' | 'recalc-before-load';
+  message: string;
+  sectorCode: string;
+  scorecardType: string;
+  fscSubSector?: string;
+}
+
 interface BbeeState extends PillarState {
   isLoaded: boolean;
   activeClientId: string | null;
   pipelineOverrides: PipelineOverrides | null;
   calculatorConfig: CalculatorConfig | null;
+  calculatorConfigStatus: CalculatorConfigStatus;
+  calculatorConfigError: CalculatorConfigErrorInfo | null;
 
   isScenarioMode: boolean;
   activeScenarioId: string | null;
@@ -1004,6 +1021,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   scorecard: emptyScorecard,
   pipelineOverrides: null,
   calculatorConfig: null,
+  calculatorConfigStatus: 'idle',
+  calculatorConfigError: null,
 
   isScenarioMode: false,
   activeScenarioId: null,
@@ -1286,6 +1305,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       scorecard: emptyScorecard,
       pipelineOverrides: null,
       calculatorConfig: null,
+  calculatorConfigStatus: 'idle',
+  calculatorConfigError: null,
       isScenarioMode: false,
       activeScenarioId: null,
       scenarios: [],
@@ -1308,6 +1329,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       scorecard: buildEmptyScorecard(),
       pipelineOverrides: null,
       calculatorConfig: null,
+  calculatorConfigStatus: 'idle',
+  calculatorConfigError: null,
       isScenarioMode: false,
       activeScenarioId: null,
       scenarios: [],
@@ -1400,79 +1423,64 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const sectorCode = client.sectorCode || 'RCOGP';
     const scorecardType = client.scorecardType || client.companySize || 'Generic';
 
+    // Mark loading BEFORE any branching — any concurrent _recalculateAll or
+    // page mount sees 'loading' instead of stale 'ready'/'idle' (race fix).
+    set({ calculatorConfigStatus: 'loading', calculatorConfigError: null });
+
+    const ready = (cfg: CalculatorConfig) => {
+      set({ calculatorConfig: cfg, calculatorConfigStatus: 'ready', calculatorConfigError: null });
+      get()._recalculateAll();
+    };
+
     if (isRcogpGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled RCOGP Generic calculator config');
-      set({ calculatorConfig: RCOGP_GENERIC_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(RCOGP_GENERIC_CALCULATOR_CONFIG);
       return;
     }
-
     if (isRcogpQseSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled RCOGP QSE calculator config');
-      set({ calculatorConfig: RCOGP_QSE_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(RCOGP_QSE_CALCULATOR_CONFIG);
       return;
     }
-
     if (isIctGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled ICT Generic calculator config');
-      set({ calculatorConfig: ICT_GENERIC_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(ICT_GENERIC_CALCULATOR_CONFIG);
       return;
     }
-
     if (isIctQseSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled ICT QSE calculator config');
-      set({ calculatorConfig: ICT_QSE_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(ICT_QSE_CALCULATOR_CONFIG);
       return;
     }
-
     if (isAgriGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled AGRI Generic calculator config');
-      set({ calculatorConfig: AGRI_GENERIC_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(AGRI_GENERIC_CALCULATOR_CONFIG);
       return;
     }
 
     if (sectorCode.toUpperCase() === 'FSC') {
       const fscSub = get().client.fscSubSector || 'Others';
-      if (isFscBanksSector(sectorCode, fscSub)) {
-        console.log('[SCORING-TRACE] Using bundled FSC Banks (FS701) calculator config');
-        set({ calculatorConfig: FSC_BANKS_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
-      if (isFscLtiSector(sectorCode, fscSub)) {
-        console.log('[SCORING-TRACE] Using bundled FSC LTI (FS702) calculator config');
-        set({ calculatorConfig: FSC_LTI_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
-      if (isFscStiSector(sectorCode, fscSub)) {
-        console.log('[SCORING-TRACE] Using bundled FSC STI (FS703) calculator config');
-        set({ calculatorConfig: FSC_STI_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
-      // Default to Generic/Others
-      if (isFscGenericSector(sectorCode, scorecardType)) {
-        console.log('[SCORING-TRACE] Using bundled FSC Generic (Others) calculator config');
-        set({ calculatorConfig: FSC_GENERIC_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
+      if (isFscBanksSector(sectorCode, fscSub)) { ready(FSC_BANKS_CALCULATOR_CONFIG); return; }
+      if (isFscLtiSector(sectorCode, fscSub))   { ready(FSC_LTI_CALCULATOR_CONFIG);   return; }
+      if (isFscStiSector(sectorCode, fscSub))   { ready(FSC_STI_CALCULATOR_CONFIG);   return; }
+      if (isFscGenericSector(sectorCode, scorecardType)) { ready(FSC_GENERIC_CALCULATOR_CONFIG); return; }
+      // Sub-sector did not match any known variant — short-circuit with a
+      // structured error rather than falling through to a remote fetch that
+      // will never resolve FSC sub-sectors.
+      const msg = `FSC sub-sector "${fscSub}" is not recognised. Pick a sub-sector on Company Info.`;
+      console.error('[store]', msg);
+      set({ calculatorConfigStatus: 'error', calculatorConfigError: { reason: 'fsc-no-subsector', message: msg, sectorCode, scorecardType, fscSubSector: fscSub } });
+      return;
     }
 
     if (isConstructionSector(sectorCode)) {
       const entityType = resolveConstructionScorecardKey(scorecardType, (client as { constructionSubSector?: string }).constructionSubSector);
       console.log('[SCORING-TRACE] Using bundled Construction calculator config:', entityType);
-      set({ calculatorConfig: buildConstructionCalculatorConfig(entityType) });
-      get()._recalculateAll();
+      ready(buildConstructionCalculatorConfig(entityType));
       return;
     }
 
-    const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
+    const { config: sectorConfig, failure: fetchFailure } = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
 
     if (sectorConfig && hasValidPillarConfigs(sectorConfig)) {
       console.log('[SCORING-TRACE] Pillar configs loaded from sector:', sectorCode, scorecardType, {
@@ -1481,22 +1489,33 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         managementControl: sectorConfig.pillarConfigs?.managementControl?.maxPoints,
         employmentEquity: sectorConfig.pillarConfigs?.employmentEquity?.maxPoints,
       });
-      set({
-        calculatorConfig: {
-          ...sectorConfig,
-          sectorCode: sectorConfig.sectorCode ?? sectorCode,
-          scorecardType: sectorConfig.scorecardType ?? scorecardType,
-        },
+      ready({
+        ...sectorConfig,
+        sectorCode: sectorConfig.sectorCode ?? sectorCode,
+        scorecardType: sectorConfig.scorecardType ?? scorecardType,
       });
-      get()._recalculateAll();
       return;
     }
 
+    // Determine the right error reason
+    let reason: CalculatorConfigErrorInfo['reason'];
+    let message: string;
     if (sectorConfig && !hasValidPillarConfigs(sectorConfig)) {
+      reason = 'invalid-config';
+      message = `Calculator config for ${sectorCode}/${scorecardType} is missing pillar weightings.`;
       console.warn('[store] Sector config rejected (invalid pillar maxPoints):', sectorCode, scorecardType);
+    } else if (fetchFailure === 'network') {
+      reason = 'network';
+      message = `Could not reach the sector config server. Check your connection and click Retry.`;
+    } else if (fetchFailure === 'server') {
+      reason = 'unknown-sector';
+      message = `No calculator config available for sector "${sectorCode}" (${scorecardType}). Pick a different sector on Company Info or contact support.`;
+    } else {
+      reason = 'unknown-sector';
+      message = `No calculator config available for "${sectorCode}/${scorecardType}".`;
     }
-
-    console.error('[store] No valid calculator config for', sectorCode, scorecardType);
+    console.error('[store] No valid calculator config for', sectorCode, scorecardType, '→', reason);
+    set({ calculatorConfigStatus: 'error', calculatorConfigError: { reason, message, sectorCode, scorecardType } });
   },
 
   saveCalculatorConfig: async (_config: CalculatorConfig) => {
@@ -1507,6 +1526,22 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
 
     if (!state.calculatorConfig) {
+      // If a load is in flight, this is a benign race — the success branch
+      // will fire _recalculateAll itself. Otherwise surface an error state so
+      // the user sees something instead of a silently-stale score.
+      if (state.calculatorConfigStatus !== 'loading') {
+        const sectorCode = state.client.sectorCode || 'RCOGP';
+        const scorecardType = state.client.scorecardType || state.client.companySize || 'Generic';
+        set({
+          calculatorConfigStatus: 'error',
+          calculatorConfigError: {
+            reason: 'recalc-before-load',
+            message: 'Scoring was triggered before the calculator config loaded. Click Retry.',
+            sectorCode,
+            scorecardType,
+          },
+        });
+      }
       console.error('[store] Cannot calculate: calculatorConfig not loaded');
       return;
     }

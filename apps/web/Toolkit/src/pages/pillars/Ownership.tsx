@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
@@ -115,7 +116,7 @@ export default function Ownership() {
   const [valuationDate, setValuationDate] = useState(ownership.valuationDate || '');
   const [valuationMethod, setValuationMethod] = useState(ownership.valuationMethod || 'last_financial');
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateOwnershipScore(ownership, calculatorConfig);
 
   const chartData = ownership.shareholders.map(sh => ({

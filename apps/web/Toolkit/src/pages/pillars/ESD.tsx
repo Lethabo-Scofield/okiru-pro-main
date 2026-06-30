@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
@@ -177,7 +178,7 @@ export default function ESD() {
     toast({ title: "Contribution Added", description: `Added ESD contribution to ${newEsd.beneficiary}.` });
   };
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateProcurementScore(procurement, calculatorConfig);
   const esdScore = calculateEsdScore(esd, client.npat, calculatorConfig);
 
