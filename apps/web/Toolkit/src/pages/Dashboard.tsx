@@ -3,6 +3,7 @@ import { Skeleton } from "@toolkit/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolkit/components/ui/tooltip";
 import { FileSpreadsheet, ArrowRight, Upload, Table, Users, UserCog, BookOpen, ShoppingCart, Handshake, HeartHandshake, PlusCircle, TrendingDown, TrendingUp, DollarSign, Info, Building2, Landmark } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { CalculatorConfigBanner } from "@toolkit/components/layout/CalculatorConfigGate";
 import type { Client, SkillsData, ProcurementData, ESDData, SEDData, ScorecardResult } from "@toolkit/lib/types";
 import type { CalculatorConfig } from "../../../shared/schema";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
@@ -193,6 +194,7 @@ export default function Dashboard() {
       initial="hidden"
       animate="show"
     >
+        <CalculatorConfigBanner />
         <motion.div variants={item}>
         <h1 className="text-lg font-heading font-semibold tracking-tight">Dashboard</h1>
         <p className="text-[13px] text-muted-foreground/50 mt-0.5">

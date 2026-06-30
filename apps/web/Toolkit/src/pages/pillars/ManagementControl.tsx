@@ -27,6 +27,7 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Employee } from "@toolkit/lib/types";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import * as XLSX from "xlsx";
 
 type BulkStep = 'upload' | 'mapping' | 'preview';
@@ -465,7 +466,7 @@ export default function ManagementControl() {
   const validCount = previewEmployees.filter(e => e.valid).length;
   const invalidCount = previewEmployees.filter(e => !e.valid).length;
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
   const mcCfg = calculatorConfig.managementControl;
   const mcMax =
