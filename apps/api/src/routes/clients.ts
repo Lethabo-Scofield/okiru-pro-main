@@ -174,7 +174,12 @@ router.get('/:id/data', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ),
         graduationEvidence: (client as any).graduationEvidence ?? '',
         jobsCreatedEvidence: (client as any).jobsCreatedEvidence ?? '',
       },
-      sed: { contributions: sedData },
+      sed: {
+        contributions: sedData,
+        ceSpend: (client as any).ceSpend ?? 0,
+        ceBonusSpend: (client as any).ceBonusSpend ?? 0,
+        fundisaSpend: (client as any).fundisaSpend ?? 0,
+      },
       afs: (client as any).afs ?? undefined,
       scenarios: scenariosData,
     });

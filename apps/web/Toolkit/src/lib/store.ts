@@ -341,6 +341,8 @@ interface BbeeState extends PillarState {
 
   // Issue 3: Removed updateProcurementBonuses - bonuses are ED only
   updateEsdBonuses: (graduationBonus: boolean, jobsCreatedBonus: boolean, jobsCreatedCount?: number, graduationEvidence?: string, jobsCreatedEvidence?: string) => void;
+  /** FSC-only SED spend fields (Consumer Education, CE bonus, Fundisa). */
+  updateSedSpend: (data: { ceSpend?: number; ceBonusSpend?: number; fundisaSpend?: number }) => void;
   
   updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => void;
   updateTMPS: (tmps: number, manualOverride?: boolean) => void;
@@ -1210,9 +1212,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const sedState: SEDData = {
         id: '',
         clientId,
-        ceSpend: finExtras.ceSpend as number | undefined,
-        ceBonusSpend: finExtras.ceBonusSpend as number | undefined,
-        fundisaSpend: finExtras.fundisaSpend as number | undefined,
+        // Prefer the top-level sed.* fields (persisted via updateClient), fall
+        // back to the legacy financials blob so existing data still loads.
+        ceSpend: (data.sed?.ceSpend as number | undefined) ?? (finExtras.ceSpend as number | undefined),
+        ceBonusSpend: (data.sed?.ceBonusSpend as number | undefined) ?? (finExtras.ceBonusSpend as number | undefined),
+        fundisaSpend: (data.sed?.fundisaSpend as number | undefined) ?? (finExtras.fundisaSpend as number | undefined),
         contributions: (data.sed?.contributions || []).map((c: any) => ({
           id: c.id,
           beneficiary: c.beneficiary,
@@ -1758,6 +1762,16 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.updateClient(state.activeClientId, { revenue, npat, leviableAmount, industryNorm }).catch(console.error);
+    }
+  },
+
+  updateSedSpend: (data) => {
+    set((state) => ({ sed: { ...state.sed, ...data } }));
+    get()._recalculateAll();
+    const state = get();
+    if (state.activeClientId) {
+      const { ceSpend, ceBonusSpend, fundisaSpend } = state.sed;
+      api.updateClient(state.activeClientId, { ceSpend, ceBonusSpend, fundisaSpend }).catch(console.error);
     }
   },
   

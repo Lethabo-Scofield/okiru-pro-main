@@ -25,7 +25,7 @@ import { cn, formatRand } from "@toolkit/lib/utils";
 import { pillarSectorSubtitle } from "@toolkit/lib/sectors/sector-labels";
 
 export default function SED() {
-  const { sed, client, addSedContribution, removeSedContribution, calculatorConfig } = useBbeeStore();
+  const { sed, client, addSedContribution, removeSedContribution, updateSedSpend, calculatorConfig } = useBbeeStore();
   const { contributions } = sed;
   const { toast } = useToast();
 
@@ -38,12 +38,25 @@ export default function SED() {
   // the hardcoded RCOGP 1% / 5pt (audit A10). calculateSedScore already uses
   // sc.npatTarget, so this is a display-only refactor and produces the same
   // numbers for RCOGP while showing the correct target for AGRI / FSC / etc.
-  const sedConfig = calculatorConfig?.sed as { npatTarget?: number } | undefined;
+  const sedConfig = calculatorConfig?.sed as {
+    npatTarget?: number;
+    ceMaxPts?: number;
+    ceTargetPct?: number;
+    ceBonusMaxPts?: number;
+    ceBonusTargetPct?: number;
+    fundisaMaxPts?: number;
+    fundisaTargetPct?: number;
+  } | undefined;
   const npatTargetPct = sedConfig?.npatTarget ?? 0.01;
   const sedMaxPoints = calculatorConfig?.pillarConfigs?.socioEconomicDevelopment?.maxPoints ?? 5;
   const targetSpend = npat * npatTargetPct;
   const targetPctLabel = `${(npatTargetPct * 100).toFixed(npatTargetPct < 0.01 ? 2 : 0)}%`;
   const actualSpend = contributions.reduce((acc, c) => acc + c.amount, 0);
+  // FSC-only: surface Consumer Education + Fundisa spend inputs. calculateSedScore
+  // already reads sed.ceSpend / ceBonusSpend / fundisaSpend and gates the scoring
+  // on these config keys — adding the UI is purely under-ingestion, not a math
+  // change (audit A10 / B11 safe subset).
+  const fscSedActive = (sedConfig?.ceMaxPts ?? 0) > 0 || (sedConfig?.fundisaMaxPts ?? 0) > 0;
 
   const getTypeColor = (type: string) => {
     switch(type) {
@@ -188,6 +201,69 @@ export default function SED() {
           </CardContent>
         </Card>
       </div>
+
+      {fscSedActive && (
+        <Card className="glass-panel mt-8" data-testid="card-fsc-sed-spend">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">FSC Consumer Education & Fundisa</CardTitle>
+            <CardDescription className="text-xs">
+              Annual spend per FSC SED sub-element. The scorecard already weights these — values entered here flow directly into the score.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <div className="grid gap-4 sm:grid-cols-3">
+              {(sedConfig?.ceMaxPts ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="sed-ce-spend" className="text-xs">
+                    Consumer Education Spend (R)
+                    {sedConfig?.ceTargetPct != null && (
+                      <span className="text-muted-foreground ml-1">· target {(sedConfig.ceTargetPct * 100).toFixed(2)}% NPAT</span>
+                    )}
+                  </Label>
+                  <NumberInput
+                    id="sed-ce-spend"
+                    value={sed.ceSpend ?? 0}
+                    onValueChange={(v) => updateSedSpend({ ceSpend: v })}
+                    placeholder="R"
+                  />
+                </div>
+              )}
+              {(sedConfig?.ceBonusMaxPts ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="sed-ce-bonus" className="text-xs">
+                    CE Bonus Spend (R)
+                    {sedConfig?.ceBonusTargetPct != null && (
+                      <span className="text-muted-foreground ml-1">· target {(sedConfig.ceBonusTargetPct * 100).toFixed(2)}% NPAT</span>
+                    )}
+                  </Label>
+                  <NumberInput
+                    id="sed-ce-bonus"
+                    value={sed.ceBonusSpend ?? 0}
+                    onValueChange={(v) => updateSedSpend({ ceBonusSpend: v })}
+                    placeholder="R"
+                  />
+                </div>
+              )}
+              {(sedConfig?.fundisaMaxPts ?? 0) > 0 && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="sed-fundisa" className="text-xs">
+                    Fundisa Spend (R)
+                    {sedConfig?.fundisaTargetPct != null && (
+                      <span className="text-muted-foreground ml-1">· target {(sedConfig.fundisaTargetPct * 100).toFixed(2)}% NPAT</span>
+                    )}
+                  </Label>
+                  <NumberInput
+                    id="sed-fundisa"
+                    value={sed.fundisaSpend ?? 0}
+                    onValueChange={(v) => updateSedSpend({ fundisaSpend: v })}
+                    placeholder="R"
+                  />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card className="glass-panel mt-8 mb-8" data-testid="card-sed-detailed-scorecard">
         <CardHeader>
