@@ -6,7 +6,7 @@ import { requireAuth } from "./routes";
 import { hasAnyRole } from "./roles";
 import { seedLakeTradingDemo } from "./lakeTradingDemoSeed";
 import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixture";
-import { WorkbookModel, ClientModel } from "../shared/schema";
+import { WorkbookModel, ClientModel, ProcessorSessionModel, WorkspaceMemberModel } from "../shared/schema";
 import { handleBackSync, rebuildWorkbookFromEntities } from "./workbookBackSync";
 import {
   validateWorkbook,
@@ -822,6 +822,43 @@ async function authorizeWorkbookAccess(
       });
       res.status(403).json({ message: "Forbidden" });
       return null;
+    }
+
+    // Phase 6 RBAC: if the client has a workspace-bound assessment, the
+    // requester must also be a member of that workspace (creators and the
+    // workspace owner are always allowed). This stops a same-org user who
+    // wasn't invited to the workspace from bypassing pillar scoping via the
+    // workbook route. Mirrors the apps/api verifyPillarAccess pattern.
+    if (mongoReady() && !sameUser && !superAdmin) {
+      try {
+        const session = await ProcessorSessionModel.findOne({
+          clientId: companyId,
+          workspaceId: { $nin: [null, ''] },
+        }).sort({ updatedAt: -1 }).lean() as any;
+        if (session?.workspaceId) {
+          const ownerId = session.createdBy ?? session.createdByUserId ?? null;
+          const isAssessmentOwner = ownerId && ownerId === userId;
+          if (!isAssessmentOwner) {
+            const member = await WorkspaceMemberModel.findOne({
+              workspaceId: String(session.workspaceId),
+              userId,
+            }).lean();
+            if (!member) {
+              logger.warn("Workbook access denied — not a workspace member", {
+                companyId,
+                requesterUserId: userId,
+                workspaceId: session.workspaceId,
+              });
+              res.status(403).json({ message: "Forbidden — not a member of this workspace" });
+              return null;
+            }
+          }
+        }
+      } catch (err: any) {
+        // Don't mask transient infra failures behind a 403 — the org/creator
+        // check above is still enforcing tenancy. Log + fall through.
+        logger.warn("workbook RBAC check failed (non-fatal)", { companyId, error: err?.message });
+      }
     }
     return wb;
   } catch (err: any) {

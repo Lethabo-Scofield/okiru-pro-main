@@ -154,6 +154,11 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
   httpServer.listen(port, "0.0.0.0", () => {
     logger.info(`API server listening`, { port, env: isProd ? "production" : "development" });
 
+    // Phase 6: persistent retry queue for Toolkit→Workbook back-sync. The
+    // drainer is a setInterval — its handle is .unref()'d inside startBackSyncDrainer
+    // so it doesn't prevent process exit.
+    void import("./src/services/workbookBackSyncFanout.js").then((m) => m.startBackSyncDrainer());
+
     setImmediate(async () => {
       try {
         const { getCertBlobServiceClient } = await import("./src/services/azureCertStorage.js");
