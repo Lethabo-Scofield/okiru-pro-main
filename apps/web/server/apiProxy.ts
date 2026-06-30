@@ -37,6 +37,13 @@ const PROXIED_TEMPLATE_PATTERNS = [
   /^\/api\/templates\/ingest-all/,
   /^\/api\/templates\/store-files/,
   /^\/api\/templates\/files/,
+  // Per-entity write routes live on apps/api. The ingress sends /api/clients/*
+  // to web, and apps/web does NOT define these sub-routes, so without this
+  // proxy every POST /api/clients/X/employees, /suppliers, etc. silently 404'd.
+  // We deliberately exclude /api/clients/X/data, /bulk-import, and
+  // /calculator-config — those belong to apps/web. The `(\/|$)` anchor stops
+  // /api/clients/X/employees-something-else from matching by accident.
+  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement)(\/|$)/,
 ];
 
 function shouldProxy(path: string): boolean {
