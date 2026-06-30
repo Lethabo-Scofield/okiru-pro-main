@@ -31,8 +31,17 @@ export default function SED() {
   const { toast } = useToast();
 
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [newSed, setNewSed] = useState({ beneficiary: '', type: 'grant', amount: 0 });
+  const [newSed, setNewSed] = useState({
+    beneficiary: '',
+    type: 'grant',
+    amount: 0,
+    // Construction-only flags. Read by construction-map.ts:91/93 — engine
+    // already scores these but no UI to enter (audit Wave 3 safe subset).
+    isStructuredProject: false,
+    isLimitedServicesCommunity: false,
+  });
   const errs = useFieldErrors();
+  const isConstructionSector = String(calculatorConfig?.sectorCode ?? '').toUpperCase() === 'CONSTRUCTION';
 
   const npat = client.npat;
   // Drive target % and max points from the sector calculatorConfig instead of
@@ -81,10 +90,14 @@ export default function SED() {
       beneficiary: newSed.beneficiary,
       type: newSed.type as any,
       amount: Number(newSed.amount),
-      category: 'socio_economic'
-    });
-    
-    setNewSed({ beneficiary: '', type: 'grant', amount: 0 });
+      category: 'socio_economic',
+      // Construction-only — read by construction-map.ts; non-construction
+      // sectors always pass false so the indicators stay dormant.
+      isStructuredProject: newSed.isStructuredProject,
+      isLimitedServicesCommunity: newSed.isLimitedServicesCommunity,
+    } as any);
+
+    setNewSed({ beneficiary: '', type: 'grant', amount: 0, isStructuredProject: false, isLimitedServicesCommunity: false });
     setIsAddOpen(false);
     toast({ title: "Contribution Added", description: `Added to SED ledger.` });
   };
@@ -150,6 +163,29 @@ export default function SED() {
                   </SelectContent>
                 </Select>
               </div>
+              {isConstructionSector && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right text-xs text-muted-foreground">Construction flags</Label>
+                  <div className="col-span-3 space-y-2 text-sm">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newSed.isStructuredProject}
+                        onChange={e => setNewSed({...newSed, isStructuredProject: e.target.checked})}
+                      />
+                      Structured Project (Construction SED indicator)
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={newSed.isLimitedServicesCommunity}
+                        onChange={e => setNewSed({...newSed, isLimitedServicesCommunity: e.target.checked})}
+                      />
+                      Limited-Services Community
+                    </label>
+                  </div>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button onClick={handleAdd}>Save Contribution</Button>

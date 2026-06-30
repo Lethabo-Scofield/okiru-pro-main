@@ -81,7 +81,18 @@ export default function ESD() {
   const supAddErrs = useFieldErrors();
   const supEditErrs = useFieldErrors();
   const esdErrs = useFieldErrors();
-  const [newEsd, setNewEsd] = useState({ beneficiary: '', type: 'grant', amount: 0, category: 'supplier_development' });
+  const [newEsd, setNewEsd] = useState({
+    beneficiary: '',
+    type: 'grant',
+    amount: 0,
+    category: 'supplier_development',
+    // Construction-only flags. Read by construction-map.ts:87/213 — the
+    // engine ALREADY scores these but until now there was no UI to enter
+    // them, so the indicators always read missing (audit Wave 3 safe subset).
+    isBlackWomenOwnedBeneficiary: false,
+    supplierDevProgramme: false,
+  });
+  const isConstructionSector = String(calculatorConfig?.sectorCode ?? '').toUpperCase() === 'CONSTRUCTION';
 
   const getBeeLevelColor = (level: number) => {
     if (level === 1) return "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300";
@@ -172,8 +183,19 @@ export default function ESD() {
       toast({ title: "Invalid", description: "Beneficiary and amount are required.", variant: "destructive" });
       return;
     }
-    addEsdContribution({ id: uuidv4(), beneficiary: newEsd.beneficiary, type: newEsd.type as any, amount: Number(newEsd.amount), category: newEsd.category as any });
-    setNewEsd({ beneficiary: '', type: 'grant', amount: 0, category: 'supplier_development' });
+    addEsdContribution({
+      id: uuidv4(),
+      beneficiary: newEsd.beneficiary,
+      type: newEsd.type as any,
+      amount: Number(newEsd.amount),
+      category: newEsd.category as any,
+      // Construction-only — gated by isConstructionSector in the form; for
+      // non-construction sectors these are always false so the construction
+      // indicators (read by construction-map.ts) never fire.
+      isBlackWomenOwnedBeneficiary: newEsd.isBlackWomenOwnedBeneficiary,
+      supplierDevProgramme: newEsd.supplierDevProgramme,
+    } as any);
+    setNewEsd({ beneficiary: '', type: 'grant', amount: 0, category: 'supplier_development', isBlackWomenOwnedBeneficiary: false, supplierDevProgramme: false });
     setIsEsdOpen(false);
     toast({ title: "Contribution Added", description: `Added ESD contribution to ${newEsd.beneficiary}.` });
   };
@@ -372,6 +394,32 @@ export default function ESD() {
                     </SelectContent>
                   </Select>
                 </div>
+                {isConstructionSector && (
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label className="text-right text-xs text-muted-foreground">Construction flags</Label>
+                      <div className="col-span-3 space-y-2 text-sm">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newEsd.isBlackWomenOwnedBeneficiary}
+                            onChange={e => setNewEsd({...newEsd, isBlackWomenOwnedBeneficiary: e.target.checked})}
+                          />
+                          Black-Women-Owned beneficiary
+                          <span className="text-xs text-muted-foreground">(Construction SD-BWO indicator)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newEsd.supplierDevProgramme}
+                            onChange={e => setNewEsd({...newEsd, supplierDevProgramme: e.target.checked})}
+                          />
+                          Part of formal Supplier &amp; Contractor Development Programme
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <DialogFooter><Button onClick={handleAddEsd}>Save Contribution</Button></DialogFooter>
             </DialogContent>

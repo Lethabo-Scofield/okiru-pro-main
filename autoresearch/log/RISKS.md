@@ -101,3 +101,13 @@ already logged as A2/A8/A10/A14).
 | B17 | LOW | P8 | DocumentProcessor enterpriseType offers 'large' (not in eme/qse/generic); cert extractor `VALID_SIZES` diverges from size enum | `DocumentProcessor.tsx:5152`; `llmExtractor.ts:240` |
 
 Rejected (6, verifier killed as overstated/dup): addEsd/addSed contribution "drops fields" (core fields ARE sent); MC edit-save validation (dup of known add); 3 P9 framings where the verifier judged the severity overstated (org-only check is real but it pushed back on impact — worth expert review).
+
+## Wave 3 — 2026-06-30 decisions
+
+| # | Action | Reason |
+|---|---|---|
+| A9 ownership voting/economic interest | **DEFERRED — expert sign-off needed.** Attempted to wire `votingRightsPercent`/`economicInterestPercent` into the calculator (use as weight when non-zero). Lake fitness stayed at 63.53 BUT 2 ICT-QSE golden tests failed because their test data sets `votingRightsPercent: 0.30` on a 100%-shares holder, expecting the old "ignored" behavior. The semantics differ — voting trust vs beneficial ownership — and we don't have a cited B-BBEE spec source for which interpretation is canonical. Reverted; the inputs stay collected-but-not-scored until the rule is clarified. See `ownership.ts:123` for the in-code NOTE. |
+| A10 construction beneficiary inputs | **SHIPPED.** Engine already scored these (`construction-map.ts:87/91/93/213`); just needed UI. Added construction-sector-gated checkboxes for `isBlackWomenOwnedBeneficiary` + `supplierDevProgramme` (ESD form) and `isStructuredProject` + `isLimitedServicesCommunity` (SED form). Score-neutral for non-construction sectors. |
+| B11 `blackBenefitPercent` | **DEFERRED.** Calculator uses per-type `benefitFactors` map; adding a row-level % multiplier is a scoring rule change. |
+| B12 Skills `isAbet`/`isMandatory` | **DEFERRED.** Not in `skills.ts` at all. Adding requires an expert rule (ABET typically counts as Cat F-G; mandatory training is excluded from B-BBEE in some sectors). |
+| B14 `isSupplierDevRecipient`/`designatedGroupType` | **DEFERRED.** Only in tests, not calculators. Adding either would shift scoring without a cited spec source. |
