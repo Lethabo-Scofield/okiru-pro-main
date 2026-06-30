@@ -75,6 +75,10 @@ const financialYearSchema = new Schema({
   npat: { type: Number, default: 0 },
   indicativeNpat: { type: Number, default: null },
   notes: { type: String, default: null },
+  // workbookRowId stamps the workbook row's `_id` onto the persisted entity so
+  // Toolkit→Workbook back-sync can match on this stable join key. Null for
+  // entities created Toolkit-only; populated on workbook /submit projection.
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "financialYears" });
 
 const shareholderSchema = new Schema({
@@ -97,6 +101,7 @@ const shareholderSchema = new Schema({
   blackNewEntrant: { type: Boolean, default: false },
   yearsHeld: { type: Number, default: 0 },
   graduationFactor: { type: Number, default: 0 },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "shareholders" });
 
 const ownershipDataSchema = new Schema({
@@ -124,6 +129,7 @@ const employeeSchema = new Schema({
   province: { type: String, default: '' },
   hireDate: { type: String, default: '' },
   terminationDate: { type: String, default: '' },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "employees" });
 
 const trainingProgramSchema = new Schema({
@@ -166,6 +172,7 @@ const trainingProgramSchema = new Schema({
   isAbet: { type: Boolean, default: false },
   isMandatory: { type: Boolean, default: false },
   isBursary: { type: Boolean, default: false },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "trainingPrograms" });
 
 const supplierSchema = new Schema({
@@ -182,6 +189,7 @@ const supplierSchema = new Schema({
   enterpriseType: { type: String, default: '' },
   spend: { type: Number, default: 0 },
   registrationNumber: { type: String, default: '' },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "suppliers" });
 
 const procurementDataSchema = new Schema({
@@ -197,6 +205,7 @@ const esdContributionSchema = new Schema({
   type: { type: String, required: true },
   amount: { type: Number, default: 0 },
   category: { type: String, required: true },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "esdContributions" });
 
 const sedContributionSchema = new Schema({
@@ -206,6 +215,7 @@ const sedContributionSchema = new Schema({
   type: { type: String, required: true },
   amount: { type: Number, default: 0 },
   category: { type: String, required: true },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "sedContributions" });
 
 const scenarioSchema = new Schema({

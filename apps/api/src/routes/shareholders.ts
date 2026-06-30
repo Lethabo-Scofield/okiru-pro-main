@@ -4,13 +4,16 @@ type Request = ExpressRequest<Record<string, string>, any, any, Record<string, s
 import { storage } from '../../storage.js';
 import { requireAuth, verifyClientAccess, verifyResourceOwnership, verifyPillarAccess } from '../middleware/auth.js';
 import { ShareholderModel } from '../../models.js';
+import { fanOutBackSync } from '../services/workbookBackSyncFanout.js';
 
 const router = Router();
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
   if (!(await verifyPillarAccess(req, res, 'ownership'))) return;
-  const result = await storage.createShareholder({ ...req.body, clientId: String(req.params.clientId) });
+  const clientId = String(req.params.clientId);
+  const result = await storage.createShareholder({ ...req.body, clientId });
+  fanOutBackSync({ companyId: clientId, entityType: 'shareholder', entity: result, op: 'upsert' });
   return res.json(result);
 });
 
@@ -20,6 +23,7 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyResourceOwnership(req, res, doc.clientId))) return;
   if (!(await verifyPillarAccess(req, res, 'ownership', doc.clientId))) return;
   await storage.deleteShareholder(String(req.params.id));
+  fanOutBackSync({ companyId: String(doc.clientId), entityType: 'shareholder', entity: doc, op: 'delete' });
   return res.json({ message: "Deleted" });
 });
 
@@ -31,6 +35,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyResourceOwnership(req, res, doc.clientId))) return;
   if (!(await verifyPillarAccess(req, res, 'ownership', doc.clientId))) return;
   const result = await storage.updateShareholder(String(req.params.id), req.body);
+  if (result) fanOutBackSync({ companyId: String(doc.clientId), entityType: 'shareholder', entity: result, op: 'upsert' });
   return res.json(result);
 });
 
