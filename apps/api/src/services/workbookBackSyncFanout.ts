@@ -24,12 +24,7 @@ type EntityType =
 const WEB_BASE = process.env.WEB_INTERNAL_URL || 'http://web:5000';
 const TIMEOUT_MS = 2000;
 
-export function fanOutBackSync(args: {
-  companyId: string;
-  entityType: EntityType;
-  entity: any;
-  op: 'upsert' | 'delete';
-}): void {
+function postInternal(payload: Record<string, any>): void {
   const token = process.env.INTERNAL_BACKSYNC_TOKEN;
   if (!token) {
     // No token configured — back-sync is disabled. Don't spam logs in that
@@ -46,20 +41,42 @@ export function fanOutBackSync(args: {
       'Content-Type': 'application/json',
       'x-internal-token': token,
     },
-    body: JSON.stringify(args),
+    body: JSON.stringify(payload),
     signal: controller.signal,
   })
     .then((res) => {
       if (!res.ok) {
-        logger.warn('back-sync fan-out non-2xx', { status: res.status, entityType: args.entityType, companyId: args.companyId });
+        logger.warn('back-sync fan-out non-2xx', { status: res.status, kind: payload.kind, companyId: payload.companyId });
       }
     })
     .catch((err) => {
       if (err?.name === 'AbortError') {
-        logger.warn('back-sync fan-out timed out', { entityType: args.entityType, companyId: args.companyId, ms: TIMEOUT_MS });
+        logger.warn('back-sync fan-out timed out', { kind: payload.kind, companyId: payload.companyId, ms: TIMEOUT_MS });
       } else {
-        logger.warn('back-sync fan-out failed', { entityType: args.entityType, companyId: args.companyId, error: err?.message });
+        logger.warn('back-sync fan-out failed', { kind: payload.kind, companyId: payload.companyId, error: err?.message });
       }
     })
     .finally(() => clearTimeout(timer));
+}
+
+export function fanOutBackSync(args: {
+  companyId: string;
+  entityType: EntityType;
+  entity: any;
+  op: 'upsert' | 'delete';
+}): void {
+  postInternal({ kind: 'entity', ...args });
+}
+
+/** Phase 2: client-scalar/meta back-sync. Fire from PATCH /api/clients/:id
+ * with the request body — the apps/web receiver maps known client fields to
+ * the matching workbook section.meta blobs (company-information, financial-
+ * information, skills-development, sed, afs-additions, esd). Unknown fields
+ * are ignored; partial patches are fine. */
+export function fanOutClientMetaBackSync(args: {
+  companyId: string;
+  patch: Record<string, any>;
+}): void {
+  if (!args.patch || Object.keys(args.patch).length === 0) return;
+  postInternal({ kind: 'clientMeta', ...args });
 }

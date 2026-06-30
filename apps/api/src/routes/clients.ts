@@ -9,6 +9,7 @@ const logger = createLogger("Clients");
 import { requireAuth, verifyClientAccess } from '../middleware/auth.js';
 import { PERMISSIONS, requirePermission, recordAudit } from '../security/index.js';
 import { ClientModel } from '../../models.js';
+import { fanOutClientMetaBackSync } from '../services/workbookBackSyncFanout.js';
 import {
   ShareholderModel, OwnershipDataModel, EmployeeModel, TrainingProgramModel,
   SupplierModel, ProcurementDataModel, EsdContributionModel, SedContributionModel,
@@ -80,7 +81,8 @@ router.get('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), asyn
 
 router.patch('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
-  const client = await storage.updateClient(String(req.params.id), req.body);
+  const clientId = String(req.params.id);
+  const client = await storage.updateClient(clientId, req.body);
   if (!client) return res.status(404).json({ message: "Client not found" });
   await recordAudit(req, {
     action: "client.update",
@@ -88,6 +90,14 @@ router.patch('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), a
     resourceId: client.id,
     result: "success",
     metadata: { fields: Object.keys(req.body || {}) },
+  });
+  // Phase 2 back-sync: propagate the client patch to the matching workbook
+  // section.meta blobs. Non-blocking; no-op when INTERNAL_BACKSYNC_TOKEN is
+  // unset. Use the canonical client.clientId (the toolkit's id) so the
+  // workbook is keyed correctly when the API id and clientId differ.
+  fanOutClientMetaBackSync({
+    companyId: String((client as any).clientId ?? client.id ?? clientId),
+    patch: req.body ?? {},
   });
   return res.json(client);
 });

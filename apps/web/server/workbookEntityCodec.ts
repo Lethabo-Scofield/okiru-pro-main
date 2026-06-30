@@ -213,3 +213,93 @@ export function compositeKey(entityType: WorkbookEntityType, row: any): string {
     .map((f) => String(row?.[f] ?? '').trim().toLowerCase())
     .join('|');
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2: Client-scalar/meta back-sync
+//
+// Maps Toolkit client-level fields (set via PATCH /api/clients/:id) to the
+// workbook section.meta blobs they correspond to. Used by backSyncClientMeta
+// to flow Settings / Financials / FSC SED / ESD bonuses changes back into
+// the workbook editor's view.
+//
+// IMPORTANT INVERSIONS:
+//   - payroll = leviableAmount × 100 (workbook stores payroll; Toolkit stores
+//     leviableAmount = payroll × 0.01 — verify in mapWorkbookFinancialsToClient)
+//   - companyValueToUse = companyValue (rename only)
+//   - npat (workbook) maps to the raw Toolkit `npat` — never to the derived
+//     `effectiveNpat`, which is computed downstream
+// ---------------------------------------------------------------------------
+
+export type WorkbookSectionMetaPatch = {
+  sectionKey: string;
+  meta: Record<string, unknown>;
+};
+
+/** Given a partial client patch (the body of PATCH /api/clients/:id), produce
+ * the list of (sectionKey, meta-patch) pairs the workbook should receive.
+ * Skips sections with no relevant fields so we don't write empty blobs.
+ */
+export function clientPatchToWorkbookMeta(patch: Record<string, any>): WorkbookSectionMetaPatch[] {
+  const out: WorkbookSectionMetaPatch[] = [];
+
+  // company-information.meta
+  const ci: Record<string, unknown> = {};
+  for (const k of [
+    'companyName', 'tradingName', 'registrationNumber', 'vatNumber', 'taxNumber',
+    'industrySector', 'scorecardType', 'companySize', 'industry',
+    'financialYearEnd', 'measurementPeriodStart', 'measurementPeriodEnd',
+    'fscSubSector', 'fscReinsurer', 'farmWorkersIncluded', 'combineExcoSenior',
+    'physicalAddress', 'postalAddress',
+    'contactPerson', 'contactEmail', 'contactPhone',
+    'constructionSubSector',
+  ] as const) {
+    if (Object.prototype.hasOwnProperty.call(patch, k)) ci[k] = patch[k];
+  }
+  if (Object.keys(ci).length) out.push({ sectionKey: 'company-information', meta: ci });
+
+  // financial-information.meta
+  const fi: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(patch, 'revenue')) fi.revenue = patch.revenue;
+  if (Object.prototype.hasOwnProperty.call(patch, 'npat')) fi.npat = patch.npat;
+  if (Object.prototype.hasOwnProperty.call(patch, 'industryNorm')) fi.industryNormPercent = patch.industryNorm;
+  if (Object.prototype.hasOwnProperty.call(patch, 'leviableAmount')) {
+    // Workbook stores payroll; Toolkit stores leviableAmount (= payroll × 0.01).
+    const lev = Number(patch.leviableAmount);
+    if (Number.isFinite(lev)) fi.payroll = lev * 100;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'companyValue')) fi.companyValueToUse = patch.companyValue;
+  if (Object.prototype.hasOwnProperty.call(patch, 'outstandingDebt')) fi.outstandingDebt = patch.outstandingDebt;
+  if (Object.prototype.hasOwnProperty.call(patch, 'tmps')) fi.tmps = patch.tmps;
+  if (Object.keys(fi).length) out.push({ sectionKey: 'financial-information', meta: fi });
+
+  // skills-development.meta
+  const sk: Record<string, unknown> = {};
+  if (Object.prototype.hasOwnProperty.call(patch, 'eapProvince')) sk.eapProvince = patch.eapProvince;
+  for (const k of ['groupLeviableAmount', 'headcount', 'trainingManagerSalary', 'trainingOverheadCost'] as const) {
+    if (Object.prototype.hasOwnProperty.call(patch, k)) sk[k] = patch[k];
+  }
+  if (Object.keys(sk).length) out.push({ sectionKey: 'skills-development', meta: sk });
+
+  // sed.meta — FSC Consumer Education / Fundisa spends (Phase 2 of the SED FSC inputs work)
+  const sed: Record<string, unknown> = {};
+  for (const k of ['ceSpend', 'ceBonusSpend', 'fundisaSpend'] as const) {
+    if (Object.prototype.hasOwnProperty.call(patch, k)) sed[k] = patch[k];
+  }
+  if (Object.keys(sed).length) out.push({ sectionKey: 'sed', meta: sed });
+
+  // afs-additions.meta — FSC AFS data (Toolkit's `afs` blob)
+  if (Object.prototype.hasOwnProperty.call(patch, 'afs') && patch.afs && typeof patch.afs === 'object') {
+    out.push({ sectionKey: 'afs-additions', meta: { ...patch.afs } });
+  }
+
+  // ESD bonuses live on the client doc but currently have no dedicated workbook
+  // meta keys (workbook holds them inside esd.meta when present). Pass through
+  // verbatim — workbook readers tolerate unknown meta keys.
+  const esdMeta: Record<string, unknown> = {};
+  for (const k of ['graduationBonus', 'graduationEvidence', 'jobsCreatedBonus', 'jobsCreatedCount', 'jobsCreatedEvidence'] as const) {
+    if (Object.prototype.hasOwnProperty.call(patch, k)) esdMeta[k] = patch[k];
+  }
+  if (Object.keys(esdMeta).length) out.push({ sectionKey: 'esd', meta: esdMeta });
+
+  return out;
+}
