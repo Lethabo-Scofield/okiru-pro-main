@@ -129,6 +129,15 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     totalBlackWomenVoting += pct * sh.blackWomenOwnership;
     totalEconomicInterest += pct * sh.blackOwnership;
     totalEconomicInterestBWO += pct * sh.blackWomenOwnership;
+    // NOTE (Wave 3 A9): sh.votingRightsPercent / economicInterestPercent are
+    // collected on the form but NOT consumed here — the calc uses the
+    // share-weighted pct for both voting and economic interest. Attempting to
+    // use those fields directly (vp/ep) caused 2 ICT-QSE golden tests to fail
+    // because the existing test data set votingRightsPercent=0.30 on a single
+    // 100%-shares holder, expecting the old "dead-input" behavior. The
+    // semantics of votingRightsPercent vs share-weight differ (voting trust
+    // vs beneficial ownership). Needs expert clarification + spec citation
+    // before making it live. Flagged in autoresearch/log/RISKS.md.
     // QSE combined indicator: a shareholder counts toward the designated-group
     // economic-interest indicator if it is a designated group OR a new entrant.
     const countsTowardDesignated = ot.combinedNewEntrantsDesignated
