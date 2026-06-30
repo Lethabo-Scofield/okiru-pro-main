@@ -26,6 +26,8 @@ import type { AddressInfo } from 'net';
 // ---- Mocks (hoisted) -------------------------------------------------------
 const mongoConnectedMock = vi.hoisted(() => vi.fn(() => false));
 const certificateFindMock = vi.hoisted(() => vi.fn());
+const certificateFindOneMock = vi.hoisted(() => vi.fn(() => ({ lean: vi.fn(async () => null) })));
+const certificateUpdateOneMock = vi.hoisted(() => vi.fn(async () => ({})));
 const certificateCountDocumentsMock = vi.hoisted(() => vi.fn(async () => 0));
 
 vi.mock('../../middleware/auth.js', () => ({
@@ -48,8 +50,8 @@ vi.mock('../../../models.js', () => {
   const noop = {
     create: vi.fn(async (x: any) => x),
     find: certificateFindMock,
-    findOne: vi.fn(async () => null),
-    updateOne: vi.fn(async () => ({})),
+    findOne: certificateFindOneMock,
+    updateOne: certificateUpdateOneMock,
     countDocuments: certificateCountDocumentsMock,
     deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
   };
@@ -158,7 +160,28 @@ const runCertificateEnrichmentJob = vi.fn(async (_client: any, options: any) => 
   details: [],
 }));
 
+const runCertificateVatRecoveryJob = vi.fn(async (options: any) => ({
+  dryRun: options?.dryRun !== false,
+  limit: Math.min(Math.max(Number(options?.limit) || 100, 1), 1000),
+  totalCertificates: 2758,
+  vatCoverageBefore: 1318,
+  vatCoverageAfter: options?.dryRun === false ? 1328 : 1318,
+  processed: 10,
+  wouldUpdate: options?.dryRun === false ? 0 : 10,
+  updated: options?.dryRun === false ? 10 : 0,
+  reviewRequired: 0,
+  noCandidateFound: 0,
+  multipleCandidates: 0,
+  rejectedByNegativeContext: 0,
+  alreadyHadTrustedVat: 0,
+  failed: 0,
+  beforeCoverage: '1318/2758',
+  afterCoverage: options?.dryRun === false ? '1328/2758' : '1318/2758',
+  details: [],
+}));
+
 vi.mock('../../services/certificateEnrichmentJob.js', () => ({
+  CERTIFICATE_ENRICHMENT_VERSION: 'cert-enrichment-test',
   ENRICHMENT_FIELDS: [
     'companyName',
     'sectorCode',
@@ -201,6 +224,7 @@ vi.mock('../../services/certificateEnrichmentJob.js', () => ({
     },
   })),
   runCertificateEnrichmentJob,
+  runCertificateVatRecoveryJob,
 }));
 
 vi.mock('../../services/certificateTextExtractionJob.js', () => ({
@@ -329,6 +353,11 @@ afterAll(async () => {
 beforeEach(() => {
   runCertificateTextExtractionRetryJob.mockClear();
   runCertificateEnrichmentJob.mockClear();
+  runCertificateVatRecoveryJob.mockClear();
+  certificateFindOneMock.mockReset();
+  certificateFindOneMock.mockReturnValue({ lean: vi.fn(async () => null) });
+  certificateUpdateOneMock.mockReset();
+  certificateUpdateOneMock.mockResolvedValue({});
   delete process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION;
   mongoConnectedMock.mockReturnValue(false);
   certificateCountDocumentsMock.mockResolvedValue(0);
@@ -977,6 +1006,164 @@ describe('Internal extraction coverage/retry endpoints', () => {
         expiryDateCount: 941,
       },
     });
+  });
+
+  it('runs VAT recovery as a dry run by default', async () => {
+    const r = await call('POST', '/api/certificates/recover-vat', {
+      apiKey: 'test-internal-key',
+      body: { limit: 25 },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateVatRecoveryJob).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 25,
+      dryRun: true,
+      onlyMissing: true,
+      onlyUsableText: true,
+    }));
+    expect(r.body).toMatchObject({
+      dryRun: true,
+      vatCoverageBefore: 1318,
+      vatCoverageAfter: 1318,
+      wouldUpdate: 10,
+      updated: 0,
+    });
+  });
+
+  it('returns a VAT review queue without extracted text', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'vat-review-1',
+        blobName: 'clients/acme.pdf',
+        fileName: 'acme.pdf',
+        supplierName: 'Acme VAT Co',
+        companySize: 'QSE',
+        sectorCode: 'ICT',
+        sectorName: 'Information & Communications Technology',
+        vatNumber: null,
+        extractionStatus: 'completed',
+        extractionMode: 'ocr',
+        extractedTextLength: 1600,
+        enrichmentStatus: 'review_required',
+        reviewFields: ['vatNumber'],
+        reviewCandidates: {
+          vatNumber: {
+            reason: 'multiple_vat_like_candidates',
+            candidates: [
+              { value: '4123456789', snippet: 'VAT No 4123456789', confidence: 0.96 },
+            ],
+          },
+        },
+        extractedText: 'must not leak',
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(1);
+
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=5', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    expect(certificateFindMock.mock.calls[0][1]).not.toHaveProperty('extractedText');
+    expect(skip).toHaveBeenCalledWith(0);
+    expect(limit).toHaveBeenCalledWith(5);
+    expect(r.body).toMatchObject({
+      total: 1,
+      limit: 5,
+      pagination: { total: 1, limit: 5, offset: 0 },
+      items: [{
+        id: 'vat-review-1',
+        filename: 'acme.pdf',
+        company: 'Acme VAT Co',
+        vatNumber: null,
+        reviewReason: 'multiple_vat_like_candidates',
+        vatCandidates: [{
+          candidate: '4123456789',
+          confidence: 0.96,
+          snippet: 'VAT No 4123456789',
+        }],
+        documentUrl: expect.stringContaining('/api/certificates/download?file=clients%2Facme.pdf'),
+        previewUrl: expect.stringContaining('/api/certificates/download?file=clients%2Facme.pdf'),
+      }],
+    });
+    expect(r.body.items[0]).not.toHaveProperty('extractedText');
+  });
+
+  it('confirms VAT manually and clears VAT review metadata only', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateFindOneMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        id: 'cert-vat-1',
+        blobName: 'clients/acme.pdf',
+        vatNumber: null,
+        reviewFields: ['vatNumber', 'expiryDate'],
+        reviewCandidates: {
+          vatNumber: { reason: 'multiple_vat_like_candidates' },
+          expiryDate: { reason: 'expired' },
+        },
+        fieldConfidence: {
+          expiryDate: { confidence: 0.98, source: 'text' },
+        },
+      })),
+    });
+
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: '412 345 6789', note: 'Checked against certificate preview' },
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      ok: true,
+      id: 'cert-vat-1',
+      vatNumber: '4123456789',
+      clearedReviewField: 'vatNumber',
+    });
+    expect(certificateUpdateOneMock).toHaveBeenCalledWith(
+      { id: 'cert-vat-1' },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          vatNumber: '4123456789',
+          vatNumberNormalized: '4123456789',
+          reviewFields: ['expiryDate'],
+          enrichmentStatus: 'review_required',
+          fieldConfidence: expect.objectContaining({
+            vatNumber: expect.objectContaining({
+              confidence: 1,
+              source: 'manual_review',
+            }),
+            expiryDate: { confidence: 0.98, source: 'text' },
+          }),
+        }),
+        $push: expect.objectContaining({
+          auditLog: expect.any(Object),
+        }),
+      }),
+    );
+    const update = certificateUpdateOneMock.mock.calls[0][1];
+    expect(update.$set.reviewCandidates).not.toHaveProperty('vatNumber');
+    expect(update.$set).not.toHaveProperty('calculatorPayload');
+    expect(update.$set).not.toHaveProperty('scorecardId');
+    expect(update.$set).not.toHaveProperty('annualSpend');
+    expect(update.$set).not.toHaveProperty('bbbeeScore');
+  });
+
+  it('rejects invalid manual VAT confirmation values', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: 'registration 2019/123456/07' },
+    });
+
+    expect(r.status).toBe(400);
+    expect(certificateUpdateOneMock).not.toHaveBeenCalled();
   });
 
   it('returns a focused review queue without extracted text and flags legacy sectors', async () => {
