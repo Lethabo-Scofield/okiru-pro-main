@@ -347,6 +347,8 @@ interface BbeeState extends PillarState {
   updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => void;
   updateTMPS: (tmps: number, manualOverride?: boolean) => void;
   updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => void;
+  /** Update the industry VERTICAL (Manufacturing, Retail, etc.) used for industry-norm lookup. Distinct from sectorCode/industrySector which drive the scorecard. */
+  updateIndustry: (industry: string) => void;
 
   loadCalculatorConfig: (clientId: string) => Promise<void>;
   saveCalculatorConfig: (config: CalculatorConfig) => Promise<void>;
@@ -1800,6 +1802,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.updateClient(state.activeClientId, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }).catch(console.error);
+    }
+  },
+
+  updateIndustry: (industry) => {
+    set((state) => ({ client: { ...state.client, industry } }));
+    get()._recalculateAll(); // industryNorm lookup uses client.industry → Skills/PP can shift
+    const state = get();
+    if (state.activeClientId) {
+      api.updateClient(state.activeClientId, { industry }).catch(console.error);
     }
   },
 

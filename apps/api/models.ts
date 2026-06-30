@@ -35,6 +35,16 @@ const clientSchema = new Schema({
   industrySector: { type: String, default: "Generic" },
   eapProvince: { type: String, default: "National" },
   industryNorm: { type: Number, default: null },
+  // Foundation Layer fields used by the Toolkit + Workbook. apps/web/shared/
+  // schema.ts has these on its clientSchema; apps/api was missing them, so
+  // every PATCH /api/clients/:id from the Toolkit was SILENTLY DROPPING
+  // industry/sectorCode/scorecardType/companySize (strict schema). That broke
+  // the "company details aren't reflected well" complaint — e.g. picking
+  // an industry vertical or changing the sector code never round-tripped.
+  industry: { type: String, default: 'Other' },
+  sectorCode: { type: String, default: 'RCOGP' },
+  scorecardType: { type: String, default: 'Generic' },
+  companySize: { type: String, default: 'Generic' },
   logo: { type: String, default: null },
   pipelineOverrides: { type: Schema.Types.Mixed, default: null },
   // Persisted via PATCH /api/clients/:id but previously dropped by the strict
