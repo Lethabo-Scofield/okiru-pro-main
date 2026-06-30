@@ -641,6 +641,23 @@ const companyProfileSchema = new Schema({
 
 export const CompanyProfileModel = mongoose.models.CompanyProfile || mongoose.model("CompanyProfile", companyProfileSchema);
 
+// Phase 6 of the sync plan — persistent retry queue for back-sync fan-outs
+// that fail (apps/web down, network blip, transient 5xx). The drainer worker
+// picks up entries whose nextAttemptAt has passed, replays them, and either
+// removes (success) or pushes them back with exponential backoff.
+const workbookBackSyncOutboxSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  companyId: { type: String, required: true, index: true },
+  kind: { type: String, enum: ['entity', 'clientMeta'], required: true },
+  payload: { type: Schema.Types.Mixed, required: true },
+  attempts: { type: Number, default: 0 },
+  nextAttemptAt: { type: Date, default: () => new Date(), index: true },
+  lastError: { type: String, default: null },
+  createdAt: { type: Date, default: () => new Date() },
+}, { collection: 'workbook_backsync_outbox' });
+
+export const WorkbookBackSyncOutboxModel = mongoose.models.WorkbookBackSyncOutbox || mongoose.model('WorkbookBackSyncOutbox', workbookBackSyncOutboxSchema);
+
 // Mirror of apps/web/shared/schema.ts `workspaceMemberSchema` — same collection
 // `workspace_members`. Defined here so the apps/api per-entity write routes can
 // resolve pillarScopes without crossing the apps/web/server boundary (audit

@@ -191,6 +191,23 @@ export async function registerRoutes(
   // Admin: append-only audit log query (RBAC-guarded inside the router)
   app.use('/api/admin/audit-logs', auditRouter);
 
+  // Admin: workbook back-sync outbox health (Phase 6 observability).
+  // Returns queue depth, gave-up count, oldest entry timestamp, and the last
+  // 5 entries so operators can spot drift recovery without DB shell access.
+  app.get('/api/admin/workbook-backsync/health', async (req: Request, res: Response) => {
+    const userRole = (req as any)?.user?.role;
+    if (userRole !== 'super_admin' && userRole !== 'admin') {
+      return res.status(403).json({ message: 'admin only' });
+    }
+    try {
+      const { getOutboxHealth } = await import('../services/workbookBackSyncFanout.js');
+      const health = await getOutboxHealth();
+      return res.json(health);
+    } catch (err: any) {
+      return res.status(500).json({ message: err?.message ?? 'failed' });
+    }
+  });
+
   // Admin: user management (super_admin only)
   app.use('/api/admin/users', adminUsersRouter);
   app.use('/api/admin', adminUsersRouter);
