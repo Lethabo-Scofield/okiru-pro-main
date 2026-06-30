@@ -97,6 +97,15 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: SESSION_SECRET
+            # Workbook back-sync (Phase 1) — shared secret with apps/api.
+            # When set on both apps, the /api/internal/workbook-backsync
+            # endpoint accepts fan-out from apps/api and merges entity rows
+            # into WorkbookModel.sections.
+            - name: INTERNAL_BACKSYNC_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: INTERNAL_BACKSYNC_TOKEN
             - name: ARANGO_URL
               valueFrom:
                 secretKeyRef:

@@ -127,6 +127,19 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: API_INTERNAL_KEY
+            # Workbook back-sync (Phase 1) — shared secret with apps/web. When
+            # set on both, apps/api fires POST /api/internal/workbook-backsync
+            # after every per-entity write, debounced + retried via the
+            # workbook_backsync_outbox drainer. Without this, fan-out is silently
+            # disabled (rebuild-on-GET still self-heals workbook drift).
+            - name: INTERNAL_BACKSYNC_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: INTERNAL_BACKSYNC_TOKEN
+            # Internal URL apps/api uses to reach apps/web (cluster DNS).
+            - name: WEB_INTERNAL_URL
+              value: "http://web:5001"
             - name: AZURE_OPENAI_ENDPOINT
               valueFrom:
                 secretKeyRef:
