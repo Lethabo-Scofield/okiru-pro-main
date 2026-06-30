@@ -86,6 +86,18 @@ type ReviewField = {
   value?: unknown;
 };
 
+type ReviewCandidate = {
+  field: EnrichmentField;
+  value: unknown;
+  confidence: number;
+  source: 'text' | 'filename' | 'regex_fallback';
+  reason: string;
+  evidence?: string;
+  needsReview: true;
+  version: string;
+  at: Date;
+};
+
 export type CertificateEnrichmentOptions = {
   limit?: number;
   dryRun?: boolean;
@@ -316,6 +328,54 @@ function pushReview(reviews: ReviewField[], field: EnrichmentField, reason: stri
     evidence: candidate?.evidence,
     value: candidate?.value,
   });
+}
+
+function normalizeReviewCandidateValue(field: EnrichmentField, value: unknown): unknown {
+  if (value instanceof Date) return value;
+  if (field === 'expiryDate' && typeof value === 'string') {
+    const parsed = parseDateStrict(value);
+    return parsed ?? value;
+  }
+  if (field === 'vatNumber' && typeof value === 'string') {
+    const digits = value
+      .replace(/[oO]/g, '0')
+      .replace(/[Il|]/g, '1')
+      .replace(/[sS]/g, '5')
+      .replace(/[bB]/g, '8')
+      .replace(/\D/g, '')
+      .slice(0, 10);
+    return digits || value;
+  }
+  return value;
+}
+
+function hasTrustedValue(doc: MongoDoc | null, updates: Record<string, unknown>, field: EnrichmentField): boolean {
+  const mongoField = FIELD_TO_MONGO[field];
+  return hasValue(updates[mongoField]) || hasValue(doc?.[mongoField]);
+}
+
+export function buildReviewCandidates(
+  doc: MongoDoc | null,
+  updates: Record<string, unknown>,
+  reviewFields: ReviewField[],
+): Record<string, ReviewCandidate> {
+  const result: Record<string, ReviewCandidate> = {};
+  for (const review of reviewFields) {
+    if (!hasValue(review.value)) continue;
+    if (hasTrustedValue(doc, updates, review.field)) continue;
+    result[review.field] = {
+      field: review.field,
+      value: normalizeReviewCandidateValue(review.field, review.value),
+      confidence: 0.62,
+      source: review.reason.includes('filename') ? 'filename' : 'regex_fallback',
+      reason: review.reason,
+      evidence: review.evidence,
+      needsReview: true,
+      version: CERTIFICATE_ENRICHMENT_VERSION,
+      at: new Date(),
+    };
+  }
+  return result;
 }
 
 function bestByConfidence(candidates: FieldCandidate[]): FieldCandidate | null {
@@ -765,6 +825,73 @@ function extractSwornAffidavitExpiryDate(text: string, reviews: ReviewField[]): 
   return null;
 }
 
+function addBroadReviewCandidates(
+  text: string,
+  fields: EnrichmentField[],
+  accepted: Set<EnrichmentField>,
+  reviews: ReviewField[],
+) {
+  if (fields.includes('vatNumber') && !accepted.has('vatNumber')) {
+    const uniqueVatLike = Array.from(new Set(
+      [...text.matchAll(/\b(4[\d\s.\-/]{9,18})\b/g)]
+        .map((m) => m[1].replace(/\D/g, '').slice(0, 10))
+        .filter((value) => /^4\d{9}$/.test(value)),
+    ));
+    if (uniqueVatLike.length === 1) {
+      pushReview(reviews, 'vatNumber', 'Single VAT-like number found without strict label; needs human confirmation', {
+        value: uniqueVatLike[0],
+        evidence: 'unlabelled VAT-like 10-digit number',
+      });
+    }
+  }
+
+  if (fields.includes('bbbeeLevel') && !accepted.has('bbbeeLevel')) {
+    const level = /\bleve[lI|]\s+(one|two|three|four|five|six|seven|eight|[1-8])(?:\s*\(\s*[1-8]\s*\))?(?:\s+(?:contributor|status)|[^\n\r]{0,80}procurement\s+recognition)/i.exec(text);
+    const parsed = level ? parseBbbeeLevelValue(level[1]) : null;
+    if (parsed) {
+      pushReview(reviews, 'bbbeeLevel', 'B-BBEE level-like wording found but strict rules did not accept it', {
+        value: parsed,
+        evidence: textSnippet(text, level!.index, level![0].length),
+      });
+    }
+  }
+
+  if (fields.includes('expiryDate') && !accepted.has('expiryDate')) {
+    const dateMatches: Array<{ match: RegExpExecArray; date: Date }> = [];
+    const datePattern = /\b(\d{1,2}\s+(?:jan|january|feb|february|mar|march|apr|april|may|jun|june|jul|july|aug|august|sep|september|oct|october|nov|november|dec|december)\s+20\d{2}|20\d{2}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2})\b/gi;
+    let dateMatch: RegExpExecArray | null;
+    while ((dateMatch = datePattern.exec(text)) !== null) {
+      const date = parseDateStrict(dateMatch[1]);
+      if (date) dateMatches.push({ match: dateMatch, date });
+    }
+    if (dateMatches.length > 0) {
+      dateMatches.sort((a, b) => b.date.getTime() - a.date.getTime());
+      const latest = dateMatches[0];
+      pushReview(reviews, 'expiryDate', 'Date found in certificate text but strict expiry label was missing', {
+        value: latest.date,
+        evidence: textSnippet(text, latest.match.index ?? 0, latest.match[0].length),
+      });
+    }
+  }
+
+  const ownershipFields: Array<'blackOwnership' | 'blackWomenOwnership'> = ['blackOwnership', 'blackWomenOwnership'];
+  for (const field of ownershipFields) {
+    if (!fields.includes(field) || accepted.has(field)) continue;
+    const label = field === 'blackWomenOwnership'
+      ? /black\s*(?:women|woman|female)/i
+      : /black\s*(?:owned|ownership|shareholding|economic\s+interest)/i;
+    const match = new RegExp(`(\\d{1,3}(?:[.,]\\d+)?)\\s*%[^\\n\\r]{0,80}${label.source}|${label.source}[^\\n\\r]{0,80}(\\d{1,3}(?:[.,]\\d+)?)\\s*%`, 'i').exec(text);
+    const raw = match?.[1] ?? match?.[2];
+    const value = raw ? parsePercent(raw) : null;
+    if (value !== null) {
+      pushReview(reviews, field, 'Ownership percentage found with loose wording; needs human confirmation', {
+        value,
+        evidence: textSnippet(text, match!.index, match![0].length),
+      });
+    }
+  }
+}
+
 function extractDesignatedGroupOwnership(text: string, reviews: ReviewField[]): FieldCandidate | null {
   const patterns = [
     /(?:designated\s+group|youth|disabled|people\s+with\s+disabilities|rural)\s+(?:black\s+)?(?:ownership|shareholding|economic\s*interest)[^\d%]{0,70}(\d{1,3}(?:[.,]\d+)?)\s*%/i,
@@ -1172,6 +1299,7 @@ export function collectFieldCandidates(text: string, fileName: string, fields: E
       });
     }
   }
+  addBroadReviewCandidates(text, fields, accepted, reviews);
 
   const missingKeyFields: Array<[EnrichmentField, string]> = [
     ['companyName', 'missing_supplier_name'],
@@ -1510,6 +1638,19 @@ export async function runCertificateEnrichmentJob(
           version: CERTIFICATE_ENRICHMENT_VERSION,
           at: new Date(),
         };
+      }
+
+      const nextReviewCandidates = {
+        ...(doc?.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}),
+        ...buildReviewCandidates(doc, updates, reviewFields),
+      };
+      for (const candidate of fieldCandidates) {
+        if (hasTrustedValue(doc, updates, candidate.field)) {
+          delete nextReviewCandidates[candidate.field];
+        }
+      }
+      if (Object.keys(nextReviewCandidates).length > 0 || hasValue(doc?.reviewCandidates)) {
+        updates.reviewCandidates = nextReviewCandidates;
       }
 
       if (updates.vatNumber) {

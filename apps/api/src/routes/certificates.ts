@@ -160,6 +160,7 @@ const LIST_SAFE_PROJECTION = {
   extractionStatus: 1,
   enrichmentStatus: 1,
   reviewFields: 1,
+  reviewCandidates: 1,
   verified: 1,
   slug: 1,
   status: 1,
@@ -184,6 +185,7 @@ function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
   ownership: { black: number | null; blackWomen: number | null };
   extractionStatus: string | null;
   reviewRequired: boolean;
+  reviewCandidates: Record<string, unknown>;
 } {
   const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
   const fileName = typeof doc.fileName === 'string' && doc.fileName.trim()
@@ -229,6 +231,7 @@ function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
     reviewRequired,
     enrichmentStatus: doc.enrichmentStatus ?? null,
     reviewFields: Array.isArray(doc.reviewFields) ? doc.reviewFields : [],
+    reviewCandidates: doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {},
     status,
     lastModified: dateOnly(doc.updatedAt),
     verified: doc.verified === true,
@@ -1184,6 +1187,7 @@ router.get('/review-queue', async (req: Request, res: Response) => {
       extractionError: 1,
       enrichmentStatus: 1,
       reviewFields: 1,
+      reviewCandidates: 1,
       fieldConfidence: 1,
       auditLog: { $slice: -1 },
       updatedAt: 1,
@@ -1234,6 +1238,7 @@ router.get('/review-queue', async (req: Request, res: Response) => {
           blackWomenOwnership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
           expiryDate: dateOnly(doc.expiryDate),
         },
+        reviewCandidates: doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {},
         fieldConfidence: doc.fieldConfidence ?? {},
         latestAudit: Array.isArray(doc.auditLog) ? doc.auditLog[0] ?? null : null,
         reviewUrl: `/certificates?reviewBlob=${encodeURIComponent(blobName)}`,
@@ -2253,6 +2258,9 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
       if ('vatNumber' in updates) {
         updates['vatNumberNormalized'] = normalizeVat(updates['vatNumber'] as string | null);
       }
+      if ('bbbeeLevel' in updates) {
+        updates['bbbeeLevelStatus'] = updates['bbbeeLevel'] == null ? null : `Level ${updates['bbbeeLevel']}`;
+      }
       if ('expiryDate' in updates) {
         const exp = updates['expiryDate'] as Date | null;
         if (!exp) { updates['status'] = 'unknown'; }
@@ -2262,10 +2270,30 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
         }
       }
       updates['updatedAt'] = new Date();
-      await CertificateMetadataModel.updateOne({ id }, { $set: updates });
+      const confirmedFields = Object.keys(updates).filter((key) => !['updatedAt', 'vatNumberNormalized', 'status'].includes(key));
+      const unsetReviewCandidates = Object.fromEntries(
+        confirmedFields.map((field) => [`reviewCandidates.${field}`, '']),
+      );
+      const remainingReviewFields = Array.isArray(doc.reviewFields)
+        ? doc.reviewFields.filter((field: string) => !confirmedFields.includes(field))
+        : [];
+      const remainingReviewCandidates = doc.reviewCandidates && typeof doc.reviewCandidates === 'object'
+        ? Object.keys(doc.reviewCandidates).filter((field) => !confirmedFields.includes(field))
+        : [];
+      await CertificateMetadataModel.updateOne(
+        { id },
+        {
+          $set: {
+            ...updates,
+            reviewFields: remainingReviewFields,
+            enrichmentStatus: remainingReviewFields.length > 0 || remainingReviewCandidates.length > 0 ? 'review_required' : 'completed',
+          },
+          ...(Object.keys(unsetReviewCandidates).length ? { $unset: unsetReviewCandidates } : {}),
+        },
+      );
       invalidateListAndStatsCache();
       logger.info('Certificate patched', { id, fields: Object.keys(updates) });
-      const returnedFields = Object.keys(updates).filter((k) => !['updatedAt', 'vatNumberNormalized', 'status'].includes(k));
+      const returnedFields = confirmedFields;
       return res.json(ok({ id, updated: returnedFields }));
     } catch (err: any) {
       logger.error('Failed to patch certificate', err);
