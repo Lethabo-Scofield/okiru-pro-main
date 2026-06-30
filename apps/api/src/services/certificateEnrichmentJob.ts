@@ -89,6 +89,11 @@ type ReviewField = {
 type ReviewCandidate = {
   field: EnrichmentField;
   value: unknown;
+  candidates?: Array<{
+    value: string;
+    snippet: string;
+    confidence: number;
+  }>;
   confidence: number;
   source: 'text' | 'filename' | 'regex_fallback';
   reason: string;
@@ -96,6 +101,57 @@ type ReviewCandidate = {
   needsReview: true;
   version: string;
   at: Date;
+};
+
+type VatTextCandidate = {
+  value: string;
+  index: number;
+  raw: string;
+  snippet: string;
+  labelled: boolean;
+  confidence: number;
+};
+
+export type VatRecoveryAnalysis =
+  | { status: 'accepted'; candidate: VatTextCandidate; reason: 'labelled_vat_candidate' | 'single_unlabelled_vat_candidate'; candidates: VatTextCandidate[]; rejectedByNegativeContext: number }
+  | { status: 'multiple_candidates'; reason: 'multiple_vat_like_candidates'; candidates: VatTextCandidate[]; rejectedByNegativeContext: number }
+  | { status: 'no_candidate_found'; reason: 'no_vat_like_candidate_found'; candidates: VatTextCandidate[]; rejectedByNegativeContext: number };
+
+export type CertificateVatRecoveryOptions = {
+  limit?: number;
+  dryRun?: boolean;
+  onlyMissing?: boolean;
+  onlyUsableText?: boolean;
+  includeDetails?: boolean;
+};
+
+export type CertificateVatRecoveryResult = {
+  dryRun: boolean;
+  limit: number;
+  totalCertificates: number;
+  vatCoverageBefore: number;
+  vatCoverageAfter: number;
+  processed: number;
+  wouldUpdate: number;
+  updated: number;
+  reviewRequired: number;
+  noCandidateFound: number;
+  multipleCandidates: number;
+  rejectedByNegativeContext: number;
+  alreadyHadTrustedVat: number;
+  failed: number;
+  beforeCoverage: string;
+  afterCoverage: string;
+  details: Array<{
+    id?: string;
+    blobName?: string;
+    status: 'updated' | 'would_update' | 'review_required' | 'no_candidate_found' | 'already_had_trusted_vat' | 'failed';
+    vatNumber?: string;
+    confidence?: number;
+    reason?: string;
+    candidates?: Array<{ value: string; snippet: string; confidence: number }>;
+    error?: string;
+  }>;
 };
 
 export type CertificateEnrichmentOptions = {
@@ -311,6 +367,9 @@ function parseDateStrict(raw: string): Date | null {
   const dmy = /\b(\d{1,2})[-/](\d{1,2})[-/](20\d{2})\b/.exec(cleaned);
   if (dmy) return validDate(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]));
 
+  const ymdCompact = /\b(20\d{2})(\d{2})(\d{2})\b/.exec(cleaned);
+  if (ymdCompact) return validDate(Number(ymdCompact[1]), Number(ymdCompact[2]) - 1, Number(ymdCompact[3]));
+
   return null;
 }
 
@@ -501,29 +560,147 @@ function extractRegistrationNumber(text: string, reviews: ReviewField[]): FieldC
   return null;
 }
 
-function extractVat(text: string, reviews: ReviewField[]): FieldCandidate | null {
-  const matches = [...text.matchAll(/(?:\bvat\b|\bvat\s*(?:no|number|nr)\b|\bvat(?:no|number|nr)\b|\bvalue\s*added\s*tax\b|\btax\s*(?:registration|reg|no|number)\b)(?:[^0-9A-Za-z]{0,40}|\s*(?:no|number|nr|reg|registration)?\s*[:#.[\]-]?\s*)([4oO][0-9oOIl|sSbB.\s\-/]{8,30})/gi)];
-  for (const m of matches) {
-    const digits = m[1]
-      .replace(/[oO]/g, '0')
-      .replace(/[Il|]/g, '1')
-      .replace(/[sS]/g, '5')
-      .replace(/[bB]/g, '8')
-      .replace(/\D/g, '')
-      .slice(0, 10);
-    if (digits.length === 10 && digits.startsWith('4')) {
-      return {
-        field: 'vatNumber',
-        mongoField: 'vatNumber',
-        value: digits,
-        confidence: 0.95,
-        evidence: textSnippet(text, m.index ?? 0, m[0].length),
-        source: 'text',
-      };
+function normaliseVatLike(raw: string): string | null {
+  const digits = raw
+    .replace(/[oO]/g, '0')
+    .replace(/[Il|]/g, '1')
+    .replace(/[sS]/g, '5')
+    .replace(/[bB]/g, '8')
+    .replace(/\D/g, '');
+  return /^4\d{9}$/.test(digits) ? digits : null;
+}
+
+function isUnsafeUnlabelledVatContext(text: string, index: number): boolean {
+  const before = text.slice(Math.max(0, index - 80), index).toLowerCase();
+  const after = text.slice(index, index + 45).toLowerCase();
+  const context = `${before} ${after}`;
+  return /\b(id(?:entity)?\s*(?:no|number)?|company\s+registration|registration\s*(?:no|number|nr)|reg\s*(?:no|number|nr)|certificate\s*(?:no|number|nr)|membership\s*(?:no|number|nr)?|member\s*(?:no|number|nr)|telephone|phone|tel|cell|contact|fax|account\s*(?:no|number|nr)|postal\s*code|zip)\b/i.test(context);
+}
+
+function collectVatLikeNumbers(text: string, options: { allowOcrChars?: boolean; rejectNegativeContext?: boolean } = {}): {
+  candidates: VatTextCandidate[];
+  rejectedByNegativeContext: number;
+} {
+  const allowOcrChars = options.allowOcrChars === true;
+  const rejectNegativeContext = options.rejectNegativeContext === true;
+  const seen = new Set<string>();
+  const candidates: VatTextCandidate[] = [];
+  let rejectedByNegativeContext = 0;
+  const pattern = allowOcrChars
+    ? /(?:^|[^\dA-Za-z])([4oO](?:[ \t.\-/]?[0-9oOIl|sSbB]){9})(?![ \t.\-/]?[0-9oOIl|sSbB])/g
+    : /(?:^|[^\d])([4](?:[ \t.\-/]?\d){9})(?![ \t.\-/]?\d)/g;
+
+  for (const m of text.matchAll(pattern)) {
+    const value = normaliseVatLike(m[1]);
+    if (!value || seen.has(value)) continue;
+    const index = (m.index ?? 0) + m[0].indexOf(m[1]);
+    if (rejectNegativeContext && isUnsafeUnlabelledVatContext(text, index)) {
+      rejectedByNegativeContext++;
+      continue;
     }
-    pushReview(reviews, 'vatNumber', 'VAT-like label found but number failed validation', {
-      value: digits,
-      evidence: textSnippet(text, m.index ?? 0, m[0].length),
+    seen.add(value);
+    candidates.push({
+      value,
+      raw: m[1],
+      index,
+      snippet: textSnippet(text, index, m[1].length),
+      labelled: false,
+      confidence: 0.88,
+    });
+  }
+
+  return { candidates, rejectedByNegativeContext };
+}
+
+function collectLabelledVatCandidates(text: string): VatTextCandidate[] {
+  const label = /\b(?:vat|v\.?\s*a\.?\s*t\.?|value\s*added\s*tax|tax)\s*(?:registration|reg|reference|ref|no|number|nr)?(?:\s*(?:no|number|nr|ref|registration))?\b/gi;
+  const seen = new Set<string>();
+  const candidates: VatTextCandidate[] = [];
+  for (const m of text.matchAll(label)) {
+    const start = m.index ?? 0;
+    const window = text.slice(start, Math.min(text.length, start + 180));
+    const found = collectVatLikeNumbers(window, { allowOcrChars: true, rejectNegativeContext: false }).candidates;
+    for (const candidate of found) {
+      const betweenLabelAndNumber = window.slice(m[0].length, candidate.index);
+      if (/[A-Za-z]{2,}/.test(betweenLabelAndNumber)) continue;
+      if (seen.has(candidate.value)) continue;
+      seen.add(candidate.value);
+      const index = start + candidate.index;
+      candidates.push({
+        ...candidate,
+        index,
+        snippet: textSnippet(text, start, index - start + candidate.raw.length),
+        labelled: true,
+        confidence: 0.96,
+      });
+    }
+  }
+  return candidates;
+}
+
+export function analyseVatRecoveryText(text: string): VatRecoveryAnalysis {
+  const labelled = collectLabelledVatCandidates(text);
+  if (labelled.length === 1) {
+    return {
+      status: 'accepted',
+      reason: 'labelled_vat_candidate',
+      candidate: labelled[0],
+      candidates: labelled,
+      rejectedByNegativeContext: 0,
+    };
+  }
+  if (labelled.length > 1) {
+    return {
+      status: 'multiple_candidates',
+      reason: 'multiple_vat_like_candidates',
+      candidates: labelled,
+      rejectedByNegativeContext: 0,
+    };
+  }
+
+  const { candidates, rejectedByNegativeContext } = collectVatLikeNumbers(text, { rejectNegativeContext: true });
+  if (candidates.length === 1) {
+    return {
+      status: 'accepted',
+      reason: 'single_unlabelled_vat_candidate',
+      candidate: candidates[0],
+      candidates,
+      rejectedByNegativeContext,
+    };
+  }
+  if (candidates.length > 1) {
+    return {
+      status: 'multiple_candidates',
+      reason: 'multiple_vat_like_candidates',
+      candidates,
+      rejectedByNegativeContext,
+    };
+  }
+  return {
+    status: 'no_candidate_found',
+    reason: 'no_vat_like_candidate_found',
+    candidates,
+    rejectedByNegativeContext,
+  };
+}
+
+function extractVat(text: string, reviews: ReviewField[]): FieldCandidate | null {
+  const analysis = analyseVatRecoveryText(text);
+  if (analysis.status === 'accepted') {
+    const match = analysis.candidate;
+    return {
+      field: 'vatNumber',
+      mongoField: 'vatNumber',
+      value: match.value,
+      confidence: match.confidence,
+      evidence: match.snippet,
+      source: 'text',
+    };
+  }
+  if (analysis.status === 'multiple_candidates') {
+    pushReview(reviews, 'vatNumber', 'multiple_vat_like_candidates', {
+      value: analysis.candidates.slice(0, 6).map((candidate) => candidate.value).join(', '),
+      evidence: analysis.candidates.map((candidate) => `${candidate.value}: ${candidate.snippet}`).join(' | '),
     });
   }
   return null;
@@ -557,6 +734,9 @@ function extractBbbeeLevel(text: string, reviews: ReviewField[]): FieldCandidate
   const patterns = [
     new RegExp(String.raw`(?:b-?bbee|broad\s*based\s*black\s*economic\s*empowerment|bee)\s*(?:status\s*)?(?:level|contributor\s*level)[:\s-]*(?:a\s*)?(?:level\s*)?${levelValue}\b`, 'i'),
     new RegExp(String.raw`(?:b-?bbee|bee)\s*status[:\s-]*(?:level\s*)?${levelValue}\b`, 'i'),
+    new RegExp(String.raw`(?:b-?bbee|broad\s*based\s*black\s*economic\s*empowerment)[^\n\r]{0,80}\bleve[lI|]\s*${levelValue}\b`, 'i'),
+    new RegExp(String.raw`\bleve[lI|]\s*${levelValue}\s*(?:contributor|status)\b`, 'i'),
+    new RegExp(String.raw`\bstatus\s*leve[lI|]\s*${levelValue}\b`, 'i'),
     new RegExp(String.raw`\bleve[lI|]\s+${levelValue}(?:\s*\(\s*[1-8]\s*\))?\s+(?:b-?bbee\s+)?(?:contributor|status)\b`, 'i'),
     new RegExp(String.raw`\bleve[lI|]\s+${levelValue}(?:\s*\(\s*[1-8]\s*\))?\s+contributor\s+to\s+b-?bbee\b`, 'i'),
     new RegExp(String.raw`\ba\s+leve[lI|]\s+${levelValue}\s+contributor\s+to\s+b-?bbee\b`, 'i'),
@@ -720,19 +900,24 @@ function parsePercent(raw: string): number | null {
 
 function extractOwnership(text: string, field: 'blackOwnership' | 'blackWomenOwnership', reviews: ReviewField[]): FieldCandidate | null {
   const label = field === 'blackWomenOwnership'
-    ? /black\s*(?:wom(?:en|an)|female)\s*(?:ownership|shareholding|economic\s*interest|owned)?/i
-    : /black\s*(?:ownership|shareholding|economic\s*interest|owned)/i;
+    ? /(?:black\s*(?:wom(?:en|an)|female)\s*(?:ownership|shareholding|economic\s*interest|owned)?|(?:black\s*)?female\s*(?:ownership|shareholding|economic\s*interest|owned)|women\s*black\s*ownership)/i
+    : /(?:black\s*(?:people\s*)?(?:ownership|shareholding|economic\s*interest|owned)|black\s+people|black\s+equity|total\s+black\s+ownership)/i;
   const percent = String.raw`([0-9oOQ©dDlI|]{1,3}(?:[.,]\d+)?)`;
   const swornPercent = String.raw`([0-9A-Za-zÂ©|]{1,3}(?:[.,]\d+)?)`;
+  const boundedPercent = String.raw`(?<![\d.])([0-9]{1,3}(?:[.,]\d+)?)`;
+  const tableLine = field === 'blackWomenOwnership'
+    ? new RegExp(`(?:black\\s*(?:wom(?:en|an)|female)|(?:black\\s*)?female)[^\\n\\r%]{0,120}?${boundedPercent}\\s*%`, 'i')
+    : new RegExp(`(?:black\\s*(?:people|ownership|owned|shareholding|economic\\s*interest)|total\\s+black\\s+ownership)[^\\n\\r%]{0,120}?${boundedPercent}\\s*%`, 'i');
   const affidavitPatterns = [
     new RegExp(`(?:enterprise|measured\\s+entity|entity)\\s+is\\s+${swornPercent}[^\\n\\r%]{0,10}%[^\\n\\r]{0,90}${label.source}`, 'i'),
     new RegExp(`(?:enterprise|measured\\s+entity|entity)[^\\n\\r]{0,80}${label.source}[^\\n\\r%]{0,40}${swornPercent}[^\\n\\r%]{0,10}%`, 'i'),
   ];
   const patterns = isSwornAffidavitText(text)
     ? affidavitPatterns
-    : [
-        new RegExp(`${label.source}[^\\n\\r%]{0,70}${percent}[^\\n\\r%]{0,10}%`, 'i'),
-        new RegExp(`${percent}[^\\n\\r%]{0,10}%[^\\n\\r]{0,90}${label.source}`, 'i'),
+      : [
+        new RegExp(`${label.source}[^\\n\\r%]{0,70}?${boundedPercent}[^\\n\\r%]{0,10}%`, 'i'),
+        new RegExp(`${boundedPercent}[^\\n\\r%]{0,10}%[^\\n\\r]{0,90}${label.source}`, 'i'),
+        tableLine,
       ];
   for (const p of patterns) {
     const m = p.exec(text);
@@ -794,11 +979,12 @@ function extractDerivedSwornAffidavitLevel(text: string): FieldCandidate | null 
 
 function extractSwornAffidavitExpiryDate(text: string, reviews: ReviewField[]): FieldCandidate | null {
   if (!isSwornAffidavitText(text)) return null;
-  if (!/valid\s+for\s+(?:a\s+)?period\s+of\s+12\s+months\s+from\s+the\s+date\s+signed/i.test(text)) return null;
+  if (!/valid[^\n\r]{0,45}(?:12|twelve)[^\n\r]{0,25}mon(?:th|ths|lh|lhs)[^\n\r]{0,90}date\s+signed/i.test(text)) return null;
 
   const signedDatePatterns = [
     /date\s+created[:\s-]*([^\n\r]{6,30})/gi,
     /(?:date\s+signed|signed\s+on|sworn\s+(?:before\s+me\s+)?(?:on|at)?)[^\n\r]{0,40}?(\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2}|\d{1,2}\s+[A-Za-z]+\s+20\d{2})/gi,
+    /\bdate[:\s-]*(\d{1,2}\s+[A-Za-z]+\s+20\d{2}|\d{1,2}[-/]\d{1,2}[-/]20\d{2}|20\d{2}[-/]\d{1,2}[-/]\d{1,2})(?=[\s\S]{0,90}(?:commissioner|deponent|signature|oaths))/gi,
   ];
 
   for (const p of signedDatePatterns) {
@@ -832,11 +1018,7 @@ function addBroadReviewCandidates(
   reviews: ReviewField[],
 ) {
   if (fields.includes('vatNumber') && !accepted.has('vatNumber')) {
-    const uniqueVatLike = Array.from(new Set(
-      [...text.matchAll(/\b(4[\d\s.\-/]{9,18})\b/g)]
-        .map((m) => m[1].replace(/\D/g, '').slice(0, 10))
-        .filter((value) => /^4\d{9}$/.test(value)),
-    ));
+    const uniqueVatLike = collectVatLikeNumbers(text, { rejectNegativeContext: true }).candidates.map((candidate) => candidate.value);
     if (uniqueVatLike.length === 1) {
       pushReview(reviews, 'vatNumber', 'Single VAT-like number found without strict label; needs human confirmation', {
         value: uniqueVatLike[0],
@@ -939,6 +1121,8 @@ function extractSupplierStatus(text: string, field: 'empoweringSupplier' | 'valu
 function extractExpiryDate(text: string, reviews: ReviewField[]): FieldCandidate | null {
   const patterns = [
     /(?:expir(?:y|es|ation)\s*(?:date)?|valid\s*(?:until|to|through|till)|date\s*of\s*expir(?:y|ation)|certificate\s*expires?|validity\s*(?:period\s*)?(?:ends?|to|until)|end\s*date|not\s*valid\s*after)[:\s-]*([^\n\r]{6,50})/gi,
+    /(?:valid\s*(?:from|period)\s*[^\n\r]{0,45}?\b(?:to|until|through|till)\b)[:\s-]*([^\n\r]{6,50})/gi,
+    /\b(?:from|issue\s*date)[:\s-]*[^\n\r]{6,35}?\b(?:to|expiry\s*date)[:\s-]*([^\n\r]{6,50})/gi,
   ];
   const candidates: FieldCandidate[] = [];
   for (const p of patterns) {
@@ -1484,6 +1668,363 @@ export async function getProductionCertificateCoverage() {
   };
 }
 
+function isTrustedVat(value: unknown): boolean {
+  if (!hasValue(value)) return false;
+  return /^4\d{9}$/.test(String(value).replace(/\D/g, ''));
+}
+
+function vatCoverageString(count: number, total: number): string {
+  return `${count}/${total}`;
+}
+
+function vatReviewCandidate(analysis: Extract<VatRecoveryAnalysis, { status: 'multiple_candidates' }>): ReviewCandidate {
+  const candidates = analysis.candidates.slice(0, 10).map((candidate) => ({
+    value: candidate.value,
+    snippet: candidate.snippet,
+    confidence: 0.62,
+  }));
+  return {
+    field: 'vatNumber',
+    value: candidates[0]?.value ?? null,
+    candidates,
+    confidence: 0.62,
+    source: 'regex_fallback',
+    reason: analysis.reason,
+    evidence: candidates.map((candidate) => `${candidate.value}: ${candidate.snippet}`).join(' | '),
+    needsReview: true,
+    version: CERTIFICATE_ENRICHMENT_VERSION,
+    at: new Date(),
+  };
+}
+
+export async function runCertificateVatRecoveryJob(options: CertificateVatRecoveryOptions = {}): Promise<CertificateVatRecoveryResult> {
+  const dryRun = options.dryRun !== false;
+  const onlyMissing = options.onlyMissing !== false;
+  const onlyUsableText = options.onlyUsableText !== false;
+  const includeDetails = options.includeDetails === true;
+  const requestedLimit = Number(options.limit);
+  const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+    ? Math.min(Math.floor(requestedLimit), 1_000)
+    : 100;
+  const totalCertificates = await CertificateMetadataModel.countDocuments();
+  const beforeVatCount = await countPresentCertificateField('vatNumber');
+  const missingVatQuery = {
+    $or: [
+      { vatNumber: null },
+      { vatNumber: '' },
+      { vatNumber: { $exists: false } },
+    ],
+  };
+  const query = {
+    ...(onlyUsableText ? usableTextQuery() : {}),
+    ...(onlyMissing ? missingVatQuery : {}),
+    ...(onlyMissing ? {
+      $and: [{
+        $or: [
+          { 'reviewCandidates.vatNumber': { $exists: false } },
+          {
+            'reviewCandidates.vatNumber.reason': {
+              $nin: [
+                'no_usable_extracted_text',
+                'no_vat_like_candidate_found',
+                'multiple_vat_like_candidates',
+                'invalid_existing_vat_requires_labelled_replacement',
+              ],
+            },
+          },
+        ],
+      }],
+    } : {}),
+  };
+  const docs = await CertificateMetadataModel.find(query)
+    .sort({ updatedAt: 1 })
+    .limit(limit)
+    .lean() as MongoDoc[];
+
+  const result: CertificateVatRecoveryResult = {
+    dryRun,
+    limit,
+    totalCertificates,
+    vatCoverageBefore: beforeVatCount,
+    vatCoverageAfter: beforeVatCount,
+    processed: 0,
+    wouldUpdate: 0,
+    updated: 0,
+    reviewRequired: 0,
+    noCandidateFound: 0,
+    multipleCandidates: 0,
+    rejectedByNegativeContext: 0,
+    alreadyHadTrustedVat: 0,
+    failed: 0,
+    beforeCoverage: vatCoverageString(beforeVatCount, totalCertificates),
+    afterCoverage: vatCoverageString(beforeVatCount, totalCertificates),
+    details: [],
+  };
+
+  for (const doc of docs) {
+    result.processed++;
+    const detailBase = { id: doc.id, blobName: doc.blobName };
+    try {
+      const existingTrustedVat = isTrustedVat(doc.vatNumber);
+      if (existingTrustedVat) {
+        result.alreadyHadTrustedVat++;
+        if (includeDetails) {
+          result.details.push({ ...detailBase, status: 'already_had_trusted_vat', vatNumber: String(doc.vatNumber) });
+        }
+        continue;
+      }
+
+      const text = existingText(doc);
+      if (!text) {
+        result.noCandidateFound++;
+        if (!dryRun) {
+          const reviewFields = Array.from(new Set([...(Array.isArray(doc.reviewFields) ? doc.reviewFields : []), 'vatNumber']));
+          const nextReviewCandidates = {
+            ...(doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}),
+            vatNumber: {
+              field: 'vatNumber',
+              value: null,
+              candidates: [],
+              confidence: 0,
+              source: 'text',
+              reason: 'no_usable_extracted_text',
+              evidence: '',
+              needsReview: true,
+              version: CERTIFICATE_ENRICHMENT_VERSION,
+              at: new Date(),
+            },
+          };
+          await CertificateMetadataModel.updateOne(
+            { _id: doc._id },
+            {
+              $set: {
+                reviewCandidates: nextReviewCandidates,
+                reviewFields,
+                enrichmentStatus: 'review_required',
+                lastEnrichedAt: new Date(),
+                enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
+                updatedAt: new Date(),
+              },
+              $push: {
+                auditLog: {
+                  $each: [{
+                    id: randomUUID(),
+                    at: new Date(),
+                    type: 'certificate_vat_recovery_review',
+                    version: CERTIFICATE_ENRICHMENT_VERSION,
+                    blobName: doc.blobName,
+                    reason: 'no_usable_extracted_text',
+                  }],
+                  $slice: -50,
+                },
+              },
+            },
+          );
+        }
+        if (includeDetails) {
+          result.details.push({ ...detailBase, status: 'no_candidate_found', reason: 'no_usable_extracted_text' });
+        }
+        continue;
+      }
+
+      const analysis = analyseVatRecoveryText(text);
+      result.rejectedByNegativeContext += analysis.rejectedByNegativeContext;
+
+      if (analysis.status === 'no_candidate_found') {
+        result.noCandidateFound++;
+        if (!dryRun) {
+          const reviewFields = Array.from(new Set([...(Array.isArray(doc.reviewFields) ? doc.reviewFields : []), 'vatNumber']));
+          const nextReviewCandidates = {
+            ...(doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}),
+            vatNumber: {
+              field: 'vatNumber',
+              value: null,
+              candidates: [],
+              confidence: 0,
+              source: 'text',
+              reason: analysis.reason,
+              evidence: '',
+              needsReview: true,
+              version: CERTIFICATE_ENRICHMENT_VERSION,
+              at: new Date(),
+            },
+          };
+          await CertificateMetadataModel.updateOne(
+            { _id: doc._id },
+            {
+              $set: {
+                reviewCandidates: nextReviewCandidates,
+                reviewFields,
+                enrichmentStatus: 'review_required',
+                lastEnrichedAt: new Date(),
+                enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
+                updatedAt: new Date(),
+              },
+              $push: {
+                auditLog: {
+                  $each: [{
+                    id: randomUUID(),
+                    at: new Date(),
+                    type: 'certificate_vat_recovery_review',
+                    version: CERTIFICATE_ENRICHMENT_VERSION,
+                    blobName: doc.blobName,
+                    reason: analysis.reason,
+                    rejectedByNegativeContext: analysis.rejectedByNegativeContext,
+                  }],
+                  $slice: -50,
+                },
+              },
+            },
+          );
+        }
+        if (includeDetails) {
+          result.details.push({ ...detailBase, status: 'no_candidate_found', reason: analysis.reason });
+        }
+        continue;
+      }
+
+      if (analysis.status === 'multiple_candidates') {
+        result.multipleCandidates++;
+        result.reviewRequired++;
+        const nextReviewCandidates = {
+          ...(doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}),
+          vatNumber: vatReviewCandidate(analysis),
+        };
+        if (!dryRun) {
+          const reviewFields = Array.from(new Set([...(Array.isArray(doc.reviewFields) ? doc.reviewFields : []), 'vatNumber']));
+          await CertificateMetadataModel.updateOne(
+            { _id: doc._id },
+            {
+              $set: {
+                reviewCandidates: nextReviewCandidates,
+                reviewFields,
+                enrichmentStatus: 'review_required',
+                lastEnrichedAt: new Date(),
+                enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
+                updatedAt: new Date(),
+              },
+              $push: {
+                auditLog: {
+                  $each: [{
+                    id: randomUUID(),
+                    at: new Date(),
+                    type: 'certificate_vat_recovery_review',
+                    version: CERTIFICATE_ENRICHMENT_VERSION,
+                    blobName: doc.blobName,
+                    reason: analysis.reason,
+                    candidates: nextReviewCandidates.vatNumber.candidates,
+                  }],
+                  $slice: -50,
+                },
+              },
+            },
+          );
+        }
+        if (includeDetails) {
+          result.details.push({
+            ...detailBase,
+            status: 'review_required',
+            reason: analysis.reason,
+            candidates: vatReviewCandidate(analysis).candidates,
+          });
+        }
+        continue;
+      }
+
+      const candidate = analysis.candidate;
+      if (hasValue(doc.vatNumber) && !existingTrustedVat && analysis.reason !== 'labelled_vat_candidate') {
+        result.reviewRequired++;
+        if (includeDetails) {
+          result.details.push({
+            ...detailBase,
+            status: 'review_required',
+            reason: 'invalid_existing_vat_requires_labelled_replacement',
+            candidates: [{ value: candidate.value, snippet: candidate.snippet, confidence: candidate.confidence }],
+          });
+        }
+        continue;
+      }
+
+      if (dryRun) {
+        result.wouldUpdate++;
+      } else {
+        result.updated++;
+      }
+      const confidence = {
+        ...(doc.fieldConfidence && typeof doc.fieldConfidence === 'object' ? doc.fieldConfidence : {}),
+        vatNumber: {
+          confidence: candidate.confidence,
+          source: 'text',
+          extractionMethod: analysis.reason,
+          evidence: candidate.snippet,
+          sourceTextSnippet: candidate.snippet,
+          version: CERTIFICATE_ENRICHMENT_VERSION,
+          at: new Date(),
+        },
+      };
+      const nextReviewCandidates = { ...(doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}) };
+      delete nextReviewCandidates.vatNumber;
+      const reviewFields = Array.isArray(doc.reviewFields)
+        ? doc.reviewFields.filter((field: string) => field !== 'vatNumber')
+        : [];
+      if (!dryRun) {
+        await CertificateMetadataModel.updateOne(
+          { _id: doc._id },
+          {
+            $set: {
+              vatNumber: candidate.value,
+              vatNumberNormalized: normalizeVat(candidate.value),
+              fieldConfidence: confidence,
+              reviewCandidates: nextReviewCandidates,
+              reviewFields,
+              enrichmentStatus: reviewFields.length || Object.keys(nextReviewCandidates).length ? 'review_required' : 'completed',
+              lastEnrichedAt: new Date(),
+              enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
+              updatedAt: new Date(),
+            },
+            $push: {
+              auditLog: {
+                $each: [{
+                  id: randomUUID(),
+                  at: new Date(),
+                  type: 'certificate_vat_recovery',
+                  version: CERTIFICATE_ENRICHMENT_VERSION,
+                  blobName: doc.blobName,
+                  vatNumber: candidate.value,
+                  confidence: candidate.confidence,
+                  reason: analysis.reason,
+                }],
+                $slice: -50,
+              },
+            },
+          },
+        );
+      }
+      if (includeDetails) {
+        result.details.push({
+          ...detailBase,
+          status: dryRun ? 'would_update' : 'updated',
+          vatNumber: candidate.value,
+          confidence: candidate.confidence,
+          reason: analysis.reason,
+          candidates: [{ value: candidate.value, snippet: candidate.snippet, confidence: candidate.confidence }],
+        });
+      }
+    } catch (err) {
+      result.failed++;
+      logger.error('VAT recovery failed', { id: doc.id, blobName: doc.blobName, error: errorDetails(err) });
+      if (includeDetails) {
+        result.details.push({ ...detailBase, status: 'failed', error: errorMessage(err) });
+      }
+    }
+  }
+
+  const afterVatCount = dryRun ? beforeVatCount : await countPresentCertificateField('vatNumber');
+  result.vatCoverageAfter = afterVatCount;
+  result.afterCoverage = vatCoverageString(afterVatCount, totalCertificates);
+  return result;
+}
+
 function statusForResult(updates: Record<string, unknown>, reviewFields: ReviewField[], failed = false): EnrichmentStatus {
   if (failed) return 'failed';
   if (reviewFields.length > 0) return 'review_required';
@@ -1674,7 +2215,16 @@ export async function runCertificateEnrichmentJob(
       updates.extractedAt = new Date();
       updates.processedAt = new Date();
 
-      const status = statusForResult(updates, reviewFields);
+      const finalReviewFields = Array.from(new Set([
+        ...(Array.isArray(doc?.reviewFields) ? doc.reviewFields : []),
+        ...reviewFields.map((r) => r.field),
+      ])).filter((field) => {
+        const mongoField = FIELD_TO_MONGO[field as EnrichmentField];
+        return mongoField ? !hasValue(updates[mongoField]) : true;
+      });
+      const status = finalReviewFields.length > 0 || Object.keys(nextReviewCandidates).length > 0
+        ? 'review_required'
+        : statusForResult(updates, reviewFields);
       if (reviewFields.length > 0) result.reviewRequired++;
       if (Object.keys(updates).length > 0) result.updated++;
       if (reviewFields.length > 0 && result.reviewSamples.length < reviewSampleLimit) {
@@ -1709,7 +2259,7 @@ export async function runCertificateEnrichmentJob(
             enrichmentStatus: status,
             lastEnrichedAt: new Date(),
             enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
-            reviewFields: reviewFields.map((r) => r.field),
+            reviewFields: finalReviewFields,
             ...(Object.keys(confidenceUpdates).length ? { fieldConfidence: { ...(doc?.fieldConfidence ?? {}), ...confidenceUpdates } } : {}),
             updatedAt: new Date(),
           },

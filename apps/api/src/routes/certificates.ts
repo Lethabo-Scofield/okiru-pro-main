@@ -43,10 +43,12 @@ import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
 import { OKIRU_HUB_SECTORS, resolveOkiruHubSector } from '../services/okiruHubSectors.js';
 import {
+  CERTIFICATE_ENRICHMENT_VERSION,
   ENRICHMENT_FIELDS,
   PRODUCTION_CERTIFICATE_FIELDS,
   getProductionCertificateCoverage,
   runCertificateEnrichmentJob,
+  runCertificateVatRecoveryJob,
   type EnrichmentField,
 } from '../services/certificateEnrichmentJob.js';
 import {
@@ -1107,6 +1109,233 @@ router.post('/enrich-missing', async (req: Request, res: Response) => {
 
 router.post('/enrich-usable-text', async (req: Request, res: Response) => {
   return runCertificateEnrichmentEndpoint(req, res, { onlyUsableText: true, forceText: false });
+});
+
+router.post('/recover-vat', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    const result = await runCertificateVatRecoveryJob({
+      limit: req.body?.limit,
+      dryRun: req.body?.dryRun !== false,
+      onlyMissing: req.body?.onlyMissing !== false,
+      onlyUsableText: req.body?.onlyUsableText !== false,
+      includeDetails: req.body?.includeDetails === true,
+    });
+    if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
+      invalidateListAndStatsCache();
+    }
+    return res.json(result);
+  } catch (err: any) {
+    logger.error('Certificate VAT recovery failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate VAT recovery failed', error: err.message });
+  }
+});
+
+function normalizeSubmittedVat(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const raw = String(value).trim();
+  if (!raw || !/^[\d\s.\-/]+$/.test(raw)) return null;
+  const digits = raw.replace(/\D/g, '');
+  if (!/^4\d{9}$/.test(digits)) return null;
+  return digits;
+}
+
+function vatPreviewUrls(blobName: string) {
+  return {
+    previewUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=inline`,
+    downloadUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=attachment`,
+  };
+}
+
+router.get('/vat-review-queue', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'MongoDB is not connected.' });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const filter = {
+      $or: [
+        { vatNumber: null },
+        { vatNumber: '' },
+        { vatNumber: { $exists: false } },
+      ],
+    };
+    const projection = {
+      _id: 0,
+      id: 1,
+      blobName: 1,
+      fileName: 1,
+      supplierName: 1,
+      companyName: 1,
+      companySize: 1,
+      sectorCode: 1,
+      sectorName: 1,
+      vatNumber: 1,
+      extractionStatus: 1,
+      extractionMode: 1,
+      extractedTextLength: 1,
+      extractionError: 1,
+      enrichmentStatus: 1,
+      reviewFields: 1,
+      reviewCandidates: 1,
+      fieldConfidence: 1,
+      updatedAt: 1,
+    };
+
+    const [docs, total] = await Promise.all([
+      CertificateMetadataModel.find(filter, projection)
+        .sort({ updatedAt: -1, id: 1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      CertificateMetadataModel.countDocuments(filter),
+    ]);
+
+    const items = docs.map((doc: any) => {
+      const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
+      const fileName = typeof doc.fileName === 'string' && doc.fileName.trim() ? doc.fileName : blobBasename(blobName);
+      const candidateMeta = doc.reviewCandidates?.vatNumber;
+      const candidates = Array.isArray(candidateMeta?.candidates)
+        ? candidateMeta.candidates.map((candidate: any) => ({
+            candidate: typeof candidate.value === 'string' ? candidate.value : null,
+            confidence: typeof candidate.confidence === 'number' ? candidate.confidence : null,
+            snippet: typeof candidate.snippet === 'string' ? candidate.snippet : '',
+            reason: candidateMeta.reason ?? null,
+          }))
+        : candidateMeta?.value
+          ? [{
+              candidate: String(candidateMeta.value),
+              confidence: typeof candidateMeta.confidence === 'number' ? candidateMeta.confidence : null,
+              snippet: String(candidateMeta.evidence ?? candidateMeta.sourceTextSnippet ?? ''),
+              reason: candidateMeta.reason ?? null,
+            }]
+          : [];
+      const reviewFields = Array.isArray(doc.reviewFields) ? doc.reviewFields : [];
+      const reviewReason = candidateMeta?.reason
+        ?? (reviewFields.includes('vatNumber') ? 'manual_vat_review_required' : null)
+        ?? (doc.extractionStatus && doc.extractionStatus !== 'completed' ? 'pending_text_recovery' : 'vat_missing');
+
+      return {
+        id: doc.id ?? null,
+        blobName,
+        fileName,
+        filename: fileName,
+        company: doc.supplierName ?? doc.companyName ?? null,
+        size: doc.companySize ?? null,
+        sector: {
+          code: doc.sectorCode ?? null,
+          name: doc.sectorName ?? null,
+        },
+        vatNumber: doc.vatNumber ?? null,
+        reviewReason,
+        vatCandidates: candidates,
+        extractionStatus: doc.extractionStatus ?? null,
+        extractionMode: doc.extractionMode ?? null,
+        extractedTextLength: doc.extractedTextLength ?? 0,
+        extractionError: doc.extractionError ?? null,
+        enrichmentStatus: doc.enrichmentStatus ?? null,
+        fieldConfidence: doc.fieldConfidence?.vatNumber ?? null,
+        reviewUrl: `/certificates?reviewBlob=${encodeURIComponent(blobName)}&field=vatNumber`,
+        documentUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=attachment`,
+        ...vatPreviewUrls(blobName),
+      };
+    });
+
+    return res.json({
+      total,
+      limit,
+      offset,
+      pagination: { total, limit, offset },
+      items,
+    });
+  } catch (err: any) {
+    logger.error('Certificate VAT review queue failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate VAT review queue failed', error: err.message });
+  }
+});
+
+router.post('/:id/confirm-vat', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'MongoDB is not connected.' });
+    }
+
+    const id = singleRouteParam(req.params.id).trim();
+    const vatNumber = normalizeSubmittedVat(req.body?.vatNumber);
+    if (!id) return res.status(400).json({ message: 'Certificate id is required.' });
+    if (!vatNumber) {
+      return res.status(400).json({ message: 'VAT number must be exactly 10 digits and start with 4.' });
+    }
+
+    const doc: any = await CertificateMetadataModel.findOne({ id }).lean();
+    if (!doc) return res.status(404).json({ message: 'Certificate not found.' });
+
+    const reviewCandidates = { ...(doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}) };
+    delete reviewCandidates.vatNumber;
+    const reviewFields = Array.isArray(doc.reviewFields)
+      ? doc.reviewFields.filter((field: string) => field !== 'vatNumber')
+      : [];
+    const fieldConfidence = {
+      ...(doc.fieldConfidence && typeof doc.fieldConfidence === 'object' ? doc.fieldConfidence : {}),
+      vatNumber: {
+        confidence: 1,
+        source: 'manual_review',
+        extractionMethod: 'manual_confirmation',
+        evidence: typeof req.body?.note === 'string' ? req.body.note.slice(0, 300) : 'Confirmed by manual review',
+        version: CERTIFICATE_ENRICHMENT_VERSION,
+        at: new Date(),
+      },
+    };
+
+    await CertificateMetadataModel.updateOne(
+      { id },
+      {
+        $set: {
+          vatNumber,
+          vatNumberNormalized: normalizeVat(vatNumber),
+          fieldConfidence,
+          reviewCandidates,
+          reviewFields,
+          enrichmentStatus: reviewFields.length || Object.keys(reviewCandidates).length ? 'review_required' : 'completed',
+          lastEnrichedAt: new Date(),
+          enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
+          updatedAt: new Date(),
+        },
+        $push: {
+          auditLog: {
+            $each: [{
+              id: randomUUID(),
+              at: new Date(),
+              type: 'certificate_vat_manual_confirmation',
+              version: CERTIFICATE_ENRICHMENT_VERSION,
+              previousValue: doc.vatNumber ?? null,
+              vatNumber,
+              userId: (req.session as any)?.userId ?? null,
+            }],
+            $slice: -50,
+          },
+        },
+      },
+    );
+    invalidateListAndStatsCache();
+    return res.json({
+      ok: true,
+      id,
+      vatNumber,
+      previousValue: doc.vatNumber ?? null,
+      clearedReviewField: 'vatNumber',
+    });
+  } catch (err: any) {
+    logger.error('Certificate VAT confirmation failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate VAT confirmation failed', error: err.message });
+  }
 });
 
 router.get('/production-coverage', async (req: Request, res: Response) => {
