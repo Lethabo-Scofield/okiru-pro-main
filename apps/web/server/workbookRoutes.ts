@@ -7,6 +7,7 @@ import { hasAnyRole } from "./roles";
 import { seedLakeTradingDemo } from "./lakeTradingDemoSeed";
 import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixture";
 import { WorkbookModel, ClientModel } from "../shared/schema";
+import { handleBackSync } from "./workbookBackSync";
 import {
   validateWorkbook,
   validateWorkbookForSubmit,
@@ -1616,6 +1617,17 @@ export function registerWorkbookRoutes(app: Express): void {
 
   app.post("/api/workbook/:companyId/submit", requireAuth, handleWorkbookScorecardSync);
   app.post("/api/workbook/:companyId/sync", requireAuth, handleWorkbookScorecardSync);
+
+  // ---------------------------------------------------------------------------
+  // POST /api/internal/workbook-backsync
+  // Toolkit→Workbook back-sync: apps/api per-entity routes fire this after
+  // every successful entity write (employees / suppliers / training-programs /
+  // shareholders / ESD / SED contributions). Token-protected (shared secret).
+  // ---------------------------------------------------------------------------
+  app.post(
+    "/api/internal/workbook-backsync",
+    handleBackSync(process.env.INTERNAL_BACKSYNC_TOKEN),
+  );
 
   // ---------------------------------------------------------------------------
   // POST /api/workbook/suggest-value

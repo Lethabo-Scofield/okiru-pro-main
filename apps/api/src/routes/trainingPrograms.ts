@@ -4,6 +4,7 @@ type Request = ExpressRequest<Record<string, string>, any, any, Record<string, s
 import { storage } from '../../storage.js';
 import { requireAuth, verifyClientAccess, verifyResourceOwnership, verifyPillarAccess } from '../middleware/auth.js';
 import { TrainingProgramModel } from '../../models.js';
+import { fanOutBackSync } from '../services/workbookBackSyncFanout.js';
 
 // Dedicated training-programs router. Previously these routes lived on the
 // employees router, which was dual-mounted at /api/training-programs — so a
@@ -16,7 +17,9 @@ const router = Router({ mergeParams: true });
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
   if (!(await verifyPillarAccess(req, res, 'skills'))) return;
-  const result = await storage.createTrainingProgram({ ...req.body, clientId: String(req.params.clientId) });
+  const clientId = String(req.params.clientId);
+  const result = await storage.createTrainingProgram({ ...req.body, clientId });
+  fanOutBackSync({ companyId: clientId, entityType: 'trainingProgram', entity: result, op: 'upsert' });
   return res.json(result);
 });
 
@@ -27,6 +30,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyResourceOwnership(req, res, doc.clientId))) return;
   if (!(await verifyPillarAccess(req, res, 'skills', doc.clientId))) return;
   const result = await storage.updateTrainingProgram(String(req.params.id), req.body);
+  if (result) fanOutBackSync({ companyId: String(doc.clientId), entityType: 'trainingProgram', entity: result, op: 'upsert' });
   return res.json(result);
 });
 
@@ -37,6 +41,7 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyResourceOwnership(req, res, doc.clientId))) return;
   if (!(await verifyPillarAccess(req, res, 'skills', doc.clientId))) return;
   await storage.deleteTrainingProgram(String(req.params.id));
+  fanOutBackSync({ companyId: String(doc.clientId), entityType: 'trainingProgram', entity: doc, op: 'delete' });
   return res.json({ message: "Deleted" });
 });
 

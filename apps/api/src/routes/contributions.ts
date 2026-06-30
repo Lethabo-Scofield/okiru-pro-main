@@ -4,6 +4,7 @@ type Request = ExpressRequest<Record<string, string>, any, any, Record<string, s
 import { storage } from '../../storage.js';
 import { requireAuth, verifyClientAccess, verifyResourceOwnership, verifyPillarAccess } from '../middleware/auth.js';
 import { EsdContributionModel, SedContributionModel } from '../../models.js';
+import { fanOutBackSync } from '../services/workbookBackSyncFanout.js';
 
 // IMPORTANT: previous handlers used router.post('/esd') / '/sed' but the
 // router is already mounted at /api/clients/:clientId/esd-contributions etc.,
@@ -26,10 +27,17 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   const sed = isSedRequest(req);
   const pillarKey = sed ? 'sed' : 'esd';
   if (!(await verifyPillarAccess(req, res, pillarKey))) return;
-  const payload = { ...req.body, clientId: String(req.params.clientId) };
+  const clientId = String(req.params.clientId);
+  const payload = { ...req.body, clientId };
   const result = sed
     ? await storage.createSedContribution(payload)
     : await storage.createEsdContribution(payload);
+  fanOutBackSync({
+    companyId: clientId,
+    entityType: sed ? 'sedContribution' : 'esdContribution',
+    entity: result,
+    op: 'upsert',
+  });
   return res.json(result);
 });
 
@@ -44,6 +52,12 @@ router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyPillarAccess(req, res, pillarKey, doc.clientId))) return;
   if (sed) await storage.deleteSedContribution(String(req.params.id));
   else await storage.deleteEsdContribution(String(req.params.id));
+  fanOutBackSync({
+    companyId: String(doc.clientId),
+    entityType: sed ? 'sedContribution' : 'esdContribution',
+    entity: doc,
+    op: 'delete',
+  });
   return res.json({ message: "Deleted" });
 });
 
