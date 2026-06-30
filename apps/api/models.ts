@@ -46,6 +46,14 @@ const clientSchema = new Schema({
   graduationEvidence: { type: String, default: '' },
   jobsCreatedEvidence: { type: String, default: '' },
   afs: { type: Schema.Types.Mixed, default: null },
+  // FSC-only SED spend fields: Consumer Education (+ CE bonus) and Fundisa.
+  // calculateSedScore already scores these when sc.ceMaxPts / sc.fundisaMaxPts > 0
+  // (i.e. FSC variants). Previously read only from the financials blob via
+  // the load path — surfacing them as top-level fields makes updateSed
+  // persistable via the existing updateClient route.
+  ceSpend: { type: Number, default: 0 },
+  ceBonusSpend: { type: Number, default: 0 },
+  fundisaSpend: { type: Number, default: 0 },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "clients" });
 
