@@ -52,21 +52,28 @@ interface CertificateRow {
   enrichmentStatus?: string | null;
   reviewFields?: string[];
   fieldConfidence?: Record<string, unknown>;
+  reviewCandidates?: Record<string, { value?: unknown; confidence?: number; reason?: string; evidence?: string; needsReview?: boolean }>;
   location?: string | null;
   businessUnit?: string | null;
 }
 
 function certificateHaystack(c: CertificateRow): string {
+  const suggested = c.reviewCandidates ?? {};
   return `
     ${c.companyName || ''}
     ${c.vatNumber || ''}
+    ${suggested.vatNumber?.value ?? ''}
     ${c.fileName || ''}
     ${c.bbbeeLevel ?? ''}
+    ${suggested.bbbeeLevel?.value ?? ''}
     ${c.bbbeeLevelStatus || ''}
     ${c.companySize || ''}
+    ${suggested.companySize?.value ?? ''}
     ${c.blackOwnership ?? ''}
+    ${suggested.blackOwnership?.value ?? ''}
     ${c.blackWomenOwnership ?? ''}
     ${c.expiryDate || ''}
+    ${suggested.expiryDate?.value ?? ''}
     ${c.sectorCode || ''}
     ${c.sectorName || ''}
     ${c.location || ''}
@@ -147,6 +154,41 @@ function displayValue(value: string | number | null | undefined): string {
   return text || 'Missing';
 }
 
+function candidateValue(cert: CertificateRow, field: string): unknown {
+  return cert.reviewCandidates?.[field]?.value;
+}
+
+function displayCandidate(cert: CertificateRow, field: string): string | null {
+  const value = candidateValue(cert, field);
+  if (value == null) return null;
+  if (field === 'expiryDate') return formatExpiry(String(value));
+  if (field === 'blackOwnership' || field === 'blackWomenOwnership') {
+    const n = Number(value);
+    return Number.isFinite(n) ? formatPct(n) : String(value);
+  }
+  if (field === 'bbbeeLevel') return `Level ${value}`;
+  return displayValue(value as string | number | null | undefined);
+}
+
+function hasCandidate(cert: CertificateRow, field: string): boolean {
+  return displayCandidate(cert, field) != null;
+}
+
+function SuggestedValue({ value, title }: { value: string | null; title?: string }) {
+  if (!value) {
+    return (
+      <span className="text-[#48484a]" title={title || 'No safe value found; open review to verify'}>
+        -
+      </span>
+    );
+  }
+  return (
+    <span className="text-[#fbbf24]" title={title || 'Suggested value needs review in the document preview'}>
+      {value}
+    </span>
+  );
+}
+
 function confidenceTitle(cert: CertificateRow, field: string): string | undefined {
   const meta = cert.fieldConfidence?.[field];
   if (!meta || typeof meta !== 'object') return undefined;
@@ -160,7 +202,44 @@ function confidenceTitle(cert: CertificateRow, field: string): string | undefine
 function needsReview(cert: CertificateRow): boolean {
   return cert.enrichmentStatus === 'review_required'
     || cert.enrichmentStatus === 'failed'
-    || (cert.reviewFields?.length ?? 0) > 0;
+    || (cert.reviewFields?.length ?? 0) > 0
+    || Object.keys(cert.reviewCandidates ?? {}).length > 0;
+}
+
+const REVIEW_EDIT_FIELDS = [
+  { key: 'vatNumber', label: 'VAT Number', type: 'text' },
+  { key: 'bbbeeLevel', label: 'B-BBEE Level', type: 'number' },
+  { key: 'companySize', label: 'Size', type: 'select' },
+  { key: 'blackOwnership', label: 'Black Ownership %', type: 'number' },
+  { key: 'blackWomenOwnership', label: 'Black Women Ownership %', type: 'number' },
+  { key: 'expiryDate', label: 'Expiry Date', type: 'date' },
+] as const;
+
+type ReviewEditFieldKey = typeof REVIEW_EDIT_FIELDS[number]['key'];
+
+function reviewFieldValue(cert: CertificateRow, key: ReviewEditFieldKey): string {
+  const current = cert[key as keyof CertificateRow];
+  const candidate = candidateValue(cert, key);
+  const value = current ?? candidate;
+  if (value == null) return '';
+  if (key === 'expiryDate') return String(value).slice(0, 10);
+  return String(value);
+}
+
+function reviewFieldNeedsAttention(cert: CertificateRow, key: ReviewEditFieldKey): boolean {
+  return (cert.reviewFields ?? []).includes(key)
+    || Boolean(cert.reviewCandidates?.[key])
+    || reviewFieldValue(cert, key).trim() === '';
+}
+
+function castReviewValue(key: ReviewEditFieldKey, value: string): string | number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (key === 'bbbeeLevel' || key === 'blackOwnership' || key === 'blackWomenOwnership') {
+    const numeric = Number(trimmed);
+    return Number.isFinite(numeric) ? numeric : null;
+  }
+  return trimmed;
 }
 
 function StatusBadge({ status, expiryDate }: { status: CertificateRow['status']; expiryDate: string | null }) {
@@ -328,6 +407,13 @@ export default function CertificateHub() {
   const [showUpload, setShowUpload] = useState(false);
   const [uploading, setUploading] = useState(false);
 
+  const handleCertificateSaved = useCallback((updated: CertificateRow) => {
+    setAllCerts(prev => prev.map(cert => (
+      (updated.id && cert.id === updated.id) || cert.name === updated.name ? updated : cert
+    )));
+    setPreviewCert(updated);
+  }, []);
+
   // Auto-open upload modal when arriving with ?openUpload=1 (e.g. after onboarding)
   useEffect(() => {
     if (authLoading) return;
@@ -420,11 +506,11 @@ export default function CertificateHub() {
     return [
       { label: 'Company', value: count(c => !!c.companyName && !/^Unknown company/i.test(c.companyName)) },
       { label: 'Sector', value: count(c => !!c.sectorCode || !!c.sectorName) },
-      { label: 'VAT', value: count(c => !!c.vatNumber) },
-      { label: 'B-BBEE Level', value: count(c => c.bbbeeLevel != null || !!c.bbbeeLevelStatus) },
+      { label: 'VAT', value: count(c => !!c.vatNumber || hasCandidate(c, 'vatNumber')) },
+      { label: 'B-BBEE Level', value: count(c => c.bbbeeLevel != null || !!c.bbbeeLevelStatus || hasCandidate(c, 'bbbeeLevel')) },
       { label: 'Size', value: count(c => !!c.companySize) },
-      { label: 'Ownership', value: count(c => c.blackOwnership != null || c.blackWomenOwnership != null) },
-      { label: 'Expiry', value: count(c => !!c.expiryDate) },
+      { label: 'Ownership', value: count(c => c.blackOwnership != null || c.blackWomenOwnership != null || hasCandidate(c, 'blackOwnership') || hasCandidate(c, 'blackWomenOwnership')) },
+      { label: 'Expiry', value: count(c => !!c.expiryDate || hasCandidate(c, 'expiryDate')) },
     ];
   }, [allCerts]);
   const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || reviewOnly);
@@ -582,10 +668,55 @@ export default function CertificateHub() {
         </div>
       </header>
 
-      <main className="max-w-[1100px] mx-auto px-5 pt-10 pb-20">
+      <main className="max-w-[1180px] mx-auto px-4 sm:px-6 pt-6 pb-20">
+
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[#636366]">
+              <FileText className="h-3.5 w-3.5 text-[#818cf8]" />
+              Certificate Hub
+            </div>
+            <h1 className="mt-1 text-[26px] font-semibold tracking-tight text-white sm:text-[30px]">
+              {loading ? 'Loading certificates' : `${headlineCount.toLocaleString()} certificates`}
+            </h1>
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#8e8e93]">
+              <span>{allCerts.length.toLocaleString()} loaded</span>
+              {stats && <span>{stats.valid.toLocaleString()} valid</span>}
+              {stats && <span>{stats.expiring.toLocaleString()} expiring</span>}
+              <span className={reviewCount > 0 ? 'text-[#fbbf24]' : 'text-[#8e8e93]'}>
+                {reviewCount.toLocaleString()} review
+              </span>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {reviewCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setReviewOnly((value) => !value)}
+                className={[
+                  'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] transition-colors',
+                  reviewOnly
+                    ? 'bg-[#f59e0b] text-black'
+                    : 'border border-[#f59e0b]/35 bg-[#f59e0b]/10 text-[#fbbf24] hover:bg-[#f59e0b]/15',
+                ].join(' ')}
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Review queue
+              </button>
+            )}
+            <button
+              onClick={requireLoginToUpload}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#6366f1]/50 px-3 py-2 text-[12px] font-medium text-white hover:bg-[#6366f1]/10 transition-colors"
+            >
+              <Upload className="h-3.5 w-3.5 text-[#a5b4fc]" />
+              Add certificate
+            </button>
+          </div>
+        </div>
 
         {/* ─── Hero ───────────────────────────────────────────── */}
-        <div className="mb-8">
+        <div className="hidden">
           <p className="text-[11px] tracking-[0.14em] uppercase text-[#818cf8] mb-3" style={{ fontFamily: "'Geist Mono', monospace" }}>
             Public B-BBEE Certificate Registry · South Africa
           </p>
@@ -603,14 +734,14 @@ export default function CertificateHub() {
         </div>
 
         {/* ─── Hero search (primary CTA) ───────────────────── */}
-        <div className="relative mb-8">
+        <div className="relative mb-4">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#636366]" />
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by company name, VAT number, or B-BBEE level…"
-            className="w-full bg-[#1c1c1e] rounded-xl pl-12 pr-12 py-4 text-[16px] text-white placeholder:text-[#48484a] outline-none border border-[#2c2c2e] focus:border-[#6366f1] transition-colors shadow-sm"
+            className="w-full rounded-lg border border-[#2c2c2e] bg-[#111114] py-3 pl-11 pr-11 text-[14px] text-white outline-none placeholder:text-[#55555a] focus:border-[#6366f1] transition-colors"
             autoComplete="off"
           />
           {search && (
@@ -625,7 +756,7 @@ export default function CertificateHub() {
 
         {/* ─── KPIs ───────────────────────────────────────────── */}
         {!loading && stats && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+          <div className="hidden">
             <KpiCard
               title="Total certificates"
               value={String(stats.total)}
@@ -658,7 +789,7 @@ export default function CertificateHub() {
         )}
 
         {!loading && reviewCount > 0 && (
-          <div className="mb-6 rounded-lg border border-[#f59e0b]/25 bg-[#f59e0b]/10 px-4 py-3">
+          <div className="hidden">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 text-[13px] font-medium text-[#fbbf24]">
@@ -694,19 +825,12 @@ export default function CertificateHub() {
 
         {/* ─── Filters ────────────────────────────────────────── */}
         {!loading && allCerts.length > 0 && (
-          <div className="mb-6 rounded-lg border border-[#2c2c2e] bg-[#111114] px-4 py-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <div>
-                <h3 className="text-[13px] font-medium text-white">Metadata coverage</h3>
-                <p className="text-[11px] text-[#636366]">Counts are based on values returned by the certificate API.</p>
-              </div>
-              <span className="shrink-0 text-[11px] text-[#8e8e93]">{allCerts.length.toLocaleString()} loaded</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
+          <div className="mb-4 rounded-lg border border-[#242428] bg-[#0d0d10] px-3 py-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
               {fieldCoverage.map((field) => (
                 <div
                   key={field.label}
-                  className="min-w-0 rounded-md bg-black/30 px-2.5 py-2"
+                  className="min-w-0 rounded-md bg-white/[0.03] px-2.5 py-2"
                   title={`${field.value.toLocaleString()} of ${allCerts.length.toLocaleString()} loaded certificates`}
                 >
                   <div className="truncate text-[10px] uppercase tracking-wide text-[#636366]">{field.label}</div>
@@ -717,7 +841,7 @@ export default function CertificateHub() {
           </div>
         )}
 
-        <div className="flex items-center gap-2 mb-6 flex-wrap">
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
           <FilterPill
             label="Validity"
             value={statusFilter}
@@ -776,7 +900,7 @@ export default function CertificateHub() {
 
         {/* Stats bar + section header */}
         {!loading && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
             <div>
               <h2 className="text-[15px] font-semibold text-white mb-0.5 flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-[#22d3ee]" />
@@ -806,7 +930,7 @@ export default function CertificateHub() {
             </div>
 
             {/* "Add Your Certificate" inline CTA */}
-            {!hasActiveFilters && (
+            {false && !hasActiveFilters && (
               <button
                 onClick={requireLoginToUpload}
                 className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-white border border-[#6366f1]/50 hover:bg-[#6366f1]/10 transition-colors"
@@ -831,14 +955,15 @@ export default function CertificateHub() {
             isAuthenticated={isAuthenticated}
           />
         ) : (
-          <div className="rounded-xl overflow-hidden border border-[#1c1c1e] bg-[#0d0d10]">
-            <div className="hidden md:grid grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(150px,1fr)] items-center gap-4 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#636366]" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+          <div className="rounded-xl border border-[#1c1c1e] bg-[#0d0d10]">
+            <div className="sticky top-14 z-10 hidden rounded-t-xl border-b border-white/[0.06] bg-[#0d0d10]/95 backdrop-blur-md md:grid grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(140px,0.9fr)_104px] items-center gap-4 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#8e8e93] shadow-[0_8px_20px_rgba(0,0,0,0.28)]">
               <div>Company / sector</div>
               <div>VAT number</div>
               <div>Level</div>
               <div>Size</div>
               <div>Ownership</div>
               <div>Expiry</div>
+              <div className="text-right">Actions</div>
             </div>
             {filtered.map((cert, idx) => (
               <CertRow
@@ -858,7 +983,7 @@ export default function CertificateHub() {
 
       {/* ─── Certificate Preview modal ──────────────────────── */}
       {previewCert && (
-        <CertPreviewModal cert={previewCert} onClose={() => setPreviewCert(null)} />
+        <CertPreviewModal cert={previewCert} onClose={() => setPreviewCert(null)} onSaved={handleCertificateSaved} />
       )}
 
       {/* ─── Upload modal ───────────────────────────────────── */}
@@ -885,10 +1010,10 @@ function CertRow({
 }) {
   return (
     <div
-      className="px-4 py-3.5 hover:bg-[#16161b] transition-colors"
+      className="group px-4 py-3.5 hover:bg-[#16161b] focus-within:bg-[#16161b] transition-colors"
       style={{ borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)' }}
     >
-      <div className="md:grid md:grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(150px,1fr)] md:items-start md:gap-4">
+      <div className="md:grid md:grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(140px,0.9fr)_104px] md:items-start md:gap-4">
         <div className="min-w-0">
         <div className="text-[14px] text-white font-medium leading-snug flex items-center gap-1.5 flex-wrap">
           {cert.slug ? (
@@ -940,32 +1065,32 @@ function CertRow({
             {cert.sectorCode ? sectorDisplayLabel(cert.sectorCode, cert.sectorName) : 'Sector not captured'}
           </span>
         </div>
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[#636366]">
-          {cert.vatNumber && <span>VAT: {cert.vatNumber}</span>}
-          {cert.bbbeeLevelStatus && <span>{cert.bbbeeLevelStatus}</span>}
+        <div className="hidden">
+          {(cert.vatNumber || hasCandidate(cert, 'vatNumber')) && <span>VAT: {cert.vatNumber || `Suggested ${displayCandidate(cert, 'vatNumber')}`}</span>}
+          {(cert.bbbeeLevelStatus || hasCandidate(cert, 'bbbeeLevel')) && <span>{cert.bbbeeLevelStatus || `Suggested ${displayCandidate(cert, 'bbbeeLevel')}`}</span>}
           {cert.companySize && <span>Size: {cert.companySize}</span>}
-          {cert.blackOwnership != null && <span>Ownership: {formatPct(cert.blackOwnership)}</span>}
+          {(cert.blackOwnership != null || hasCandidate(cert, 'blackOwnership')) && <span>Ownership: {cert.blackOwnership != null ? formatPct(cert.blackOwnership) : `Suggested ${displayCandidate(cert, 'blackOwnership')}`}</span>}
           {cert.blackWomenOwnership != null && <span>Women ownership: {formatPct(cert.blackWomenOwnership)}</span>}
-          {cert.expiryDate && <span>Expiry: {formatExpiry(cert.expiryDate)}</span>}
+          {(cert.expiryDate || hasCandidate(cert, 'expiryDate')) && <span>Expiry: {cert.expiryDate ? formatExpiry(cert.expiryDate) : `Suggested ${displayCandidate(cert, 'expiryDate')}`}</span>}
         </div>
         <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
-          {cert.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber}</span>}
-          {(cert.bbbeeLevel != null || cert.bbbeeLevelStatus) && <span><Award className="inline h-3 w-3 mr-0.5" /> {cert.bbbeeLevelStatus || `Level ${cert.bbbeeLevel}`}</span>}
+          {(cert.vatNumber || hasCandidate(cert, 'vatNumber')) && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber || displayCandidate(cert, 'vatNumber')}</span>}
+          {(cert.bbbeeLevel != null || cert.bbbeeLevelStatus || hasCandidate(cert, 'bbbeeLevel')) && <span><Award className="inline h-3 w-3 mr-0.5" /> {cert.bbbeeLevelStatus || (cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : displayCandidate(cert, 'bbbeeLevel'))}</span>}
           {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {cert.companySize}</span>}
-          {cert.blackOwnership != null && <span><Percent className="inline h-3 w-3 mr-0.5" /> {formatPct(cert.blackOwnership)} black</span>}
-          {cert.expiryDate && <span><CalendarClock className="inline h-3 w-3 mr-0.5" /> {formatExpiry(cert.expiryDate)}</span>}
+          {(cert.blackOwnership != null || hasCandidate(cert, 'blackOwnership')) && <span><Percent className="inline h-3 w-3 mr-0.5" /> {cert.blackOwnership != null ? formatPct(cert.blackOwnership) : displayCandidate(cert, 'blackOwnership')} black</span>}
+          {(cert.expiryDate || hasCandidate(cert, 'expiryDate')) && <span><CalendarClock className="inline h-3 w-3 mr-0.5" /> {cert.expiryDate ? formatExpiry(cert.expiryDate) : displayCandidate(cert, 'expiryDate')}</span>}
         </div>
         <div className="md:hidden mt-1.5"><StatusBadge status={cert.status} expiryDate={cert.expiryDate} /></div>
       </div>
 
       <div className="hidden md:block text-[13px] text-[#a1a1aa] truncate">
-        {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <span className="text-[#48484a]">—</span>}
+        {cert.vatNumber ? <HighlightMatch text={cert.vatNumber} query={searchQuery} /> : <SuggestedValue value={displayCandidate(cert, 'vatNumber')} />}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
         {cert.bbbeeLevel != null ? (
           <span className="text-white">Level {cert.bbbeeLevel}</span>
         ) : (
-          <span className="text-[#48484a]">—</span>
+          <SuggestedValue value={displayCandidate(cert, 'bbbeeLevel')} />
         )}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
@@ -980,15 +1105,44 @@ function CertRow({
             )}
           </span>
         ) : (
-          <span className="text-[#48484a]">-</span>
+          <SuggestedValue value={displayCandidate(cert, 'blackOwnership')} />
         )}
       </div>
       <div className="hidden md:flex flex-col items-start gap-1 text-[13px] text-[#a1a1aa]">
-        <span>{formatExpiry(cert.expiryDate)}</span>
+        {cert.expiryDate ? <span>{formatExpiry(cert.expiryDate)}</span> : <SuggestedValue value={displayCandidate(cert, 'expiryDate')} />}
         <StatusBadge status={cert.status} expiryDate={cert.expiryDate} />
       </div>
+      <div className="hidden md:flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {needsReview(cert) && (
+          <button
+            onClick={onPreview}
+            aria-label={`Review ${cert.companyName}`}
+            title="Review"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#fbbf24] hover:bg-[#f59e0b]/15 transition-colors"
+          >
+            <AlertTriangle className="h-4 w-4" />
+          </button>
+        )}
+        <button
+          onClick={onPreview}
+          aria-label={`Preview ${cert.companyName}`}
+          title="Preview"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors"
+        >
+          <Eye className="h-4 w-4" />
+        </button>
+        <button
+          onClick={onDownload}
+          disabled={isDownloading}
+          aria-label={`Download ${cert.fileName}`}
+          title="Download"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors"
+        >
+          {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+        </button>
       </div>
-      <div className="hidden md:flex items-center justify-end gap-2 mt-3">
+      </div>
+      <div className="hidden">
         {needsReview(cert) && (
           <button
             onClick={onPreview}
@@ -1055,13 +1209,19 @@ function certPreviewKind(fileName: string): 'pdf' | 'image' | 'other' {
   return 'other';
 }
 
-function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: () => void }) {
+function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; onClose: () => void; onSaved: (updated: CertificateRow) => void }) {
+  const { toast } = useToast();
   const [docUrl, setDocUrl] = useState<string | null>(null);
   const [loadingDoc, setLoadingDoc] = useState(true);
   const [docError, setDocError] = useState<string | null>(null);
+  const [reviewDraft, setReviewDraft] = useState<Record<ReviewEditFieldKey, string>>(() => (
+    Object.fromEntries(REVIEW_EDIT_FIELDS.map(field => [field.key, reviewFieldValue(cert, field.key)])) as Record<ReviewEditFieldKey, string>
+  ));
+  const [savingReview, setSavingReview] = useState(false);
 
   const displayName = cert.fileName || cert.name;
   const kind = certPreviewKind(displayName);
+  const reviewFieldsToShow = REVIEW_EDIT_FIELDS.filter(field => reviewFieldNeedsAttention(cert, field.key));
 
   useEffect(() => {
     let cancelled = false;
@@ -1092,6 +1252,66 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
 
     return () => { cancelled = true; };
   }, [cert.name]);
+
+  useEffect(() => {
+    setReviewDraft(Object.fromEntries(
+      REVIEW_EDIT_FIELDS.map(field => [field.key, reviewFieldValue(cert, field.key)]),
+    ) as Record<ReviewEditFieldKey, string>);
+  }, [cert]);
+
+  const saveReviewedFields = async () => {
+    const payload: Partial<Record<ReviewEditFieldKey, string | number | null>> = {};
+    for (const field of reviewFieldsToShow) {
+      payload[field.key] = castReviewValue(field.key, reviewDraft[field.key] ?? '');
+    }
+
+    if (!Object.keys(payload).length || !cert.id) {
+      toast({ title: 'Nothing to save', description: 'No review fields are available for this certificate.' });
+      return;
+    }
+
+    setSavingReview(true);
+    try {
+      const res = await fetch(`/api/certificates/${encodeURIComponent(cert.id)}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message || 'Could not save certificate metadata');
+
+      const confirmedFields = Object.keys(payload) as ReviewEditFieldKey[];
+      const nextCandidates = { ...(cert.reviewCandidates ?? {}) };
+      confirmedFields.forEach(field => { delete nextCandidates[field]; });
+      const nextReviewFields = (cert.reviewFields ?? []).filter(field => !confirmedFields.includes(field as ReviewEditFieldKey));
+      const localUpdates: Partial<CertificateRow> = {};
+      if ('vatNumber' in payload) localUpdates.vatNumber = payload.vatNumber == null ? null : String(payload.vatNumber);
+      if ('companySize' in payload) localUpdates.companySize = payload.companySize == null ? null : String(payload.companySize);
+      if ('expiryDate' in payload) localUpdates.expiryDate = payload.expiryDate == null ? null : String(payload.expiryDate);
+      if ('bbbeeLevel' in payload) localUpdates.bbbeeLevel = typeof payload.bbbeeLevel === 'number' ? payload.bbbeeLevel : null;
+      if ('blackOwnership' in payload) localUpdates.blackOwnership = typeof payload.blackOwnership === 'number' ? payload.blackOwnership : null;
+      if ('blackWomenOwnership' in payload) localUpdates.blackWomenOwnership = typeof payload.blackWomenOwnership === 'number' ? payload.blackWomenOwnership : null;
+      const nextCert: CertificateRow = {
+        ...cert,
+        ...localUpdates,
+        bbbeeLevelStatus: localUpdates.bbbeeLevel != null ? `Level ${localUpdates.bbbeeLevel}` : cert.bbbeeLevelStatus,
+        reviewFields: nextReviewFields,
+        reviewCandidates: nextCandidates,
+        enrichmentStatus: nextReviewFields.length || Object.keys(nextCandidates).length ? 'review_required' : 'completed',
+      };
+      onSaved(nextCert);
+      toast({ title: 'Review saved', description: 'Confirmed fields were saved and their review alerts were cleared.' });
+    } catch (err) {
+      toast({
+        title: 'Could not save review',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingReview(false);
+    }
+  };
 
   const statusMap = {
     valid:    { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', label: 'Valid' },
@@ -1203,51 +1423,99 @@ function CertPreviewModal({ cert, onClose }: { cert: CertificateRow; onClose: ()
                 <p className="mt-1 text-[12px] leading-relaxed text-[#d1d1d6]">
                   {cert.enrichmentStatus === 'failed'
                     ? 'The enrichment job could not safely process this certificate.'
-                    : 'Some extracted fields were uncertain and need manual verification.'}
+                    : 'Check the document on the left, correct the fields below, then save confirmed values to clear the review alert.'}
                 </p>
-                {(cert.reviewFields?.length ?? 0) > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {cert.reviewFields!.map((field) => (
-                      <span
-                        key={field}
-                        className="rounded bg-black/25 px-2 py-0.5 text-[11px] text-[#fef3c7]"
-                      >
-                        {field}
-                      </span>
-                    ))}
+              </div>
+            )}
+
+            {reviewFieldsToShow.length > 0 && (
+              <div className="rounded-xl border border-[#2c2c2e] bg-[#111114] p-3">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-white">Verify fields</p>
+                    <p className="text-[11px] text-[#8e8e93]">Only these fields are currently flagged or missing.</p>
                   </div>
-                )}
+                  <button
+                    onClick={saveReviewedFields}
+                    disabled={savingReview}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#f59e0b]/15 px-3 py-1.5 text-[12px] font-medium text-[#fbbf24] transition-colors hover:bg-[#f59e0b]/25 disabled:opacity-50"
+                  >
+                    {savingReview ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                    Save confirmed
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2">
+                  {reviewFieldsToShow.map(field => {
+                    const candidate = cert.reviewCandidates?.[field.key];
+                    return (
+                      <label key={field.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="text-[10px] uppercase tracking-wider text-[#8e8e93]">{field.label}</span>
+                          {candidate?.confidence != null && (
+                            <span className="text-[10px] text-[#fbbf24]">{Math.round(candidate.confidence * 100)}% confidence</span>
+                          )}
+                        </div>
+                        {field.type === 'select' ? (
+                          <select
+                            value={reviewDraft[field.key] ?? ''}
+                            onChange={e => setReviewDraft(prev => ({ ...prev, [field.key]: e.target.value }))}
+                            className="w-full rounded-md border border-[#2c2c2e] bg-[#0d0d10] px-2.5 py-2 text-[13px] text-white outline-none focus:border-[#f59e0b]/60"
+                          >
+                            <option value="">Missing</option>
+                            {COMPANY_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
+                          </select>
+                        ) : (
+                          <input
+                            value={reviewDraft[field.key] ?? ''}
+                            type={field.type}
+                            step={field.type === 'number' ? '0.01' : undefined}
+                            min={field.type === 'number' ? '0' : undefined}
+                            max={field.key === 'bbbeeLevel' ? '8' : field.type === 'number' ? '100' : undefined}
+                            onChange={e => setReviewDraft(prev => ({ ...prev, [field.key]: e.target.value }))}
+                            className="w-full rounded-md border border-[#2c2c2e] bg-[#0d0d10] px-2.5 py-2 text-[13px] text-white outline-none focus:border-[#f59e0b]/60"
+                          />
+                        )}
+                        {(candidate?.reason || candidate?.evidence) && (
+                          <p className="mt-1.5 line-clamp-2 text-[11px] text-[#8e8e93]">
+                            {candidate.reason || candidate.evidence}
+                          </p>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">
               <PreviewField label="Company" value={displayValue(cert.companyName)} icon={<Building2 className="h-3.5 w-3.5" />} title={confidenceTitle(cert, 'companyName')} />
               <PreviewField label="Sector" value={sectorDisplayLabel(cert.sectorCode, cert.sectorName)} icon={<Building2 className="h-3.5 w-3.5" />} />
-              <PreviewField label="VAT Number" value={displayValue(cert.vatNumber)} icon={<Hash className="h-3.5 w-3.5" />} title={confidenceTitle(cert, 'vatNumber')} />
+              <PreviewField label="VAT Number" value={displayValue(cert.vatNumber)} icon={<Hash className="h-3.5 w-3.5" />} title={confidenceTitle(cert, 'vatNumber') || cert.reviewCandidates?.vatNumber?.reason} />
               <PreviewField label="Company Size" value={displayValue(cert.companySize)} icon={<Building2 className="h-3.5 w-3.5" />} title={confidenceTitle(cert, 'companySize')} />
               <PreviewField
                 label="B-BBEE Level"
-                value={cert.bbbeeLevelStatus || (cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : 'Needs review')}
+                value={cert.bbbeeLevelStatus || (cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : 'Missing')}
                 icon={<Award className="h-3.5 w-3.5" />}
-                title={confidenceTitle(cert, 'bbbeeLevel')}
+                title={confidenceTitle(cert, 'bbbeeLevel') || cert.reviewCandidates?.bbbeeLevel?.reason}
               />
               <PreviewField
                 label="Expiry Date"
-                value={formatExpiry(cert.expiryDate)}
+                value={cert.expiryDate ? formatExpiry(cert.expiryDate) : 'Missing'}
                 icon={<CalendarClock className="h-3.5 w-3.5" />}
-                title={confidenceTitle(cert, 'expiryDate')}
+                title={confidenceTitle(cert, 'expiryDate') || cert.reviewCandidates?.expiryDate?.reason}
               />
               <PreviewField
                 label="Black Ownership"
-                value={formatPct(cert.blackOwnership)}
+                value={cert.blackOwnership != null ? formatPct(cert.blackOwnership) : 'Missing'}
                 icon={<Percent className="h-3.5 w-3.5" />}
-                title={confidenceTitle(cert, 'blackOwnership')}
+                title={confidenceTitle(cert, 'blackOwnership') || cert.reviewCandidates?.blackOwnership?.reason}
               />
               <PreviewField
                 label="Black Women Ownership"
-                value={formatPct(cert.blackWomenOwnership)}
+                value={cert.blackWomenOwnership != null ? formatPct(cert.blackWomenOwnership) : 'Missing'}
                 icon={<Users2 className="h-3.5 w-3.5" />}
-                title={confidenceTitle(cert, 'blackWomenOwnership')}
+                title={confidenceTitle(cert, 'blackWomenOwnership') || cert.reviewCandidates?.blackWomenOwnership?.reason}
               />
             </div>
 

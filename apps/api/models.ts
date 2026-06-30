@@ -349,6 +349,7 @@ const certificateMetadataSchema = new Schema({
   enrichmentVersion: { type: String, default: null },
   fieldConfidence: { type: Schema.Types.Mixed, default: {} },
   reviewFields: { type: [String], default: [] },
+  reviewCandidates: { type: Schema.Types.Mixed, default: {} },
   auditLog: {
     type: [Schema.Types.Mixed],
     default: [],
