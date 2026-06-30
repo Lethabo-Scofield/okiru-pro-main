@@ -44,7 +44,10 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
 // DELETE /api/{esd,sed}-contributions/:id
 router.delete('/:id', requireAuth, async (req: Request, res: Response) => {
   const sed = isSedRequest(req);
-  const Model = sed ? SedContributionModel : EsdContributionModel;
+  // Cast through `any` — the two models now have slightly different field
+  // sets (Phase 4 schema parity added different bonus fields to each), so the
+  // union narrows to never on findOne. The runtime call is identical.
+  const Model = (sed ? SedContributionModel : EsdContributionModel) as any;
   const pillarKey = sed ? 'sed' : 'esd';
   const doc = await Model.findOne({ id: String(req.params.id) }).lean();
   if (!doc) return res.status(404).json({ message: `${sed ? 'SED' : 'ESD'} contribution not found` });

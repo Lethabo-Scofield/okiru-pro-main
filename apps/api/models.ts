@@ -64,6 +64,38 @@ const clientSchema = new Schema({
   ceSpend: { type: Number, default: 0 },
   ceBonusSpend: { type: Number, default: 0 },
   fundisaSpend: { type: Number, default: 0 },
+  // Phase 4 schema parity sweep: fields apps/web/shared/schema.ts defines on
+  // clientSchema that the apps/api strict mode was silently dropping. Without
+  // these, every PATCH /api/clients/:id from the Toolkit (or workbook /sync
+  // setting top-level fields) lost data.
+  fscReinsurer: { type: Boolean, default: null },
+  farmWorkersIncluded: { type: Boolean, default: true },
+  combineExcoSenior: { type: Boolean, default: false },
+  constructionSubSector: { type: String, default: null },
+  measurementPeriodStart: { type: String, default: null },
+  measurementPeriodEnd: { type: String, default: null },
+  numberOfEmployees: { type: Number, default: 0 },
+  annualTurnover: { type: Number, default: 0 },
+  beeCertificateNumber: { type: String, default: '' },
+  beeCertificateExpiry: { type: String, default: '' },
+  beeCertificateLevel: { type: Number, default: null },
+  verificationAgency: { type: String, default: '' },
+  // Foundation contact + identity fields
+  tradingName: { type: String, default: '' },
+  registrationNumber: { type: String, default: '' },
+  vatNumber: { type: String, default: '' },
+  taxNumber: { type: String, default: '' },
+  physicalAddress: { type: String, default: '' },
+  postalAddress: { type: String, default: '' },
+  contactPerson: { type: String, default: '' },
+  contactEmail: { type: String, default: '' },
+  contactPhone: { type: String, default: '' },
+  // Mixed financials blob (deemedNpat/effectiveNpat/industryNormPercent/
+  // groupLeviableAmount/trainingManagerSalary/etc.). The workbook /sync writes
+  // here; pre-Phase 4 the field wasn't declared so strict mode dropped the
+  // whole object → next read returned undefined → deemed-NPAT branch lost,
+  // industry norm lookup defaulted, etc.
+  financials: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "clients" });
 
@@ -189,7 +221,20 @@ const supplierSchema = new Schema({
   enterpriseType: { type: String, default: '' },
   spend: { type: Number, default: 0 },
   registrationNumber: { type: String, default: '' },
-  workbookRowId: { type: String, default: null, index: true, sparse: true },
+  // Phase 4 schema parity: Toolkit Procurement.tsx collects all of these but
+  // the strict schema was dropping them on PATCH /api/suppliers/:id, so the
+  // empowering-supplier sub-minimum, foreign-supplier exclusion, 3-year
+  // contract bonus and SD-recipient linkage all reset to false on reload.
+  isEmpoweringSupplier: { type: Boolean, default: false },
+  isForeignSupplier: { type: Boolean, default: false },
+  isBlackOwned51: { type: Boolean, default: false },
+  isBlackWomanOwned30: { type: Boolean, default: false },
+  isDesignatedGroup: { type: Boolean, default: false },
+  isSupplierDevRecipient: { type: Boolean, default: false },
+  hasThreeYearContract: { type: Boolean, default: false },
+  certificateExpiryDate: { type: String, default: '' },
+  firstProcurementDate: { type: String, default: '' },
+  vatNumber: { type: String, default: '' },
 }, { collection: "suppliers" });
 
 const procurementDataSchema = new Schema({
@@ -205,6 +250,17 @@ const esdContributionSchema = new Schema({
   type: { type: String, required: true },
   amount: { type: Number, default: 0 },
   category: { type: String, required: true },
+  // Phase 4 schema parity: workbook + Toolkit collect these; previously
+  // silently dropped. blackBenefitPercent feeds scoring; construction-only
+  // flags drive the construction ESD indicators.
+  blackBenefitPercent: { type: Number, default: 0 },
+  contributionType: { type: String, default: '' },
+  contributionDescription: { type: String, default: '' },
+  dateOfTransaction: { type: String, default: '' },
+  invoiceDate: { type: String, default: '' },
+  paymentDate: { type: String, default: '' },
+  supplierDevProgramme: { type: Boolean, default: false },
+  isBlackWomenOwnedBeneficiary: { type: Boolean, default: false },
   workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "esdContributions" });
 
@@ -215,6 +271,15 @@ const sedContributionSchema = new Schema({
   type: { type: String, required: true },
   amount: { type: Number, default: 0 },
   category: { type: String, required: true },
+  // Phase 4 schema parity: same as esdContributionSchema. percentBenefitingBlack
+  // ↔ blackBenefitPercent; construction-only flags drive the SED indicators.
+  blackBenefitPercent: { type: Number, default: 0 },
+  contributionType: { type: String, default: '' },
+  descriptionOfSpend: { type: String, default: '' },
+  dateOfTransaction: { type: String, default: '' },
+  ictSpecificInitiative: { type: Boolean, default: false },
+  isStructuredProject: { type: Boolean, default: false },
+  isLimitedServicesCommunity: { type: Boolean, default: false },
   workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "sedContributions" });
 

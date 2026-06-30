@@ -7,7 +7,7 @@ import { hasAnyRole } from "./roles";
 import { seedLakeTradingDemo } from "./lakeTradingDemoSeed";
 import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixture";
 import { WorkbookModel, ClientModel } from "../shared/schema";
-import { handleBackSync } from "./workbookBackSync";
+import { handleBackSync, rebuildWorkbookFromEntities } from "./workbookBackSync";
 import {
   validateWorkbook,
   validateWorkbookForSubmit,
@@ -1302,6 +1302,17 @@ export function registerWorkbookRoutes(app: Express): void {
   app.get("/api/workbook/:companyId", requireAuth, async (req: Request, res: Response) => {
     const wb = await authorizeWorkbookAccess(req, res);
     if (!wb) return;
+    // Phase 5: read-time rebuild — make the workbook a true derived view of
+    // the live per-entity collections, so even if a back-sync fan-out was
+    // dropped the workbook self-heals on open. Opt-out with ?rebuild=0 (for
+    // perf debugging or to inspect the persisted shape unmodified).
+    if (req.query.rebuild !== '0') {
+      try {
+        await rebuildWorkbookFromEntities(wb);
+      } catch (err) {
+        logger.warn('workbook rebuild failed (returning stored doc)', { err: err instanceof Error ? err.message : String(err) });
+      }
+    }
     res.json(wb);
   });
 
@@ -1571,6 +1582,22 @@ export function registerWorkbookRoutes(app: Express): void {
           return res
             .status(404)
             .json({ error: "Client not found for this workbook." });
+        }
+
+        // Phase 3 (sync plan): financials merge fix. `update.financials` is a
+        // Mixed-typed blob — using $set on it whole-replaces the field,
+        // silently dropping sub-keys that other paths wrote (e.g. CE/Fundisa
+        // spends set via Toolkit Settings, deemedNpat flags from prior
+        // submissions). Merge over the existing blob so workbook-owned keys
+        // win while other keys pass through unchanged. The set of keys the
+        // workbook OWNS is whatever projectWorkbookToClient + buildUpdate
+        // here actually populate (skillsExtra at line ~1484), so spreading
+        // workbook-owned LAST preserves the right precedence.
+        if (update.financials && typeof update.financials === 'object') {
+          const currentFinancials = ((client as any).financials && typeof (client as any).financials === 'object')
+            ? (client as any).financials
+            : {};
+          update.financials = { ...currentFinancials, ...update.financials };
         }
 
         await ClientModel.updateOne({ clientId: wb.companyId }, { $set: update });
