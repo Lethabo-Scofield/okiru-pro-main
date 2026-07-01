@@ -86,6 +86,16 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # Organization / company team management (members, invite, admin
+          # transfer) — web owns these (invite email + workspace infra live on
+          # web). Longer prefix than /api so nginx routes here, not to api.
+          - path: /api/organization
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           - path: /api/clients
             pathType: Prefix
             backend:
