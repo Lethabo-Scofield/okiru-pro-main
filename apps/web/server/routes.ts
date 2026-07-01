@@ -1437,24 +1437,19 @@ export async function registerRoutes(
    * de-facto founder) and giving them the admin role. Idempotent.
    */
   async function resolveOrgAdminUserId(orgId: string): Promise<string | null> {
-    const org = (await OrganizationModel.findOne({ id: orgId }).lean()) as
-      | { adminUserId?: string | null; createdByUserId?: string | null }
-      | null;
-    if (!org) return null;
-    if (org.adminUserId) return org.adminUserId;
-    const earliest = (await UserModel.find({ organizationId: orgId })
-      .sort({ createdAt: 1 })
-      .limit(1)
-      .lean()) as Array<{ id: string; role?: string }>;
-    const founder = earliest[0];
+    const org = await storage.getOrganizationById(orgId);
+    if (org?.adminUserId) return org.adminUserId;
+    // Legacy / no-Mongo path: derive the admin from the members (oldest-first).
+    // Prefer an existing admin-role holder, else the earliest member (founder),
+    // and self-heal by persisting the pointer + role. Goes through storage so it
+    // works identically against Mongo and the in-memory fallback.
+    const members = await storage.getUsersByOrganization(orgId);
+    const founder = members.find((m) => m.role === "admin" || m.role === "super_admin") ?? members[0];
     if (!founder) return null;
     try {
-      await OrganizationModel.updateOne(
-        { id: orgId },
-        { $set: { adminUserId: founder.id, createdByUserId: org.createdByUserId ?? founder.id } },
-      );
+      await storage.setOrganizationAdmin(orgId, founder.id, org?.createdByUserId ?? founder.id);
       if (founder.role !== "admin" && founder.role !== "super_admin") {
-        await UserModel.updateOne({ id: founder.id }, { $set: { role: "admin" } });
+        await storage.updateUser(founder.id, { role: "admin" });
       }
     } catch (err) {
       logger.warn("org admin self-heal failed (continuing)", err, { orgId });
@@ -1481,18 +1476,20 @@ export async function registerRoutes(
   // Org summary — name, admin, member count, and whether the caller is admin.
   app.get("/api/organization", requireAuth, async (req: Request, res: Response) => {
     try {
-      const user = (req as any).user as { id: string; organizationId?: string | null };
+      const user = (req as any).user as { id: string; organizationId?: string | null; organizationName?: string | null };
       const orgId = user.organizationId;
       if (!orgId) return res.json({ organization: null, isAdmin: false, memberCount: 0 });
-      const org = (await OrganizationModel.findOne({ id: orgId }).lean()) as
-        | { id: string; name: string }
-        | null;
+      const org = await storage.getOrganizationById(orgId);
       const adminUserId = await resolveOrgAdminUserId(orgId);
-      const memberCount = await UserModel.countDocuments({ organizationId: orgId });
+      const members = await storage.getUsersByOrganization(orgId);
       res.json({
-        organization: org ? { id: org.id, name: org.name, adminUserId } : null,
+        organization: {
+          id: orgId,
+          name: org?.name ?? user.organizationName ?? "Your company",
+          adminUserId,
+        },
         isAdmin: adminUserId === user.id,
-        memberCount,
+        memberCount: members.length,
       });
     } catch (err: any) {
       logger.error("GET /api/organization failed", err);
@@ -1507,9 +1504,7 @@ export async function registerRoutes(
       const orgId = user.organizationId;
       if (!orgId) return res.json({ members: [], adminUserId: null, isAdmin: false });
       const adminUserId = await resolveOrgAdminUserId(orgId);
-      const users = (await UserModel.find({ organizationId: orgId })
-        .sort({ createdAt: 1 })
-        .lean()) as Array<{ id: string; username?: string; fullName?: string; email?: string; role?: string; createdAt?: unknown }>;
+      const users = await storage.getUsersByOrganization(orgId);
       const members = users.map((u) => ({
         id: u.id,
         username: u.username ?? null,
@@ -1600,7 +1595,7 @@ export async function registerRoutes(
       // source-of-truth pointer last.
       await storage.updateUser(newAdminUserId, { role: "admin" });
       await storage.updateUser(current.id, { role: "analyst" });
-      await OrganizationModel.updateOne({ id: orgId }, { $set: { adminUserId: newAdminUserId } });
+      await storage.setOrganizationAdmin(orgId, newAdminUserId);
 
       await recordAudit(req, {
         action: "organization.admin.transfer",
@@ -1631,7 +1626,7 @@ export async function registerRoutes(
       if (!target || target.organizationId !== orgId) {
         return res.status(404).json({ message: "That user is not a member of your organization" });
       }
-      await storage.updateUser(targetId, { organizationId: null as any, role: "user" });
+      await storage.updateUser(targetId, { organizationId: null, role: "user" });
       await recordAudit(req, {
         action: "organization.member.remove",
         resourceType: "user",
