@@ -1039,13 +1039,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserAssessments(userId: string): Promise<Assessment[]> {
-    const { ProcessorSessionModel } = await import("../shared/schema");
+    const { ProcessorSessionModel, UserModel } = await import("../shared/schema");
     const memberships = await WorkspaceMemberModel.find({ userId }).select("workspaceId").lean();
     const wsIds = memberships.map((m: { workspaceId: string }) => m.workspaceId).filter(Boolean);
 
     const orClause: Record<string, unknown>[] = [{ createdBy: userId }, { createdByUserId: userId }];
     if (wsIds.length > 0) {
       orClause.push({ workspaceId: { $in: wsIds } });
+    }
+    // Org-scoped: teammates in the same organization see each other's
+    // assessments/scorecards (matches the org-scoped client visibility). The
+    // organizationId is stamped on the session at save time (apps/api).
+    const actor = (await UserModel.findOne({ id: userId }).select("organizationId").lean()) as
+      | { organizationId?: string | null }
+      | null;
+    if (actor?.organizationId) {
+      orClause.push({ organizationId: actor.organizationId });
     }
 
     const docs = await ProcessorSessionModel.find({ $or: orClause }).sort({ updatedAt: -1 });
@@ -1442,6 +1451,7 @@ function toAssessment(doc: any): Assessment | undefined {
     scorecardResult: obj.scorecardResult,
     status: obj.status || 'draft',
     createdBy: obj.createdBy || obj.userId || obj.createdByUserId,
+    organizationId: obj.organizationId ?? null,
     workspaceId: obj.workspaceId ?? null,
     pillarActivity: activity,
     scorecardSnapshots: snaps,
