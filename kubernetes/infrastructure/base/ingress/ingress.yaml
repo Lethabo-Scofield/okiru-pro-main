@@ -82,6 +82,17 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # Organization / company team management (members, invite, admin
+          # transfer) — web owns these because the invite email + workspace/
+          # invite infra lives on web. Longer prefix than /api so nginx routes
+          # it here, not to the api catch-all.
+          - path: /api/organization
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # User feedback (web server handles both POST and GET — saved to MongoDB)
           - path: /api/feedback
             pathType: Prefix

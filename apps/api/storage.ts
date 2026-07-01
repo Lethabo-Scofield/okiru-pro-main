@@ -34,10 +34,12 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByUsernameOrEmail(loginId: string): Promise<User | undefined>;
   createUser(user: InsertUser & { organizationId?: string }): Promise<User>;
-  updateUser(id: string, data: Partial<{ fullName: string; email: string; profilePicture: string }>): Promise<User | undefined>;
+  updateUser(id: string, data: Partial<{ fullName: string; email: string; profilePicture: string; role: string; organizationId: string; secondaryRoles: string[] }>): Promise<User | undefined>;
+  getUsersByOrganization(orgId: string): Promise<User[]>;
 
   createOrganization(org: InsertOrganization): Promise<Organization>;
   getOrganization(id: string): Promise<Organization | undefined>;
+  updateOrganization(id: string, data: Partial<{ name: string; adminUserId: string | null; createdByUserId: string | null }>): Promise<Organization | undefined>;
 
   getClientsByOrg(orgId: string): Promise<Client[]>;
   getClientsByOrgPaginated(orgId: string, page: number, limit: number): Promise<PaginatedResponse<Client>>;
@@ -124,9 +126,14 @@ export class DatabaseStorage implements IStorage {
     return clean<User>(doc);
   }
 
-  async updateUser(id: string, data: Partial<{ fullName: string; email: string; profilePicture: string }>): Promise<User | undefined> {
+  async updateUser(id: string, data: Partial<{ fullName: string; email: string; profilePicture: string; role: string; organizationId: string; secondaryRoles: string[] }>): Promise<User | undefined> {
     const doc = await UserModel.findOneAndUpdate({ id }, { $set: data }, { new: true }).lean();
     return doc ? clean<User>(doc) : undefined;
+  }
+
+  async getUsersByOrganization(orgId: string): Promise<User[]> {
+    const docs = await UserModel.find({ organizationId: orgId }).lean();
+    return docs.map((d) => clean<User>(d));
   }
 
   async createOrganization(org: InsertOrganization): Promise<Organization> {
@@ -136,6 +143,11 @@ export class DatabaseStorage implements IStorage {
 
   async getOrganization(id: string): Promise<Organization | undefined> {
     const doc = await OrganizationModel.findOne({ id }).lean();
+    return doc ? clean<Organization>(doc) : undefined;
+  }
+
+  async updateOrganization(id: string, data: Partial<{ name: string; adminUserId: string | null; createdByUserId: string | null }>): Promise<Organization | undefined> {
+    const doc = await OrganizationModel.findOneAndUpdate({ id }, { $set: data }, { new: true }).lean();
     return doc ? clean<Organization>(doc) : undefined;
   }
 

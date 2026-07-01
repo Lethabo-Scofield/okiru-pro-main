@@ -18,6 +18,12 @@ const userSchema = new Schema({
 const organizationSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
   name: { type: String, required: true },
+  // Company-admin model: the user who currently administers this organization
+  // (the tenant). Set to the first registrant at signup; reassignable via the
+  // admin-transfer endpoint. `createdByUserId` records the original founder for
+  // audit even after admin is transferred away.
+  adminUserId: { type: String, default: null, index: true },
+  createdByUserId: { type: String, default: null },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "organizations" });
 
