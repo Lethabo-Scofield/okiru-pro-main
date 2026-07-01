@@ -1753,10 +1753,43 @@ export async function registerRoutes(
     try {
       const existing = await loadClientWithAccess(req, res);
       if (!existing) return;
-      const allowed = ["name", "financialYear", "industrySector", "eapProvince", "revenue", "npat", "leviableAmount", "logo"];
+      // CRITICAL FIX (audit P1 #1): the previous 8-field allowlist
+      // ["name", "financialYear", "industrySector", "eapProvince", "revenue",
+      // "npat", "leviableAmount", "logo"] silently dropped every other field
+      // the Toolkit tries to save — pipelineOverrides, afs, fscSubSector,
+      // graduationBonus/jobsCreatedBonus + evidence, ceSpend/ceBonusSpend/
+      // fundisaSpend, industryNorm, measurementPeriod*, industry, sectorCode,
+      // scorecardType, etc. So Settings, Financials, AFS, FSC SED inputs all
+      // appeared to save (200 OK + Toast "Saved") but reverted on reload —
+      // the actual root cause of every "company details aren't reflected"
+      // complaint. The Mongoose schema for ClientModel is strict, so unknown
+      // keys (e.g. a typoed field) are still dropped at the DB layer; we
+      // rely on schema-level guarantees here instead of a parallel allowlist
+      // that gets stale on every new feature.
+      const allowed = new Set([
+        // Foundation / identity
+        "name", "tradingName", "registrationNumber", "vatNumber", "taxNumber",
+        "industrySector", "industry", "sectorCode", "scorecardType", "companySize",
+        "financialYear", "measurementPeriodStart", "measurementPeriodEnd",
+        "physicalAddress", "postalAddress", "contactPerson", "contactEmail", "contactPhone",
+        "annualTurnover", "numberOfEmployees",
+        "beeCertificateNumber", "beeCertificateExpiry", "beeCertificateLevel", "verificationAgency",
+        "logo",
+        // Scoring inputs the Toolkit edits via PATCH /api/clients/:id
+        "revenue", "npat", "leviableAmount", "industryNorm", "eapProvince",
+        "tmps", "companyValue", "outstandingDebt",
+        // FSC + ESD + SED scalar fields that live on ClientModel
+        "fscSubSector", "fscReinsurer", "combineExcoSenior", "farmWorkersIncluded",
+        "constructionSubSector",
+        "graduationBonus", "jobsCreatedBonus", "jobsCreatedCount",
+        "graduationEvidence", "jobsCreatedEvidence",
+        "ceSpend", "ceBonusSpend", "fundisaSpend",
+        // Mixed-typed blobs
+        "afs", "pipelineOverrides", "financials", "pillars",
+      ]);
       const updates: any = { updatedAt: new Date() };
-      for (const key of allowed) {
-        if (req.body[key] !== undefined) updates[key] = req.body[key];
+      for (const key of Object.keys(req.body || {})) {
+        if (allowed.has(key)) updates[key] = req.body[key];
       }
 
       if (isMongoConnected()) {
@@ -1813,10 +1846,54 @@ export async function registerRoutes(
       const c = await loadClientWithAccess(req, res);
       if (!c) return;
 
-      // If a workspace-bound assessment exists for this client, enforce the
-      // caller's pillarScopes against it. For scoped collaborators we still
-      // return the client meta (name, sector, etc.) — only the pillar payloads
-      // outside their scope are stripped. Audit A2 server side.
+      // CRITICAL FIX (audit P1 #2): per-entity rows now live in apps/api's
+      // separate Mongo collections (shareholders/employees/trainingPrograms/
+      // suppliers/esdContributions/sedContributions/financialYears/scenarios)
+      // because all writes go through apps/api per-entity routers. The OLD
+      // path read c.<entity> from the embedded ClientModel arrays, which were
+      // never populated — so every Toolkit add appeared to succeed but
+      // disappeared on the next loadClientData. Read both: per-entity
+      // collections win; fall back to embedded arrays for legacy clients
+      // whose data still lives only on ClientModel (Lake demo, in-memory dev).
+      const db = isMongoConnected() ? mongoose.connection.db : null;
+      async function collectionRows(name: string): Promise<any[]> {
+        if (!db) return [];
+        try {
+          return await db.collection(name).find({ clientId }).toArray();
+        } catch {
+          return [];
+        }
+      }
+      const [
+        shRows, empRows, tpRows, supRows, esdRows, sedRows, fyRows, scenRows, procData, ownData,
+      ] = await Promise.all([
+        collectionRows('shareholders'),
+        collectionRows('employees'),
+        collectionRows('trainingPrograms'),
+        collectionRows('suppliers'),
+        collectionRows('esdContributions'),
+        collectionRows('sedContributions'),
+        collectionRows('financialYears'),
+        collectionRows('scenarios'),
+        db ? db.collection('procurementData').findOne({ clientId }) : Promise.resolve(null),
+        db ? db.collection('ownershipData').findOne({ clientId }) : Promise.resolve(null),
+      ]);
+      const mergeById = (collRows: any[], embedded: any[] | undefined): any[] => {
+        const out = Array.isArray(embedded) ? [...embedded] : [];
+        const seen = new Set(out.map((r) => r?.id || r?._id).filter(Boolean));
+        for (const r of collRows) {
+          const key = (r as any).id ?? (r as any)._id?.toString?.();
+          if (!key || !seen.has(key)) out.push(r);
+        }
+        return out;
+      };
+      const shareholdersAll = mergeById(shRows, c.shareholders);
+      const employeesAll = mergeById(empRows, c.employees);
+      const trainingProgramsAll = mergeById(tpRows, c.trainingPrograms);
+      const suppliersAll = mergeById(supRows, c.suppliers);
+      const esdAll = mergeById(esdRows, c.esdContributions);
+      const sedAll = mergeById(sedRows, c.sedContributions);
+
       const userId = (req.session as any).userId as string;
       const pillarAccess = await resolveClientPillarAccess(clientId, userId);
       const allowedPillars: Set<string> | null =
@@ -1875,29 +1952,37 @@ export async function registerRoutes(
         ownership: allow("ownership")
           ? {
               id: `own-${clientId}`,
-              shareholders: c.shareholders || [],
-              companyValue: c.companyValue || 0,
-              outstandingDebt: c.outstandingDebt || 0,
-              yearsHeld: 0,
+              shareholders: shareholdersAll,
+              // Read companyValue/outstandingDebt from ownershipData collection
+              // (where PATCH /api/clients/:id/ownership writes them) and fall
+              // back to the legacy embedded fields. Audit P1 #4.
+              companyValue: (ownData as any)?.companyValue ?? c.companyValue ?? 0,
+              outstandingDebt: (ownData as any)?.outstandingDebt ?? c.outstandingDebt ?? 0,
+              yearsHeld: (ownData as any)?.yearsHeld ?? 0,
             }
           : empty({ id: `own-${clientId}`, shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 }),
         management: allow("management")
-          ? { employees: c.employees || [] }
+          ? { employees: employeesAll }
           : empty({ employees: [] }),
         skills: allow("skills")
-          ? { leviableAmount: c.leviableAmount || 0, trainingPrograms: c.trainingPrograms || [] }
+          ? { leviableAmount: c.leviableAmount || 0, trainingPrograms: trainingProgramsAll }
           : empty({ leviableAmount: 0, trainingPrograms: [] }),
         procurement: allow("procurement")
-          ? { tmps: c.tmps || 0, suppliers: c.suppliers || [] }
+          ? {
+              // Read TMPS from procurementData collection (where PATCH
+              // /api/clients/:id/procurement writes it). Audit P1 #5.
+              tmps: (procData as any)?.tmps ?? c.tmps ?? 0,
+              suppliers: suppliersAll,
+            }
           : empty({ tmps: 0, suppliers: [] }),
         esd: allow("esd")
-          ? { contributions: c.esdContributions || [] }
+          ? { contributions: esdAll }
           : empty({ contributions: [] }),
         sed: allow("sed")
-          ? { contributions: c.sedContributions || [] }
+          ? { contributions: sedAll }
           : empty({ contributions: [] }),
-        financialYears: [],
-        scenarios: [],
+        financialYears: fyRows,
+        scenarios: scenRows,
         // Surface the scope decision to the client so the UI can show a
         // read-only/scoped banner — does NOT grant access; the filtering above
         // is the security boundary.

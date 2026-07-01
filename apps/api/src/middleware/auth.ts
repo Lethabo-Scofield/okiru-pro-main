@@ -178,10 +178,19 @@ export async function verifyResourceOwnership(req: Request, res: Response, clien
     res.status(404).json({ message: "Not found" });
     return false;
   }
-  if (client.organizationId !== req.session.organizationId) {
-    res.status(403).json({ message: "Access denied" });
-    return false;
+  // Audit P2 #9: a personal-tenant user (no organizationId, sole creator path)
+  // owns the resources they created. Prior code only checked org equality, so
+  // any client created via the personal-tenant flow returned 403 to its own
+  // creator on every per-entity write. Mirror verifyClientAccess: creator OR
+  // shared org match is sufficient. Workspace overlay still gated by
+  // verifyPillarAccess upstream where applicable.
+  const sessionUserId = req.session.userId ?? null;
+  const creatorId = (client as { createdByUserId?: string | null }).createdByUserId ?? null;
+  if (creatorId && sessionUserId && creatorId === sessionUserId) return true;
+  if (client.organizationId && req.session.organizationId && client.organizationId === req.session.organizationId) {
+    return true;
   }
-  return true;
+  res.status(403).json({ message: "Access denied" });
+  return false;
 }
 

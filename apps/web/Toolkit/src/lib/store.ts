@@ -1692,13 +1692,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addSupplier(state.activeClientId, {
-        name: supplier.name, beeLevel: supplier.beeLevel,
-        registrationNumber: supplier.registrationNumber,
-        blackOwnership: supplier.blackOwnership, blackWomenOwnership: supplier.blackWomenOwnership,
-        youthOwnership: supplier.youthOwnership, disabledOwnership: supplier.disabledOwnership,
-        enterpriseType: supplier.enterpriseType, spend: supplier.spend,
-      }).catch(console.error);
+      // Audit P2 #6: spread the full Supplier shape sans local id so the
+      // strict subset of 8 fields no longer drops isEmpoweringSupplier,
+      // isSupplierDevRecipient, hasThreeYearContract, isForeignSupplier,
+      // certificateExpiryDate, vatNumber, etc. Pattern matches the working
+      // addShareholder / addTrainingProgram / addEmployeesBulk forms.
+      const { id: _sId, ...supplierPayload } = supplier;
+      api.addSupplier(state.activeClientId, supplierPayload).catch(console.error);
     }
   },
   updateSupplier: (id, data) => {
@@ -1729,10 +1729,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addEsdContribution(state.activeClientId, {
-        beneficiary: contribution.beneficiary, type: contribution.type,
-        amount: contribution.amount, category: contribution.category,
-      }).catch(console.error);
+      // Audit P2 #7: spread the full Contribution shape sans local id so
+      // construction flags (isBlackWomenOwnedBeneficiary, supplierDevProgramme),
+      // blackBenefitPercent, contributionType, descriptions, and the date
+      // fields round-trip.
+      const { id: _cId, ...payload } = contribution;
+      api.addEsdContribution(state.activeClientId, payload).catch(console.error);
     }
   },
   removeEsdContribution: (id) => {
@@ -1746,10 +1748,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addSedContribution(state.activeClientId, {
-        beneficiary: contribution.beneficiary, type: contribution.type,
-        amount: contribution.amount, category: contribution.category,
-      }).catch(console.error);
+      // Audit P2 #8: same as addEsdContribution — spread the full shape so
+      // isStructuredProject + isLimitedServicesCommunity (construction SED
+      // indicators), blackBenefitPercent, descriptionOfSpend, and dates
+      // persist instead of being silently truncated to 4 fields.
+      const { id: _cId, ...payload } = contribution;
+      api.addSedContribution(state.activeClientId, payload).catch(console.error);
     }
   },
   removeSedContribution: (id) => {
