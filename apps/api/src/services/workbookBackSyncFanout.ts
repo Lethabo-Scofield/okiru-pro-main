@@ -22,7 +22,12 @@ type EntityType =
   | 'esdContribution'
   | 'sedContribution';
 
-const WEB_BASE = process.env.WEB_INTERNAL_URL || 'http://web:5000';
+// Audit P2 #23: apps/web listens on 5001 (see kubernetes/base/deployments/web.yaml
+// containerPort + Service spec). The previous default of 5000 was the apps/api
+// port; in cluster the override WEB_INTERNAL_URL=http://web:5001 masks the bug,
+// but local dev and test harnesses fan out to the wrong port silently. Default
+// to the right port so a missing env var is no longer a silent failure.
+const WEB_BASE = process.env.WEB_INTERNAL_URL || 'http://web:5001';
 const TIMEOUT_MS = 2000;
 
 /** Single network attempt. Returns { ok, reason } so caller can decide whether
