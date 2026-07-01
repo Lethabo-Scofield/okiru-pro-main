@@ -361,6 +361,11 @@ const organizationSchema = new Schema(
   {
     id: { type: String, required: true, unique: true },
     name: { type: String, required: true },
+    // Company-admin model (mirrors apps/api/models.ts). adminUserId is the
+    // current tenant administrator (first registrant, transferable);
+    // createdByUserId is the immutable founder for audit.
+    adminUserId: { type: String, default: null, index: true },
+    createdByUserId: { type: String, default: null },
     createdAt: { type: String, default: () => new Date().toISOString() },
   },
   { collection: "organizations" }

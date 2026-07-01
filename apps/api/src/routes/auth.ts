@@ -147,12 +147,22 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req: 
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const org = await storage.createOrganization({ name: organizationName });
+    // The first person to register a company is its admin (tenant administrator
+    // = ALL_PERMISSIONS incl. member management). Teammates who join later via
+    // an invite get a non-admin member role. Admin is transferable via
+    // PATCH /api/organization/admin.
     const user = await storage.createUser({
       username,
       password: hashedPassword,
       fullName: fullName || username,
       email: email || null,
       organizationId: org.id,
+      role: 'admin',
+    });
+    // Record who administers / founded the org (reverse link the org row lacked).
+    await storage.updateOrganization(org.id, {
+      adminUserId: user.id,
+      createdByUserId: user.id,
     });
 
     req.session.userId = user.id;

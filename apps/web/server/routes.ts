@@ -275,8 +275,11 @@ export async function registerRoutes(
         return res.status(503).json({ message: "Database is not available. Please try again later." });
       }
 
-      const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
-      const safeRole = ALLOWED_ROLES.includes(role) ? role : "analyst";
+      // The first person to register a company founds a brand-new organization,
+      // so they are its admin (tenant administrator). The step-4 job-title picker
+      // (auditor/analyst/manager) is descriptive only; the permission role for a
+      // founder is 'admin'. Teammates join later via invite as non-admin members.
+      const founderRole = "admin";
 
       const existing = await storage.getUserByUsername(trimmedUsername);
       if (existing && existing.isVerified) {
@@ -309,7 +312,7 @@ export async function registerRoutes(
           fullName: trimmedFullName,
           organizationName: trimmedOrgName,
           organizationId: tenantOrgId,
-          role: safeRole,
+          role: founderRole,
         } as any);
       } else if (existing && !existing.isVerified) {
         const hashedPassword = await bcrypt.hash(password, 8);
@@ -319,7 +322,7 @@ export async function registerRoutes(
           email: trimmedEmail,
           organizationName: trimmedOrgName,
           organizationId: tenantOrgId,
-          role: safeRole,
+          role: founderRole,
         } as any);
       } else {
         const hashedPassword = await bcrypt.hash(password, 8);
@@ -330,9 +333,20 @@ export async function registerRoutes(
           email: trimmedEmail,
           organizationName: trimmedOrgName,
           organizationId: tenantOrgId,
-          role: safeRole,
+          role: founderRole,
           profilePicture: null,
         });
+      }
+
+      // Reverse link: record the founder as the org's admin so member management
+      // and admin-transfer have a source of truth (org row lacked this before).
+      try {
+        await OrganizationModel.updateOne(
+          { id: tenantOrgId },
+          { $set: { adminUserId: user.id, createdByUserId: user.id } },
+        );
+      } catch (err) {
+        logger.warn("Failed to stamp org adminUserId on register (non-fatal)", err);
       }
 
       if (!isSmtpConfigured()) {
@@ -1403,6 +1417,234 @@ export async function registerRoutes(
     }
     next();
   }
+
+  // ==========================================================================
+  // Organization / company team management (org-scoped multitenancy).
+  //
+  // The "company" is the Organization (tenant). Members share an organizationId
+  // and therefore already see each other's companies/scorecards via the
+  // org-scoped visibility filter (buildClientVisibilityFilter). The first
+  // registrant is the org admin; the admin can invite teammates by email (they
+  // join this org on accept) and transfer admin to another member.
+  //
+  // Routed to the web service via ingress (/api/organization -> web) because the
+  // invite email + workspace/invite infra lives here.
+  // ==========================================================================
+
+  /**
+   * Resolve the current admin userId for an org, self-healing legacy orgs that
+   * predate the adminUserId field by promoting the earliest-created member (the
+   * de-facto founder) and giving them the admin role. Idempotent.
+   */
+  async function resolveOrgAdminUserId(orgId: string): Promise<string | null> {
+    const org = (await OrganizationModel.findOne({ id: orgId }).lean()) as
+      | { adminUserId?: string | null; createdByUserId?: string | null }
+      | null;
+    if (!org) return null;
+    if (org.adminUserId) return org.adminUserId;
+    const earliest = (await UserModel.find({ organizationId: orgId })
+      .sort({ createdAt: 1 })
+      .limit(1)
+      .lean()) as Array<{ id: string; role?: string }>;
+    const founder = earliest[0];
+    if (!founder) return null;
+    try {
+      await OrganizationModel.updateOne(
+        { id: orgId },
+        { $set: { adminUserId: founder.id, createdByUserId: org.createdByUserId ?? founder.id } },
+      );
+      if (founder.role !== "admin" && founder.role !== "super_admin") {
+        await UserModel.updateOne({ id: founder.id }, { $set: { role: "admin" } });
+      }
+    } catch (err) {
+      logger.warn("org admin self-heal failed (continuing)", err, { orgId });
+    }
+    return founder.id;
+  }
+
+  /** Gate: caller must be the admin of their OWN organization. */
+  async function requireOrgAdmin(req: Request, res: Response, next: NextFunction) {
+    const userId = (req.session as any)?.userId;
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const user = await storage.getUserById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ message: "You are not part of an organization" });
+    }
+    const adminId = await resolveOrgAdminUserId(user.organizationId);
+    if (adminId !== userId) {
+      return res.status(403).json({ message: "Company admin access required" });
+    }
+    (req as any).user = user;
+    next();
+  }
+
+  // Org summary — name, admin, member count, and whether the caller is admin.
+  app.get("/api/organization", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as { id: string; organizationId?: string | null };
+      const orgId = user.organizationId;
+      if (!orgId) return res.json({ organization: null, isAdmin: false, memberCount: 0 });
+      const org = (await OrganizationModel.findOne({ id: orgId }).lean()) as
+        | { id: string; name: string }
+        | null;
+      const adminUserId = await resolveOrgAdminUserId(orgId);
+      const memberCount = await UserModel.countDocuments({ organizationId: orgId });
+      res.json({
+        organization: org ? { id: org.id, name: org.name, adminUserId } : null,
+        isAdmin: adminUserId === user.id,
+        memberCount,
+      });
+    } catch (err: any) {
+      logger.error("GET /api/organization failed", err);
+      res.status(500).json({ message: "Failed to load organization" });
+    }
+  });
+
+  // Members of the caller's organization (any member may view the roster).
+  app.get("/api/organization/members", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as { id: string; organizationId?: string | null };
+      const orgId = user.organizationId;
+      if (!orgId) return res.json({ members: [], adminUserId: null, isAdmin: false });
+      const adminUserId = await resolveOrgAdminUserId(orgId);
+      const users = (await UserModel.find({ organizationId: orgId })
+        .sort({ createdAt: 1 })
+        .lean()) as Array<{ id: string; username?: string; fullName?: string; email?: string; role?: string; createdAt?: unknown }>;
+      const members = users.map((u) => ({
+        id: u.id,
+        username: u.username ?? null,
+        fullName: u.fullName ?? null,
+        email: u.email ?? null,
+        role: u.role ?? "user",
+        isAdmin: u.id === adminUserId,
+      }));
+      res.json({ members, adminUserId, isAdmin: adminUserId === user.id });
+    } catch (err: any) {
+      logger.error("GET /api/organization/members failed", err);
+      res.status(500).json({ message: "Failed to load members" });
+    }
+  });
+
+  // Invite a teammate to the company by email (admin only). Reuses the
+  // workspace-invite + email path; on accept the invitee joins this org and
+  // gains full org visibility.
+  app.post("/api/organization/invites", requireAuth, requireOrgAdmin, async (req: Request, res: Response) => {
+    try {
+      const inviter = (req as any).user as { id: string; fullName?: string; username?: string; email?: string; organizationName?: string };
+      const email = String(req.body?.email ?? "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "A valid email address is required" });
+      }
+      // Attach the invite to a workspace the inviter owns (create one if needed).
+      await ensureDefaultWorkspace(inviter.id);
+      const workspaces = await storage.listWorkspacesForUser(inviter.id);
+      const ownWs = workspaces.find((w) => w.ownerUserId === inviter.id) ?? workspaces[0];
+      if (!ownWs) return res.status(500).json({ message: "No workspace available to attach the invite" });
+
+      const invite = await storage.createInvite({
+        workspaceId: ownWs.workspaceId,
+        email,
+        role: "collaborator", // full access member (empty pillarScopes => all pillars)
+        displayRole: "contributor",
+        invitedByUserId: inviter.id,
+      });
+
+      const baseUrl = process.env.APP_BASE_URL || process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+      const acceptUrl = `${baseUrl}/invite/${invite.token}`;
+      const smtpOn = isSmtpConfigured();
+      if (smtpOn) {
+        const workspace = await storage.getWorkspaceById(ownWs.workspaceId);
+        sendWorkspaceInviteEmail({
+          inviteeEmail: email,
+          inviterName: inviter.fullName || inviter.username || "A teammate",
+          inviterEmail: inviter.email || null,
+          inviterCompany: inviter.organizationName || null,
+          workspaceName: workspace?.name || "your company",
+          role: "collaborator",
+          acceptUrl,
+          expiresAt: invite.expiresAt,
+        }).catch((err) => logger.error("Org invite email failed", err, { inviteId: invite.id }));
+      }
+
+      await recordAudit(req, {
+        action: "organization.invite.create",
+        resourceType: "workspace_invite",
+        resourceId: invite.id,
+        result: "success",
+        metadata: { email, invitedByUserId: inviter.id, expiresAt: invite.expiresAt },
+      });
+
+      // When SMTP is off (dev / not configured) return the accept link so the
+      // admin can share it manually instead of the invite silently going nowhere.
+      res.json({ ok: true, inviteId: invite.id, email, emailSent: smtpOn, ...(smtpOn ? {} : { acceptUrl }) });
+    } catch (err: any) {
+      logger.error("POST /api/organization/invites failed", err);
+      res.status(500).json({ message: "Failed to create invite" });
+    }
+  });
+
+  // Transfer company admin to another member of the same org (admin only).
+  app.patch("/api/organization/admin", requireAuth, requireOrgAdmin, async (req: Request, res: Response) => {
+    try {
+      const current = (req as any).user as { id: string; organizationId?: string | null };
+      const orgId = current.organizationId!;
+      const newAdminUserId = String(req.body?.newAdminUserId ?? "").trim();
+      if (!newAdminUserId) return res.status(400).json({ message: "newAdminUserId is required" });
+      if (newAdminUserId === current.id) return res.status(400).json({ message: "You are already the company admin" });
+      const target = await storage.getUserById(newAdminUserId);
+      if (!target || target.organizationId !== orgId) {
+        return res.status(404).json({ message: "That user is not a member of your organization" });
+      }
+      // Promote the target to admin, demote the outgoing admin to a full member
+      // (analyst = client read/write, no member management). Update the org's
+      // source-of-truth pointer last.
+      await storage.updateUser(newAdminUserId, { role: "admin" });
+      await storage.updateUser(current.id, { role: "analyst" });
+      await OrganizationModel.updateOne({ id: orgId }, { $set: { adminUserId: newAdminUserId } });
+
+      await recordAudit(req, {
+        action: "organization.admin.transfer",
+        resourceType: "organization",
+        resourceId: orgId,
+        result: "success",
+        metadata: { from: current.id, to: newAdminUserId },
+      });
+      res.json({ ok: true, adminUserId: newAdminUserId });
+    } catch (err: any) {
+      logger.error("PATCH /api/organization/admin failed", err);
+      res.status(500).json({ message: "Failed to transfer admin" });
+    }
+  });
+
+  // Remove a member from the company (admin only). The member is detached from
+  // the org (loses org-shared visibility) but keeps clients they personally
+  // created; they can be re-invited later.
+  app.delete("/api/organization/members/:userId", requireAuth, requireOrgAdmin, async (req: Request, res: Response) => {
+    try {
+      const current = (req as any).user as { id: string; organizationId?: string | null };
+      const orgId = current.organizationId!;
+      const targetId = String(req.params.userId);
+      if (targetId === current.id) {
+        return res.status(400).json({ message: "Transfer admin to someone else before removing yourself" });
+      }
+      const target = await storage.getUserById(targetId);
+      if (!target || target.organizationId !== orgId) {
+        return res.status(404).json({ message: "That user is not a member of your organization" });
+      }
+      await storage.updateUser(targetId, { organizationId: null as any, role: "user" });
+      await recordAudit(req, {
+        action: "organization.member.remove",
+        resourceType: "user",
+        resourceId: targetId,
+        result: "success",
+        metadata: { orgId, removedBy: current.id },
+      });
+      res.json({ ok: true, removed: targetId });
+    } catch (err: any) {
+      logger.error("DELETE /api/organization/members/:userId failed", err);
+      res.status(500).json({ message: "Failed to remove member" });
+    }
+  });
 
   // Phase 6 observability — workbook back-sync outbox health. Returns queue
   // depth, gave-up count, oldest entry timestamp, and the last 5 entries so
