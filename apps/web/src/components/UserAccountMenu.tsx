@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Building2, ChevronDown, LogOut } from "lucide-react";
+import { Building2, ChevronDown, LogOut, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Variant = "hub" | "dashboard" | "certificate";
@@ -98,6 +98,15 @@ export function UserAccountMenu({ variant = "hub", className, trigger }: UserAcc
         >
           <Building2 />
           Company &amp; B-BBEE profile
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            navigate("/team");
+          }}
+          data-testid="menu-team"
+        >
+          <Users />
+          Team &amp; members
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {

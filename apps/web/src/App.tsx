@@ -22,6 +22,7 @@ import CertificateDetail from "@/pages/CertificateDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
 import Workspace from "@/pages/Workspace";
+import Team from "@/pages/Team";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
@@ -146,6 +147,9 @@ function AppRouter() {
       </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
+      <Route path="/team">
+        <ProtectedRoute><Team /></ProtectedRoute>
       </Route>
       <Route path="/company-profile">
         <ProtectedRoute><CompanyProfilePage /></ProtectedRoute>
