@@ -1067,6 +1067,20 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         fscReinsurer: coerceYesNo(data.client.fscReinsurer ?? finExtras.fscReinsurer),
         eapProvince: (data.client.eapProvince || finExtras.eapProvince || 'National') as Client['eapProvince'],
         industryNorm: data.client.industryNorm ?? (finExtras.industryNormPercent as number | undefined),
+        // Foundation / company-detail fields that PATCH /api/clients/:id persists
+        // and GET /:id/data returns, but which were previously DROPPED here — so
+        // measurement period, turnover/headcount, and certificate details showed
+        // blank again on reload ("company details aren't reflected well"). These
+        // also close the pre-existing TS2739 (annualTurnover, numberOfEmployees
+        // missing from the Client literal).
+        measurementPeriodStart: data.client.measurementPeriodStart || undefined,
+        measurementPeriodEnd: data.client.measurementPeriodEnd || undefined,
+        annualTurnover: data.client.annualTurnover || 0,
+        numberOfEmployees: data.client.numberOfEmployees || 0,
+        beeCertificateNumber: data.client.beeCertificateNumber || undefined,
+        beeCertificateExpiry: data.client.beeCertificateExpiry || undefined,
+        beeCertificateLevel: (data.client.beeCertificateLevel ?? undefined) as Client['beeCertificateLevel'],
+        verificationAgency: data.client.verificationAgency || undefined,
         financialHistory: (data.financialYears || []).map((fy: any) => ({
           id: fy.id,
           year: fy.year,
