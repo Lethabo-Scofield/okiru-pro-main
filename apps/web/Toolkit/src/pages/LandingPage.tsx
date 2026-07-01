@@ -912,11 +912,15 @@ function DemoModal({ onClose }: { onClose: () => void }) {
 /* ─────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────── */
-export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void }) {
+export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
 
   const openDemo = () => { setDemoOpen(true); setMenuOpen(false); };
+  // Wire the marketing "Get started" CTA to the register flow (falls back to the
+  // shared auth screen, where "Create account" is still reachable, if the host
+  // didn't pass a register handler).
+  const goRegister = () => { setMenuOpen(false); (onNavigateRegister ?? onNavigateAuth)(); };
 
   const scrollTo = (id: string) => {
     setMenuOpen(false);
@@ -965,6 +969,7 @@ export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () =>
 
           <div className="ok-nav-right">
             <button className="ok-nav-signin" onClick={onNavigateAuth}>Sign in</button>
+            <button className="ok-nav-signin" onClick={goRegister}>Get started</button>
             <button className="ok-nav-demo-btn" onClick={openDemo}>
               Book a demo <span className="arr"><ArrowRight size={13} /></span>
             </button>
@@ -981,6 +986,7 @@ export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () =>
           <button key={link.id} className="ok-mobile-link" onClick={() => scrollTo(link.id)}>{link.label}</button>
         ))}
         <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
+        <button className="ok-mobile-link" onClick={goRegister}>Get started</button>
         <button className="ok-mobile-cta" onClick={openDemo}>Book a 45-min demo →</button>
       </div>
 
@@ -1007,9 +1013,10 @@ export default function OkiruLanding({ onNavigateAuth }: { onNavigateAuth: () =>
               businesses ready to transform. <strong>One toolkit. Every framework.</strong> Net-Zero ready.
             </p>
             <div className="ok-hero-btns ok-anim-4">
-              <button className="ok-btn-cta" onClick={openDemo}>
-                Book a 45-min demo <span className="arr"><ArrowRight size={14} /></span>
+              <button className="ok-btn-cta" onClick={goRegister}>
+                Get started <span className="arr"><ArrowRight size={14} /></span>
               </button>
+              <button className="ok-btn-sec" onClick={openDemo}>Book a 45-min demo</button>
               <button className="ok-btn-sec" onClick={() => scrollTo("sec-toolkit")}>Explore the toolkit</button>
             </div>
           </div>
