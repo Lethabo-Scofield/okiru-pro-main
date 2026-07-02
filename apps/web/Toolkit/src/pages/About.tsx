@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { GLOBAL_CSS } from "./LandingPage";
 import { SiteNav, SiteFooter, Reveal, FullIcon } from "./siteChrome";
+import ceoPortrait from "@assets/image_1783017832778.png";
 
 /* ─────────────────────────────────────────────
    ABOUT PAGE
@@ -88,6 +89,36 @@ export default function OkiruAbout({
                   ))}
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── FOUNDER / CEO MESSAGE ── */}
+        <section className="ok-section ok-ceo" id="sec-ceo">
+          <div className="ok-w">
+            <div className="ok-ceo-grid">
+              <Reveal className="ok-ceo-photo-wrap">
+                <img className="ok-ceo-photo" src={ceoPortrait} alt="Chengetai Myezwa, Chief Executive Officer of Okiru Consulting" loading="lazy" />
+                <div className="ok-ceo-photo-glow" aria-hidden />
+              </Reveal>
+              <Reveal className="ok-ceo-body" delay="ok-d1">
+                <span className="ok-eyebrow">A message from our CEO</span>
+                <blockquote className="ok-ceo-quote">
+                  “Transformation in South Africa has too often been reduced to a certificate at
+                  the end of the year — a number chased, filed, and forgotten. We built Okiru to
+                  change that. When your ESG, B-BBEE and Skills Development data all live in one
+                  defensible system, compliance stops being a scramble and becomes a story of
+                  real, measurable progress you can stand behind in any boardroom.
+                  <br /><br />
+                  Our promise is simple: we don't just hand you a tool and walk away. We build
+                  the methodology inside your business, load the data, validate every number, and
+                  stay accountable for the outcome. That's how transformation becomes permanent.”
+                </blockquote>
+                <div className="ok-ceo-sign">
+                  <div className="ok-ceo-name">Chengetai Myezwa</div>
+                  <div className="ok-ceo-role">Chief Executive Officer · Okiru Consulting</div>
+                </div>
+              </Reveal>
             </div>
           </div>
         </section>
