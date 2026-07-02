@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
+import heroBg from "@assets/image_1783014770940.png";
 import { PRODUCT_TABS, PRODUCTS } from "./productLandingConfig";
 
 /* ─────────────────────────────────────────────
@@ -255,21 +256,28 @@ export const GLOBAL_CSS = `
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
   .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: var(--ink); }
+  .okiru-root .ok-hero-photo {
+    position: absolute; inset: 0; z-index: 0;
+    background-position: center right; background-size: cover; background-repeat: no-repeat;
+    opacity: 0.92; animation: okiru-heroPhoto 1.8s cubic-bezier(.16,1,.3,1) both;
+  }
+  @keyframes okiru-heroPhoto {
+    from { opacity: 0; transform: scale(1.07); }
+    to   { opacity: 0.92; transform: scale(1); }
+  }
+  .okiru-root .ok-hero-photo-overlay {
+    position: absolute; inset: 0; z-index: 1;
+    background:
+      linear-gradient(90deg, var(--ink) 0%, rgba(11,15,26,0.92) 26%, rgba(11,15,26,0.55) 54%, rgba(11,15,26,0.12) 78%, rgba(11,15,26,0.4) 100%),
+      linear-gradient(180deg, rgba(11,15,26,0.55) 0%, transparent 20%, transparent 58%, var(--ink) 100%);
+  }
   .okiru-root .ok-hero-beam {
     position: absolute; top: -10%; right: -5%; width: 55%; height: 120%;
     background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(6,182,212,0.06) 10deg, rgba(147,51,234,0.10) 18deg, rgba(232,68,26,0.05) 26deg, transparent 38deg);
   }
-  .okiru-root .ok-hero-beam-2 {
-    position: absolute; top: -5%; right: 2%; width: 45%; height: 100%;
-    background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(232,68,26,0.04) 6deg, rgba(6,182,212,0.07) 12deg, rgba(147,51,234,0.04) 18deg, transparent 28deg);
-  }
   .okiru-root .ok-hero-glow {
     position: absolute; top: -20%; right: -8%; width: 700px; height: 700px; border-radius: 50%;
     background: radial-gradient(circle, rgba(6,182,212,0.08) 0%, rgba(147,51,234,0.05) 40%, transparent 70%);
-  }
-  .okiru-root .ok-hero-glow-2 {
-    position: absolute; bottom: -10%; left: -5%; width: 500px; height: 500px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(232,68,26,0.06) 0%, transparent 65%);
   }
 
   .okiru-root .ok-hero-tag {
@@ -608,6 +616,7 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-nav::before,
     .okiru-root .ok-nav-demo-btn:hover::before,
     .okiru-root .ok-mobile-menu.ok-menu-open { animation: none; opacity: 1; }
+    .okiru-root .ok-hero-photo { animation: none; opacity: 0.92; transform: none; }
   }
 
   /* ── RESPONSIVE ── */
@@ -951,8 +960,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         {/* ── 01: HERO ── */}
         <section className="ok-hero">
           <div className="ok-hero-bg" aria-hidden>
-            <div className="ok-hero-beam" /><div className="ok-hero-beam-2" />
-            <div className="ok-hero-glow" /><div className="ok-hero-glow-2" />
+            <div className="ok-hero-photo" style={{ backgroundImage: `url(${heroBg})` }} />
+            <div className="ok-hero-photo-overlay" />
+            <div className="ok-hero-beam" />
+            <div className="ok-hero-glow" />
           </div>
           <div className="ok-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-tag ok-anim-1">
@@ -962,12 +973,14 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               <span className="ok-hero-tag-brand">Okiru Consulting&nbsp;&nbsp;·&nbsp;&nbsp;Est.&nbsp;2023</span>
             </div>
             <h1 className="ok-h1 ok-anim-2">
-              Transformation<br />
-              <span className="ok-h1-gradient">Toolkit.</span>
+              Okiru means<br />
+              <span className="ok-h1-gradient">to grow.</span>
             </h1>
             <p className="ok-hero-sub ok-anim-3">
-              Expert ESG, B-BBEE, AI &amp; Skills Development advisory for South African
-              businesses ready to transform. <strong>One toolkit. Every framework.</strong> Net-Zero ready.
+              Every business starts as a bud. We help South African companies grow with
+              purpose &mdash; turning <strong>ESG, B-BBEE &amp; Skills Development</strong> from
+              box-ticking compliance into real, measurable transformation that compounds.
+              One toolkit. Every framework. Net-Zero ready.
             </p>
             <div className="ok-hero-btns ok-anim-4">
               <button className="ok-btn-cta" onClick={goRegister}>
