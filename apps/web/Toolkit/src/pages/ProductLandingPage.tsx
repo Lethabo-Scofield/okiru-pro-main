@@ -4,74 +4,109 @@ import { GLOBAL_CSS } from "./LandingPage";
 import { PRODUCT_TABS, type ProductConfig } from "./productLandingConfig";
 
 /* ─────────────────────────────────────────────
-   PRODUCT PAGE THEME — clean, purple / blue / orange
-   Scoped to `.okiru-product` so the main landing is
-   untouched. Overrides the shared gradient tokens and
-   refines the product-page surfaces for a cleaner look.
+   PRODUCT PAGE THEMES — each tab gets its own identity
+   within the purple / blue / orange palette.
+   • purple (B-BBEE Toolkit) — top-accent cards
+   • blue   (ESG Toolkit)    — left-accent cards
+   • orange (Certificate)    — soft-filled cards
+   Scoped to `.okiru-product` so the main landing is untouched.
 ───────────────────────────────────────────── */
 const PRODUCT_CSS = `
-  .okiru-root.okiru-product {
-    --grad:      linear-gradient(135deg, #9333ea 0%, #2563eb 52%, #f97316 100%);
-    --grad-r:    linear-gradient(135deg, #f97316 0%, #2563eb 52%, #9333ea 100%);
-    --grad-text: linear-gradient(100deg, #a855f7 0%, #3b82f6 50%, #fb923c 100%);
-    --grad-h:    linear-gradient(90deg, #9333ea, #2563eb, #f97316);
-  }
-
-  /* ── HERO AMBIENCE (blue-forward, no cyan) ── */
-  .okiru-product .ok-hero-glow { background: radial-gradient(circle, rgba(37,99,235,0.11) 0%, rgba(147,51,234,0.06) 42%, transparent 70%); }
-  .okiru-product .ok-hero-glow-2 { background: radial-gradient(circle, rgba(249,115,22,0.08) 0%, transparent 65%); }
-  .okiru-product .ok-hero-beam { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(37,99,235,0.08) 10deg, rgba(147,51,234,0.11) 18deg, rgba(249,115,22,0.06) 26deg, transparent 38deg); }
-  .okiru-product .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(249,115,22,0.05) 6deg, rgba(37,99,235,0.08) 12deg, rgba(147,51,234,0.05) 18deg, transparent 28deg); }
-  .okiru-product .ok-hero-tag-dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.7); }
-
-  /* ── ACTIVE NAV TAB ── */
+  /* ── SHARED STRUCTURE (theme-agnostic, uses themed tokens) ── */
+  .okiru-product .ok-nav-link { position: relative; }
   .okiru-product .ok-nav-active { color: #fff; background: rgba(255,255,255,0.06); }
   .okiru-product .ok-nav-active::after {
     content: ''; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2px;
     border-radius: 2px; background: var(--grad-h);
   }
-  .okiru-product .ok-nav-link { position: relative; }
 
-  /* ── STAT STRIP ── */
-  .okiru-product .ok-service:hover { background: rgba(147,51,234,0.05); }
-
-  /* ── FEATURE CARDS (clean, rounded, per-column accent) ── */
   .okiru-product .ok-challenge-grid { gap: 18px; }
   .okiru-product .ok-challenge-card {
     padding: 32px 30px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
     background: rgba(255,255,255,0.022);
     transition: transform .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease;
   }
-  .okiru-product .ok-challenge-card::before { height: 3px; opacity: 1; border-radius: 16px 16px 0 0; }
+  .okiru-product .ok-challenge-card::before { height: 3px; opacity: 1; border-radius: 16px 16px 0 0; background: var(--grad-h); }
   .okiru-product .ok-challenge-card:hover { transform: translateY(-4px); background: rgba(255,255,255,0.04); }
-  .okiru-product .ok-challenge-card:nth-child(3n+1)::before { background: linear-gradient(90deg,#9333ea,#a855f7); }
-  .okiru-product .ok-challenge-card:nth-child(3n+1):hover { border-color: rgba(147,51,234,0.5); box-shadow: 0 12px 32px -16px rgba(147,51,234,0.55); }
-  .okiru-product .ok-challenge-card:nth-child(3n+1) .ok-challenge-label { color: #a855f7; }
-  .okiru-product .ok-challenge-card:nth-child(3n+2)::before { background: linear-gradient(90deg,#2563eb,#3b82f6); }
-  .okiru-product .ok-challenge-card:nth-child(3n+2):hover { border-color: rgba(37,99,235,0.5); box-shadow: 0 12px 32px -16px rgba(37,99,235,0.55); }
-  .okiru-product .ok-challenge-card:nth-child(3n+2) .ok-challenge-label { color: #3b82f6; }
-  .okiru-product .ok-challenge-card:nth-child(3n+3)::before { background: linear-gradient(90deg,#f97316,#fb923c); }
-  .okiru-product .ok-challenge-card:nth-child(3n+3):hover { border-color: rgba(249,115,22,0.5); box-shadow: 0 12px 32px -16px rgba(249,115,22,0.5); }
-  .okiru-product .ok-challenge-card:nth-child(3n+3) .ok-challenge-label { color: #fb923c; }
+  .okiru-product .ok-challenge-label { color: var(--accent); }
 
-  /* ── STEPS (how it works) ── */
   .okiru-product .ok-about-pillar { grid-template-columns: 64px 1fr; padding: 26px 0; }
   .okiru-product .ok-about-pillar-num {
     font-family: var(--serif); font-style: italic; font-size: 1.6rem; letter-spacing: -0.02em; padding-top: 0;
     background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
 
-  /* ── CTA PANEL (clean gradient card) ── */
-  .okiru-product #product-cta .ok-w > div {
-    max-width: 860px; padding: 48px 44px; border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.09);
-    background: linear-gradient(135deg, rgba(147,51,234,0.10) 0%, rgba(37,99,235,0.06) 55%, rgba(249,115,22,0.07) 100%);
-  }
   .okiru-product #product-cta { border-bottom: none; }
+  .okiru-product #product-cta .ok-w > div {
+    max-width: 860px; padding: 48px 44px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.09);
+  }
 
   @media (max-width: 860px) {
     .okiru-product .ok-challenge-grid { grid-template-columns: 1fr; }
+    .okiru-product .ok-services { flex-wrap: wrap; }
   }
+
+  /* ══════════════ PURPLE — B-BBEE Toolkit ══════════════ */
+  .okiru-root.okiru-purple {
+    --grad:      linear-gradient(135deg, #9333ea 0%, #a855f7 45%, #f97316 100%);
+    --grad-r:    linear-gradient(135deg, #f97316 0%, #a855f7 55%, #9333ea 100%);
+    --grad-text: linear-gradient(100deg, #a855f7 0%, #c084fc 48%, #fb923c 100%);
+    --grad-h:    linear-gradient(90deg, #9333ea, #f97316);
+    --accent:    #a855f7;
+  }
+  .okiru-purple .ok-hero-tag-dot { background: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,0.7); }
+  .okiru-purple .ok-hero-glow   { background: radial-gradient(circle, rgba(147,51,234,0.14) 0%, rgba(168,85,247,0.06) 42%, transparent 70%); }
+  .okiru-purple .ok-hero-glow-2 { background: radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 65%); }
+  .okiru-purple .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(147,51,234,0.12) 14deg, rgba(168,85,247,0.09) 22deg, rgba(249,115,22,0.05) 30deg, transparent 40deg); }
+  .okiru-purple .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(249,115,22,0.05) 6deg, rgba(147,51,234,0.09) 14deg, rgba(168,85,247,0.05) 20deg, transparent 30deg); }
+  .okiru-purple .ok-service:hover { background: rgba(147,51,234,0.06); }
+  .okiru-purple .ok-challenge-card:hover { border-color: rgba(147,51,234,0.5); box-shadow: 0 14px 36px -16px rgba(147,51,234,0.6); }
+  .okiru-purple #product-cta .ok-w > div { background: linear-gradient(135deg, rgba(147,51,234,0.13) 0%, rgba(168,85,247,0.06) 55%, rgba(249,115,22,0.07) 100%); }
+
+  /* ══════════════ BLUE — ESG Toolkit (left-accent cards) ══════════════ */
+  .okiru-root.okiru-blue {
+    --grad:      linear-gradient(135deg, #2563eb 0%, #3b82f6 45%, #9333ea 100%);
+    --grad-r:    linear-gradient(135deg, #9333ea 0%, #3b82f6 55%, #2563eb 100%);
+    --grad-text: linear-gradient(100deg, #3b82f6 0%, #60a5fa 48%, #a855f7 100%);
+    --grad-h:    linear-gradient(90deg, #2563eb, #9333ea);
+    --accent:    #3b82f6;
+  }
+  .okiru-blue .ok-hero-tag-dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.7); }
+  .okiru-blue .ok-hero-glow   { background: radial-gradient(circle, rgba(37,99,235,0.15) 0%, rgba(59,130,246,0.06) 42%, transparent 70%); }
+  .okiru-blue .ok-hero-glow-2 { background: radial-gradient(circle, rgba(147,51,234,0.06) 0%, transparent 65%); }
+  .okiru-blue .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(37,99,235,0.12) 14deg, rgba(59,130,246,0.09) 22deg, rgba(147,51,234,0.05) 30deg, transparent 40deg); }
+  .okiru-blue .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(147,51,234,0.05) 6deg, rgba(37,99,235,0.09) 14deg, rgba(59,130,246,0.05) 20deg, transparent 30deg); }
+  .okiru-blue .ok-service:hover { background: rgba(37,99,235,0.06); }
+  /* card variant: vertical accent on the left, squarer corners */
+  .okiru-blue .ok-challenge-card { border-radius: 12px; padding-left: 34px; }
+  .okiru-blue .ok-challenge-card::before {
+    top: 0; bottom: 0; left: 0; right: auto; width: 3px; height: auto; border-radius: 12px 0 0 12px; background: var(--grad-h);
+  }
+  .okiru-blue .ok-challenge-card:hover { border-color: rgba(37,99,235,0.5); box-shadow: 0 14px 36px -16px rgba(37,99,235,0.6); }
+  .okiru-blue #product-cta .ok-w > div { background: linear-gradient(135deg, rgba(37,99,235,0.13) 0%, rgba(59,130,246,0.06) 55%, rgba(147,51,234,0.07) 100%); }
+
+  /* ══════════════ ORANGE — B-BBEE Certificate (soft-filled cards) ══════════════ */
+  .okiru-root.okiru-orange {
+    --grad:      linear-gradient(135deg, #f97316 0%, #fb923c 45%, #2563eb 100%);
+    --grad-r:    linear-gradient(135deg, #2563eb 0%, #fb923c 55%, #f97316 100%);
+    --grad-text: linear-gradient(100deg, #fb923c 0%, #fdba74 45%, #3b82f6 100%);
+    --grad-h:    linear-gradient(90deg, #f97316, #2563eb);
+    --accent:    #fb923c;
+  }
+  .okiru-orange .ok-hero-tag-dot { background: #fb923c; box-shadow: 0 0 10px rgba(251,146,60,0.7); }
+  .okiru-orange .ok-hero-glow   { background: radial-gradient(circle, rgba(249,115,22,0.14) 0%, rgba(251,146,60,0.06) 42%, transparent 70%); }
+  .okiru-orange .ok-hero-glow-2 { background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 65%); }
+  .okiru-orange .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(249,115,22,0.11) 14deg, rgba(251,146,60,0.08) 22deg, rgba(37,99,235,0.05) 30deg, transparent 40deg); }
+  .okiru-orange .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(37,99,235,0.05) 6deg, rgba(249,115,22,0.08) 14deg, rgba(251,146,60,0.05) 20deg, transparent 30deg); }
+  .okiru-orange .ok-service:hover { background: rgba(249,115,22,0.06); }
+  /* card variant: soft filled background + bottom accent */
+  .okiru-orange .ok-challenge-card { border-radius: 18px; background: linear-gradient(160deg, rgba(249,115,22,0.07) 0%, rgba(37,99,235,0.03) 100%); }
+  .okiru-orange .ok-challenge-card::before { top: auto; bottom: 0; height: 3px; border-radius: 0 0 18px 18px; }
+  .okiru-orange .ok-challenge-card:hover {
+    border-color: rgba(249,115,22,0.5); box-shadow: 0 14px 36px -16px rgba(249,115,22,0.55);
+    background: linear-gradient(160deg, rgba(249,115,22,0.11) 0%, rgba(37,99,235,0.04) 100%);
+  }
+  .okiru-orange #product-cta .ok-w > div { background: linear-gradient(135deg, rgba(249,115,22,0.13) 0%, rgba(251,146,60,0.06) 55%, rgba(37,99,235,0.07) 100%); }
 `;
 
 const ArrowRight = ({ size = 14 }: { size?: number }) => (
@@ -141,7 +176,7 @@ export default function ProductLandingPage({
   useEffect(() => { window.scrollTo(0, 0); }, [product.slug]);
 
   return (
-    <div className="okiru-root okiru-product">
+    <div className={`okiru-root okiru-product okiru-${product.theme}`}>
       <div className="okiru-grain" aria-hidden />
 
       {/* ── NAV ── */}

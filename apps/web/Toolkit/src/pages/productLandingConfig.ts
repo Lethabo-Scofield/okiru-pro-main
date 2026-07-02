@@ -24,9 +24,13 @@ export interface ProductStep {
   desc: string;
 }
 
+export type ProductTheme = "purple" | "blue" | "orange";
+
 export interface ProductConfig {
   slug: string;
   navLabel: string;
+  /** Drives the per-page accent colour + card treatment. */
+  theme: ProductTheme;
   heroTag: string;
   heroBrand: string;
   titleLead: string;
@@ -52,6 +56,7 @@ export const PRODUCTS: ProductConfig[] = [
   {
     slug: "bbbee-toolkit",
     navLabel: "B-BBEE Toolkit",
+    theme: "purple",
     heroTag: "Scorecard · Sector Codes · Verification",
     heroBrand: "Okiru Pro · B-BBEE",
     titleLead: "B-BBEE",
@@ -129,6 +134,7 @@ export const PRODUCTS: ProductConfig[] = [
   {
     slug: "esg-toolkit",
     navLabel: "ESG Toolkit",
+    theme: "blue",
     heroTag: "Scope 1·2·3 · IFRS S1/S2 · Net-Zero",
     heroBrand: "Okiru · ESG",
     titleLead: "ESG",
@@ -206,6 +212,7 @@ export const PRODUCTS: ProductConfig[] = [
   {
     slug: "bbbee-certificate",
     navLabel: "B-BBEE Certificate",
+    theme: "orange",
     heroTag: "Registry · Extraction · Validity",
     heroBrand: "Okiru · Certificate Hub",
     titleLead: "Certificate",
