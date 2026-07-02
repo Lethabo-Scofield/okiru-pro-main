@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import heroBg from "@assets/image_1783014770940.png";
 import ctaBg from "@assets/image_1783017701495.png";
+import ringLogo from "@assets/okiru_ring.png";
 import { PRODUCTS } from "./productLandingConfig";
 import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome";
 
@@ -317,6 +318,13 @@ export const GLOBAL_CSS = `
     background: var(--grad-text);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
+  .okiru-root .ok-h1-ring {
+    display: inline-block; width: 0.82em; height: 0.82em; vertical-align: -0.1em;
+    margin: 0 0.015em; object-fit: contain; -webkit-text-fill-color: initial;
+    animation: okiru-ringSpin 8s linear infinite;
+  }
+  @keyframes okiru-ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-h1-ring { animation: none; } }
   .okiru-root .ok-hero-sub {
     max-width: min(44rem, 100%); font-size: 16px; color: rgba(255,255,255,0.75);
     line-height: 1.8; font-weight: 400; margin-bottom: 44px;
@@ -861,7 +869,9 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               </span>
               <h1 className="ok-h1 ok-anim-2">
                 Turn compliance into<br />
-                <span className="ok-h1-gradient">compounding growth.</span>
+                <span className="ok-h1-gradient" aria-label="compounding growth.">
+                  compounding gr<img src={ringLogo} alt="" aria-hidden="true" className="ok-h1-ring" />wth.
+                </span>
               </h1>
               <p className="ok-hero-sub ok-anim-3">
                 South African transformation, made measurable. We turn
