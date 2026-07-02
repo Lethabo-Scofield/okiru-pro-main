@@ -44,69 +44,129 @@ export const GLOBAL_CSS = `
     background-size: 256px;
   }
 
-  /* ── NAV ── */
+  /* ── NAV (floating command bar) ── */
   .okiru-root .ok-nav {
-    position: fixed; top: 0; width: 100%; z-index: 200;
-    border-bottom: 1px solid rgba(255,255,255,0.07);
-    background: rgba(11,15,26,0.82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-    transition: background .3s;
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    width: calc(100% - 32px); max-width: 1200px; z-index: 200;
+    border-radius: 15px; border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(11,15,26,0.62);
+    backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+    animation: okiru-navDrop .8s cubic-bezier(.16,1,.3,1) both;
+    transition: top .45s cubic-bezier(.16,1,.3,1), max-width .45s cubic-bezier(.16,1,.3,1),
+                background .35s, box-shadow .35s, border-radius .35s;
   }
+  .okiru-root .ok-nav.ok-nav-scrolled {
+    top: 8px; max-width: 940px; border-radius: 13px;
+    background: rgba(11,15,26,0.9);
+    box-shadow: 0 12px 46px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.02);
+  }
+  @keyframes okiru-navDrop {
+    from { opacity: 0; transform: translate(-50%, -150%); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
+  }
+  /* animated purple→blue→orange hairline border */
+  .okiru-root .ok-nav::before {
+    content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+    background: linear-gradient(115deg, transparent 8%, rgba(147,51,234,0.55) 28%, rgba(6,182,212,0.55) 50%, rgba(232,68,26,0.5) 72%, transparent 92%);
+    background-size: 260% 100%;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: okiru-navSheen 9s linear infinite; opacity: 0.75; pointer-events: none;
+  }
+  @keyframes okiru-navSheen { 0% { background-position: 0% 50%; } 100% { background-position: 260% 50%; } }
+
   .okiru-root .ok-nav-inner {
-    width: 100%; max-width: 1280px; margin: 0 auto; padding: 0 48px;
-    height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    position: relative; z-index: 1;
+    width: 100%; margin: 0 auto; padding: 0 22px;
+    height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
   }
+  .okiru-root .ok-nav-inner > * { opacity: 0; animation: okiru-navFade .6s ease forwards; }
+  .okiru-root .ok-nav-inner > *:nth-child(1) { animation-delay: .18s; }
+  .okiru-root .ok-nav-inner > *:nth-child(2) { animation-delay: .28s; }
+  .okiru-root .ok-nav-inner > *:nth-child(3) { animation-delay: .38s; }
+  @keyframes okiru-navFade { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
   .okiru-root .ok-brand { display: inline-flex; align-items: center; gap: 9px; text-decoration: none; flex-shrink: 0; }
-  .okiru-root .ok-brand-mark { width: 26px; height: 26px; display: block; transition: transform .35s ease; }
-  .okiru-root .ok-brand:hover .ok-brand-mark { transform: rotate(8deg); }
+  .okiru-root .ok-brand-mark {
+    width: 26px; height: 26px; display: block;
+    transition: transform .5s cubic-bezier(.16,1,.3,1);
+    animation: okiru-markGlow 4.5s ease-in-out infinite;
+  }
+  @keyframes okiru-markGlow {
+    0%, 100% { filter: drop-shadow(0 0 2px rgba(147,51,234,0)); }
+    50%      { filter: drop-shadow(0 0 7px rgba(147,51,234,0.5)); }
+  }
+  .okiru-root .ok-brand:hover .ok-brand-mark { transform: rotate(-12deg) scale(1.08); }
   .okiru-root .ok-wordmark { font-family: var(--sans); font-weight: 500; font-size: 15px; color: var(--hi); letter-spacing: -0.02em; }
   .okiru-root .ok-wordmark strong { font-weight: 600; }
   .okiru-root .ok-wordmark span { font-weight: 300; color: rgba(255,255,255,.5); }
 
   .okiru-root .ok-nav-center { display: flex; align-items: center; gap: 2px; }
   .okiru-root .ok-nav-link {
-    font-family: var(--sans); font-size: 13.5px; font-weight: 400;
+    position: relative; font-family: var(--sans); font-size: 13.5px; font-weight: 400;
     color: rgba(255,255,255,0.55); background: none; border: none; cursor: pointer;
-    padding: 6px 13px; border-radius: 6px; transition: color .2s, background .2s; text-decoration: none;
+    padding: 7px 14px; border-radius: 8px; transition: color .25s; text-decoration: none;
     white-space: nowrap;
   }
-  .okiru-root .ok-nav-link:hover { color: var(--hi); background: rgba(255,255,255,0.05); }
+  .okiru-root .ok-nav-link::after {
+    content: ''; position: absolute; left: 14px; right: 14px; bottom: 4px; height: 1.5px;
+    background: var(--grad); border-radius: 2px;
+    transform: scaleX(0); transform-origin: center;
+    transition: transform .32s cubic-bezier(.16,1,.3,1);
+  }
+  .okiru-root .ok-nav-link:hover { color: var(--hi); }
+  .okiru-root .ok-nav-link:hover::after { transform: scaleX(1); }
   .okiru-root .ok-nav-link.ok-nav-active { color: var(--hi); }
-  .okiru-root .ok-nav-div { width: 1px; height: 18px; background: rgba(255,255,255,0.1); margin: 0 4px; flex-shrink: 0; }
+  .okiru-root .ok-nav-link.ok-nav-active::after { transform: scaleX(1); }
+  .okiru-root .ok-nav-div { width: 1px; height: 16px; background: rgba(255,255,255,0.12); margin: 0 6px; flex-shrink: 0; }
 
   .okiru-root .ok-nav-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .okiru-root .ok-nav-signin {
     font-family: var(--sans); font-size: 13px; font-weight: 400;
-    color: rgba(255,255,255,0.5); background: none; border: 1px solid rgba(255,255,255,0.12); cursor: pointer;
-    padding: 7px 16px; border-radius: 6px; transition: color .2s, border-color .2s, background .2s;
+    color: rgba(255,255,255,0.55); background: none; border: 1px solid rgba(255,255,255,0.12); cursor: pointer;
+    padding: 7px 16px; border-radius: 8px; transition: color .2s, border-color .2s, background .2s;
   }
   .okiru-root .ok-nav-signin:hover { color: var(--hi); border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.04); }
   .okiru-root .ok-nav-demo-btn {
+    position: relative; overflow: hidden;
     font-family: var(--sans); font-size: 13px; font-weight: 600;
     color: #fff; background: var(--grad); border: none; cursor: pointer;
-    padding: 8px 18px; border-radius: 6px; letter-spacing: -0.01em;
-    transition: opacity .2s, transform .15s;
+    padding: 8px 18px; border-radius: 8px; letter-spacing: -0.01em;
+    transition: transform .18s cubic-bezier(.16,1,.3,1), box-shadow .25s;
     display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
   }
-  .okiru-root .ok-nav-demo-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+  .okiru-root .ok-nav-demo-btn::before {
+    content: ''; position: absolute; top: 0; left: -80%; width: 55%; height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,0.35), transparent);
+    transform: skewX(-18deg); pointer-events: none;
+  }
+  .okiru-root .ok-nav-demo-btn:hover { transform: translateY(-1px); box-shadow: 0 8px 22px rgba(147,51,234,0.35); }
+  .okiru-root .ok-nav-demo-btn:hover::before { animation: okiru-btnSheen .7s ease; }
+  @keyframes okiru-btnSheen { from { left: -80%; } to { left: 130%; } }
+  .okiru-root .ok-nav-demo-btn > * { position: relative; z-index: 1; }
   .okiru-root .ok-nav-demo-btn .arr { display: inline-flex; transition: transform .2s; }
   .okiru-root .ok-nav-demo-btn:hover .arr { transform: translateX(3px); }
 
   .okiru-root .ok-hamburger { display: none; background: none; border: none; cursor: pointer; padding: 6px; color: var(--hi); }
   .okiru-root .ok-mobile-menu {
-    display: none; position: fixed; top: 62px; left: 0; right: 0; z-index: 199;
-    background: rgba(11,15,26,0.98); backdrop-filter: blur(24px);
-    border-bottom: 1px solid var(--rule); padding: 20px 24px 28px; flex-direction: column; gap: 4px;
+    display: none; position: fixed; top: 80px; left: 16px; right: 16px; z-index: 199;
+    background: rgba(11,15,26,0.97); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--rule); border-radius: 16px; padding: 14px 20px 20px; flex-direction: column; gap: 4px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   }
-  .okiru-root .ok-mobile-menu.ok-menu-open { display: flex; }
+  .okiru-root .ok-mobile-menu.ok-menu-open { display: flex; animation: okiru-menuIn .3s cubic-bezier(.16,1,.3,1) both; }
+  @keyframes okiru-menuIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
   .okiru-root .ok-mobile-link {
     font-family: var(--sans); font-size: 15px; font-weight: 400;
     color: rgba(255,255,255,.75); background: none; border: none; cursor: pointer;
-    padding: 12px 0; text-align: left; border-bottom: 1px solid rgba(255,255,255,.06); width: 100%;
+    padding: 12px 2px; text-align: left; border-bottom: 1px solid rgba(255,255,255,.06); width: 100%;
+    transition: color .2s, padding-left .2s;
   }
   .okiru-root .ok-mobile-link:last-of-type { border-bottom: none; }
-  .okiru-root .ok-mobile-link:hover { color: var(--hi); }
+  .okiru-root .ok-mobile-link:hover { color: var(--hi); padding-left: 8px; }
   .okiru-root .ok-mobile-cta {
-    margin-top: 16px; width: 100%; padding: 14px; border-radius: 8px;
+    margin-top: 16px; width: 100%; padding: 14px; border-radius: 10px;
     background: var(--grad); border: none; cursor: pointer; font-family: var(--sans);
     font-size: 15px; font-weight: 600; color: #fff;
   }
@@ -540,6 +600,16 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-anim-3 { opacity: 0; animation: okiru-slideUp .65s ease forwards .32s; }
   .okiru-root .ok-anim-4 { opacity: 0; animation: okiru-slideUp .6s ease forwards .46s; }
 
+  /* ── REDUCED MOTION ── */
+  @media (prefers-reduced-motion: reduce) {
+    .okiru-root .ok-nav,
+    .okiru-root .ok-nav-inner > *,
+    .okiru-root .ok-brand-mark,
+    .okiru-root .ok-nav::before,
+    .okiru-root .ok-nav-demo-btn:hover::before,
+    .okiru-root .ok-mobile-menu.ok-menu-open { animation: none; opacity: 1; }
+  }
+
   /* ── RESPONSIVE ── */
   @media (max-width: 1100px) {
     .okiru-root .ok-nav-link { font-size: 13px; padding: 6px 10px; }
@@ -794,6 +864,7 @@ function DemoModal({ onClose }: { onClose: () => void }) {
 export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNavigateProduct }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void; onNavigateProduct?: (slug: string) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const openDemo = () => { setDemoOpen(true); setMenuOpen(false); };
   // Wire the marketing "Get started" CTA to the register flow (falls back to the
@@ -816,6 +887,13 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
   }, []);
 
   useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
     document.body.style.overflow = (menuOpen || demoOpen) ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [menuOpen, demoOpen]);
@@ -828,7 +906,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
 
       {/* ── NAV ── */}
-      <nav className="ok-nav">
+      <nav className={`ok-nav ${scrolled ? "ok-nav-scrolled" : ""}`}>
         <div className="ok-nav-inner">
           <a href="/" className="ok-brand" aria-label="Okiru home">
             <img src={okiruLogo} alt="" className="ok-brand-mark" />
