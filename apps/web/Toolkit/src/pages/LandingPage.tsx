@@ -304,17 +304,17 @@ export const GLOBAL_CSS = `
 
   .okiru-root .ok-h1 {
     font-family: var(--serif); font-size: clamp(2.8rem, 5.8vw, 5.2rem);
-    line-height: 1.05; letter-spacing: -0.035em; color: #ffffff; font-weight: 700;
-    max-width: min(60rem, 100%); margin-bottom: 20px;
+    line-height: 1.12; letter-spacing: -0.035em; color: #ffffff; font-weight: 700;
+    max-width: min(60rem, 100%); margin-bottom: 32px;
   }
   .okiru-root .ok-h1-gradient {
-    display: block;
+    display: block; margin-top: 6px;
     background: var(--grad-text);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
   .okiru-root .ok-hero-sub {
-    max-width: min(44rem, 100%); font-size: 15px; color: rgba(255,255,255,0.75);
-    line-height: 1.75; font-weight: 400; margin-bottom: 32px;
+    max-width: min(44rem, 100%); font-size: 16px; color: rgba(255,255,255,0.75);
+    line-height: 1.8; font-weight: 400; margin-bottom: 44px;
   }
   .okiru-root .ok-hero-sub strong { color: rgba(255,255,255,0.92); font-weight: 500; }
   .okiru-root .ok-hero-btns { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
