@@ -46,7 +46,7 @@ export default function OkiruContact({
             <Reveal>
               <span className="ok-sec-num">Contact</span>
               <h2 className="ok-h2" style={{ marginTop:8 }}>Let's make your transformation measurable.</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Questions about the toolkit, a sector code, or your reporting cycle? Reach out — we usually reply within one business day.</p>
+              <p className="ok-lead-l" style={{ marginTop:8 }}>Questions about the toolkit, a sector code, or your reporting cycle? Reach out. We usually reply within one business day.</p>
             </Reveal>
             <div className="ok-demo-grid">
               <div className="ok-demo-l">
