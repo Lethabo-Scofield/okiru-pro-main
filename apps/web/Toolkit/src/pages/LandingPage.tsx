@@ -766,8 +766,8 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <h1 className="ok-h1 ok-anim-2">
-              Okiru means<br />
-              <span className="ok-h1-gradient">to grow.</span>
+              Turn compliance into<br />
+              <span className="ok-h1-gradient">measurable growth.</span>
             </h1>
             <p className="ok-hero-sub ok-anim-3">
               Every business starts as a bud. We help South African companies grow with
