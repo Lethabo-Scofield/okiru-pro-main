@@ -36,7 +36,7 @@ export const LinkedInIcon = ({ size = 18 }: { size?: number }) => (
   </svg>
 );
 
-export const OKIRU_LINKEDIN_URL = "https://www.linkedin.com/company/okiru-consulting/";
+export const OKIRU_LINKEDIN_URL = "https://www.linkedin.com/company/okiru.co.za/posts/?feedView=all";
 
 /* ─────────────────────────────────────────────
    REVEAL-ON-SCROLL
