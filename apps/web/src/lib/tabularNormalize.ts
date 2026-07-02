@@ -103,7 +103,9 @@ const GENDER_MAP: Record<string, string> = {
   men: "Male",
 };
 
-const BOOLEAN_TRUE = new Set([
+// Shared Yes/No synonym sets — the single source of truth for boolean coercion
+// across paste, file-import and the grid (keep normalization consistently smart).
+export const BOOLEAN_TRUE = new Set([
   "true",
   "yes",
   "y",
@@ -113,8 +115,11 @@ const BOOLEAN_TRUE = new Set([
   "x",
   "checked",
   "compliant",
+  "yebo",
+  "applicable",
+  "present",
 ]);
-const BOOLEAN_FALSE = new Set([
+export const BOOLEAN_FALSE = new Set([
   "false",
   "no",
   "n",
@@ -124,6 +129,10 @@ const BOOLEAN_FALSE = new Set([
   "-",
   "unchecked",
   "non-compliant",
+  "na",
+  "n/a",
+  "none",
+  "not applicable",
 ]);
 
 const PLACEHOLDER_VALUES = new Set([
@@ -183,7 +192,7 @@ export function isPercentColumn(col: ColumnDef): boolean {
   );
 }
 
-function parseNumberLoose(raw: string): number | null {
+export function parseNumberLoose(raw: string): number | null {
   // Handle accounting negatives: (1 000.00) → -1000.00
   const s = raw.trim();
   const negative = /^\(.*\)$/.test(s) || s.trim().startsWith("-");
@@ -546,6 +555,9 @@ export function normalizeMatrix(
       if (validateFlag) cell.flag = validateFlag;
       if (cell.flag) flaggedCells++;
       const v = cell.value;
+      // NB: normalizeCellForColumn returns false for BOTH "No" and an empty
+      // yes/no cell, so we cannot count boolean-false as data here (it would keep
+      // all-empty rows). Source-empty rows are already skipped above.
       if (v !== "" && v !== null && v !== undefined && v !== false) hasData = true;
       cells[m.targetKey] = cell;
     }

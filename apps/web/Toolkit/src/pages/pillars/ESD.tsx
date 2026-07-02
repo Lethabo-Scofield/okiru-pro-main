@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
@@ -76,7 +78,21 @@ export default function ESD() {
   const [editSup, setEditSup] = useState({ ...emptySupplierForm });
 
   const [isEsdOpen, setIsEsdOpen] = useState(false);
-  const [newEsd, setNewEsd] = useState({ beneficiary: '', type: 'grant', amount: 0, category: 'supplier_development' });
+  const supAddErrs = useFieldErrors();
+  const supEditErrs = useFieldErrors();
+  const esdErrs = useFieldErrors();
+  const [newEsd, setNewEsd] = useState({
+    beneficiary: '',
+    type: 'grant',
+    amount: 0,
+    category: 'supplier_development',
+    // Construction-only flags. Read by construction-map.ts:87/213 — the
+    // engine ALREADY scores these but until now there was no UI to enter
+    // them, so the indicators always read missing (audit Wave 3 safe subset).
+    isBlackWomenOwnedBeneficiary: false,
+    supplierDevProgramme: false,
+  });
+  const isConstructionSector = String(calculatorConfig?.sectorCode ?? '').toUpperCase() === 'CONSTRUCTION';
 
   const getBeeLevelColor = (level: number) => {
     if (level === 1) return "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300";
@@ -94,7 +110,10 @@ export default function ESD() {
   const totalRecognisedSpend = suppliers.reduce((acc, sup) => acc + (sup.spend * (getRecognitionPercentage(sup.beeLevel) / 100)), 0);
 
   const handleAddSupplier = () => {
-    if (!newSup.name || newSup.spend <= 0) {
+    const nameBad = !newSup.name.trim();
+    const spendBad = !(newSup.spend > 0);
+    if (nameBad || spendBad) {
+      supAddErrs.setMany({ name: nameBad, spend: spendBad });
       toast({ title: "Invalid", description: "Name and spend are required.", variant: "destructive" });
       return;
     }
@@ -117,6 +136,7 @@ export default function ESD() {
 
   const openEditSupplier = (sup: Supplier) => {
     setEditSupId(sup.id);
+    supEditErrs.reset();
     setEditSup({
       name: sup.name,
       beeLevel: sup.beeLevel,
@@ -132,7 +152,10 @@ export default function ESD() {
   };
 
   const handleEditSupplier = () => {
-    if (!editSupId || !editSup.name || editSup.spend <= 0) {
+    const nameBad = !editSup.name.trim();
+    const spendBad = !(editSup.spend > 0);
+    if (!editSupId || nameBad || spendBad) {
+      supEditErrs.setMany({ name: nameBad, spend: spendBad });
       toast({ title: "Invalid", description: "Name and spend are required.", variant: "destructive" });
       return;
     }
@@ -153,42 +176,67 @@ export default function ESD() {
   };
 
   const handleAddEsd = () => {
-    if (!newEsd.beneficiary || newEsd.amount <= 0) {
+    const beneficiaryBad = !newEsd.beneficiary.trim();
+    const amountBad = !(newEsd.amount > 0);
+    if (beneficiaryBad || amountBad) {
+      esdErrs.setMany({ beneficiary: beneficiaryBad, amount: amountBad });
       toast({ title: "Invalid", description: "Beneficiary and amount are required.", variant: "destructive" });
       return;
     }
-    addEsdContribution({ id: uuidv4(), beneficiary: newEsd.beneficiary, type: newEsd.type as any, amount: Number(newEsd.amount), category: newEsd.category as any });
-    setNewEsd({ beneficiary: '', type: 'grant', amount: 0, category: 'supplier_development' });
+    addEsdContribution({
+      id: uuidv4(),
+      beneficiary: newEsd.beneficiary,
+      type: newEsd.type as any,
+      amount: Number(newEsd.amount),
+      category: newEsd.category as any,
+      // Construction-only — gated by isConstructionSector in the form; for
+      // non-construction sectors these are always false so the construction
+      // indicators (read by construction-map.ts) never fire.
+      isBlackWomenOwnedBeneficiary: newEsd.isBlackWomenOwnedBeneficiary,
+      supplierDevProgramme: newEsd.supplierDevProgramme,
+    } as any);
+    setNewEsd({ beneficiary: '', type: 'grant', amount: 0, category: 'supplier_development', isBlackWomenOwnedBeneficiary: false, supplierDevProgramme: false });
     setIsEsdOpen(false);
     toast({ title: "Contribution Added", description: `Added ESD contribution to ${newEsd.beneficiary}.` });
   };
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateProcurementScore(procurement, calculatorConfig);
   const esdScore = calculateEsdScore(esd, client.npat, calculatorConfig);
 
   const renderSupplierFormFields = (
     data: typeof emptySupplierForm,
     setData: (d: typeof emptySupplierForm) => void,
+    errs: ReturnType<typeof useFieldErrors>,
   ) => (
     <div className="grid gap-4 py-4">
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Name</Label>
-        <Input
-          value={data.name}
-          onChange={e => setData({ ...data, name: e.target.value })}
-          className="col-span-3"
-          data-testid="input-supplier-name"
-        />
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label className="text-right pt-2">Name</Label>
+        <div className="col-span-3 space-y-1">
+          <Input
+            value={data.name}
+            onChange={e => { setData({ ...data, name: e.target.value }); errs.clear('name'); }}
+            data-testid="input-supplier-name"
+            aria-invalid={errs.has('name') || undefined}
+            aria-describedby={errs.has('name') ? 'esd-sup-name-error' : undefined}
+            className={cn(errs.has('name') && "border-destructive focus-visible:ring-destructive")}
+          />
+          {errs.has('name') && <p id="esd-sup-name-error" className="text-xs text-destructive">Name is required.</p>}
+        </div>
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Spend (R)</Label>
-        <NumberInput
-          value={data.spend}
-          onValueChange={v => setData({ ...data, spend: v })}
-          className="col-span-3"
-          data-testid="input-supplier-spend"
-        />
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label className="text-right pt-2">Spend (R)</Label>
+        <div className="col-span-3 space-y-1">
+          <NumberInput
+            value={data.spend}
+            onValueChange={v => { setData({ ...data, spend: v }); if (v > 0) errs.clear('spend'); }}
+            data-testid="input-supplier-spend"
+            aria-invalid={errs.has('spend') || undefined}
+            aria-describedby={errs.has('spend') ? 'esd-sup-spend-error' : undefined}
+            className={errs.has('spend') ? "border-destructive focus-visible:ring-destructive" : undefined}
+          />
+          {errs.has('spend') && <p id="esd-sup-spend-error" className="text-xs text-destructive">Spend must be greater than 0.</p>}
+        </div>
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">B-BBEE Level</Label>
@@ -277,7 +325,7 @@ export default function ESD() {
         </div>
         <div className="flex gap-2">
           
-          <Dialog open={isSupOpen} onOpenChange={setIsSupOpen}>
+          <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) supAddErrs.reset(); }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2" data-testid="btn-add-supplier">
                 <ShoppingCart className="h-4 w-4" /> Add Supplier
@@ -285,12 +333,12 @@ export default function ESD() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add Supplier</DialogTitle></DialogHeader>
-              {renderSupplierFormFields(newSup, setNewSup)}
+              {renderSupplierFormFields(newSup, setNewSup, supAddErrs)}
               <DialogFooter><Button onClick={handleAddSupplier} data-testid="btn-save-supplier">Save Supplier</Button></DialogFooter>
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isEsdOpen} onOpenChange={setIsEsdOpen}>
+          <Dialog open={isEsdOpen} onOpenChange={(open) => { setIsEsdOpen(open); if (!open) esdErrs.reset(); }}>
             <DialogTrigger asChild>
               <Button className="gap-2" data-testid="btn-add-contribution">
                 <Plus className="h-4 w-4" /> Add Contribution
@@ -299,8 +347,32 @@ export default function ESD() {
             <DialogContent>
               <DialogHeader><DialogTitle>Add ESD Contribution</DialogTitle></DialogHeader>
               <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Beneficiary</Label><Input value={newEsd.beneficiary} onChange={e => setNewEsd({...newEsd, beneficiary: e.target.value})} className="col-span-3" /></div>
-                <div className="grid grid-cols-4 items-center gap-4"><Label className="text-right">Amount (R)</Label><NumberInput value={newEsd.amount} onValueChange={v => setNewEsd({...newEsd, amount: v})} className="col-span-3" /></div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label className="text-right pt-2">Beneficiary</Label>
+                  <div className="col-span-3 space-y-1">
+                    <Input
+                      value={newEsd.beneficiary}
+                      onChange={e => { setNewEsd({...newEsd, beneficiary: e.target.value}); esdErrs.clear('beneficiary'); }}
+                      aria-invalid={esdErrs.has('beneficiary') || undefined}
+                      aria-describedby={esdErrs.has('beneficiary') ? 'esd-beneficiary-error' : undefined}
+                      className={cn(esdErrs.has('beneficiary') && "border-destructive focus-visible:ring-destructive")}
+                    />
+                    {esdErrs.has('beneficiary') && <p id="esd-beneficiary-error" className="text-xs text-destructive">Beneficiary is required.</p>}
+                  </div>
+                </div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label className="text-right pt-2">Amount (R)</Label>
+                  <div className="col-span-3 space-y-1">
+                    <NumberInput
+                      value={newEsd.amount}
+                      onValueChange={v => { setNewEsd({...newEsd, amount: v}); if (v > 0) esdErrs.clear('amount'); }}
+                      aria-invalid={esdErrs.has('amount') || undefined}
+                      aria-describedby={esdErrs.has('amount') ? 'esd-amount-error' : undefined}
+                      className={esdErrs.has('amount') ? "border-destructive focus-visible:ring-destructive" : undefined}
+                    />
+                    {esdErrs.has('amount') && <p id="esd-amount-error" className="text-xs text-destructive">Amount must be greater than 0.</p>}
+                  </div>
+                </div>
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right">Category</Label>
                   <Select value={newEsd.category} onValueChange={v => setNewEsd({...newEsd, category: v})}>
@@ -322,6 +394,32 @@ export default function ESD() {
                     </SelectContent>
                   </Select>
                 </div>
+                {isConstructionSector && (
+                  <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label className="text-right text-xs text-muted-foreground">Construction flags</Label>
+                      <div className="col-span-3 space-y-2 text-sm">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newEsd.isBlackWomenOwnedBeneficiary}
+                            onChange={e => setNewEsd({...newEsd, isBlackWomenOwnedBeneficiary: e.target.checked})}
+                          />
+                          Black-Women-Owned beneficiary
+                          <span className="text-xs text-muted-foreground">(Construction SD-BWO indicator)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newEsd.supplierDevProgramme}
+                            onChange={e => setNewEsd({...newEsd, supplierDevProgramme: e.target.checked})}
+                          />
+                          Part of formal Supplier &amp; Contractor Development Programme
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <DialogFooter><Button onClick={handleAddEsd}>Save Contribution</Button></DialogFooter>
             </DialogContent>
@@ -329,10 +427,10 @@ export default function ESD() {
         </div>
       </div>
 
-      <Dialog open={isEditSupOpen} onOpenChange={setIsEditSupOpen}>
+      <Dialog open={isEditSupOpen} onOpenChange={(open) => { setIsEditSupOpen(open); if (!open) supEditErrs.reset(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit Supplier</DialogTitle></DialogHeader>
-          {renderSupplierFormFields(editSup, setEditSup)}
+          {renderSupplierFormFields(editSup, setEditSup, supEditErrs)}
           <DialogFooter><Button onClick={handleEditSupplier} data-testid="btn-update-supplier">Update Supplier</Button></DialogFooter>
         </DialogContent>
       </Dialog>

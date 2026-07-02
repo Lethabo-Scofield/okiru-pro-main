@@ -61,6 +61,34 @@ import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
 import { mergeWorkbookSectionSaveBody } from "@/lib/workbookSectionSave";
 
 type Row = Record<string, unknown> & { _id: string };
+
+const PREVIEW_SECTION_LABELS: Record<string, string> = {
+  "company-information": "Company Information",
+  "financial-information": "Financial Information",
+  ownership: "Ownership",
+  "management-control": "Management Control",
+  employees: "Employees",
+  "skills-development": "Skills Development",
+  procurement: "Procurement / Suppliers",
+  esd: "Enterprise & Supplier Development",
+  sed: "Socio-Economic Development",
+  "afs-additions": "Access to Financial Services",
+};
+
+/** Per-section row/field counts for the import preview so users see everything
+ *  that came in, not just company + financials. */
+function buildSectionSummary(sections: WorkbookSectionsInput) {
+  return Object.entries(sections)
+    .map(([key, sec]) => ({
+      key,
+      label: PREVIEW_SECTION_LABELS[key] ?? key,
+      rowCount: Array.isArray((sec as { rows?: unknown[] })?.rows) ? (sec as { rows: unknown[] }).rows.length : 0,
+      fieldCount: (sec as { meta?: Record<string, unknown> })?.meta
+        ? Object.values((sec as { meta: Record<string, unknown> }).meta).filter((v) => v !== "" && v != null).length
+        : 0,
+    }))
+    .filter((s) => s.rowCount > 0 || s.fieldCount > 0);
+}
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
 type Workbook = {
   companyId: string;
@@ -399,10 +427,13 @@ function CompanyPicker({
                       npat: Number(fallback.sections["financial-information"]?.meta?.npat ?? 0) || undefined,
                     },
                     warnings: fallback.warnings,
-                    unmappedFields: [],
                     fieldStatuses: { companyName: "mapped" },
+                    fieldConfidences: {},
+                    fieldSources: {},
                     isBeeGatheringFormat: true,
                     mappedSheets: Object.keys(fallback.mappedSheets),
+                    extractedFieldCount: fallback.extractedFieldCount,
+                    sectionSummary: buildSectionSummary(fallback.sections),
                   });
                   setPendingSections(fallback.sections);
                   setPreviewOpen(true);
@@ -437,7 +468,7 @@ function CompanyPicker({
             setPendingSections(null);
           }}
           onConfirm={async () => {
-            const companyName = String(previewResult?.data.companyName ?? "").trim();
+            const companyName = String(previewResult?.data?.companyName ?? "").trim();
             const sections = pendingSections;
             if (!companyName || !sections) return;
             setCreating(true);
@@ -489,7 +520,7 @@ function CompanyPicker({
                   // Summary page will retry loadClientData.
                 }
               }
-              const warnCount = previewResult?.warnings.length ?? 0;
+              const warnCount = previewResult?.warnings?.length ?? 0;
               toast({
                 title: submitted
                   ? "Imported and synced to scorecard"
@@ -609,10 +640,13 @@ function CompanyPicker({
                     npat: Number(fallback.sections["financial-information"]?.meta?.npat ?? 0) || undefined,
                   },
                   warnings: fallback.warnings,
-                  unmappedFields: [],
                   fieldStatuses: { companyName: "mapped" },
+                  fieldConfidences: {},
+                  fieldSources: {},
                   isBeeGatheringFormat: true,
                   mappedSheets: Object.keys(fallback.mappedSheets),
+                  extractedFieldCount: fallback.extractedFieldCount,
+                  sectionSummary: buildSectionSummary(fallback.sections),
                 });
                 setPendingSections(fallback.sections);
                 setPreviewOpen(true);
@@ -784,7 +818,7 @@ function CompanyPicker({
                 // Summary page will retry loadClientData.
               }
             }
-            const warnCount = previewResult?.warnings.length ?? 0;
+            const warnCount = previewResult?.warnings?.length ?? 0;
             toast({
               title: submitted
                 ? "Imported and synced to scorecard"
@@ -1428,43 +1462,80 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 
   const handleExcelImport = useCallback(
     async (file: File) => {
-      const bee = await importBeeGatheringExcel(file, API_BASE);
-      const result = bee.extraction.isBeeGatheringFormat
-        ? { sections: bee.sections, validationIssues: bee.validationIssues, criticalBlocked: bee.criticalBlocked, warnings: bee.extraction.warnings }
-        : await normalizeExcelFileWithAi(file, API_BASE);
+      try {
+        const bee = await importBeeGatheringExcel(file, API_BASE);
+        const result = bee.extraction.isBeeGatheringFormat
+          ? { sections: bee.sections, validationIssues: bee.validationIssues, criticalBlocked: bee.criticalBlocked, warnings: bee.extraction.warnings }
+          : await normalizeExcelFileWithAi(file, API_BASE);
 
-      if (result.criticalBlocked) {
+        if (result.criticalBlocked) {
+          toast({
+            title: "Import blocked — fix critical fields",
+            description: formatWorkbookValidationSummary(result.validationIssues, 5),
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Only send sections that actually parsed data. The server replaces each
+        // section it receives by key (persistSection), so posting empty sections
+        // would wipe rows that didn't parse instead of leaving them untouched.
+        const populatedSections = Object.fromEntries(
+          Object.entries(result.sections ?? {}).filter(([, sec]) => {
+            const rows = (sec as { rows?: unknown[] } | undefined)?.rows;
+            const meta = (sec as { meta?: Record<string, unknown> } | undefined)?.meta;
+            const hasRows = Array.isArray(rows) && rows.length > 0;
+            const hasMeta = !!meta && Object.keys(meta).length > 0;
+            return hasRows || hasMeta;
+          }),
+        ) as typeof result.sections;
+
+        if (Object.keys(populatedSections).length === 0) {
+          toast({
+            title: "Nothing to import",
+            description:
+              "No recognisable data was found in that file. Check the sheet names and column headers match the expected template.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const res = await fetch(
+          `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/import`,
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sections: populatedSections }),
+          },
+        );
+        if (!res.ok) {
+          toast({ title: "Import failed", variant: "destructive" });
+          return;
+        }
+        setWorkbook((prev) =>
+          prev ? { ...prev, sections: { ...prev.sections, ...populatedSections } } : prev,
+        );
+        if (result.validationIssues.length > 0) {
+          toast({
+            title: "Imported with gaps",
+            description:
+              "Non-critical fields missing — review sections before submit. Scores may reflect discounted levels.",
+          });
+        } else {
+          toast({ title: "Workbook updated from Excel" });
+        }
+      } catch (err) {
+        // Previously any thrown error (bad file, network/AI failure) fell through
+        // with no UI feedback — the button just appeared to do nothing.
         toast({
-          title: "Import blocked — fix critical fields",
-          description: formatWorkbookValidationSummary(result.validationIssues, 5),
+          title: "Couldn't import file",
+          description:
+            err instanceof Error
+              ? err.message
+              : "The file could not be read. Make sure it's a valid .xlsx workbook and try again.",
           variant: "destructive",
         });
-        return;
-      }
-      const res = await fetch(
-        `${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/import`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sections: result.sections }),
-        },
-      );
-      if (!res.ok) {
-        toast({ title: "Import failed", variant: "destructive" });
-        return;
-      }
-      setWorkbook((prev) =>
-        prev ? { ...prev, sections: { ...prev.sections, ...result.sections } } : prev,
-      );
-      if (result.validationIssues.length > 0) {
-        toast({
-          title: "Imported with gaps",
-          description:
-            "Non-critical fields missing — review sections before submit. Scores may reflect discounted levels.",
-        });
-      } else {
-        toast({ title: "Workbook updated from Excel" });
       }
     },
     [companyId, toast],

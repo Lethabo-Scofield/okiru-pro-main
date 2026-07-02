@@ -242,6 +242,45 @@ describe("normalizeExcelBuffer — procurement/suppliers dedup", () => {
   });
 });
 
+describe("normalizeExcelBuffer — R21 financials Measured column", () => {
+  it("reads financial meta from the Measured (current-year) column, not Prior", () => {
+    // Real toolkit Financials layout: Metric | Prior | Measured | Forecast.
+    const buf = makeBuffer({
+      Financials: [
+        ["Financials", "", "", ""],
+        ["Measured Entity", "Acme (Pty) Ltd", "", ""],
+        ["Sector / Codes", "Generic - Amended Codes of Good Practice", "", ""],
+        ["", "", "", ""],
+        ["Metric", "Prior FYE 31 Dec 2024", "Measured FYE 31 Dec 2025", "Forecast FYE 31 Dec 2026"],
+        ["Total Revenue / Turnover (R)", 390000000, 420000000, 455000000],
+        ["Net Profit After Tax - NPAT (R)", 47000000, 52000000, 58000000],
+        ["Total Payroll (R)", 90000000, 96000000, 104000000],
+      ],
+    });
+    const res = normalizeExcelBuffer(buf);
+    // Root cause: a sheet literally named "Financials" must map to financial-information,
+    // not afs-additions (whose "access to financial services" hint contains "financials").
+    expect(res.mappedSheets["Financials"]).toBe("financial-information");
+    const meta = (res.sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
+    expect(meta.revenue).toBe(420000000); // Measured, NOT 390000000 (Prior)
+    expect(meta.npat).toBe(52000000); // Measured, NOT 47000000
+    expect(meta.payroll).toBe(96000000); // Measured, NOT 90000000
+  });
+
+  it("keeps column-B behaviour for single-value meta sheets (no Prior|Measured header)", () => {
+    const buf = makeBuffer({
+      Financials: [
+        ["Total Revenue / Turnover (R)", 123456, "", ""],
+        ["Total Payroll (R)", 7890, "", ""],
+      ],
+    });
+    const { sections } = normalizeExcelBuffer(buf);
+    const meta = (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
+    expect(meta.revenue).toBe(123456);
+    expect(meta.payroll).toBe(7890);
+  });
+});
+
 describe("normalizeExcelBuffer — skills cost aliases", () => {
   it("recognises common cost-column aliases for Skills Development rows", () => {
     const buf = makeBuffer({

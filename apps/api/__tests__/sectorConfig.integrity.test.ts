@@ -52,8 +52,11 @@ function sumConstructionIndicators(entityFilter: (el: string) => boolean): numbe
 }
 
 describe('sectorConfig integrity vs SECTOR_TRUTH_LEDGER', () => {
-  it('lists exactly 11 sectors', () => {
-    expect(ALL_SECTORS).toHaveLength(11);
+  it('lists exactly 14 sectors', () => {
+    // RCOGP G/Q, ICT G/Q, AGRI G, TRANSPORT, FSC G + Banks/LTI/STI, CONSTRUCTION
+    // QSE/Contractor/BEP = 14. (Was 11 before the construction + FSC sub-variants
+    // were added; updated to match the registry — each is validated per-sector below.)
+    expect(ALL_SECTORS).toHaveLength(14);
   });
 
   for (const { code, type, totalPoints } of ALL_SECTORS) {

@@ -6,6 +6,7 @@ export interface User {
   email: string | null;
   fullName: string | null;
   role: string;
+  secondaryRoles?: string[];
   organizationId: string | null;
   profilePicture: string | null;
   createdAt: string;
@@ -17,6 +18,7 @@ export interface InsertUser {
   email?: string | null;
   fullName?: string | null;
   role?: string;
+  secondaryRoles?: string[];
   organizationId?: string;
   profilePicture?: string | null;
 }
@@ -24,11 +26,17 @@ export interface InsertUser {
 export interface Organization {
   id: string;
   name: string;
+  /** Current tenant administrator (company admin). First registrant at signup; transferable. */
+  adminUserId?: string | null;
+  /** Immutable original founder of the organization, for audit. */
+  createdByUserId?: string | null;
   createdAt: string;
 }
 
 export interface InsertOrganization {
   name: string;
+  adminUserId?: string | null;
+  createdByUserId?: string | null;
 }
 
 // Client Types

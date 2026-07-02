@@ -145,6 +145,8 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
+// Public read: anyone with the /devmode route can view feedback (no login required).
+// Mutations (PATCH/DELETE below) remain auth-gated.
 router.get('/', async (req: Request, res: Response) => {
   try {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
@@ -177,6 +179,7 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
+// Public read: feedback stats are viewable without login (see GET '/' above).
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
     const dbOnly = _req.query.dbOnly === '1' || _req.query.dbOnly === 'true';

@@ -110,6 +110,41 @@ export type WorkbookSectionsInput = Record<
 
 
 
+/**
+ * Whether a value satisfies a select column's allowed options, tolerantly.
+ * Strict exact-match flagged thousands of false "Not an allowed option" warnings
+ * per import: Yes/No columns are `yesNoBoolean`, so the importer stores real JS
+ * booleans (true/false) which stringify to "true"/"false" — never matching
+ * ["Yes","No"]; values also differ only by case/whitespace. Accept case-insensitive
+ * matches and map boolean / 1-0 / y-n to a Yes/No option set. Pure validation
+ * leniency — stored values and scoring are unchanged. (W-validate)
+ */
+function selectValueAllowed(v: unknown, options: ReadonlyArray<string | number>): boolean {
+  let value: unknown = v;
+  if (typeof value === "boolean") value = value ? "Yes" : "No";
+  const sv = String(value).trim().toLowerCase();
+  if (options.some((opt) => String(opt).trim().toLowerCase() === sv)) return true;
+  const optSet = options.map((opt) => String(opt).trim().toLowerCase());
+  if (optSet.includes("yes") && optSet.includes("no")) {
+    if (["true", "yes", "y", "1"].includes(sv)) return true;
+    if (["false", "no", "n", "0"].includes(sv)) return true;
+  }
+  // Accept common ESD/SED contribution-type shorthands as valid so they don't flag
+  // (validation only — the stored value and scoring are untouched; the underlying
+  // category vocabulary is an expert question, not a reason to block the import).
+  const SELECT_SYNONYMS: Record<string, string> = {
+    grant: "grant contribution",
+    grants: "grant contribution",
+    donation: "grant contribution",
+    donations: "grant contribution",
+    "early payment": "payment period reduction",
+    "early payment discount": "payment period reduction",
+  };
+  const synonym = SELECT_SYNONYMS[sv];
+  if (synonym && optSet.includes(synonym)) return true;
+  return false;
+}
+
 function isBlank(v: unknown): boolean {
 
   return (
@@ -269,9 +304,7 @@ function validateGridRow(
 
     ) {
 
-      const sv = String(v);
-
-      const allowed = col.options.some((opt) => String(opt) === sv);
+      const allowed = selectValueAllowed(v, col.options);
 
       if (!allowed) {
 

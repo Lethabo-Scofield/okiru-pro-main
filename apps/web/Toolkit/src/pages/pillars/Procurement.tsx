@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { round2 } from "@toolkit/lib/calculators/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
@@ -85,6 +87,8 @@ export default function Procurement() {
   const [isEditSupOpen, setIsEditSupOpen] = useState(false);
   const [editSupId, setEditSupId] = useState<string | null>(null);
   const [editSup, setEditSup] = useState({ ...emptySupplierForm });
+  const addErrs = useFieldErrors();
+  const editErrs = useFieldErrors();
 
   const getBeeLevelColor = (level: number) => {
     if (level === 1) return "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300";
@@ -103,7 +107,10 @@ export default function Procurement() {
 
   // Issue 3: Added isForeignSupplier to addSupplier
   const handleAddSupplier = () => {
-    if (!newSup.name || newSup.spend <= 0) {
+    const nameBad = !newSup.name.trim();
+    const spendBad = !(newSup.spend > 0);
+    if (nameBad || spendBad) {
+      addErrs.setMany({ name: nameBad, spend: spendBad });
       toast({ title: "Invalid", description: "Name and spend are required.", variant: "destructive" });
       return;
     }
@@ -129,6 +136,7 @@ export default function Procurement() {
   // Issue 3: Added isForeignSupplier to edit form
   const openEditSupplier = (sup: Supplier) => {
     setEditSupId(sup.id);
+    editErrs.reset();
     setEditSup({
       name: sup.name,
       registrationNumber: sup.registrationNumber || '',
@@ -147,7 +155,10 @@ export default function Procurement() {
 
   // Issue 3: Added isForeignSupplier to updateSupplier
   const handleEditSupplier = () => {
-    if (!editSupId || !editSup.name || editSup.spend <= 0) {
+    const nameBad = !editSup.name.trim();
+    const spendBad = !(editSup.spend > 0);
+    if (!editSupId || nameBad || spendBad) {
+      editErrs.setMany({ name: nameBad, spend: spendBad });
       toast({ title: "Invalid", description: "Name and spend are required.", variant: "destructive" });
       return;
     }
@@ -169,13 +180,14 @@ export default function Procurement() {
     toast({ title: "Supplier Updated", description: `${editSup.name} has been updated.` });
   };
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateProcurementScore(procurement, calculatorConfig);
 
   // Issue 3: Added isForeignSupplier to form fields
   const renderSupplierFormFields = (
     data: typeof emptySupplierForm,
     setData: (d: typeof emptySupplierForm) => void,
+    errs: ReturnType<typeof useFieldErrors>,
   ) => (
     <div className="grid gap-4 py-4">
       <div className="grid grid-cols-4 items-start gap-4">
@@ -191,14 +203,19 @@ export default function Procurement() {
           <span className="text-sm text-muted-foreground">Foreign Supplier (excluded from Empowering Supplier recognition, included in TMPS)</span>
         </div>
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Name</Label>
-        <Input
-          value={data.name}
-          onChange={e => setData({ ...data, name: e.target.value })}
-          className="col-span-3"
-          data-testid="input-supplier-name"
-        />
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label className="text-right pt-2">Name</Label>
+        <div className="col-span-3 space-y-1">
+          <Input
+            value={data.name}
+            onChange={e => { setData({ ...data, name: e.target.value }); errs.clear('name'); }}
+            data-testid="input-supplier-name"
+            aria-invalid={errs.has('name') || undefined}
+            aria-describedby={errs.has('name') ? 'sup-name-error' : undefined}
+            className={cn(errs.has('name') && "border-destructive focus-visible:ring-destructive")}
+          />
+          {errs.has('name') && <p id="sup-name-error" className="text-xs text-destructive">Name is required.</p>}
+        </div>
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">Registration No.</Label>
@@ -210,14 +227,19 @@ export default function Procurement() {
           data-testid="input-supplier-registration-number"
         />
       </div>
-      <div className="grid grid-cols-4 items-center gap-4">
-        <Label className="text-right">Spend (R)</Label>
-        <NumberInput
-          value={data.spend}
-          onValueChange={v => setData({ ...data, spend: v })}
-          className="col-span-3"
-          data-testid="input-supplier-spend"
-        />
+      <div className="grid grid-cols-4 items-start gap-4">
+        <Label className="text-right pt-2">Spend (R)</Label>
+        <div className="col-span-3 space-y-1">
+          <NumberInput
+            value={data.spend}
+            onValueChange={v => { setData({ ...data, spend: v }); if (v > 0) errs.clear('spend'); }}
+            data-testid="input-supplier-spend"
+            aria-invalid={errs.has('spend') || undefined}
+            aria-describedby={errs.has('spend') ? 'sup-spend-error' : undefined}
+            className={errs.has('spend') ? "border-destructive focus-visible:ring-destructive" : undefined}
+          />
+          {errs.has('spend') && <p id="sup-spend-error" className="text-xs text-destructive">Spend must be greater than 0.</p>}
+        </div>
       </div>
       <div className="grid grid-cols-4 items-center gap-4">
         <Label className="text-right">B-BBEE Level</Label>
@@ -305,7 +327,7 @@ export default function Procurement() {
           <p className="text-muted-foreground mt-1">Manage supplier spend and B-BBEE compliance. 29 points available.</p>
         </div>
         <div className="flex gap-2">
-          <Dialog open={isSupOpen} onOpenChange={setIsSupOpen}>
+          <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) addErrs.reset(); }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2" data-testid="btn-add-supplier">
                 <ShoppingCart className="h-4 w-4" /> Add Supplier
@@ -313,17 +335,17 @@ export default function Procurement() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Add Supplier</DialogTitle></DialogHeader>
-              {renderSupplierFormFields(newSup, setNewSup)}
+              {renderSupplierFormFields(newSup, setNewSup, addErrs)}
               <DialogFooter><Button onClick={handleAddSupplier} data-testid="btn-save-supplier">Save Supplier</Button></DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </div>
 
-      <Dialog open={isEditSupOpen} onOpenChange={setIsEditSupOpen}>
+      <Dialog open={isEditSupOpen} onOpenChange={(open) => { setIsEditSupOpen(open); if (!open) editErrs.reset(); }}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit Supplier</DialogTitle></DialogHeader>
-          {renderSupplierFormFields(editSup, setEditSup)}
+          {renderSupplierFormFields(editSup, setEditSup, editErrs)}
           <DialogFooter><Button onClick={handleEditSupplier} data-testid="btn-update-supplier">Update Supplier</Button></DialogFooter>
         </DialogContent>
       </Dialog>

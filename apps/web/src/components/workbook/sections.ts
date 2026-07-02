@@ -343,7 +343,9 @@ export function getScorecardTypeOptions(sectorCode: string): string[] {
     case "TRANSPORT":
       return ["Generic", "QSE"];
     case "CONSTRUCTION":
-      return ["QSE", "Contractor", "BEP"];
+      // Size axis. Sub-sector (Contractor/BEP) is a separate field
+      // (constructionSubSector). Construction has no separate EME scorecard.
+      return ["Generic", "QSE"];
     case "FSC":
     case "AGRI":
       return ["Generic"];
@@ -359,6 +361,16 @@ export function resolveScorecardTypeForSector(
 ): string {
   const allowed = getScorecardTypeOptions(sectorCode);
   const value = String(current ?? "").trim();
+  // Construction migration: the legacy single field used Contractor/BEP as the
+  // "scorecard type". Those are the Generic (large) scorecards, so migrate them to
+  // the Generic size — the constructionSubSector field now captures Contractor vs
+  // BEP. This keeps existing entities valid under the new size-axis options.
+  if (
+    String(sectorCode ?? "").trim().toUpperCase() === "CONSTRUCTION" &&
+    (value === "Contractor" || value === "BEP")
+  ) {
+    return "Generic";
+  }
   if (value && allowed.includes(value)) return value;
   if (allowed.length === 1) return allowed[0];
   return "";
@@ -419,6 +431,21 @@ export function getCompanyInfoMetaFields(sectorCode?: string): ColumnDef[] {
         emphasis: true,
         guidance:
           "FSC-specific. Reinsurers use reduced Consumer Education scoring: Additional CE only (1 pt max) and the Additional CE bonus row is suppressed.",
+      },
+    ]);
+  }
+
+  if (sector === "CONSTRUCTION") {
+    base = insertFieldsAfter(base, "industrySector", [
+      {
+        key: "constructionSubSector",
+        label: "Construction Sub-Sector",
+        type: "select",
+        required: true,
+        emphasis: true,
+        options: ["Contractor", "BEP"],
+        guidance:
+          "Required for Construction. Contractor (CE) or BEP (Built Environment Professional) — they have different scorecards (per the Construction Sector Code). Pick the size separately under Scorecard Type (Generic vs QSE).",
       },
     ]);
   }
@@ -773,13 +800,19 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     width: 140,
     aliases: ["Ownership Type"],
   },
-  yesNoColumn("soaBuyer", "SOA Buyer", { width: 110, aliases: ["SOA Buyer"] }),
+  yesNoColumn("soaBuyer", "Sale of Assets (SOA) Buyer", {
+    width: 150,
+    aliases: ["SOA Buyer", "Sale of Assets Buyer"],
+    guidance:
+      "SOA = Sale of Assets. Choose Yes if this shareholder acquired the holding via a Sale of Assets transaction.",
+  }),
   {
     key: "transactionSoa",
     label: "Transaction (SOA)",
     type: "text",
     width: 150,
     aliases: ["Transaction (SOA)", "Transaction"],
+    guidance: "SOA = Sale of Assets. Describe the Sale of Assets transaction, if applicable.",
   },
   {
     key: "rowOutstandingDebt",
@@ -857,6 +890,8 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     validate: percentValidator,
     aliases: ["Share %", "Shareholding (%)", "Shareholding"],
     validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+    guidance:
+      "Percentage shareholding. Used only to weight this shareholder against others when 'Number of Shares' is blank. Voting and economic-interest points come from the Voting Rights (%) and Economic Interest (%) columns.",
   },
   {
     key: "votingRights",
@@ -866,6 +901,8 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     validate: percentValidator,
     aliases: ["Voting Rights"],
     validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)",
+    guidance:
+      "This shareholder's share of the company's total exercisable voting rights (a 51% voting holder = 51), not the proportion of their own shares that carry votes.",
   },
   {
     key: "economicInterest",
@@ -912,7 +949,7 @@ export const MC_EE_COLUMNS: ColumnDef[] = [
     guidance:
       "Required. Distinguishes board-level directors (Executive Director, Non-executive Director) from management/EE bands. Board-level rows are scored at fixed MC targets; Senior/Middle/Junior rows are scored against provincial EAP targets.",
   },
-  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level", "Job Level"] },
+  { key: "occupationalLevel", label: "Occupational Level", type: "select", options: OCC_LEVEL_OPTIONS, width: 180, aliases: ["Occupational Level", "Occ Level", "Management Tier", "Tier", "Level", "Job Level"], guidance: "Optional reference only. Scoring uses the Designation column; Occupational Level is used only as a fallback if Designation is blank." },
   { key: "department", label: "Department", type: "text", width: 160, aliases: ["Department", "Dept", "Business Unit"] },
   { key: "salary", label: "Annual Salary (R)", type: "number", width: 150, validate: numericValidator, aliases: ["Salary", "Annual Salary", "Monthly Salary", "Remuneration", "Total Cost to Company", "CTC"] },
   yesNoColumn("isDisabled", "Disabled", { width: 100, required: false, aliases: ["Disabled *", "Disabled"] }),
@@ -933,7 +970,34 @@ export const MC_EE_COLUMNS: ColumnDef[] = [
     validate: dateOrNumberValidator,
     aliases: ["Hire Date", "Hire Date (format: dd/mm/yyyy)"],
   },
+  // Construction-only employee fields (surfaced for CONSTRUCTION via getSection;
+  // stripped from the form for other sectors). Feed the construction
+  // professional-registration and youth indicators. (Phase 1 template columns)
+  yesNoColumn("professionallyRegistered", "Professionally Registered?", {
+    width: 150,
+    required: false,
+    aliases: ["Professionally Registered", "Professionally Registered?", "Professional Registration", "Professionally Registered (Yes/No)"],
+    guidance: "Construction only: is this employee professionally registered with a statutory built-environment / industry council?",
+  }),
+  yesNoColumn("isYouthEmployee", "Youth (under 35)?", {
+    width: 120,
+    required: false,
+    aliases: ["Youth", "Youth (<35)", "Youth?", "Youth (under 35)", "Is Youth"],
+    guidance: "Construction only: is this employee a black youth (under 35)? Feeds the Black Youth Employees bonus.",
+  }),
 ];
+
+/** Construction-only column keys, appended to the base arrays for the importer but
+ *  hidden from non-construction forms via getSection. (Phase 1 template columns) */
+export const CONSTRUCTION_ONLY_COLUMN_KEYS = new Set<string>([
+  "professionallyRegistered",
+  "isYouthEmployee",
+  "industryRegistered",
+  "learnerMgmtLevel",
+  "mentorship",
+  "mentorshipPromotion",
+  "supplierDevProgramme",
+]);
 
 /**
  * @deprecated Use MC_EE_COLUMNS for the combined Management Control &
@@ -968,7 +1032,9 @@ export const SKILLS_META: ColumnDef[] = [
     key: "eapProvince",
     label: "Applicable EAP Targets (Province)",
     type: "select",
-    required: true,
+    // Optional: scoring defaults to National when blank. Marking it required
+    // produced an advisory error on every import (workbooks rarely carry it). (W6)
+    required: false,
     options: EAP_PROVINCE_OPTIONS,
     guidance: "National or province for EAP demographic lookup. Required for bursary demographic splits and Management Control scoring.",
     validationMessage: "Select National or a South African province from the dropdown",
@@ -978,7 +1044,7 @@ export const SKILLS_META: ColumnDef[] = [
     key: "eapYear",
     label: "EAP Targets Year",
     type: "number",
-    required: true,
+    required: false,
     validate: positiveIntValidator,
     guidance: "Year matching a row in the EAP table (e.g. 2025). Triggers 'EAP targets Year selected?' validation in the toolkit.",
   },
@@ -986,15 +1052,16 @@ export const SKILLS_META: ColumnDef[] = [
     key: "headcount",
     label: "Headcount (Total Employees)",
     type: "number",
-    required: true,
+    // Optional: derived from the Management Control employee register when blank. (W6)
+    required: false,
     validate: positiveIntValidator,
-    guidance: "Total employee headcount of the entity (positive integer). Used as the base for the LAI target: 5% × headcount.",
+    guidance: "Total employee headcount of the entity (positive integer). Used as the base for the LAI target: 5% × headcount. Auto-derived from the employee register if left blank.",
   },
   {
     key: "trainingManagerSalary",
     label: "Training Manager's Salary (R)",
     type: "number",
-    required: true,
+    required: false,
     validate: numericValidator,
     guidance: "Annual salary of the Skills Development Facilitator / Training Manager (≥ 0). Admin costs are capped at 15% of total skills spend.",
   },
@@ -1002,7 +1069,7 @@ export const SKILLS_META: ColumnDef[] = [
     key: "trainingOverheadCost",
     label: "Training Overhead Cost (R)",
     type: "number",
-    required: true,
+    required: false,
     validate: numericValidator,
     guidance: "Total training overhead costs (venue hire, admin, etc.) (≥ 0). Also subject to the 15% admin cost cap.",
   },
@@ -1010,7 +1077,7 @@ export const SKILLS_META: ColumnDef[] = [
     key: "selectPeriod",
     label: "Select Period",
     type: "select",
-    required: true,
+    required: false,
     options: SELECT_PERIOD_OPTIONS,
     guidance: "Set to 'Current YTD' for active year-to-date measurement. The Summary scorecard warns when not set.",
   },
@@ -1018,7 +1085,7 @@ export const SKILLS_META: ColumnDef[] = [
     key: "dataDate",
     label: "Data Date (dd/mm/yyyy)",
     type: "date",
-    required: true,
+    required: false,
     validate: dateValidator,
     validationMessage: "Enter date as dd/mm/yyyy",
     guidance: "Reference date for this training dataset. Skills scorecard flags 'Data with no data date' when missing.",
@@ -1053,6 +1120,27 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "manHours", label: "Man Hours", type: "number", width: 120, validate: numericValidator },
   { key: "startDate", label: "Start Date (dd/mm/yyyy)", type: "date", width: 150, validate: dateValidator, validationMessage: "Enter date as dd/mm/yyyy" },
   { key: "endDate", label: "End Date (dd/mm/yyyy)", type: "date", width: 150, validate: dateValidator, validationMessage: "Enter date as dd/mm/yyyy" },
+  // Construction-only learner fields (hidden from other sectors via getSection).
+  // Feed the construction industry-registration, black-management-by-level and
+  // mentorship indicators. (Phase 1 template columns)
+  yesNoColumn("industryRegistered", "Registered with Industry Body?", {
+    width: 160, required: false,
+    aliases: ["Industry Body", "Registered with Industry Body", "Industry Registration", "Industry Body Registered"],
+    guidance: "Construction only: is this black candidate registered with a recognised industry/professional body?",
+  }),
+  { key: "learnerMgmtLevel", label: "Management Level", type: "select", options: ["Executive", "Senior", "Middle", "Junior", "None"], width: 150, required: false,
+    aliases: ["Management Level", "Mgmt Level", "Learner Management Level", "Management Band"],
+    guidance: "Construction only: the learner's management band (Exec/Senior/Middle/Junior) for black-management skills indicators." },
+  yesNoColumn("mentorship", "Mentorship Programme?", {
+    width: 150, required: false,
+    aliases: ["Mentorship", "Mentorship Programme", "Mentored", "On Mentorship"],
+    guidance: "Construction only: is this learner on a structured mentorship programme?",
+  }),
+  yesNoColumn("mentorshipPromotion", "Promoted via Mentorship?", {
+    width: 160, required: false,
+    aliases: ["Mentorship Promotion", "Promoted via Mentorship", "Mentorship Promoted"],
+    guidance: "Construction only: was this learner promoted through the mentorship programme? (bonus)",
+  }),
 ];
 
 // ---------- Procurement / Suppliers ----------
@@ -1155,6 +1243,13 @@ export const ESD_COLUMNS: ColumnDef[] = [
   { key: "paymentDate", label: "Payment Date (dd/mm/yyyy)", type: "date", width: 160, validate: dateValidator, aliases: ["Payment date (format: dd/mm/yyyy)"], validationMessage: "Enter date as dd/mm/yyyy" },
   { key: "primeRate", label: "Prime Rate (%)", type: "number", width: 130, validate: percentValidator },
   { key: "actualRate", label: "Actual Rate (%)", type: "number", width: 130, validate: percentValidator },
+  // Construction-only (hidden from other sectors via getSection): flags a recognised
+  // Supplier & Contractor Development programme (Annex CSC 400). (Phase 1 template column)
+  yesNoColumn("supplierDevProgramme", "Supplier/Contractor Dev Programme?", {
+    width: 200, required: false,
+    aliases: ["Supplier Development Programme", "Contractor Development Programme", "Supplier/Contractor Dev Programme", "Dev Programme"],
+    guidance: "Construction only: is this a recognised Supplier & Contractor Development programme (Annex CSC 400)?",
+  }),
 ];
 
 // ---------- SED ----------
@@ -1405,6 +1500,24 @@ export function getSection(
   fscSubSector?: string,
   fscReinsurer?: boolean,
 ): SectionDef | undefined {
+  const result = getSectionInner(key, sectorCode, scorecardType, fscSubSector, fscReinsurer);
+  // Construction-only columns live in the base arrays so the importer (which calls
+  // getSection with NO sector) always parses them. Hide them from EXPLICIT
+  // non-construction sector forms; keep them for the importer and for Construction.
+  if (!result?.columns || sectorCode === undefined) return result;
+  const sector = String(sectorCode).trim().toUpperCase();
+  if (sector === "" || sector === "CONSTRUCTION") return result;
+  const cols = result.columns.filter((c) => !CONSTRUCTION_ONLY_COLUMN_KEYS.has(c.key));
+  return cols.length === result.columns.length ? result : { ...result, columns: cols };
+}
+
+function getSectionInner(
+  key: string,
+  sectorCode?: string,
+  scorecardType?: string,
+  fscSubSector?: string,
+  fscReinsurer?: boolean,
+): SectionDef | undefined {
   const section = SECTIONS.find((s) => s.key === key);
   if (!section) return undefined;
   if (
@@ -1554,6 +1667,29 @@ export function getSection(
       label: "Preferential Procurement",
       description:
         "Construction sector procurement spend against TMPS. Indicator rows follow the selected Construction scorecard type (QSE / Contractor / BEP).",
+    };
+  }
+
+  // Construction is scored on Supplier Development; the Construction Sector Code
+  // has no *scored* Enterprise Development pillar (ED contributions score 0).
+  // We steer users to SD via the label/guidance but keep both options so strict
+  // validation never rejects an imported row that carries "Enterprise Development".
+  if (key === "esd" && sector === "CONSTRUCTION" && section.columns) {
+    return {
+      ...section,
+      label: "Supplier Development",
+      description:
+        "Construction is scored on Supplier Development. The Construction Sector Code has no scored Enterprise Development pillar — ED contributions score 0 points.",
+      columns: section.columns.map((c) =>
+        c.key === "esdCategory"
+          ? {
+              ...c,
+              guidance:
+                "Construction is scored on Supplier Development only — Enterprise Development contributions are not scored (0 pts). Use Supplier Development.",
+              validationMessage: "Construction is scored on Supplier Development (Enterprise Development is not scored).",
+            }
+          : c,
+      ),
     };
   }
 

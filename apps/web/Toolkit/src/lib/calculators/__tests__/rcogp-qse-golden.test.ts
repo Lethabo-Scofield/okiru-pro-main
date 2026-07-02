@@ -61,7 +61,7 @@ describe('RCOGP QSE — CalculatorConfig completeness', () => {
     expect(CONFIG.skills.disabledLearningMaxPts).toBe(3);
     expect(CONFIG.skills.absorptionMaxPts).toBe(5);
     expect(CONFIG.skills.learnershipsMaxPts).toBe(0);        // No LAI headcount in QSE
-    expect(CONFIG.skills.absorptionTargetPercent).toBeCloseTo(1.0, 4); // percent; skills.ts /100 → 1% (was double-divided to 0.01%, ledger D-04)
+    expect(CONFIG.skills.absorptionTargetPercent).toBe(100); // R8: whole-percent 100 → /100 → 1.0 = 100% target (Excel Skills Calcs!J28 = MIN(absorbed/completers × 5, 5), no % divisor). Was 1.0 (=1%); ledger D-04 misread the display cell C30=1 as a divisor.
     // Total: 15 + 7 + 3 + 0 + 5 = 30 ✓
   });
 
@@ -326,8 +326,8 @@ describe('RCOGP QSE — Skills Development pillar', () => {
     expect(CONFIG.skills.subMinThreshold).toBeCloseTo(10, 1);
   });
 
-  it('maxed absorption bonus (5 pts) recognised with LAI completions', () => {
-    // absorptionTargetPercent = 1% of absorbed/total_learners; all absorbed → 100% rate → 5pts
+  it('maxed absorption bonus (5 pts) at 100% absorption (Excel Skills Calcs!J28)', () => {
+    // R8: target is 100% absorption (absorbed/completers = 1.0). All absorbed → 5 pts.
     // Each TrainingProgram row = one learner (legacy flat format)
     const r = calculateSkillsScore(
       {
@@ -345,14 +345,33 @@ describe('RCOGP QSE — Skills Development pillar', () => {
       },
       CONFIG,
     );
-    // 2 absorbed / 2 total learners = 100% absorption rate; target = 1% → capped at 5
-    expect(r.absorption).toBeGreaterThan(0);
-    expect(r.absorption).toBeLessThanOrEqual(5);
+    // 2 absorbed / 2 total learners = 100% rate × 5 = 5 (maxed only at 100%, not 1%)
+    expect(r.absorption).toBeCloseTo(5, 1);
   });
 
-  it('absorption no longer maxes on a single learner (ledger D-04: 1% target, not 0.01%)', () => {
-    // 1 absorbed of 200 Black learners = 0.5% rate; against the 1% target → 0.5/1 × 5 = 2.5.
-    // Before the double-/100 fix the effective target was 0.01%, so this maxed at 5.
+  it('R8: partial absorption scores pro-rata BELOW 5 (100% target, not 1%)', () => {
+    // Excel `Skills Calcs!J28 = MIN(absorbed/completers × 5, 5)` — full pts need 100% absorbed.
+    // 1 absorbed of 2 Black learners = 50% rate → 0.5 × 5 = 2.5 (strictly < 5).
+    const r = calculateSkillsScore(
+      {
+        id: '1', clientId: 'qse', leviableAmount: LEVIABLE,
+        trainingPrograms: [
+          { id: 'a', name: 'LAI', category: 'learnership', cost: 1000,
+            isBlack: true, isDisabled: false, isAbsorbed: true, gender: 'Male', race: 'African' } as never,
+          { id: 'b', name: 'LAI', category: 'learnership', cost: 1000,
+            isBlack: true, isDisabled: false, isAbsorbed: false, gender: 'Female', race: 'African' } as never,
+        ],
+        yesCandidatesCount: 0, yesAbsorbedCount: 0,
+      },
+      CONFIG,
+    );
+    expect(r.absorption).toBeCloseTo(2.5, 1);
+    expect(r.absorption).toBeLessThan(5);
+  });
+
+  it('R8: a single absorbed learner among many no longer maxes (was 2.5 under the wrong 1% target)', () => {
+    // 1 absorbed of 200 Black learners = 0.5% rate. Under the corrected 100% target:
+    // 0.005 × 5 = 0.025 ≈ 0 (was 2.5 when the target was misread as 1%, ledger D-04).
     const programs = Array.from({ length: 200 }, (_, i) => ({
       id: `L${i}`, name: 'LAI', category: 'learnership', cost: 1000,
       isBlack: true, isDisabled: false, isAbsorbed: i === 0, gender: 'Male', race: 'African',
@@ -361,7 +380,7 @@ describe('RCOGP QSE — Skills Development pillar', () => {
       { id: '1', clientId: 'qse', leviableAmount: LEVIABLE, trainingPrograms: programs as never, yesCandidatesCount: 0, yesAbsorbedCount: 0 },
       CONFIG,
     );
-    expect(r.absorption).toBeCloseTo(2.5, 1);
+    expect(r.absorption).toBeLessThan(0.1);
   });
 });
 

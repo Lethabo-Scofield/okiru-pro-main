@@ -133,6 +133,8 @@ export function registerFeedbackRoutes(
     }
   });
 
+  // Public read: anyone with the /devmode route can view feedback (no login
+  // required). Mutations (PATCH/DELETE below) remain auth-gated.
   app.get("/api/feedback", async (req: Request, res: Response) => {
     try {
       const status = typeof req.query.status === 'string' ? req.query.status : undefined;
@@ -167,6 +169,7 @@ export function registerFeedbackRoutes(
     }
   });
 
+  // Public read: feedback stats viewable without login (see GET '/api/feedback').
   app.get("/api/feedback/stats", async (req: Request, res: Response) => {
     try {
       const dbOnly = req.query.dbOnly === '1' || req.query.dbOnly === 'true';

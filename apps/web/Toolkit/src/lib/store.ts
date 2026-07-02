@@ -46,6 +46,13 @@ import {
   AGRI_GENERIC_CALCULATOR_CONFIG,
   isAgriGenericSector,
 } from './sectors/agri-generic';
+import {
+  isConstructionSector,
+  resolveConstructionScorecardKey,
+  buildConstructionCalculatorConfig,
+} from './sectors/construction';
+import { buildConstructionScoringInput } from './calculators/construction-map';
+import { calculateConstructionScorecard } from '../../../../api/pipeline/constructionScoring';
 
 import { coerceYesNo } from '@/lib/yesNoValue';
 import { calculateOwnershipScore } from './calculators/ownership';
@@ -157,23 +164,29 @@ function normalizeFraction(v: unknown): number {
   return Math.max(0, n);
 }
 
-/** Fetch sector-specific calculator config from API (authoritative pillar weightings). */
+/** Fetch sector-specific calculator config from API (authoritative pillar weightings).
+ * Returns a tagged result so callers can distinguish network failures from
+ * server-side 404/5xx (Q4 verification: previously a bare null swallowed both
+ * cases, leaving the user with no UI signal).
+ */
 async function fetchSectorCalculatorConfig(
   sectorCode: string,
   scorecardType: string,
-): Promise<CalculatorConfig | null> {
+): Promise<{ config: CalculatorConfig | null; failure: 'network' | 'server' | null }> {
   try {
     const res = await fetch(
       `${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`,
     );
     if (res.ok) {
       const data = await res.json();
-      if (data.success && data.config) return data.config as CalculatorConfig;
+      if (data.success && data.config) return { config: data.config as CalculatorConfig, failure: null };
+      return { config: null, failure: 'server' };
     }
+    return { config: null, failure: 'server' };
   } catch (error) {
     console.error('[store] Failed to fetch sector calculator config:', error);
+    return { config: null, failure: 'network' };
   }
-  return null;
 }
 
 function hasValidPillarConfigs(config: CalculatorConfig | null | undefined): boolean {
@@ -281,11 +294,22 @@ export interface PipelineOverrides {
   subMinimumsMet?: boolean;
 }
 
+export type CalculatorConfigStatus = 'idle' | 'loading' | 'ready' | 'error';
+export interface CalculatorConfigErrorInfo {
+  reason: 'network' | 'server' | 'invalid-config' | 'unknown-sector' | 'fsc-no-subsector' | 'recalc-before-load';
+  message: string;
+  sectorCode: string;
+  scorecardType: string;
+  fscSubSector?: string;
+}
+
 interface BbeeState extends PillarState {
   isLoaded: boolean;
   activeClientId: string | null;
   pipelineOverrides: PipelineOverrides | null;
   calculatorConfig: CalculatorConfig | null;
+  calculatorConfigStatus: CalculatorConfigStatus;
+  calculatorConfigError: CalculatorConfigErrorInfo | null;
 
   isScenarioMode: boolean;
   activeScenarioId: string | null;
@@ -334,10 +358,14 @@ interface BbeeState extends PillarState {
 
   // Issue 3: Removed updateProcurementBonuses - bonuses are ED only
   updateEsdBonuses: (graduationBonus: boolean, jobsCreatedBonus: boolean, jobsCreatedCount?: number, graduationEvidence?: string, jobsCreatedEvidence?: string) => void;
+  /** FSC-only SED spend fields (Consumer Education, CE bonus, Fundisa). */
+  updateSedSpend: (data: { ceSpend?: number; ceBonusSpend?: number; fundisaSpend?: number }) => void;
   
   updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => void;
   updateTMPS: (tmps: number, manualOverride?: boolean) => void;
   updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => void;
+  /** Update the industry VERTICAL (Manufacturing, Retail, etc.) used for industry-norm lookup. Distinct from sectorCode/industrySector which drive the scorecard. */
+  updateIndustry: (industry: string) => void;
 
   loadCalculatorConfig: (clientId: string) => Promise<void>;
   saveCalculatorConfig: (config: CalculatorConfig) => Promise<void>;
@@ -556,6 +584,39 @@ function calculateScorecard(
 ): ScorecardResult {
   const cfg = state.calculatorConfig;
   if (!cfg) throw new Error('calculatorConfig must be loaded before calculating scorecard. Please select a sector first.');
+
+  // Construction scores via the expert-verified indicator-matrix evaluator, not the
+  // pillar calculators. Map the Toolkit data → ConstructionScoringInput, evaluate, and
+  // adapt the 5-element output into ScorecardResult (construction folds PP+SD into the
+  // ESD element → mapped to the procurement slot; SD/ED/EE/YES slots are zeroed).
+  if (isConstructionSector(state.client.sectorCode)) {
+    const { entityType, input } = buildConstructionScoringInput(state, cfg);
+    const out = calculateConstructionScorecard(entityType, input);
+    const el = out.elementScores;
+    const lvl = pointsToLevel(out.totalScore, cfg);
+    const mkPillar = (e: { achievedPoints: number; availablePoints: number }) => ({
+      score: round2(e.achievedPoints), target: e.availablePoints, weighting: e.availablePoints,
+    });
+    const result: ScorecardResult = {
+      ownership: { ...mkPillar(el.ownership), subMinimumMet: true },
+      managementControl: mkPillar(el.managementControl),
+      skillsDevelopment: { ...mkPillar(el.skillsDevelopment), subMinimumMet: true },
+      procurement: { ...mkPillar(el.enterpriseSupplierDevelopment), subMinimumMet: true },
+      supplierDevelopment: { score: 0, target: 0, weighting: 0, subMinimumMet: true },
+      enterpriseDevelopment: { score: 0, target: 0, weighting: 0, subMinimumMet: true },
+      socioEconomicDevelopment: mkPillar(el.socioEconomicDevelopment),
+      yesInitiative: { score: 0, target: 0, weighting: 0 },
+      total: { score: round2(out.totalScore), target: out.totalAvailable, weighting: out.totalAvailable },
+      achievedLevel: lvl,
+      discountedLevel: lvl,
+      isDiscounted: false,
+      recognitionLevel: levelToRecognition(lvl, cfg),
+    };
+    // Attach the raw construction output (per-indicator detail) for the results view.
+    (result as unknown as { construction?: unknown }).construction = out;
+    return result;
+  }
+
   assertSectorConfigLoaded(cfg, state.client);
   const transportQse = isTransportQseSector(state.client.sectorCode, state.client.scorecardType);
   const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;
@@ -960,6 +1021,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   scorecard: emptyScorecard,
   pipelineOverrides: null,
   calculatorConfig: null,
+  calculatorConfigStatus: 'idle',
+  calculatorConfigError: null,
 
   isScenarioMode: false,
   activeScenarioId: null,
@@ -1004,6 +1067,20 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         fscReinsurer: coerceYesNo(data.client.fscReinsurer ?? finExtras.fscReinsurer),
         eapProvince: (data.client.eapProvince || finExtras.eapProvince || 'National') as Client['eapProvince'],
         industryNorm: data.client.industryNorm ?? (finExtras.industryNormPercent as number | undefined),
+        // Foundation / company-detail fields that PATCH /api/clients/:id persists
+        // and GET /:id/data returns, but which were previously DROPPED here — so
+        // measurement period, turnover/headcount, and certificate details showed
+        // blank again on reload ("company details aren't reflected well"). These
+        // also close the pre-existing TS2739 (annualTurnover, numberOfEmployees
+        // missing from the Client literal).
+        measurementPeriodStart: data.client.measurementPeriodStart || undefined,
+        measurementPeriodEnd: data.client.measurementPeriodEnd || undefined,
+        annualTurnover: data.client.annualTurnover || 0,
+        numberOfEmployees: data.client.numberOfEmployees || 0,
+        beeCertificateNumber: data.client.beeCertificateNumber || undefined,
+        beeCertificateExpiry: data.client.beeCertificateExpiry || undefined,
+        beeCertificateLevel: (data.client.beeCertificateLevel ?? undefined) as Client['beeCertificateLevel'],
+        verificationAgency: data.client.verificationAgency || undefined,
         financialHistory: (data.financialYears || []).map((fy: any) => ({
           id: fy.id,
           year: fy.year,
@@ -1088,6 +1165,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           isForeign: coerceYesNo(e.isForeign),
           annualSalary: e.annualSalary ?? 0,
           votingRightsPercent: e.votingRightsPercent ?? 0,
+          idNumber: e.idNumber || undefined,
+          province: e.province || undefined,
+          hireDate: e.hireDate || undefined,
+          terminationDate: e.terminationDate || undefined,
         })),
       };
 
@@ -1166,9 +1247,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const sedState: SEDData = {
         id: '',
         clientId,
-        ceSpend: finExtras.ceSpend as number | undefined,
-        ceBonusSpend: finExtras.ceBonusSpend as number | undefined,
-        fundisaSpend: finExtras.fundisaSpend as number | undefined,
+        // Prefer the top-level sed.* fields (persisted via updateClient), fall
+        // back to the legacy financials blob so existing data still loads.
+        ceSpend: (data.sed?.ceSpend as number | undefined) ?? (finExtras.ceSpend as number | undefined),
+        ceBonusSpend: (data.sed?.ceBonusSpend as number | undefined) ?? (finExtras.ceBonusSpend as number | undefined),
+        fundisaSpend: (data.sed?.fundisaSpend as number | undefined) ?? (finExtras.fundisaSpend as number | undefined),
         contributions: (data.sed?.contributions || []).map((c: any) => ({
           id: c.id,
           beneficiary: c.beneficiary,
@@ -1236,6 +1319,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       scorecard: emptyScorecard,
       pipelineOverrides: null,
       calculatorConfig: null,
+  calculatorConfigStatus: 'idle',
+  calculatorConfigError: null,
       isScenarioMode: false,
       activeScenarioId: null,
       scenarios: [],
@@ -1258,6 +1343,8 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       scorecard: buildEmptyScorecard(),
       pipelineOverrides: null,
       calculatorConfig: null,
+  calculatorConfigStatus: 'idle',
+  calculatorConfigError: null,
       isScenarioMode: false,
       activeScenarioId: null,
       scenarios: [],
@@ -1350,71 +1437,64 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const sectorCode = client.sectorCode || 'RCOGP';
     const scorecardType = client.scorecardType || client.companySize || 'Generic';
 
+    // Mark loading BEFORE any branching — any concurrent _recalculateAll or
+    // page mount sees 'loading' instead of stale 'ready'/'idle' (race fix).
+    set({ calculatorConfigStatus: 'loading', calculatorConfigError: null });
+
+    const ready = (cfg: CalculatorConfig) => {
+      set({ calculatorConfig: cfg, calculatorConfigStatus: 'ready', calculatorConfigError: null });
+      get()._recalculateAll();
+    };
+
     if (isRcogpGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled RCOGP Generic calculator config');
-      set({ calculatorConfig: RCOGP_GENERIC_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(RCOGP_GENERIC_CALCULATOR_CONFIG);
       return;
     }
-
     if (isRcogpQseSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled RCOGP QSE calculator config');
-      set({ calculatorConfig: RCOGP_QSE_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(RCOGP_QSE_CALCULATOR_CONFIG);
       return;
     }
-
     if (isIctGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled ICT Generic calculator config');
-      set({ calculatorConfig: ICT_GENERIC_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(ICT_GENERIC_CALCULATOR_CONFIG);
       return;
     }
-
     if (isIctQseSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled ICT QSE calculator config');
-      set({ calculatorConfig: ICT_QSE_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(ICT_QSE_CALCULATOR_CONFIG);
       return;
     }
-
     if (isAgriGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled AGRI Generic calculator config');
-      set({ calculatorConfig: AGRI_GENERIC_CALCULATOR_CONFIG });
-      get()._recalculateAll();
+      ready(AGRI_GENERIC_CALCULATOR_CONFIG);
       return;
     }
 
     if (sectorCode.toUpperCase() === 'FSC') {
       const fscSub = get().client.fscSubSector || 'Others';
-      if (isFscBanksSector(sectorCode, fscSub)) {
-        console.log('[SCORING-TRACE] Using bundled FSC Banks (FS701) calculator config');
-        set({ calculatorConfig: FSC_BANKS_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
-      if (isFscLtiSector(sectorCode, fscSub)) {
-        console.log('[SCORING-TRACE] Using bundled FSC LTI (FS702) calculator config');
-        set({ calculatorConfig: FSC_LTI_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
-      if (isFscStiSector(sectorCode, fscSub)) {
-        console.log('[SCORING-TRACE] Using bundled FSC STI (FS703) calculator config');
-        set({ calculatorConfig: FSC_STI_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
-      // Default to Generic/Others
-      if (isFscGenericSector(sectorCode, scorecardType)) {
-        console.log('[SCORING-TRACE] Using bundled FSC Generic (Others) calculator config');
-        set({ calculatorConfig: FSC_GENERIC_CALCULATOR_CONFIG });
-        get()._recalculateAll();
-        return;
-      }
+      if (isFscBanksSector(sectorCode, fscSub)) { ready(FSC_BANKS_CALCULATOR_CONFIG); return; }
+      if (isFscLtiSector(sectorCode, fscSub))   { ready(FSC_LTI_CALCULATOR_CONFIG);   return; }
+      if (isFscStiSector(sectorCode, fscSub))   { ready(FSC_STI_CALCULATOR_CONFIG);   return; }
+      if (isFscGenericSector(sectorCode, scorecardType)) { ready(FSC_GENERIC_CALCULATOR_CONFIG); return; }
+      // Sub-sector did not match any known variant — short-circuit with a
+      // structured error rather than falling through to a remote fetch that
+      // will never resolve FSC sub-sectors.
+      const msg = `FSC sub-sector "${fscSub}" is not recognised. Pick a sub-sector on Company Info.`;
+      console.error('[store]', msg);
+      set({ calculatorConfigStatus: 'error', calculatorConfigError: { reason: 'fsc-no-subsector', message: msg, sectorCode, scorecardType, fscSubSector: fscSub } });
+      return;
     }
 
-    const sectorConfig = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
+    if (isConstructionSector(sectorCode)) {
+      const entityType = resolveConstructionScorecardKey(scorecardType, (client as { constructionSubSector?: string }).constructionSubSector);
+      console.log('[SCORING-TRACE] Using bundled Construction calculator config:', entityType);
+      ready(buildConstructionCalculatorConfig(entityType));
+      return;
+    }
+
+    const { config: sectorConfig, failure: fetchFailure } = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
 
     if (sectorConfig && hasValidPillarConfigs(sectorConfig)) {
       console.log('[SCORING-TRACE] Pillar configs loaded from sector:', sectorCode, scorecardType, {
@@ -1423,22 +1503,33 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         managementControl: sectorConfig.pillarConfigs?.managementControl?.maxPoints,
         employmentEquity: sectorConfig.pillarConfigs?.employmentEquity?.maxPoints,
       });
-      set({
-        calculatorConfig: {
-          ...sectorConfig,
-          sectorCode: sectorConfig.sectorCode ?? sectorCode,
-          scorecardType: sectorConfig.scorecardType ?? scorecardType,
-        },
+      ready({
+        ...sectorConfig,
+        sectorCode: sectorConfig.sectorCode ?? sectorCode,
+        scorecardType: sectorConfig.scorecardType ?? scorecardType,
       });
-      get()._recalculateAll();
       return;
     }
 
+    // Determine the right error reason
+    let reason: CalculatorConfigErrorInfo['reason'];
+    let message: string;
     if (sectorConfig && !hasValidPillarConfigs(sectorConfig)) {
+      reason = 'invalid-config';
+      message = `Calculator config for ${sectorCode}/${scorecardType} is missing pillar weightings.`;
       console.warn('[store] Sector config rejected (invalid pillar maxPoints):', sectorCode, scorecardType);
+    } else if (fetchFailure === 'network') {
+      reason = 'network';
+      message = `Could not reach the sector config server. Check your connection and click Retry.`;
+    } else if (fetchFailure === 'server') {
+      reason = 'unknown-sector';
+      message = `No calculator config available for sector "${sectorCode}" (${scorecardType}). Pick a different sector on Company Info or contact support.`;
+    } else {
+      reason = 'unknown-sector';
+      message = `No calculator config available for "${sectorCode}/${scorecardType}".`;
     }
-
-    console.error('[store] No valid calculator config for', sectorCode, scorecardType);
+    console.error('[store] No valid calculator config for', sectorCode, scorecardType, '→', reason);
+    set({ calculatorConfigStatus: 'error', calculatorConfigError: { reason, message, sectorCode, scorecardType } });
   },
 
   saveCalculatorConfig: async (_config: CalculatorConfig) => {
@@ -1449,6 +1540,22 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
 
     if (!state.calculatorConfig) {
+      // If a load is in flight, this is a benign race — the success branch
+      // will fire _recalculateAll itself. Otherwise surface an error state so
+      // the user sees something instead of a silently-stale score.
+      if (state.calculatorConfigStatus !== 'loading') {
+        const sectorCode = state.client.sectorCode || 'RCOGP';
+        const scorecardType = state.client.scorecardType || state.client.companySize || 'Generic';
+        set({
+          calculatorConfigStatus: 'error',
+          calculatorConfigError: {
+            reason: 'recalc-before-load',
+            message: 'Scoring was triggered before the calculator config loaded. Click Retry.',
+            sectorCode,
+            scorecardType,
+          },
+        });
+      }
       console.error('[store] Cannot calculate: calculatorConfig not loaded');
       return;
     }
@@ -1479,11 +1586,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     set((state) => ({ client: { ...state.client, financialHistory: [...state.client.financialHistory, year] } }));
     const state = get();
     if (state.activeClientId) {
-      api.addFinancialYear(state.activeClientId, { year: year.year, revenue: year.revenue, npat: year.npat, indicativeNpat: year.indicativeNpat, notes: year.notes }).catch(console.error);
+      api.addFinancialYear(state.activeClientId, { id: year.id, year: year.year, revenue: year.revenue, npat: year.npat, indicativeNpat: year.indicativeNpat, notes: year.notes }).catch(console.error);
     }
   },
   updateFinancialYear: (id, data) => {
     set((state) => ({ client: { ...state.client, financialHistory: state.client.financialHistory.map(y => y.id === id ? { ...y, ...data } : y) } }));
+    api.updateFinancialYear(id, data).catch(console.error);
   },
   removeFinancialYear: (id) => {
     set((state) => ({ client: { ...state.client, financialHistory: state.client.financialHistory.filter(y => y.id !== id) } }));
@@ -1495,14 +1603,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addShareholder(state.activeClientId, {
-        name: shareholder.name,
-        ownershipType: shareholder.ownershipType || 'shareholder',
-        blackOwnership: shareholder.blackOwnership,
-        blackWomenOwnership: shareholder.blackWomenOwnership,
-        shares: shareholder.shares,
-        shareValue: shareholder.shareValue,
-      }).catch(console.error);
+      // Send the full Shareholder shape INCLUDING the local id. The server
+      // preserves a provided id (create does { id: uuid(), ...data }), so the
+      // row persists under the SAME id the store holds — otherwise a later
+      // updateShareholder(localId) hits PATCH /api/shareholders/<localId> which
+      // 404s because the server minted its own id ("edit doesn't save at all").
+      api.addShareholder(state.activeClientId, shareholder).catch(console.error);
     }
   },
   updateShareholder: (id, data) => {
@@ -1530,9 +1636,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.addEmployee(state.activeClientId, {
+        // Persist under the store's local id so a later updateEmployee(localId)
+        // resolves server-side (the create respects a provided id). Without this
+        // the edit PATCHes an id the server never had → 404 → silently dropped.
+        id: employee.id,
         name: employee.name, gender: employee.gender, race: employee.race,
         designation: employee.designation, isDisabled: employee.isDisabled,
         annualSalary: employee.annualSalary, votingRightsPercent: employee.votingRightsPercent,
+        idNumber: employee.idNumber, isForeign: employee.isForeign, province: employee.province,
+        hireDate: employee.hireDate, terminationDate: employee.terminationDate,
       }).catch(console.error);
     }
   },
@@ -1544,6 +1656,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       }
     }));
     get()._recalculateAll();
+    api.updateEmployee(id, data).catch(console.error);
   },
   removeEmployee: (id) => {
     set((state) => ({ management: { ...state.management, employees: state.management.employees.filter(e => e.id !== id) } }));
@@ -1555,15 +1668,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      Promise.all(
-        employees.map(emp =>
-          api.addEmployee(state.activeClientId!, {
-            name: emp.name, gender: emp.gender, race: emp.race,
-            designation: emp.designation, isDisabled: emp.isDisabled,
-            annualSalary: emp.annualSalary, votingRightsPercent: emp.votingRightsPercent,
-          })
-        )
-      ).catch(console.error);
+      // Single round-trip via the bulk endpoint (insertMany). Keep the local
+      // ids so bulk-added rows are editable immediately (create preserves a
+      // provided id; without it updateEmployee(localId) 404s).
+      api.bulkAddEmployees(state.activeClientId, employees).catch(console.error);
     }
   },
 
@@ -1572,12 +1680,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addTrainingProgram(state.activeClientId, {
-        name: program.name, category: program.category, cost: program.cost,
-        employeeId: program.employeeId, isEmployed: program.isEmployed, isBlack: program.isBlack,
-        gender: program.gender, race: program.race, isDisabled: program.isDisabled,
-        municipality: program.municipality,
-      }).catch(console.error);
+      // Send the full TrainingProgram shape INCLUDING the local id so the row
+      // persists under the store's id and updateTrainingProgram(localId) resolves
+      // (else PATCH /api/training-programs/<localId> 404s). Also carries
+      // programName/categoryCode/learnerName/employmentStatus/dates/*Cost/
+      // isYesEmployee/isCompleted/isAbsorbed (audit B6).
+      api.addTrainingProgram(state.activeClientId, program).catch(console.error);
     }
   },
   updateTrainingProgram: (id, data) => {
@@ -1605,13 +1713,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addSupplier(state.activeClientId, {
-        name: supplier.name, beeLevel: supplier.beeLevel,
-        registrationNumber: supplier.registrationNumber,
-        blackOwnership: supplier.blackOwnership, blackWomenOwnership: supplier.blackWomenOwnership,
-        youthOwnership: supplier.youthOwnership, disabledOwnership: supplier.disabledOwnership,
-        enterpriseType: supplier.enterpriseType, spend: supplier.spend,
-      }).catch(console.error);
+      // Send the full Supplier shape INCLUDING the local id so the row persists
+      // under the store's id and updateSupplier(localId) resolves (else PATCH
+      // /api/suppliers/<localId> 404s → "edit doesn't save"). Also carries
+      // isEmpoweringSupplier, isSupplierDevRecipient, hasThreeYearContract,
+      // isForeignSupplier, certificateExpiryDate, vatNumber, etc. (audit P2 #6).
+      api.addSupplier(state.activeClientId, supplier).catch(console.error);
     }
   },
   updateSupplier: (id, data) => {
@@ -1642,10 +1749,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addEsdContribution(state.activeClientId, {
-        beneficiary: contribution.beneficiary, type: contribution.type,
-        amount: contribution.amount, category: contribution.category,
-      }).catch(console.error);
+      // Send the full Contribution shape INCLUDING the local id so the row
+      // persists under the store's id (else a later delete/edit by localId
+      // misses the server row). Also carries construction flags
+      // (isBlackWomenOwnedBeneficiary, supplierDevProgramme), blackBenefitPercent,
+      // contributionType, descriptions, and dates (audit P2 #7).
+      api.addEsdContribution(state.activeClientId, contribution).catch(console.error);
     }
   },
   removeEsdContribution: (id) => {
@@ -1659,10 +1768,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addSedContribution(state.activeClientId, {
-        beneficiary: contribution.beneficiary, type: contribution.type,
-        amount: contribution.amount, category: contribution.category,
-      }).catch(console.error);
+      // Send the full Contribution shape INCLUDING the local id (same fix as
+      // addEsdContribution). Also carries isStructuredProject +
+      // isLimitedServicesCommunity (construction SED indicators),
+      // blackBenefitPercent, descriptionOfSpend, and dates (audit P2 #8).
+      api.addSedContribution(state.activeClientId, contribution).catch(console.error);
     }
   },
   removeSedContribution: (id) => {
@@ -1674,6 +1784,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   updateAfs: (data) => {
     set((state) => ({ afs: { ...state.afs, ...data } }));
     get()._recalculateAll();
+    const clientId = get().activeClientId;
+    if (clientId) {
+      api.updateClient(clientId, { afs: get().afs }).catch(console.error);
+    }
   },
 
   setFscSubSector: (subSector) => {
@@ -1693,6 +1807,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       esd: { ...state.esd, graduationBonus, jobsCreatedBonus, jobsCreatedCount, graduationEvidence, jobsCreatedEvidence },
     }));
     get()._recalculateAll();
+    const clientId = get().activeClientId;
+    if (clientId) {
+      api.updateClient(clientId, { graduationBonus, jobsCreatedBonus, jobsCreatedCount, graduationEvidence, jobsCreatedEvidence }).catch(console.error);
+    }
   },
 
   updateFinancials: (revenue, npat, leviableAmount, industryNorm) => {
@@ -1704,6 +1822,16 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.updateClient(state.activeClientId, { revenue, npat, leviableAmount, industryNorm }).catch(console.error);
+    }
+  },
+
+  updateSedSpend: (data) => {
+    set((state) => ({ sed: { ...state.sed, ...data } }));
+    get()._recalculateAll();
+    const state = get();
+    if (state.activeClientId) {
+      const { ceSpend, ceBonusSpend, fundisaSpend } = state.sed;
+      api.updateClient(state.activeClientId, { ceSpend, ceBonusSpend, fundisaSpend }).catch(console.error);
     }
   },
   
@@ -1732,6 +1860,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.updateClient(state.activeClientId, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }).catch(console.error);
+    }
+  },
+
+  updateIndustry: (industry) => {
+    set((state) => ({ client: { ...state.client, industry } }));
+    get()._recalculateAll(); // industryNorm lookup uses client.industry → Skills/PP can shift
+    const state = get();
+    if (state.activeClientId) {
+      api.updateClient(state.activeClientId, { industry }).catch(console.error);
     }
   },
 

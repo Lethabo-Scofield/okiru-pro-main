@@ -18,6 +18,12 @@ const userSchema = new Schema({
 const organizationSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
   name: { type: String, required: true },
+  // Company-admin model: the user who currently administers this organization
+  // (the tenant). Set to the first registrant at signup; reassignable via the
+  // admin-transfer endpoint. `createdByUserId` records the original founder for
+  // audit even after admin is transferred away.
+  adminUserId: { type: String, default: null, index: true },
+  createdByUserId: { type: String, default: null },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "organizations" });
 
@@ -35,8 +41,67 @@ const clientSchema = new Schema({
   industrySector: { type: String, default: "Generic" },
   eapProvince: { type: String, default: "National" },
   industryNorm: { type: Number, default: null },
+  // Foundation Layer fields used by the Toolkit + Workbook. apps/web/shared/
+  // schema.ts has these on its clientSchema; apps/api was missing them, so
+  // every PATCH /api/clients/:id from the Toolkit was SILENTLY DROPPING
+  // industry/sectorCode/scorecardType/companySize (strict schema). That broke
+  // the "company details aren't reflected well" complaint — e.g. picking
+  // an industry vertical or changing the sector code never round-tripped.
+  industry: { type: String, default: 'Other' },
+  sectorCode: { type: String, default: 'RCOGP' },
+  scorecardType: { type: String, default: 'Generic' },
+  companySize: { type: String, default: 'Generic' },
   logo: { type: String, default: null },
   pipelineOverrides: { type: Schema.Types.Mixed, default: null },
+  // Persisted via PATCH /api/clients/:id but previously dropped by the strict
+  // schema: FSC sub-sector, ESD graduation/jobs bonuses, and AFS (FSC) data.
+  fscSubSector: { type: String, default: null },
+  graduationBonus: { type: Boolean, default: false },
+  jobsCreatedBonus: { type: Boolean, default: false },
+  jobsCreatedCount: { type: Number, default: 0 },
+  graduationEvidence: { type: String, default: '' },
+  jobsCreatedEvidence: { type: String, default: '' },
+  afs: { type: Schema.Types.Mixed, default: null },
+  // FSC-only SED spend fields: Consumer Education (+ CE bonus) and Fundisa.
+  // calculateSedScore already scores these when sc.ceMaxPts / sc.fundisaMaxPts > 0
+  // (i.e. FSC variants). Previously read only from the financials blob via
+  // the load path — surfacing them as top-level fields makes updateSed
+  // persistable via the existing updateClient route.
+  ceSpend: { type: Number, default: 0 },
+  ceBonusSpend: { type: Number, default: 0 },
+  fundisaSpend: { type: Number, default: 0 },
+  // Phase 4 schema parity sweep: fields apps/web/shared/schema.ts defines on
+  // clientSchema that the apps/api strict mode was silently dropping. Without
+  // these, every PATCH /api/clients/:id from the Toolkit (or workbook /sync
+  // setting top-level fields) lost data.
+  fscReinsurer: { type: Boolean, default: null },
+  farmWorkersIncluded: { type: Boolean, default: true },
+  combineExcoSenior: { type: Boolean, default: false },
+  constructionSubSector: { type: String, default: null },
+  measurementPeriodStart: { type: String, default: null },
+  measurementPeriodEnd: { type: String, default: null },
+  numberOfEmployees: { type: Number, default: 0 },
+  annualTurnover: { type: Number, default: 0 },
+  beeCertificateNumber: { type: String, default: '' },
+  beeCertificateExpiry: { type: String, default: '' },
+  beeCertificateLevel: { type: Number, default: null },
+  verificationAgency: { type: String, default: '' },
+  // Foundation contact + identity fields
+  tradingName: { type: String, default: '' },
+  registrationNumber: { type: String, default: '' },
+  vatNumber: { type: String, default: '' },
+  taxNumber: { type: String, default: '' },
+  physicalAddress: { type: String, default: '' },
+  postalAddress: { type: String, default: '' },
+  contactPerson: { type: String, default: '' },
+  contactEmail: { type: String, default: '' },
+  contactPhone: { type: String, default: '' },
+  // Mixed financials blob (deemedNpat/effectiveNpat/industryNormPercent/
+  // groupLeviableAmount/trainingManagerSalary/etc.). The workbook /sync writes
+  // here; pre-Phase 4 the field wasn't declared so strict mode dropped the
+  // whole object → next read returned undefined → deemed-NPAT branch lost,
+  // industry norm lookup defaulted, etc.
+  financials: { type: Schema.Types.Mixed, default: null },
   createdAt: { type: String, default: () => new Date().toISOString() },
 }, { collection: "clients" });
 
@@ -48,6 +113,10 @@ const financialYearSchema = new Schema({
   npat: { type: Number, default: 0 },
   indicativeNpat: { type: Number, default: null },
   notes: { type: String, default: null },
+  // workbookRowId stamps the workbook row's `_id` onto the persisted entity so
+  // Toolkit→Workbook back-sync can match on this stable join key. Null for
+  // entities created Toolkit-only; populated on workbook /submit projection.
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "financialYears" });
 
 const shareholderSchema = new Schema({
@@ -58,6 +127,19 @@ const shareholderSchema = new Schema({
   blackWomenOwnership: { type: Number, default: 0 },
   shares: { type: Number, default: 0 },
   shareValue: { type: Number, default: 0 },
+  // Modern Shareholder fields the Toolkit form captures (were dropped: strict schema).
+  // Some are not yet read by ownership scoring (Wave 3); persisting them now prevents
+  // data loss and unblocks the scoring fix without a second round-trip.
+  shareholderId: { type: String, default: '' },
+  ownershipType: { type: String, default: 'shareholder' },
+  votingRightsPercent: { type: Number, default: 0 },
+  economicInterestPercent: { type: Number, default: 0 },
+  isDesignatedGroup: { type: Boolean, default: false },
+  designatedGroupType: { type: String, default: '' },
+  blackNewEntrant: { type: Boolean, default: false },
+  yearsHeld: { type: Number, default: 0 },
+  graduationFactor: { type: Number, default: 0 },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "shareholders" });
 
 const ownershipDataSchema = new Schema({
@@ -78,18 +160,57 @@ const employeeSchema = new Schema({
   isDisabled: { type: Boolean, default: false },
   annualSalary: { type: Number, default: 0 },
   votingRightsPercent: { type: Number, default: 0 },
+  // Captured by the form/import and needed for foreign-national exclusion and
+  // active-during-measurement-period filtering (were dropped: strict schema).
+  idNumber: { type: String, default: '' },
+  isForeign: { type: Boolean, default: false },
+  province: { type: String, default: '' },
+  hireDate: { type: String, default: '' },
+  terminationDate: { type: String, default: '' },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "employees" });
 
 const trainingProgramSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
   clientId: { type: String, required: true, index: true },
-  name: { type: String, required: true },
-  category: { type: String, required: true },
+  // Legacy fields kept for backward compatibility with already-persisted docs.
+  name: { type: String, required: false, default: '' },
+  category: { type: String, required: false, default: '' },
   cost: { type: Number, default: 0 },
   employeeId: { type: String, default: null },
   isEmployed: { type: Boolean, default: false },
   isBlack: { type: Boolean, default: false },
   municipality: { type: String, default: '' },
+  // Modern TrainingProgram fields the Toolkit form + scoring use (were dropped).
+  programName: { type: String, default: '' },
+  trainingProvider: { type: String, default: '' },
+  categoryCode: { type: String, default: '' },
+  learnerName: { type: String, default: '' },
+  learnerIdNumber: { type: String, default: '' },
+  gender: { type: String, default: '' },
+  race: { type: String, default: '' },
+  isDisabled: { type: Boolean, default: false },
+  isForeign: { type: Boolean, default: false },
+  employmentStatus: { type: String, default: '' },
+  isYesEmployee: { type: Boolean, default: false },
+  isCompleted: { type: Boolean, default: false },
+  isAbsorbed: { type: Boolean, default: false },
+  transactionDate: { type: String, default: '' },
+  startDate: { type: String, default: '' },
+  endDate: { type: String, default: '' },
+  courseCost: { type: Number, default: 0 },
+  travelCost: { type: Number, default: 0 },
+  accommodationCost: { type: Number, default: 0 },
+  cateringCost: { type: Number, default: 0 },
+  stationeryCost: { type: Number, default: 0 },
+  facilityCost: { type: Number, default: 0 },
+  salaryCost: { type: Number, default: 0 },
+  otherCosts: { type: Number, default: 0 },
+  totalCost: { type: Number, default: 0 },
+  isAbet: { type: Boolean, default: false },
+  isMandatory: { type: Boolean, default: false },
+  isBursary: { type: Boolean, default: false },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "trainingPrograms" });
 
 const supplierSchema = new Schema({
@@ -98,8 +219,28 @@ const supplierSchema = new Schema({
   name: { type: String, required: true },
   beeLevel: { type: Number, default: 4 },
   blackOwnership: { type: Number, default: 0 },
+  // Demographic + classification fields the Toolkit form/import already capture
+  // and the procurement calculator scores (were silently dropped: strict schema).
+  blackWomenOwnership: { type: Number, default: 0 },
+  youthOwnership: { type: Number, default: 0 },
+  disabledOwnership: { type: Number, default: 0 },
+  enterpriseType: { type: String, default: '' },
   spend: { type: Number, default: 0 },
   registrationNumber: { type: String, default: '' },
+  // Phase 4 schema parity: Toolkit Procurement.tsx collects all of these but
+  // the strict schema was dropping them on PATCH /api/suppliers/:id, so the
+  // empowering-supplier sub-minimum, foreign-supplier exclusion, 3-year
+  // contract bonus and SD-recipient linkage all reset to false on reload.
+  isEmpoweringSupplier: { type: Boolean, default: false },
+  isForeignSupplier: { type: Boolean, default: false },
+  isBlackOwned51: { type: Boolean, default: false },
+  isBlackWomanOwned30: { type: Boolean, default: false },
+  isDesignatedGroup: { type: Boolean, default: false },
+  isSupplierDevRecipient: { type: Boolean, default: false },
+  hasThreeYearContract: { type: Boolean, default: false },
+  certificateExpiryDate: { type: String, default: '' },
+  firstProcurementDate: { type: String, default: '' },
+  vatNumber: { type: String, default: '' },
 }, { collection: "suppliers" });
 
 const procurementDataSchema = new Schema({
@@ -115,6 +256,18 @@ const esdContributionSchema = new Schema({
   type: { type: String, required: true },
   amount: { type: Number, default: 0 },
   category: { type: String, required: true },
+  // Phase 4 schema parity: workbook + Toolkit collect these; previously
+  // silently dropped. blackBenefitPercent feeds scoring; construction-only
+  // flags drive the construction ESD indicators.
+  blackBenefitPercent: { type: Number, default: 0 },
+  contributionType: { type: String, default: '' },
+  contributionDescription: { type: String, default: '' },
+  dateOfTransaction: { type: String, default: '' },
+  invoiceDate: { type: String, default: '' },
+  paymentDate: { type: String, default: '' },
+  supplierDevProgramme: { type: Boolean, default: false },
+  isBlackWomenOwnedBeneficiary: { type: Boolean, default: false },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "esdContributions" });
 
 const sedContributionSchema = new Schema({
@@ -124,6 +277,16 @@ const sedContributionSchema = new Schema({
   type: { type: String, required: true },
   amount: { type: Number, default: 0 },
   category: { type: String, required: true },
+  // Phase 4 schema parity: same as esdContributionSchema. percentBenefitingBlack
+  // ↔ blackBenefitPercent; construction-only flags drive the SED indicators.
+  blackBenefitPercent: { type: Number, default: 0 },
+  contributionType: { type: String, default: '' },
+  descriptionOfSpend: { type: String, default: '' },
+  dateOfTransaction: { type: String, default: '' },
+  ictSpecificInitiative: { type: Boolean, default: false },
+  isStructuredProject: { type: Boolean, default: false },
+  isLimitedServicesCommunity: { type: Boolean, default: false },
+  workbookRowId: { type: String, default: null, index: true, sparse: true },
 }, { collection: "sedContributions" });
 
 const scenarioSchema = new Schema({
@@ -518,3 +681,37 @@ const companyProfileSchema = new Schema({
 }, { collection: "company_profiles", strict: false });
 
 export const CompanyProfileModel = mongoose.models.CompanyProfile || mongoose.model("CompanyProfile", companyProfileSchema);
+
+// Phase 6 of the sync plan — persistent retry queue for back-sync fan-outs
+// that fail (apps/web down, network blip, transient 5xx). The drainer worker
+// picks up entries whose nextAttemptAt has passed, replays them, and either
+// removes (success) or pushes them back with exponential backoff.
+const workbookBackSyncOutboxSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  companyId: { type: String, required: true, index: true },
+  kind: { type: String, enum: ['entity', 'clientMeta'], required: true },
+  payload: { type: Schema.Types.Mixed, required: true },
+  attempts: { type: Number, default: 0 },
+  nextAttemptAt: { type: Date, default: () => new Date(), index: true },
+  lastError: { type: String, default: null },
+  createdAt: { type: Date, default: () => new Date() },
+}, { collection: 'workbook_backsync_outbox' });
+
+export const WorkbookBackSyncOutboxModel = mongoose.models.WorkbookBackSyncOutbox || mongoose.model('WorkbookBackSyncOutbox', workbookBackSyncOutboxSchema);
+
+// Mirror of apps/web/shared/schema.ts `workspaceMemberSchema` — same collection
+// `workspace_members`. Defined here so the apps/api per-entity write routes can
+// resolve pillarScopes without crossing the apps/web/server boundary (audit
+// B15-srv). Read-only from here.
+const workspaceMemberSchema = new Schema({
+  memberId: { type: String, required: true, unique: true, index: true },
+  workspaceId: { type: String, required: true, index: true },
+  userId: { type: String, required: true, index: true },
+  role: { type: String, enum: ["owner", "collaborator", "viewer"], required: true },
+  displayRole: { type: String, default: null },
+  pillarScopes: { type: [String], default: undefined },
+  joinedAt: { type: Date, default: Date.now },
+}, { collection: "workspace_members" });
+workspaceMemberSchema.index({ workspaceId: 1, userId: 1 }, { unique: true });
+
+export const WorkspaceMemberModel = mongoose.models.WorkspaceMember || mongoose.model("WorkspaceMember", workspaceMemberSchema);

@@ -345,8 +345,11 @@ export async function registerRoutes(
         return res.status(503).json({ message: "Database is not available. Please try again later." });
       }
 
-      const ALLOWED_ROLES = ["auditor", "analyst", "manager"];
-      const safeRole = ALLOWED_ROLES.includes(role) ? role : "analyst";
+      // The first person to register a company founds a brand-new organization,
+      // so they are its admin (tenant administrator). The step-4 job-title picker
+      // (auditor/analyst/manager) is descriptive only; the permission role for a
+      // founder is 'admin'. Teammates join later via invite as non-admin members.
+      const founderRole = "admin";
 
       const existing = await storage.getUserByUsername(trimmedUsername);
       if (existing && existing.isVerified) {
@@ -379,7 +382,7 @@ export async function registerRoutes(
           fullName: trimmedFullName,
           organizationName: trimmedOrgName,
           organizationId: tenantOrgId,
-          role: safeRole,
+          role: founderRole,
         } as any);
       } else if (existing && !existing.isVerified) {
         const hashedPassword = await bcrypt.hash(password, 8);
@@ -389,7 +392,7 @@ export async function registerRoutes(
           email: trimmedEmail,
           organizationName: trimmedOrgName,
           organizationId: tenantOrgId,
-          role: safeRole,
+          role: founderRole,
         } as any);
       } else {
         const hashedPassword = await bcrypt.hash(password, 8);
@@ -400,9 +403,20 @@ export async function registerRoutes(
           email: trimmedEmail,
           organizationName: trimmedOrgName,
           organizationId: tenantOrgId,
-          role: safeRole,
+          role: founderRole,
           profilePicture: null,
         });
+      }
+
+      // Reverse link: record the founder as the org's admin so member management
+      // and admin-transfer have a source of truth (org row lacked this before).
+      try {
+        await OrganizationModel.updateOne(
+          { id: tenantOrgId },
+          { $set: { adminUserId: user.id, createdByUserId: user.id } },
+        );
+      } catch (err) {
+        logger.warn("Failed to stamp org adminUserId on register (non-fatal)", err);
       }
 
       if (!isSmtpConfigured()) {
@@ -1373,6 +1387,22 @@ export async function registerRoutes(
         await storage.addMember(inv.workspaceId, userId, inv.role, { pillarScopes: inv.pillarScopes?.length ? inv.pillarScopes : undefined, displayRole: inv.displayRole });
       }
       await storage.acceptInvite(token);
+      // Org membership: scorecard visibility is org-scoped (sameOrg || sameUser), so put the
+      // accepting user in the inviter's organisation — this is how teammates come to see each
+      // other's scorecards going forward (the same effect as the one-off Okiru org merge).
+      let joinedOrg: string | null = null;
+      try {
+        const inviter = await storage.getUserById(inv.invitedByUserId);
+        if (inviter?.organizationId && inviter.organizationId !== user.organizationId) {
+          await storage.updateUser(userId, {
+            organizationId: inviter.organizationId,
+            organizationName: inviter.organizationName ?? undefined,
+          } as any);
+          joinedOrg = inviter.organizationId;
+        }
+      } catch (orgErr) {
+        logger.warn("invite-accept org join failed (membership still added)", orgErr);
+      }
       await recordAudit(req, {
         action: "workspace.invite.accept",
         resourceType: "workspace_invite",
@@ -1382,6 +1412,7 @@ export async function registerRoutes(
           workspaceId: inv.workspaceId,
           role: inv.role,
           alreadyMember: !!existing,
+          joinedOrg,
         },
       });
       return res.json({ ok: true, workspaceId: inv.workspaceId });
@@ -1484,6 +1515,244 @@ export async function registerRoutes(
     }
     next();
   }
+
+  // ==========================================================================
+  // Organization / company team management (org-scoped multitenancy).
+  //
+  // The "company" is the Organization (tenant). Members share an organizationId
+  // and therefore already see each other's companies/scorecards via the
+  // org-scoped visibility filter (buildClientVisibilityFilter). The first
+  // registrant is the org admin; the admin can invite teammates by email (they
+  // join this org on accept) and transfer admin to another member.
+  //
+  // Routed to the web service via ingress (/api/organization -> web) because the
+  // invite email + workspace/invite infra lives here.
+  // ==========================================================================
+
+  /**
+   * Resolve the current admin userId for an org, self-healing legacy orgs that
+   * predate the adminUserId field by promoting the earliest-created member (the
+   * de-facto founder) and giving them the admin role. Idempotent.
+   */
+  async function resolveOrgAdminUserId(orgId: string): Promise<string | null> {
+    const org = await storage.getOrganizationById(orgId);
+    if (org?.adminUserId) return org.adminUserId;
+    // Legacy / no-Mongo path: derive the admin from the members (oldest-first).
+    // Prefer an existing admin-role holder, else the earliest member (founder),
+    // and self-heal by persisting the pointer + role. Goes through storage so it
+    // works identically against Mongo and the in-memory fallback.
+    const members = await storage.getUsersByOrganization(orgId);
+    const founder = members.find((m) => m.role === "admin" || m.role === "super_admin") ?? members[0];
+    if (!founder) return null;
+    try {
+      await storage.setOrganizationAdmin(orgId, founder.id, org?.createdByUserId ?? founder.id);
+      if (founder.role !== "admin" && founder.role !== "super_admin") {
+        await storage.updateUser(founder.id, { role: "admin" });
+      }
+    } catch (err) {
+      logger.warn("org admin self-heal failed (continuing)", err, { orgId });
+    }
+    return founder.id;
+  }
+
+  /** Gate: caller must be the admin of their OWN organization. */
+  async function requireOrgAdmin(req: Request, res: Response, next: NextFunction) {
+    const userId = (req.session as any)?.userId;
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const user = await storage.getUserById(userId);
+    if (!user?.organizationId) {
+      return res.status(403).json({ message: "You are not part of an organization" });
+    }
+    const adminId = await resolveOrgAdminUserId(user.organizationId);
+    if (adminId !== userId) {
+      return res.status(403).json({ message: "Company admin access required" });
+    }
+    (req as any).user = user;
+    next();
+  }
+
+  // Org summary — name, admin, member count, and whether the caller is admin.
+  app.get("/api/organization", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as { id: string; organizationId?: string | null; organizationName?: string | null };
+      const orgId = user.organizationId;
+      if (!orgId) return res.json({ organization: null, isAdmin: false, memberCount: 0 });
+      const org = await storage.getOrganizationById(orgId);
+      const adminUserId = await resolveOrgAdminUserId(orgId);
+      const members = await storage.getUsersByOrganization(orgId);
+      res.json({
+        organization: {
+          id: orgId,
+          name: org?.name ?? user.organizationName ?? "Your company",
+          adminUserId,
+        },
+        isAdmin: adminUserId === user.id,
+        memberCount: members.length,
+      });
+    } catch (err: any) {
+      logger.error("GET /api/organization failed", err);
+      res.status(500).json({ message: "Failed to load organization" });
+    }
+  });
+
+  // Members of the caller's organization (any member may view the roster).
+  app.get("/api/organization/members", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as { id: string; organizationId?: string | null };
+      const orgId = user.organizationId;
+      if (!orgId) return res.json({ members: [], adminUserId: null, isAdmin: false });
+      const adminUserId = await resolveOrgAdminUserId(orgId);
+      const users = await storage.getUsersByOrganization(orgId);
+      const members = users.map((u) => ({
+        id: u.id,
+        username: u.username ?? null,
+        fullName: u.fullName ?? null,
+        email: u.email ?? null,
+        role: u.role ?? "user",
+        isAdmin: u.id === adminUserId,
+      }));
+      res.json({ members, adminUserId, isAdmin: adminUserId === user.id });
+    } catch (err: any) {
+      logger.error("GET /api/organization/members failed", err);
+      res.status(500).json({ message: "Failed to load members" });
+    }
+  });
+
+  // Invite a teammate to the company by email (admin only). Reuses the
+  // workspace-invite + email path; on accept the invitee joins this org and
+  // gains full org visibility.
+  app.post("/api/organization/invites", requireAuth, requireOrgAdmin, async (req: Request, res: Response) => {
+    try {
+      const inviter = (req as any).user as { id: string; fullName?: string; username?: string; email?: string; organizationName?: string };
+      const email = String(req.body?.email ?? "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ message: "A valid email address is required" });
+      }
+      // Attach the invite to a workspace the inviter owns (create one if needed).
+      await ensureDefaultWorkspace(inviter.id);
+      const workspaces = await storage.listWorkspacesForUser(inviter.id);
+      const ownWs = workspaces.find((w) => w.ownerUserId === inviter.id) ?? workspaces[0];
+      if (!ownWs) return res.status(500).json({ message: "No workspace available to attach the invite" });
+
+      const invite = await storage.createInvite({
+        workspaceId: ownWs.workspaceId,
+        email,
+        role: "collaborator", // full access member (empty pillarScopes => all pillars)
+        displayRole: "contributor",
+        invitedByUserId: inviter.id,
+      });
+
+      const baseUrl = process.env.APP_BASE_URL || process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+      const acceptUrl = `${baseUrl}/invite/${invite.token}`;
+      const smtpOn = isSmtpConfigured();
+      if (smtpOn) {
+        const workspace = await storage.getWorkspaceById(ownWs.workspaceId);
+        sendWorkspaceInviteEmail({
+          inviteeEmail: email,
+          inviterName: inviter.fullName || inviter.username || "A teammate",
+          inviterEmail: inviter.email || null,
+          inviterCompany: inviter.organizationName || null,
+          workspaceName: workspace?.name || "your company",
+          role: "collaborator",
+          acceptUrl,
+          expiresAt: invite.expiresAt,
+        }).catch((err) => logger.error("Org invite email failed", err, { inviteId: invite.id }));
+      }
+
+      await recordAudit(req, {
+        action: "organization.invite.create",
+        resourceType: "workspace_invite",
+        resourceId: invite.id,
+        result: "success",
+        metadata: { email, invitedByUserId: inviter.id, expiresAt: invite.expiresAt },
+      });
+
+      // When SMTP is off (dev / not configured) return the accept link so the
+      // admin can share it manually instead of the invite silently going nowhere.
+      res.json({ ok: true, inviteId: invite.id, email, emailSent: smtpOn, ...(smtpOn ? {} : { acceptUrl }) });
+    } catch (err: any) {
+      logger.error("POST /api/organization/invites failed", err);
+      res.status(500).json({ message: "Failed to create invite" });
+    }
+  });
+
+  // Transfer company admin to another member of the same org (admin only).
+  app.patch("/api/organization/admin", requireAuth, requireOrgAdmin, async (req: Request, res: Response) => {
+    try {
+      const current = (req as any).user as { id: string; organizationId?: string | null };
+      const orgId = current.organizationId!;
+      const newAdminUserId = String(req.body?.newAdminUserId ?? "").trim();
+      if (!newAdminUserId) return res.status(400).json({ message: "newAdminUserId is required" });
+      if (newAdminUserId === current.id) return res.status(400).json({ message: "You are already the company admin" });
+      const target = await storage.getUserById(newAdminUserId);
+      if (!target || target.organizationId !== orgId) {
+        return res.status(404).json({ message: "That user is not a member of your organization" });
+      }
+      // Promote the target to admin, demote the outgoing admin to a full member
+      // (analyst = client read/write, no member management). Update the org's
+      // source-of-truth pointer last.
+      await storage.updateUser(newAdminUserId, { role: "admin" });
+      await storage.updateUser(current.id, { role: "analyst" });
+      await storage.setOrganizationAdmin(orgId, newAdminUserId);
+
+      await recordAudit(req, {
+        action: "organization.admin.transfer",
+        resourceType: "organization",
+        resourceId: orgId,
+        result: "success",
+        metadata: { from: current.id, to: newAdminUserId },
+      });
+      res.json({ ok: true, adminUserId: newAdminUserId });
+    } catch (err: any) {
+      logger.error("PATCH /api/organization/admin failed", err);
+      res.status(500).json({ message: "Failed to transfer admin" });
+    }
+  });
+
+  // Remove a member from the company (admin only). The member is detached from
+  // the org (loses org-shared visibility) but keeps clients they personally
+  // created; they can be re-invited later.
+  app.delete("/api/organization/members/:userId", requireAuth, requireOrgAdmin, async (req: Request, res: Response) => {
+    try {
+      const current = (req as any).user as { id: string; organizationId?: string | null };
+      const orgId = current.organizationId!;
+      const targetId = String(req.params.userId);
+      if (targetId === current.id) {
+        return res.status(400).json({ message: "Transfer admin to someone else before removing yourself" });
+      }
+      const target = await storage.getUserById(targetId);
+      if (!target || target.organizationId !== orgId) {
+        return res.status(404).json({ message: "That user is not a member of your organization" });
+      }
+      await storage.updateUser(targetId, { organizationId: null, role: "user" });
+      await recordAudit(req, {
+        action: "organization.member.remove",
+        resourceType: "user",
+        resourceId: targetId,
+        result: "success",
+        metadata: { orgId, removedBy: current.id },
+      });
+      res.json({ ok: true, removed: targetId });
+    } catch (err: any) {
+      logger.error("DELETE /api/organization/members/:userId failed", err);
+      res.status(500).json({ message: "Failed to remove member" });
+    }
+  });
+
+  // Phase 6 observability — workbook back-sync outbox health. Returns queue
+  // depth, gave-up count, oldest entry timestamp, and the last 5 entries so
+  // operators can spot drift recovery without DB shell access. Mounted here
+  // (not on apps/api) because the ingress sends /api/admin/* to web.
+  app.get("/api/admin/workbook-backsync/health", requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const { getOutboxHealth } = await import("./workbookBackSync");
+      const health = await getOutboxHealth();
+      res.json(health);
+    } catch (err: any) {
+      logger.error("Workbook back-sync health query failed", err);
+      res.status(500).json({ message: err?.message ?? "failed" });
+    }
+  });
 
   app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res) => {
     try {
@@ -1614,6 +1883,51 @@ export async function registerRoutes(
   // Returns the plain client doc on success, or null after writing the
   // appropriate 404/403 response. Used by the per-client routes below to
   // dedupe the access guard.
+  // Resolve workspace-based pillar access for a client. The Client model has no
+  // direct workspaceId field — the link is the ProcessorSession (Assessment),
+  // which carries both `clientId` and `workspaceId`. If we find a
+  // workspace-bound assessment for this client, we treat that workspace as the
+  // authority and resolve the caller's pillarScopes against it. If we find none
+  // (single-user flow with no workspace overlay), the caller's existing org/
+  // creator check from loadClientWithAccess stands and access is unfiltered.
+  // Audit A2/B15 — closes the server-side half of the RBAC bypass for the read
+  // path. (Per-entity write routes live in apps/api and need the same plumbing
+  // applied separately — TODO logged in autoresearch/RISKS.md as B15-server.)
+  async function resolveClientPillarAccess(
+    clientId: string,
+    userId: string,
+  ): Promise<{
+    mode: "owner_override" | "full" | "readOnly" | "scoped";
+    scopes?: string[];
+  } | null> {
+    if (!isMongoConnected()) return null;
+    try {
+      const session = await ProcessorSessionModel.findOne({
+        clientId,
+        workspaceId: { $nin: [null, ""] },
+      })
+        .sort({ updatedAt: -1 })
+        .lean();
+      const sessionAny = session as any;
+      if (!sessionAny?.workspaceId) return null;
+      const ownerId = sessionAny.createdBy ?? sessionAny.createdByUserId ?? null;
+      if (ownerId && ownerId === userId) return { mode: "full" };
+      const member = await storage.getMember(String(sessionAny.workspaceId), userId);
+      if (!member) return { mode: "scoped", scopes: [] }; // not a member of the bound workspace → deny pillars
+      if (member.role === "owner") return { mode: "owner_override" };
+      if (member.role === "viewer") return { mode: "readOnly" };
+      const scopes = normalizePillarScopes(member.pillarScopes);
+      if (scopes.length === 0) return { mode: "full" };
+      return { mode: "scoped", scopes };
+    } catch (err) {
+      logger.warn("resolveClientPillarAccess failed (non-fatal)", {
+        clientId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   async function loadClientWithAccess(
     req: Request,
     res: Response,
@@ -1774,10 +2088,43 @@ export async function registerRoutes(
     try {
       const existing = await loadClientWithAccess(req, res);
       if (!existing) return;
-      const allowed = ["name", "financialYear", "industrySector", "eapProvince", "revenue", "npat", "leviableAmount", "logo"];
+      // CRITICAL FIX (audit P1 #1): the previous 8-field allowlist
+      // ["name", "financialYear", "industrySector", "eapProvince", "revenue",
+      // "npat", "leviableAmount", "logo"] silently dropped every other field
+      // the Toolkit tries to save — pipelineOverrides, afs, fscSubSector,
+      // graduationBonus/jobsCreatedBonus + evidence, ceSpend/ceBonusSpend/
+      // fundisaSpend, industryNorm, measurementPeriod*, industry, sectorCode,
+      // scorecardType, etc. So Settings, Financials, AFS, FSC SED inputs all
+      // appeared to save (200 OK + Toast "Saved") but reverted on reload —
+      // the actual root cause of every "company details aren't reflected"
+      // complaint. The Mongoose schema for ClientModel is strict, so unknown
+      // keys (e.g. a typoed field) are still dropped at the DB layer; we
+      // rely on schema-level guarantees here instead of a parallel allowlist
+      // that gets stale on every new feature.
+      const allowed = new Set([
+        // Foundation / identity
+        "name", "tradingName", "registrationNumber", "vatNumber", "taxNumber",
+        "industrySector", "industry", "sectorCode", "scorecardType", "companySize",
+        "financialYear", "measurementPeriodStart", "measurementPeriodEnd",
+        "physicalAddress", "postalAddress", "contactPerson", "contactEmail", "contactPhone",
+        "annualTurnover", "numberOfEmployees",
+        "beeCertificateNumber", "beeCertificateExpiry", "beeCertificateLevel", "verificationAgency",
+        "logo",
+        // Scoring inputs the Toolkit edits via PATCH /api/clients/:id
+        "revenue", "npat", "leviableAmount", "industryNorm", "eapProvince",
+        "tmps", "companyValue", "outstandingDebt",
+        // FSC + ESD + SED scalar fields that live on ClientModel
+        "fscSubSector", "fscReinsurer", "combineExcoSenior", "farmWorkersIncluded",
+        "constructionSubSector",
+        "graduationBonus", "jobsCreatedBonus", "jobsCreatedCount",
+        "graduationEvidence", "jobsCreatedEvidence",
+        "ceSpend", "ceBonusSpend", "fundisaSpend",
+        // Mixed-typed blobs
+        "afs", "pipelineOverrides", "financials", "pillars",
+      ]);
       const updates: any = { updatedAt: new Date() };
-      for (const key of allowed) {
-        if (req.body[key] !== undefined) updates[key] = req.body[key];
+      for (const key of Object.keys(req.body || {})) {
+        if (allowed.has(key)) updates[key] = req.body[key];
       }
 
       if (isMongoConnected()) {
@@ -1834,6 +2181,75 @@ export async function registerRoutes(
       const c = await loadClientWithAccess(req, res);
       if (!c) return;
 
+      // CRITICAL FIX (audit P1 #2): per-entity rows now live in apps/api's
+      // separate Mongo collections (shareholders/employees/trainingPrograms/
+      // suppliers/esdContributions/sedContributions/financialYears/scenarios)
+      // because all writes go through apps/api per-entity routers. The OLD
+      // path read c.<entity> from the embedded ClientModel arrays, which were
+      // never populated — so every Toolkit add appeared to succeed but
+      // disappeared on the next loadClientData. Read both: per-entity
+      // collections win; fall back to embedded arrays for legacy clients
+      // whose data still lives only on ClientModel (Lake demo, in-memory dev).
+      const db = isMongoConnected() ? mongoose.connection.db : null;
+      async function collectionRows(name: string): Promise<any[]> {
+        if (!db) return [];
+        try {
+          return await db.collection(name).find({ clientId }).toArray();
+        } catch {
+          return [];
+        }
+      }
+      const [
+        shRows, empRows, tpRows, supRows, esdRows, sedRows, fyRows, scenRows, procData, ownData,
+      ] = await Promise.all([
+        collectionRows('shareholders'),
+        collectionRows('employees'),
+        collectionRows('trainingPrograms'),
+        collectionRows('suppliers'),
+        collectionRows('esdContributions'),
+        collectionRows('sedContributions'),
+        collectionRows('financialYears'),
+        collectionRows('scenarios'),
+        db ? db.collection('procurementData').findOne({ clientId }) : Promise.resolve(null),
+        db ? db.collection('ownershipData').findOne({ clientId }) : Promise.resolve(null),
+      ]);
+      const mergeById = (collRows: any[], embedded: any[] | undefined): any[] => {
+        const out = Array.isArray(embedded) ? [...embedded] : [];
+        const seen = new Set(out.map((r) => r?.id || r?._id).filter(Boolean));
+        for (const r of collRows) {
+          const key = (r as any).id ?? (r as any)._id?.toString?.();
+          if (!key || !seen.has(key)) out.push(r);
+        }
+        return out;
+      };
+      const shareholdersAll = mergeById(shRows, c.shareholders);
+      const employeesAll = mergeById(empRows, c.employees);
+      const trainingProgramsAll = mergeById(tpRows, c.trainingPrograms);
+      const suppliersAll = mergeById(supRows, c.suppliers);
+      const esdAll = mergeById(esdRows, c.esdContributions);
+      const sedAll = mergeById(sedRows, c.sedContributions);
+
+      const userId = (req.session as any).userId as string;
+      const pillarAccess = await resolveClientPillarAccess(clientId, userId);
+      const allowedPillars: Set<string> | null =
+        pillarAccess && pillarAccess.mode === "scoped"
+          ? new Set([
+              ...(pillarAccess.scopes ?? []),
+              // Scope synonyms in scorecardCollaboration's pillarInScope:
+              // management↔employmentEquity, esd↔supplierDevelopment↔enterpriseDevelopment
+              ...((pillarAccess.scopes ?? []).includes("management") || (pillarAccess.scopes ?? []).includes("employmentEquity")
+                ? ["management", "employmentEquity"]
+                : []),
+              ...((pillarAccess.scopes ?? []).includes("esd") ||
+              (pillarAccess.scopes ?? []).includes("supplierDevelopment") ||
+              (pillarAccess.scopes ?? []).includes("enterpriseDevelopment")
+                ? ["esd", "supplierDevelopment", "enterpriseDevelopment"]
+                : []),
+            ])
+          : null;
+      const allow = (key: string): boolean => !allowedPillars || allowedPillars.has(key);
+      const empty = <T>(fallback: T): T => fallback;
+
       res.json({
         client: {
           id: c.id ?? c.clientId,
@@ -1868,32 +2284,46 @@ export async function registerRoutes(
           beeCertificateLevel: c.beeCertificateLevel || null,
           verificationAgency: c.verificationAgency || '',
         },
-        ownership: {
-          id: `own-${clientId}`,
-          shareholders: c.shareholders || [],
-          companyValue: c.companyValue || 0,
-          outstandingDebt: c.outstandingDebt || 0,
-          yearsHeld: 0,
-        },
-        management: {
-          employees: c.employees || [],
-        },
-        skills: {
-          leviableAmount: c.leviableAmount || 0,
-          trainingPrograms: c.trainingPrograms || [],
-        },
-        procurement: {
-          tmps: c.tmps || 0,
-          suppliers: c.suppliers || [],
-        },
-        esd: {
-          contributions: c.esdContributions || [],
-        },
-        sed: {
-          contributions: c.sedContributions || [],
-        },
-        financialYears: [],
-        scenarios: [],
+        ownership: allow("ownership")
+          ? {
+              id: `own-${clientId}`,
+              shareholders: shareholdersAll,
+              // Read companyValue/outstandingDebt from ownershipData collection
+              // (where PATCH /api/clients/:id/ownership writes them) and fall
+              // back to the legacy embedded fields. Audit P1 #4.
+              companyValue: (ownData as any)?.companyValue ?? c.companyValue ?? 0,
+              outstandingDebt: (ownData as any)?.outstandingDebt ?? c.outstandingDebt ?? 0,
+              yearsHeld: (ownData as any)?.yearsHeld ?? 0,
+            }
+          : empty({ id: `own-${clientId}`, shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0 }),
+        management: allow("management")
+          ? { employees: employeesAll }
+          : empty({ employees: [] }),
+        skills: allow("skills")
+          ? { leviableAmount: c.leviableAmount || 0, trainingPrograms: trainingProgramsAll }
+          : empty({ leviableAmount: 0, trainingPrograms: [] }),
+        procurement: allow("procurement")
+          ? {
+              // Read TMPS from procurementData collection (where PATCH
+              // /api/clients/:id/procurement writes it). Audit P1 #5.
+              tmps: (procData as any)?.tmps ?? c.tmps ?? 0,
+              suppliers: suppliersAll,
+            }
+          : empty({ tmps: 0, suppliers: [] }),
+        esd: allow("esd")
+          ? { contributions: esdAll }
+          : empty({ contributions: [] }),
+        sed: allow("sed")
+          ? { contributions: sedAll }
+          : empty({ contributions: [] }),
+        financialYears: fyRows,
+        scenarios: scenRows,
+        // Surface the scope decision to the client so the UI can show a
+        // read-only/scoped banner — does NOT grant access; the filtering above
+        // is the security boundary.
+        access: pillarAccess
+          ? { mode: pillarAccess.mode, scopes: pillarAccess.scopes ?? null }
+          : { mode: "full" as const, scopes: null },
       });
     } catch (error: any) {
       logger.error("Error fetching client data", error);

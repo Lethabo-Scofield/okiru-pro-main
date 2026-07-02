@@ -232,6 +232,55 @@ describe('Construction scoring engine', () => {
   });
 });
 
+describe("Construction — Zoleka's verified corrections (2026-06-24)", () => {
+  const TMPS = 1_000_000;
+
+  it('BEP PP from EME Suppliers target is 20% (was 15%): 15% spend scores partial', () => {
+    const out = calculateConstructionScorecard('construction_bep', {
+      indicators: { ppEmeSpend: 0.15 * TMPS }, // 15% of TMPS
+      financials: { totalMeasuredProcurementSpend: TMPS },
+    });
+    const ind = out.indicators.find(i => i.code === 'bep.esd.pp_eme')!;
+    expect(ind.target).toBe(20);
+    // 15% / 20% × 3 = 2.25 (partial) — under the old 15% target this was 'met' (3.0)
+    expect(ind.achievedPoints).toBeCloseTo(2.25, 2);
+    expect(ind.status).toBe('partial');
+  });
+
+  it('BEP PP from QSE Suppliers target is 10% (was 15%): 10% spend scores full', () => {
+    const out = calculateConstructionScorecard('construction_bep', {
+      indicators: { ppQseSpend: 0.10 * TMPS }, // 10% of TMPS
+      financials: { totalMeasuredProcurementSpend: TMPS },
+    });
+    const ind = out.indicators.find(i => i.code === 'bep.esd.pp_qse')!;
+    expect(ind.target).toBe(10);
+    expect(ind.achievedPoints).toBe(2); // weight 2, met
+    expect(ind.status).toBe('met');
+  });
+
+  it('QSE New Entrants/Designated Groups: 10% default, 5% for BEP (subSector override)', () => {
+    // Default (Contractor-QSE): 5% actual against 10% target → half of 7 = 3.5 (partial)
+    const dflt = calculateConstructionScorecard('construction_qse', {
+      indicators: { economicInterestDesignatedPercent: 5 },
+      financials: {},
+    });
+    const di = dflt.indicators.find(i => i.code === 'qse.ownership.designated_groups')!;
+    expect(di.target).toBe(10);
+    expect(di.achievedPoints).toBeCloseTo(3.5, 2);
+
+    // BEP-QSE: same 5% actual now meets the 5% target → full 7 pts
+    const bep = calculateConstructionScorecard('construction_qse', {
+      indicators: { economicInterestDesignatedPercent: 5 },
+      financials: {},
+      subSector: 'BEP',
+    });
+    const bi = bep.indicators.find(i => i.code === 'qse.ownership.designated_groups')!;
+    expect(bi.target).toBe(5);
+    expect(bi.achievedPoints).toBe(7);
+    expect(bi.status).toBe('met');
+  });
+});
+
 describe('Construction payload validator', () => {
   it('rejects missing entityType', () => {
     const r = validateConstructionPayload({ indicators: {}, financials: {} });

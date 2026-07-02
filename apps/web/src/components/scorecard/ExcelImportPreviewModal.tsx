@@ -89,10 +89,10 @@ export function ExcelImportPreviewModal({
         .map((key) => ({
           key,
           label: EXTRACTED_FIELD_LABELS[key],
-          value: result.data[key],
-          status: result.fieldStatuses[key] ?? (result.data[key] !== undefined ? "mapped" : "unrecognized"),
-          confidence: result.fieldConfidences[key],
-          source: result.fieldSources[key],
+          value: result.data?.[key],
+          status: result.fieldStatuses?.[key] ?? (result.data?.[key] !== undefined ? "mapped" : "unrecognized"),
+          confidence: result.fieldConfidences?.[key],
+          source: result.fieldSources?.[key],
         }))
         .filter((r) => r.value !== undefined || r.status !== "unrecognized");
 
@@ -116,7 +116,7 @@ export function ExcelImportPreviewModal({
             <p className="text-[12px] text-[#8e8e93] mt-0.5 truncate max-w-md">{fileName}</p>
             {result?.isBeeGatheringFormat && (
               <p className="text-[11px] text-emerald-400/90 mt-1">
-                {extractedCount} fields extracted across {result.mappedSheets.length} sheets
+                {extractedCount} fields extracted across {result.mappedSheets?.length ?? 0} sheets
               </p>
             )}
           </div>
@@ -140,8 +140,28 @@ export function ExcelImportPreviewModal({
           ) : (
             <>
               <div className="text-[12px] text-[#8e8e93]">
-                Sheets scanned: {result.mappedSheets.join(", ") || "—"}
+                Sheets scanned: {result.mappedSheets?.join(", ") || "—"}
               </div>
+
+              {(result.sectionSummary?.length ?? 0) > 0 && (
+                <div className="rounded-xl border border-[#2c2c2e] overflow-hidden">
+                  <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">
+                    Data extracted by section
+                  </div>
+                  <div className="px-3 py-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
+                    {result.sectionSummary?.map((s) => (
+                      <div key={s.key} className="flex items-center justify-between gap-2 text-[12px]">
+                        <span className="text-[#d1d1d6] truncate">{s.label}</span>
+                        <span className="tabular-nums text-emerald-400 font-medium shrink-0">
+                          {s.rowCount > 0
+                            ? `${s.rowCount} row${s.rowCount !== 1 ? "s" : ""}`
+                            : `${s.fieldCount} field${s.fieldCount !== 1 ? "s" : ""}`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {groupedRows.map((group) => (
                 <div key={group.id} className="rounded-xl border border-[#2c2c2e] overflow-hidden">
@@ -183,13 +203,13 @@ export function ExcelImportPreviewModal({
                 </div>
               ))}
 
-              {result.ownershipChainTiers.length > 0 && (
+              {(result.ownershipChainTiers?.length ?? 0) > 0 && (
                 <div className="rounded-xl border border-[#2c2c2e] overflow-hidden">
                   <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">
-                    Ownership Chain Tiers ({result.ownershipChainTiers.length})
+                    Ownership Chain Tiers ({result.ownershipChainTiers?.length ?? 0})
                   </div>
                   <div className="px-3 py-2 space-y-1">
-                    {result.ownershipChainTiers.slice(0, 5).map((tier) => (
+                    {result.ownershipChainTiers?.slice(0, 5).map((tier) => (
                       <div key={tier.tier} className="text-[12px] text-[#d1d1d6] flex gap-3">
                         <span className="text-[#8e8e93] w-12">Tier {tier.tier}</span>
                         <span className="flex-1 truncate">{tier.entityName || "—"}</span>
@@ -207,11 +227,11 @@ export function ExcelImportPreviewModal({
                 </div>
               )}
 
-              {result.warnings.length > 0 && (
+              {(result.warnings?.length ?? 0) > 0 && (
                 <div className="rounded-lg border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3">
                   <p className="text-[12px] font-semibold text-amber-200 mb-2">Warnings</p>
                   <ul className="space-y-1">
-                    {result.warnings.map((w) => (
+                    {result.warnings?.map((w) => (
                       <li key={w} className="text-[12px] text-amber-100/90 flex gap-2">
                         <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                         {w}
@@ -236,7 +256,7 @@ export function ExcelImportPreviewModal({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={importing || !result?.isBeeGatheringFormat || !result.data.companyName}
+            disabled={importing || !result?.isBeeGatheringFormat || !result?.data?.companyName}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white text-black text-[13px] font-semibold hover:bg-[#e5e5e5] smooth press-sm disabled:opacity-50"
             data-testid="button-confirm-excel-import"
           >

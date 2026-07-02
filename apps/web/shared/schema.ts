@@ -361,6 +361,11 @@ const organizationSchema = new Schema(
   {
     id: { type: String, required: true, unique: true },
     name: { type: String, required: true },
+    // Company-admin model (mirrors apps/api/models.ts). adminUserId is the
+    // current tenant administrator (first registrant, transferable);
+    // createdByUserId is the immutable founder for audit.
+    adminUserId: { type: String, default: null, index: true },
+    createdByUserId: { type: String, default: null },
     createdAt: { type: String, default: () => new Date().toISOString() },
   },
   { collection: "organizations" }
@@ -640,6 +645,27 @@ const clientSchema = new Schema({
   verificationAgency: { type: String, default: null },
   financials: { type: Schema.Types.Mixed, default: null },
   pillars: { type: Schema.Types.Mixed, default: null },
+  // Audit P1 #1 — schema parity: fields the Toolkit edits via
+  // PATCH /api/clients/:id but apps/web schema was silently dropping under
+  // strict mode (apps/api added these in 1c848788 + bffde3b5; this makes the
+  // apps/web side write-through too — the parallel handler at routes.ts:1752
+  // now allowlists these field names and the schema accepts them).
+  pipelineOverrides: { type: Schema.Types.Mixed, default: null },
+  afs: { type: Schema.Types.Mixed, default: null },
+  fscSubSector: { type: String, default: null },
+  fscReinsurer: { type: Boolean, default: null },
+  combineExcoSenior: { type: Boolean, default: false },
+  farmWorkersIncluded: { type: Boolean, default: true },
+  constructionSubSector: { type: String, default: null },
+  industryNorm: { type: Number, default: null },
+  graduationBonus: { type: Boolean, default: false },
+  jobsCreatedBonus: { type: Boolean, default: false },
+  jobsCreatedCount: { type: Number, default: 0 },
+  graduationEvidence: { type: String, default: '' },
+  jobsCreatedEvidence: { type: String, default: '' },
+  ceSpend: { type: Number, default: 0 },
+  ceBonusSpend: { type: Number, default: 0 },
+  fundisaSpend: { type: Number, default: 0 },
   /** Platform demo workbook (Lake Trading ground truth); visible to super_admin only. */
   lakeTradingDemo: { type: Boolean, default: false, index: true },
 });

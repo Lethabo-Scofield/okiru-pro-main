@@ -4,6 +4,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@toolkit/components/ui/tooltip";
 import { ChevronDown, ChevronRight, HelpCircle, Award, Shield, TrendingUp, Trophy, CheckCircle2, XCircle, AlertTriangle, Trash2, Loader2 } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { CalculatorConfigBanner } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useAuth } from "@toolkit/lib/auth";
 import { useActiveClient } from "@toolkit/lib/client-context";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -313,6 +314,7 @@ export default function Scorecard() {
   return (
     <TooltipProvider>
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl mx-auto" data-testid="page-scorecard">
+        <CalculatorConfigBanner />
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-heading font-bold tracking-tight" data-testid="text-scorecard-title">Full Scorecard</h1>

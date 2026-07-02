@@ -39,9 +39,11 @@ export default function Scenarios() {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newScenarioName, setNewScenarioName] = useState("");
+  const [nameError, setNameError] = useState(false);
 
   const handleCreate = () => {
-    if (!newScenarioName) {
+    if (!newScenarioName.trim()) {
+      setNameError(true);
       toast({ title: "Name required", variant: "destructive" });
       return;
     }
@@ -100,7 +102,7 @@ export default function Scenarios() {
             </Button>
           )}
 
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) setNameError(false); }}>
             <DialogTrigger asChild>
               <Button className="gap-2" data-testid="btn-create-scenario">
                 <Plus className="h-4 w-4" />
@@ -116,12 +118,16 @@ export default function Scenarios() {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="space-y-2">
-                  <Input 
-                    placeholder="e.g. Hire 3 Black Executives in Q3" 
-                    value={newScenarioName} 
-                    onChange={e => setNewScenarioName(e.target.value)} 
+                  <Input
+                    placeholder="e.g. Hire 3 Black Executives in Q3"
+                    value={newScenarioName}
+                    onChange={e => { setNewScenarioName(e.target.value); if (nameError) setNameError(false); }}
                     autoFocus
+                    aria-invalid={nameError || undefined}
+                    aria-describedby={nameError ? 'scenario-name-error' : undefined}
+                    className={cn(nameError && "border-destructive focus-visible:ring-destructive")}
                   />
+                  {nameError && <p id="scenario-name-error" className="text-xs text-destructive">Scenario name is required.</p>}
                 </div>
               </div>
               <DialogFooter>

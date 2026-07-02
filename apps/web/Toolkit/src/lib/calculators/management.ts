@@ -256,7 +256,16 @@ export function calculateManagementScore(
   const juniorBlackTarget = mgmtFallback(cfg?.juniorBlackTarget, rcogp.juniorBlackTarget, useRcogp);
   const juniorBWBandTarget = mgmtFallback(cfg?.juniorBWTarget, rcogp.juniorBWTarget, useRcogp);
 
-  const board = grouped['Board'] || [];
+  // Board members for the voting indicator = non-executive board members PLUS
+  // executive directors (executive directors sit on the board). Without the exec
+  // directors, an entity whose only directors are executive scores 0 board voting
+  // even when they hold all the voting rights — e.g. Lake Trading's 2 executive
+  // directors at 50% each (Excel credits the full 2 points).
+  const board = [
+    ...(grouped['Board'] || []),
+    ...(grouped['Executive'] || []),
+    ...(grouped['Executive Director'] || []),
+  ];
   // QSE "Executive Management" (Section 1) combines Executive Directors AND Other
   // Executive Managers into ONE band (workbook MC Scorecard F24 = COUNTIFS over
   // Designation.calcs ∈ {Executive Director, Other Executive Manager}). The Generic

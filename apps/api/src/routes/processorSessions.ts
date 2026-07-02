@@ -100,6 +100,29 @@ async function deleteBlobs(sessionId: string): Promise<void> {
   }
 }
 
+/**
+ * Org-scoped read filter for processor sessions: the caller's own sessions OR
+ * any session belonging to the same organization. Teammates in one company see
+ * (and can edit) each other's in-progress scorecards. Falls back to owner-only
+ * when the caller has no org (backward-compatible).
+ */
+function sessionReadFilter(userId: string, orgId?: string | null): Record<string, any> {
+  const or: Array<Record<string, any>> = [{ createdByUserId: userId }];
+  if (orgId) or.push({ organizationId: orgId });
+  return { $or: or };
+}
+
+/** Whether a caller may read/edit a session (owner OR same organization). */
+function canAccessSession(
+  doc: { createdByUserId?: string | null; organizationId?: string | null } | null,
+  userId: string,
+  orgId?: string | null,
+): boolean {
+  if (!doc) return false;
+  if (doc.createdByUserId === userId) return true;
+  return !!orgId && !!doc.organizationId && doc.organizationId === orgId;
+}
+
 export function createProcessorSessionsRouter(): Router {
   const router = Router();
 
@@ -115,8 +138,9 @@ export function createProcessorSessionsRouter(): Router {
     }
 
     try {
-      const query = { createdByUserId: userId };
-      logger.debug(`Fetching sessions for user: ${userId}`);
+      const orgId = (req.session as any)?.organizationId || null;
+      const query = sessionReadFilter(userId, orgId);
+      logger.debug(`Fetching sessions for user: ${userId} (org ${orgId ?? 'none'})`);
 
       const sessions = await ProcessorSessionModel.find(query)
         .select({
@@ -176,9 +200,10 @@ export function createProcessorSessionsRouter(): Router {
 
     try {
       const sessionId = routeParam(req.params.sessionId);
-      const doc = await ProcessorSessionModel.findOne({ sessionId, createdByUserId: userId }).lean();
+      const orgId = (req.session as any)?.organizationId || null;
+      const doc = await ProcessorSessionModel.findOne({ sessionId }).lean();
 
-      if (!doc) {
+      if (!doc || !canAccessSession(doc as any, userId, orgId)) {
         return res.status(404).json({ error: "Session not found" });
       }
 
@@ -223,8 +248,9 @@ export function createProcessorSessionsRouter(): Router {
         return res.status(400).json({ error: "sessionId and companyInfo.name are required" });
       }
 
+      const orgId = (req.session as any)?.organizationId || null;
       const existing = await ProcessorSessionModel.findOne({ sessionId });
-      if (existing && existing.createdByUserId !== userId) {
+      if (existing && !canAccessSession(existing as any, userId, orgId)) {
         return res.status(403).json({ error: "You don't have permission to modify this session" });
       }
 
@@ -251,10 +277,13 @@ export function createProcessorSessionsRouter(): Router {
       }
       await Promise.all(blobPromises);
 
-      // Main document only stores metadata and small fields
+      // Main document only stores metadata and small fields. Note: createdByUserId
+      // is set ONLY on insert ($setOnInsert) so that when an org-mate edits a
+      // teammate's session the original owner is preserved. organizationId is
+      // (re)stamped on every save so the session is org-scoped for visibility
+      // and legacy sessions get backfilled on their next write.
       const updateData: any = {
         sessionId,
-        createdByUserId: userId,
         companyInfo,
         currentStep: currentStep || 'upload',
         filesData: safeFilesData,
@@ -263,13 +292,14 @@ export function createProcessorSessionsRouter(): Router {
         isComplete: isComplete || false,
         updatedAt: new Date(),
       };
+      if (orgId) updateData.organizationId = orgId;
 
       if (flowMode !== undefined) updateData.flowMode = flowMode;
       if (integratedToolkitUpload !== undefined) updateData.integratedToolkitUpload = integratedToolkitUpload;
 
       const doc = await ProcessorSessionModel.findOneAndUpdate(
-        { sessionId, createdByUserId: userId },
-        updateData,
+        { sessionId },
+        { $set: updateData, $setOnInsert: { createdByUserId: userId } },
         { upsert: true, new: true, setDefaultsOnInsert: true },
       );
 
@@ -302,6 +332,12 @@ export function createProcessorSessionsRouter(): Router {
 
     try {
       const sessionId = routeParam(req.params.sessionId);
+      const orgId = (req.session as any)?.organizationId || null;
+      // Authorize (owner OR same org) before mutating.
+      const existing = await ProcessorSessionModel.findOne({ sessionId }).lean();
+      if (!existing || !canAccessSession(existing as any, userId, orgId)) {
+        return res.status(404).json({ error: "Session not found" });
+      }
       const allowedSmallFields = ['currentStep', 'isComplete', 'toolkitClientId', 'flowMode', 'integratedToolkitUpload'];
       const blobFields = ['scorecardResult', 'foundationData', 'pillarData', 'extractionResults', 'integratedToolkitState'];
       const patch: any = { updatedAt: new Date() };
@@ -328,14 +364,14 @@ export function createProcessorSessionsRouter(): Router {
       await Promise.all([
         ...blobPromises,
         ProcessorSessionModel.findOneAndUpdate(
-          { sessionId, createdByUserId: userId },
+          { sessionId },
           { $set: patch },
           { new: true },
         )
       ]);
 
       // Fetch and return merged result
-      const doc = await ProcessorSessionModel.findOne({ sessionId, createdByUserId: userId }).lean();
+      const doc = await ProcessorSessionModel.findOne({ sessionId }).lean();
       if (!doc) {
         return res.status(404).json({ error: "Session not found" });
       }
@@ -368,10 +404,16 @@ export function createProcessorSessionsRouter(): Router {
 
     try {
       const sessionId = routeParam(req.params.sessionId);
-      
+      const orgId = (req.session as any)?.organizationId || null;
+      // Authorize (owner OR same org) before deleting.
+      const existing = await ProcessorSessionModel.findOne({ sessionId }).lean();
+      if (!existing || !canAccessSession(existing as any, userId, orgId)) {
+        return res.status(404).json({ error: "Session not found or you don't have permission" });
+      }
+
       // Delete main doc and blobs in parallel
       const [result] = await Promise.all([
-        ProcessorSessionModel.deleteOne({ sessionId, createdByUserId: userId }),
+        ProcessorSessionModel.deleteOne({ sessionId }),
         deleteBlobs(sessionId)
       ]);
 

@@ -170,11 +170,13 @@ export function sectorConfigToQseCalculatorConfig(sc: SectorConfig): CalculatorC
       // QSE Skills SK-2 "Spend on Black female" (bursaryMaxPts=7 @ 1% leviable) measures
       // Black-female learning spend across all categories, not bursary spend. (ledger D-03)
       bursaryIsBlackFemale: true,
-      // Pass the PERCENT through (skills.ts divides by 100 → 0.01 = 1%). The
-      // previous `/ 100` here was a second division (0.010 → 0.0001 = 0.01%), so
-      // any absorption maxed the 5-pt bonus instantly. (DISCREPANCY-LEDGER D-04;
-      // the absorbed÷headcount vs ÷black-learners basis is the open expert item Q-E.)
-      absorptionTargetPercent: sk.absorptionTargetPercent, // 1.0 (percent) → skills.ts /100 = 1%
+      // Pass the whole-percent through (skills.ts divides by 100 once). Config is now
+      // 100 → 1.0 = 100% absorption target, matching Excel `Skills Calcs!J28 =
+      // MIN(absorbed/completers × 5, 5)` (no % divisor → full pts need 100% absorbed).
+      // R8 corrected the config 1.0→100; the earlier D-04 fix only removed the double
+      // /100 but left the value at 1.0 (=1%), still under the 100% Excel target. The
+      // absorbed÷completers vs ÷black-learners basis is the open expert item Q-E/R18.
+      absorptionTargetPercent: sk.absorptionTargetPercent, // 100 (percent) → skills.ts /100 = 1.0 = 100%
     },
     procurement: {
       baseMax: procBaseMax,               // 15 + 5 = 20

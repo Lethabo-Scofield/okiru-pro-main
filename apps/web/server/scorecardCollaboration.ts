@@ -45,6 +45,18 @@ export async function resolveAssessmentAccess(
     return { ok: true, mode: "full" };
   }
 
+  // Org-scoped: a teammate in the same organization has full access to the
+  // assessment (matches the org-scoped client/scorecard visibility — "all
+  // members see and edit all company data"). organizationId is stamped on the
+  // session at save time (apps/api).
+  const assessmentOrgId = (assessment as { organizationId?: string | null }).organizationId ?? null;
+  if (assessmentOrgId) {
+    const actor = await storage.getUserById(userId);
+    if (actor?.organizationId && actor.organizationId === assessmentOrgId) {
+      return { ok: true, mode: "full" };
+    }
+  }
+
   const wsId = assessment.workspaceId;
   if (!wsId) return { ok: false };
 

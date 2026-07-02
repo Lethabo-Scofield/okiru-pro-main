@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
@@ -106,13 +108,15 @@ export default function Ownership() {
   const [activeTab, setActiveTab] = useState("basic");
   const [newSh, setNewSh] = useState<ShareholderFormState>({ ...emptyForm });
   const [editSh, setEditSh] = useState<ShareholderFormState>({ ...emptyForm });
+  const addErrs = useFieldErrors();
+  const editErrs = useFieldErrors();
 
   const [companyVal, setCompanyVal] = useState(ownership.companyValue);
   const [debtVal, setDebtVal] = useState(ownership.outstandingDebt);
   const [valuationDate, setValuationDate] = useState(ownership.valuationDate || '');
   const [valuationMethod, setValuationMethod] = useState(ownership.valuationMethod || 'last_financial');
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateOwnershipScore(ownership, calculatorConfig);
 
   const chartData = ownership.shareholders.map(sh => ({
@@ -124,7 +128,11 @@ export default function Ownership() {
   const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)'];
 
   const handleAdd = () => {
-    if (!newSh.name || newSh.shares <= 0) {
+    const nameBad = !newSh.name.trim();
+    const sharesBad = !(newSh.shares > 0);
+    if (nameBad || sharesBad) {
+      addErrs.setMany({ name: nameBad, shares: sharesBad });
+      setActiveTab("basic");
       toast({ title: "Invalid input", description: "Name and shares are required.", variant: "destructive" });
       return;
     }
@@ -159,6 +167,7 @@ export default function Ownership() {
 
   const handleEditOpen = (sh: Shareholder) => {
     setEditingId(sh.id);
+    editErrs.reset();
     setEditSh({
       name: sh.name,
       shareholderId: sh.shareholderId || '',
@@ -178,7 +187,11 @@ export default function Ownership() {
   };
 
   const handleEditSave = () => {
-    if (!editingId || !editSh.name || editSh.shares <= 0) {
+    const nameBad = !editSh.name.trim();
+    const sharesBad = !(editSh.shares > 0);
+    if (!editingId || nameBad || sharesBad) {
+      editErrs.setMany({ name: nameBad, shares: sharesBad });
+      setActiveTab("basic");
       toast({ title: "Invalid input", description: "Name and shares are required.", variant: "destructive" });
       return;
     }
@@ -227,6 +240,7 @@ export default function Ownership() {
     formState: ShareholderFormState,
     setFormState: (val: ShareholderFormState) => void,
     prefix: string,
+    errs: ReturnType<typeof useFieldErrors>,
   ) => (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
       <TabsList className="grid w-full grid-cols-3">
@@ -236,15 +250,20 @@ export default function Ownership() {
       </TabsList>
 
       <TabsContent value="basic" className="space-y-4 py-4">
-        <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor={`${prefix}-name`} className="text-right">Name</Label>
-          <Input
-            id={`${prefix}-name`}
-            value={formState.name}
-            onChange={e => setFormState({ ...formState, name: e.target.value })}
-            className="col-span-3"
-            placeholder="Entity or individual name"
-          />
+        <div className="grid grid-cols-4 items-start gap-4">
+          <Label htmlFor={`${prefix}-name`} className="text-right pt-2">Name</Label>
+          <div className="col-span-3 space-y-1">
+            <Input
+              id={`${prefix}-name`}
+              value={formState.name}
+              onChange={e => { setFormState({ ...formState, name: e.target.value }); errs.clear('name'); }}
+              placeholder="Entity or individual name"
+              aria-invalid={errs.has('name') || undefined}
+              aria-describedby={errs.has('name') ? `${prefix}-name-error` : undefined}
+              className={cn(errs.has('name') && "border-destructive focus-visible:ring-destructive")}
+            />
+            {errs.has('name') && <p id={`${prefix}-name-error`} className="text-xs text-destructive">Name is required.</p>}
+          </div>
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor={`${prefix}-id`} className="text-right">ID/Reg No</Label>
@@ -274,14 +293,19 @@ export default function Ownership() {
             </Select>
           </div>
         </div>
-        <div className="grid grid-cols-4 items-center gap-4">
-          <Label htmlFor={`${prefix}-shares`} className="text-right">Shares</Label>
-          <NumberInput
-            id={`${prefix}-shares`}
-            value={formState.shares}
-            onValueChange={v => setFormState({ ...formState, shares: v })}
-            className="col-span-3"
-          />
+        <div className="grid grid-cols-4 items-start gap-4">
+          <Label htmlFor={`${prefix}-shares`} className="text-right pt-2">Shares</Label>
+          <div className="col-span-3 space-y-1">
+            <NumberInput
+              id={`${prefix}-shares`}
+              value={formState.shares}
+              onValueChange={v => { setFormState({ ...formState, shares: v }); if (v > 0) errs.clear('shares'); }}
+              aria-invalid={errs.has('shares') || undefined}
+              aria-describedby={errs.has('shares') ? `${prefix}-shares-error` : undefined}
+              className={errs.has('shares') ? "border-destructive focus-visible:ring-destructive" : undefined}
+            />
+            {errs.has('shares') && <p id={`${prefix}-shares-error`} className="text-xs text-destructive">Shares must be greater than 0.</p>}
+          </div>
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor={`${prefix}-shareValue`} className="text-right">Share Value</Label>
@@ -458,7 +482,7 @@ export default function Ownership() {
           </p>
         </div>
 
-        <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setNewSh({ ...emptyForm }); setActiveTab("basic"); } }}>
+        <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setNewSh({ ...emptyForm }); setActiveTab("basic"); addErrs.reset(); } }}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
@@ -472,7 +496,7 @@ export default function Ownership() {
                 Enter shareholder details. Black ownership, voting rights, and economic interest can differ.
               </DialogDescription>
             </DialogHeader>
-            {shareholderFormFields(newSh, setNewSh, "add")}
+            {shareholderFormFields(newSh, setNewSh, "add", addErrs)}
             <DialogFooter>
               <Button type="submit" onClick={handleAdd}>Save Shareholder</Button>
             </DialogFooter>
@@ -480,7 +504,7 @@ export default function Ownership() {
         </Dialog>
       </div>
 
-      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setEditSh({ ...emptyForm }); setActiveTab("basic"); } }}>
+      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setEditSh({ ...emptyForm }); setActiveTab("basic"); editErrs.reset(); } }}>
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Shareholder</DialogTitle>
@@ -488,7 +512,7 @@ export default function Ownership() {
               Update shareholder details.
             </DialogDescription>
           </DialogHeader>
-          {shareholderFormFields(editSh, setEditSh, "edit")}
+          {shareholderFormFields(editSh, setEditSh, "edit", editErrs)}
           <DialogFooter>
             <Button type="submit" onClick={handleEditSave}>Update Shareholder</Button>
           </DialogFooter>
