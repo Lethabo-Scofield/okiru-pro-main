@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
+import { PRODUCT_TABS } from "./productLandingConfig";
 
 /* ─────────────────────────────────────────────
    GLOBAL CSS
 ───────────────────────────────────────────── */
-const GLOBAL_CSS = `
+export const GLOBAL_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
 
   .okiru-root *, .okiru-root *::before, .okiru-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -614,11 +615,6 @@ const SERVICES = [
   { name: "WSP", meta: "Skills & reporting" },
 ];
 
-const NAV_LINKS = [
-  { label: "About", id: "sec-about" },
-  { label: "Contact", id: "sec-contact" },
-];
-
 const HUB_SECTORS = [
   { code: "RCOGP", name: "Retail, Construction, Oil & Gas, Property", meta: "2,985 nodes · 5,695 edges", color: "#60a5fa" },
   { code: "ICT", name: "Information & Communications Technology", meta: "5,193 nodes · 9,415 edges", color: "#a78bfa" },
@@ -908,7 +904,7 @@ function DemoModal({ onClose }: { onClose: () => void }) {
 /* ─────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────── */
-export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void }) {
+export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNavigateProduct }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void; onNavigateProduct?: (slug: string) => void }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
 
@@ -953,14 +949,14 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
           </a>
 
           <div className="ok-nav-center">
-            {NAV_LINKS.map((link, i) => (
-              <span key={link.id} style={{ display:"contents" }}>
-                {i === 1 && <div className="ok-nav-div" />}
-                <button className="ok-nav-link" onClick={() => scrollTo(link.id)}>
-                  {link.label}
-                </button>
-              </span>
+            <button className="ok-nav-link" onClick={() => scrollTo("sec-about")}>About</button>
+            {PRODUCT_TABS.map(t => (
+              <button key={t.slug} className="ok-nav-link" onClick={() => onNavigateProduct?.(t.slug)}>
+                {t.label}
+              </button>
             ))}
+            <div className="ok-nav-div" />
+            <button className="ok-nav-link" onClick={() => scrollTo("sec-contact")}>Contact</button>
           </div>
 
           <div className="ok-nav-right">
@@ -978,9 +974,11 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
 
       {/* ── MOBILE MENU ── */}
       <div className={`ok-mobile-menu ${menuOpen ? "ok-menu-open" : ""}`}>
-        {NAV_LINKS.map(link => (
-          <button key={link.id} className="ok-mobile-link" onClick={() => scrollTo(link.id)}>{link.label}</button>
+        <button className="ok-mobile-link" onClick={() => scrollTo("sec-about")}>About</button>
+        {PRODUCT_TABS.map(t => (
+          <button key={t.slug} className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateProduct?.(t.slug); }}>{t.label}</button>
         ))}
+        <button className="ok-mobile-link" onClick={() => scrollTo("sec-contact")}>Contact</button>
         <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
         <button className="ok-mobile-link" onClick={goRegister}>Get started</button>
         <button className="ok-mobile-cta" onClick={openDemo}>Book a 45-min demo →</button>
