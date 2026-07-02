@@ -10,6 +10,9 @@ import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ProtectedRoute, GuestRoute, SuperAdminRoute } from "@/components/RouteGuards";
 import SuperAdmin from "@/pages/SuperAdmin";
 import LandingWrapper from "@/pages/LandingWrapper";
+import AboutWrapper from "@/pages/AboutWrapper";
+import ContactWrapper from "@/pages/ContactWrapper";
+import ProductLandingWrapper from "@/pages/ProductLandingWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
 import Dashboard from "@/pages/Dashboard";
@@ -135,6 +138,15 @@ function AppRouter() {
     <Switch>
       <Route path="/">
         <GuestRoute><LandingWrapper /></GuestRoute>
+      </Route>
+      <Route path="/products/:slug">
+        <GuestRoute><ProductLandingWrapper /></GuestRoute>
+      </Route>
+      <Route path="/about">
+        <GuestRoute><AboutWrapper /></GuestRoute>
+      </Route>
+      <Route path="/contact">
+        <GuestRoute><ContactWrapper /></GuestRoute>
       </Route>
       <Route path="/auth">
         <AuthWrapper />
