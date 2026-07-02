@@ -616,10 +616,6 @@ const SERVICES = [
 
 const NAV_LINKS = [
   { label: "About", id: "sec-about" },
-  { label: "Toolkit", id: "sec-toolkit" },
-  { label: "Frameworks", id: "sec-frameworks" },
-  { label: "Net-Zero", id: "sec-netzero" },
-  { label: "Sectors", id: "sec-sectors" },
   { label: "Contact", id: "sec-contact" },
 ];
 
@@ -959,7 +955,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister }: { o
           <div className="ok-nav-center">
             {NAV_LINKS.map((link, i) => (
               <span key={link.id} style={{ display:"contents" }}>
-                {i === 5 && <div className="ok-nav-div" />}
+                {i === 1 && <div className="ok-nav-div" />}
                 <button className="ok-nav-link" onClick={() => scrollTo(link.id)}>
                   {link.label}
                 </button>
