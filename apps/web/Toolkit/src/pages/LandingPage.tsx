@@ -6,7 +6,7 @@ import { PRODUCT_TABS, PRODUCTS } from "./productLandingConfig";
    GLOBAL CSS
 ───────────────────────────────────────────── */
 export const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
 
   .okiru-root *, .okiru-root *::before, .okiru-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
   .okiru-root {
@@ -29,9 +29,9 @@ export const GLOBAL_CSS = `
     --grad-r:     linear-gradient(135deg, #9333ea 0%, #06b6d4 50%, #e8441a 100%);
     --grad-text:  linear-gradient(100deg, #e8441a 0%, #06b6d4 48%, #9333ea 95%);
     --grad-h:     linear-gradient(90deg, #e8441a, #06b6d4, #9333ea);
-    --mono:  'Geist Mono', monospace;
-    --serif: 'Instrument Serif', serif;
-    --sans:  'Geist', sans-serif;
+    --mono:  'IBM Plex Mono', ui-monospace, monospace;
+    --serif: 'IBM Plex Serif', Georgia, serif;
+    --sans:  'IBM Plex Sans', system-ui, -apple-system, sans-serif;
     background: var(--ink); color: var(--body);
     font-family: var(--sans); font-weight: 300;
     font-size: 15px; line-height: 1.65; overflow-x: hidden; min-height: 100%;
