@@ -32,7 +32,7 @@ const PRODUCT_CSS = `
 
   .okiru-product .ok-about-pillar { grid-template-columns: 64px 1fr; padding: 26px 0; }
   .okiru-product .ok-about-pillar-num {
-    font-family: var(--serif); font-style: italic; font-size: 1.6rem; letter-spacing: -0.02em; padding-top: 0;
+    font-family: var(--serif); font-weight: 700; font-size: 1.6rem; letter-spacing: -0.02em; padding-top: 0;
     background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
 

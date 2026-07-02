@@ -7,7 +7,7 @@ import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome
    GLOBAL CSS
 ───────────────────────────────────────────── */
 export const GLOBAL_CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700;800&display=swap');
 
   .okiru-root *, .okiru-root *::before, .okiru-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
   .okiru-root {
@@ -31,10 +31,10 @@ export const GLOBAL_CSS = `
     --grad-text:  linear-gradient(100deg, #e8441a 0%, #06b6d4 48%, #9333ea 95%);
     --grad-h:     linear-gradient(90deg, #e8441a, #06b6d4, #9333ea);
     --mono:  'IBM Plex Mono', ui-monospace, monospace;
-    --serif: 'IBM Plex Serif', Georgia, serif;
-    --sans:  'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --serif: 'Inter', system-ui, -apple-system, sans-serif;
+    --sans:  'Inter', system-ui, -apple-system, sans-serif;
     background: var(--ink); color: var(--body);
-    font-family: var(--sans); font-weight: 300;
+    font-family: var(--sans); font-weight: 400;
     font-size: 15px; line-height: 1.65; overflow-x: hidden; min-height: 100%;
   }
   .okiru-root ::selection { background: rgba(6,182,212,0.22); }
@@ -304,13 +304,13 @@ export const GLOBAL_CSS = `
 
   .okiru-root .ok-h1 {
     font-family: var(--serif); font-size: clamp(2.8rem, 5.8vw, 5.2rem);
-    line-height: 1.0; letter-spacing: -0.03em; color: #ffffff; font-weight: 400;
+    line-height: 1.05; letter-spacing: -0.035em; color: #ffffff; font-weight: 700;
     max-width: min(60rem, 100%); margin-bottom: 20px;
   }
   .okiru-root .ok-h1-gradient {
     display: block;
     background: var(--grad-text);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-style: italic;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
   }
   .okiru-root .ok-hero-sub {
     max-width: min(44rem, 100%); font-size: 15px; color: rgba(255,255,255,0.75);
@@ -350,11 +350,11 @@ export const GLOBAL_CSS = `
   }
   .okiru-root .ok-quote-inner { max-width: 820px; }
   .okiru-root .ok-quote-text {
-    font-family: var(--serif); font-style: italic;
+    font-family: var(--serif);
     font-size: clamp(1.55rem, 3.2vw, 2.2rem); line-height: 1.38;
     letter-spacing: -0.02em; color: rgba(255,255,255,0.88);
   }
-  .okiru-root .ok-quote-text em { font-style: italic; color: var(--coral); }
+  .okiru-root .ok-quote-text em { color: var(--coral); }
 
   .okiru-root .ok-scroll-ind {
     display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 36px;
@@ -378,11 +378,11 @@ export const GLOBAL_CSS = `
   }
   .okiru-root .ok-h2 {
     font-family: var(--serif); font-size: clamp(1.9rem,3.2vw,2.8rem);
-    color: var(--hi); font-weight: 400; letter-spacing: -0.025em; line-height: 1.08;
+    color: var(--hi); font-weight: 700; letter-spacing: -0.03em; line-height: 1.08;
   }
   .okiru-root .ok-h3 {
     font-family: var(--serif); font-size: clamp(1.4rem,2.2vw,1.9rem);
-    color: var(--hi); font-weight: 400; letter-spacing: -0.02em; line-height: 1.1;
+    color: var(--hi); font-weight: 600; letter-spacing: -0.025em; line-height: 1.1;
   }
   .okiru-root .ok-lead { font-size: 15px; color: var(--body); line-height: 1.8; margin-top: 16px; }
   .okiru-root .ok-lead-l { font-size: 15px; color: var(--body); line-height: 1.8; margin-top: 16px; max-width: 42rem; }
@@ -400,7 +400,7 @@ export const GLOBAL_CSS = `
   }
   .okiru-root .ok-challenge-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #06b6d4; margin-bottom: 14px; display: block; }
   .okiru-root .ok-challenge-title { font-family: var(--serif); font-size: 1.3rem; color: var(--hi); font-weight: 400; letter-spacing: -0.02em; margin-bottom: 10px; }
-  .okiru-root .ok-challenge-stat { font-family: var(--serif); font-size: 2.4rem; color: var(--hi); font-style: italic; letter-spacing: -0.04em; margin-bottom: 4px; line-height: 1; }
+  .okiru-root .ok-challenge-stat { font-family: var(--serif); font-weight: 700; font-size: 2.4rem; color: var(--hi); letter-spacing: -0.04em; margin-bottom: 4px; line-height: 1; }
   .okiru-root .ok-challenge-stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px; }
   .okiru-root .ok-challenge-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
 
@@ -414,7 +414,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-about-pillar-desc { font-size: 13.5px; color: var(--muted); line-height: 1.7; }
   .okiru-root .ok-about-badges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px; }
   .okiru-root .ok-about-badge { padding: 20px; border: 1px solid var(--rule); border-radius: 8px; background: rgba(255,255,255,0.02); }
-  .okiru-root .ok-about-badge-val { font-family: var(--serif); font-size: 1.8rem; color: var(--hi); letter-spacing: -0.03em; line-height: 1; }
+  .okiru-root .ok-about-badge-val { font-family: var(--serif); font-weight: 700; font-size: 1.8rem; color: var(--hi); letter-spacing: -0.03em; line-height: 1; }
   .okiru-root .ok-about-badge-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 5px; }
 
   /* ── SECTION 04: OKIRU DIFFERENCE ── */
@@ -427,14 +427,14 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-diff-stats { display: grid; grid-template-columns: repeat(6,1fr); border-top: 1px solid var(--rule); }
   .okiru-root .ok-diff-stat { padding: 28px 24px; border-right: 1px solid var(--rule); }
   .okiru-root .ok-diff-stat:last-child { border-right: none; }
-  .okiru-root .ok-diff-stat-n { font-family: var(--serif); font-size: 2rem; color: var(--hi); letter-spacing: -0.04em; line-height: 1; font-style: italic; }
+  .okiru-root .ok-diff-stat-n { font-family: var(--serif); font-weight: 700; font-size: 2rem; color: var(--hi); letter-spacing: -0.04em; line-height: 1; }
   .okiru-root .ok-diff-stat-l { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 5px; }
 
   /* ── SECTION 05: TOOLKIT ── */
   .okiru-root .ok-toolkit-hdr { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-bottom: 56px; }
   .okiru-root .ok-toolkit-pillar-wrap { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; }
   .okiru-root .ok-toolkit-pillar { border: 1px solid var(--rule); padding: 32px 28px; background: rgba(255,255,255,0.015); }
-  .okiru-root .ok-toolkit-pillar-letter { font-family: var(--serif); font-style: italic; font-size: 3.5rem; line-height: 1; letter-spacing: -0.05em; margin-bottom: 6px; }
+  .okiru-root .ok-toolkit-pillar-letter { font-family: var(--serif); font-weight: 700; font-size: 3.5rem; line-height: 1; letter-spacing: -0.05em; margin-bottom: 6px; }
   .okiru-root .ok-toolkit-pillar-name { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .okiru-root .ok-toolkit-pillar-weight { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.35); letter-spacing: 0.04em; margin-bottom: 20px; }
   .okiru-root .ok-toolkit-items { list-style: none; display: flex; flex-direction: column; gap: 7px; }
@@ -447,7 +447,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-arch-layers { display: flex; flex-direction: column; gap: 2px; margin-top: 56px; }
   .okiru-root .ok-arch-layer { display: grid; grid-template-columns: 80px 1fr 1fr; gap: 0; border: 1px solid var(--rule); background: rgba(255,255,255,0.015); transition: background .3s; }
   .okiru-root .ok-arch-layer:hover { background: rgba(99,102,241,0.03); }
-  .okiru-root .ok-arch-num-col { display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--rule); padding: 32px 16px; font-family: var(--serif); font-size: 2.2rem; font-style: italic; color: rgba(255,255,255,.15); letter-spacing: -0.04em; }
+  .okiru-root .ok-arch-num-col { display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--rule); padding: 32px 16px; font-family: var(--serif); font-weight: 700; font-size: 2.2rem; color: rgba(255,255,255,.15); letter-spacing: -0.04em; }
   .okiru-root .ok-arch-main { padding: 32px 36px; border-right: 1px solid var(--rule); }
   .okiru-root .ok-arch-detail { padding: 32px 36px; }
   .okiru-root .ok-arch-tag { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #22d3ee; margin-bottom: 10px; }
@@ -472,7 +472,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-outcome-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: #22d3ee; margin-bottom: 14px; display: block; }
   .okiru-root .ok-outcome-title { font-family: var(--serif); font-size: 1.5rem; color: var(--hi); font-weight: 400; letter-spacing: -0.02em; margin-bottom: 14px; }
   .okiru-root .ok-outcome-desc { font-size: 14px; color: var(--muted); line-height: 1.8; }
-  .okiru-root .ok-outcome-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule); font-family: var(--serif); font-style: italic; font-size: 13.5px; color: rgba(255,255,255,.4); }
+  .okiru-root .ok-outcome-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule); font-family: var(--serif); font-size: 13.5px; color: rgba(255,255,255,.4); }
 
   /* ── SECTION 09: ENGAGEMENT ── */
   .okiru-root .ok-eng-hdr { display: grid; grid-template-columns: 1fr 2fr; gap: 80px; margin-bottom: 56px; }
@@ -491,7 +491,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-dash-scores { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-bottom: 40px; }
   .okiru-root .ok-dash-score-card { border: 1px solid var(--rule); border-radius: 8px; padding: 24px; background: rgba(255,255,255,0.02); }
   .okiru-root .ok-dash-score-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
-  .okiru-root .ok-dash-score-val { font-family: var(--serif); font-size: 2rem; color: var(--hi); letter-spacing: -0.03em; line-height: 1; margin-bottom: 4px; }
+  .okiru-root .ok-dash-score-val { font-family: var(--serif); font-weight: 700; font-size: 2rem; color: var(--hi); letter-spacing: -0.03em; line-height: 1; margin-bottom: 4px; }
   .okiru-root .ok-dash-score-status { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; }
   .okiru-root .ok-dash-score-gap { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .okiru-root .ok-dash-table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 8px; }
@@ -508,7 +508,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-nz-targets { display: grid; grid-template-columns: repeat(4,1fr); gap: 2px; margin-bottom: 40px; }
   .okiru-root .ok-nz-target { border: 1px solid var(--rule); padding: 24px 20px; background: rgba(255,255,255,0.015); }
   .okiru-root .ok-nz-target-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
-  .okiru-root .ok-nz-target-val { font-family: var(--serif); font-size: 1.7rem; color: var(--hi); letter-spacing: -0.03em; font-style: italic; line-height: 1; }
+  .okiru-root .ok-nz-target-val { font-family: var(--serif); font-weight: 700; font-size: 1.7rem; color: var(--hi); letter-spacing: -0.03em; line-height: 1; }
   .okiru-root .ok-nz-milestones { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 40px; }
   .okiru-root .ok-nz-milestone { border: 1px solid var(--rule); border-radius: 8px; padding: 24px 20px; background: rgba(255,255,255,0.02); }
   .okiru-root .ok-nz-milestone-year { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; color: #22d3ee; margin-bottom: 6px; }
@@ -594,7 +594,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-foot-col-item a { color: rgba(255,255,255,.5); text-decoration: none; transition: color .2s; }
   .okiru-root .ok-foot-col-item a:hover { color: var(--hi); }
   .okiru-root .ok-foot-bottom { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding-top: 24px; border-top: 1px solid var(--rule); }
-  .okiru-root .ok-foot-wm { font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted); display: inline-flex; align-items: center; gap: 10px; }
+  .okiru-root .ok-foot-wm { font-family: var(--serif); font-size: 15px; color: var(--muted); display: inline-flex; align-items: center; gap: 10px; }
   .okiru-root .ok-foot-c { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.15); letter-spacing: .06em; }
   .okiru-root .ok-foot-links { display: flex; align-items: center; gap: 14px; }
   .okiru-root .ok-foot-link { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,.35); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; transition: color .2s ease; background: none; border: none; cursor: pointer; }
