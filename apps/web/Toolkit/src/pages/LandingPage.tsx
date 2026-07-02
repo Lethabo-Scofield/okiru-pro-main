@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import heroBg from "@assets/image_1783014770940.png";
+import ctaBg from "@assets/image_1783017701495.png";
 import { PRODUCTS } from "./productLandingConfig";
 import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome";
 
@@ -601,8 +602,18 @@ export const GLOBAL_CSS = `
 
   /* ── FINAL CTA ── */
   .okiru-root .ok-cta { position: relative; overflow: hidden; padding: 128px 0; }
-  .okiru-root .ok-cta-bg { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 70% 70% at 50% 0%, rgba(147,51,234,0.10) 0%, rgba(6,182,212,0.05) 40%, transparent 72%); }
-  .okiru-root .ok-cta-inner { max-width: 760px; position: relative; z-index: 1; }
+  .okiru-root .ok-cta-photo {
+    position: absolute; inset: -40px; z-index: 0; pointer-events: none;
+    background-position: center; background-size: cover; background-repeat: no-repeat;
+    filter: blur(18px) saturate(1.05); opacity: 0.42; transform: scale(1.08);
+  }
+  .okiru-root .ok-cta-bg {
+    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 70% at 50% 0%, rgba(147,51,234,0.12) 0%, rgba(6,182,212,0.05) 40%, transparent 72%),
+      linear-gradient(180deg, var(--ink) 0%, rgba(11,15,26,0.55) 22%, rgba(11,15,26,0.55) 78%, var(--ink) 100%);
+  }
+  .okiru-root .ok-cta-inner { max-width: 760px; position: relative; z-index: 2; }
   .okiru-root .ok-cta-h { font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; color: var(--hi); margin-bottom: 20px; }
   .okiru-root .ok-cta-sub { font-size: 16px; color: var(--body); line-height: 1.7; margin-bottom: 36px; max-width: 580px; }
   .okiru-root .ok-cta-btns { display: flex; gap: 14px; flex-wrap: wrap; }
@@ -931,6 +942,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
 
         {/* ── 05: FINAL CTA ── */}
         <section className="ok-section ok-cta" id="sec-cta">
+          <div className="ok-cta-photo" aria-hidden style={{ backgroundImage: `url(${ctaBg})` }} />
           <div className="ok-cta-bg" aria-hidden />
           <div className="ok-w">
             <Reveal className="ok-cta-inner">
