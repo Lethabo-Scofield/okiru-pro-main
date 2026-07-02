@@ -105,7 +105,7 @@ export default function OkiruAbout({
                 <span className="ok-eyebrow">A message from our CEO</span>
                 <blockquote className="ok-ceo-quote">
                   “Transformation in South Africa has too often been reduced to a certificate at
-                  the end of the year — a number chased, filed, and forgotten. We built Okiru to
+                  the end of the year: a number chased, filed, and forgotten. We built Okiru to
                   change that. When your ESG, B-BBEE and Skills Development data all live in one
                   defensible system, compliance stops being a scramble and becomes a story of
                   real, measurable progress you can stand behind in any boardroom.
@@ -164,7 +164,7 @@ export default function OkiruAbout({
             <Reveal>
               <span className="ok-sec-num">03</span>
               <h2 className="ok-h2">Operational Outcomes</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Four shifts that change how your ESG function works — permanently.</p>
+              <p className="ok-lead-l" style={{ marginTop:8 }}>Four shifts that change how your ESG function works, permanently.</p>
             </Reveal>
           </div>
           <div className="ok-outcomes-grid">
@@ -172,7 +172,7 @@ export default function OkiruAbout({
               { label:"Governance", title:"Single source of truth", desc:"One workbook. Every framework. Every number traces to a documented source row through a documented formula chain. The audit committee, auditor, JSE, and integrated report all see the same numbers calculated the same way." },
               { label:"Efficiency", title:"Clean data flows", desc:"Inputs captured once flow through to every framework simultaneously. No re-keying fleet litres into the GHG inventory, ISO 14083 register, Carbon Tax submission and CDP response separately." },
               { label:"Insight", title:"Embedded analytics", desc:"Year-on-year variance built in. Intensity ratios calculated automatically. Materiality flagged dynamically. The Stance toggle lets you stress-test performance under Lean, Standard and Strict scoring assumptions." },
-              { label:"Reporting", title:"Board-ready disclosure", desc:"Pre-formatted disclosure blocks aligned to IFRS S1/S2, GRI, CDP and B-BBEE structures. Lift directly into your integrated annual report. Methodology lives inside your finance function — not on a consultant's hard drive.", footer:"Not a portal. Not a certificate. A measurement system with people behind it." },
+              { label:"Reporting", title:"Board-ready disclosure", desc:"Pre-formatted disclosure blocks aligned to IFRS S1/S2, GRI, CDP and B-BBEE structures. Lift directly into your integrated annual report. Methodology lives inside your finance function, not on a consultant's hard drive.", footer:"Not a portal. Not a certificate. A measurement system with people behind it." },
             ].map((o, i) => (
               <Reveal key={o.label} delay={i % 2 === 1 ? "ok-d1" : ""}>
                 <div className="ok-outcome-card">
@@ -230,8 +230,8 @@ export default function OkiruAbout({
             </Reveal>
             <div className="ok-vs-edges" style={{ marginTop:40 }}>
               {[
-                { num:"Edge 01", title:"Only SA firm integrating B-BBEE + ESG in one toolkit", desc:"BEE platforms score pillars. Okiru links your B-BBEE score to your GHG inventory, EE plan, and IFRS S2 disclosure — one source of truth for every framework simultaneously." },
-                { num:"Edge 02", title:"Methodology lives inside your business — not on our server", desc:"Every formula, factor, and threshold is documented in your own workbook. When the engagement ends, your finance team owns the methodology. No platform lock-in. No annual licence." },
+                { num:"Edge 01", title:"Only SA firm integrating B-BBEE + ESG in one toolkit", desc:"BEE platforms score pillars. Okiru links your B-BBEE score to your GHG inventory, EE plan, and IFRS S2 disclosure: one source of truth for every framework simultaneously." },
+                { num:"Edge 02", title:"Methodology lives inside your business, not on our server", desc:"Every formula, factor, and threshold is documented in your own workbook. When the engagement ends, your finance team owns the methodology. No platform lock-in. No annual licence." },
                 { num:"Edge 03", title:"Consultant accountability, not just software access", desc:"BEE123 gives you a tool. Updapt tracks your ESG data. Okiru builds the strategy, loads the data, validates every number, and stands behind the output when your verifier asks questions." },
               ].map((e, i) => (
                 <Reveal key={e.num} delay={i > 0 ? `ok-d${Math.min(i,2)}` : ""}>
@@ -257,14 +257,14 @@ export default function OkiruAbout({
                   <tbody>
                     {[
                       ["All 5 B-BBEE pillars scored","Full","Full","Full"],
-                      ["AI toolkit upload → instant scorecard","Full","—","—"],
-                      ["GHG Scope 1, 2 & 3 measurement","Full","—","—"],
-                      ["IFRS S1/S2, TCFD, CDP, GRI, SBTi","Full","—","—"],
-                      ["Net-Zero Roadmap (SBTi CNZS 2.0)","Full","—","—"],
-                      ["Employment Equity (EEA2/EEA4)","Full","Basic","—"],
-                      ["Dedicated consultant relationship","Full","—","Full"],
+                      ["AI toolkit upload → instant scorecard","Full","No","No"],
+                      ["GHG Scope 1, 2 & 3 measurement","Full","No","No"],
+                      ["IFRS S1/S2, TCFD, CDP, GRI, SBTi","Full","No","No"],
+                      ["Net-Zero Roadmap (SBTi CNZS 2.0)","Full","No","No"],
+                      ["Employment Equity (EEA2/EEA4)","Full","Basic","No"],
+                      ["Dedicated consultant relationship","Full","No","Full"],
                       ["Board-ready disclosure outputs","Full","B-BBEE only","Cert. only"],
-                      ["Annual framework refresh","Full","B-BBEE codes","—"],
+                      ["Annual framework refresh","Full","B-BBEE codes","No"],
                     ].map(([cap, ...vals]) => (
                       <tr key={cap}>
                         <td>{cap}</td>

@@ -461,7 +461,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-toolkit-pillar-weight { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.35); letter-spacing: 0.04em; margin-bottom: 20px; }
   .okiru-root .ok-toolkit-items { list-style: none; display: flex; flex-direction: column; gap: 7px; }
   .okiru-root .ok-toolkit-items li { font-size: 12.5px; color: var(--muted); display: flex; align-items: flex-start; gap: 8px; line-height: 1.4; }
-  .okiru-root .ok-toolkit-items li::before { content: '—'; color: var(--accent); flex-shrink: 0; }
+  .okiru-root .ok-toolkit-items li::before { content: '·'; color: var(--accent); flex-shrink: 0; }
   .okiru-root .ok-toolkit-bullet { display: flex; align-items: flex-start; gap: 12px; font-size: 14px; color: rgba(255,255,255,.75); margin-bottom: 10px; }
   .okiru-root .ok-toolkit-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,.4); flex-shrink: 0; margin-top: 8px; }
 
@@ -859,7 +859,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               <p className="ok-hero-sub ok-anim-3">
                 South African transformation, made measurable. We turn
                 <strong> ESG, B-BBEE &amp; Skills Development</strong> from once-a-year
-                box-ticking into audit-grade progress that compounds &mdash; one toolkit,
+                box-ticking into audit-grade progress that compounds. One toolkit,
                 every framework, Net-Zero ready.
               </p>
               <div className="ok-hero-btns ok-anim-4">
@@ -910,12 +910,12 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <Reveal>
               <span className="ok-sec-num">02</span>
               <h2 className="ok-h2" style={{ marginBottom:12 }}>The Challenge</h2>
-              <p className="ok-h3" style={{ marginBottom:8 }}>Why most organisations can't get to Net Zero — and what Okiru solves.</p>
+              <p className="ok-h3" style={{ marginBottom:8 }}>Why most organisations can't get to Net Zero, and what Okiru solves.</p>
               <p className="ok-lead-l">Three structural gaps stand between South African organisations and credible, audit-grade transformation reporting.</p>
             </Reveal>
             <div className="ok-challenge-grid">
               {[
-                { label:"The Measurement Gap", title:"Scope 3 remains uncaptured", stat:"70–90%", statLabel:"of emissions sit in the supply chain", desc:"Most organisations measure Scope 1 confidently, Scope 2 with effort, and Scope 3 with estimates. The majority of supply-chain emissions are the hardest to measure — and the largest opportunity to reduce." },
+                { label:"The Measurement Gap", title:"Scope 3 remains uncaptured", stat:"70–90%", statLabel:"of emissions sit in the supply chain", desc:"Most organisations measure Scope 1 confidently, Scope 2 with effort, and Scope 3 with estimates. The majority of supply-chain emissions are the hardest to measure, and the largest opportunity to reduce." },
                 { label:"The Reporting Gap", title:"Frameworks are tightening", stat:"IFRS S2", statLabel:"CDP & SBTi are raising the bar", desc:"IFRS S1 and S2 are mandatory in many jurisdictions. CDP penalises spend-based methodologies. SBTi requires activity-based targets. The bar for credible reporting rises every cycle." },
                 { label:"The Execution Gap", title:"Data lives in the wrong places", stat:"5 silos", statLabel:"→ one annual report", desc:"Energy is in finance. Waste is in operations. Workforce is in HR. CSI is in marketing. Until these sources speak to each other, the ESG report is reconstructed from scratch every year." },
               ].map((c, i) => (
@@ -939,7 +939,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <Reveal>
               <span className="ok-sec-num">03</span>
               <h2 className="ok-h2">Our Products</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Three focused toolkits, one measurement methodology. Each has its own dedicated walkthrough — pick a starting point.</p>
+              <p className="ok-lead-l" style={{ marginTop:8 }}>Three focused toolkits, one measurement methodology. Each has its own dedicated walkthrough. Pick a starting point.</p>
             </Reveal>
             <div className="ok-challenge-grid" style={{ marginTop:56 }}>
               {PRODUCTS.map((p, i) => (
@@ -974,7 +974,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               {[
                 { title:"Global Disclosure Frameworks", items:[["GHG Protocol","Scope 1 / 2 / 3 inventory"],["IFRS S1 + S2","ISSB sustainability + climate"],["TCFD","6-family climate risk taxonomy"],["CDP","Climate + water disclosure"],["SBTi CNZS 2.0","Net-zero pathway alignment"],["ISO 14083","Trip-level transport emissions"],["GRI","Topical standards"]] },
                 { title:"South African Compliance", items:[["King V","Apply-or-Explain governance"],["B-BBEE Codes","All five pillars + sector forks"],["ISO 14001","Environmental management"],["EE / Skills Dev","EEA2/EEA4 · WSP/ATR"],["NEMWA","Waste classification & reporting"],["POPIA","Data protection compliance"]] },
-                { title:"Emission Factors & Standards", items:[["DEFRA 2024","GHG conversion factors — Scope 1 + 3"],["Eskom NERSA 2024","Scope 2 location-based, SA grid"],["GLEC Framework","80 gCO₂e/t·km road freight norm"],["SBTi CNZS 2.0","Net-zero pathway alignment"],["IFRS S2","ISSB climate disclosure structure"],["King V","170-point Apply-or-Explain scorecard"]] },
+                { title:"Emission Factors & Standards", items:[["DEFRA 2024","GHG conversion factors: Scope 1 + 3"],["Eskom NERSA 2024","Scope 2 location-based, SA grid"],["GLEC Framework","80 gCO₂e/t·km road freight norm"],["SBTi CNZS 2.0","Net-zero pathway alignment"],["IFRS S2","ISSB climate disclosure structure"],["King V","170-point Apply-or-Explain scorecard"]] },
               ].map((col, ci) => (
                 <div key={col.title}>
                   <Reveal delay={ci > 0 ? `ok-d${ci}` : ""}>
@@ -1000,7 +1000,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               <span className="ok-eyebrow">Ready when you are</span>
               <h2 className="ok-cta-h">Make your next disclosure the one that compounds.</h2>
               <p className="ok-cta-sub">
-                Bring ESG, B-BBEE and Skills Development into one audit-grade toolkit &mdash;
+                Bring ESG, B-BBEE and Skills Development into one audit-grade toolkit,
                 and turn a once-a-year scramble into measurable progress you can prove
                 every quarter.
               </p>

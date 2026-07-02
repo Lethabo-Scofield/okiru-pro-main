@@ -278,7 +278,7 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
             <div className="ok-modal-head">
               <div>
                 <div className="ok-modal-title">Book a 45-min demo</div>
-                <p className="ok-modal-sub">A working session — not a sales pitch. We'll walk through the live Okiru Toolkit mapped to your reporting cycle.</p>
+                <p className="ok-modal-sub">A working session, not a sales pitch. We'll walk through the live Okiru Toolkit mapped to your reporting cycle.</p>
               </div>
               <button className="ok-modal-close" onClick={onClose} aria-label="Close">
                 <CloseIcon />
