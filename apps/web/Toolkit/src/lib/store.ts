@@ -1586,7 +1586,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     set((state) => ({ client: { ...state.client, financialHistory: [...state.client.financialHistory, year] } }));
     const state = get();
     if (state.activeClientId) {
-      api.addFinancialYear(state.activeClientId, { year: year.year, revenue: year.revenue, npat: year.npat, indicativeNpat: year.indicativeNpat, notes: year.notes }).catch(console.error);
+      api.addFinancialYear(state.activeClientId, { id: year.id, year: year.year, revenue: year.revenue, npat: year.npat, indicativeNpat: year.indicativeNpat, notes: year.notes }).catch(console.error);
     }
   },
   updateFinancialYear: (id, data) => {
@@ -1603,10 +1603,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      // Send the full Shareholder shape (sans local id) so demographic/designated/
-      // graduation fields aren't silently dropped on persist (audit B5).
-      const { id: _shId, ...shareholderPayload } = shareholder;
-      api.addShareholder(state.activeClientId, shareholderPayload).catch(console.error);
+      // Send the full Shareholder shape INCLUDING the local id. The server
+      // preserves a provided id (create does { id: uuid(), ...data }), so the
+      // row persists under the SAME id the store holds — otherwise a later
+      // updateShareholder(localId) hits PATCH /api/shareholders/<localId> which
+      // 404s because the server minted its own id ("edit doesn't save at all").
+      api.addShareholder(state.activeClientId, shareholder).catch(console.error);
     }
   },
   updateShareholder: (id, data) => {
@@ -1634,6 +1636,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.addEmployee(state.activeClientId, {
+        // Persist under the store's local id so a later updateEmployee(localId)
+        // resolves server-side (the create respects a provided id). Without this
+        // the edit PATCHes an id the server never had → 404 → silently dropped.
+        id: employee.id,
         name: employee.name, gender: employee.gender, race: employee.race,
         designation: employee.designation, isDisabled: employee.isDisabled,
         annualSalary: employee.annualSalary, votingRightsPercent: employee.votingRightsPercent,
@@ -1662,10 +1668,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      // Single round-trip via the bulk endpoint (insertMany). Send the full
-      // Employee shape sans local id so the schema does the rest.
-      const payload = employees.map(({ id: _id, ...rest }) => rest);
-      api.bulkAddEmployees(state.activeClientId, payload).catch(console.error);
+      // Single round-trip via the bulk endpoint (insertMany). Keep the local
+      // ids so bulk-added rows are editable immediately (create preserves a
+      // provided id; without it updateEmployee(localId) 404s).
+      api.bulkAddEmployees(state.activeClientId, employees).catch(console.error);
     }
   },
 
@@ -1674,11 +1680,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      // Send the full TrainingProgram shape (sans local id) — the legacy subset
-      // was dropping programName/categoryCode/learnerName/employmentStatus/dates/
-      // *Cost/isYesEmployee/isCompleted/isAbsorbed (audit B6).
-      const { id: _tpId, ...programPayload } = program;
-      api.addTrainingProgram(state.activeClientId, programPayload).catch(console.error);
+      // Send the full TrainingProgram shape INCLUDING the local id so the row
+      // persists under the store's id and updateTrainingProgram(localId) resolves
+      // (else PATCH /api/training-programs/<localId> 404s). Also carries
+      // programName/categoryCode/learnerName/employmentStatus/dates/*Cost/
+      // isYesEmployee/isCompleted/isAbsorbed (audit B6).
+      api.addTrainingProgram(state.activeClientId, program).catch(console.error);
     }
   },
   updateTrainingProgram: (id, data) => {
@@ -1706,13 +1713,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      // Audit P2 #6: spread the full Supplier shape sans local id so the
-      // strict subset of 8 fields no longer drops isEmpoweringSupplier,
-      // isSupplierDevRecipient, hasThreeYearContract, isForeignSupplier,
-      // certificateExpiryDate, vatNumber, etc. Pattern matches the working
-      // addShareholder / addTrainingProgram / addEmployeesBulk forms.
-      const { id: _sId, ...supplierPayload } = supplier;
-      api.addSupplier(state.activeClientId, supplierPayload).catch(console.error);
+      // Send the full Supplier shape INCLUDING the local id so the row persists
+      // under the store's id and updateSupplier(localId) resolves (else PATCH
+      // /api/suppliers/<localId> 404s → "edit doesn't save"). Also carries
+      // isEmpoweringSupplier, isSupplierDevRecipient, hasThreeYearContract,
+      // isForeignSupplier, certificateExpiryDate, vatNumber, etc. (audit P2 #6).
+      api.addSupplier(state.activeClientId, supplier).catch(console.error);
     }
   },
   updateSupplier: (id, data) => {
@@ -1743,12 +1749,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      // Audit P2 #7: spread the full Contribution shape sans local id so
-      // construction flags (isBlackWomenOwnedBeneficiary, supplierDevProgramme),
-      // blackBenefitPercent, contributionType, descriptions, and the date
-      // fields round-trip.
-      const { id: _cId, ...payload } = contribution;
-      api.addEsdContribution(state.activeClientId, payload).catch(console.error);
+      // Send the full Contribution shape INCLUDING the local id so the row
+      // persists under the store's id (else a later delete/edit by localId
+      // misses the server row). Also carries construction flags
+      // (isBlackWomenOwnedBeneficiary, supplierDevProgramme), blackBenefitPercent,
+      // contributionType, descriptions, and dates (audit P2 #7).
+      api.addEsdContribution(state.activeClientId, contribution).catch(console.error);
     }
   },
   removeEsdContribution: (id) => {
@@ -1762,12 +1768,11 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      // Audit P2 #8: same as addEsdContribution — spread the full shape so
-      // isStructuredProject + isLimitedServicesCommunity (construction SED
-      // indicators), blackBenefitPercent, descriptionOfSpend, and dates
-      // persist instead of being silently truncated to 4 fields.
-      const { id: _cId, ...payload } = contribution;
-      api.addSedContribution(state.activeClientId, payload).catch(console.error);
+      // Send the full Contribution shape INCLUDING the local id (same fix as
+      // addEsdContribution). Also carries isStructuredProject +
+      // isLimitedServicesCommunity (construction SED indicators),
+      // blackBenefitPercent, descriptionOfSpend, and dates (audit P2 #8).
+      api.addSedContribution(state.activeClientId, contribution).catch(console.error);
     }
   },
   removeSedContribution: (id) => {
