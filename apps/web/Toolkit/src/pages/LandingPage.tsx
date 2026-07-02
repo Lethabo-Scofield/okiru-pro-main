@@ -945,7 +945,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         <div className="ok-nav-inner">
           <a href="/" className="ok-brand" aria-label="Okiru home">
             <img src={okiruLogo} alt="" className="ok-brand-mark" />
-            <span className="ok-wordmark"><strong>Okiru</strong><span> Consulting</span></span>
+            <span className="ok-wordmark"><strong>Okiru</strong></span>
           </a>
 
           <div className="ok-nav-center">
@@ -961,7 +961,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
 
           <div className="ok-nav-right">
             <button className="ok-nav-signin" onClick={onNavigateAuth}>Sign in</button>
-            <button className="ok-nav-signin" onClick={goRegister}>Get started</button>
             <button className="ok-nav-demo-btn" onClick={openDemo}>
               Book a demo <span className="arr"><ArrowRight size={13} /></span>
             </button>
@@ -980,7 +979,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         ))}
         <button className="ok-mobile-link" onClick={() => scrollTo("sec-contact")}>Contact</button>
         <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
-        <button className="ok-mobile-link" onClick={goRegister}>Get started</button>
         <button className="ok-mobile-cta" onClick={openDemo}>Book a 45-min demo →</button>
       </div>
 
