@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { GLOBAL_CSS } from "./LandingPage";
-import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome";
+import { SiteNav, SiteFooter, Reveal, LinkedInIcon, OKIRU_LINKEDIN_URL } from "./siteChrome";
 
 /* ─────────────────────────────────────────────
-   CONTACT PAGE — Get in touch · Book a demo
+   CONTACT PAGE — Get in touch
 ───────────────────────────────────────────── */
 export default function OkiruContact({
   onNavigateAuth,
@@ -16,9 +16,6 @@ export default function OkiruContact({
   onNavigateAbout?: () => void;
   onNavigateProduct?: (slug: string) => void;
 }) {
-  const [demoOpen, setDemoOpen] = useState(false);
-  const openDemo = () => setDemoOpen(true);
-
   useEffect(() => {
     const id = "okiru-styles";
     if (!document.getElementById(id)) {
@@ -29,16 +26,9 @@ export default function OkiruContact({
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
 
-  useEffect(() => {
-    document.body.style.overflow = demoOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [demoOpen]);
-
   return (
     <div className="okiru-root">
       <div className="okiru-grain" aria-hidden />
-
-      {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
 
       <SiteNav
         active="contact"
@@ -50,13 +40,13 @@ export default function OkiruContact({
       />
 
       <main>
-        {/* ── CONTACT / BOOK A DEMO ── */}
+        {/* ── CONTACT ── */}
         <section className="ok-section ok-page-top" id="sec-contact">
           <div className="ok-w">
             <Reveal>
               <span className="ok-sec-num">Contact</span>
               <h2 className="ok-h2" style={{ marginTop:8 }}>Let's make your transformation measurable.</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>A 45-minute working session — not a sales pitch. We'll walk through the live Okiru Toolkit, map it to your reporting cycle, and show you the Net-Zero pathway implied by your own data.</p>
+              <p className="ok-lead-l" style={{ marginTop:8 }}>Questions about the toolkit, a sector code, or your reporting cycle? Reach out — we usually reply within one business day.</p>
             </Reveal>
             <div className="ok-demo-grid">
               <div className="ok-demo-l">
@@ -71,23 +61,26 @@ export default function OkiruContact({
                     </div>
                   ))}
                 </div>
-                <div style={{ marginTop:36 }}>
-                  <button className="ok-btn-cta" onClick={openDemo}>
-                    Book a 45-min demo <span className="arr"><ArrowRight size={14} /></span>
-                  </button>
-                </div>
               </div>
               <div className="ok-demo-r">
-                <div className="ok-demo-agenda-title">
-                  <span>Demo Agenda</span>
-                  <span style={{ color:"var(--pur-l)" }}>45 min</span>
+                <h3 className="ok-h3" style={{ marginBottom:8 }}>Follow us</h3>
+                <p className="ok-lead" style={{ marginTop:0, marginBottom:24 }}>Keep up with product updates, sector guidance, and transformation insights.</p>
+                <div className="ok-social-list">
+                  <a className="ok-social-link" href={OKIRU_LINKEDIN_URL} target="_blank" rel="noopener noreferrer">
+                    <span className="ok-social-icon"><LinkedInIcon size={18} /></span>
+                    <span className="ok-social-meta">
+                      <span className="ok-social-name">LinkedIn</span>
+                      <span className="ok-social-handle">Okiru Consulting</span>
+                    </span>
+                  </a>
+                  <a className="ok-social-link" href="mailto:contact@okiru.co.za">
+                    <span className="ok-social-icon" aria-hidden>@</span>
+                    <span className="ok-social-meta">
+                      <span className="ok-social-name">Email</span>
+                      <span className="ok-social-handle">contact@okiru.co.za</span>
+                    </span>
+                  </a>
                 </div>
-                {[["00:00 – 10:00","Your transformation reporting today"],["10:00 – 25:00","Live walkthrough · Okiru Toolkit"],["25:00 – 35:00","Net-Zero Roadmap · your data"],["35:00 – 45:00","Engagement model & next steps"]].map(([time, desc]) => (
-                  <div key={time} className="ok-demo-agenda-item">
-                    <span className="ok-demo-agenda-time">{time}</span>
-                    <span className="ok-demo-agenda-desc">{desc}</span>
-                  </div>
-                ))}
               </div>
             </div>
           </div>

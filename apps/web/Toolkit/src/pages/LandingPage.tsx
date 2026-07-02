@@ -578,6 +578,23 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-demo-agenda-time { font-family: var(--mono); font-size: 11px; color: rgba(255,255,255,.3); letter-spacing: 0.04em; padding-top: 1px; }
   .okiru-root .ok-demo-agenda-desc { font-size: 13.5px; color: rgba(255,255,255,.7); }
 
+  /* ── SOCIALS ── */
+  .okiru-root .ok-social-list { display: flex; flex-direction: column; gap: 12px; }
+  .okiru-root .ok-social-link {
+    display: flex; align-items: center; gap: 16px; padding: 16px 18px;
+    border: 1px solid var(--rule); border-radius: 12px; background: rgba(255,255,255,0.015);
+    text-decoration: none; transition: border-color .2s ease, background .2s ease, transform .2s ease;
+  }
+  .okiru-root .ok-social-link:hover { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.04); transform: translateY(-2px); }
+  .okiru-root .ok-social-icon {
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05);
+    color: var(--hi); font-family: var(--serif); font-size: 18px;
+  }
+  .okiru-root .ok-social-meta { display: flex; flex-direction: column; gap: 3px; }
+  .okiru-root .ok-social-name { font-size: 14px; font-weight: 600; color: var(--hi); }
+  .okiru-root .ok-social-handle { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: rgba(255,255,255,.4); }
+
   /* ── SCORECARD WIDGET ── */
   .okiru-root .ok-sc-pillar-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
   .okiru-root .ok-sc-pillar-name { font-family: var(--sans); font-size: 11px; color: rgba(255,255,255,.55); letter-spacing: -0.01em; }
