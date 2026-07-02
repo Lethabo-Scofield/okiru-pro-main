@@ -861,12 +861,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-content">
-              <span className="ok-hero-tag ok-anim-1">
-                <span className="ok-hero-tag-dot" />
-                Compliance &amp; Transformation
-                <span className="ok-hero-tag-div" />
-                <span className="ok-hero-tag-brand">ESG · B-BBEE · Skills Development</span>
-              </span>
               <h1 className="ok-h1 ok-anim-2">
                 Turn compliance into<br />
                 <span className="ok-h1-gradient" aria-label="compounding growth.">
