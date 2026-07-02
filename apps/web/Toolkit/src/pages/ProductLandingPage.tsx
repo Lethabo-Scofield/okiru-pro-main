@@ -3,6 +3,77 @@ import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
 import { GLOBAL_CSS } from "./LandingPage";
 import { PRODUCT_TABS, type ProductConfig } from "./productLandingConfig";
 
+/* ─────────────────────────────────────────────
+   PRODUCT PAGE THEME — clean, purple / blue / orange
+   Scoped to `.okiru-product` so the main landing is
+   untouched. Overrides the shared gradient tokens and
+   refines the product-page surfaces for a cleaner look.
+───────────────────────────────────────────── */
+const PRODUCT_CSS = `
+  .okiru-root.okiru-product {
+    --grad:      linear-gradient(135deg, #9333ea 0%, #2563eb 52%, #f97316 100%);
+    --grad-r:    linear-gradient(135deg, #f97316 0%, #2563eb 52%, #9333ea 100%);
+    --grad-text: linear-gradient(100deg, #a855f7 0%, #3b82f6 50%, #fb923c 100%);
+    --grad-h:    linear-gradient(90deg, #9333ea, #2563eb, #f97316);
+  }
+
+  /* ── HERO AMBIENCE (blue-forward, no cyan) ── */
+  .okiru-product .ok-hero-glow { background: radial-gradient(circle, rgba(37,99,235,0.11) 0%, rgba(147,51,234,0.06) 42%, transparent 70%); }
+  .okiru-product .ok-hero-glow-2 { background: radial-gradient(circle, rgba(249,115,22,0.08) 0%, transparent 65%); }
+  .okiru-product .ok-hero-beam { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(37,99,235,0.08) 10deg, rgba(147,51,234,0.11) 18deg, rgba(249,115,22,0.06) 26deg, transparent 38deg); }
+  .okiru-product .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(249,115,22,0.05) 6deg, rgba(37,99,235,0.08) 12deg, rgba(147,51,234,0.05) 18deg, transparent 28deg); }
+  .okiru-product .ok-hero-tag-dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.7); }
+
+  /* ── ACTIVE NAV TAB ── */
+  .okiru-product .ok-nav-active { color: #fff; background: rgba(255,255,255,0.06); }
+  .okiru-product .ok-nav-active::after {
+    content: ''; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2px;
+    border-radius: 2px; background: var(--grad-h);
+  }
+  .okiru-product .ok-nav-link { position: relative; }
+
+  /* ── STAT STRIP ── */
+  .okiru-product .ok-service:hover { background: rgba(147,51,234,0.05); }
+
+  /* ── FEATURE CARDS (clean, rounded, per-column accent) ── */
+  .okiru-product .ok-challenge-grid { gap: 18px; }
+  .okiru-product .ok-challenge-card {
+    padding: 32px 30px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.022);
+    transition: transform .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease;
+  }
+  .okiru-product .ok-challenge-card::before { height: 3px; opacity: 1; border-radius: 16px 16px 0 0; }
+  .okiru-product .ok-challenge-card:hover { transform: translateY(-4px); background: rgba(255,255,255,0.04); }
+  .okiru-product .ok-challenge-card:nth-child(3n+1)::before { background: linear-gradient(90deg,#9333ea,#a855f7); }
+  .okiru-product .ok-challenge-card:nth-child(3n+1):hover { border-color: rgba(147,51,234,0.5); box-shadow: 0 12px 32px -16px rgba(147,51,234,0.55); }
+  .okiru-product .ok-challenge-card:nth-child(3n+1) .ok-challenge-label { color: #a855f7; }
+  .okiru-product .ok-challenge-card:nth-child(3n+2)::before { background: linear-gradient(90deg,#2563eb,#3b82f6); }
+  .okiru-product .ok-challenge-card:nth-child(3n+2):hover { border-color: rgba(37,99,235,0.5); box-shadow: 0 12px 32px -16px rgba(37,99,235,0.55); }
+  .okiru-product .ok-challenge-card:nth-child(3n+2) .ok-challenge-label { color: #3b82f6; }
+  .okiru-product .ok-challenge-card:nth-child(3n+3)::before { background: linear-gradient(90deg,#f97316,#fb923c); }
+  .okiru-product .ok-challenge-card:nth-child(3n+3):hover { border-color: rgba(249,115,22,0.5); box-shadow: 0 12px 32px -16px rgba(249,115,22,0.5); }
+  .okiru-product .ok-challenge-card:nth-child(3n+3) .ok-challenge-label { color: #fb923c; }
+
+  /* ── STEPS (how it works) ── */
+  .okiru-product .ok-about-pillar { grid-template-columns: 64px 1fr; padding: 26px 0; }
+  .okiru-product .ok-about-pillar-num {
+    font-family: var(--serif); font-style: italic; font-size: 1.6rem; letter-spacing: -0.02em; padding-top: 0;
+    background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+
+  /* ── CTA PANEL (clean gradient card) ── */
+  .okiru-product #product-cta .ok-w > div {
+    max-width: 860px; padding: 48px 44px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.09);
+    background: linear-gradient(135deg, rgba(147,51,234,0.10) 0%, rgba(37,99,235,0.06) 55%, rgba(249,115,22,0.07) 100%);
+  }
+  .okiru-product #product-cta { border-bottom: none; }
+
+  @media (max-width: 860px) {
+    .okiru-product .ok-challenge-grid { grid-template-columns: 1fr; }
+  }
+`;
+
 const ArrowRight = ({ size = 14 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
@@ -47,11 +118,18 @@ export default function ProductLandingPage({
   };
 
   useEffect(() => {
-    const id = "okiru-styles";
-    if (!document.getElementById(id)) {
-      const s = document.createElement("style"); s.id = id; s.textContent = GLOBAL_CSS; document.head.appendChild(s);
+    const base = "okiru-styles";
+    if (!document.getElementById(base)) {
+      const s = document.createElement("style"); s.id = base; s.textContent = GLOBAL_CSS; document.head.appendChild(s);
     }
-    return () => { const el = document.getElementById(id); if (el) el.remove(); };
+    const themeId = "okiru-product-styles";
+    if (!document.getElementById(themeId)) {
+      const s = document.createElement("style"); s.id = themeId; s.textContent = PRODUCT_CSS; document.head.appendChild(s);
+    }
+    return () => {
+      document.getElementById(base)?.remove();
+      document.getElementById(themeId)?.remove();
+    };
   }, []);
 
   useEffect(() => {
@@ -63,7 +141,7 @@ export default function ProductLandingPage({
   useEffect(() => { window.scrollTo(0, 0); }, [product.slug]);
 
   return (
-    <div className="okiru-root">
+    <div className="okiru-root okiru-product">
       <div className="okiru-grain" aria-hidden />
 
       {/* ── NAV ── */}
