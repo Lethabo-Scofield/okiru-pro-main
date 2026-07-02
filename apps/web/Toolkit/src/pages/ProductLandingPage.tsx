@@ -20,6 +20,8 @@ const PRODUCT_CSS = `
     border-radius: 2px; background: var(--grad-h);
   }
 
+  .okiru-product .ok-hero { min-height: 0; display: block; padding: 132px 0 52px; align-items: initial; }
+
   .okiru-product .ok-challenge-grid { gap: 18px; }
   .okiru-product .ok-challenge-card {
     padding: 32px 30px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
