@@ -184,7 +184,7 @@ export default function ProductLandingPage({
         <div className="ok-nav-inner">
           <button onClick={onNavigateHome} className="ok-brand" aria-label="Okiru home" style={{ background: "none", border: "none", cursor: "pointer" }}>
             <img src={okiruLogo} alt="" className="ok-brand-mark" />
-            <span className="ok-wordmark"><strong>Okiru</strong><span> Consulting</span></span>
+            <span className="ok-wordmark"><strong>Okiru</strong></span>
           </button>
 
           <div className="ok-nav-center">
@@ -203,7 +203,6 @@ export default function ProductLandingPage({
 
           <div className="ok-nav-right">
             <button className="ok-nav-signin" onClick={onNavigateAuth}>Sign in</button>
-            <button className="ok-nav-signin" onClick={goRegister}>Get started</button>
             <button className="ok-nav-demo-btn" onClick={goPrimary}>
               {product.primaryCta} <span className="arr"><ArrowRight size={13} /></span>
             </button>
@@ -221,7 +220,6 @@ export default function ProductLandingPage({
           <button key={t.slug} className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateProduct(t.slug); }}>{t.label}</button>
         ))}
         <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
-        <button className="ok-mobile-link" onClick={goRegister}>Get started</button>
         <button className="ok-mobile-cta" onClick={goPrimary}>{product.primaryCta} →</button>
       </div>
 
