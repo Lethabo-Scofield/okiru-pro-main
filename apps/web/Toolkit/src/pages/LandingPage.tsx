@@ -966,12 +966,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <div className="ok-hero-glow" />
           </div>
           <div className="ok-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
-            <div className="ok-hero-tag ok-anim-1">
-              <span className="ok-hero-tag-dot" />
-              ESG&nbsp;·&nbsp;B-BBEE&nbsp;·&nbsp;AI&nbsp;·&nbsp;Skills&nbsp;·&nbsp;WSP
-              <span className="ok-hero-tag-div" />
-              <span className="ok-hero-tag-brand">Okiru Consulting&nbsp;&nbsp;·&nbsp;&nbsp;Est.&nbsp;2023</span>
-            </div>
             <h1 className="ok-h1 ok-anim-2">
               Okiru means<br />
               <span className="ok-h1-gradient">to grow.</span>
