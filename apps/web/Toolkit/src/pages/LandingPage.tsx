@@ -327,6 +327,7 @@ export const GLOBAL_CSS = `
 
   .okiru-root .ok-hero-w { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; }
   .okiru-root .ok-hero-content { min-width: 0; }
+  .okiru-root .ok-hero-content .ok-h1 { font-size: clamp(2.4rem, 4vw, 3.7rem); margin-bottom: 26px; }
   .okiru-root .ok-hero-visual { position: relative; justify-self: end; width: 100%; max-width: 440px; }
   .okiru-root .ok-hero-portrait {
     position: relative; z-index: 1; width: 100%; display: block;
