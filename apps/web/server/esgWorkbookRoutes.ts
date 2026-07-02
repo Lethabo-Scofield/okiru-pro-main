@@ -69,16 +69,38 @@ async function authorizeEsgWorkbook(req: Request, res: Response): Promise<EsgWor
   const userOrgId: string | null = user?.organizationId ?? null;
 
   let clientExists = false;
+  let clientOrgId: string | null = null;
+  let clientCreatedBy: string | null = null;
   if (mongoReady()) {
-    const client = await ClientModel.findOne({ clientId: companyId })
-      .select({ clientId: 1 })
-      .lean();
-    clientExists = Boolean(client);
+    const client = (await ClientModel.findOne({ clientId: companyId })
+      .select({ clientId: 1, organizationId: 1, createdByUserId: 1 })
+      .lean()) as { organizationId?: string | null; createdByUserId?: string | null } | null;
+    if (client) {
+      clientExists = true;
+      clientOrgId = client.organizationId ?? null;
+      clientCreatedBy = client.createdByUserId ?? null;
+    }
   } else {
-    clientExists = Boolean(memGetClient(companyId));
+    const c = memGetClient(companyId) as { organizationId?: string | null; createdByUserId?: string | null } | undefined;
+    if (c) {
+      clientExists = true;
+      clientOrgId = c.organizationId ?? null;
+      clientCreatedBy = c.createdByUserId ?? null;
+    }
   }
   if (!clientExists) {
     res.status(404).json({ error: "Company not found" });
+    return null;
+  }
+
+  // Cross-tenant guard (audit): previously this function only checked that the
+  // client EXISTED, so any ESG-enabled user could read/write ANY company's ESG
+  // workbook by id. Enforce the same rule as the client/workbook paths — the
+  // creator or a same-organization teammate only.
+  const sameUser = clientCreatedBy != null && clientCreatedBy === userId;
+  const sameOrg = !!userOrgId && !!clientOrgId && clientOrgId === userOrgId;
+  if (!sameUser && !sameOrg) {
+    res.status(403).json({ error: "You don't have access to this company's ESG workbook" });
     return null;
   }
 

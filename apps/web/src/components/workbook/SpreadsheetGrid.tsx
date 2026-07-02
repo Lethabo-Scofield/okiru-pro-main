@@ -114,7 +114,12 @@ function normalizeRange(a: CellRef, b: CellRef) {
 }
 
 function formatCellDisplay(v: unknown, col: ColumnDef): string {
-  if (isYesNoColumn(col)) return yesNoToSelectValue(v);
+  if (isYesNoColumn(col)) {
+    // Unset Yes/No cells render blank (not "No"), so a value the user never set
+    // can be cleared back to empty via the "—" option.
+    if (v === "" || v === null || v === undefined) return "";
+    return yesNoToSelectValue(v);
+  }
   if (col.type === "boolean") return v ? "TRUE" : "FALSE";
   if (col.type === "date") return formatDateForDisplay(v);
   if (v === null || v === undefined) return "";
@@ -122,7 +127,12 @@ function formatCellDisplay(v: unknown, col: ColumnDef): string {
 }
 
 function serializeCellValue(v: unknown, col: ColumnDef): string {
-  if (isYesNoColumn(col)) return yesNoToSelectValue(v);
+  if (isYesNoColumn(col)) {
+    // Unset cells copy as blank (not "No") so copy matches the grid and a
+    // round-trip paste doesn't materialise an explicit No.
+    if (v === "" || v === null || v === undefined) return "";
+    return yesNoToSelectValue(v);
+  }
   if (col.type === "boolean") return v ? "TRUE" : "FALSE";
   if (v === null || v === undefined) return "";
   return String(v);
@@ -319,7 +329,8 @@ export function SpreadsheetGrid({
         } else if (col.type === "boolean") {
           value = raw.toLowerCase() === "true" || raw === "1";
         } else if (isYesNoColumn(col)) {
-          value = coerceYesNo(raw);
+          // Empty selection ("—") clears the cell to unset rather than forcing No.
+          value = raw === "" ? "" : coerceYesNo(raw);
         } else if (col.type === "date" && raw.trim() !== "") {
           value = numericDateDisplayToIso(raw) ?? raw;
         }
@@ -372,7 +383,9 @@ export function SpreadsheetGrid({
       const display =
         initialValue ??
         (isYesNoColumn(col)
-          ? yesNoToSelectValue(v)
+          ? // Unset cell seeds the empty "—" option, not "No", so opening the
+            // editor on a blank cell doesn't silently commit No on Enter/Tab.
+            (v === "" || v === null || v === undefined ? "" : yesNoToSelectValue(v))
           : col.type === "date"
             ? formatDateForDisplay(v)
             : String(v ?? ""));
@@ -1149,12 +1162,22 @@ export function SpreadsheetGrid({
             {columns.map((c, i) => (
               <th
                 key={c.key}
+                title={c.guidance || undefined}
                 style={{ width: colWidths[c.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[c.key] || DEFAULT_COL_WIDTH }}
                 className="relative text-left px-3 py-2 font-semibold text-[#d1d1d6] border-b border-r border-[#2c2c2e] text-[11px]"
               >
                 <span className="text-[#636366] mr-1.5 font-mono">{colLetter(i)}</span>
                 {c.label}
                 {c.required && <span className="text-status-error ml-0.5">*</span>}
+                {c.guidance && (
+                  <span
+                    className="ml-1 text-[#636366] cursor-help"
+                    title={c.guidance}
+                    aria-label={`Help: ${c.label}`}
+                  >
+                    ⓘ
+                  </span>
+                )}
                 <span
                   role="separator"
                   className="absolute right-0 top-0 h-full w-1.5 cursor-col-resize hover:bg-blue-500/40"

@@ -84,6 +84,8 @@ export default function Dashboard() {
 
   const openScorecard = (clientId: string) => {
     localStorage.setItem('okiru-pro-active-client', clientId);
+    // Record origin so the toolkit "Back" returns to this company's workbook, not the Hub.
+    sessionStorage.setItem('okiru-toolkit-from', JSON.stringify({ kind: 'company', companyId: clientId }));
     navigate('/toolkit/scorecard');
   };
 

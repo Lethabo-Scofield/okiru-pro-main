@@ -160,6 +160,7 @@ export default function YESInitiative() {
   const { trainingPrograms } = skills;
   const { employees } = management;
   const { toast } = useToast();
+  const updateTrainingProgram = useBbeeStore((s) => s.updateTrainingProgram);
 
   // YES candidates - derive from training interventions with isYesEmployee flag
   const yesCandidates: YESCandidate[] = useMemo(() => {
@@ -250,7 +251,14 @@ export default function YESInitiative() {
 
   const handleEdit = () => {
     if (!editingId) return;
-    // Update the linked training intervention
+    // The candidate id IS the underlying TrainingProgram id (set as
+    // trainingInterventionId in the derived map). Persist via the store so the
+    // absorption flag/date isn't lost on reload (audit B4 — previously toasted
+    // "Changes saved" with no store/api call).
+    updateTrainingProgram(editingId, {
+      isAbsorbed: formState.isAbsorbed,
+      endDate: formState.isAbsorbed ? (formState.absorptionDate || undefined) : undefined,
+    });
     toast({ title: "Updated", description: "Changes saved." });
     setIsEditOpen(false);
     setEditingId(null);

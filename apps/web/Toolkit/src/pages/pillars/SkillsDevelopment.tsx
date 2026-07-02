@@ -1,10 +1,12 @@
 import React, { useRef, useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { parseSkillsBulkUploadBuffer } from "./bulkUploadParser";
 import { calculateSkillsScore, resolveSkillsSpendTargets } from "@toolkit/lib/calculators/skills";
 import { isBlackRace } from "@toolkit/lib/calculators/shared";
 import { getEAPTargets } from "@toolkit/lib/calculators/eapTargets";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -177,6 +179,7 @@ export default function SkillsDevelopment() {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const errs = useFieldErrors();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("details");
   const [formState, setFormState] = useState<InterventionFormState>({ ...defaultFormState });
@@ -260,16 +263,23 @@ export default function SkillsDevelopment() {
     setFormState({ ...defaultFormState });
     setMunicipalityIsOther(false);
     setActiveTab("details");
+    errs.reset();
   };
 
   const handleAdd = () => {
-    if (!formState.programName || !formState.learnerName) {
+    const programBad = !formState.programName.trim();
+    const learnerBad = !formState.learnerName.trim();
+    if (programBad || learnerBad) {
+      errs.setMany({ programName: programBad, learnerName: learnerBad });
+      setActiveTab(programBad ? "details" : "learner");
       toast({ title: "Invalid input", description: "Program name and learner name are required.", variant: "destructive" });
       return;
     }
 
     const totalCost = calculateTotalCost(formState);
     if (totalCost <= 0) {
+      errs.set('totalCost', true);
+      setActiveTab("costs");
       toast({ title: "Invalid cost", description: "At least one cost field must be greater than 0.", variant: "destructive" });
       return;
     }
@@ -361,7 +371,11 @@ export default function SkillsDevelopment() {
 
   const handleEdit = () => {
     if (!editingId) return;
-    if (!formState.programName || !formState.learnerName) {
+    const programBad = !formState.programName.trim();
+    const learnerBad = !formState.learnerName.trim();
+    if (programBad || learnerBad) {
+      errs.setMany({ programName: programBad, learnerName: learnerBad });
+      setActiveTab(programBad ? "details" : "learner");
       toast({ title: "Invalid input", description: "Program name and learner name are required.", variant: "destructive" });
       return;
     }
@@ -411,7 +425,7 @@ export default function SkillsDevelopment() {
     toast({ title: "Intervention Updated", description: `${formState.programName} for ${formState.learnerName}` });
   };
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
   const score = calculateSkillsScore(skills, calculatorConfig, client.eapProvince);
 
@@ -431,13 +445,18 @@ export default function SkillsDevelopment() {
       <TabsContent value="details" className="space-y-4 py-4">
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="program-name" className="text-right">Program Name</Label>
-          <Input
-            id="program-name"
-            value={formState.programName}
-            onChange={e => setFormState({ ...formState, programName: e.target.value })}
-            className="col-span-3"
-            placeholder="e.g., IT Support Learnership"
-          />
+          <div className="col-span-3 space-y-1">
+            <Input
+              id="program-name"
+              value={formState.programName}
+              onChange={e => { setFormState({ ...formState, programName: e.target.value }); errs.clear('programName'); }}
+              placeholder="e.g., IT Support Learnership"
+              aria-invalid={errs.has('programName') || undefined}
+              aria-describedby={errs.has('programName') ? 'program-name-error' : undefined}
+              className={cn(errs.has('programName') && "border-destructive focus-visible:ring-destructive")}
+            />
+            {errs.has('programName') && <p id="program-name-error" className="text-xs text-destructive">Program name is required.</p>}
+          </div>
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="training-provider" className="text-right">Provider</Label>
@@ -493,13 +512,18 @@ export default function SkillsDevelopment() {
       <TabsContent value="learner" className="space-y-4 py-4">
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="learner-name" className="text-right">Learner Name</Label>
-          <Input
-            id="learner-name"
-            value={formState.learnerName}
-            onChange={e => setFormState({ ...formState, learnerName: e.target.value })}
-            className="col-span-3"
-            placeholder="Full name of participant"
-          />
+          <div className="col-span-3 space-y-1">
+            <Input
+              id="learner-name"
+              value={formState.learnerName}
+              onChange={e => { setFormState({ ...formState, learnerName: e.target.value }); errs.clear('learnerName'); }}
+              placeholder="Full name of participant"
+              aria-invalid={errs.has('learnerName') || undefined}
+              aria-describedby={errs.has('learnerName') ? 'learner-name-error' : undefined}
+              className={cn(errs.has('learnerName') && "border-destructive focus-visible:ring-destructive")}
+            />
+            {errs.has('learnerName') && <p id="learner-name-error" className="text-xs text-destructive">Learner name is required.</p>}
+          </div>
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="learner-id" className="text-right">ID Number</Label>

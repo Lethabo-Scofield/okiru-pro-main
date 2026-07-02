@@ -1,5 +1,6 @@
 import {
   UserModel,
+  OrganizationModel,
   TemplateModel,
   CalculatorConfigModel,
   CompanyProfileModel,
@@ -40,6 +41,13 @@ export interface ScorecardSnapshotRecord {
   scorecardResult?: unknown;
   createdAt: string;
   createdBy: string;
+}
+
+export interface OrgRecord {
+  id: string;
+  name: string;
+  adminUserId?: string | null;
+  createdByUserId?: string | null;
 }
 
 export interface Assessment {
@@ -141,6 +149,11 @@ export interface IStorage {
   setTwofaEnabled(id: string, enabled: boolean): Promise<User | undefined>;
   setLastLogin(id: string): Promise<void>;
   getAllUsers(): Promise<User[]>;
+  // Organization / tenant membership. getUsersByOrganization returns the org's
+  // members sorted oldest-first (the earliest is the de-facto founder).
+  getUsersByOrganization(orgId: string): Promise<User[]>;
+  getOrganizationById(orgId: string): Promise<OrgRecord | undefined>;
+  setOrganizationAdmin(orgId: string, adminUserId: string, createdByUserId?: string | null): Promise<void>;
   getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined>;
   saveCalculatorConfig(clientId: string, config: CalculatorConfig): Promise<CalculatorConfigRow>;
   
@@ -193,6 +206,7 @@ export interface IStorage {
 export class MemoryStorage implements IStorage {
   private templates: Map<number, Template> = new Map();
   private users: Map<string, User> = new Map();
+  private organizations: Map<string, OrgRecord> = new Map();
   private calculatorConfigs: Map<string, CalculatorConfigRow> = new Map();
   private templateSeq = 0;
   private userSeq = 0;
@@ -366,6 +380,26 @@ export class MemoryStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return Array.from(this.users.values());
+  }
+
+  async getUsersByOrganization(orgId: string): Promise<User[]> {
+    return Array.from(this.users.values())
+      .filter((u) => u.organizationId === orgId)
+      .sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime());
+  }
+
+  async getOrganizationById(orgId: string): Promise<OrgRecord | undefined> {
+    return this.organizations.get(orgId);
+  }
+
+  async setOrganizationAdmin(orgId: string, adminUserId: string, createdByUserId?: string | null): Promise<void> {
+    const existing = this.organizations.get(orgId);
+    this.organizations.set(orgId, {
+      id: orgId,
+      name: existing?.name ?? orgId,
+      adminUserId,
+      createdByUserId: createdByUserId ?? existing?.createdByUserId ?? adminUserId,
+    });
   }
 
   async getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined> {
@@ -875,6 +909,30 @@ export class DatabaseStorage implements IStorage {
     return docs.map((d) => toUser(d)!);
   }
 
+  async getUsersByOrganization(orgId: string): Promise<User[]> {
+    const docs = await UserModel.find({ organizationId: orgId }).sort({ createdAt: 1 });
+    return docs.map((d) => toUser(d)!);
+  }
+
+  async getOrganizationById(orgId: string): Promise<OrgRecord | undefined> {
+    const doc = (await OrganizationModel.findOne({ id: orgId }).lean()) as
+      | { id: string; name: string; adminUserId?: string | null; createdByUserId?: string | null }
+      | null;
+    if (!doc) return undefined;
+    return {
+      id: doc.id,
+      name: doc.name,
+      adminUserId: doc.adminUserId ?? null,
+      createdByUserId: doc.createdByUserId ?? null,
+    };
+  }
+
+  async setOrganizationAdmin(orgId: string, adminUserId: string, createdByUserId?: string | null): Promise<void> {
+    const set: Record<string, unknown> = { adminUserId };
+    if (createdByUserId != null) set.createdByUserId = createdByUserId;
+    await OrganizationModel.updateOne({ id: orgId }, { $set: set });
+  }
+
   async getCalculatorConfig(clientId: string): Promise<CalculatorConfigRow | undefined> {
     const doc = await CalculatorConfigModel.findOne({ clientId });
     if (!doc) return undefined;
@@ -1039,13 +1097,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserAssessments(userId: string): Promise<Assessment[]> {
-    const { ProcessorSessionModel } = await import("../shared/schema");
+    const { ProcessorSessionModel, UserModel } = await import("../shared/schema");
     const memberships = await WorkspaceMemberModel.find({ userId }).select("workspaceId").lean();
     const wsIds = memberships.map((m: { workspaceId: string }) => m.workspaceId).filter(Boolean);
 
     const orClause: Record<string, unknown>[] = [{ createdBy: userId }, { createdByUserId: userId }];
     if (wsIds.length > 0) {
       orClause.push({ workspaceId: { $in: wsIds } });
+    }
+    // Org-scoped: teammates in the same organization see each other's
+    // assessments/scorecards (matches the org-scoped client visibility). The
+    // organizationId is stamped on the session at save time (apps/api).
+    const actor = (await UserModel.findOne({ id: userId }).select("organizationId").lean()) as
+      | { organizationId?: string | null }
+      | null;
+    if (actor?.organizationId) {
+      orClause.push({ organizationId: actor.organizationId });
     }
 
     const docs = await ProcessorSessionModel.find({ $or: orClause }).sort({ updatedAt: -1 });
@@ -1442,6 +1509,7 @@ function toAssessment(doc: any): Assessment | undefined {
     scorecardResult: obj.scorecardResult,
     status: obj.status || 'draft',
     createdBy: obj.createdBy || obj.userId || obj.createdByUserId,
+    organizationId: obj.organizationId ?? null,
     workspaceId: obj.workspaceId ?? null,
     pillarActivity: activity,
     scorecardSnapshots: snaps,

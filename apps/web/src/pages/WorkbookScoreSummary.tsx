@@ -98,6 +98,8 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
 
   const goToScorecard = () => {
     localStorage.setItem("okiru-pro-active-client", companyId);
+    // Record origin so the toolkit "Back" returns here (the summary), not the Hub.
+    sessionStorage.setItem("okiru-toolkit-from", JSON.stringify({ kind: "summary", companyId }));
     navigate("/toolkit/scorecard");
   };
 

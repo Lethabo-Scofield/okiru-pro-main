@@ -32,10 +32,16 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Serve assets with long-lived cache headers
+  // Serve assets with long-lived cache headers.
+  // fallthrough:false so a MISSING hashed chunk returns a real 404 instead of
+  // falling through to the SPA index.html (a 200-HTML response makes the browser
+  // try to execute HTML as a JS module → "Failed to fetch dynamically imported
+  // module" for any stale tab after a deploy). With a clean 404 the client can
+  // detect the stale chunk and auto-reload.
   app.use("/assets", express.static(path.join(distPath, "assets"), {
     maxAge: "1y",
     immutable: true,
+    fallthrough: false,
   }));
 
   // Serve remaining static files
@@ -43,7 +49,13 @@ export function serveStatic(app: Express) {
 
   // SPA fallback - any unmatched route returns index.html
   // Note: Express 5 requires named wildcard - "/*path" not "*"
-  app.get("/{*path}", (_req, res) => {
+  app.get("/{*path}", (req, res) => {
+    // Never return index.html for a static-asset request: a stale/missing chunk
+    // must 404 so the browser doesn't parse HTML as a module.
+    if (/\.(js|mjs|css|map|json|wasm)$/i.test(req.path)) {
+      res.status(404).end();
+      return;
+    }
     res.sendFile(path.join(distPath!, "index.html"));
   });
 }

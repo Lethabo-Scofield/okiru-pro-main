@@ -6,7 +6,8 @@ import { requireAuth } from "./routes";
 import { hasAnyRole } from "./roles";
 import { seedLakeTradingDemo } from "./lakeTradingDemoSeed";
 import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixture";
-import { WorkbookModel, ClientModel } from "../shared/schema";
+import { WorkbookModel, ClientModel, ProcessorSessionModel, WorkspaceMemberModel } from "../shared/schema";
+import { handleBackSync, rebuildWorkbookFromEntities } from "./workbookBackSync";
 import {
   validateWorkbook,
   validateWorkbookForSubmit,
@@ -822,6 +823,43 @@ async function authorizeWorkbookAccess(
       res.status(403).json({ message: "Forbidden" });
       return null;
     }
+
+    // Phase 6 RBAC: if the client has a workspace-bound assessment, the
+    // requester must also be a member of that workspace (creators and the
+    // workspace owner are always allowed). This stops a same-org user who
+    // wasn't invited to the workspace from bypassing pillar scoping via the
+    // workbook route. Mirrors the apps/api verifyPillarAccess pattern.
+    if (mongoReady() && !sameUser && !superAdmin) {
+      try {
+        const session = await ProcessorSessionModel.findOne({
+          clientId: companyId,
+          workspaceId: { $nin: [null, ''] },
+        }).sort({ updatedAt: -1 }).lean() as any;
+        if (session?.workspaceId) {
+          const ownerId = session.createdBy ?? session.createdByUserId ?? null;
+          const isAssessmentOwner = ownerId && ownerId === userId;
+          if (!isAssessmentOwner) {
+            const member = await WorkspaceMemberModel.findOne({
+              workspaceId: String(session.workspaceId),
+              userId,
+            }).lean();
+            if (!member) {
+              logger.warn("Workbook access denied — not a workspace member", {
+                companyId,
+                requesterUserId: userId,
+                workspaceId: session.workspaceId,
+              });
+              res.status(403).json({ message: "Forbidden — not a member of this workspace" });
+              return null;
+            }
+          }
+        }
+      } catch (err: any) {
+        // Don't mask transient infra failures behind a 403 — the org/creator
+        // check above is still enforcing tenancy. Log + fall through.
+        logger.warn("workbook RBAC check failed (non-fatal)", { companyId, error: err?.message });
+      }
+    }
     return wb;
   } catch (err: any) {
     if (err?.message === "DATABASE_UNAVAILABLE") {
@@ -860,7 +898,7 @@ function mapContributionType(raw: string): string {
 
 function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
   const t = (raw ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
-  if (t === "ed" || t.startsWith("enterprise")) return "enterprise_development";
+  if (t === "ed" || t.startsWith("enterprise") || t.includes("enterprise development")) return "enterprise_development";
   if (t === "sd" || t.startsWith("supplier")) return "supplier_development";
   // Lake Trading Fix Plan §1 Bug 4: safe default → counts toward SD sub-min
   return "supplier_development";
@@ -913,8 +951,13 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     const sharePct = pctToFraction((r as any).shareholding);
     const isYouth = coerceYesNo((r as any).isYouth);
     const isDisabled = coerceYesNo((r as any).isDisabled);
-    // Lake demo writes `isNewEntrant` directly; default false otherwise.
-    const isNewEntrant = coerceYesNo((r as any).isNewEntrant ?? (r as any).blackNewEntrant);
+    // Credit a black new entrant from the explicit flag OR a positive BNE%
+    // column (mirrors how designated groups are credited from their % below).
+    // Without this, a workbook / bulk-upload row that supplies only BNE% never
+    // scores the new-entrant points.
+    const isNewEntrant =
+      coerceYesNo((r as any).isNewEntrant ?? (r as any).blackNewEntrant) ||
+      pctToFraction((r as any).blackNewEntrantOwnership) > 0;
     // AGRI-specific: farm workers as a 5th Designated Group category.
     const isFarmWorker = sectorCode === "AGRI" && coerceYesNo((r as any).isFarmWorker) && farmWorkersIncluded;
 
@@ -923,17 +966,21 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     // to race+gender+voting/EI derivation for individual shareholders.
     const explicitBlackOwn = (r as any).blackOwnership;
     const explicitBlackWomenOwn = (r as any).blackWomenOwnership;
+    // blackOwnership is the BLACK FRACTION of the holder (the calc multiplies it by the
+    // holder's share fraction). A black individual is 100% black-owned — their holding
+    // SIZE comes from `shares` (voting/EI), NOT from blackOwnership. The old code set it
+    // to max(voting,EI), which the calc then squared (28% voting -> 14% black). (W-own)
     const blackOwnership =
       explicitBlackOwn != null
         ? pctToFraction(explicitBlackOwn)
         : isBlack
-          ? Math.max(votingPct, eiPct)
+          ? 1
           : 0;
     const blackWomenOwnership =
       explicitBlackWomenOwn != null
         ? pctToFraction(explicitBlackWomenOwn)
         : isBlack && isFemale
-          ? Math.max(votingPct, eiPct)
+          ? 1
           : 0;
 
     return {
@@ -953,10 +1000,14 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // Use integer "shares" derived from shareholding %; only relative weight matters
       // (calculators normalise by total shares). 1 minimum keeps the totalShares > 0
       // branch in calculateOwnershipScore so blackOwnership flows through.
+      // Share weight: real export sheets carry Voting Rights % / Economic Interest %
+      // but no explicit shareholding column, so the share-weighted ownership calc was
+      // diluting every holder to 1 equal share (black voting read ~6% not ~63%). Fall
+      // back to voting% (then EI%) as the weight so ownership scores from real %s. (W-own)
       shares:
         num((r as any).numberOfShares) > 0
           ? Math.round(num((r as any).numberOfShares))
-          : Math.max(1, Math.round(sharePct * 10_000)),
+          : Math.max(1, Math.round((sharePct > 0 ? sharePct : Math.max(votingPct, eiPct)) * 10_000)),
       shareValue: num((r as any).shareValue) > 0 ? num((r as any).shareValue) : 1,
       yearsHeld: num((r as any).yearsHeld),
       isDesignatedGroup:
@@ -971,6 +1022,15 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       economicInterestPercent: eiPct,
       ownershipType: "shareholder" as const,
     };
+  }).filter((sh) => {
+    // Drop summary / total / note rows the grid parser ingests below the shareholder
+    // data (e.g. "TOTALS" with voting 100%, "Black voting rights", a "Net value:" note).
+    // These were polluting the share-weighted ownership calc. (W-own)
+    const nm = String(sh.name ?? "").trim().toLowerCase();
+    if (!nm) return false;
+    if (/^(totals?|sub-?totals?|grand\s+total|net\s+value|black\s+(voting|women|economic|new|people|disabled))/i.test(nm)) return false;
+    // A real shareholder has a recognised race or some ownership signal.
+    return sh.race !== "" || sh.blackOwnership > 0 || sh.votingRightsPercent > 0 || sh.economicInterestPercent > 0;
   });
 
   const empSeen = new Set<string>();
@@ -1000,6 +1060,9 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         isForeign: coerceYesNo((r as any).isForeign),
         votingRights: num((r as any).votingRights),
         startDate: s((r as any).startDate),
+        // Construction-only template fields (professional registration, youth).
+        professionallyRegistered: coerceYesNo((r as any).professionallyRegistered),
+        isYouthEmployee: coerceYesNo((r as any).isYouthEmployee),
       });
     }
   }
@@ -1058,6 +1121,12 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       cost: total,
       startDate: s((r as any).startDate),
       endDate: s((r as any).endDate),
+      // Construction-only template fields (industry registration, learner mgmt
+      // level, mentorship) for the construction skills indicators.
+      industryRegistered: coerceYesNo((r as any).industryRegistered),
+      learnerMgmtLevel: s((r as any).learnerMgmtLevel),
+      mentorship: coerceYesNo((r as any).mentorship),
+      mentorshipPromotion: coerceYesNo((r as any).mentorshipPromotion),
     };
   });
 
@@ -1123,7 +1192,10 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   // enterprise_development) and map contributionType labels Î“Ã¥Ã† calculator keys.
   const esdContributions = (sec["esd"]?.rows ?? []).map((r) => {
     const rawType = s((r as any).contributionType);
-    const rawCategory = s((r as any).esdCategory);
+    // The export ESD sheet has no category column — SD vs ED is encoded in the
+    // Contribution Description ("ENTERPRISE DEVELOPMENT (non-supplier…)" vs "SD
+    // beneficiary (existing supplier…)"). Fall back to it so ED rows score. (W1b)
+    const rawCategory = s((r as any).esdCategory) || s((r as any).contributionDescription);
     return {
       id: (r as any)._id ?? undefined,
       // Calculator reads `beneficiary` + `type` + `category` + `amount`
@@ -1142,6 +1214,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       paymentDate: s((r as any).paymentDate),
       primeRate: num((r as any).primeRate),
       actualRate: num((r as any).actualRate),
+      // Construction-only: recognised Supplier & Contractor Development programme.
+      supplierDevProgramme: coerceYesNo((r as any).supplierDevProgramme),
     };
   });
 
@@ -1180,6 +1254,14 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       0,
     );
     if (supplierSpendTotal > 0) financials.tmps = supplierSpendTotal;
+  }
+
+  // Connect the skills headcount to the actual employee register — the user
+  // shouldn't have to enter it twice. When no headcount was supplied, use the
+  // number of employees captured in Management Control. The skills calculator
+  // scores learnership / absorption participation as a % of this headcount.
+  if (!((financials as any).headcount > 0) && employees.length > 0) {
+    (financials as any).headcount = employees.length;
   }
 
   const ownershipMeta = {
@@ -1257,6 +1339,17 @@ export function registerWorkbookRoutes(app: Express): void {
   app.get("/api/workbook/:companyId", requireAuth, async (req: Request, res: Response) => {
     const wb = await authorizeWorkbookAccess(req, res);
     if (!wb) return;
+    // Phase 5: read-time rebuild — make the workbook a true derived view of
+    // the live per-entity collections, so even if a back-sync fan-out was
+    // dropped the workbook self-heals on open. Opt-out with ?rebuild=0 (for
+    // perf debugging or to inspect the persisted shape unmodified).
+    if (req.query.rebuild !== '0') {
+      try {
+        await rebuildWorkbookFromEntities(wb);
+      } catch (err) {
+        logger.warn('workbook rebuild failed (returning stored doc)', { err: err instanceof Error ? err.message : String(err) });
+      }
+    }
     res.json(wb);
   });
 
@@ -1528,6 +1621,22 @@ export function registerWorkbookRoutes(app: Express): void {
             .json({ error: "Client not found for this workbook." });
         }
 
+        // Phase 3 (sync plan): financials merge fix. `update.financials` is a
+        // Mixed-typed blob — using $set on it whole-replaces the field,
+        // silently dropping sub-keys that other paths wrote (e.g. CE/Fundisa
+        // spends set via Toolkit Settings, deemedNpat flags from prior
+        // submissions). Merge over the existing blob so workbook-owned keys
+        // win while other keys pass through unchanged. The set of keys the
+        // workbook OWNS is whatever projectWorkbookToClient + buildUpdate
+        // here actually populate (skillsExtra at line ~1484), so spreading
+        // workbook-owned LAST preserves the right precedence.
+        if (update.financials && typeof update.financials === 'object') {
+          const currentFinancials = ((client as any).financials && typeof (client as any).financials === 'object')
+            ? (client as any).financials
+            : {};
+          update.financials = { ...currentFinancials, ...update.financials };
+        }
+
         await ClientModel.updateOne({ clientId: wb.companyId }, { $set: update });
 
         const saved = await ClientModel.findOne({ clientId: wb.companyId })
@@ -1572,6 +1681,17 @@ export function registerWorkbookRoutes(app: Express): void {
 
   app.post("/api/workbook/:companyId/submit", requireAuth, handleWorkbookScorecardSync);
   app.post("/api/workbook/:companyId/sync", requireAuth, handleWorkbookScorecardSync);
+
+  // ---------------------------------------------------------------------------
+  // POST /api/internal/workbook-backsync
+  // Toolkit→Workbook back-sync: apps/api per-entity routes fire this after
+  // every successful entity write (employees / suppliers / training-programs /
+  // shareholders / ESD / SED contributions). Token-protected (shared secret).
+  // ---------------------------------------------------------------------------
+  app.post(
+    "/api/internal/workbook-backsync",
+    handleBackSync(process.env.INTERNAL_BACKSYNC_TOKEN),
+  );
 
   // ---------------------------------------------------------------------------
   // POST /api/workbook/suggest-value

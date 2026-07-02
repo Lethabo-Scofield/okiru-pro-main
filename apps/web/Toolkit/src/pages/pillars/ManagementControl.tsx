@@ -12,7 +12,7 @@ import { Label } from "@toolkit/components/ui/label";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@toolkit/components/ui/tabs";
-import { Plus, Filter, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX, ChevronDown, ChevronRight, Wallet, Vote } from "lucide-react";
+import { Plus, Pencil, Trash2, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Globe, Calendar, MapPin, UserX, ChevronDown, ChevronRight, Wallet, Vote } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Employee } from "@toolkit/lib/types";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import * as XLSX from "xlsx";
 
 type BulkStep = 'upload' | 'mapping' | 'preview';
@@ -55,6 +56,22 @@ const VALID_RACES = ['African', 'Coloured', 'Indian', 'White'];
 // Issue 1: Added new designation levels
 const VALID_DESIGNATIONS = ['Board', 'Executive', 'Executive Director', 'Other Executive Management', 'Senior', 'Middle', 'Junior', 'Skilled Technical', 'Semi-skilled', 'Unskilled'];
 const VALID_PROVINCES = ['Gauteng', 'Western Cape', 'KZN', 'Eastern Cape', 'Free State', 'Limpopo', 'Mpumalanga', 'North West', 'Northern Cape', 'National'];
+
+// Heading shown for each designation group. Using an explicit map avoids the
+// "{level} Management" concatenation that produced "Board Management",
+// "Other Executive Management Management", "Unskilled Management", etc.
+const LEVEL_HEADINGS: Record<string, string> = {
+  'Board': 'Board',
+  'Executive Director': 'Executive Directors',
+  'Other Executive Management': 'Other Executive Management',
+  'Executive': 'Executive Management',
+  'Senior': 'Senior Management',
+  'Middle': 'Middle Management',
+  'Skilled Technical': 'Skilled Technical',
+  'Junior': 'Junior Management',
+  'Semi-skilled': 'Semi-skilled',
+  'Unskilled': 'Unskilled',
+};
 
 const GENDER_MAP: Record<string, string> = {
   'm': 'Male', 'male': 'Male', 'f': 'Female', 'female': 'Female',
@@ -202,6 +219,8 @@ export default function ManagementControl() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("basic");
   const [formState, setFormState] = useState<EmployeeFormState>({ ...defaultFormState });
+  const [nameError, setNameError] = useState(false);
+  const [mappingNameError, setMappingNameError] = useState(false);
 
   const [showForeignOnly, setShowForeignOnly] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -240,7 +259,9 @@ export default function ManagementControl() {
   };
 
   const handleAdd = () => {
-    if (!formState.name) {
+    if (!formState.name.trim()) {
+      setNameError(true);
+      setActiveTab("basic");
       toast({ title: "Invalid input", description: "Name is required.", variant: "destructive" });
       return;
     }
@@ -288,11 +309,14 @@ export default function ManagementControl() {
       annualSalary: emp.annualSalary || 0,
       votingRightsPercent: emp.votingRightsPercent || 0,
     });
+    setNameError(false);
     setIsEditOpen(true);
   };
 
   const handleEditSave = () => {
-    if (!editingId || !formState.name) {
+    if (!editingId || !formState.name.trim()) {
+      setNameError(true);
+      setActiveTab("basic");
       toast({ title: "Invalid input", description: "Name is required.", variant: "destructive" });
       return;
     }
@@ -336,6 +360,7 @@ export default function ManagementControl() {
     setColumnMapping({ name: '', idNumber: '', gender: '', race: '', designation: '', isDisabled: '', isForeign: '', province: '', hireDate: '' });
     setPreviewEmployees([]);
     setFileName('');
+    setMappingNameError(false);
   }, []);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -385,6 +410,7 @@ export default function ManagementControl() {
 
   const handleApplyMapping = useCallback(() => {
     if (!columnMapping.name) {
+      setMappingNameError(true);
       toast({ title: "Missing mapping", description: "Name column mapping is required.", variant: "destructive" });
       return;
     }
@@ -440,7 +466,7 @@ export default function ManagementControl() {
   const validCount = previewEmployees.filter(e => e.valid).length;
   const invalidCount = previewEmployees.filter(e => !e.valid).length;
 
-  if (!calculatorConfig) return <div className="p-8 text-center text-muted-foreground">Loading calculator config... Select a sector first.</div>;
+  if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
   const mcCfg = calculatorConfig.managementControl;
   const mcMax =
@@ -487,12 +513,17 @@ export default function ManagementControl() {
       <TabsContent value="basic" className="space-y-4 py-4">
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="emp-name" className="text-right">Name</Label>
-          <Input 
-            id="emp-name" 
-            value={formState.name} 
-            onChange={e => setFormState({...formState, name: e.target.value})} 
-            className="col-span-3" 
-          />
+          <div className="col-span-3 space-y-1">
+            <Input
+              id="emp-name"
+              value={formState.name}
+              onChange={e => { setFormState({...formState, name: e.target.value}); if (nameError) setNameError(false); }}
+              aria-invalid={nameError}
+              aria-describedby={nameError ? "emp-name-error" : undefined}
+              className={cn(nameError && "border-destructive focus-visible:ring-destructive")}
+            />
+            {nameError && <p id="emp-name-error" className="text-xs text-destructive">Name is required.</p>}
+          </div>
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label htmlFor="emp-id" className="text-right">ID Number</Label>
@@ -506,7 +537,6 @@ export default function ManagementControl() {
         </div>
         <div className="grid grid-cols-4 items-center gap-4">
           <Label className="text-right">Level</Label>
-          // Issue 1: Added new designation options
           <Select value={formState.designation} onValueChange={(v) => setFormState({...formState, designation: v as typeof formState.designation})}>
             <SelectTrigger className="col-span-3"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -729,7 +759,7 @@ export default function ManagementControl() {
             Bulk Upload
           </Button>
 
-          <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setFormState({ ...defaultFormState }); setActiveTab("basic"); } }}>
+          <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setFormState({ ...defaultFormState }); setActiveTab("basic"); setNameError(false); } }}>
             <DialogTrigger asChild>
               <Button className="gap-2">
                 <Plus className="h-4 w-4" />
@@ -760,7 +790,7 @@ export default function ManagementControl() {
         </div>
       )}
 
-      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setFormState({ ...defaultFormState }); setActiveTab("basic"); } }}>
+      <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setFormState({ ...defaultFormState }); setActiveTab("basic"); setNameError(false); } }}>
         <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
@@ -1005,7 +1035,7 @@ export default function ManagementControl() {
               <CardHeader className="pb-3 border-b">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center gap-2">
-                    {level} Management
+                    {LEVEL_HEADINGS[level] ?? level}
                     <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-xs font-normal">
                       {total} Total
                     </Badge>
@@ -1044,7 +1074,7 @@ export default function ManagementControl() {
                       </div>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100">
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleEditOpen(emp)}>
-                          <Filter className="h-3 w-3" />
+                          <Pencil className="h-3 w-3" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive shrink-0" onClick={() => removeEmployee(emp.id)}>
                           <Trash2 className="h-3 w-3" />
@@ -1138,26 +1168,41 @@ export default function ManagementControl() {
                   { key: 'isForeign', label: 'Foreign National', required: false },
                   { key: 'province', label: 'Province', required: false },
                   { key: 'hireDate', label: 'Hire Date', required: false },
-                ].map(field => (
-                  <div key={field.key} className="grid grid-cols-2 items-center gap-4">
-                    <Label className="text-right text-sm">
-                      {field.label}
-                      {field.required && <span className="text-destructive ml-0.5">*</span>}
-                    </Label>
-                    <Select
-                      value={columnMapping[field.key] || '__none__'}
-                      onValueChange={(v) => setColumnMapping(prev => ({ ...prev, [field.key]: v === '__none__' ? '' : v }))}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none__">-- Not mapped --</SelectItem>
-                        {fileColumns.map(col => (
-                          <SelectItem key={col} value={col}>{col}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ))}
+                ].map(field => {
+                  const fieldHasError = field.key === 'name' && mappingNameError && !columnMapping.name;
+                  return (
+                    <div key={field.key} className="grid grid-cols-2 items-start gap-4">
+                      <Label className="text-right text-sm pt-2">
+                        {field.label}
+                        {field.required && <span className="text-destructive ml-0.5">*</span>}
+                      </Label>
+                      <div className="space-y-1">
+                        <Select
+                          value={columnMapping[field.key] || '__none__'}
+                          onValueChange={(v) => {
+                            setColumnMapping(prev => ({ ...prev, [field.key]: v === '__none__' ? '' : v }));
+                            if (field.key === 'name' && v !== '__none__' && mappingNameError) setMappingNameError(false);
+                          }}
+                        >
+                          <SelectTrigger
+                            aria-invalid={fieldHasError || undefined}
+                            aria-describedby={fieldHasError ? `${field.key}-mapping-error` : undefined}
+                            className={cn(fieldHasError && "border-destructive focus-visible:ring-destructive")}
+                          >
+                            <SelectValue placeholder="Select column" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">-- Not mapped --</SelectItem>
+                            {fileColumns.map(col => (
+                              <SelectItem key={col} value={col}>{col}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {fieldHasError && <p id={`${field.key}-mapping-error`} className="text-xs text-destructive">Map a column to {field.label}.</p>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               <DialogFooter className="gap-2">

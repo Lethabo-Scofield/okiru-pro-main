@@ -564,6 +564,13 @@ export const ICT_GENERIC: SectorConfig = {
       seniorMaxPts: 2, seniorBWMaxPts: 1,
       middleMaxPts: 2, middleBWMaxPts: 1,
       juniorMaxPts: 1, juniorBWMaxPts: 1,
+      // Per-band Black / Black-female targets, split across the provincial EAP
+      // (workbook MC Scorecard E30/E37/E43/E50/E56/E63). Required: without them the
+      // calculator's mgmtFallback returns undefined for ICT (useRcogp=false) and the
+      // 8 senior/middle/junior band points silently score 0. (R6 / matches AGRI D-01)
+      seniorBlackTarget: 0.60, seniorBWTarget: 0.30,
+      middleBlackTarget: 0.75, middleBWTarget: 0.38,
+      juniorBlackTarget: 0.88, juniorBWTarget: 0.44,
     },
     employmentEquity: {
       // All MC+EE merged into the MC pillar; disabled scored within MC
@@ -683,7 +690,7 @@ export const FSC_GENERIC: SectorConfig = {
       bursarySpendPercent: 1.5,       // Unemployed spend target = 1.5% of leviable
       disabledSpendPercent: 0.3,      // Disabled spend target = 0.3% of leviable
       learnershipTargetPercent: 5.0,  // LAI = 5% of total headcount
-      absorptionTargetPercent: 1.0,   // Absorption = 100% of unemployed LAI participants
+      absorptionTargetPercent: 100,   // 100% of unemployed LAI (skills.ts single /100 → 1.0). R7: was 1.0 + a 2nd /100 in the mapper = 0.01% effective
     },
     procurement: {
       // FSC Others PP — verified from Excel procurement scorecard.
@@ -777,7 +784,7 @@ export const FSC_BANKS: SectorConfig = {
       bursarySpendPercent: 1.5,
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 1.0,
+      absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -863,7 +870,7 @@ export const FSC_LTI: SectorConfig = {
       bursarySpendPercent: 1.5,
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 1.0,
+      absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -947,7 +954,7 @@ export const FSC_STI: SectorConfig = {
       bursarySpendPercent: 1.5,
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 1.0,
+      absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -1153,12 +1160,16 @@ export const RCOGP_QSE: SectorConfig = {
       bursaryMaxPts: 7,               // Spend on Black female: 1% leviable (QSE-specific indicator)
       disabledLearningMaxPts: 3,      // Spend on Black disabled: 0.15% leviable
       learnershipsMaxPts: 0,          // No LAI headcount indicator in QSE
-      absorptionMaxPts: 5,            // Absorption of unemployed Black after LAI: 1%
+      absorptionMaxPts: 5,            // Absorption of unemployed Black after LAI (bonus)
       overallSpendPercent: 3.0,       // 3% (vs Generic 3.5%)
       bursarySpendPercent: 1.0,       // Black female spend target 1%
       disabledSpendPercent: 0.15,     // 0.15% (vs Generic 0.3%)
       learnershipTargetPercent: 0,
-      absorptionTargetPercent: 1.0,   // 1% (vs Generic 2.5%)
+      // R8: 100% absorption target. Excel `Skills Calcs!J28 = MIN(absorbed/completers × 5, 5)`
+      // has NO percentage divisor — full 5 pts require 100% absorption. Whole-percent 100 →
+      // (calculator /100) → 1.0 = 100%. Was 1.0 (=1%); the ledger D-04 "1% target" misread the
+      // display cell C30=1 as a divisor. (basis completers-vs-black-learners stays open: Q-E/R18.)
+      absorptionTargetPercent: 100,
     },
     procurement: {
       // QSE PP: 3 indicators only (no QSE/EME split, no BWO30)
@@ -1244,13 +1255,17 @@ export const ICT_QSE: SectorConfig = {
       disabledLearningMaxPts: 3,
       // No LAI headcount indicator in QSE
       learnershipsMaxPts: 0,
-      // SK-4: Absorption bonus 1% headcount / 5 pts
+      // SK-4: Absorption bonus / 5 pts
       absorptionMaxPts: 5,
       overallSpendPercent: 3.0,
       bursarySpendPercent: 1.0,
       disabledSpendPercent: 0.15,
       learnershipTargetPercent: 0,
-      absorptionTargetPercent: 1.0,
+      // R22 (mirror of R8): 100% absorption target. Excel `Skills Calcs!J28 =
+      // MIN(absorbed/completers × 5, 5)` has NO percentage divisor — full 5 pts
+      // require 100% absorption. Whole-percent 100 → (calculator /100) → 1.0 = 100%.
+      // Was 1.0 (=1%); the D-04 fix removed the double /100 but left the under-target.
+      absorptionTargetPercent: 100,
     },
     procurement: {
       // QSE PP: 3 indicators only (all-suppliers 60%/15, BO51 15%/5, DG bonus 1%/1)

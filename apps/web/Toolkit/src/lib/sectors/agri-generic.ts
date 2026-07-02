@@ -186,8 +186,12 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
       bonusMax: pr.dgMaxPts,                           // 2
       tmpsTarget: 0,
       subMinThreshold: procSubMin,                     // 10 (40% × 25 base, excl. 2-pt DG bonus)
-      blackOwnedThreshold: pr.bo51Target,              // 0.40
-      blackWomenThreshold: pr.bwo30Target,             // 0.12
+      blackOwnedThreshold: pr.bo51Target,              // inert — procurement.ts hardcodes the ≥51% qualifier
+      // R12: per-supplier QUALIFICATION = >30% black-female ownership (AGRI scorecard B55
+      // "Spend on empowering suppliers with greater than 30% black female ownership").
+      // `bwo30Target` (0.12) is the SPEND target (12% of TMPS), NOT the ownership qualifier —
+      // the previous override let 12–29%-BWO suppliers wrongly count toward the line.
+      blackWomenThreshold: 0.30,
       allSuppliersTarget: pr.allSuppliersTarget,       // 0.80
       allSuppliersMaxPts: pr.allSuppliersMaxPts,       // 5
       qseTarget: pr.qseTarget,                         // 0.15

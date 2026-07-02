@@ -428,6 +428,39 @@ describe('AGRI Generic — PP proportionality', () => {
   });
 });
 
+describe('AGRI Generic — BWO30 qualification is >30% ownership, not the 12% spend target (R12)', () => {
+  it('a 20%-BWO supplier (between 12% and 30%) does NOT count toward the BWO30 line', () => {
+    const r = calculateProcurementScore(
+      {
+        id: '1', clientId: 'agri', tmps: TMPS,
+        suppliers: [
+          { id: 's1', name: 'Partly BWO Co', beeLevel: 1 as const, enterpriseType: 'eme' as const,
+            blackOwnership: 0.6, blackWomenOwnership: 0.20, youthOwnership: 0, disabledOwnership: 0, spend: TMPS },
+        ],
+      },
+      CONFIG,
+    );
+    // 20% BWO < 30% qualification → BWO30 line scores 0. Under the old `blackWomenThreshold =
+    // bwo30Target (0.12)` override this wrongly scored the full 4 pts.
+    expect(r.blackFemaleOwned30).toBe(0);
+  });
+
+  it('a 35%-BWO supplier qualifies and the BWO30 line scores (12% spend target)', () => {
+    const r = calculateProcurementScore(
+      {
+        id: '1', clientId: 'agri', tmps: TMPS,
+        suppliers: [
+          { id: 's2', name: 'BWO Farm', beeLevel: 1 as const, enterpriseType: 'eme' as const,
+            blackOwnership: 0.6, blackWomenOwnership: 0.35, youthOwnership: 0, disabledOwnership: 0, spend: TMPS },
+        ],
+      },
+      CONFIG,
+    );
+    // 35% BWO ≥ 30% qualifies; spend (100% TMPS × L1 recognition) >> 12% target → maxes 4 pts
+    expect(r.blackFemaleOwned30).toBeCloseTo(4, 1);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // §4 Sub-minimum checks
 // ---------------------------------------------------------------------------

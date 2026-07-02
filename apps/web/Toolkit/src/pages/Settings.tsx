@@ -281,7 +281,7 @@ function CalculationFormulasPanel() {
 }
 
 export default function Settings() {
-  const { client, updateSettings } = useBbeeStore();
+  const { client, updateSettings, updateIndustry } = useBbeeStore();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -294,7 +294,15 @@ export default function Settings() {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      updateSettings(province, industry, measureStart || undefined, measureEnd || undefined);
+      // CRITICAL: `industry` is the industry VERTICAL (Manufacturing, Retail,
+      // etc.) used for the industry-norm lookup — it is NOT the scorecard
+      // sector code. Previously this handler passed `industry` as the
+      // industrySector argument to updateSettings, silently overwriting the
+      // sector code that drives the entire scorecard configuration. Now uses
+      // updateIndustry (which targets client.industry) and PRESERVES the
+      // sector code via the existing client.industrySector.
+      updateSettings(province, client.industrySector || '', measureStart || undefined, measureEnd || undefined);
+      if (industry !== client.industry) updateIndustry(industry);
       toast({ title: "Settings Saved", description: "Client preferences updated." });
     } catch {
       toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" });

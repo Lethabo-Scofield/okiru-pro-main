@@ -6,6 +6,7 @@ import type { PillarPermission } from "@/hooks/usePillarPermission";
 import {
   diffSectionImport,
   exportSectionToXlsx,
+  findHeaderRow,
   mergeSectionImport,
   readSectionMatrix,
   type SectionImportDiff,
@@ -58,7 +59,11 @@ export function SectionWorkbookEditor({
       setUsedAi(false);
       try {
         const matrix = await readSectionMatrix(file);
-        const { result, usedAi: ai } = await normalizePaste(matrix, columns, API_BASE, {
+        // Skip leading title/blank rows (e.g. the merged section-title row our own
+        // export writes) so the real header row lands at index 0 for normalizePaste.
+        const headerIdx = findHeaderRow(matrix);
+        const trimmed = headerIdx > 0 ? matrix.slice(headerIdx) : matrix;
+        const { result, usedAi: ai } = await normalizePaste(trimmed, columns, API_BASE, {
           hasHeaderRow: true,
         });
         const parsed = toGridRows(result, columns);

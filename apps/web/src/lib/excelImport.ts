@@ -86,6 +86,9 @@ export interface ExcelExtractionResult {
   mappedSheets: string[];
   ownershipChainTiers: OwnershipChainTier[];
   extractedFieldCount: number;
+  /** Per-section extraction summary (label + populated row/field counts) so the
+   *  preview can show everything that came in, not just company + financials. */
+  sectionSummary?: { key: string; label: string; rowCount: number; fieldCount: number }[];
 }
 
 export interface NormalizeRequest {

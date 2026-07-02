@@ -293,7 +293,9 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       else if (usernameStatus.available === false) errors.username = usernameStatus.message;
       else if (form.username.trim() && usernameStatus.available === null) errors.username = "Verification pending, please wait";
       if (!form.password) errors.password = "Password is required";
-      else if (form.password.length < 4) errors.password = "At least 4 characters";
+      // Must match the server registerSchema (min 8); a 4-7 char password used
+      // to pass every client step then fail with a generic "Registration Failed".
+      else if (form.password.length < 8) errors.password = "At least 8 characters";
       if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match";
     } else if (s === 4) {
       if (!form.role) errors.role = "Please select a role";
@@ -444,7 +446,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     const errors: Record<string, string> = {};
     if (!resetToken.trim()) errors.resetToken = "Reset code is required";
     if (!resetNewPassword) errors.resetNewPassword = "New password is required";
-    else if (resetNewPassword.length < 4) errors.resetNewPassword = "At least 4 characters";
+    else if (resetNewPassword.length < 8) errors.resetNewPassword = "At least 8 characters";
     if (resetNewPassword !== resetConfirmPassword) errors.resetConfirmPassword = "Passwords do not match";
     if (Object.keys(errors).length > 0) { setFieldErrors(errors); return; }
 
@@ -488,8 +490,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     const pw = form.password;
     if (!pw) return null;
     let score = 0;
-    if (pw.length >= 4) score++;
     if (pw.length >= 8) score++;
+    if (pw.length >= 12) score++;
     if (/[A-Z]/.test(pw) && /[a-z]/.test(pw)) score++;
     if (/\d/.test(pw)) score++;
     if (/[^a-zA-Z0-9]/.test(pw)) score++;
@@ -908,7 +910,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                                   setForm({ ...form, password: e.target.value });
                                   setFieldErrors(prev => ({ ...prev, password: '' }));
                                 }}
-                                placeholder="Min 4 characters"
+                                placeholder="Min 8 characters"
                                 className="h-10"
                                 autoComplete="new-password"
                                 data-testid="input-password"
