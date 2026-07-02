@@ -5,12 +5,20 @@
    B-BBEE Toolkit · ESG Toolkit · B-BBEE Certificate
 ───────────────────────────────────────────── */
 
+import type { LucideIcon } from "lucide-react";
+import {
+  Layers, Boxes, ScanText, GraduationCap, ShieldCheck, SlidersHorizontal,
+  Gauge, ClipboardCheck, Factory, Route, LayoutGrid, CloudRainWind,
+  Database, ScanLine, CalendarClock, FileSearch, Filter, BadgeCheck,
+} from "lucide-react";
+
 export interface ProductStat {
   name: string;
   meta: string;
 }
 
 export interface ProductFeature {
+  icon: LucideIcon;
   label: string;
   title: string;
   stat: string;
@@ -80,6 +88,7 @@ export const PRODUCTS: ProductConfig[] = [
     features: [
       {
         label: "Automation",
+        icon: Layers,
         title: "Five-pillar scoring",
         stat: "5 / 5",
         statLabel: "pillars automated",
@@ -87,6 +96,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Coverage",
+        icon: Boxes,
         title: "Sector code support",
         stat: "9+",
         statLabel: "sector codes",
@@ -94,6 +104,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Intelligence",
+        icon: ScanText,
         title: "AI evidence extraction",
         stat: "60%+",
         statLabel: "less manual capture",
@@ -101,6 +112,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Compliance",
+        icon: GraduationCap,
         title: "WSP / ATR & EE ready",
         stat: "Integrated",
         statLabel: "skills & equity",
@@ -108,6 +120,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Defensibility",
+        icon: ShieldCheck,
         title: "Verifier-defensible output",
         stat: "Audit-grade",
         statLabel: "every calculation",
@@ -115,6 +128,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Modelling",
+        icon: SlidersHorizontal,
         title: "What-if scenarios",
         stat: "Live",
         statLabel: "scenario planning",
@@ -158,6 +172,7 @@ export const PRODUCTS: ProductConfig[] = [
     features: [
       {
         label: "Method",
+        icon: Gauge,
         title: "Activity-based measurement",
         stat: "1 · 2 · 3",
         statLabel: "all three scopes",
@@ -165,6 +180,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Standards",
+        icon: ClipboardCheck,
         title: "IFRS S1/S2 & TCFD",
         stat: "Aligned",
         statLabel: "global frameworks",
@@ -172,6 +188,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Factors",
+        icon: Factory,
         title: "DEFRA & Eskom factors",
         stat: "Curated",
         statLabel: "emission factors",
@@ -179,6 +196,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Strategy",
+        icon: Route,
         title: "Net-Zero roadmap",
         stat: "2050",
         statLabel: "SBTi CNZS 2.0",
@@ -186,6 +204,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Focus",
+        icon: LayoutGrid,
         title: "Materiality matrix",
         stat: "Ranked",
         statLabel: "by impact",
@@ -193,6 +212,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Risk",
+        icon: CloudRainWind,
         title: "Climate risk taxonomy",
         stat: "Board-ready",
         statLabel: "risk register",
@@ -236,6 +256,7 @@ export const PRODUCTS: ProductConfig[] = [
     features: [
       {
         label: "Registry",
+        icon: Database,
         title: "Centralised registry",
         stat: "One place",
         statLabel: "all certificates",
@@ -243,6 +264,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Intelligence",
+        icon: ScanLine,
         title: "AI metadata extraction",
         stat: "Auto",
         statLabel: "level · expiry · %",
@@ -250,6 +272,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Validity",
+        icon: CalendarClock,
         title: "Expiry tracking & alerts",
         stat: "Live",
         statLabel: "expiring / expired",
@@ -257,6 +280,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Search",
+        icon: FileSearch,
         title: "Full-text PDF search",
         stat: "Deep",
         statLabel: "inside every doc",
@@ -264,6 +288,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Filter",
+        icon: Filter,
         title: "Filter by VAT & sector",
         stat: "Instant",
         statLabel: "any supplier",
@@ -271,6 +296,7 @@ export const PRODUCTS: ProductConfig[] = [
       },
       {
         label: "Verification",
+        icon: BadgeCheck,
         title: "Verification status",
         stat: "At a glance",
         statLabel: "compliance view",
