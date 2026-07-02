@@ -369,7 +369,27 @@ export const GLOBAL_CSS = `
   }
   @keyframes okiru-scrollBob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
 
-  /* ── SHARED SECTION STYLES ── */
+  /* ── TRUSTED BY ── */
+  .okiru-root .ok-sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  .okiru-root .ok-trusted { padding: 84px 0; border-bottom: 1px solid var(--rule); overflow: hidden; }
+  .okiru-root .ok-trusted-head { margin-bottom: 48px; }
+  .okiru-root .ok-trusted-title { font-family: var(--serif); font-size: clamp(1.7rem, 3vw, 2.6rem); color: var(--hi); letter-spacing: -0.025em; line-height: 1.15; margin-top: 12px; max-width: 22ch; }
+  .okiru-root .ok-marquee { position: relative; display: flex; overflow: hidden; -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); }
+  .okiru-root .ok-marquee + .ok-marquee { margin-top: 20px; }
+  .okiru-root .ok-marquee-track { display: flex; flex-shrink: 0; align-items: center; animation: okiru-marquee 46s linear infinite; }
+  .okiru-root .ok-marquee-rev .ok-marquee-track { animation-direction: reverse; animation-duration: 54s; }
+  .okiru-root .ok-marquee:hover .ok-marquee-track { animation-play-state: paused; }
+  .okiru-root .ok-brand-word {
+    font-family: var(--serif); font-size: 1.35rem; font-weight: 500; letter-spacing: -0.01em;
+    color: rgba(255,255,255,0.38); white-space: nowrap; margin-right: 60px; transition: color .25s;
+  }
+  .okiru-root .ok-brand-word:hover { color: var(--hi); }
+  @keyframes okiru-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-marquee-track { animation: none; } }
+
   .okiru-root .ok-section { padding: 96px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-section.ok-page-top { padding-top: 140px; }
   .okiru-root .ok-sec-num {
@@ -833,6 +853,12 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-content">
+              <span className="ok-hero-tag ok-anim-1">
+                <span className="ok-hero-tag-dot" />
+                Compliance &amp; Transformation
+                <span className="ok-hero-tag-div" />
+                <span className="ok-hero-tag-brand">ESG · B-BBEE · Skills Development</span>
+              </span>
               <h1 className="ok-h1 ok-anim-2">
                 Turn compliance into<br />
                 <span className="ok-h1-gradient">compounding growth.</span>
@@ -968,7 +994,35 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 05: FINAL CTA ── */}
+        {/* ── TRUSTED BY ── */}
+        <section className="ok-trusted" id="sec-trusted">
+          <div className="ok-w">
+            <Reveal className="ok-trusted-head">
+              <span className="ok-sec-num">05</span>
+              <h2 className="ok-trusted-title">Trusted By Leading South African Organisations</h2>
+              <p className="ok-lead-l" style={{ marginTop:8 }}>From transport and water to pharmacy, food and financial services, organisations across the country rely on Okiru for compliance they can defend.</p>
+            </Reveal>
+          </div>
+          <ul className="ok-sr-only">
+            {["CoverBridge","Thandanani Transport","Exness","ST2 Group","Baby City","ALX Africa","Di-Verse IT","Azelis South Africa","AutoMX","Dis-Chem Pharmacies","Super Group","Xlink","FICO South Africa","Magalies Water","JoJo Tanks","Silver Lake Trading","DineXp","Woman of Taste","iMPELA"].map(n => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+          {[
+            ["CoverBridge","Thandanani Transport","Exness","ST2 Group","Baby City","ALX Africa","Di-Verse IT","Azelis South Africa","AutoMX","Dis-Chem Pharmacies"],
+            ["Super Group","Xlink","FICO South Africa","Magalies Water","JoJo Tanks","Silver Lake Trading","DineXp","Woman of Taste","iMPELA"],
+          ].map((row, ri) => (
+            <div key={ri} className={`ok-marquee${ri === 1 ? " ok-marquee-rev" : ""}`} aria-hidden>
+              <div className="ok-marquee-track">
+                {[...row, ...row].map((name, i) => (
+                  <span key={`${ri}-${i}`} className="ok-brand-word">{name}</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </section>
+
+        {/* ── 06: FINAL CTA ── */}
         <section className="ok-section ok-cta" id="sec-cta">
           <div className="ok-cta-photo" aria-hidden style={{ backgroundImage: `url(${ctaBg})` }} />
           <div className="ok-cta-bg" aria-hidden />
