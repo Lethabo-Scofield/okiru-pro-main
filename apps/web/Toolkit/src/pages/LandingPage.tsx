@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
-import { PRODUCT_TABS } from "./productLandingConfig";
+import { PRODUCT_TABS, PRODUCTS } from "./productLandingConfig";
 
 /* ─────────────────────────────────────────────
    GLOBAL CSS
@@ -615,21 +615,6 @@ const SERVICES = [
   { name: "WSP", meta: "Skills & reporting" },
 ];
 
-const HUB_SECTORS = [
-  { code: "RCOGP", name: "Retail, Construction, Oil & Gas, Property", meta: "2,985 nodes · 5,695 edges", color: "#60a5fa" },
-  { code: "ICT", name: "Information & Communications Technology", meta: "5,193 nodes · 9,415 edges", color: "#a78bfa" },
-  { code: "FSC", name: "Financial Sector Code", meta: "487 nodes · 689 edges", color: "#fbbf24" },
-  { code: "AGRI", name: "Agriculture (AgriBEE)", meta: "3,281 nodes · 6,267 edges", color: "#34d399" },
-];
-
-const PILLARS_SC = [
-  { id: 0, name: "Ownership", target: 87, bg: "linear-gradient(90deg,#e8441a,#f97316)" },
-  { id: 1, name: "Management Control", target: 61, bg: "linear-gradient(90deg,#e8441a,#06b6d4)" },
-  { id: 2, name: "Skills Development", target: 95, bg: "linear-gradient(90deg,#06b6d4,#22d3ee)" },
-  { id: 3, name: "Enterprise & Supplier Dev", target: 74, bg: "linear-gradient(90deg,#06b6d4,#9333ea)" },
-  { id: 4, name: "Socio-Economic Dev", target: 100, bg: "linear-gradient(90deg,#9333ea,#c084fc)" },
-];
-
 /* ─────────────────────────────────────────────
    SMALL ICONS
 ───────────────────────────────────────────── */
@@ -674,110 +659,12 @@ function useReveal(threshold = 0.08) {
   return [ref, visible] as const;
 }
 
-function useCountUp(target: number, active: boolean, duration = 900) {
-  const [val, setVal] = useState(0);
-  useEffect(() => {
-    if (!active) { setVal(0); return; }
-    const start = performance.now(); let raf: number;
-    const tick = (now: number) => {
-      const p = Math.min((now - start) / duration, 1);
-      setVal(Math.round((1 - Math.pow(1 - p, 3)) * target));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [active, target, duration]);
-  return val;
-}
-
 /* ─────────────────────────────────────────────
    REVEAL WRAPPER
 ───────────────────────────────────────────── */
 function Reveal({ children, delay = "", className = "" }: { children: React.ReactNode; delay?: string; className?: string }) {
   const [ref, visible] = useReveal();
   return <div ref={ref} className={`ok-reveal ${visible ? "ok-in" : ""} ${delay} ${className}`}>{children}</div>;
-}
-
-/* ─────────────────────────────────────────────
-   SCORECARD WIDGET
-───────────────────────────────────────────── */
-function PillarRow({ pillar, active }: { pillar: typeof PILLARS_SC[0]; active: boolean }) {
-  const val = useCountUp(pillar.target, active, 900);
-  return (
-    <div>
-      <div className="ok-sc-pillar-meta">
-        <span className="ok-sc-pillar-name">{pillar.name}</span>
-        <span className="ok-sc-pillar-val">{val} / 100</span>
-      </div>
-      <div className="ok-sc-track">
-        <div className="ok-sc-fill" style={{ width: active ? `${pillar.target}%` : "0%", background: pillar.bg }} />
-      </div>
-    </div>
-  );
-}
-
-function Scorecard() {
-  const scRef = useRef<HTMLDivElement>(null);
-  const [showNum, setShowNum] = useState(false);
-  const [showRec, setShowRec] = useState(false);
-  const [showSub, setShowSub] = useState(false);
-  const [activeBars, setActiveBars] = useState<number[]>([]);
-  const [showFoot, setShowFoot] = useState(false);
-  const timerRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const clearTimers = () => { timerRefs.current.forEach(clearTimeout); timerRefs.current = []; };
-  const t = (fn: () => void, ms: number) => { timerRefs.current.push(setTimeout(fn, ms)); };
-
-  const play = useCallback(() => {
-    clearTimers();
-    setShowNum(false); setShowRec(false); setShowSub(false); setActiveBars([]); setShowFoot(false);
-    t(() => setShowNum(true), 260); t(() => setShowRec(true), 560); t(() => setShowSub(true), 760);
-    PILLARS_SC.forEach((_, i) => t(() => setActiveBars(prev => [...prev, i]), 900 + i * 250));
-    const done = 900 + PILLARS_SC.length * 250 + 1100;
-    t(() => setShowFoot(true), done);
-    t(() => play(), done + 3200);
-  }, []);
-
-  useEffect(() => {
-    const el = scRef.current; if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { play(); obs.unobserve(el); } }, { threshold: 0.3 });
-    obs.observe(el);
-    return () => { obs.disconnect(); clearTimers(); };
-  }, [play]);
-
-  return (
-    <div style={{ borderRadius: 12, overflow: "hidden", background: "#0d0c15", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 32px 80px rgba(0,0,0,0.6)", fontFamily: "var(--mono)" }} ref={scRef}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
-        <div style={{ display: "flex", gap: 5 }}>
-          {["#ff5f56","#ffbd2e","#27c93f"].map(c => <span key={c} style={{ width:9, height:9, borderRadius:"50%", background:c, display:"block" }}/>)}
-        </div>
-        <span style={{ fontSize:10, letterSpacing:".06em", color:"rgba(255,255,255,.22)" }}>scorecard.okiru.pro</span>
-        <div style={{ display:"flex", alignItems:"center", gap:5, fontSize:10, color:"rgba(255,255,255,.3)" }}>
-          <span style={{ width:5, height:5, borderRadius:"50%", background:"#6366f1", display:"block" }} />live
-        </div>
-      </div>
-      <div style={{ padding: "20px 20px 18px" }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, paddingBottom:18, borderBottom:"1px solid rgba(255,255,255,0.05)" }}>
-          <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-            <span style={{ fontFamily:"var(--serif)", fontStyle:"italic", fontSize:"4rem", lineHeight:1, color:"var(--hi)", letterSpacing:"-0.04em", opacity:showNum?1:0, transform:showNum?"none":"translateY(6px)", transition:"opacity .4s,transform .4s" }}>2</span>
-            <span style={{ fontSize:12, color:"rgba(255,255,255,.25)", marginTop:4 }}>/ 8</span>
-          </div>
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:5 }}>
-            <span style={{ fontSize:10, letterSpacing:".07em", textTransform:"uppercase", padding:"3px 10px", borderRadius:3, color:"#818cf8", background:"rgba(99,102,241,.12)", border:"1px solid rgba(99,102,241,.2)", opacity:showRec?1:0, transition:"opacity .4s" }}>125% Recognition</span>
-            <span style={{ fontSize:10, color:"rgba(255,255,255,.28)", opacity:showSub?1:0, transition:"opacity .4s" }}>Sub-minimums met</span>
-          </div>
-        </div>
-        <div style={{ display:"flex", flexDirection:"column", gap:11, marginBottom:18 }}>
-          {PILLARS_SC.map(p => <PillarRow key={p.id} pillar={p} active={activeBars.includes(p.id)} />)}
-        </div>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", paddingTop:14, borderTop:"1px solid rgba(255,255,255,0.05)" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:6, fontSize:10, color:"rgba(255,255,255,.3)", opacity:showFoot?1:0, transition:"opacity .5s" }}>
-            <CheckIcon /> Audit-ready
-          </div>
-          <button style={{ fontSize:10, color:"rgba(99,102,241,.7)", background:"none", border:"1px solid rgba(99,102,241,.2)", padding:"4px 11px", borderRadius:3, cursor:"pointer", fontFamily:"var(--mono)", letterSpacing:".04em", opacity:showFoot?1:0, transition:"opacity .5s" }}>Export Pack</button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 /* ─────────────────────────────────────────────
@@ -1009,7 +896,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 Get started <span className="arr"><ArrowRight size={14} /></span>
               </button>
               <button className="ok-btn-sec" onClick={openDemo}>Book a 45-min demo</button>
-              <button className="ok-btn-sec" onClick={() => scrollTo("sec-toolkit")}>Explore the toolkit</button>
+              <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
             </div>
           </div>
         </section>
@@ -1156,84 +1043,40 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 05: THE TOOLKIT ── */}
-        <section className="ok-section" id="sec-toolkit">
-          <div className="ok-w">
-            <div className="ok-toolkit-hdr">
-              <Reveal>
-                <span className="ok-sec-num">05</span>
-                <h2 className="ok-h2">The Toolkit</h2>
-                <p className="ok-lead" style={{ marginTop:8 }}>The measurement engine behind every Okiru engagement. Captures activity-based data at source, calculates emissions to international standards, and produces audit-grade outputs that feed directly into your sustainability reporting cycle.</p>
-              </Reveal>
-              <Reveal delay="ok-d1">
-                <div style={{ marginTop:4 }}>
-                  {["Scope 1, 2 & 3 activity-based measurement.","Linked to B-BBEE, WSP/ATR & EE plans.","IFRS S2 & King V aligned — board-ready."].map(b => (
-                    <div key={b} className="ok-toolkit-bullet"><div className="ok-toolkit-dot" />{b}</div>
-                  ))}
-                </div>
-              </Reveal>
-            </div>
-            <div className="ok-toolkit-pillar-wrap">
-              {[
-                { letter:"E", color:"#34d399", name:"Environment", weight:"Pillar weight 40%", items:["Energy & Emissions (fleet, electricity, LPG, refrigerants)","Renewable Generation (solar, PPA, RECs, REIPPPP)","Water & Effluent (withdrawal, discharge, recycled)","Waste & Circularity (tonnage, destination, NEMWA)","Transport Emissions (ISO 14083, trip register)"] },
-                { letter:"S", color:"#60a5fa", name:"Social", weight:"Pillar weight 30%", items:["Workforce Profile (headcount, demographics, levels)","Employment Equity (Black, women, PWD, EAP benchmark)","Skills Development (WSP/ATR, learnerships, bursaries)","Health & Safety (LTIFR, TRIFR, fatalities, near-miss)","Socio-economic Dev (CSI register, beneficiaries, R spend)"] },
-                { letter:"G", color:"#a78bfa", name:"Governance", weight:"Pillar weight 30%", items:["Governance Scorecard (King V 16-principle, Apply-or-Explain)","Materiality Matrix (18 risks, 6 TCFD families)","Climate Risk (physical & transition, IFRS S2 flagged)","Ethics & Conduct (POPIA, whistleblowing, conflicts)","B-BBEE Compliance (all five elements, sector code forks)"] },
-              ].map((p, i) => (
-                <Reveal key={p.letter} delay={i > 0 ? `ok-d${i}` : ""}>
-                  <div className="ok-toolkit-pillar">
-                    <div className="ok-toolkit-pillar-letter" style={{ color:p.color }}>{p.letter}</div>
-                    <div className="ok-toolkit-pillar-name">{p.name}</div>
-                    <div className="ok-toolkit-pillar-weight">{p.weight}</div>
-                    <ul className="ok-toolkit-items">
-                      {p.items.map(item => <li key={item}>{item}</li>)}
-                    </ul>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── 06: ARCHITECTURE ── */}
-        <section className="ok-section">
+        {/* ── 05: OUR PRODUCTS ── */}
+        <section className="ok-section" id="sec-products">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">06</span>
-              <h2 className="ok-h2">Toolkit Architecture</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Three layers — capture once, score automatically, disclose everywhere.</p>
+              <span className="ok-sec-num">05</span>
+              <h2 className="ok-h2">Our Products</h2>
+              <p className="ok-lead-l" style={{ marginTop:8 }}>Three focused toolkits, one measurement methodology. Each has its own dedicated walkthrough — pick a starting point.</p>
             </Reveal>
-            <div className="ok-arch-layers">
-              {[
-                { n:"1", tag:"Inputs Layer · 8 sheets", title:"Capture once", desc:"Source data enters blue input cells: fuel cards, electricity meters, payroll records, waste invoices, governance documents. No re-keying across frameworks.", sheets:["E_Data","S_Data","G_Data","Fleet_Register","Waste_Register","Driver_Debrief","Financial_Summary","CSI_Register"] },
-                { n:"2", tag:"Scoring Layer · 11 sheets", title:"Calculate, score & band", desc:"Documented factors (DEFRA, Eskom NERSA), conditional banding, traffic-light flagging, pillar weighting. Validation sheet runs integrity checks before any output is used.", sheets:["E_Scorecard","S_Scorecard","G_Scorecard","EE_Scorecard","Materiality_Matrix","Carbon_Tax","B_BBEE_ESG","Validation"] },
-                { n:"3", tag:"Disclosure Layer · 10 sheets", title:"Disclose & improve", desc:"Pre-formatted blocks lift into your integrated annual report, B-BBEE submission, CDP response. Net-Zero Roadmap surfaces what to fix next cycle.", sheets:["ESG_Dashboard","IFRS_S1_S2","GARP_GRAP","NetZero_Roadmap","Standards_Map","ISO_14083","Assumptions","Audit_Log"] },
-              ].map((l, i) => (
-                <Reveal key={l.n} delay={i > 0 ? `ok-d${Math.min(i,2)}` : ""}>
-                  <div className="ok-arch-layer">
-                    <div className="ok-arch-num-col">{l.n}</div>
-                    <div className="ok-arch-main">
-                      <div className="ok-arch-tag">{l.tag}</div>
-                      <div className="ok-arch-title">{l.title}</div>
-                      <div className="ok-arch-desc">{l.desc}</div>
-                    </div>
-                    <div className="ok-arch-detail">
-                      <div className="ok-arch-tag" style={{ marginBottom:12 }}>Sheets</div>
-                      <div className="ok-arch-sheets">
-                        {l.sheets.map(s => <span key={s} className="ok-arch-sheet">{s}</span>)}
-                      </div>
-                    </div>
-                  </div>
+            <div className="ok-challenge-grid" style={{ marginTop:56 }}>
+              {PRODUCTS.map((p, i) => (
+                <Reveal key={p.slug} delay={i > 0 ? `ok-d${Math.min(i,3)}` : ""}>
+                  <button
+                    className="ok-challenge-card"
+                    onClick={() => onNavigateProduct?.(p.slug)}
+                    style={{ textAlign:"left", width:"100%", cursor:"pointer", font:"inherit", color:"inherit", display:"block" }}
+                  >
+                    <span className="ok-challenge-label">{p.heroTag}</span>
+                    <div className="ok-challenge-title">{p.navLabel}</div>
+                    <div className="ok-challenge-desc">{p.heroSub}</div>
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop:22, fontFamily:"var(--mono)", fontSize:11, letterSpacing:".08em", textTransform:"uppercase", color:"var(--pur-l)" }}>
+                      Explore <ArrowRight size={12} />
+                    </span>
+                  </button>
                 </Reveal>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ── 07: FRAMEWORKS ── */}
+        {/* ── 06: FRAMEWORKS ── */}
         <section className="ok-section" id="sec-frameworks">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">07</span>
+              <span className="ok-sec-num">06</span>
               <h2 className="ok-h2">Frameworks &amp; Benchmarks</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Globally recognised standards. Publicly defensible authority on every factor.</p>
             </Reveal>
@@ -1258,11 +1101,11 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 08: OUTCOMES ── */}
+        {/* ── 07: OUTCOMES ── */}
         <section className="ok-section">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">08</span>
+              <span className="ok-sec-num">07</span>
               <h2 className="ok-h2">Operational Outcomes</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Four shifts that change how your ESG function works — permanently.</p>
             </Reveal>
@@ -1286,12 +1129,12 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 09: ENGAGEMENT MODEL ── */}
+        {/* ── 08: ENGAGEMENT MODEL ── */}
         <section className="ok-section">
           <div className="ok-w">
             <div className="ok-eng-hdr">
               <Reveal>
-                <span className="ok-sec-num">09</span>
+                <span className="ok-sec-num">08</span>
                 <h2 className="ok-h2">Engagement Model</h2>
               </Reveal>
               <Reveal delay="ok-d1">
@@ -1320,169 +1163,11 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 10: DASHBOARD SAMPLE ── */}
+        {/* ── 09: OKIRU VS MARKET ── */}
         <section className="ok-section">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">10</span>
-              <h2 className="ok-h2">ESG Dashboard · Sample Output</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Board-ready executive view. FY2025/26 illustrative data. Numbers refresh automatically from the toolkit — no manual re-entry.</p>
-            </Reveal>
-            <div className="ok-dash-scores" style={{ marginTop:40 }}>
-              {[
-                { label:"Environmental", val:"74/108", pct:"69%", status:"Good · Behind target", gap:"Key gap: GHG Scope 1+2 reduction · ISO 14001 pending", color:"#34d399" },
-                { label:"Social", val:"61/100", pct:"61%", status:"Good · Behind target", gap:"Key gap: EE targets · Black female management · WSP grant recovery", color:"#60a5fa" },
-                { label:"Governance", val:"48/100", pct:"48%", status:"Adequate · Attention needed", gap:"Key gap: King V full adoption · IFRS S2 disclosures · External assurance", color:"#fbbf24" },
-              ].map((s, i) => (
-                <Reveal key={s.label} delay={i > 0 ? `ok-d${i}` : ""}>
-                  <div className="ok-dash-score-card">
-                    <div className="ok-dash-score-label">{s.label}</div>
-                    <div className="ok-dash-score-val">{s.val}</div>
-                    <div className="ok-dash-score-status" style={{ color:s.color }}>{s.status}</div>
-                    <div className="ok-dash-score-gap">{s.gap}</div>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-            <Reveal>
-              <p className="ok-eyebrow" style={{ marginBottom:16 }}>GHG Emissions Summary · Scope 1 + 2 + 3 · 9 months actuals (tCO₂e)</p>
-              <div className="ok-dash-table-wrap">
-                <table className="ok-dash-table">
-                  <thead>
-                    <tr><th>Scope</th>{["Jul","Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar","YTD"].map(m => <th key={m}>{m}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { scope:"Scope 1 — Fleet Diesel", vals:[212,183,171,192,178,154,161,169,175,1595] },
-                      { scope:"Scope 2 — Electricity", vals:[240,252,247,215,210,238,214,261,258,2135] },
-                      { scope:"Scope 3 — Water", vals:["1.4","1.3","1.2","1.5","1.4","1.1","1.3","1.2","1.4","11.8"] },
-                      { scope:"TOTAL Scope 1+2+3", vals:[457,436,419,409,389,394,376,431,436,"3,747"] },
-                    ].map(r => (
-                      <tr key={r.scope}><td>{r.scope}</td>{r.vals.map((v,i) => <td key={i}>{v}</td>)}</tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="ok-dash-note">Dummy data for illustration. Scores auto-update from the toolkit — no manual entry.</p>
-            </Reveal>
-          </div>
-        </section>
-
-        {/* ── 11: NET-ZERO ROADMAP ── */}
-        <section className="ok-section" id="sec-netzero">
-          <div className="ok-w">
-            <div className="ok-nz-hdr">
-              <Reveal>
-                <span className="ok-sec-num">11</span>
-                <h2 className="ok-h2">Net-Zero Roadmap · SBTi CNZS 2.0</h2>
-              </Reveal>
-              <Reveal delay="ok-d1">
-                <p className="ok-lead">Auto-projected from GHG actuals. Baseline to 2050. Reduction trajectory, milestone bands, and the operational levers — derived directly from your live toolkit data.</p>
-              </Reveal>
-            </div>
-            <div className="ok-nz-targets">
-              {[["Baseline","4,200 tCO₂e"],["2030 (−50%)","2,190 tCO₂e"],["2035 (−65%)","1,516 tCO₂e"],["2050 Net-Zero","233 tCO₂e"]].map(([label,val]) => (
-                <Reveal key={label}>
-                  <div className="ok-nz-target"><div className="ok-nz-target-label">{label}</div><div className="ok-nz-target-val">{val}</div></div>
-                </Reveal>
-              ))}
-            </div>
-            <Reveal>
-              <div style={{ overflowX:"auto", border:"1px solid var(--rule)", borderRadius:8, marginBottom:40 }}>
-                <table className="ok-dash-table">
-                  <thead>
-                    <tr><th>Scope</th>{["Baseline","2026","2028","2030 (−50%)","2035 (−65%)","2050 Net-Zero"].map(h => <th key={h}>{h}</th>)}</tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { scope:"Scope 1+2 (Fleet + Electricity)", vals:["3,750","3,563","3,000","1,875","1,313","188"] },
-                      { scope:"Scope 3 (Water + Value chain)", vals:["450","428","383","315","203","45"] },
-                      { scope:"TOTAL Scope 1+2+3", vals:["4,200","3,991","3,383","2,190","1,516","233"] },
-                    ].map(r => (
-                      <tr key={r.scope}><td>{r.scope}</td>{r.vals.map((v,i) => <td key={i}>{v}</td>)}</tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Reveal>
-            <div className="ok-nz-milestones">
-              {[
-                { year:"2025 · Pre-Recognised", name:"Baseline established", desc:"Baseline established. Submit SBTi commitment letter." },
-                { year:"2028 · Recognised", name:"−50% Scope 1+2", desc:"EV fleet phase-in. Solar at all depots." },
-                { year:"2035 · Leadership", name:"−90% Scope 1+2 + −30% Scope 3", desc:"Full EV. 100% renewable." },
-                { year:"2050 · Net-Zero", name:"Net-Zero Scope 1+2+3", desc:"Zero fossil fleet. Residual credits only." },
-              ].map((m, i) => (
-                <Reveal key={m.year} delay={i > 0 ? `ok-d${Math.min(i,3)}` : ""}>
-                  <div className="ok-nz-milestone">
-                    <div className="ok-nz-milestone-year">{m.year}</div>
-                    <div className="ok-nz-milestone-name">{m.name}</div>
-                    <div className="ok-nz-milestone-desc">{m.desc}</div>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-            <Reveal>
-              <p className="ok-eyebrow" style={{ marginBottom:12 }}>Key Net-Zero levers</p>
-              <div className="ok-nz-levers">
-                {["EV Fleet (20% by 2030)","Solar (50% renewable)","Eco-Driving (−10% L/100km)","Waste Diversion (≥75%)","SBTi Commitment (Q1 FY2026)"].map(l => (
-                  <span key={l} className="ok-nz-lever">{l}</span>
-                ))}
-              </div>
-            </Reveal>
-          </div>
-        </section>
-
-        {/* ── 12: OKIRU PRO ── */}
-        <section className="ok-section">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">12</span>
-              <h2 className="ok-h2">Okiru Pro · AI-Powered B-BBEE Toolkit</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Same methodology. Powered by AI extraction. The same audit-grade workbook your finance team owns — accelerated by an AI engine that imports, scores, and verifies in minutes, not weeks.</p>
-            </Reveal>
-            <div className="ok-pro-grid" style={{ marginTop:40 }}>
-              <div className="ok-pro-l">
-                <Scorecard />
-                <div style={{ marginTop:28 }}>
-                  {[
-                    { num:"01", title:"Toolkit import", desc:"Our engine parses every sheet, maps every formula, and builds a full dependency graph — thousands of interconnected nodes per sector code." },
-                    { num:"02", title:"Live scorecard", desc:"B-BBEE level, recognition percentage, and sub-minimum status update in real time across all five pillars against the latest sector codes." },
-                    { num:"03", title:"AI extraction & verify", desc:"AI-powered entity extraction pulls structured data using ontology-backed templates tuned to your sector. Review, correct, then lock." },
-                  ].map(s => (
-                    <div key={s.num} className="ok-pro-step">
-                      <div className="ok-pro-step-num">{s.num}</div>
-                      <div>
-                        <div className="ok-pro-step-title">{s.title}</div>
-                        <div className="ok-pro-step-desc">{s.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="ok-pro-r">
-                <Reveal>
-                  <span className="ok-eyebrow">Okiru Hub · Sector Coverage</span>
-                  <p className="ok-lead" style={{ marginTop:0 }}>Every sector code we've modelled — formula by formula.</p>
-                  <div style={{ marginTop:28 }}>
-                    {HUB_SECTORS.map(s => (
-                      <div key={s.code} className="ok-hub-sector">
-                        <div className="ok-hub-sector-code" style={{ color:s.color }}>{s.code}</div>
-                        <div className="ok-hub-sector-name">{s.name}</div>
-                        <div className="ok-hub-sector-meta">{s.meta}</div>
-                      </div>
-                    ))}
-                  </div>
-                </Reveal>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── 13: OKIRU VS MARKET ── */}
-        <section className="ok-section">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">13</span>
+              <span className="ok-sec-num">09</span>
               <h2 className="ok-h2">Okiru vs the Market</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>We don't compete on cheaper software. We compete on what we own.</p>
             </Reveal>
@@ -1541,11 +1226,11 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 14: SECTORS ── */}
+        {/* ── 10: SECTORS ── */}
         <section className="ok-section" id="sec-sectors">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">14</span>
+              <span className="ok-sec-num">10</span>
               <h2 className="ok-h2">Sectors We Serve</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Cross-sector advisory across South Africa's transformation economy. Client names withheld pending consent.</p>
             </Reveal>
@@ -1563,11 +1248,11 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 15: CONTACT / BOOK A DEMO ── */}
+        {/* ── 11: CONTACT / BOOK A DEMO ── */}
         <section className="ok-section" id="sec-contact">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">15 · Contact</span>
+              <span className="ok-sec-num">11 · Contact</span>
               <h2 className="ok-h2" style={{ marginTop:8 }}>Let's make your transformation measurable.</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>A 45-minute working session — not a sales pitch. We'll walk through the live Okiru Toolkit, map it to your reporting cycle, and show you the Net-Zero pathway implied by your own data.</p>
             </Reveal>
@@ -1649,20 +1334,4 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       </footer>
     </div>
   );
-}
-
-/* Inject Scorecard keyframes once */
-const _KF = `
-  @keyframes okiru-scPulse { 0%,100%{opacity:1;box-shadow:0 0 6px #6366f1}50%{opacity:.3;box-shadow:0 0 2px #6366f1} }
-  .ok-sc-fill::after { content:''; position:absolute; top:0; left:-60%; width:60%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,0.3),transparent); animation: okiru-shimmer 2.2s ease-in-out infinite; }
-  @keyframes okiru-shimmer { 0%{left:-60%} 100%{left:120%} }
-`;
-if (typeof document !== "undefined") {
-  ["okiru-kf","okiru-sc-fill"].forEach((id, i) => {
-    if (!document.getElementById(id)) {
-      const s = document.createElement("style"); s.id = id; s.textContent = i === 0 ? _KF : ""; document.head.appendChild(s);
-    }
-  });
-  const kfEl = document.getElementById("okiru-kf");
-  if (kfEl && !kfEl.textContent?.includes("okiru-shimmer")) kfEl.textContent = _KF;
 }
