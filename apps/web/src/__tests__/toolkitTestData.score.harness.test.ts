@@ -91,13 +91,16 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
         let total = 0;
         let brk = '';
         if (isConstructionSector(sector)) {
-          const state = { client: { sectorCode: sector, scorecardType: type, constructionSubSector: subSector, npat, leviableAmount: leviable, eapProvince: 'National' }, ownership: { shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }, management: { employees: p.employees }, skills: { leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] }, procurement: { tmps, suppliers: p.suppliers }, esd: { contributions: p.esdContributions }, sed: { contributions: p.sedContributions } };
+          const state = { client: { sectorCode: sector, scorecardType: type, constructionSubSector: subSector, npat, leviableAmount: leviable, eapProvince: 'National', eapYear: 2025 }, ownership: { shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }, management: { employees: p.employees }, skills: { leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] }, procurement: { tmps, suppliers: p.suppliers }, esd: { contributions: p.esdContributions }, sed: { contributions: p.sedContributions } };
           const { entityType, input } = buildConstructionScoringInput(state, cfg);
           total = calculateConstructionScorecard(entityType, input).totalScore;
         } else {
           const own = calculateOwnershipScore({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 } as any, cfg).total;
-          const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any } as any, cfg, 'Gauteng').total;
-          const skills = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng').total;
+          // eapYear 2025: the Toolkit Testing Data workbooks were filled and
+          // expert-verified under the 25th CEE EAP dataset — pin the vintage so
+          // the harness stays faithful to those workbooks (live default = 26th CEE, 2026).
+          const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any } as any, cfg, 'Gauteng', 2025).total;
+          const skills = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng', 2025).total;
           const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
           const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
           const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg).total;

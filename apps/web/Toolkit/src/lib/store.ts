@@ -366,6 +366,8 @@ interface BbeeState extends PillarState {
   updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => void;
   /** Update the industry VERTICAL (Manufacturing, Retail, etc.) used for industry-norm lookup. Distinct from sectorCode/industrySector which drive the scorecard. */
   updateIndustry: (industry: string) => void;
+  /** Update the CEE report vintage used for MC/Skills EAP targets (undefined = latest). */
+  updateEapYear: (eapYear: number | undefined) => void;
 
   loadCalculatorConfig: (clientId: string) => Promise<void>;
   saveCalculatorConfig: (config: CalculatorConfig) => Promise<void>;
@@ -649,7 +651,7 @@ function calculateScorecard(
     console.log('[SCORING-TRACE] Calculator input for managementControl:', {
       employees: state.management.employees?.length ?? 0,
     });
-    const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince);
+    const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince, state.client.eapYear);
     mgtScoreTotal = mgtScore.total;
     console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: mgtScore.total, subMin: mgtScore.subMinimumMet });
   }
@@ -658,7 +660,7 @@ function calculateScorecard(
     leviableAmount: state.skills.leviableAmount,
     programs: state.skills.trainingPrograms?.length ?? 0,
   });
-  const skillScore = calculateSkillsScore(state.skills, cfg, state.client.eapProvince);
+  const skillScore = calculateSkillsScore(state.skills, cfg, state.client.eapProvince, state.client.eapYear);
   console.log('[SCORING-TRACE] Calculator output for skillsDevelopment:', { score: skillScore.total, subMin: skillScore.subMinimumMet });
 
   console.log('[SCORING-TRACE] Calculator input for procurement:', {
@@ -1066,6 +1068,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         fscSubSector: normalizeFscSubSector(data.client.fscSubSector ?? finExtras.fscSubSector) as Client['fscSubSector'],
         fscReinsurer: coerceYesNo(data.client.fscReinsurer ?? finExtras.fscReinsurer),
         eapProvince: (data.client.eapProvince || finExtras.eapProvince || 'National') as Client['eapProvince'],
+        // CEE vintage for MC/Skills EAP targets — persisted per client so legacy
+        // clients keep the dataset their workbook was scored under; undefined
+        // (new clients) = latest ingested CEE year (26th CEE = 2026).
+        eapYear: (data.client.eapYear ?? finExtras.eapYear) as number | undefined,
         industryNorm: data.client.industryNorm ?? (finExtras.industryNormPercent as number | undefined),
         // Foundation / company-detail fields that PATCH /api/clients/:id persists
         // and GET /:id/data returns, but which were previously DROPPED here — so
@@ -1869,6 +1875,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.updateClient(state.activeClientId, { industry }).catch(console.error);
+    }
+  },
+
+  updateEapYear: (eapYear) => {
+    set((state) => ({ client: { ...state.client, eapYear } }));
+    get()._recalculateAll(); // MC + Skills EAP bands score against the selected CEE vintage
+    const state = get();
+    if (state.activeClientId) {
+      api.updateClient(state.activeClientId, { eapYear: eapYear ?? null }).catch(console.error);
     }
   },
 

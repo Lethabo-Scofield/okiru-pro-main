@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getProvinces } from "@toolkit/lib/calculators/eapTargets";
+import { getProvinces, getEapReportYears } from "@toolkit/lib/calculators/eapTargets";
 import { Card, CardContent, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
@@ -281,12 +281,13 @@ function CalculationFormulasPanel() {
 }
 
 export default function Settings() {
-  const { client, updateSettings, updateIndustry } = useBbeeStore();
+  const { client, updateSettings, updateIndustry, updateEapYear } = useBbeeStore();
   const { user } = useAuth();
   const { toast } = useToast();
 
   const [province, setProvince] = useState(client.eapProvince);
   const [industry, setIndustry] = useState(client.industry);
+  const [eapYear, setEapYear] = useState<number | undefined>(client.eapYear);
   const [measureStart, setMeasureStart] = useState(client.measurementPeriodStart || '');
   const [measureEnd, setMeasureEnd] = useState(client.measurementPeriodEnd || '');
   const [isSaving, setIsSaving] = useState(false);
@@ -303,6 +304,7 @@ export default function Settings() {
       // sector code via the existing client.industrySector.
       updateSettings(province, client.industrySector || '', measureStart || undefined, measureEnd || undefined);
       if (industry !== client.industry) updateIndustry(industry);
+      if (eapYear !== client.eapYear) updateEapYear(eapYear);
       toast({ title: "Settings Saved", description: "Client preferences updated." });
     } catch {
       toast({ title: "Error", description: "Failed to save settings.", variant: "destructive" });
@@ -527,6 +529,27 @@ export default function Settings() {
               </SelectContent>
             </Select>
             <p className="text-[11px] text-muted-foreground">Demographic targets for Management Control.</p>
+          </div>
+
+          <div className="grid gap-2">
+            <Label className="text-[13px]">EAP Report Year (CEE)</Label>
+            <Select
+              value={eapYear === undefined ? 'latest' : String(eapYear)}
+              onValueChange={(v) => setEapYear(v === 'latest' ? undefined : Number(v))}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Latest CEE report" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="latest">Latest ({getEapReportYears()[0]} — current CEE report)</SelectItem>
+                {getEapReportYears().map((y) => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              CEE EAP dataset vintage the MC &amp; Skills demographic targets score against. Use the year your measurement period was verified under.
+            </p>
           </div>
 
           <div className="grid gap-2">

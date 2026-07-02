@@ -41,6 +41,8 @@ export interface ClientInformationData {
   industry: string;
   /** EAP province for Management Control (Senior/Middle/Junior targets). Falls back to parsing physicalAddress. */
   eapProvince?: Client['eapProvince'];
+  /** CEE report vintage for MC/Skills EAP targets (undefined = latest ingested CEE year). */
+  eapYear?: number;
   
   // Financials for sizing
   annualTurnover: number;

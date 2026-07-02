@@ -603,6 +603,9 @@ const clientSchema = new Schema({
   financialYear: { type: String, default: () => new Date().getFullYear().toString() },
   industrySector: { type: String, default: null },
   eapProvince: { type: String, default: null },
+  // CEE report vintage for MC/Skills EAP targets (e.g. 2026 = 26th CEE report).
+  // null = latest ingested year; pinned for legacy-workbook clients.
+  eapYear: { type: Number, default: null },
   logo: { type: String, default: null },
   revenue: { type: Number, default: 0 },
   npat: { type: Number, default: 0 },
