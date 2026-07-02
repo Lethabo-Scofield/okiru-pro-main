@@ -150,6 +150,7 @@ describe('RCOGP Generic golden — Lake Trading pillar scores', () => {
       { id: '1', clientId: 'lake', employees: lakeEmployees },
       CONFIG,
       EAP_PROVINCE,
+      2025, // pin: the Excel golden was produced under the 25th CEE EAP dataset
     );
     // Discrepancy: toolkit rounds EAP bands; within 0.05 of Excel
     expect(r.total).toBeCloseTo(EXCEL.managementControl, 1);
@@ -259,6 +260,7 @@ describe('RCOGP Generic golden — Lake Trading pillar scores', () => {
       { id: '1', clientId: 'lake', employees: lakeEmployees },
       CONFIG,
       EAP_PROVINCE,
+      2025, // pin: the Excel golden was produced under the 25th CEE EAP dataset
     ).total;
     const sk = calculateSkillsScore(
       {

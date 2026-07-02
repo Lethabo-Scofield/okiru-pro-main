@@ -53,6 +53,12 @@ export interface Client {
   
   // EAP targeting
   eapProvince: 'National' | 'Western Cape' | 'Eastern Cape' | 'Northern Cape' | 'Free State' | 'KwaZulu-Natal' | 'KZN' | 'North West' | 'Gauteng' | 'Mpumalanga' | 'Limpopo';
+  /**
+   * CEE report vintage the MC/Skills EAP targets score against (e.g. 2026 =
+   * 26th CEE Report pp.33-34, QLFS Q3 2025). Undefined = latest ingested year.
+   * Pinned on legacy fixtures/workbooks produced under an older CEE dataset.
+   */
+  eapYear?: number;
   industryNorm?: number;
   
   // Financial history

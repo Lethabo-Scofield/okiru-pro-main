@@ -302,6 +302,7 @@ export function calculateSkillsScore(
   data: SkillsData,
   config?: CalculatorConfig,
   eapProvince?: string,
+  eapYear?: number,
 ): SkillsResult {
   console.log('[SCORING-TRACE] calculateSkillsScore received:', {
     leviableAmount: data.leviableAmount,
@@ -417,7 +418,7 @@ export function calculateSkillsScore(
   const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
   const eapBreakdowns = isQse
     ? {}
-    : buildSkillsEAPBreakdowns(trainingPrograms, province);
+    : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear);
 
   return {
     learningProgrammes: round2(learningScore),

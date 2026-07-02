@@ -40,6 +40,9 @@ const clientSchema = new Schema({
   leviableAmount: { type: Number, default: 0 },
   industrySector: { type: String, default: "Generic" },
   eapProvince: { type: String, default: "National" },
+  // CEE report vintage for MC/Skills EAP targets (e.g. 2026 = 26th CEE report).
+  // null = latest ingested year; pinned for legacy-workbook clients.
+  eapYear: { type: Number, default: null },
   industryNorm: { type: Number, default: null },
   // Foundation Layer fields used by the Toolkit + Workbook. apps/web/shared/
   // schema.ts has these on its clientSchema; apps/api was missing them, so

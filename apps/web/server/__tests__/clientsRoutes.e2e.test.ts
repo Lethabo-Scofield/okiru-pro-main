@@ -204,24 +204,29 @@ describe("/api/clients/:clientId — tenant guard", () => {
     expect(res.body.clientId).toBe(aliceClientId);
   });
 
-  it("returns 403 for a cross-tenant caller on GET", async () => {
+  // Cross-tenant callers get 404, not 403 — loadClientWithAccess deliberately
+  // answers "Client not found" so an attacker can't enumerate which client ids
+  // exist in other tenants. (These assertions originally said 403 but the
+  // guard has returned 404 since it was written — the test was stale, not the
+  // route.)
+  it("returns 404 for a cross-tenant caller on GET (no existence leak)", async () => {
     const res = await malloryAgent.get(`/api/clients/${aliceClientId}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
-  it("returns 403 for a cross-tenant caller on PATCH", async () => {
+  it("returns 404 for a cross-tenant caller on PATCH (no existence leak)", async () => {
     const res = await malloryAgent
       .patch(`/api/clients/${aliceClientId}`)
       .send({ name: "hijacked" });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     // And the client was not mutated.
     const check = await aliceAgent.get(`/api/clients/${aliceClientId}`);
     expect(check.body.name).toBe("Alice Holdings");
   });
 
-  it("returns 403 for a cross-tenant caller on DELETE", async () => {
+  it("returns 404 for a cross-tenant caller on DELETE (no existence leak)", async () => {
     const res = await malloryAgent.delete(`/api/clients/${aliceClientId}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     // And the client still exists.
     const check = await aliceAgent.get(`/api/clients/${aliceClientId}`);
     expect(check.status).toBe(200);
@@ -246,9 +251,11 @@ describe("GET /api/workbook/:companyId — tenant guard", () => {
     expect(res.status).toBe(404);
   });
 
-  it("returns 403 for a cross-tenant caller on a known client", async () => {
+  it("returns 404 for a cross-tenant caller on a known client (no existence leak)", async () => {
+    // Mirrors loadClientWithAccess: deny-as-not-found so foreign tenants can't
+    // probe which company ids exist.
     const res = await malloryAgent.get(`/api/workbook/${aliceClientId}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   });
 
   it("returns 401 when unauthenticated", async () => {

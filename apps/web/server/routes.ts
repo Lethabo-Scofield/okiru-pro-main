@@ -2013,7 +2013,7 @@ export async function registerRoutes(
         "beeCertificateNumber", "beeCertificateExpiry", "beeCertificateLevel", "verificationAgency",
         "logo",
         // Scoring inputs the Toolkit edits via PATCH /api/clients/:id
-        "revenue", "npat", "leviableAmount", "industryNorm", "eapProvince",
+        "revenue", "npat", "leviableAmount", "industryNorm", "eapProvince", "eapYear",
         "tmps", "companyValue", "outstandingDebt",
         // FSC + ESD + SED scalar fields that live on ClientModel
         "fscSubSector", "fscReinsurer", "combineExcoSenior", "farmWorkersIncluded",
@@ -2162,6 +2162,7 @@ export async function registerRoutes(
           leviableAmount: c.leviableAmount,
           industrySector: c.industrySector,
           eapProvince: c.eapProvince || "National",
+          eapYear: c.eapYear ?? null,
           industryNorm: undefined,
           // Extended Foundation Layer fields
           sectorCode: c.sectorCode || c.industrySector || 'RCOGP',
