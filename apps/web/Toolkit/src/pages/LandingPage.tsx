@@ -779,7 +779,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               <button className="ok-btn-cta" onClick={goRegister}>
                 Get started <span className="arr"><ArrowRight size={14} /></span>
               </button>
-              <button className="ok-btn-sec" onClick={() => (onNavigateContact ?? openDemo)()}>Book a 45-min demo</button>
               <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
             </div>
           </div>
