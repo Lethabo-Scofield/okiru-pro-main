@@ -364,6 +364,7 @@ export const GLOBAL_CSS = `
 
   /* ── SHARED SECTION STYLES ── */
   .okiru-root .ok-section { padding: 96px 0; border-bottom: 1px solid var(--rule); }
+  .okiru-root .ok-section.ok-page-top { padding-top: 140px; }
   .okiru-root .ok-sec-num {
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
     background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
@@ -661,6 +662,7 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-hero { padding: 120px 0 48px; }
     .okiru-root .ok-h1 { font-size: clamp(2.4rem, 9vw, 3.2rem); }
     .okiru-root .ok-section { padding: 64px 0; }
+    .okiru-root .ok-section.ok-page-top { padding-top: 108px; }
     .okiru-root .ok-services { flex-direction: column; }
     .okiru-root .ok-service { border-right: none; border-bottom: 1px solid var(--rule); }
     .okiru-root .ok-service:last-child { border-bottom: none; }
@@ -669,17 +671,27 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-fw-grid { grid-template-columns: 1fr; }
     .okiru-root .ok-sectors-list { grid-template-columns: 1fr 1fr; }
     .okiru-root .ok-foot-grid { grid-template-columns: 1fr; }
+    .okiru-root .ok-vs-edge-body { padding: 22px 24px; }
+    .okiru-root .ok-vs-edge-num { padding: 22px 12px; }
     .okiru-root .ok-modal { max-width: calc(100vw - 32px); }
     .okiru-root .ok-modal-head { padding: 24px 24px 0; }
     .okiru-root .ok-modal-body { padding: 20px 24px 24px; }
   }
   @media (max-width: 480px) {
     .okiru-root .ok-h1 { font-size: 2.2rem; }
+    .okiru-root .ok-section { padding: 52px 0; }
+    .okiru-root .ok-section.ok-page-top { padding-top: 96px; }
     .okiru-root .ok-hero-btns { flex-direction: column; align-items: stretch; }
     .okiru-root .ok-btn-cta, .okiru-root .ok-btn-sec { width: 100%; justify-content: center; }
     .okiru-root .ok-nz-targets { grid-template-columns: 1fr 1fr; }
     .okiru-root .ok-nz-milestones { grid-template-columns: 1fr; }
     .okiru-root .ok-sectors-list { grid-template-columns: 1fr; }
+    .okiru-root .ok-diff-stats { grid-template-columns: 1fr 1fr; }
+    .okiru-root .ok-about-badges { grid-template-columns: 1fr; }
+    .okiru-root .ok-vs-edge { grid-template-columns: 1fr; }
+    .okiru-root .ok-vs-edge-num { border-right: none; border-bottom: 1px solid var(--rule); justify-content: flex-start; padding: 14px 24px; }
+    .okiru-root .ok-vs-edge-body { padding: 20px 24px; }
+    .okiru-root .ok-demo-agenda-item { grid-template-columns: 88px 1fr; }
   }
 `;
 

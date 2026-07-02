@@ -51,7 +51,7 @@ export default function OkiruContact({
 
       <main>
         {/* ── CONTACT / BOOK A DEMO ── */}
-        <section className="ok-section" id="sec-contact" style={{ paddingTop: 140 }}>
+        <section className="ok-section ok-page-top" id="sec-contact">
           <div className="ok-w">
             <Reveal>
               <span className="ok-sec-num">Contact</span>

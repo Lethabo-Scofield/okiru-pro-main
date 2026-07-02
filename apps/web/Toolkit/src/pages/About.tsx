@@ -43,7 +43,7 @@ export default function OkiruAbout({
 
       <main>
         {/* ── 01: WHO WE ARE ── */}
-        <section className="ok-section" id="sec-about" style={{ paddingTop: 140 }}>
+        <section className="ok-section ok-page-top" id="sec-about">
           <div className="ok-w">
             <Reveal>
               <span className="ok-sec-num">01</span>
