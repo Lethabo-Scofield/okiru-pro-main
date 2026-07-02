@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import heroBg from "@assets/image_1783014770940.png";
 import ctaBg from "@assets/image_1783017701495.png";
+import heroPortrait from "@assets/image_1783017896626.png";
 import { PRODUCTS } from "./productLandingConfig";
 import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome";
 
@@ -323,6 +324,21 @@ export const GLOBAL_CSS = `
   }
   .okiru-root .ok-hero-sub strong { color: rgba(255,255,255,0.92); font-weight: 500; }
   .okiru-root .ok-hero-btns { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+  .okiru-root .ok-hero-w { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 56px; align-items: center; }
+  .okiru-root .ok-hero-content { min-width: 0; }
+  .okiru-root .ok-hero-visual { position: relative; justify-self: end; width: 100%; max-width: 440px; }
+  .okiru-root .ok-hero-portrait {
+    position: relative; z-index: 1; width: 100%; display: block;
+    border-radius: var(--radius-xl, 16px); border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 30px 70px rgba(0,0,0,0.55);
+    animation: okiru-heroPhoto 1.8s cubic-bezier(.16,1,.3,1) both;
+  }
+  .okiru-root .ok-hero-portrait-glow {
+    position: absolute; inset: -14%; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 60% 40%, rgba(6,182,212,0.22), rgba(147,51,234,0.14) 45%, transparent 72%);
+    filter: blur(34px);
+  }
 
   .okiru-root .ok-btn-cta {
     display: inline-flex; align-items: center; gap: 9px; font-family: var(--sans);
@@ -712,6 +728,8 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-toolkit-pillar-wrap { grid-template-columns: 1fr; }
     .okiru-root .ok-eng-hdr { grid-template-columns: 1fr; gap: 32px; }
     .okiru-root .ok-eng-phases { grid-template-columns: 1fr; }
+    .okiru-root .ok-hero-w { grid-template-columns: 1fr; gap: 40px; }
+    .okiru-root .ok-hero-visual { justify-self: start; max-width: 360px; }
     .okiru-root .ok-dash-scores { grid-template-columns: 1fr; }
     .okiru-root .ok-outcomes-grid { grid-template-columns: 1fr; }
     .okiru-root .ok-nz-hdr { grid-template-columns: 1fr; gap: 32px; }
@@ -831,22 +849,28 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <div className="ok-hero-beam" />
             <div className="ok-hero-glow" />
           </div>
-          <div className="ok-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
-            <h1 className="ok-h1 ok-anim-2">
-              Stop ticking boxes.<br />
-              <span className="ok-h1-gradient">Start compounding growth.</span>
-            </h1>
-            <p className="ok-hero-sub ok-anim-3">
-              South African transformation, made measurable. We turn
-              <strong> ESG, B-BBEE &amp; Skills Development</strong> from once-a-year
-              box-ticking into audit-grade progress that compounds &mdash; one toolkit,
-              every framework, Net-Zero ready.
-            </p>
-            <div className="ok-hero-btns ok-anim-4">
-              <button className="ok-btn-cta" onClick={goRegister}>
-                Get started <span className="arr"><ArrowRight size={14} /></span>
-              </button>
-              <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
+          <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
+            <div className="ok-hero-content">
+              <h1 className="ok-h1 ok-anim-2">
+                Stop ticking boxes.<br />
+                <span className="ok-h1-gradient">Start compounding growth.</span>
+              </h1>
+              <p className="ok-hero-sub ok-anim-3">
+                South African transformation, made measurable. We turn
+                <strong> ESG, B-BBEE &amp; Skills Development</strong> from once-a-year
+                box-ticking into audit-grade progress that compounds &mdash; one toolkit,
+                every framework, Net-Zero ready.
+              </p>
+              <div className="ok-hero-btns ok-anim-4">
+                <button className="ok-btn-cta" onClick={goRegister}>
+                  Get started <span className="arr"><ArrowRight size={14} /></span>
+                </button>
+                <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
+              </div>
+            </div>
+            <div className="ok-hero-visual ok-anim-4" aria-hidden>
+              <div className="ok-hero-portrait-glow" />
+              <img className="ok-hero-portrait" src={heroPortrait} alt="" loading="eager" />
             </div>
           </div>
         </section>
