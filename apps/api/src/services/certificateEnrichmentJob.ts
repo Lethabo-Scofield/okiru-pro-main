@@ -729,9 +729,33 @@ function extractTaxNumber(text: string, reviews: ReviewField[]): FieldCandidate 
 }
 
 function extractBbbeeLevel(text: string, reviews: ReviewField[]): FieldCandidate | null {
-  if (isSwornAffidavitText(text)) return null;
   const levelValue = String.raw`(one|two|three|four|five|six|seven|eight|[1-8])`;
+  if (isSwornAffidavitText(text)) {
+    // Sworn affidavit templates enumerate every level in a tick-box table, so
+    // generic level wording is unsafe there. Accept only a completed
+    // declarative status line — "status level : a level X contributor" —
+    // which table rows never contain.
+    const declared = new RegExp(
+      String.raw`(?:b-?bbee|broad[-\s]*based\s+bee|bee)\s*status\s*leve[lI|][:\s-]*(?:a\s+)?leve[lI|]\s*${levelValue}\s+contributor\b`,
+      'i',
+    ).exec(text);
+    if (declared) {
+      const level = parseBbbeeLevelValue(declared[1]);
+      if (level) {
+        return {
+          field: 'bbbeeLevel',
+          mongoField: 'bbbeeLevel',
+          value: level,
+          confidence: 0.9,
+          evidence: textSnippet(text, declared.index, declared[0].length),
+          source: 'text',
+        };
+      }
+    }
+    return null;
+  }
   const patterns = [
+    new RegExp(String.raw`(?:b-?bbee|broad[-\s]*based\s+bee|bee)\s*status\s+of\s+(?:a\s+)?leve[lI|]\s*${levelValue}\b`, 'i'),
     new RegExp(String.raw`(?:b-?bbee|broad\s*based\s*black\s*economic\s*empowerment|bee)\s*(?:status\s*)?(?:level|contributor\s*level)[:\s-]*(?:a\s*)?(?:level\s*)?${levelValue}\b`, 'i'),
     new RegExp(String.raw`(?:b-?bbee|bee)\s*status[:\s-]*(?:level\s*)?${levelValue}\b`, 'i'),
     new RegExp(String.raw`(?:b-?bbee|broad\s*based\s*black\s*economic\s*empowerment)[^\n\r]{0,80}\bleve[lI|]\s*${levelValue}\b`, 'i'),
@@ -949,6 +973,10 @@ function isExemptMicroEnterpriseText(text: string): boolean {
   return /\bexempt(?:ed)?\s+micro\s+enterprise\b|\bEME\b/i.test(text);
 }
 
+function isQualifyingSmallEnterpriseText(text: string): boolean {
+  return /\bqualifying\s+small\s+enterprise\b|\bQSE\b/i.test(text);
+}
+
 function addMonthsUtc(date: Date, months: number): Date | null {
   const next = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()));
   if (next.getUTCDate() !== date.getUTCDate()) return null;
@@ -961,18 +989,30 @@ function hasReliableOwnershipEvidenceForDerivedLevel(candidate: FieldCandidate):
 }
 
 function extractDerivedSwornAffidavitLevel(text: string): FieldCandidate | null {
-  if (!isSwornAffidavitText(text) || !isExemptMicroEnterpriseText(text)) return null;
+  if (!isSwornAffidavitText(text)) return null;
+  const isEme = isExemptMicroEnterpriseText(text);
+  const isQse = isQualifyingSmallEnterpriseText(text);
+  if (!isEme && !isQse) return null;
   const ownership = extractOwnership(text, 'blackOwnership', []);
   if (!ownership || typeof ownership.value !== 'number') return null;
   if (!hasReliableOwnershipEvidenceForDerivedLevel(ownership)) return null;
   const ownershipPct = ownership.value;
-  const level = ownershipPct >= 100 ? 1 : ownershipPct >= 51 ? 2 : 4;
+  // Amended Codes automatic recognition: 100% black-owned EME/QSE = Level 1,
+  // >=51% = Level 2. Below 51% only an EME has a deemed level (4); a QSE
+  // must be verified, so it goes to review instead. When the affidavit
+  // mentions both scorecards the sub-51% case is ambiguous — review it.
+  const level = ownershipPct >= 100 ? 1
+    : ownershipPct >= 51 ? 2
+    : isEme && !isQse ? 4
+    : null;
+  if (level == null) return null;
+  const scorecard = isEme && isQse ? 'EME/QSE' : isEme ? 'EME' : 'QSE';
   return {
     field: 'bbbeeLevel',
     mongoField: 'bbbeeLevel',
     value: level,
     confidence: 0.9,
-    evidence: `Sworn EME affidavit ownership rule. ${ownership.evidence}`,
+    evidence: `Sworn ${scorecard} affidavit ownership rule. ${ownership.evidence}`,
     source: 'text',
   };
 }

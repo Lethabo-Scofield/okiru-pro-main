@@ -1166,6 +1166,111 @@ describe('Internal extraction coverage/retry endpoints', () => {
     expect(certificateUpdateOneMock).not.toHaveBeenCalled();
   });
 
+  it('rejects manual VAT confirmation for numbers that do not start with 4', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: '5123456789' },
+    });
+
+    expect(r.status).toBe(400);
+    expect(r.body.message).toContain('start with 4');
+    expect(certificateUpdateOneMock).not.toHaveBeenCalled();
+  });
+
+  it('normalizes hyphenated VAT values on manual confirmation', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateFindOneMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        id: 'cert-vat-2',
+        blobName: 'clients/beta.pdf',
+        vatNumber: null,
+        reviewFields: ['vatNumber'],
+        reviewCandidates: { vatNumber: { reason: 'no_vat_like_candidate_found' } },
+        fieldConfidence: {},
+      })),
+    });
+
+    const r = await call('POST', '/api/certificates/cert-vat-2/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: '412-345-6789', source: 'manual_review' },
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, vatNumber: '4123456789' });
+    const update = certificateUpdateOneMock.mock.calls[0][1];
+    expect(update.$set.vatNumber).toBe('4123456789');
+    expect(update.$set.reviewFields).toEqual([]);
+    expect(update.$set.reviewCandidates).not.toHaveProperty('vatNumber');
+    expect(update.$set.enrichmentStatus).toBe('completed');
+  });
+
+  it('lists missing-VAT certificates with no candidates in the review queue and excludes trusted VAT records', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateFindMock.mockClear();
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'vat-review-2',
+        blobName: 'clients/no-candidate.pdf',
+        fileName: 'no-candidate.pdf',
+        supplierName: 'No Candidate Co',
+        companySize: 'EME',
+        sectorCode: 'RCOGP',
+        sectorName: 'Retail, Construction, Oil & Gas, Property',
+        vatNumber: null,
+        extractionStatus: 'completed',
+        extractionMode: 'pdf_text',
+        extractedTextLength: 900,
+        enrichmentStatus: 'review_required',
+        reviewFields: ['vatNumber'],
+        reviewCandidates: {
+          vatNumber: {
+            value: null,
+            candidates: [],
+            reason: 'no_vat_like_candidate_found',
+          },
+        },
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(7);
+
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=2&offset=4', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    // Only missing-VAT records may enter the queue: trusted VAT is excluded by the filter itself.
+    expect(certificateFindMock.mock.calls[0][0]).toEqual({
+      $or: [
+        { vatNumber: null },
+        { vatNumber: '' },
+        { vatNumber: { $exists: false } },
+      ],
+    });
+    expect(skip).toHaveBeenCalledWith(4);
+    expect(limit).toHaveBeenCalledWith(2);
+    expect(r.body).toMatchObject({
+      total: 7,
+      limit: 2,
+      offset: 4,
+      pagination: { total: 7, limit: 2, offset: 4 },
+      items: [{
+        id: 'vat-review-2',
+        company: 'No Candidate Co',
+        vatNumber: null,
+        reviewReason: 'no_vat_like_candidate_found',
+        vatCandidates: [],
+      }],
+    });
+    expect(r.body.items[0]).not.toHaveProperty('extractedText');
+  });
+
   it('returns a focused review queue without extracted text and flags legacy sectors', async () => {
     mongoConnectedMock.mockReturnValue(true);
     const sort = vi.fn(() => chain);
