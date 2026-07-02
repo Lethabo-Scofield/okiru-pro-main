@@ -766,14 +766,14 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <h1 className="ok-h1 ok-anim-2">
-              Turn compliance into<br />
-              <span className="ok-h1-gradient">measurable growth.</span>
+              Stop ticking boxes.<br />
+              <span className="ok-h1-gradient">Start compounding growth.</span>
             </h1>
             <p className="ok-hero-sub ok-anim-3">
-              Every business starts as a bud. We help South African companies grow with
-              purpose &mdash; turning <strong>ESG, B-BBEE &amp; Skills Development</strong> from
-              box-ticking compliance into real, measurable transformation that compounds.
-              One toolkit. Every framework. Net-Zero ready.
+              South African transformation, made measurable. We turn
+              <strong> ESG, B-BBEE &amp; Skills Development</strong> from once-a-year
+              box-ticking into audit-grade progress that compounds &mdash; one toolkit,
+              every framework, Net-Zero ready.
             </p>
             <div className="ok-hero-btns ok-anim-4">
               <button className="ok-btn-cta" onClick={goRegister}>
