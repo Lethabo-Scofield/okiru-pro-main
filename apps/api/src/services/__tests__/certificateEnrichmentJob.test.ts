@@ -151,6 +151,71 @@ describe('certificate enrichment job', () => {
     expect(candidates.some((candidate) => candidate.field === 'bbbeeLevel')).toBe(false);
   });
 
+  it('derives Level 1 and Level 2 from QSE sworn affidavits with explicit majority black ownership', async () => {
+    const { collectFieldCandidates } = await import('../certificateEnrichmentJob.js');
+    const fullyOwned = collectFieldCandidates([
+      'SWORN AFFIDAVIT - B-BBEE QUALIFYING SMALL ENTERPRISE',
+      'The Enterprise is 100 % Black Owned as per Amended Codes.',
+    ].join('\n'), 'qse-100.pdf', ['bbbeeLevel'], []);
+    const majorityOwned = collectFieldCandidates([
+      'SWORN AFFIDAVIT - B-BBEE QUALIFYING SMALL ENTERPRISE',
+      'The Enterprise is 51 % Black Owned as per Amended Codes.',
+    ].join('\n'), 'qse-51.pdf', ['bbbeeLevel'], []);
+
+    expect(fullyOwned.find((c) => c.field === 'bbbeeLevel')).toMatchObject({ value: 1, source: 'text' });
+    expect(majorityOwned.find((c) => c.field === 'bbbeeLevel')).toMatchObject({ value: 2, source: 'text' });
+  });
+
+  it('sends sub-51% QSE affidavits to review instead of deriving a level', async () => {
+    const { collectFieldCandidates } = await import('../certificateEnrichmentJob.js');
+    const candidates = collectFieldCandidates([
+      'SWORN AFFIDAVIT - B-BBEE QUALIFYING SMALL ENTERPRISE',
+      'The Enterprise is 30 % Black Owned as per Amended Codes.',
+    ].join('\n'), 'qse-30.pdf', ['bbbeeLevel'], []);
+
+    expect(candidates.some((c) => c.field === 'bbbeeLevel')).toBe(false);
+  });
+
+  it('does not apply the EME sub-51% deemed level when the affidavit also mentions QSE', async () => {
+    const { collectFieldCandidates } = await import('../certificateEnrichmentJob.js');
+    const candidates = collectFieldCandidates([
+      'SWORN AFFIDAVIT - B-BBEE EXEMPTED MICRO ENTERPRISE / QUALIFYING SMALL ENTERPRISE',
+      'The Enterprise is 30 % Black Owned as per Amended Codes.',
+    ].join('\n'), 'ambiguous-30.pdf', ['bbbeeLevel'], []);
+
+    expect(candidates.some((c) => c.field === 'bbbeeLevel')).toBe(false);
+  });
+
+  it('accepts a completed declarative status line inside a sworn affidavit but not the tick-box table', async () => {
+    const { collectFieldCandidates } = await import('../certificateEnrichmentJob.js');
+    const declared = collectFieldCandidates([
+      'SWORN AFFIDAVIT - B-BBEE QUALIFYING SMALL ENTERPRISE',
+      'Financial Year applicable : 31 August 2024',
+      'Broad Based BEE status level : A level TWO contributor to B-BBEE',
+      'BEE procurement recognition level : 125%',
+    ].join('\n'), 'declared-qse.pdf', ['bbbeeLevel'], []);
+    const tableOnly = collectFieldCandidates([
+      'SWORN AFFIDAVIT - B-BBEE QUALIFYING SMALL ENTERPRISE',
+      'Please confirm on the below table the B-BBEE Level Contributor, by ticking the applicable box.',
+      '100% Black Owned Level One (135% B-BBEE procurement recognition level)',
+      'At least 51% Black Owned Level Two (125% B-BBEE procurement recognition level)',
+    ].join('\n'), 'table-qse.pdf', ['bbbeeLevel'], []);
+
+    expect(declared.find((c) => c.field === 'bbbeeLevel')).toMatchObject({ value: 2, source: 'text' });
+    expect(tableOnly.some((c) => c.field === 'bbbeeLevel')).toBe(false);
+  });
+
+  it('accepts "Status of LEVEL X" certificate wording', async () => {
+    const { collectFieldCandidates } = await import('../certificateEnrichmentJob.js');
+    const candidates = collectFieldCandidates([
+      'B-BBEE VERIFICATION CERTIFICATE',
+      'Certificate No: Moore10430',
+      'has a current overall Broad-Based BEE Status of LEVEL 1 in terms of the Amended Codes of Good Practice',
+    ].join('\n'), 'moore-cert.pdf', ['bbbeeLevel'], []);
+
+    expect(candidates.find((c) => c.field === 'bbbeeLevel')).toMatchObject({ value: 1, source: 'text' });
+  });
+
   it('extracts worded B-BBEE levels from certificate status wording', async () => {
     const { collectFieldCandidates } = await import('../certificateEnrichmentJob.js');
     const reviews: any[] = [];
@@ -271,6 +336,54 @@ describe('certificate enrichment job', () => {
     }));
   }, 15000);
 
+  it('VAT recovery update touches only VAT metadata fields and never scoring fields', async () => {
+    const { runCertificateVatRecoveryJob } = await import('../certificateEnrichmentJob.js');
+    const lean = vi.fn().mockResolvedValue([{
+      _id: 'doc-1',
+      id: 'cert-1',
+      blobName: 'cert-1.pdf',
+      extractionStatus: 'completed',
+      extractionMode: 'ocr',
+      extractedTextLength: 160,
+      extractedText: 'B-BBEE Verification Certificate with enough extracted text for reliable enrichment. VAT No: 4123456789',
+      vatNumber: null,
+      reviewFields: [],
+      reviewCandidates: {},
+      calculatorPayload: { keep: true },
+      scorecardId: 'scorecard-1',
+      annualSpend: 100000,
+      bbbeeScore: 85,
+    }]);
+    const limit = vi.fn(() => ({ lean }));
+    const sort = vi.fn(() => ({ limit }));
+    find.mockReturnValue({ sort });
+    countDocuments
+      .mockResolvedValueOnce(1)
+      .mockResolvedValueOnce(0)
+      .mockResolvedValueOnce(1);
+
+    const result = await runCertificateVatRecoveryJob({ dryRun: false, includeDetails: true });
+
+    expect(result.updated).toBe(1);
+    expect(updateOne).toHaveBeenCalledTimes(1);
+    const setKeys = Object.keys(updateOne.mock.calls[0][1].$set);
+    expect(setKeys.sort()).toEqual([
+      'enrichmentStatus',
+      'enrichmentVersion',
+      'fieldConfidence',
+      'lastEnrichedAt',
+      'reviewCandidates',
+      'reviewFields',
+      'updatedAt',
+      'vatNumber',
+      'vatNumberNormalized',
+    ]);
+    expect(setKeys).not.toContain('calculatorPayload');
+    expect(setKeys).not.toContain('scorecardId');
+    expect(setKeys).not.toContain('annualSpend');
+    expect(setKeys).not.toContain('bbbeeScore');
+  }, 15000);
+
   it('VAT recovery stores multiple candidates for review instead of guessing', async () => {
     const { runCertificateVatRecoveryJob } = await import('../certificateEnrichmentJob.js');
     const lean = vi.fn().mockResolvedValue([{
@@ -306,4 +419,104 @@ describe('certificate enrichment job', () => {
       ]),
     });
   }, 15000);
+});
+
+describe('VAT recovery text analysis', () => {
+  async function analyse(text: string) {
+    const { analyseVatRecoveryText } = await import('../certificateEnrichmentJob.js');
+    return analyseVatRecoveryText(text);
+  }
+
+  it('accepts a labelled VAT with spaces', async () => {
+    const result = await analyse('B-BBEE Certificate\nVAT No: 412 345 6789\nIssued for Example Co');
+    expect(result).toMatchObject({
+      status: 'accepted',
+      reason: 'labelled_vat_candidate',
+      candidate: expect.objectContaining({ value: '4123456789', labelled: true }),
+    });
+  });
+
+  it('accepts a labelled VAT with hyphens', async () => {
+    const result = await analyse('B-BBEE Certificate\nVAT Number: 412-345-6789\nIssued for Example Co');
+    expect(result).toMatchObject({
+      status: 'accepted',
+      reason: 'labelled_vat_candidate',
+      candidate: expect.objectContaining({ value: '4123456789' }),
+    });
+  });
+
+  it('accepts a VAT whose label sits on the previous line', async () => {
+    const result = await analyse('B-BBEE Certificate\nVAT Registration\n4123456789\nIssued for Example Co');
+    expect(result).toMatchObject({
+      status: 'accepted',
+      reason: 'labelled_vat_candidate',
+      candidate: expect.objectContaining({ value: '4123456789' }),
+    });
+  });
+
+  it('accepts a Tax Reference label as a VAT label', async () => {
+    const result = await analyse('B-BBEE Certificate\nTax Reference: 4123456789\nIssued for Example Co');
+    expect(result).toMatchObject({
+      status: 'accepted',
+      reason: 'labelled_vat_candidate',
+      candidate: expect.objectContaining({ value: '4123456789' }),
+    });
+  });
+
+  it('accepts a single clean unlabelled VAT-like number with no negative context', async () => {
+    const result = await analyse('B-BBEE Certificate issued for Example Co\n4123456789\nValid until further notice');
+    expect(result).toMatchObject({
+      status: 'accepted',
+      reason: 'single_unlabelled_vat_candidate',
+      candidate: expect.objectContaining({ value: '4123456789', labelled: false }),
+    });
+  });
+
+  it('sends multiple VAT-like candidates to review', async () => {
+    const result = await analyse('B-BBEE Certificate issued for Example Co\n4123456789\n4987654321');
+    expect(result).toMatchObject({
+      status: 'multiple_candidates',
+      reason: 'multiple_vat_like_candidates',
+    });
+    expect(result.candidates).toHaveLength(2);
+  });
+
+  it('rejects an unlabelled candidate next to an identity number label', async () => {
+    const result = await analyse('B-BBEE Certificate issued for Example Co\nIdentity Number: 4123456789');
+    expect(result).toMatchObject({
+      status: 'no_candidate_found',
+      rejectedByNegativeContext: 1,
+    });
+  });
+
+  it('rejects an unlabelled candidate next to a company registration label', async () => {
+    const result = await analyse('B-BBEE Certificate issued for Example Co\nCompany Registration: 4123456789');
+    expect(result).toMatchObject({
+      status: 'no_candidate_found',
+      rejectedByNegativeContext: 1,
+    });
+  });
+
+  it('rejects an unlabelled candidate next to phone or contact labels', async () => {
+    const tel = await analyse('B-BBEE Certificate issued for Example Co\nTel: 412 345 6789');
+    const contact = await analyse('B-BBEE Certificate issued for Example Co\nContact: 4123456789');
+    expect(tel).toMatchObject({ status: 'no_candidate_found', rejectedByNegativeContext: 1 });
+    expect(contact).toMatchObject({ status: 'no_candidate_found', rejectedByNegativeContext: 1 });
+  });
+
+  it('rejects an unlabelled candidate next to certificate or member number labels', async () => {
+    const certificate = await analyse('B-BBEE document issued for Example Co\nCertificate No: 4123456789');
+    const member = await analyse('B-BBEE document issued for Example Co\nMember Number: 4123456789');
+    expect(certificate).toMatchObject({ status: 'no_candidate_found', rejectedByNegativeContext: 1 });
+    expect(member).toMatchObject({ status: 'no_candidate_found', rejectedByNegativeContext: 1 });
+  });
+
+  it('never treats digits embedded in longer numbers as VAT candidates', async () => {
+    const result = await analyse('B-BBEE Certificate issued for Example Co\n24123456789\n41234567891');
+    expect(result).toMatchObject({
+      status: 'no_candidate_found',
+      reason: 'no_vat_like_candidate_found',
+    });
+    expect(result.candidates).toHaveLength(0);
+  });
 });
