@@ -618,6 +618,32 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-cta-sub { font-size: 16px; color: var(--body); line-height: 1.7; margin-bottom: 36px; max-width: 580px; }
   .okiru-root .ok-cta-btns { display: flex; gap: 14px; flex-wrap: wrap; }
 
+  /* ── CEO / FOUNDER MESSAGE ── */
+  .okiru-root .ok-ceo { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: linear-gradient(to bottom, rgba(147,51,234,0.03) 0%, transparent 60%); }
+  .okiru-root .ok-ceo-grid { display: grid; grid-template-columns: 320px 1fr; gap: 56px; align-items: center; }
+  .okiru-root .ok-ceo-photo-wrap { position: relative; }
+  .okiru-root .ok-ceo-photo {
+    position: relative; z-index: 1; width: 100%; display: block; border-radius: var(--radius-xl, 16px);
+    filter: grayscale(1) contrast(1.02); border: 1px solid rgba(255,255,255,0.1);
+  }
+  .okiru-root .ok-ceo-photo-glow {
+    position: absolute; inset: -12% -12% -18% -12%; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 40%, rgba(147,51,234,0.22), transparent 70%); filter: blur(28px);
+  }
+  .okiru-root .ok-ceo-body { max-width: 640px; }
+  .okiru-root .ok-ceo-quote {
+    margin: 18px 0 0; font-family: var(--serif); font-weight: 400;
+    font-size: clamp(1.15rem, 1.9vw, 1.5rem); line-height: 1.55; letter-spacing: -0.015em;
+    color: rgba(255,255,255,0.9);
+  }
+  .okiru-root .ok-ceo-sign { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--rule); }
+  .okiru-root .ok-ceo-name { font-size: 16px; font-weight: 600; color: var(--hi); letter-spacing: -0.01em; }
+  .okiru-root .ok-ceo-role { margin-top: 3px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+  @media (max-width: 820px) {
+    .okiru-root .ok-ceo-grid { grid-template-columns: 1fr; gap: 32px; }
+    .okiru-root .ok-ceo-photo-wrap { max-width: 300px; }
+  }
+
   /* ── SCORECARD WIDGET ── */
   .okiru-root .ok-sc-pillar-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
   .okiru-root .ok-sc-pillar-name { font-family: var(--sans); font-size: 11px; color: rgba(255,255,255,.55); letter-spacing: -0.01em; }
