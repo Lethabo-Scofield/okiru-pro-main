@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
+import { useEffect } from "react";
 import { GLOBAL_CSS } from "./LandingPage";
-import { PRODUCT_TABS, type ProductConfig } from "./productLandingConfig";
+import { type ProductConfig } from "./productLandingConfig";
+import { SiteNav, SiteFooter, ArrowRight } from "./siteChrome";
 
 /* ─────────────────────────────────────────────
    PRODUCT PAGE THEMES — each tab gets its own identity
@@ -109,18 +109,6 @@ const PRODUCT_CSS = `
   .okiru-orange #product-cta .ok-w > div { background: linear-gradient(135deg, rgba(249,115,22,0.13) 0%, rgba(251,146,60,0.06) 55%, rgba(37,99,235,0.07) 100%); }
 `;
 
-const ArrowRight = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-  </svg>
-);
-const MenuIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-);
-const CloseIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-);
-
 interface ProductLandingPageProps {
   product: ProductConfig;
   onNavigateHome: () => void;
@@ -128,6 +116,8 @@ interface ProductLandingPageProps {
   onNavigateRegister?: () => void;
   onNavigateProduct: (slug: string) => void;
   onNavigateCertificates?: () => void;
+  onNavigateAbout?: () => void;
+  onNavigateContact?: () => void;
 }
 
 export default function ProductLandingPage({
@@ -137,17 +127,15 @@ export default function ProductLandingPage({
   onNavigateRegister,
   onNavigateProduct,
   onNavigateCertificates,
+  onNavigateAbout,
+  onNavigateContact,
 }: ProductLandingPageProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const goRegister = () => { setMenuOpen(false); (onNavigateRegister ?? onNavigateAuth)(); };
+  const goRegister = () => { (onNavigateRegister ?? onNavigateAuth)(); };
   const goPrimary = () => {
-    setMenuOpen(false);
     if (product.primaryAction === "certificates" && onNavigateCertificates) onNavigateCertificates();
     else goRegister();
   };
   const scrollTo = (id: string) => {
-    setMenuOpen(false);
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -167,11 +155,6 @@ export default function ProductLandingPage({
     };
   }, []);
 
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [menuOpen]);
-
   // Reset scroll when switching between product pages.
   useEffect(() => { window.scrollTo(0, 0); }, [product.slug]);
 
@@ -179,49 +162,14 @@ export default function ProductLandingPage({
     <div className={`okiru-root okiru-product okiru-${product.theme}`}>
       <div className="okiru-grain" aria-hidden />
 
-      {/* ── NAV ── */}
-      <nav className="ok-nav">
-        <div className="ok-nav-inner">
-          <button onClick={onNavigateHome} className="ok-brand" aria-label="Okiru home" style={{ background: "none", border: "none", cursor: "pointer" }}>
-            <img src={okiruLogo} alt="" className="ok-brand-mark" />
-            <span className="ok-wordmark"><strong>Okiru</strong></span>
-          </button>
-
-          <div className="ok-nav-center">
-            <button className="ok-nav-link" onClick={onNavigateHome}>Home</button>
-            {PRODUCT_TABS.map((t) => (
-              <button
-                key={t.slug}
-                className={`ok-nav-link ${t.slug === product.slug ? "ok-nav-active" : ""}`}
-                aria-current={t.slug === product.slug ? "page" : undefined}
-                onClick={() => onNavigateProduct(t.slug)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="ok-nav-right">
-            <button className="ok-nav-signin" onClick={onNavigateAuth}>Sign in</button>
-            <button className="ok-nav-demo-btn" onClick={goPrimary}>
-              {product.primaryCta} <span className="arr"><ArrowRight size={13} /></span>
-            </button>
-            <button className="ok-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen}>
-              {menuOpen ? <CloseIcon /> : <MenuIcon />}
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* ── MOBILE MENU ── */}
-      <div className={`ok-mobile-menu ${menuOpen ? "ok-menu-open" : ""}`}>
-        <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateHome(); }}>Home</button>
-        {PRODUCT_TABS.map((t) => (
-          <button key={t.slug} className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateProduct(t.slug); }}>{t.label}</button>
-        ))}
-        <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
-        <button className="ok-mobile-cta" onClick={goPrimary}>{product.primaryCta} →</button>
-      </div>
+      <SiteNav
+        active={product.slug}
+        onNavigateHome={onNavigateHome}
+        onNavigateAbout={onNavigateAbout}
+        onNavigateContact={onNavigateContact}
+        onNavigateProduct={onNavigateProduct}
+        onNavigateAuth={onNavigateAuth}
+      />
 
       <main>
         {/* ── HERO ── */}
@@ -312,6 +260,8 @@ export default function ProductLandingPage({
           </div>
         </section>
       </main>
+
+      <SiteFooter onNavigateAuth={onNavigateAuth} />
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
-import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
+import { useState, useEffect } from "react";
 import heroBg from "@assets/image_1783014770940.png";
-import { PRODUCT_TABS, PRODUCTS } from "./productLandingConfig";
+import { PRODUCTS } from "./productLandingConfig";
+import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome";
 
 /* ─────────────────────────────────────────────
    GLOBAL CSS
@@ -123,12 +123,13 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-nav-div { width: 1px; height: 16px; background: rgba(255,255,255,0.12); margin: 0 6px; flex-shrink: 0; }
 
   .okiru-root .ok-nav-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
-  .okiru-root .ok-nav-signin {
-    font-family: var(--sans); font-size: 13px; font-weight: 400;
+  .okiru-root .ok-nav-linkedin {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 8px;
     color: rgba(255,255,255,0.55); background: none; border: 1px solid rgba(255,255,255,0.12); cursor: pointer;
-    padding: 7px 16px; border-radius: 8px; transition: color .2s, border-color .2s, background .2s;
+    transition: color .2s, border-color .2s, background .2s, transform .18s cubic-bezier(.16,1,.3,1);
   }
-  .okiru-root .ok-nav-signin:hover { color: var(--hi); border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.04); }
+  .okiru-root .ok-nav-linkedin:hover { color: var(--hi); border-color: rgba(255,255,255,0.28); background: rgba(255,255,255,0.04); transform: translateY(-1px); }
   .okiru-root .ok-nav-demo-btn {
     position: relative; overflow: hidden;
     font-family: var(--sans); font-size: 13px; font-weight: 600;
@@ -654,7 +655,6 @@ export const GLOBAL_CSS = `
   }
   @media (max-width: 760px) {
     .okiru-root .ok-nav-inner { padding: 0 20px; }
-    .okiru-root .ok-nav-signin { display: none; }
     .okiru-root .ok-nav-demo-btn { display: none; }
     .okiru-root .ok-hamburger { display: block; }
     .okiru-root .ok-w { padding: 0 20px; }
@@ -694,195 +694,20 @@ const SERVICES = [
   { name: "WSP", meta: "Skills & reporting" },
 ];
 
-/* ─────────────────────────────────────────────
-   SMALL ICONS
-───────────────────────────────────────────── */
-const ArrowRight = ({ size = 14 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
-  </svg>
-);
-const MenuIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
-  </svg>
-);
-const CloseIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-const CheckIcon = () => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-const FullIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="20 6 9 17 4 12" />
-  </svg>
-);
-
-/* ─────────────────────────────────────────────
-   HOOKS
-───────────────────────────────────────────── */
-function useReveal(threshold = 0.08) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const el = ref.current; if (!el) return;
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setVisible(true); obs.unobserve(el); } }, { threshold });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [threshold]);
-  return [ref, visible] as const;
-}
-
-/* ─────────────────────────────────────────────
-   REVEAL WRAPPER
-───────────────────────────────────────────── */
-function Reveal({ children, delay = "", className = "" }: { children: React.ReactNode; delay?: string; className?: string }) {
-  const [ref, visible] = useReveal();
-  return <div ref={ref} className={`ok-reveal ${visible ? "ok-in" : ""} ${delay} ${className}`}>{children}</div>;
-}
-
-/* ─────────────────────────────────────────────
-   DEMO MODAL
-───────────────────────────────────────────── */
-interface DemoFormState {
-  name: string; company: string; email: string; phone: string; message: string;
-}
-interface DemoFormErrors {
-  name?: string; company?: string; email?: string;
-}
-
-function DemoModal({ onClose }: { onClose: () => void }) {
-  const [form, setForm] = useState<DemoFormState>({ name: "", company: "", email: "", phone: "", message: "" });
-  const [errors, setErrors] = useState<DemoFormErrors>({});
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const set = (k: keyof DemoFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setForm(f => ({ ...f, [k]: e.target.value }));
-    if (errors[k as keyof DemoFormErrors]) setErrors(er => ({ ...er, [k]: undefined }));
-  };
-
-  const validate = () => {
-    const errs: DemoFormErrors = {};
-    if (!form.name.trim()) errs.name = "Name is required";
-    if (!form.company.trim()) errs.company = "Company is required";
-    if (!form.email.trim()) errs.email = "Email is required";
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = "Enter a valid email";
-    return errs;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    setLoading(true);
-    try {
-      await fetch("/api/demo-request", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      setSubmitted(true);
-    } catch {
-      setSubmitted(true);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, [onClose]);
-
-  return (
-    <div className="ok-modal-overlay" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="ok-modal" role="dialog" aria-modal="true" aria-label="Book a demo">
-        {submitted ? (
-          <div className="ok-modal-success">
-            <div className="ok-success-icon"><CheckIcon /></div>
-            <div className="ok-success-title">Request received.</div>
-            <p className="ok-success-sub">
-              Thank you, <strong style={{ color:"var(--hi)" }}>{form.name}</strong>. We'll be in touch within one business day to confirm your 45-minute session.
-            </p>
-            <button className="ok-form-submit" style={{ marginTop:28, maxWidth:200, margin:"28px auto 0" }} onClick={onClose}>
-              Close
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="ok-modal-head">
-              <div>
-                <div className="ok-modal-title">Book a 45-min demo</div>
-                <p className="ok-modal-sub">A working session — not a sales pitch. We'll walk through the live Okiru Toolkit mapped to your reporting cycle.</p>
-              </div>
-              <button className="ok-modal-close" onClick={onClose} aria-label="Close">
-                <CloseIcon />
-              </button>
-            </div>
-            <div className="ok-modal-body">
-              <form className="ok-form" onSubmit={handleSubmit} noValidate>
-                <div className="ok-form-row">
-                  <div className="ok-field">
-                    <label className="ok-label">Name<span className="ok-req">*</span></label>
-                    <input className={`ok-input${errors.name ? " ok-err" : ""}`} value={form.name} onChange={set("name")} placeholder="Thabo Nkosi" autoFocus />
-                    {errors.name && <span className="ok-field-err">{errors.name}</span>}
-                  </div>
-                  <div className="ok-field">
-                    <label className="ok-label">Company<span className="ok-req">*</span></label>
-                    <input className={`ok-input${errors.company ? " ok-err" : ""}`} value={form.company} onChange={set("company")} placeholder="Acme Corp" />
-                    {errors.company && <span className="ok-field-err">{errors.company}</span>}
-                  </div>
-                </div>
-                <div className="ok-form-row">
-                  <div className="ok-field">
-                    <label className="ok-label">Email<span className="ok-req">*</span></label>
-                    <input type="email" className={`ok-input${errors.email ? " ok-err" : ""}`} value={form.email} onChange={set("email")} placeholder="you@company.co.za" />
-                    {errors.email && <span className="ok-field-err">{errors.email}</span>}
-                  </div>
-                  <div className="ok-field">
-                    <label className="ok-label">Phone <span style={{ opacity:.5, fontSize:9 }}>(optional)</span></label>
-                    <input className="ok-input" value={form.phone} onChange={set("phone")} placeholder="+27 78 000 0000" />
-                  </div>
-                </div>
-                <div className="ok-field">
-                  <label className="ok-label">Anything specific you'd like to cover? <span style={{ opacity:.5, fontSize:9 }}>(optional)</span></label>
-                  <textarea className="ok-textarea" value={form.message} onChange={set("message")} placeholder="e.g. We need to submit our B-BBEE certificate in Q1 and want to understand our Scope 2 exposure…" />
-                </div>
-                <button type="submit" className="ok-form-submit" disabled={loading}>
-                  {loading ? "Sending…" : <><span>Send request</span><span className="arr"><ArrowRight size={15} /></span></>}
-                </button>
-              </form>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /* ─────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────── */
-export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNavigateProduct }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateCertificates?: () => void; onNavigateProduct?: (slug: string) => void }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNavigateProduct, onNavigateAbout, onNavigateContact }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateProduct?: (slug: string) => void; onNavigateAbout?: () => void; onNavigateContact?: () => void }) {
   const [demoOpen, setDemoOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
 
-  const openDemo = () => { setDemoOpen(true); setMenuOpen(false); };
+  const openDemo = () => setDemoOpen(true);
   // Wire the marketing "Get started" CTA to the register flow (falls back to the
   // shared auth screen, where "Create account" is still reachable, if the host
   // didn't pass a register handler).
-  const goRegister = () => { setMenuOpen(false); (onNavigateRegister ?? onNavigateAuth)(); };
+  const goRegister = () => (onNavigateRegister ?? onNavigateAuth)();
 
   const scrollTo = (id: string) => {
-    setMenuOpen(false);
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
@@ -896,16 +721,9 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
   }, []);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = (menuOpen || demoOpen) ? "hidden" : "";
+    document.body.style.overflow = demoOpen ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [menuOpen, demoOpen]);
+  }, [demoOpen]);
 
   return (
     <div className="okiru-root">
@@ -914,47 +732,14 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
       {/* ── DEMO MODAL ── */}
       {demoOpen && <DemoModal onClose={() => setDemoOpen(false)} />}
 
-      {/* ── NAV ── */}
-      <nav className={`ok-nav ${scrolled ? "ok-nav-scrolled" : ""}`}>
-        <div className="ok-nav-inner">
-          <a href="/" className="ok-brand" aria-label="Okiru home">
-            <img src={okiruLogo} alt="" className="ok-brand-mark" />
-            <span className="ok-wordmark"><strong>Okiru</strong></span>
-          </a>
-
-          <div className="ok-nav-center">
-            <button className="ok-nav-link" onClick={() => scrollTo("sec-about")}>About</button>
-            {PRODUCT_TABS.map(t => (
-              <button key={t.slug} className="ok-nav-link" onClick={() => onNavigateProduct?.(t.slug)}>
-                {t.label}
-              </button>
-            ))}
-            <div className="ok-nav-div" />
-            <button className="ok-nav-link" onClick={() => scrollTo("sec-contact")}>Contact</button>
-          </div>
-
-          <div className="ok-nav-right">
-            <button className="ok-nav-signin" onClick={onNavigateAuth}>Sign in</button>
-            <button className="ok-nav-demo-btn" onClick={openDemo}>
-              Book a demo <span className="arr"><ArrowRight size={13} /></span>
-            </button>
-            <button className="ok-hamburger" onClick={() => setMenuOpen(!menuOpen)} aria-label="Menu" aria-expanded={menuOpen}>
-              {menuOpen ? <CloseIcon /> : <MenuIcon />}
-            </button>
-          </div>
-        </div>
-      </nav>
-
-      {/* ── MOBILE MENU ── */}
-      <div className={`ok-mobile-menu ${menuOpen ? "ok-menu-open" : ""}`}>
-        <button className="ok-mobile-link" onClick={() => scrollTo("sec-about")}>About</button>
-        {PRODUCT_TABS.map(t => (
-          <button key={t.slug} className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateProduct?.(t.slug); }}>{t.label}</button>
-        ))}
-        <button className="ok-mobile-link" onClick={() => scrollTo("sec-contact")}>Contact</button>
-        <button className="ok-mobile-link" onClick={() => { setMenuOpen(false); onNavigateAuth(); }}>Sign in</button>
-        <button className="ok-mobile-cta" onClick={openDemo}>Book a 45-min demo →</button>
-      </div>
+      <SiteNav
+        active="home"
+        onNavigateHome={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        onNavigateAbout={onNavigateAbout}
+        onNavigateContact={onNavigateContact}
+        onNavigateProduct={onNavigateProduct}
+        onNavigateAuth={onNavigateAuth}
+      />
 
       <main>
         {/* ── 01: HERO ── */}
@@ -980,7 +765,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               <button className="ok-btn-cta" onClick={goRegister}>
                 Get started <span className="arr"><ArrowRight size={14} /></span>
               </button>
-              <button className="ok-btn-sec" onClick={openDemo}>Book a 45-min demo</button>
+              <button className="ok-btn-sec" onClick={() => (onNavigateContact ?? openDemo)()}>Book a 45-min demo</button>
               <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
             </div>
           </div>
@@ -1043,96 +828,11 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 03: WHO WE ARE ── */}
-        <section className="ok-section" id="sec-about">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">03</span>
-              <h2 className="ok-h2">Who We Are</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>A South African transformation advisory. Methodology specialists. Disclosure-fluent.</p>
-            </Reveal>
-            <div className="ok-about-grid">
-              <div>
-                <Reveal>
-                  <h3 className="ok-h3">About Okiru Consulting</h3>
-                  <p className="ok-lead" style={{ marginTop:14 }}>Founded in 2023, Okiru Consulting helps organisations turn ESG, B-BBEE, and compliance obligations into measurable, board-ready performance. Headquartered in Braamfontein, Johannesburg, our practice marries technology and human expertise to remove the friction between capturing data and disclosing it.</p>
-                  <p style={{ marginTop:16, fontSize:14, color:"var(--muted)", lineHeight:1.7 }}><strong style={{ color:"rgba(255,255,255,.7)", fontStyle:"normal" }}>Our Mission</strong><br />To make transformation measurable, defensible and permanent for every South African organisation we serve.</p>
-                </Reveal>
-                <div className="ok-about-badges" style={{ marginTop:28 }}>
-                  {[["Accuracy","Audit-grade outputs"],["Independence","Verifier-defensible"],["Transformation","Methodology-led"],["Innovation","60%+ time saved"]].map(([val, label]) => (
-                    <Reveal key={val}>
-                      <div className="ok-about-badge">
-                        <div className="ok-about-badge-val">{val}</div>
-                        <div className="ok-about-badge-label">{label}</div>
-                      </div>
-                    </Reveal>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ display:"flex", flexDirection:"column" }}>
-                  {[
-                    { num:"01", name:"ESG Advisory", sub:"IFRS S1/S2 · GRI · TCFD · CDP · SBTi", desc:"Net-Zero strategy, GHG measurement, and board-ready sustainability disclosure for JSE-listed and private companies." },
-                    { num:"02", name:"B-BBEE & Compliance", sub:"Generic & sector codes · Verification", desc:"Sector code strategy, EE Act compliance, Skills Development WSP/ATR, Employment Equity plans, and ownership advisory." },
-                    { num:"03", name:"AI & Digital Tools", sub:"Zoho & Microsoft 365 automation", desc:"AI-enabled compliance workflows and WSP integration for intelligent, scalable transformation reporting that cuts reporting time by 60%+." },
-                  ].map((p, i) => (
-                    <Reveal key={p.num} delay={i > 0 ? `ok-d${i}` : ""}>
-                      <div className="ok-about-pillar">
-                        <div className="ok-about-pillar-num">{p.num}</div>
-                        <div>
-                          <div className="ok-about-pillar-name">{p.name}</div>
-                          <div className="ok-about-pillar-sub">{p.sub}</div>
-                          <div className="ok-about-pillar-desc">{p.desc}</div>
-                        </div>
-                      </div>
-                    </Reveal>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ── 04: THE OKIRU DIFFERENCE ── */}
-        <section className="ok-section">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">04</span>
-              <h2 className="ok-h2">The Okiru Difference</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Six reasons leading South African organisations choose our Transformation Toolkit.</p>
-            </Reveal>
-          </div>
-          <div className="ok-diff-grid">
-            {[
-              { idx:"01", title:"One integrated toolkit", desc:"ESG, B-BBEE, EE, and Skills Dev in one workbook. No re-keying, no reconciliation gaps, no separate platforms." },
-              { idx:"02", title:"Activity-based accuracy", desc:"DEFRA 2024, Eskom NERSA, SBTi CNZS 2.0. CDP-defensible, audit-grade outputs aligned to every major framework." },
-              { idx:"03", title:"Deep local expertise", desc:"Built for SA regulation: King V, B-BBEE Codes, EE Act, POPIA, JSE ESG Guidance, and sector-specific requirements." },
-              { idx:"04", title:"AI-powered innovation", desc:"AI-enabled workflows cut ESG reporting time by 60%+ and eliminate manual data consolidation risk." },
-              { idx:"05", title:"Measurable business impact", desc:"Improved B-BBEE scores, reduced verification risk, stronger investor ESG ratings, and compliance-led growth." },
-              { idx:"06", title:"Built-in capability transfer", desc:"Your team leaves every engagement knowing how to run the toolkit independently. We build capability, not dependency." },
-            ].map((d, i) => (
-              <Reveal key={d.idx} className="ok-diff-card" delay={i % 3 > 0 ? `ok-d${i % 3}` : ""}>
-                <div className="ok-diff-idx">{d.idx}</div>
-                <div className="ok-diff-title">{d.title}</div>
-                <div className="ok-diff-desc">{d.desc}</div>
-              </Reveal>
-            ))}
-          </div>
-          <div className="ok-diff-stats">
-            {[["29","Integrated sheets"],["1,583","Live formulas"],["12","Frameworks covered"],["120","Glossary entries"],["0","Reconciliation gaps"],["60%+","Time saved via AI"]].map(([n, l], i) => (
-              <Reveal key={l} className="ok-diff-stat" delay={i > 0 ? `ok-d${Math.min(i,3)}` : ""}>
-                <div className="ok-diff-stat-n">{n}</div>
-                <div className="ok-diff-stat-l">{l}</div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
-        {/* ── 05: OUR PRODUCTS ── */}
+        {/* ── 03: OUR PRODUCTS ── */}
         <section className="ok-section" id="sec-products">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">05</span>
+              <span className="ok-sec-num">03</span>
               <h2 className="ok-h2">Our Products</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Three focused toolkits, one measurement methodology. Each has its own dedicated walkthrough — pick a starting point.</p>
             </Reveal>
@@ -1157,11 +857,11 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 06: FRAMEWORKS ── */}
+        {/* ── 04: FRAMEWORKS ── */}
         <section className="ok-section" id="sec-frameworks">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">06</span>
+              <span className="ok-sec-num">04</span>
               <h2 className="ok-h2">Frameworks &amp; Benchmarks</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Globally recognised standards. Publicly defensible authority on every factor.</p>
             </Reveal>
@@ -1186,237 +886,9 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
         </section>
 
-        {/* ── 07: OUTCOMES ── */}
-        <section className="ok-section">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">07</span>
-              <h2 className="ok-h2">Operational Outcomes</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Four shifts that change how your ESG function works — permanently.</p>
-            </Reveal>
-          </div>
-          <div className="ok-outcomes-grid">
-            {[
-              { label:"Governance", title:"Single source of truth", desc:"One workbook. Every framework. Every number traces to a documented source row through a documented formula chain. The audit committee, auditor, JSE, and integrated report all see the same numbers calculated the same way." },
-              { label:"Efficiency", title:"Clean data flows", desc:"Inputs captured once flow through to every framework simultaneously. No re-keying fleet litres into the GHG inventory, ISO 14083 register, Carbon Tax submission and CDP response separately." },
-              { label:"Insight", title:"Embedded analytics", desc:"Year-on-year variance built in. Intensity ratios calculated automatically. Materiality flagged dynamically. The Stance toggle lets you stress-test performance under Lean, Standard and Strict scoring assumptions." },
-              { label:"Reporting", title:"Board-ready disclosure", desc:"Pre-formatted disclosure blocks aligned to IFRS S1/S2, GRI, CDP and B-BBEE structures. Lift directly into your integrated annual report. Methodology lives inside your finance function — not on a consultant's hard drive.", footer:"Not a portal. Not a certificate. A measurement system with people behind it." },
-            ].map((o, i) => (
-              <Reveal key={o.label} delay={i % 2 === 1 ? "ok-d1" : ""}>
-                <div className="ok-outcome-card">
-                  <span className="ok-outcome-label">{o.label}</span>
-                  <div className="ok-outcome-title">{o.title}</div>
-                  <div className="ok-outcome-desc">{o.desc}</div>
-                  {o.footer && <div className="ok-outcome-footer">{o.footer}</div>}
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
-
-        {/* ── 08: ENGAGEMENT MODEL ── */}
-        <section className="ok-section">
-          <div className="ok-w">
-            <div className="ok-eng-hdr">
-              <Reveal>
-                <span className="ok-sec-num">08</span>
-                <h2 className="ok-h2">Engagement Model</h2>
-              </Reveal>
-              <Reveal delay="ok-d1">
-                <p className="ok-lead">From scoping session to live reporting cadence in three structured phases.</p>
-                <p style={{ marginTop:16, fontSize:13.5, color:"var(--muted)", lineHeight:1.75, fontStyle:"italic" }}>Your team owns the data and the strategy. Okiru owns the methodology, data loading, and framework refresh as standards evolve.</p>
-              </Reveal>
-            </div>
-            <div className="ok-eng-phases">
-              {[
-                { num:"01", name:"Scoping & Configuration", sub:"2 weeks", items:["Sector-configured workbook","Data source map","Methodology sign-off"] },
-                { num:"02", name:"Data Migration", sub:"3 weeks", items:["Reconciled historical data","Validation at zero errors","First dashboard refresh"] },
-                { num:"03", name:"Live Reporting Cadence", sub:"Ongoing", items:["Monthly refresh cycle","Quarterly board pack","Annual report support"] },
-              ].map((p, i) => (
-                <Reveal key={p.num} delay={i > 0 ? `ok-d${i}` : ""}>
-                  <div className="ok-eng-phase">
-                    <div className="ok-eng-phase-num">Phase {p.num}</div>
-                    <div className="ok-eng-phase-name">{p.name}</div>
-                    <div className="ok-eng-phase-sub">{p.sub}</div>
-                    <ul className="ok-eng-phase-items">
-                      {p.items.map(item => <li key={item}>{item}</li>)}
-                    </ul>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── 09: OKIRU VS MARKET ── */}
-        <section className="ok-section">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">09</span>
-              <h2 className="ok-h2">Okiru vs the Market</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>We don't compete on cheaper software. We compete on what we own.</p>
-            </Reveal>
-            <div className="ok-vs-edges" style={{ marginTop:40 }}>
-              {[
-                { num:"Edge 01", title:"Only SA firm integrating B-BBEE + ESG in one toolkit", desc:"BEE platforms score pillars. Okiru links your B-BBEE score to your GHG inventory, EE plan, and IFRS S2 disclosure — one source of truth for every framework simultaneously." },
-                { num:"Edge 02", title:"Methodology lives inside your business — not on our server", desc:"Every formula, factor, and threshold is documented in your own workbook. When the engagement ends, your finance team owns the methodology. No platform lock-in. No annual licence." },
-                { num:"Edge 03", title:"Consultant accountability, not just software access", desc:"BEE123 gives you a tool. Updapt tracks your ESG data. Okiru builds the strategy, loads the data, validates every number, and stands behind the output when your verifier asks questions." },
-              ].map((e, i) => (
-                <Reveal key={e.num} delay={i > 0 ? `ok-d${Math.min(i,2)}` : ""}>
-                  <div className="ok-vs-edge">
-                    <div className="ok-vs-edge-num">{e.num}</div>
-                    <div className="ok-vs-edge-body">
-                      <div className="ok-vs-edge-title">{e.title}</div>
-                      <div className="ok-vs-edge-desc">{e.desc}</div>
-                    </div>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-            <Reveal>
-              <p className="ok-eyebrow" style={{ marginBottom:16, marginTop:40 }}>Capability Matrix</p>
-              <div className="ok-vs-table-wrap">
-                <table className="ok-vs-table">
-                  <thead>
-                    <tr>
-                      <th>Capability</th><th>Okiru B-BBEE + ESG</th><th>BEE 123</th><th>Updapt ESG Tech</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ["All 5 B-BBEE pillars scored","Full","Full","Full"],
-                      ["AI toolkit upload → instant scorecard","Full","—","—"],
-                      ["GHG Scope 1, 2 & 3 measurement","Full","—","—"],
-                      ["IFRS S1/S2, TCFD, CDP, GRI, SBTi","Full","—","—"],
-                      ["Net-Zero Roadmap (SBTi CNZS 2.0)","Full","—","—"],
-                      ["Employment Equity (EEA2/EEA4)","Full","Basic","—"],
-                      ["Dedicated consultant relationship","Full","—","Full"],
-                      ["Board-ready disclosure outputs","Full","B-BBEE only","Cert. only"],
-                      ["Annual framework refresh","Full","B-BBEE codes","—"],
-                    ].map(([cap, ...vals]) => (
-                      <tr key={cap}>
-                        <td>{cap}</td>
-                        {vals.map((v, i) => (
-                          <td key={i} className={v==="Full"?"ok-vs-full":v==="Basic"||v.includes("only")||v.includes("codes")?"ok-vs-basic":"ok-vs-none"}>
-                            {v==="Full"?<span style={{display:"inline-flex",alignItems:"center",gap:4}}><FullIcon/> Full</span>:v}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="ok-vs-table-note">Public information · May 2026</p>
-            </Reveal>
-          </div>
-        </section>
-
-        {/* ── 10: SECTORS ── */}
-        <section className="ok-section" id="sec-sectors">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">10</span>
-              <h2 className="ok-h2">Sectors We Serve</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>Cross-sector advisory across South Africa's transformation economy. Client names withheld pending consent.</p>
-            </Reveal>
-            <div className="ok-sectors-list">
-              {[["01","Financial Services"],["02","Chemicals"],["03","Retail & Pharmacy"],["04","Public Sector"],["05","Logistics"],["06","Water & Utilities"],["07","Mid-Cap Corporates"],["08","JSE-Listed Corporates"]].map(([num, name], i) => (
-                <Reveal key={name} delay={i % 4 > 0 ? `ok-d${Math.min(i%4,3)}` : ""}>
-                  <div className="ok-sector-item">
-                    <div className="ok-sector-num">{num}</div>
-                    <div className="ok-sector-name">{name}</div>
-                    <span className="ok-sector-badge-sm">Toolkit deployed</span>
-                  </div>
-                </Reveal>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── 11: CONTACT / BOOK A DEMO ── */}
-        <section className="ok-section" id="sec-contact">
-          <div className="ok-w">
-            <Reveal>
-              <span className="ok-sec-num">11 · Contact</span>
-              <h2 className="ok-h2" style={{ marginTop:8 }}>Let's make your transformation measurable.</h2>
-              <p className="ok-lead-l" style={{ marginTop:8 }}>A 45-minute working session — not a sales pitch. We'll walk through the live Okiru Toolkit, map it to your reporting cycle, and show you the Net-Zero pathway implied by your own data.</p>
-            </Reveal>
-            <div className="ok-demo-grid">
-              <div className="ok-demo-l">
-                <h3 className="ok-h3" style={{ marginBottom:8 }}>Get in touch</h3>
-                <div className="ok-demo-contact">
-                  {[["Email","contact@okiru.co.za"],["Phone","+27 78 104 6527"],["Office","Braamfontein, Johannesburg"],["Web","okiru.co.za"],["Registration","2023/597303/07"]].map(([label, val]) => (
-                    <div key={label} className="ok-demo-contact-item">
-                      <span className="ok-demo-contact-label">{label}</span>
-                      <span className="ok-demo-contact-val">
-                        {label==="Email"?<a href={`mailto:${val}`}>{val}</a>:label==="Web"?<a href={`https://${val}`} target="_blank" rel="noopener">{val}</a>:val}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop:36 }}>
-                  <button className="ok-btn-cta" onClick={openDemo}>
-                    Book a 45-min demo <span className="arr"><ArrowRight size={14} /></span>
-                  </button>
-                </div>
-              </div>
-              <div className="ok-demo-r">
-                <div className="ok-demo-agenda-title">
-                  <span>Demo Agenda</span>
-                  <span style={{ color:"var(--pur-l)" }}>45 min</span>
-                </div>
-                {[["00:00 – 10:00","Your transformation reporting today"],["10:00 – 25:00","Live walkthrough · Okiru Toolkit"],["25:00 – 35:00","Net-Zero Roadmap · your data"],["35:00 – 45:00","Engagement model & next steps"]].map(([time, desc]) => (
-                  <div key={time} className="ok-demo-agenda-item">
-                    <span className="ok-demo-agenda-time">{time}</span>
-                    <span className="ok-demo-agenda-desc">{desc}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
       </main>
 
-      {/* ── FOOTER ── */}
-      <footer>
-        <div className="ok-w">
-          <div className="ok-foot-grid">
-            <div>
-              <div className="ok-foot-col-title">Contact</div>
-              <div className="ok-foot-col-items">
-                <div className="ok-foot-col-item"><a href="mailto:contact@okiru.co.za">contact@okiru.co.za</a></div>
-                <div className="ok-foot-col-item">+27 78 104 6527</div>
-                <div className="ok-foot-col-item"><a href="https://okiru.co.za" target="_blank" rel="noopener">okiru.co.za</a></div>
-              </div>
-            </div>
-            <div>
-              <div className="ok-foot-col-title">Practice</div>
-              <div className="ok-foot-col-items">
-                {["ESG Advisory","B-BBEE & Compliance","AI & Digital Tools","Skills Development"].map(p => (
-                  <div key={p} className="ok-foot-col-item">{p}</div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="ok-foot-col-title">Frameworks</div>
-              <div className="ok-foot-col-items">
-                <div className="ok-foot-col-item" style={{ fontSize:12, lineHeight:1.8 }}>IFRS S1/S2 · GRI · TCFD · CDP · SBTi CNZS 2.0 · King V · B-BBEE Codes · EE Act · ISO 14001 · POPIA · ISO 14083</div>
-              </div>
-            </div>
-          </div>
-          <div className="ok-foot-bottom">
-            <span className="ok-foot-wm">
-              <img src={okiruLogo} alt="" style={{ width:22, height:22, opacity:0.85 }} />
-              Okiru Consulting
-            </span>
-            <span className="ok-foot-c">Compliance. Strategy. Growth. · Braamfontein, Johannesburg, South Africa</span>
-            <div className="ok-foot-links">
-              <button className="ok-foot-link" onClick={onNavigateAuth}>Sign in</button>
-              <a href="/devmode" className="ok-foot-link" data-testid="link-devmode">{`{DevMode}`}</a>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter onNavigateAuth={onNavigateAuth} />
     </div>
   );
 }
