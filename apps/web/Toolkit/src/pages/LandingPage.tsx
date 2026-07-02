@@ -253,7 +253,9 @@ export const GLOBAL_CSS = `
 
   /* ── HERO ── */
   .okiru-root .ok-hero {
-    padding: 132px 0 52px; position: relative;
+    min-height: 100vh; min-height: 100svh;
+    display: flex; align-items: center;
+    padding: 104px 0 64px; position: relative;
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
   .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: var(--ink); }
@@ -659,7 +661,7 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-nav-demo-btn { display: none; }
     .okiru-root .ok-hamburger { display: block; }
     .okiru-root .ok-w { padding: 0 20px; }
-    .okiru-root .ok-hero { padding: 120px 0 48px; }
+    .okiru-root .ok-hero { padding: 96px 0 56px; }
     .okiru-root .ok-h1 { font-size: clamp(2.4rem, 9vw, 3.2rem); }
     .okiru-root .ok-section { padding: 64px 0; }
     .okiru-root .ok-section.ok-page-top { padding-top: 108px; }
