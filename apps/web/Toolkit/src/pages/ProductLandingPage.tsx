@@ -231,12 +231,6 @@ export default function ProductLandingPage({
             <div className="ok-hero-glow" /><div className="ok-hero-glow-2" />
           </div>
           <div className="ok-w" style={{ position: "relative", zIndex: 1, width: "100%" }}>
-            <div className="ok-hero-tag ok-anim-1">
-              <span className="ok-hero-tag-dot" />
-              {product.heroTag}
-              <span className="ok-hero-tag-div" />
-              <span className="ok-hero-tag-brand">{product.heroBrand}</span>
-            </div>
             <h1 className="ok-h1 ok-anim-2">
               {product.titleLead}<br />
               <span className="ok-h1-gradient">{product.titleGradient}</span>
