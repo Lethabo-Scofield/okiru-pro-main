@@ -599,6 +599,14 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-social-name { font-size: 14px; font-weight: 600; color: var(--hi); }
   .okiru-root .ok-social-handle { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: rgba(255,255,255,.4); }
 
+  /* ── FINAL CTA ── */
+  .okiru-root .ok-cta { position: relative; overflow: hidden; padding: 128px 0; }
+  .okiru-root .ok-cta-bg { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 70% 70% at 50% 0%, rgba(147,51,234,0.10) 0%, rgba(6,182,212,0.05) 40%, transparent 72%); }
+  .okiru-root .ok-cta-inner { max-width: 760px; position: relative; z-index: 1; }
+  .okiru-root .ok-cta-h { font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; color: var(--hi); margin-bottom: 20px; }
+  .okiru-root .ok-cta-sub { font-size: 16px; color: var(--body); line-height: 1.7; margin-bottom: 36px; max-width: 580px; }
+  .okiru-root .ok-cta-btns { display: flex; gap: 14px; flex-wrap: wrap; }
+
   /* ── SCORECARD WIDGET ── */
   .okiru-root .ok-sc-pillar-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
   .okiru-root .ok-sc-pillar-name { font-family: var(--sans); font-size: 11px; color: rgba(255,255,255,.55); letter-spacing: -0.01em; }
@@ -741,6 +749,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
   // shared auth screen, where "Create account" is still reachable, if the host
   // didn't pass a register handler).
   const goRegister = () => (onNavigateRegister ?? onNavigateAuth)();
+  const goContact = () => (onNavigateContact ?? onNavigateAuth)();
 
   const scrollTo = (id: string) => {
     const el = document.getElementById(id);
@@ -917,6 +926,28 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 </div>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* ── 05: FINAL CTA ── */}
+        <section className="ok-section ok-cta" id="sec-cta">
+          <div className="ok-cta-bg" aria-hidden />
+          <div className="ok-w">
+            <Reveal className="ok-cta-inner">
+              <span className="ok-eyebrow">Ready when you are</span>
+              <h2 className="ok-cta-h">Make your next disclosure the one that compounds.</h2>
+              <p className="ok-cta-sub">
+                Bring ESG, B-BBEE and Skills Development into one audit-grade toolkit &mdash;
+                and turn a once-a-year scramble into measurable progress you can prove
+                every quarter.
+              </p>
+              <div className="ok-cta-btns">
+                <button className="ok-btn-cta" onClick={goRegister}>
+                  Get started <span className="arr"><ArrowRight size={14} /></span>
+                </button>
+                <button className="ok-btn-sec" onClick={goContact}>Talk to our team</button>
+              </div>
+            </Reveal>
           </div>
         </section>
 
