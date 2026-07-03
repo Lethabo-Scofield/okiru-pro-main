@@ -94,6 +94,12 @@ export interface CalculatorConfig {
     maxPoints: number;
     disabledTarget?: number;
     disabledMaxPts?: number;
+    // Transport Large EE (Transport Codes "Road Freight Large" rows 33-43;
+    // mirrored from apps/api/pipeline sectorConfig TRANSPORT_GENERIC targets).
+    disabledWomenTarget?: number;
+    disabledWomenMaxPts?: number;
+    semiUnskilledWomenMaxPts?: number;
+    eapBonusMaxPts?: number;
   };
   skills: {
     generalMax: number;
