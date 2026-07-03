@@ -907,8 +907,66 @@ async function loadMongoMetadataMap(blobNames: string[]): Promise<Map<string, an
   }
 }
 
+const SEO_LIST_PROJECTION = {
+  _id: 0,
+  id: 1,
+  slug: 1,
+  supplierName: 1,
+  bbbeeLevel: 1,
+  bbbeeScore: 1,
+  blackOwnership: 1,
+  blackWomenOwnership: 1,
+  verificationAgency: 1,
+  certificateNumber: 1,
+  expiryDate: 1,
+  issueDate: 1,
+  blobName: 1,
+  status: 1,
+  updatedAt: 1,
+  vatNumber: 1,
+  companySize: 1,
+  verified: 1,
+} as const;
+
 router.get('/seo/list', async (_req: Request, res: Response) => {
   try {
+    const cached = getCached<unknown[]>('seo:list');
+    if (cached) return res.json(cached);
+
+    // Fast path: sitemap/SEO pages need lightweight rows, not the legacy
+    // blob-enumeration snapshot (which walks the whole Azure container and
+    // times out at registry scale).
+    if (isMongoConnected()) {
+      // Empty filter + indexed sort keeps this an index walk capped at ~1200
+      // docs instead of a full collection scan; rows without id/name are
+      // dropped below.
+      const docs = await CertificateMetadataModel.find({}, SEO_LIST_PROJECTION)
+        .sort({ updatedAt: -1 })
+        .limit(1200)
+        .lean() as Record<string, any>[];
+      const records = docs.filter((doc) => typeof doc.id === 'string' && doc.id && typeof doc.supplierName === 'string' && doc.supplierName.trim()).map((doc) => ({
+        id: doc.id ?? null,
+        slug: doc.slug || buildCertSlug(String(doc.supplierName), doc.id ?? null),
+        companyName: String(doc.supplierName),
+        bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
+        bbbeeScore: typeof doc.bbbeeScore === 'number' ? doc.bbbeeScore : null,
+        blackOwnership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+        blackWomenOwnership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+        verificationAgency: doc.verificationAgency ?? null,
+        certificateNumber: doc.certificateNumber ?? null,
+        expiryDate: dateOnly(doc.expiryDate),
+        issueDate: dateOnly(doc.issueDate),
+        blobName: doc.blobName ?? null,
+        status: doc.status ?? 'unknown',
+        updatedAt: dateOnly(doc.updatedAt) ?? '',
+        vatNumber: doc.vatNumber ?? null,
+        companySize: doc.companySize ?? null,
+        verified: doc.verified === true,
+      })).filter((record) => record.slug);
+      setCached('seo:list', records, 30 * 60_000);
+      return res.json(records);
+    }
+
     const certs = await getPublicCertificatesCached();
     const records = certs
       .filter((c) => c.slug)
@@ -926,7 +984,24 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
   if (!slug) return res.status(400).json({ message: 'slug required' });
 
   try {
-    let match = (await getPublicCertificatesCached()).find((c) => c.slug === slug) ?? null;
+    // Fast path: public slugs embed the certificate id, so resolve straight
+    // from Mongo instead of walking the legacy blob snapshot (which is slow
+    // and empty right after a cold start).
+    let match: ReturnType<typeof normalizeFromMongoAndParsed> = null;
+    const idTail = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(slug);
+    if (idTail && isMongoConnected()) {
+      const doc = await CertificateMetadataModel.findOne({ id: idTail[1] }, { extractedText: 0 }).lean() as Record<string, unknown> | null;
+      if (doc) {
+        match = normalizeFromMongoAndParsed(doc, null, {
+          name: typeof doc.blobName === 'string' ? doc.blobName : String(doc.fileName ?? ''),
+          lastModified: (doc.updatedAt as Date | string | null) ?? null,
+        });
+      }
+    }
+
+    if (!match) {
+      match = (await getPublicCertificatesCached()).find((c) => c.slug === slug) ?? null;
+    }
 
     if (!match) {
       const legacy = (await getPublicCertificatesCached()).find(
