@@ -66,7 +66,13 @@ import {
   calculateTransportQseManagement,
   calculateTransportQseEmploymentEquity,
   isTransportQseSector,
+  calculateTransportLargeManagementControl,
+  calculateTransportLargeEmploymentEquity,
+  calculateTransportLargeSkills,
+  isTransportLargeSector,
 } from './calculators/transport';
+import { TRANSPORT_GENERIC_CALCULATOR_CONFIG } from './sectors/transport-generic';
+import { TRANSPORT_QSE_CALCULATOR_CONFIG } from './sectors/transport-qse';
 import {
   deepClone,
   round2,
@@ -621,6 +627,7 @@ function calculateScorecard(
 
   assertSectorConfigLoaded(cfg, state.client);
   const transportQse = isTransportQseSector(state.client.sectorCode, state.client.scorecardType);
+  const transportLarge = !transportQse && isTransportLargeSector(state.client.sectorCode, state.client.scorecardType);
   const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;
 
   console.log('[SCORING-TRACE] Calculator input for ownership:', {
@@ -647,6 +654,21 @@ function calculateScorecard(
     const tqEe = calculateTransportQseEmploymentEquity(state.management, cfg, state.client.eapProvince);
     eeScoreTotal = tqEe.score;
     console.log('[SCORING-TRACE] Calculator output for employmentEquity:', { score: tqEe.score, subMin: true });
+  } else if (transportLarge) {
+    // Transport Large: MC 11 + EE 18 are SEPARATE pillars (Transport Codes
+    // "Road Freight Large" rows 23-31 / 33-43). Previously this branch fell
+    // through to the generic MC calculator and EE stayed 0 — the 18 EE points
+    // were counted in the target but never scored.
+    console.log('[SCORING-TRACE] Calculator input for managementControl (Transport Large):', {
+      employees: state.management.employees?.length ?? 0,
+    });
+    const tlMc = calculateTransportLargeManagementControl(state.management, cfg);
+    mgtScoreTotal = tlMc.score;
+    console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: tlMc.score, subMin: true });
+
+    const tlEe = calculateTransportLargeEmploymentEquity(state.management, cfg);
+    eeScoreTotal = tlEe.score;
+    console.log('[SCORING-TRACE] Calculator output for employmentEquity:', { score: tlEe.score, subMin: true });
   } else {
     console.log('[SCORING-TRACE] Calculator input for managementControl:', {
       employees: state.management.employees?.length ?? 0,
@@ -660,7 +682,11 @@ function calculateScorecard(
     leviableAmount: state.skills.leviableAmount,
     programs: state.skills.trainingPrograms?.length ?? 0,
   });
-  const skillScore = calculateSkillsScore(state.skills, cfg, state.client.eapProvince, state.client.eapYear);
+  // Transport Large Skills is structurally different (5th indicator = black
+  // women in B/C/D programmes, not absorption) — use the mirrored calculator.
+  const skillScore = transportLarge
+    ? calculateTransportLargeSkills(state.skills, cfg)
+    : calculateSkillsScore(state.skills, cfg, state.client.eapProvince, state.client.eapYear);
   console.log('[SCORING-TRACE] Calculator output for skillsDevelopment:', { score: skillScore.total, subMin: skillScore.subMinimumMet });
 
   console.log('[SCORING-TRACE] Calculator input for procurement:', {
@@ -1475,6 +1501,21 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     if (isAgriGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled AGRI Generic calculator config');
       ready(AGRI_GENERIC_CALCULATOR_CONFIG);
+      return;
+    }
+    // Transport Sector Code — bundled configs derived from the pipeline
+    // TRANSPORT_GENERIC / TRANSPORT_QSE (docs/Transport Codes.xlsx). Previously
+    // TRANSPORT fell through to the remote fetch, so the toolkit could not
+    // score Transport clients when the API config wasn't reachable, and the
+    // Large EE pillar (18 pts) was never computed at all.
+    if (isTransportQseSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled Transport QSE calculator config');
+      ready(TRANSPORT_QSE_CALCULATOR_CONFIG);
+      return;
+    }
+    if (isTransportLargeSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled Transport Large calculator config');
+      ready(TRANSPORT_GENERIC_CALCULATOR_CONFIG);
       return;
     }
 
