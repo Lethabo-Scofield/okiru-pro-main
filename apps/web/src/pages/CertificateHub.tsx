@@ -705,32 +705,41 @@ export default function CertificateHub() {
 
       <main className="max-w-[1180px] mx-auto px-4 sm:px-6 pt-6 pb-20">
 
-        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[#636366]">
-              <FileText className="h-3.5 w-3.5 text-[#818cf8]" />
-              Certificate Hub
-            </div>
-            <h1 className="mt-1 text-[26px] font-semibold tracking-tight text-white sm:text-[30px]">
+        <div className="mb-5">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[#636366]">
+            <FileText className="h-3.5 w-3.5 text-[#818cf8]" />
+            Certificate Hub
+          </div>
+          <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center">
+            <h1 className="shrink-0 text-[24px] font-semibold tracking-tight text-white sm:text-[28px]">
               {loading ? 'Loading certificates' : `${headlineCount.toLocaleString()} certificates`}
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#8e8e93]">
-              <span>{allCerts.length.toLocaleString()} loaded</span>
-              {stats && <span>{stats.valid.toLocaleString()} valid</span>}
-              {stats && <span>{stats.expiring.toLocaleString()} expiring</span>}
-              <span className={reviewCount > 0 ? 'text-[#fbbf24]' : 'text-[#8e8e93]'}>
-                {reviewCount.toLocaleString()} review
-              </span>
+            <div className="relative min-w-0 flex-1 lg:ml-4">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#636366]" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by company name, VAT number, or B-BBEE level…"
+                className="w-full rounded-lg border border-[#2c2c2e] bg-[#111114] py-2.5 pl-11 pr-11 text-[14px] text-white outline-none placeholder:text-[#55555a] focus:border-[#6366f1] transition-colors"
+                autoComplete="off"
+              />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-white transition-colors"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
             {reviewCount > 0 && (
               <button
                 type="button"
                 onClick={() => setReviewOnly((value) => !value)}
                 className={[
-                  'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] transition-colors',
+                  'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2.5 text-[12px] transition-colors',
                   reviewOnly
                     ? 'bg-[#f59e0b] text-black'
                     : 'border border-[#f59e0b]/35 bg-[#f59e0b]/10 text-[#fbbf24] hover:bg-[#f59e0b]/15',
@@ -738,15 +747,17 @@ export default function CertificateHub() {
               >
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Review queue
+                <span className={reviewOnly ? 'text-black/60' : 'text-[#f59e0b]/70'}>{reviewCount.toLocaleString()}</span>
               </button>
             )}
-            <button
-              onClick={requireLoginToUpload}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#6366f1]/50 px-3 py-2 text-[12px] font-medium text-white hover:bg-[#6366f1]/10 transition-colors"
-            >
-              <Upload className="h-3.5 w-3.5 text-[#a5b4fc]" />
-              Add certificate
-            </button>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#8e8e93]">
+            <span>{allCerts.length.toLocaleString()} loaded</span>
+            {stats && <span>{stats.valid.toLocaleString()} valid</span>}
+            {stats && <span>{stats.expiring.toLocaleString()} expiring</span>}
+            <span className={reviewCount > 0 ? 'text-[#fbbf24]' : 'text-[#8e8e93]'}>
+              {reviewCount.toLocaleString()} review
+            </span>
           </div>
         </div>
 
@@ -766,27 +777,6 @@ export default function CertificateHub() {
           <p className="mt-4 text-[14px] text-[#a1a1aa] max-w-[640px] leading-relaxed">
             Search and verify South African B-BBEE compliance certificates. Filter by company size, ownership, and validity. Anyone can browse - sign in to add your own certificate to the registry.
           </p>
-        </div>
-
-        {/* ─── Hero search (primary CTA) ───────────────────── */}
-        <div className="relative mb-4">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#636366]" />
-          <input
-            type="text"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search by company name, VAT number, or B-BBEE level…"
-            className="w-full rounded-lg border border-[#2c2c2e] bg-[#111114] py-3 pl-11 pr-11 text-[14px] text-white outline-none placeholder:text-[#55555a] focus:border-[#6366f1] transition-colors"
-            autoComplete="off"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-white transition-colors"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
         </div>
 
         {/* ─── KPIs ───────────────────────────────────────────── */}
