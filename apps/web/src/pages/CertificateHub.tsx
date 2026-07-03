@@ -49,6 +49,7 @@ interface CertificateRow {
   metadataComplete?: boolean;
   sectorCode?: string | null;
   sectorName?: string | null;
+  extractionStatus?: string | null;
   enrichmentStatus?: string | null;
   reviewFields?: string[];
   fieldConfidence?: Record<string, unknown>;
@@ -204,6 +205,25 @@ function needsReview(cert: CertificateRow): boolean {
     || cert.enrichmentStatus === 'failed'
     || (cert.reviewFields?.length ?? 0) > 0
     || Object.keys(cert.reviewCandidates ?? {}).length > 0;
+}
+
+/** Sworn affidavits (EME/QSE self-declarations) get their own tab. */
+function isAffidavitRow(cert: CertificateRow): boolean {
+  if (cert.certificateType) return /affidavit/i.test(cert.certificateType);
+  return /affidavit/i.test(cert.fileName || cert.name || '');
+}
+
+/**
+ * A document earns a spot in the registry views when it either already has
+ * extracted metadata, has suggested candidates awaiting review, or its text
+ * extracted cleanly so the data is still recoverable. Unreadable documents
+ * with no metadata stay out of both tabs.
+ */
+function hasDataOrPotential(cert: CertificateRow): boolean {
+  if (cert.vatNumber || cert.bbbeeLevel != null || cert.bbbeeLevelStatus || cert.expiryDate) return true;
+  if (cert.blackOwnership != null || cert.blackWomenOwnership != null) return true;
+  if (Object.keys(cert.reviewCandidates ?? {}).length > 0) return true;
+  return cert.extractionStatus === 'completed';
 }
 
 const REVIEW_EDIT_FIELDS = [
@@ -393,6 +413,7 @@ export default function CertificateHub() {
   const [stats, setStats] = useState<CertStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [docTab, setDocTab] = useState<'certificates' | 'affidavits'>('certificates');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sizeFilter, setSizeFilter] = useState('');
@@ -515,9 +536,23 @@ export default function CertificateHub() {
   }, [allCerts]);
   const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || reviewOnly);
 
+  const tabCounts = useMemo(() => {
+    let certificates = 0;
+    let affidavits = 0;
+    let hidden = 0;
+    for (const c of allCerts) {
+      if (!hasDataOrPotential(c)) { hidden++; continue; }
+      if (isAffidavitRow(c)) affidavits++;
+      else certificates++;
+    }
+    return { certificates, affidavits, hidden };
+  }, [allCerts]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const out = allCerts.filter(c => {
+      if (!hasDataOrPotential(c)) return false;
+      if (isAffidavitRow(c) !== (docTab === 'affidavits')) return false;
       if (q) {
         if (!certificateHaystack(c).includes(q)) return false;
       }
@@ -539,7 +574,7 @@ export default function CertificateHub() {
       if (av !== bv) return av ? -1 : 1;
       return (b.lastModified || '').localeCompare(a.lastModified || '');
     });
-  }, [allCerts, search, statusFilter, sizeFilter, sectorFilter, ownershipFilter, reviewOnly]);
+  }, [allCerts, docTab, search, statusFilter, sizeFilter, sectorFilter, ownershipFilter, reviewOnly]);
 
   const clearAllFilters = () => {
     setSearch('');
@@ -841,6 +876,41 @@ export default function CertificateHub() {
           </div>
         )}
 
+        {/* ─── Document type tabs ─────────────────────────────── */}
+        <div className="mb-4 flex items-center gap-3 flex-wrap">
+          <div className="inline-flex rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] p-0.5">
+            {([
+              { key: 'certificates', label: 'Certificates', count: tabCounts.certificates },
+              { key: 'affidavits', label: 'Affidavits', count: tabCounts.affidavits },
+            ] as const).map(tab => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setDocTab(tab.key)}
+                className={[
+                  'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors',
+                  docTab === tab.key
+                    ? 'bg-[#2c2c2e] text-white shadow-sm'
+                    : 'text-[#8e8e93] hover:text-white',
+                ].join(' ')}
+              >
+                {tab.label}
+                <span className={docTab === tab.key ? 'text-[#a5b4fc]' : 'text-[#636366]'}>
+                  {tab.count.toLocaleString()}
+                </span>
+              </button>
+            ))}
+          </div>
+          {tabCounts.hidden > 0 && (
+            <span
+              className="text-[11px] text-[#636366]"
+              title="Documents whose text could not be read and that have no extracted metadata are excluded from the registry views"
+            >
+              {tabCounts.hidden.toLocaleString()} unreadable document{tabCounts.hidden !== 1 ? 's' : ''} hidden
+            </span>
+          )}
+        </div>
+
         <div className="mb-4 flex items-center gap-2 flex-wrap">
           <FilterPill
             label="Validity"
@@ -904,7 +974,7 @@ export default function CertificateHub() {
             <div>
               <h2 className="text-[15px] font-semibold text-white mb-0.5 flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-[#22d3ee]" />
-                {reviewOnly ? 'Certificates needing review' : hasActiveFilters ? 'Search results' : 'All certificates'}
+                {reviewOnly ? 'Certificates needing review' : hasActiveFilters ? 'Search results' : docTab === 'affidavits' ? 'Sworn affidavits' : 'Verified & data-rich certificates'}
               </h2>
               {hasActiveFilters ? (
                 <p className="text-[13px] text-[#8e8e93]">
