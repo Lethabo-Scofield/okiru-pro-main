@@ -156,6 +156,7 @@ const LIST_SAFE_PROJECTION = {
   sectorName: 1,
   bbbeeLevel: 1,
   bbbeeLevelStatus: 1,
+  certificateType: 1,
   blackOwnership: 1,
   blackWomenOwnership: 1,
   expiryDate: 1,
@@ -222,6 +223,7 @@ function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
     vatNumber: doc.vatNumber ?? null,
     bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
     bbbeeLevelStatus: doc.bbbeeLevelStatus ?? null,
+    certificateType: doc.certificateType ?? null,
     ownership: {
       black: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
       blackWomen: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
