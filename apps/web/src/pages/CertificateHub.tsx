@@ -476,11 +476,13 @@ export default function CertificateHub() {
           rows.push(cert);
         }
 
+        // Render each page as it arrives so the registry is usable
+        // immediately instead of buffering the full collection.
+        setAllCerts([...rows]);
+
         if (page.items.length === 0) break;
         offset += page.items.length;
       }
-
-      setAllCerts(rows);
     } catch (err: any) {
       toast({ title: 'Could not load certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
     } finally {
@@ -522,18 +524,6 @@ export default function CertificateHub() {
   }, [loadAllCerts, loadStats]);
 
   const reviewCount = useMemo(() => allCerts.filter(needsReview).length, [allCerts]);
-  const fieldCoverage = useMemo(() => {
-    const count = (predicate: (cert: CertificateRow) => boolean) => allCerts.reduce((sum, cert) => sum + (predicate(cert) ? 1 : 0), 0);
-    return [
-      { label: 'Company', value: count(c => !!c.companyName && !/^Unknown company/i.test(c.companyName)) },
-      { label: 'Sector', value: count(c => !!c.sectorCode || !!c.sectorName) },
-      { label: 'VAT', value: count(c => !!c.vatNumber || hasCandidate(c, 'vatNumber')) },
-      { label: 'B-BBEE Level', value: count(c => c.bbbeeLevel != null || !!c.bbbeeLevelStatus || hasCandidate(c, 'bbbeeLevel')) },
-      { label: 'Size', value: count(c => !!c.companySize) },
-      { label: 'Ownership', value: count(c => c.blackOwnership != null || c.blackWomenOwnership != null || hasCandidate(c, 'blackOwnership') || hasCandidate(c, 'blackWomenOwnership')) },
-      { label: 'Expiry', value: count(c => !!c.expiryDate || hasCandidate(c, 'expiryDate')) },
-    ];
-  }, [allCerts]);
   const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || reviewOnly);
 
   const tabCounts = useMemo(() => {
@@ -711,8 +701,11 @@ export default function CertificateHub() {
             Certificate Hub
           </div>
           <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center">
-            <h1 className="shrink-0 text-[24px] font-semibold tracking-tight text-white sm:text-[28px]">
-              {loading ? 'Loading certificates' : `${headlineCount.toLocaleString()} certificates`}
+            <h1 className="flex shrink-0 items-center gap-2 text-[24px] font-semibold tracking-tight text-white sm:text-[28px]">
+              {loading && allCerts.length === 0 ? 'Loading certificates' : `${headlineCount.toLocaleString()} certificates`}
+              {(loading || allCertsLoading) && (
+                <Loader2 className="h-4 w-4 animate-spin text-[#636366]" aria-label="Loading more certificates" />
+              )}
             </h1>
             <div className="relative min-w-0 flex-1 lg:ml-4">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#636366]" />
@@ -751,13 +744,10 @@ export default function CertificateHub() {
               </button>
             )}
           </div>
-          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#8e8e93]">
-            <span>{allCerts.length.toLocaleString()} loaded</span>
-            {stats && <span>{stats.valid.toLocaleString()} valid</span>}
-            {stats && <span>{stats.expiring.toLocaleString()} expiring</span>}
-            <span className={reviewCount > 0 ? 'text-[#fbbf24]' : 'text-[#8e8e93]'}>
-              {reviewCount.toLocaleString()} review
-            </span>
+          <div className="mt-2 text-[12px] text-[#636366]">
+            {stats
+              ? <>South Africa&apos;s public B-BBEE registry · <span className="text-[#22c55e]">{stats.valid.toLocaleString()} valid</span> · <span className="text-[#f59e0b]">{stats.expiring.toLocaleString()} expiring soon</span></>
+              : 'South Africa’s public B-BBEE registry'}
           </div>
         </div>
 
@@ -848,27 +838,12 @@ export default function CertificateHub() {
           </div>
         )}
 
-        {/* ─── Filters ────────────────────────────────────────── */}
-        {!loading && allCerts.length > 0 && (
-          <div className="mb-4 rounded-lg border border-[#242428] bg-[#0d0d10] px-3 py-3">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-              {fieldCoverage.map((field) => (
-                <div
-                  key={field.label}
-                  className="min-w-0 rounded-md bg-white/[0.03] px-2.5 py-2"
-                  title={`${field.value.toLocaleString()} of ${allCerts.length.toLocaleString()} loaded certificates`}
-                >
-                  <div className="truncate text-[10px] uppercase tracking-wide text-[#636366]">{field.label}</div>
-                  <div className="mt-0.5 truncate text-[13px] font-medium text-white">{field.value.toLocaleString()}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ─── Document type tabs ─────────────────────────────── */}
-        <div className="mb-4 flex items-center gap-3 flex-wrap">
-          <div className="inline-flex rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] p-0.5">
+        {/* ─── Toolbar: document tabs + filters ────────────────── */}
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div
+            className="inline-flex rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] p-0.5"
+            title={tabCounts.hidden > 0 ? `${tabCounts.hidden.toLocaleString()} unreadable documents without metadata are excluded` : undefined}
+          >
             {([
               { key: 'certificates', label: 'Certificates', count: tabCounts.certificates },
               { key: 'affidavits', label: 'Affidavits', count: tabCounts.affidavits },
@@ -891,118 +866,59 @@ export default function CertificateHub() {
               </button>
             ))}
           </div>
-          {tabCounts.hidden > 0 && (
-            <span
-              className="text-[11px] text-[#636366]"
-              title="Documents whose text could not be read and that have no extracted metadata are excluded from the registry views"
-            >
-              {tabCounts.hidden.toLocaleString()} unreadable document{tabCounts.hidden !== 1 ? 's' : ''} hidden
-            </span>
-          )}
-        </div>
-
-        <div className="mb-4 flex items-center gap-2 flex-wrap">
-          <FilterPill
-            label="Validity"
-            value={statusFilter}
-            options={[
-              { value: 'valid', label: 'Valid' },
-              { value: 'expiring', label: 'Expiring soon' },
-              { value: 'expired', label: 'Expired' },
-              { value: 'unknown', label: 'No expiry on record' },
-            ]}
-            onChange={setStatusFilter}
-          />
-          <FilterPill
-            label="Company size"
-            value={sizeFilter}
-            options={COMPANY_SIZES.map(s => ({ value: s, label: s }))}
-            onChange={setSizeFilter}
-          />
-          <FilterPill
-            label="Sector"
-            value={sectorFilter}
-            options={OKIRU_HUB_SECTORS.map(s => ({ value: s.code, label: s.code }))}
-            onChange={setSectorFilter}
-          />
-          <FilterPill
-            label="Black ownership"
-            value={ownershipFilter}
-            options={OWNERSHIP_RANGES.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
-            onChange={setOwnershipFilter}
-          />
-          <button
-            type="button"
-            onClick={() => setReviewOnly((value) => !value)}
-            className={[
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[12px] transition-colors',
-              reviewOnly
-                ? 'border-[#f59e0b]/70 bg-[#f59e0b]/15 text-[#fbbf24]'
-                : 'border-[#2c2c2e] text-[#a1a1aa] hover:text-white hover:border-[#3a3a3c]',
-            ].join(' ')}
-            title="Show certificates that need metadata review"
-          >
-            <AlertTriangle className="h-3.5 w-3.5" />
-            Needs review
-            <span className="text-[#8e8e93]">{reviewCount.toLocaleString()}</span>
-          </button>
-          {hasActiveFilters && (
-            <button
-              onClick={clearAllFilters}
-              className="text-[12px] text-[#636366] hover:text-white transition-colors ml-1"
-            >
-              Clear all
-            </button>
-          )}
+          <div className="hidden h-5 w-px bg-[#2c2c2e] sm:block" />
+          <div className="flex flex-wrap items-center gap-2">
+            <FilterPill
+              label="Validity"
+              value={statusFilter}
+              options={[
+                { value: 'valid', label: 'Valid' },
+                { value: 'expiring', label: 'Expiring soon' },
+                { value: 'expired', label: 'Expired' },
+                { value: 'unknown', label: 'No expiry on record' },
+              ]}
+              onChange={setStatusFilter}
+            />
+            <FilterPill
+              label="Company size"
+              value={sizeFilter}
+              options={COMPANY_SIZES.map(s => ({ value: s, label: s }))}
+              onChange={setSizeFilter}
+            />
+            <FilterPill
+              label="Sector"
+              value={sectorFilter}
+              options={OKIRU_HUB_SECTORS.map(s => ({ value: s.code, label: s.code }))}
+              onChange={setSectorFilter}
+            />
+            <FilterPill
+              label="Black ownership"
+              value={ownershipFilter}
+              options={OWNERSHIP_RANGES.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
+              onChange={setOwnershipFilter}
+            />
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="text-[12px] text-[#636366] hover:text-white transition-colors"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ─── List ──────────────────────────────────────────── */}
 
-        {/* Stats bar + section header */}
-        {!loading && (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-            <div>
-              <h2 className="text-[15px] font-semibold text-white mb-0.5 flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-[#22d3ee]" />
-                {reviewOnly ? 'Certificates needing review' : hasActiveFilters ? 'Search results' : docTab === 'affidavits' ? 'Sworn affidavits' : 'Verified & data-rich certificates'}
-              </h2>
-              {hasActiveFilters ? (
-                <p className="text-[13px] text-[#8e8e93]">
-                  {allCertsLoading
-                    ? 'Loading…'
-                    : `${filtered.length.toLocaleString()} result${filtered.length !== 1 ? 's' : ''}${search.trim() ? ` for "${search.trim()}"` : ''}`
-                  }
-                </p>
-              ) : stats ? (
-                <p className="text-[12px] text-[#636366]">
-                  <span className="text-[#a1a1aa]">{filtered.length.toLocaleString()} shown</span>
-                  {stats.total > filtered.length && (
-                    <> · <span className="text-[#a1a1aa]">{stats.total.toLocaleString()} total in registry</span></>
-                  )}
-                  {' · '}
-                  <span className="text-[#22c55e]">{stats.valid} valid</span>
-                  {' · '}
-                  <span className="text-[#f59e0b]">{stats.expiring} expiring soon</span>
-                </p>
-              ) : (
-                <p className="text-[12px] text-[#636366]">{filtered.length.toLocaleString()} certificates</p>
-              )}
-            </div>
-
-            {/* "Add Your Certificate" inline CTA */}
-            {false && !hasActiveFilters && (
-              <button
-                onClick={requireLoginToUpload}
-                className="shrink-0 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-medium text-white border border-[#6366f1]/50 hover:bg-[#6366f1]/10 transition-colors"
-              >
-                <Upload className="h-3.5 w-3.5 text-[#a5b4fc]" />
-                Add Your Certificate
-              </button>
-            )}
-          </div>
+        {!loading && (hasActiveFilters || reviewOnly) && (
+          <p className="mb-3 text-[13px] text-[#8e8e93]">
+            {allCertsLoading
+              ? 'Loading…'
+              : `${filtered.length.toLocaleString()} result${filtered.length !== 1 ? 's' : ''}${search.trim() ? ` for "${search.trim()}"` : ''}${reviewOnly ? ' needing review' : ''}`}
+          </p>
         )}
 
-        {(loading || allCertsLoading) ? (
+        {(loading || allCertsLoading) && allCerts.length === 0 ? (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
             {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
@@ -1107,13 +1023,10 @@ function CertRow({
             )}
             {needsReview(cert) && (
               <span
-                title={cert.reviewFields?.length ? `Review: ${cert.reviewFields.join(', ')}` : 'Metadata needs review'}
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium tracking-wide uppercase"
-                style={{ color: '#f59e0b', background: 'rgba(245,158,11,0.12)' }}
-              >
-                <AlertTriangle className="h-3 w-3" />
-                Review
-              </span>
+                title={cert.reviewFields?.length ? `Needs review: ${cert.reviewFields.join(', ')}` : 'Metadata needs review'}
+                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#f59e0b]/80"
+                aria-label="Needs review"
+              />
             )}
         </div>
         <div
