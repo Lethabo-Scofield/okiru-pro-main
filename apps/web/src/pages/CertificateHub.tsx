@@ -435,6 +435,12 @@ export default function CertificateHub() {
     setPreviewCert(updated);
   }, []);
 
+  useEffect(() => {
+    const previous = document.title;
+    document.title = 'B-BBEE Certificate Registry — Verify South African Certificates | Okiru';
+    return () => { document.title = previous; };
+  }, []);
+
   // Auto-open upload modal when arriving with ?openUpload=1 (e.g. after onboarding)
   useEffect(() => {
     if (authLoading) return;
