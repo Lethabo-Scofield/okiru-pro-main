@@ -24,6 +24,11 @@ import fs from 'fs';
 import type { AddressInfo } from 'net';
 
 // ---- Mocks (hoisted) -------------------------------------------------------
+const mongoConnectedMock = vi.hoisted(() => vi.fn(() => false));
+const certificateFindMock = vi.hoisted(() => vi.fn());
+const certificateFindOneMock = vi.hoisted(() => vi.fn(() => ({ lean: vi.fn(async () => null) })));
+const certificateUpdateOneMock = vi.hoisted(() => vi.fn(async () => ({})));
+const certificateCountDocumentsMock = vi.hoisted(() => vi.fn(async () => 0));
 
 vi.mock('../../middleware/auth.js', () => ({
   requireAuth: (req: any, res: any, next: any) => {
@@ -39,15 +44,15 @@ vi.mock('../../middleware/auth.js', () => ({
   verifyResourceOwnership: async () => true,
 }));
 
-vi.mock('../../../db.js', () => ({ isMongoConnected: () => false }));
+vi.mock('../../../db.js', () => ({ isMongoConnected: mongoConnectedMock }));
 
 vi.mock('../../../models.js', () => {
   const noop = {
     create: vi.fn(async (x: any) => x),
-    find: () => ({ sort: () => ({ skip: () => ({ limit: () => ({ lean: async () => [] }) }), limit: () => ({ lean: async () => [] }) }) }),
-    findOne: vi.fn(async () => null),
-    updateOne: vi.fn(async () => ({})),
-    countDocuments: vi.fn(async () => 0),
+    find: certificateFindMock,
+    findOne: certificateFindOneMock,
+    updateOne: certificateUpdateOneMock,
+    countDocuments: certificateCountDocumentsMock,
     deleteMany: vi.fn(async () => ({ deletedCount: 0 })),
   };
   return {
@@ -83,6 +88,20 @@ vi.mock('../../services/mongoSearch.js', () => ({
   ensureSearchIndex: vi.fn(async () => undefined),
 }));
 
+vi.mock('../../services/azureCertStorage.js', () => ({
+  getCertAccountName: vi.fn(() => 'testaccount'),
+  getCertBlobContainerName: vi.fn(() => 'clients-certs'),
+  getCertBlobServiceClient: vi.fn(() => ({ mocked: true })),
+  getCertConnectionString: vi.fn(() => 'UseDevelopmentStorage=true'),
+  getCertContainerClient: vi.fn(() => ({
+    getBlobClient: vi.fn(() => ({
+      url: 'https://example.test/cert.pdf',
+      downloadToBuffer: vi.fn(),
+    })),
+    listBlobsFlat: vi.fn(async function* () {}),
+  })),
+}));
+
 vi.mock('../../services/certificateExtractor.js', () => ({
   processAllCertificates: vi.fn(async () => ({ processed: 0 })),
   processOneCertificate: vi.fn(async () => null),
@@ -104,6 +123,133 @@ vi.mock('../../services/certificateExtractor.js', () => ({
   })),
 }));
 
+const runCertificateTextExtractionRetryJob = vi.fn(async (_client: any, options: any) => ({
+  dryRun: options?.dryRun !== false,
+  limit: Math.min(Math.max(Number(options?.limit) || (options?.dryRun === false ? 5 : 20), 1), 25),
+  requestedLimit: options?.limit ?? null,
+  maxLimit: 25,
+  concurrency: Math.min(Math.max(Number(options?.concurrency) || 1, 1), 3),
+  fileTimeoutMs: Number(options?.fileTimeoutMs) || 120000,
+  matched: 0,
+  retried: 0,
+  wouldRetry: options?.dryRun === false ? 0 : 0,
+  updated: 0,
+  skipped: 0,
+  completed: 0,
+  textTooShort: 0,
+  failed: 0,
+  timedOut: 0,
+  durationMs: 0,
+  averageMsPerFile: 0,
+  results: [],
+  summary: {},
+  coverage: { totalCertificates: 0 },
+}));
+
+const runCertificateEnrichmentJob = vi.fn(async (_client: any, options: any) => ({
+  totalCertificates: 2758,
+  usableTextCount: 2040,
+  skippedMissingText: 718,
+  processed: 0,
+  updated: 0,
+  reviewRequired: 0,
+  failed: 0,
+  dryRun: options?.dryRun === true,
+  coverage: {},
+  reviewSamples: [],
+  details: [],
+}));
+
+const runCertificateVatRecoveryJob = vi.fn(async (options: any) => ({
+  dryRun: options?.dryRun !== false,
+  limit: Math.min(Math.max(Number(options?.limit) || 100, 1), 1000),
+  totalCertificates: 2758,
+  vatCoverageBefore: 1318,
+  vatCoverageAfter: options?.dryRun === false ? 1328 : 1318,
+  processed: 10,
+  wouldUpdate: options?.dryRun === false ? 0 : 10,
+  updated: options?.dryRun === false ? 10 : 0,
+  reviewRequired: 0,
+  noCandidateFound: 0,
+  multipleCandidates: 0,
+  rejectedByNegativeContext: 0,
+  alreadyHadTrustedVat: 0,
+  failed: 0,
+  beforeCoverage: '1318/2758',
+  afterCoverage: options?.dryRun === false ? '1328/2758' : '1318/2758',
+  details: [],
+}));
+
+vi.mock('../../services/certificateEnrichmentJob.js', () => ({
+  CERTIFICATE_ENRICHMENT_VERSION: 'cert-enrichment-test',
+  ENRICHMENT_FIELDS: [
+    'companyName',
+    'sectorCode',
+    'sectorName',
+    'vatNumber',
+    'bbbeeLevel',
+    'bbbeeLevelStatus',
+    'companySize',
+    'blackOwnership',
+    'blackWomenOwnership',
+    'expiryDate',
+    'certificateNumber',
+    'verificationAgency',
+  ],
+  PRODUCTION_CERTIFICATE_FIELDS: [
+    'companyName',
+    'sectorCode',
+    'sectorName',
+    'vatNumber',
+    'bbbeeLevel',
+    'bbbeeLevelStatus',
+    'companySize',
+    'blackOwnership',
+    'blackWomenOwnership',
+    'expiryDate',
+  ],
+  getProductionCertificateCoverage: vi.fn(async () => ({
+    totalCertificates: 2758,
+    usableTextCount: 2040,
+    skippedMissingText: 718,
+    productionFields: ['company', 'sector', 'vatNumber', 'bbbeeLevel', 'companySize', 'ownership', 'expiryDate'],
+    fieldCoverage: {
+      companyCount: 2757,
+      sectorCount: 2300,
+      vatNumberCount: 3,
+      bbbeeLevelCount: 308,
+      companySizeCount: 2735,
+      ownershipCount: 1129,
+      expiryDateCount: 941,
+    },
+  })),
+  runCertificateEnrichmentJob,
+  runCertificateVatRecoveryJob,
+}));
+
+vi.mock('../../services/certificateTextExtractionJob.js', () => ({
+  getCertificateTextExtractionCoverage: vi.fn(async () => ({
+    totalCertificates: 0,
+    usableExtractedText: 0,
+    missingExtractedText: 0,
+    textTooShort: 0,
+    failed: 0,
+    missingBlob: 0,
+    unsupported: 0,
+    pendingOrNotAttempted: 0,
+    byExtractionStatus: {},
+    byExtractionMode: {},
+    averageExtractedTextLength: 0,
+    topFailureReasons: [],
+    dependencies: {
+      azureDocumentIntelligenceConfigured: false,
+      tesseractJsAvailable: true,
+      pdftoppmAvailable: false,
+    },
+  })),
+  runCertificateTextExtractionRetryJob,
+}));
+
 let server: http.Server;
 let port: number;
 let tmpDir: string;
@@ -114,10 +260,11 @@ let storeMod: StoreModule;
 async function call(
   method: string,
   path: string,
-  opts: { body?: any; auth?: string } = {},
+  opts: { body?: any; auth?: string; apiKey?: string } = {},
 ): Promise<{ status: number; body: any }> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (opts.auth) headers['x-test-auth'] = opts.auth;
+  if (opts.apiKey) headers['x-api-key'] = opts.apiKey;
   const res = await fetch(`http://127.0.0.1:${port}${path}`, {
     method,
     headers,
@@ -180,6 +327,7 @@ async function upload(
 
 beforeAll(async () => {
   originalCwd = process.cwd();
+  process.env.API_INTERNAL_KEY = 'test-internal-key';
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cert-routes-test-'));
   process.chdir(tmpDir);
 
@@ -203,6 +351,29 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  runCertificateTextExtractionRetryJob.mockClear();
+  runCertificateEnrichmentJob.mockClear();
+  runCertificateVatRecoveryJob.mockClear();
+  certificateFindOneMock.mockReset();
+  certificateFindOneMock.mockReturnValue({ lean: vi.fn(async () => null) });
+  certificateUpdateOneMock.mockReset();
+  certificateUpdateOneMock.mockResolvedValue({});
+  delete process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION;
+  mongoConnectedMock.mockReturnValue(false);
+  certificateCountDocumentsMock.mockResolvedValue(0);
+  certificateFindMock.mockReturnValue({
+    sort: vi.fn(() => ({
+      skip: vi.fn(() => ({
+        limit: vi.fn(() => ({
+          lean: vi.fn(async () => []),
+        })),
+      })),
+      limit: vi.fn(() => ({
+        lean: vi.fn(async () => []),
+      })),
+    })),
+  });
+
   // Wipe disk store so each test starts with a deterministic baseline.
   // We then re-seed only what each test needs. Note: the in-memory Map
   // inside certificateStore persists across tests because the module isn't
@@ -277,6 +448,96 @@ describe('Public certificates registry', () => {
     });
     expect(r.body.data).toMatchObject({ total: 3, limit: 2, offset: 0 });
     expect(r.body.data.items).toHaveLength(2);
+  });
+
+  it('GET /list?limit=5 uses Mongo pagination without loading the full collection', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'mongo-1',
+        blobName: 'certs/acme.pdf',
+        fileName: 'acme.pdf',
+        supplierName: 'Acme Fast Co',
+        vatNumber: '4123456789',
+        companySize: 'QSE',
+        sectorCode: 'ICT',
+        sectorName: 'Information & Communications Technology',
+        bbbeeLevel: 2,
+        blackOwnership: 51,
+        blackWomenOwnership: 26,
+        expiryDate: new Date('2030-01-01T00:00:00Z'),
+        extractionStatus: 'completed',
+        enrichmentStatus: 'completed',
+        reviewFields: [],
+        verified: true,
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(2759);
+
+    const r = await call('GET', '/api/certificates/list?limit=5&offset=10');
+
+    expect(r.status).toBe(200);
+    expect(certificateFindMock).toHaveBeenCalledTimes(1);
+    expect(certificateFindMock.mock.calls[0][1]).not.toHaveProperty('extractedText');
+    expect(skip).toHaveBeenCalledWith(10);
+    expect(limit).toHaveBeenCalledWith(5);
+    expect(lean).toHaveBeenCalledTimes(1);
+    expect(r.body.data).toMatchObject({ total: 2759, limit: 5, offset: 10 });
+    expect(r.body.data.items).toHaveLength(1);
+    expect(r.body.data.items[0]).toMatchObject({
+      id: 'mongo-1',
+      company: 'Acme Fast Co',
+      companyName: 'Acme Fast Co',
+      size: 'QSE',
+      sector: { code: 'ICT', name: 'Information & Communications Technology' },
+      vatNumber: '4123456789',
+      bbbeeLevel: 2,
+      ownership: { black: 51, blackWomen: 26 },
+      expiryDate: '2030-01-01',
+      extractionStatus: 'completed',
+      reviewRequired: false,
+    });
+  });
+
+  it('GET /list hides non-Okiru legacy sector codes and marks them for review', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'mongo-legacy-sector',
+        blobName: 'certs/generic.pdf',
+        fileName: 'generic.pdf',
+        supplierName: 'Generic Legacy Co',
+        companySize: 'Generic Enterprise',
+        sectorCode: 'GENERIC',
+        sectorName: 'Generic Codes',
+        extractionStatus: 'completed',
+        enrichmentStatus: 'completed',
+        reviewFields: [],
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(1);
+
+    const r = await call('GET', '/api/certificates/list?limit=5&offset=0');
+
+    expect(r.status).toBe(200);
+    expect(r.body.data.items[0]).toMatchObject({
+      id: 'mongo-legacy-sector',
+      sector: { code: null, name: null },
+      sectorCode: null,
+      sectorName: null,
+      reviewRequired: true,
+    });
   });
 
   it('GET /list?sort=verified surfaces verified certificates first', async () => {
@@ -569,6 +830,513 @@ describe('GET /stats and GET /seo/list', () => {
       slug: expect.stringMatching(/^seo-widgets/),
       status: expect.any(String),
     });
+  });
+});
+
+describe('Internal extraction coverage/retry endpoints', () => {
+  it('rejects extraction coverage without a valid API key', async () => {
+    const r = await call('GET', '/api/certificates/extraction-coverage');
+
+    expect(r.status).toBe(401);
+  });
+
+  it('rejects retry extraction without a valid API key', async () => {
+    const r = await call('POST', '/api/certificates/retry-extraction', { body: { limit: 20 } });
+
+    expect(r.status).toBe(401);
+  });
+
+  it('defaults retry extraction to dryRun=true', async () => {
+    const r = await call('POST', '/api/certificates/retry-extraction', {
+      apiKey: 'test-internal-key',
+      body: { limit: 20 },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ dryRun: true, limit: 20 }),
+    );
+    expect(r.body.dryRun).toBe(true);
+  });
+
+  it('passes safe retry filters and controls to the extraction job', async () => {
+    const r = await call('POST', '/api/certificates/retry-extraction', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 999,
+        dryRun: false,
+        statuses: ['text_too_short', 'completed', 'not-real'],
+        modes: ['none', 'ocr', 'not-real'],
+        onlyMissingText: true,
+        fileTimeoutMs: 30000,
+        concurrency: 2,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 999,
+        dryRun: false,
+        statuses: ['text_too_short', 'completed'],
+        modes: ['none', 'ocr'],
+        onlyMissingText: true,
+        fileTimeoutMs: 30000,
+        concurrency: 2,
+      }),
+    );
+    expect(r.body.limit).toBe(25);
+    expect(r.body.concurrency).toBe(2);
+  });
+
+  it('manual retry endpoint still works when startup extraction is disabled', async () => {
+    process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION = 'true';
+
+    const r = await call('POST', '/api/certificates/retry-extraction', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 10,
+        dryRun: false,
+        modes: ['none'],
+        onlyMissingText: true,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledTimes(1);
+    expect(runCertificateTextExtractionRetryJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 10,
+        dryRun: false,
+        modes: ['none'],
+        onlyMissingText: true,
+      }),
+    );
+  });
+
+  it('rejects usable-text enrichment without a valid API key', async () => {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+      body: { limit: 100, dryRun: true },
+    });
+
+    expect(r.status).toBe(401);
+    expect(runCertificateEnrichmentJob).not.toHaveBeenCalled();
+  });
+
+  it('runs enrichment only for usable-text records without triggering text extraction', async () => {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 100,
+        dryRun: false,
+        forceText: true,
+        fields: ['vatNumber', 'expiryDate', 'not-real'],
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateEnrichmentJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 100,
+        dryRun: false,
+        forceText: false,
+        onlyUsableText: true,
+        fields: ['vatNumber', 'expiryDate'],
+      }),
+    );
+    expect(r.body).toMatchObject({
+      totalCertificates: 2758,
+      usableTextCount: 2040,
+      skippedMissingText: 718,
+    });
+  });
+
+  it('defaults usable-text enrichment to production-critical fields only', async () => {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+      apiKey: 'test-internal-key',
+      body: {
+        dryRun: true,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateEnrichmentJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        dryRun: true,
+        onlyUsableText: true,
+        fields: [
+          'companyName',
+          'sectorCode',
+          'sectorName',
+          'vatNumber',
+          'bbbeeLevel',
+          'bbbeeLevelStatus',
+          'companySize',
+          'blackOwnership',
+          'blackWomenOwnership',
+          'expiryDate',
+        ],
+      }),
+    );
+  });
+
+  it('returns focused production coverage for the seven MVP fields', async () => {
+    const r = await call('GET', '/api/certificates/production-coverage', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      totalCertificates: 2758,
+      usableTextCount: 2040,
+      skippedMissingText: 718,
+      productionFields: ['company', 'sector', 'vatNumber', 'bbbeeLevel', 'companySize', 'ownership', 'expiryDate'],
+      fieldCoverage: {
+        companyCount: 2757,
+        sectorCount: 2300,
+        vatNumberCount: 3,
+        bbbeeLevelCount: 308,
+        companySizeCount: 2735,
+        ownershipCount: 1129,
+        expiryDateCount: 941,
+      },
+    });
+  });
+
+  it('runs VAT recovery as a dry run by default', async () => {
+    const r = await call('POST', '/api/certificates/recover-vat', {
+      apiKey: 'test-internal-key',
+      body: { limit: 25 },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateVatRecoveryJob).toHaveBeenCalledWith(expect.objectContaining({
+      limit: 25,
+      dryRun: true,
+      onlyMissing: true,
+      onlyUsableText: true,
+    }));
+    expect(r.body).toMatchObject({
+      dryRun: true,
+      vatCoverageBefore: 1318,
+      vatCoverageAfter: 1318,
+      wouldUpdate: 10,
+      updated: 0,
+    });
+  });
+
+  it('returns a VAT review queue without extracted text', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'vat-review-1',
+        blobName: 'clients/acme.pdf',
+        fileName: 'acme.pdf',
+        supplierName: 'Acme VAT Co',
+        companySize: 'QSE',
+        sectorCode: 'ICT',
+        sectorName: 'Information & Communications Technology',
+        vatNumber: null,
+        extractionStatus: 'completed',
+        extractionMode: 'ocr',
+        extractedTextLength: 1600,
+        enrichmentStatus: 'review_required',
+        reviewFields: ['vatNumber'],
+        reviewCandidates: {
+          vatNumber: {
+            reason: 'multiple_vat_like_candidates',
+            candidates: [
+              { value: '4123456789', snippet: 'VAT No 4123456789', confidence: 0.96 },
+            ],
+          },
+        },
+        extractedText: 'must not leak',
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(1);
+
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=5', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    expect(certificateFindMock.mock.calls[0][1]).not.toHaveProperty('extractedText');
+    expect(skip).toHaveBeenCalledWith(0);
+    expect(limit).toHaveBeenCalledWith(5);
+    expect(r.body).toMatchObject({
+      total: 1,
+      limit: 5,
+      pagination: { total: 1, limit: 5, offset: 0 },
+      items: [{
+        id: 'vat-review-1',
+        filename: 'acme.pdf',
+        company: 'Acme VAT Co',
+        vatNumber: null,
+        reviewReason: 'multiple_vat_like_candidates',
+        vatCandidates: [{
+          candidate: '4123456789',
+          confidence: 0.96,
+          snippet: 'VAT No 4123456789',
+        }],
+        documentUrl: expect.stringContaining('/api/certificates/download?file=clients%2Facme.pdf'),
+        previewUrl: expect.stringContaining('/api/certificates/download?file=clients%2Facme.pdf'),
+      }],
+    });
+    expect(r.body.items[0]).not.toHaveProperty('extractedText');
+  });
+
+  it('confirms VAT manually and clears VAT review metadata only', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateFindOneMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        id: 'cert-vat-1',
+        blobName: 'clients/acme.pdf',
+        vatNumber: null,
+        reviewFields: ['vatNumber', 'expiryDate'],
+        reviewCandidates: {
+          vatNumber: { reason: 'multiple_vat_like_candidates' },
+          expiryDate: { reason: 'expired' },
+        },
+        fieldConfidence: {
+          expiryDate: { confidence: 0.98, source: 'text' },
+        },
+      })),
+    });
+
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: '412 345 6789', note: 'Checked against certificate preview' },
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      ok: true,
+      id: 'cert-vat-1',
+      vatNumber: '4123456789',
+      clearedReviewField: 'vatNumber',
+    });
+    expect(certificateUpdateOneMock).toHaveBeenCalledWith(
+      { id: 'cert-vat-1' },
+      expect.objectContaining({
+        $set: expect.objectContaining({
+          vatNumber: '4123456789',
+          vatNumberNormalized: '4123456789',
+          reviewFields: ['expiryDate'],
+          enrichmentStatus: 'review_required',
+          fieldConfidence: expect.objectContaining({
+            vatNumber: expect.objectContaining({
+              confidence: 1,
+              source: 'manual_review',
+            }),
+            expiryDate: { confidence: 0.98, source: 'text' },
+          }),
+        }),
+        $push: expect.objectContaining({
+          auditLog: expect.any(Object),
+        }),
+      }),
+    );
+    const update = certificateUpdateOneMock.mock.calls[0][1];
+    expect(update.$set.reviewCandidates).not.toHaveProperty('vatNumber');
+    expect(update.$set).not.toHaveProperty('calculatorPayload');
+    expect(update.$set).not.toHaveProperty('scorecardId');
+    expect(update.$set).not.toHaveProperty('annualSpend');
+    expect(update.$set).not.toHaveProperty('bbbeeScore');
+  });
+
+  it('rejects invalid manual VAT confirmation values', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: 'registration 2019/123456/07' },
+    });
+
+    expect(r.status).toBe(400);
+    expect(certificateUpdateOneMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects manual VAT confirmation for numbers that do not start with 4', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: '5123456789' },
+    });
+
+    expect(r.status).toBe(400);
+    expect(r.body.message).toContain('start with 4');
+    expect(certificateUpdateOneMock).not.toHaveBeenCalled();
+  });
+
+  it('normalizes hyphenated VAT values on manual confirmation', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateFindOneMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        id: 'cert-vat-2',
+        blobName: 'clients/beta.pdf',
+        vatNumber: null,
+        reviewFields: ['vatNumber'],
+        reviewCandidates: { vatNumber: { reason: 'no_vat_like_candidate_found' } },
+        fieldConfidence: {},
+      })),
+    });
+
+    const r = await call('POST', '/api/certificates/cert-vat-2/confirm-vat', {
+      apiKey: 'test-internal-key',
+      body: { vatNumber: '412-345-6789', source: 'manual_review' },
+    });
+
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ ok: true, vatNumber: '4123456789' });
+    const update = certificateUpdateOneMock.mock.calls[0][1];
+    expect(update.$set.vatNumber).toBe('4123456789');
+    expect(update.$set.reviewFields).toEqual([]);
+    expect(update.$set.reviewCandidates).not.toHaveProperty('vatNumber');
+    expect(update.$set.enrichmentStatus).toBe('completed');
+  });
+
+  it('lists missing-VAT certificates with no candidates in the review queue and excludes trusted VAT records', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    certificateFindMock.mockClear();
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'vat-review-2',
+        blobName: 'clients/no-candidate.pdf',
+        fileName: 'no-candidate.pdf',
+        supplierName: 'No Candidate Co',
+        companySize: 'EME',
+        sectorCode: 'RCOGP',
+        sectorName: 'Retail, Construction, Oil & Gas, Property',
+        vatNumber: null,
+        extractionStatus: 'completed',
+        extractionMode: 'pdf_text',
+        extractedTextLength: 900,
+        enrichmentStatus: 'review_required',
+        reviewFields: ['vatNumber'],
+        reviewCandidates: {
+          vatNumber: {
+            value: null,
+            candidates: [],
+            reason: 'no_vat_like_candidate_found',
+          },
+        },
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock.mockResolvedValue(7);
+
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=2&offset=4', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    // Only missing-VAT records may enter the queue: trusted VAT is excluded by the filter itself.
+    expect(certificateFindMock.mock.calls[0][0]).toEqual({
+      $or: [
+        { vatNumber: null },
+        { vatNumber: '' },
+        { vatNumber: { $exists: false } },
+      ],
+    });
+    expect(skip).toHaveBeenCalledWith(4);
+    expect(limit).toHaveBeenCalledWith(2);
+    expect(r.body).toMatchObject({
+      total: 7,
+      limit: 2,
+      offset: 4,
+      pagination: { total: 7, limit: 2, offset: 4 },
+      items: [{
+        id: 'vat-review-2',
+        company: 'No Candidate Co',
+        vatNumber: null,
+        reviewReason: 'no_vat_like_candidate_found',
+        vatCandidates: [],
+      }],
+    });
+    expect(r.body.items[0]).not.toHaveProperty('extractedText');
+  });
+
+  it('returns a focused review queue without extracted text and flags legacy sectors', async () => {
+    mongoConnectedMock.mockReturnValue(true);
+    const sort = vi.fn(() => chain);
+    const skip = vi.fn(() => chain);
+    const limit = vi.fn(() => chain);
+    const lean = vi.fn(async () => [
+      {
+        id: 'review-1',
+        blobName: 'certs/generic.pdf',
+        fileName: 'generic.pdf',
+        supplierName: 'Legacy Generic Co',
+        sectorCode: 'GENERIC',
+        sectorName: 'Generic Codes',
+        extractionStatus: 'completed',
+        extractionMode: 'ocr',
+        extractedTextLength: 2000,
+        enrichmentStatus: 'review_required',
+        reviewFields: ['bbbeeLevel'],
+        fieldConfidence: {},
+        auditLog: [{ reviewFields: ['bbbeeLevel'] }],
+      },
+    ]);
+    const chain = { sort, skip, limit, lean };
+    certificateFindMock.mockReturnValue(chain);
+    certificateCountDocumentsMock
+      .mockResolvedValueOnce(1)
+      .mockResolvedValue(0);
+
+    const r = await call('GET', '/api/certificates/review-queue?limit=5', {
+      apiKey: 'test-internal-key',
+    });
+
+    expect(r.status).toBe(200);
+    expect(certificateFindMock.mock.calls[0][1]).not.toHaveProperty('extractedText');
+    expect(r.body).toMatchObject({ total: 1, limit: 5, offset: 0 });
+    expect(r.body.items[0]).toMatchObject({
+      id: 'review-1',
+      companyName: 'Legacy Generic Co',
+      reviewFields: expect.arrayContaining(['bbbeeLevel', 'sectorCode']),
+      values: {
+        sectorCode: null,
+        sectorName: null,
+      },
+    });
+    expect(r.body.items[0]).not.toHaveProperty('extractedText');
+  });
+
+  it('passes usable-text mode through enrich-missing when requested', async () => {
+    const r = await call('POST', '/api/certificates/enrich-missing', {
+      apiKey: 'test-internal-key',
+      body: {
+        limit: 25,
+        dryRun: true,
+        onlyUsableText: true,
+      },
+    });
+
+    expect(r.status).toBe(200);
+    expect(runCertificateEnrichmentJob).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        limit: 25,
+        dryRun: true,
+        onlyUsableText: true,
+      }),
+    );
   });
 });
 

@@ -99,6 +99,30 @@ const PRODUCT_CSS = `
   .okiru-blue .ok-feat-card:hover { transform: translateY(-4px); border-color: rgba(37,99,235,0.5); box-shadow: 0 16px 40px -18px rgba(37,99,235,0.6); background: rgba(37,99,235,0.04); }
   .okiru-blue #product-cta .ok-w > div { background: linear-gradient(135deg, rgba(37,99,235,0.13) 0%, rgba(59,130,246,0.06) 55%, rgba(147,51,234,0.07) 100%); }
 
+  /* ══════════════ GREEN — ESG Toolkit (centred instrument cards) ══════════════ */
+  .okiru-root.okiru-green {
+    --grad:      linear-gradient(135deg, #16a34a 0%, #22c55e 45%, #0ea5e9 100%);
+    --grad-r:    linear-gradient(135deg, #0ea5e9 0%, #22c55e 55%, #16a34a 100%);
+    --grad-text: linear-gradient(100deg, #22c55e 0%, #4ade80 48%, #38bdf8 100%);
+    --grad-h:    linear-gradient(90deg, #16a34a, #0ea5e9);
+    --accent:    #22c55e;
+  }
+  .okiru-green .ok-hero-tag-dot { background: #22c55e; box-shadow: 0 0 10px rgba(34,197,94,0.7); }
+  .okiru-green .ok-hero-glow   { background: radial-gradient(circle, rgba(22,163,74,0.15) 0%, rgba(34,197,94,0.06) 42%, transparent 70%); }
+  .okiru-green .ok-hero-glow-2 { background: radial-gradient(circle, rgba(14,165,233,0.06) 0%, transparent 65%); }
+  .okiru-green .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(22,163,74,0.12) 14deg, rgba(34,197,94,0.09) 22deg, rgba(14,165,233,0.05) 30deg, transparent 40deg); }
+  .okiru-green .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(14,165,233,0.05) 6deg, rgba(22,163,74,0.09) 14deg, rgba(34,197,94,0.05) 20deg, transparent 30deg); }
+  .okiru-green .ok-service:hover { background: rgba(22,163,74,0.06); }
+  /* ESG: circular icon, centred instrument layout */
+  .okiru-green .ok-feat-card { align-items: center; text-align: center; border-radius: 14px; padding: 30px 26px; }
+  .okiru-green .ok-feat-icon { width: 54px; height: 54px; border-radius: 50%; border: 1px solid rgba(34,197,94,0.32); background: radial-gradient(circle at 50% 32%, rgba(34,197,94,0.22), rgba(22,163,74,0.05)); }
+  .okiru-green .ok-feat-desc { max-width: 34ch; }
+  .okiru-green .ok-feat-meta { flex-direction: column; align-items: center; gap: 2px; margin-top: 8px; padding-top: 0; }
+  .okiru-green .ok-feat-stat { font-family: var(--serif); font-size: 1.5rem; font-weight: 500; background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .okiru-green .ok-feat-stat-label { text-transform: uppercase; letter-spacing: 0.1em; font-size: 10px; font-family: var(--mono); }
+  .okiru-green .ok-feat-card:hover { transform: translateY(-4px); border-color: rgba(22,163,74,0.5); box-shadow: 0 16px 40px -18px rgba(22,163,74,0.6); background: rgba(22,163,74,0.04); }
+  .okiru-green #product-cta .ok-w > div { background: linear-gradient(135deg, rgba(22,163,74,0.13) 0%, rgba(34,197,94,0.06) 55%, rgba(14,165,233,0.07) 100%); }
+
   /* ══════════════ ORANGE — B-BBEE Certificate (soft-filled, icon-chip cards) ══════════════ */
   .okiru-root.okiru-orange {
     --grad:      linear-gradient(135deg, #f97316 0%, #fb923c 45%, #2563eb 100%);

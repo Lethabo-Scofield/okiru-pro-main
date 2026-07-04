@@ -76,7 +76,10 @@ function dedupeBySlug(records: CertificateRecord[]): CertificateRecord[] {
 }
 
 export async function listCertificates(): Promise<CertificateRecord[]> {
-  const apiRecords = await fetchFromApi<CertificateRecord[]>("/api/certificates/seo/list");
+  // Cold API queries on the shared Atlas tier can take tens of seconds; the
+  // API caches the result, so allow one slow fetch rather than serving an
+  // empty sitemap/level page to a crawler.
+  const apiRecords = await fetchFromApi<CertificateRecord[]>("/api/certificates/seo/list", 60_000);
   if (apiRecords && Array.isArray(apiRecords)) {
     return dedupeBySlug(apiRecords.filter((r) => r.slug && r.companyName));
   }
@@ -86,6 +89,7 @@ export async function listCertificates(): Promise<CertificateRecord[]> {
 export async function getCertificateBySlug(slug: string): Promise<CertificateRecord | null> {
   const fromApi = await fetchFromApi<CertificateRecord>(
     `/api/certificates/by-slug/${encodeURIComponent(slug)}`,
+    15_000,
   );
   if (fromApi && fromApi.slug) return fromApi;
   return null;

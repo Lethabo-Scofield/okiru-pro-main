@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import {
   Download, Loader2, ShieldCheck, AlertTriangle, Award,
-  Building2, Hash, Users2, Percent, CalendarClock, History, Flag,
-  X, CheckCircle2, Pencil, MapPin, Briefcase,
+  Building2, Hash, Users2, CalendarClock, History, Flag,
+  X, CheckCircle2, Pencil,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { AppNavBack } from '@/components/AppNavBack';
@@ -15,7 +15,12 @@ import { sectorDisplayLabel, OKIRU_HUB_SECTORS } from '@/lib/okiruHubSectors';
 interface CertDetail {
   slug: string;
   companyName: string;
+  tradingName?: string | null;
+  registrationNumber?: string | null;
   bbbeeLevel: number | null;
+  bbbeeLevelStatus?: string | null;
+  certificateType?: string | null;
+  procurementRecognition?: number | null;
   bbbeeScore: number | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
@@ -30,6 +35,7 @@ interface CertDetail {
   updatedAt?: string | null;
   verified?: boolean;
   vatNumber?: string | null;
+  taxNumber?: string | null;
   companySize?: string | null;
   id?: string | null;
   metadataComplete?: boolean;
@@ -38,6 +44,8 @@ interface CertDetail {
   location?: string | null;
   businessUnit?: string | null;
   empoweringSupplier?: boolean | null;
+  valueAddingSupplier?: boolean | null;
+  measurementPeriod?: string | null;
   firstProcurementDate?: string | null;
   sizeAtFirstProcurement?: string | null;
   flowThroughBlackOwnership?: number | null;
@@ -45,6 +53,12 @@ interface CertDetail {
   sdRecipient?: boolean | null;
   threeYearContract?: boolean | null;
   annualSpend?: number | null;
+  sanasAccreditationNumber?: string | null;
+  commissionerDetails?: string | null;
+  physicalAddress?: string | null;
+  contactDetails?: Record<string, string> | null;
+  reviewFields?: string[];
+  fieldConfidence?: Record<string, unknown>;
 }
 
 interface VersionEntry {
@@ -104,6 +118,12 @@ function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string;
       </div>
     </div>
   );
+}
+
+function missing(value: string | number | null | undefined): string {
+  if (value == null) return 'Missing';
+  const text = String(value).trim();
+  return text || 'Missing';
 }
 
 export default function CertificateDetail({ slug }: { slug: string }) {
@@ -200,7 +220,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   }, [data?.id, toast]);
 
   const loadHistory = useCallback(async () => {
-    if (!registryActionsAvailable) {
+    if (!registryActionsAvailable || !data?.id) {
       toast({ title: 'History unavailable', description: 'Version history requires full certificate metadata.' });
       return;
     }
@@ -244,7 +264,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   }, [data, toast]);
 
   const submitReport = useCallback(async () => {
-    if (!registryActionsAvailable) {
+    if (!registryActionsAvailable || !data?.id) {
       toast({ title: 'Cannot report this certificate', description: 'Reporting requires full certificate metadata.', variant: 'destructive' });
       return;
     }
@@ -350,27 +370,14 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 mb-10">
+              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company" value={missing(data.companyName)} />
               <MetaRow icon={<Building2 className="h-4 w-4" />} label="Sector" value={sectorDisplayLabel(data.sectorCode, data.sectorName)} />
-              <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={data.vatNumber ?? 'Not on record'} />
-              <MetaRow icon={<MapPin className="h-4 w-4" />} label="Location" value={data.location ?? 'Not on record'} />
-              <MetaRow icon={<Briefcase className="h-4 w-4" />} label="Business unit" value={data.businessUnit ?? 'Not on record'} />
-              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={data.companySize ?? 'Not on record'} />
-              <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : 'Not on record'} />
-              <MetaRow icon={<Percent className="h-4 w-4" />} label="B-BBEE score" value={data.bbbeeScore != null ? `${data.bbbeeScore}` : 'Not on record'} />
-              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Empowering supplier" value={data.empoweringSupplier == null ? 'Not on record' : data.empoweringSupplier ? 'Yes' : 'No'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : 'Not on record'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : 'Not on record'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Flow-through black ownership" value={data.flowThroughBlackOwnership != null ? `${data.flowThroughBlackOwnership}%` : 'Not on record'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black designated group ownership" value={data.blackDesignatedGroupOwnership != null ? `${data.blackDesignatedGroupOwnership}%` : 'Not on record'} />
-              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Issue date" value={data.issueDate ? formatDate(data.issueDate) : 'Not on record'} />
-              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={data.expiryDate ? formatDate(data.expiryDate) : 'Not on record'} />
-              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Date of first procurement" value={data.firstProcurementDate ? formatDate(data.firstProcurementDate) : 'Not on record'} />
-              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Size at first procurement" value={data.sizeAtFirstProcurement ?? 'Not on record'} />
-              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="SD recipient" value={data.sdRecipient == null ? 'Not on record' : data.sdRecipient ? 'Yes' : 'No'} />
-              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="3-year contract in place" value={data.threeYearContract == null ? 'Not on record' : data.threeYearContract ? 'Yes' : 'No'} />
-              <MetaRow icon={<Briefcase className="h-4 w-4" />} label="Annual spend" value={data.annualSpend != null ? `R ${data.annualSpend.toLocaleString('en-ZA')}` : 'Not on record'} />
-              <MetaRow icon={<ShieldCheck className="h-4 w-4" />} label="Verification agency" value={data.verificationAgency || data.agency || 'Not on record'} />
-              <MetaRow icon={<Hash className="h-4 w-4" />} label="Certificate number" value={data.certificateNumber ?? 'Not on record'} />
+              <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={missing(data.vatNumber)} />
+              <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={missing(data.companySize)} />
+              <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevelStatus || (data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : 'Needs review')} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : 'Missing'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : 'Missing'} />
+              <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={data.expiryDate ? formatDate(data.expiryDate) : 'Missing'} />
             </div>
 
             <div className="flex items-center gap-2 flex-wrap mb-10">

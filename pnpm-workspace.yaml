@@ -2,6 +2,18 @@ packages:
   - 'apps/*'
   - 'packages/*'
 
+overrides:
+  esbuild: 0.27.4
+  '@esbuild/linux-x64': 0.27.4
+
+allowBuilds:
+  bcrypt: true
+  bufferutil: true
+  canvas: true
+  core-js: true
+  esbuild: true
+  tesseract.js: true
+
 onlyBuiltDependencies:
   - bcrypt
   - bufferutil

@@ -6,6 +6,7 @@ import {
   normalizeFromBlobOnly,
   normalizeFromLocal,
   normalizeFromMongo,
+  publicCertificateToDetailJson,
   publicCertificateToListRow,
   resolveCertificateStatus,
   stableBlobRecordId,
@@ -84,19 +85,75 @@ describe('normalizeFromMongo', () => {
     expect(c?.slug).toBe('test-co-id-1');
     expect(c?.vatNumber).toBe('4123456789');
   });
+
+  it('preserves production-critical enriched certificate metadata from Mongo', () => {
+    const c = normalizeFromMongo({
+      id: 'enriched-1',
+      supplierName: 'Enriched Co',
+      vatNumber: '4123456789',
+      blobName: 'public/enriched.pdf',
+      bbbeeLevel: 2,
+      bbbeeLevelStatus: 'Level 2',
+      blackOwnership: 51,
+      blackWomenOwnership: 26,
+      expiryDate: new Date('2027-06-17T00:00:00Z'),
+      sectorCode: 'FSC',
+      sectorName: 'Financial Sector',
+      companySize: 'Generic Enterprise',
+      reviewFields: ['missing_vat_number'],
+      fieldConfidence: { vatNumber: { confidence: 0.95, sourceTextSnippet: 'VAT Number: 4123456789' } },
+    })!;
+
+    expect(c.companyName).toBe('Enriched Co');
+    expect(c.vatNumber).toBe('4123456789');
+    expect(c.bbbeeLevel).toBe(2);
+    expect(c.companySize).toBe('Generic Enterprise');
+    expect(c.blackOwnership).toBe(51);
+    expect(c.blackWomenOwnership).toBe(26);
+    expect(c.expiryDate).toBe('2027-06-17');
+    expect(c.sectorCode).toBe('FSC');
+    expect(c.fieldConfidence?.vatNumber).toMatchObject({ confidence: 0.95 });
+  });
 });
 
 describe('certificateSearchHaystack', () => {
-  it('includes B-BBEE level and certificate number', () => {
+  it('includes production-critical certificate fields', () => {
+    const hay = certificateSearchHaystack({
+      companyName: 'X',
+      vatNumber: '4123456789',
+      fileName: 'f.pdf',
+      bbbeeLevel: 4,
+      sectorCode: 'ICT',
+      sectorName: 'Information & Communications Technology',
+      companySize: 'QSE',
+      blackOwnership: 51,
+      blackWomenOwnership: 26,
+      expiryDate: '2027-06-17',
+    } as any);
+    expect(hay).toContain('4');
+    expect(hay).toContain('4123456789');
+    expect(hay).toContain('ict');
+    expect(hay).toContain('qse');
+    expect(hay).toContain('51');
+    expect(hay).toContain('2027-06-17');
+  });
+
+  it('does not make non-MVP metadata searchable for production readiness', () => {
     const hay = certificateSearchHaystack({
       companyName: 'X',
       vatNumber: null,
       fileName: 'f.pdf',
       bbbeeLevel: 4,
       certificateNumber: 'CN-88',
-    });
-    expect(hay).toContain('4');
-    expect(hay).toContain('cn-88');
+      registrationNumber: '2020/123456/07',
+      taxNumber: '9876543210',
+      agency: 'Example Ratings',
+      sanasAccreditationNumber: 'BVA123',
+    } as any);
+    expect(hay).not.toContain('2020/123456/07');
+    expect(hay).not.toContain('9876543210');
+    expect(hay).not.toContain('example ratings');
+    expect(hay).not.toContain('bva123');
   });
 });
 
@@ -141,15 +198,37 @@ describe('dedupePublicCertificates', () => {
 });
 
 describe('publicCertificateToListRow', () => {
-  it('exposes certificateNumber on list rows', () => {
+  it('exposes production-critical enriched values on list and detail rows', () => {
     const c = normalizeFromMongo({
       id: 'x',
       supplierName: 'Co',
       blobName: 'b',
-      certificateNumber: 'NUM-1',
+      vatNumber: '4123456789',
+      sectorCode: 'ICT',
+      sectorName: 'Information & Communications Technology',
+      companySize: 'QSE',
+      bbbeeLevel: 1,
+      bbbeeLevelStatus: 'Level 1',
+      blackOwnership: 51,
+      blackWomenOwnership: 26,
+      expiryDate: new Date('2027-06-17T00:00:00.000Z'),
+      fieldConfidence: { vatNumber: { confidence: 0.95 } },
     })!;
     const row = publicCertificateToListRow(c);
-    expect(row.certificateNumber).toBe('NUM-1');
+    const detail = publicCertificateToDetailJson(c);
+
+    expect(row).toMatchObject({
+      companyName: 'Co',
+      vatNumber: '4123456789',
+      sectorCode: 'ICT',
+      sectorName: 'Information & Communications Technology',
+      companySize: 'QSE',
+      bbbeeLevel: 1,
+      bbbeeLevelStatus: 'Level 1',
+      blackOwnership: 51,
+      blackWomenOwnership: 26,
+    });
+    expect(detail.fieldConfidence).toMatchObject({ vatNumber: { confidence: 0.95 } });
   });
 
   it('classifies processed mongo docs without expiry as valid in list rows', () => {

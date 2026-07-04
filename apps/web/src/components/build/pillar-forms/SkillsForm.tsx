@@ -18,6 +18,7 @@ import type { CalculatorConfig } from "@shared/schema";
 import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
+import { NumberTextInput } from "../NumberTextInput";
 
 interface SkillsFormProps {
   data: SkillsData;
@@ -41,6 +42,25 @@ const CATEGORY_DESCRIPTIONS: Record<TrainingCategoryCode, string> = {
   G: 'Informal training',
 };
 
+const MUNICIPALITY_OPTIONS = [
+  'City of Johannesburg',
+  'City of Tshwane',
+  'Ekurhuleni',
+  'eThekwini',
+  'City of Cape Town',
+  'Nelson Mandela Bay',
+  'Buffalo City',
+  'Mangaung',
+  'Msunduzi',
+  'Rustenburg',
+  'Polokwane',
+  'Mbombela',
+  'Sol Plaatje',
+  'Stellenbosch',
+];
+
+const OTHER_MUNICIPALITY = '__other__';
+
 // Issue 6: Added classification fields and expanded cost capture
 const emptyForm = {
   programName: '',
@@ -52,6 +72,7 @@ const emptyForm = {
   isDisabled: false,
   isForeign: false,
   employmentStatus: 'Permanent' as StatusOption,
+  municipality: '',
   isYesEmployee: false,
   isAbsorbed: false,
   // Issue 6: Added classification fields
@@ -74,6 +95,7 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  const [customMunicipalityMode, setCustomMunicipalityMode] = useState(false);
 
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
   const result = useMemo(() => {
@@ -81,8 +103,18 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
     return calculateSkillsScore(data, calculatorConfig);
   }, [data, calculatorConfig]);
 
+  const formTotalCost = form.courseCost + form.travelCost + form.accommodationCost +
+    form.cateringCost + form.stationeryCost + form.facilityCost +
+    form.salaryCost + form.otherCosts;
+  const selectedMunicipality = MUNICIPALITY_OPTIONS.includes(form.municipality)
+    ? form.municipality
+    : customMunicipalityMode || form.municipality
+      ? OTHER_MUNICIPALITY
+      : '';
+
   const openAdd = () => {
     setForm({ ...emptyForm });
+    setCustomMunicipalityMode(false);
     setEditingId(null);
     setShowDialog(true);
   };
@@ -99,6 +131,7 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
       isDisabled: p.isDisabled,
       isForeign: p.isForeign,
       employmentStatus: p.employmentStatus,
+      municipality: p.municipality || '',
       isYesEmployee: p.isYesEmployee,
       isAbsorbed: p.isAbsorbed,
       // Issue 6: Classification fields
@@ -116,6 +149,7 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
       startDate: p.startDate || '',
       endDate: p.endDate || '',
     });
+    setCustomMunicipalityMode(Boolean(p.municipality && !MUNICIPALITY_OPTIONS.includes(p.municipality)));
     setEditingId(p.id);
     setShowDialog(true);
   };
@@ -138,6 +172,7 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
         isDisabled: form.isDisabled,
         isForeign: form.isForeign,
         employmentStatus: form.employmentStatus,
+        municipality: form.municipality || undefined,
         isYesEmployee: form.isYesEmployee,
         isAbsorbed: form.isAbsorbed,
         isCompleted: false,
@@ -226,10 +261,9 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
           <Label className="text-xs">Leviable Amount (SDL payroll)</Label>
-          <Input
-            type="number"
-            value={data.leviableAmount || ''}
-            onChange={e => onChange({ ...data, leviableAmount: Number(e.target.value) })}
+          <NumberTextInput
+            value={data.leviableAmount}
+            onNumberChange={value => onChange({ ...data, leviableAmount: value })}
             placeholder="0"
           />
         </div>
@@ -288,7 +322,11 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
                       {p.race} · {p.gender}
                     </td>
                     <td className="px-3 py-2 text-right text-xs font-medium">
-                      {formatRand(p.courseCost)}
+                      {formatRand(
+                        (p.courseCost || 0) + (p.travelCost || 0) + (p.accommodationCost || 0) +
+                        (p.cateringCost || 0) + (p.stationeryCost || 0) + (p.facilityCost || 0) +
+                        (p.salaryCost || 0) + (p.otherCosts || 0)
+                      )}
                     </td>
                     <td className="px-3 py-2" onClick={e => e.stopPropagation()}>
                       <Button
@@ -362,6 +400,40 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label className="text-xs">Municipality</Label>
+                <Select
+                  value={selectedMunicipality}
+                  onValueChange={(value) => {
+                    const isOther = value === OTHER_MUNICIPALITY;
+                    setCustomMunicipalityMode(isOther);
+                    setForm(p => ({
+                      ...p,
+                      municipality: isOther ? p.municipality : value,
+                    }));
+                  }}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select municipality" /></SelectTrigger>
+                  <SelectContent>
+                    {MUNICIPALITY_OPTIONS.map(municipality => (
+                      <SelectItem key={municipality} value={municipality}>{municipality}</SelectItem>
+                    ))}
+                    <SelectItem value={OTHER_MUNICIPALITY}>Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {selectedMunicipality === OTHER_MUNICIPALITY || !selectedMunicipality ? (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Custom Municipality</Label>
+                  <Input
+                    value={form.municipality}
+                    onChange={e => setForm(p => ({ ...p, municipality: e.target.value }))}
+                    placeholder="Enter municipality"
+                  />
+                </div>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
                 <Label className="text-xs">Race</Label>
                 <Select value={form.race} onValueChange={(v: RaceOption) => setForm(p => ({ ...p, race: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -429,36 +501,36 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
               <Label className="text-xs font-semibold mb-2 block">Cost Breakdown</Label>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Course/Tuition (R)</Label>
-                  <Input type="number" value={form.courseCost || ''} onChange={e => setForm(p => ({ ...p, courseCost: Number(e.target.value) }))} placeholder="0" />
+                  <Label className="text-xs">Programme Spend (R)</Label>
+                  <NumberTextInput value={form.courseCost} onNumberChange={value => setForm(p => ({ ...p, courseCost: value }))} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Travel (R)</Label>
-                  <Input type="number" value={form.travelCost || ''} onChange={e => setForm(p => ({ ...p, travelCost: Number(e.target.value) }))} placeholder="0" />
+                  <NumberTextInput value={form.travelCost} onNumberChange={value => setForm(p => ({ ...p, travelCost: value }))} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Accommodation (R)</Label>
-                  <Input type="number" value={form.accommodationCost || ''} onChange={e => setForm(p => ({ ...p, accommodationCost: Number(e.target.value) }))} placeholder="0" />
+                  <NumberTextInput value={form.accommodationCost} onNumberChange={value => setForm(p => ({ ...p, accommodationCost: value }))} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Catering (R)</Label>
-                  <Input type="number" value={form.cateringCost || ''} onChange={e => setForm(p => ({ ...p, cateringCost: Number(e.target.value) }))} placeholder="0" />
+                  <NumberTextInput value={form.cateringCost} onNumberChange={value => setForm(p => ({ ...p, cateringCost: value }))} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Stationery (R)</Label>
-                  <Input type="number" value={form.stationeryCost || ''} onChange={e => setForm(p => ({ ...p, stationeryCost: Number(e.target.value) }))} placeholder="0" />
+                  <NumberTextInput value={form.stationeryCost} onNumberChange={value => setForm(p => ({ ...p, stationeryCost: value }))} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Facility/Venue (R)</Label>
-                  <Input type="number" value={form.facilityCost || ''} onChange={e => setForm(p => ({ ...p, facilityCost: Number(e.target.value) }))} placeholder="0" />
+                  <NumberTextInput value={form.facilityCost} onNumberChange={value => setForm(p => ({ ...p, facilityCost: value }))} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Salary/Stipend (R)</Label>
-                  <Input type="number" value={form.salaryCost || ''} onChange={e => setForm(p => ({ ...p, salaryCost: Number(e.target.value) }))} placeholder="0" />
+                  <NumberTextInput value={form.salaryCost} onNumberChange={value => setForm(p => ({ ...p, salaryCost: value }))} placeholder="0" />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Other Costs (R)</Label>
-                  <Input type="number" value={form.otherCosts || ''} onChange={e => setForm(p => ({ ...p, otherCosts: Number(e.target.value) }))} placeholder="0" />
+                  <NumberTextInput value={form.otherCosts} onNumberChange={value => setForm(p => ({ ...p, otherCosts: value }))} placeholder="0" />
                 </div>
               </div>
             </div>
@@ -476,7 +548,7 @@ export function SkillsForm({ data, onChange, npat, className }: SkillsFormProps)
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!form.learnerName || !form.programName || form.courseCost <= 0}>
+            <Button onClick={handleSave} disabled={!form.learnerName || !form.programName || formTotalCost <= 0}>
               {editingId ? 'Save Changes' : 'Add Program'}
             </Button>
           </DialogFooter>

@@ -37,6 +37,15 @@ function getConfig(): ArangoConfig {
   };
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
+    }),
+  ]);
+}
+
 export async function connectArango(): Promise<Database | null> {
   if (_db) return _db;
 
@@ -49,7 +58,7 @@ export async function connectArango(): Promise<Database | null> {
       auth: { username: cfg.username, password: cfg.password },
     });
 
-    const databases = await systemDb.listDatabases();
+    const databases = await withTimeout(systemDb.listDatabases(), 3000, "ArangoDB connection");
     if (!databases.includes(cfg.databaseName)) {
       logger.info("Creating database", { database: cfg.databaseName });
       await systemDb.createDatabase(cfg.databaseName);

@@ -129,15 +129,18 @@ export function validateParsedDocument(input: ParsedDocumentValidationInput): Pa
       ? 'review_required'
       : 'passed';
 
+  const outputSafeFields = status === 'failed' ? [] : Array.from(new Set(safeFields));
+  const outputCalculatorPayload = status === 'failed' ? {} : calculatorPayload;
+
   return {
     status,
     passed: status === 'passed',
     warnings: Array.from(new Set(warnings)),
     errors: Array.from(new Set(errors)),
     missing_fields: Array.from(new Set(missingFields)),
-    safe_fields: Array.from(new Set(safeFields)),
+    safe_fields: outputSafeFields,
     unsafe_fields: Array.from(new Set(unsafeFields)),
-    calculator_payload: calculatorPayload,
+    calculator_payload: outputCalculatorPayload,
     requires_human_review: status !== 'passed',
   };
 }

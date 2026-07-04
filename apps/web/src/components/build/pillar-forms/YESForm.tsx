@@ -17,6 +17,7 @@ import { cn } from "@toolkit/lib/utils";
 import type { YESData, YESCandidate } from "@toolkit/lib/types";
 import { calculateYESScore } from "@toolkit/lib/calculators/yes";
 import { v4 as uuidv4 } from "uuid";
+import { NumberTextInput } from "../NumberTextInput";
 
 interface YESFormProps {
   data: YESData;
@@ -290,7 +291,7 @@ export function YESForm({ data, onChange, totalEmployees, className }: YESFormPr
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Programme Cost (R)</Label>
-              <Input type="number" value={form.cost || ''} onChange={e => setForm(p => ({ ...p, cost: Number(e.target.value) }))} placeholder="0" />
+              <NumberTextInput value={form.cost} onNumberChange={value => setForm(p => ({ ...p, cost: value }))} placeholder="0" />
             </div>
             <div className="flex flex-col gap-2 pt-1">
               <label className="flex items-center gap-2 cursor-pointer text-sm">

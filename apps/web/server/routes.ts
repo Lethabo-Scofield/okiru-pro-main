@@ -16,7 +16,7 @@ import {
 } from "./scorecardCollaboration";
 import { sendLoginNotification, sendOtpEmail, sendPasswordResetEmail, sendWorkspaceInviteEmail, sendDemoRequestEmail, generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, isSmtpConfigured } from "./email";
 import { ProcessorSessionModel, ClientModel, OrganizationModel, UserModel } from "../shared/schema";
-import type { WorkspaceRole } from "../shared/schema";
+import type { CompanyProfile, User, WorkspaceRole } from "../shared/schema";
 import { randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
@@ -46,10 +46,80 @@ function isMongoConnected(): boolean {
   return mongoose.connection.readyState === 1;
 }
 
+const DEMO_USER_ID = "demo-offline-user";
+
+function isOfflineDemoCredentials(loginId: unknown, password: unknown): boolean {
+  return (
+    typeof loginId === "string" &&
+    typeof password === "string" &&
+    loginId.trim().toLowerCase() === "demo" &&
+    password === "demo"
+  );
+}
+
+function getOfflineDemoUser(): User {
+  const now = new Date();
+  return {
+    id: DEMO_USER_ID,
+    username: "demo",
+    password: "",
+    fullName: "Demo User",
+    email: "demo@okiru.pro",
+    role: "admin",
+    secondaryRoles: [],
+    organizationId: "demo-offline-workspace",
+    organizationName: "Demo Workspace",
+    profilePicture: null,
+    isVerified: true,
+    twofaEnabled: false,
+    otpCode: null,
+    otpExpiry: null,
+    otpAttempts: 0,
+    lastLogin: now,
+    createdAt: now,
+  };
+}
+
+function getSessionDemoUser(req: Request): User | null {
+  if (isMongoConnected()) return null;
+  const userData = (req.session as any)?.userData;
+  if ((req.session as any)?.userId === DEMO_USER_ID && userData?.username === "demo") {
+    return { ...getOfflineDemoUser(), ...userData };
+  }
+  return null;
+}
+
+function getOfflineDemoProfile(): CompanyProfile {
+  const now = new Date();
+  return {
+    id: "demo-offline-profile",
+    userId: DEMO_USER_ID,
+    companyName: "Demo Workspace",
+    role: "admin",
+    beeLevel: "Level 4",
+    employeeRange: "11-50",
+    industry: "Technology",
+    industryOther: null,
+    annualRevenue: "R10M - R50M",
+    acquisitionSource: "demo",
+    acquisitionSourceOther: null,
+    toolsUsed: [],
+    toolsUsedOther: null,
+    biggestChallenge: "Offline demo mode",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const userId = (req.session as any)?.userId;
   if (!userId) {
     return res.status(401).json({ message: "Not authenticated" });
+  }
+  const demoUser = getSessionDemoUser(req);
+  if (demoUser) {
+    (req as any).user = demoUser;
+    return next();
   }
   const user = await storage.getUserById(userId);
   if (!user) {
@@ -128,14 +198,14 @@ export async function registerRoutes(
   };
 
   const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
-  if (mongoUri) {
+  if (mongoUri && isMongoConnected()) {
     sessionConfig.store = MongoStore.create({
       mongoUrl: mongoUri,
       collectionName: "sessions",
       touchAfter: 24 * 3600,
     });
   } else {
-    logger.warn("Using in-memory session store (MONGODB_URI not set) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sessions will not persist across restarts");
+    logger.warn("Using in-memory session store (MongoDB unavailable) - sessions will not persist across restarts");
   }
 
   app.use(session(sessionConfig));
@@ -413,6 +483,25 @@ export async function registerRoutes(
         attempts.count++;
       }
 
+      if (!isMongoConnected() && isOfflineDemoCredentials(loginId, password)) {
+        const demoUser = getOfflineDemoUser();
+        const safeUser = sanitizeUser(demoUser);
+        (req.session as any).userId = demoUser.id;
+        (req.session as any).userData = safeUser;
+        (req.session as any).otpVerified = true;
+        logger.warn("Offline demo login used while MongoDB is unavailable", {
+          userId: demoUser.id,
+          durationMs: Date.now() - start,
+        });
+        return res.json({ user: safeUser, offlineDemo: true });
+      }
+
+      if (!isMongoConnected()) {
+        return res.status(503).json({
+          message: "Database is not available. Use demo/demo for offline demo access.",
+        });
+      }
+
       const user = await storage.getUserByUsernameOrEmail(loginId);
       if (!user) {
         return res.status(401).json({ message: "Invalid username or password" });
@@ -668,6 +757,12 @@ export async function registerRoutes(
       if (!userId) {
         return res.status(401).json({ message: "Not authenticated" });
       }
+      const demoUser = getSessionDemoUser(req);
+      if (demoUser) {
+        const safeUser = sanitizeUser(demoUser);
+        (req.session as any).userData = safeUser;
+        return res.json({ user: safeUser, offlineDemo: true });
+      }
       const user = await storage.getUserById(userId);
       if (!user) {
         return res.status(401).json({ message: "User not found" });
@@ -701,6 +796,9 @@ export async function registerRoutes(
 
   app.get("/api/onboarding/me", requireAuth, async (req, res) => {
     try {
+      if (getSessionDemoUser(req)) {
+        return res.json({ profile: getOfflineDemoProfile(), offlineDemo: true });
+      }
       const userId = (req.session as any)?.userId as string;
       const profile = await storage.getCompanyProfileByUserId(userId);
       if (!profile) {
@@ -3731,3 +3829,4 @@ Respond ONLY with a valid JSON array.`;
   logger.info("Route registration completed");
   return httpServer;
 }
+

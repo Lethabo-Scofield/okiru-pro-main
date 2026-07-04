@@ -16,6 +16,12 @@ import {
   getCertBlobServiceClient,
   getCertContainerClient,
 } from './azureCertStorage.js';
+import {
+  type CertificateExtractionMode,
+  extractionStatusForText,
+  hasUsefulExtractedText,
+  usefulExtractedTextLength,
+} from './certificateExtractionStatus.js';
 
 const logger = createLogger('CertExtractor');
 const TMP_DIR = join(tmpdir(), 'cert-extract');
@@ -492,51 +498,104 @@ export async function processOneCertificate(
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
 
   let text = '';
+  let extractionMode: CertificateExtractionMode = 'none';
   try {
     const downloaded = await blobClient.downloadToBuffer();
 
     if (ext === 'pdf') {
       if (isDocumentIntelligenceConfigured()) {
-        // Stage 1a: Azure Document Intelligence (prebuilt-read) — best OCR quality
         text = await extractTextWithDocIntelligence(downloaded, fileName);
+        if (hasUsefulExtractedText(text)) extractionMode = 'pdf_text';
       }
-      if (!text.trim()) {
-        // Stage 1b: pdfjs selectable-text extraction
+      if (!hasUsefulExtractedText(text)) {
         text = await extractTextFromPdf(downloaded.buffer as ArrayBuffer);
+        if (hasUsefulExtractedText(text)) extractionMode = 'pdf_text';
       }
-      if (!text.trim()) {
-        // Stage 1c: Tesseract OCR fallback for fully scanned PDFs
-        logger.info('PDF has no text layer, trying Tesseract OCR', { fileName });
+      if (!hasUsefulExtractedText(text)) {
+        logger.info('PDF has no usable text layer, trying OCR', { blobName, fileName });
         text = await ocrPdf(downloaded, fileName);
+        if (hasUsefulExtractedText(text)) extractionMode = 'ocr';
       }
     } else if (['png', 'jpg', 'jpeg'].includes(ext)) {
       if (isDocumentIntelligenceConfigured()) {
-        // Azure DI handles images too
         text = await extractTextWithDocIntelligence(downloaded, fileName);
+        if (hasUsefulExtractedText(text)) extractionMode = 'pdf_text';
       }
-      if (!text.trim()) {
+      if (!hasUsefulExtractedText(text)) {
         text = await ocrImage(downloaded);
+        if (hasUsefulExtractedText(text)) extractionMode = 'ocr';
       }
     }
   } catch (err: any) {
-    logger.error('Failed to download/extract', { blobName, error: err.message });
+    logger.error('Certificate extraction failed', {
+      blobName,
+      fileName,
+      downloadSucceeded: false,
+      extractionMode: 'failed',
+      extractedTextLength: 0,
+      extractionStatus: 'failed',
+      error: err.message,
+    });
     await CertificateMetadataModel.findOneAndUpdate(
       { blobName },
-      { blobName, fileName, extractionStatus: 'failed', extractionError: err.message, processedAt: new Date() },
+      {
+        $set: {
+          blobName,
+          fileName,
+          extractionStatus: 'failed',
+          extractionMode: 'failed',
+          extractionError: err.message,
+          extractedTextLength: 0,
+          extractedAt: new Date(),
+          processedAt: new Date(),
+        },
+        $inc: { extractionAttempts: 1 },
+      },
       { upsert: true },
     );
     return { blobName, status: 'error', expiryDate: null };
   }
 
-  // Stage 2: LLM extraction (GPT-4o-mini) → regex fallback
-  const extracted = await extractCertificateWithLLM(text, fileName);
+  const extractedTextLength = usefulExtractedTextLength(text);
+  const extractionStatus = extractionStatusForText(text);
+  if (extractionStatus !== 'completed') {
+    const companySize = extractCompanySizeFromFileName(fileName);
+    const emptyTextUpdates: Record<string, unknown> = {
+      blobName,
+      fileName,
+      extractionStatus,
+      extractionMode: companySize ? 'filename_only' : extractionMode,
+      extractedTextLength,
+      extractionError: `No usable extracted text (${extractedTextLength} chars)`,
+      extractedAt: new Date(),
+      processedAt: new Date(),
+    };
+    if (companySize) emptyTextUpdates.companySize = companySize;
 
-  // Prefer the blob-name-derived supplier name: it was set by a human on upload
-  // and is more reliable than OCR/LLM extraction for common noise patterns.
-  const blobDerivedName = cleanNameFromBlobPath(blobName);
-  if (blobDerivedName) {
-    extracted.supplierName = blobDerivedName;
+    logger.warn('Certificate extraction produced no usable text', {
+      blobName,
+      fileName,
+      downloadSucceeded: true,
+      extractionMode: emptyTextUpdates.extractionMode,
+      extractedTextLength,
+      extractionStatus,
+      error: emptyTextUpdates.extractionError,
+    });
+    await CertificateMetadataModel.findOneAndUpdate(
+      { blobName },
+      {
+        $set: emptyTextUpdates,
+        $setOnInsert: { createdAt: new Date() },
+        $inc: { extractionAttempts: 1 },
+      },
+      { upsert: true, new: true },
+    );
+    return { blobName, status: extractionStatus, expiryDate: null };
   }
+
+  const extracted = await extractCertificateWithLLM(text, fileName);
+  const blobDerivedName = cleanNameFromBlobPath(blobName);
+  if (blobDerivedName) extracted.supplierName = blobDerivedName;
 
   const certStatus = computeStatus(extracted.expiryDate);
   const vatNumberNormalized = normalizeVat(extracted.vatNumber);
@@ -561,22 +620,29 @@ export async function processOneCertificate(
       status: certStatus,
       extractedText: text.substring(0, 4000),
       extractionStatus: 'completed',
+      extractionMode,
+      extractedTextLength,
       extractionError: null,
+      extractedAt: new Date(),
       processedAt: new Date(),
     },
     { upsert: true, new: true },
   );
 
   logger.info('Processed certificate', {
+    blobName,
     fileName,
+    downloadSucceeded: true,
     expiryDate: extracted.expiryDate?.toISOString() ?? null,
     bbbeeLevel: extracted.bbbeeLevel,
     vatNumber: extracted.vatNumber,
     companySize: extracted.companySize,
     status: certStatus,
+    extractionMode,
+    extractedTextLength,
+    extractionStatus: 'completed',
   });
 
-  // Stage 3: ChromaDB semantic index — fire-and-forget, never blocks the response
   if (isChromaConfigured() && text.trim()) {
     void indexCertificate(blobName, text, {
       supplierName: extracted.supplierName ?? '',

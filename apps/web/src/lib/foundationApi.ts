@@ -652,6 +652,8 @@ export async function populateAndScore(
       designation: e.designation,
       isDisabled: e.isDisabled,
       isForeign: e.isForeign,
+      annualSalary: e.annualSalary || 0,
+      votingRightsPercent: e.votingRightsPercent || 0,
     }));
     
     const shareholders = (storeState.ownership?.shareholders || []).map(s => ({
@@ -667,11 +669,15 @@ export async function populateAndScore(
     
     const suppliers = (storeState.procurement?.suppliers || []).map(s => ({
       name: s.name,
+      registrationNumber: s.registrationNumber,
+      vatNumber: s.vatNumber,
       spend: s.spend,
       beeLevel: s.beeLevel,
       blackOwnership: s.blackOwnership,
       blackWomenOwnership: s.blackWomenOwnership,
-      enterpriseType: s.enterpriseType,
+      youthOwnership: s.youthOwnership || 0,
+      disabledOwnership: s.disabledOwnership || 0,
+      enterpriseType: String(s.enterpriseType).toLowerCase() === 'large' ? 'generic' : s.enterpriseType,
       isDesignatedGroup: (s.designatedGroupOwnership ?? 0) > 0,
       isBlackOwned51: s.blackOwnership > 1 ? s.blackOwnership >= 51 : s.blackOwnership >= 0.51,
       isBlackWomanOwned30: s.blackWomenOwnership > 1 ? s.blackWomenOwnership >= 30 : s.blackWomenOwnership >= 0.30,
@@ -701,9 +707,28 @@ export async function populateAndScore(
     
     const trainingPrograms = (storeState.skills?.trainingPrograms || []).map(tp => ({
       id: tp.id,
-      name: tp.name,
-      category: tp.category,
-      cost: tp.cost || 0,
+      name: tp.programName || tp.name,
+      programName: tp.programName || tp.name,
+      category: tp.category || (
+        tp.categoryCode === 'A' ? 'learnership' :
+        tp.categoryCode === 'C' || tp.categoryCode === 'D' ? 'bursary' :
+        tp.categoryCode === 'E' ? 'internship' :
+        'short_course'
+      ),
+      categoryCode: tp.categoryCode,
+      cost: tp.totalCost || tp.cost ||
+        ((tp.courseCost || 0) + (tp.travelCost || 0) + (tp.accommodationCost || 0) +
+        (tp.cateringCost || 0) + (tp.stationeryCost || 0) + (tp.facilityCost || 0) +
+        (tp.salaryCost || 0) + (tp.otherCosts || 0)),
+      courseCost: tp.courseCost || 0,
+      travelCost: tp.travelCost || 0,
+      accommodationCost: tp.accommodationCost || 0,
+      cateringCost: tp.cateringCost || 0,
+      stationeryCost: tp.stationeryCost || 0,
+      facilityCost: tp.facilityCost || 0,
+      salaryCost: tp.salaryCost || 0,
+      otherCosts: tp.otherCosts || 0,
+      municipality: tp.municipality,
       isYesEmployee: tp.isYesEmployee || false,
       isAbsorbed: tp.isAbsorbed || false,
       race: tp.race,
