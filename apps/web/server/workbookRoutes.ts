@@ -1556,6 +1556,12 @@ export function registerWorkbookRoutes(app: Express): void {
             update.financials = { ...(update.financials ?? {}), ...skillsExtra };
           }
           const cm = projected.companyMeta;
+          // Construction sub-sector (Contractor / BEP / Built-Environment QSE)
+          // lives in company-information meta. Persist it so the live store
+          // hydrates the correct construction CalculatorConfig on GET instead
+          // of defaulting to Contractor. Input ingestion only — never the engine.
+          const csub = String(cm.constructionSubSector ?? "").trim();
+          if (csub) update.constructionSubSector = csub;
           for (const key of [
             "tradingName",
             "registrationNumber",
