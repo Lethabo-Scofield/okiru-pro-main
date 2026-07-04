@@ -263,9 +263,11 @@ export function clientPatchToWorkbookMeta(patch: Record<string, any>): WorkbookS
   if (Object.prototype.hasOwnProperty.call(patch, 'npat')) fi.npat = patch.npat;
   if (Object.prototype.hasOwnProperty.call(patch, 'industryNorm')) fi.industryNormPercent = patch.industryNorm;
   if (Object.prototype.hasOwnProperty.call(patch, 'leviableAmount')) {
-    // Workbook stores payroll; Toolkit stores leviableAmount (= payroll × 0.01).
+    // Workbook stores Total Payroll; Toolkit's leviableAmount IS the full
+    // payroll (the skills-levy base, not the 1% SDL) — so the round-trip is
+    // identity. The prior `× 100` inflated payroll 100× on back-sync.
     const lev = Number(patch.leviableAmount);
-    if (Number.isFinite(lev)) fi.payroll = lev * 100;
+    if (Number.isFinite(lev)) fi.payroll = lev;
   }
   if (Object.prototype.hasOwnProperty.call(patch, 'companyValue')) fi.companyValueToUse = patch.companyValue;
   if (Object.prototype.hasOwnProperty.call(patch, 'outstandingDebt')) fi.outstandingDebt = patch.outstandingDebt;
