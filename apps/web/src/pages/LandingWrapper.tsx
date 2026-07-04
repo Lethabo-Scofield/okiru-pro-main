@@ -9,7 +9,6 @@ export default function LandingWrapper() {
     <LandingPage
       onNavigateAuth={() => navigate(marketingAuthPath("login"))}
       onNavigateRegister={() => navigate(marketingAuthPath("register"))}
-      onNavigateCertificates={() => navigate("/certificates")}
       onNavigateProduct={(slug) => navigate(`/products/${slug}`)}
       onNavigateAbout={() => navigate("/about")}
       onNavigateContact={() => navigate("/contact")}
