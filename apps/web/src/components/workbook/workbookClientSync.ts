@@ -171,8 +171,15 @@ export function mapWorkbookFinancialsToClient(
   const npat = num(finMeta.npat);
   const payroll = num(finMeta.payroll);
 
-  // Leviable Amount is always 1% of Total Payroll — never a separate user input.
-  const leviableAmount = payroll * 0.01;
+  // Leviable Amount for Skills = Total Payroll (the skills-levy BASE), NOT the
+  // 1% SDL levy. Verified against the test workbooks: e.g. Kgodiso Financials
+  // has "Total Payroll (R) 96,000,000" and "Leviable Amount for Skills (R)
+  // 96,000,000" as the SAME value, and "Skills spend on black people 6.0% of
+  // leviable = R5,760,000" (= 6% × 96M). The previous `payroll × 0.01` computed
+  // the levy, making every live skills target 100× too small (targets trivially
+  // met → skills over-scored). The harness path already used full payroll as
+  // leviable, which is why headless fitness was correct while live was not.
+  const leviableAmount = payroll;
 
   const npatResolved = resolveEffectiveNpat(revenue, npat, finMeta, companyMeta);
   const industryNormResolved = resolveIndustryNormFromMeta(finMeta, companyMeta);

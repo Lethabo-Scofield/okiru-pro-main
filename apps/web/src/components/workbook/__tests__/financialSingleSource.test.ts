@@ -1,7 +1,10 @@
 /**
  * Regression — FINANCIAL_META does not have a separate `leviableAmount` field.
- * The downstream `leviableAmount` is always derived as `payroll × 1%` in
- * `mapWorkbookFinancialsToClient`. There are no forecast financial fields.
+ * The downstream `leviableAmount` is derived as the FULL Total Payroll (the
+ * skills-levy base) in `mapWorkbookFinancialsToClient` — verified against the
+ * test workbooks (Kgodiso Financials: Total Payroll = Leviable Amount for
+ * Skills = 96,000,000; "6% of leviable = R5,760,000"). There are no forecast
+ * financial fields.
  */
 import { describe, expect, it } from "vitest";
 import { SECTIONS } from "../sections";
@@ -26,16 +29,16 @@ describe("FINANCIAL_META — leviableAmount not a separate input", () => {
   });
 });
 
-describe("mapWorkbookFinancialsToClient — leviableAmount = payroll × 1%", () => {
+describe("mapWorkbookFinancialsToClient — leviableAmount = full payroll (levy base)", () => {
   const company = { industrySector: "RCOGP", scorecardType: "Generic" };
 
-  it("derives leviableAmount as exactly 1% of payroll", () => {
+  it("derives leviableAmount as the full Total Payroll (workbook: Leviable = Total Payroll)", () => {
     const out = mapWorkbookFinancialsToClient(
       { revenue: 1_000_000, npat: 100_000, payroll: 4_000_000 },
       company,
     );
-    // 4 000 000 × 1% = 40 000
-    expect(out.leviableAmount).toBe(40_000);
+    // Leviable Amount for Skills = Total Payroll (skills-levy base), NOT the 1% SDL.
+    expect(out.leviableAmount).toBe(4_000_000);
   });
 
   it("leviableAmount is 0 when payroll is absent", () => {
