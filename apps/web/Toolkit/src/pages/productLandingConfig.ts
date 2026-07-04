@@ -32,7 +32,7 @@ export interface ProductStep {
   desc: string;
 }
 
-export type ProductTheme = "purple" | "blue" | "orange";
+export type ProductTheme = "purple" | "blue" | "orange" | "green";
 
 export interface ProductConfig {
   slug: string;
@@ -148,7 +148,7 @@ export const PRODUCTS: ProductConfig[] = [
   {
     slug: "esg-toolkit",
     navLabel: "ESG Toolkit",
-    theme: "blue",
+    theme: "green",
     heroTag: "Scope 1·2·3 · IFRS S1/S2 · Net-Zero",
     heroBrand: "Okiru · ESG",
     titleLead: "ESG",
