@@ -584,6 +584,39 @@ function deriveCompanyMetaFromSheets(wb: XLSX.WorkBook): Record<string, unknown>
   return out;
 }
 
+/**
+ * FSC "Consumer Education" is its own per-programme contribution table (Programme
+ * Name | Description | Date | Spend (R) | % Black Beneficiaries | Reach), but the
+ * FSC "SED & CE Scorecard" needs a single aggregate `ceSpend` (total CE spend)
+ * that calculateSedScore compares to the 0.4%-of-NPAT target. Sum the "Spend (R)"
+ * column. The workbook's own Sector Targets sheet expresses CE achievement as the
+ * FULL CE spend ÷ NPAT (e.g. 0.6% = R2.52M ÷ R420M), so the aggregate is the
+ * whole Spend column — not a black-weighted subset (which would give 0.54%).
+ * Returns 0 when the sheet or its Spend column is absent (never fabricated).
+ */
+function deriveConsumerEducationSpend(rows: unknown[][]): number {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const joined = (rows[i] || []).map((c) => norm(String(c ?? ""))).join("|");
+    if (/spend|contribution|amount/.test(joined) && /programme|program|description|beneficiar|reach/.test(joined)) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return 0;
+  const header = (rows[headerIdx] as unknown[]).map((c) => norm(String(c ?? "")));
+  const spendCol = header.findIndex((h) => h.includes("spend") || h.includes("contribution") || h.includes("randvalue") || h.includes("amount"));
+  if (spendCol < 0) return 0;
+  let total = 0;
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i] as unknown[];
+    if (!r) continue;
+    const v = Number(String(r[spendCol] ?? "").replace(/[^0-9.\-]/g, ""));
+    if (Number.isFinite(v) && v > 0) total += v;
+  }
+  return total;
+}
+
 export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const warnings: string[] = [];
   const mappedSheets: Record<string, string> = {};
@@ -632,6 +665,25 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
       payload = { ...payload, rows: [...(payload.rows ?? []), ...rows] };
     }
     sections[sectionKey] = payload;
+  }
+
+  // W-fsc-ce: the FSC "Consumer Education" sheet is unmapped (a per-programme
+  // table, not a grid section), so its spend never reached the SED & CE
+  // scorecard and the Consumer Education line scored 0 despite real workbook
+  // data. Aggregate its Spend column into sed.meta.ceSpend so calculateSedScore
+  // (which already scores CE for FSC) can award it. Never overwrites an explicit
+  // aggregate; only sets when a real spend is found.
+  const ceSheetName = wb.SheetNames.find((n) => /consumer\s*education/i.test(n));
+  if (ceSheetName) {
+    const ceMatrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[ceSheetName], { header: 1, defval: "" }) as unknown[][];
+    const ceSpend = deriveConsumerEducationSpend(ceMatrix);
+    if (ceSpend > 0) {
+      const sed = sections["sed"] ?? { rows: [] };
+      const meta = (sed.meta ?? {}) as Record<string, unknown>;
+      if (meta.ceSpend == null || Number(meta.ceSpend) === 0) {
+        sections["sed"] = { ...sed, meta: { ...meta, ceSpend } };
+      }
+    }
   }
 
   // R19: derive missing company meta (name/sector/type/sub-sector) from any
