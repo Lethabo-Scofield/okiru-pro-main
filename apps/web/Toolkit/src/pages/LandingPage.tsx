@@ -261,7 +261,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hero {
     min-height: 100vh; min-height: 100svh;
     display: flex; align-items: center;
-    padding: 104px 0 64px; position: relative;
+    padding: 128px 0 64px; position: relative;
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
   .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: var(--ink); }
@@ -287,7 +287,13 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hero-glow {
     position: absolute; top: -20%; right: -8%; width: 700px; height: 700px; border-radius: 50%;
     background: radial-gradient(circle, rgba(6,182,212,0.08) 0%, rgba(147,51,234,0.05) 40%, transparent 70%);
+    animation: okiru-glowDrift 16s ease-in-out infinite alternate;
   }
+  @keyframes okiru-glowDrift {
+    from { transform: translate(0, 0) scale(1); }
+    to   { transform: translate(-48px, 36px) scale(1.08); }
+  }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hero-glow { animation: none; } }
 
   .okiru-root .ok-hero-tag {
     display: inline-flex; align-items: center; gap: 12px;
@@ -316,8 +322,15 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-h1-gradient {
     display: block; margin-top: 6px;
     background: var(--grad-text);
+    background-size: 220% 100%;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    animation: okiru-h1Shimmer 9s ease-in-out infinite;
   }
+  @keyframes okiru-h1Shimmer {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-h1-gradient { animation: none; } }
   .okiru-root .ok-h1-ring {
     display: inline-block; width: 0.82em; height: 0.82em; vertical-align: -0.1em;
     margin: 0 0.015em; object-fit: contain; -webkit-text-fill-color: initial;
@@ -332,13 +345,33 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hero-sub strong { color: rgba(255,255,255,0.92); font-weight: 500; }
   .okiru-root .ok-hero-btns { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
+  /* ── HERO PROOF STATS ── */
+  .okiru-root .ok-hero-stats {
+    display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+    margin-top: 52px; padding-top: 26px;
+    border-top: 1px solid rgba(255,255,255,0.09);
+    max-width: min(58rem, 100%);
+  }
+  .okiru-root .ok-hero-stat { display: flex; flex-direction: column; gap: 3px; }
+  .okiru-root .ok-hero-stat-num {
+    font-family: var(--serif); font-size: 1.45rem; font-weight: 600; letter-spacing: -0.01em;
+    background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  }
+  .okiru-root .ok-hero-stat-label {
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: rgba(255,255,255,0.45);
+  }
+  .okiru-root .ok-hero-stat-div { width: 1px; height: 34px; background: rgba(255,255,255,0.1); }
+  .okiru-root .ok-anim-5 { opacity: 0; animation: okiru-slideUp .6s ease forwards .6s; }
+
   .okiru-root .ok-btn-cta {
     display: inline-flex; align-items: center; gap: 9px; font-family: var(--sans);
     font-size: 15px; font-weight: 600; color: #fff; background: var(--grad);
     border: none; cursor: pointer; padding: 13px 28px; border-radius: 999px;
-    letter-spacing: -0.01em; transition: opacity .2s, transform .15s; position: relative;
+    letter-spacing: -0.01em; transition: opacity .2s, transform .15s, box-shadow .25s; position: relative;
+    box-shadow: 0 12px 32px -14px rgba(147,51,234,0.55);
   }
-  .okiru-root .ok-btn-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+  .okiru-root .ok-btn-cta:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 16px 40px -14px rgba(147,51,234,0.7); }
   .okiru-root .ok-btn-cta .arr { display: inline-flex; transition: transform .2s; }
   .okiru-root .ok-btn-cta:hover .arr { transform: translateX(3px); }
   .okiru-root .ok-btn-sec {
@@ -778,6 +811,8 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-section { padding: 52px 0; }
     .okiru-root .ok-section.ok-page-top { padding-top: 96px; }
     .okiru-root .ok-hero-btns { flex-direction: column; align-items: stretch; }
+    .okiru-root .ok-hero-stats { gap: 16px 22px; margin-top: 40px; }
+    .okiru-root .ok-hero-stat-div { display: none; }
     .okiru-root .ok-btn-cta, .okiru-root .ok-btn-sec { width: 100%; justify-content: center; }
     .okiru-root .ok-nz-targets { grid-template-columns: 1fr 1fr; }
     .okiru-root .ok-nz-milestones { grid-template-columns: 1fr; }
@@ -861,6 +896,12 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-content">
+              <div className="ok-hero-tag ok-anim-1">
+                <span className="ok-hero-tag-dot" aria-hidden />
+                ESG · B-BBEE · AI · Skills · WSP
+                <span className="ok-hero-tag-div" aria-hidden />
+                <span className="ok-hero-tag-brand">Okiru Consulting · Est. 2023</span>
+              </div>
               <h1 className="ok-h1 ok-anim-2">
                 Turn compliance into<br />
                 <span className="ok-h1-gradient" aria-label="compounding growth.">
@@ -878,6 +919,27 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                   Get started <span className="arr"><ArrowRight size={14} /></span>
                 </button>
                 <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
+              </div>
+              <div className="ok-hero-stats ok-anim-5">
+                <div className="ok-hero-stat">
+                  <span className="ok-hero-stat-num">2,750+</span>
+                  <span className="ok-hero-stat-label">certificates indexed</span>
+                </div>
+                <div className="ok-hero-stat-div" aria-hidden />
+                <div className="ok-hero-stat">
+                  <span className="ok-hero-stat-num">9+</span>
+                  <span className="ok-hero-stat-label">sector codes automated</span>
+                </div>
+                <div className="ok-hero-stat-div" aria-hidden />
+                <div className="ok-hero-stat">
+                  <span className="ok-hero-stat-num">1 · 2 · 3</span>
+                  <span className="ok-hero-stat-label">emission scopes measured</span>
+                </div>
+                <div className="ok-hero-stat-div" aria-hidden />
+                <div className="ok-hero-stat">
+                  <span className="ok-hero-stat-num">IFRS S1/S2</span>
+                  <span className="ok-hero-stat-label">disclosure aligned</span>
+                </div>
               </div>
             </div>
           </div>
