@@ -14,9 +14,15 @@ export interface PublicCertificate {
   id: string | null;
   slug: string | null;
   companyName: string;
+  tradingName?: string | null;
+  registrationNumber?: string | null;
   vatNumber: string | null;
+  taxNumber?: string | null;
   companySize: string | null;
   bbbeeLevel: number | null;
+  bbbeeLevelStatus?: string | null;
+  certificateType?: string | null;
+  procurementRecognition?: number | null;
   bbbeeScore: number | null;
   certificateNumber: string | null;
   issueDate: string | null;
@@ -30,6 +36,8 @@ export interface PublicCertificate {
   flowThroughBlackOwnership?: number | null;
   blackDesignatedGroupOwnership?: number | null;
   empoweringSupplier?: boolean | null;
+  valueAddingSupplier?: boolean | null;
+  measurementPeriod?: string | null;
   firstProcurementDate?: string | null;
   sizeAtFirstProcurement?: string | null;
   sdRecipient?: boolean | null;
@@ -39,6 +47,13 @@ export interface PublicCertificate {
   businessUnit?: string | null;
   sectorCode?: string | null;
   sectorName?: string | null;
+  sanasAccreditationNumber?: string | null;
+  commissionerDetails?: string | null;
+  physicalAddress?: string | null;
+  contactDetails?: Record<string, string> | null;
+  enrichmentStatus?: string | null;
+  reviewFields?: string[];
+  fieldConfidence?: Record<string, unknown>;
   source: CertificateSource;
   status: PublicCertificateStatus;
   /** False when the record would rely on filename-only guessing. */
@@ -51,13 +66,22 @@ export interface CertificateListRow {
   name: string;
   fileName: string;
   companyName: string;
+  tradingName?: string | null;
+  registrationNumber?: string | null;
   vatNumber: string | null;
+  taxNumber?: string | null;
   companySize: string | null;
   blackOwnership: number | null;
   blackWomenOwnership: number | null;
   bbbeeLevel: number | null;
+  bbbeeLevelStatus?: string | null;
+  certificateType?: string | null;
+  procurementRecognition?: number | null;
   certificateNumber: string | null;
+  issueDate?: string | null;
   expiryDate: string | null;
+  agency?: string | null;
+  sanasAccreditationNumber?: string | null;
   status: PublicCertificateStatus;
   lastModified: string | null;
   id: string | null;
@@ -66,6 +90,9 @@ export interface CertificateListRow {
   metadataComplete: boolean;
   sectorCode?: string | null;
   sectorName?: string | null;
+  enrichmentStatus?: string | null;
+  reviewFields?: string[];
+  fieldConfidence?: Record<string, unknown>;
   location?: string | null;
   businessUnit?: string | null;
 }
@@ -203,11 +230,28 @@ function readExtendedFields(doc: Record<string, unknown>) {
     typeof v === 'boolean' ? v : null;
   const strOrNull = (v: unknown): string | null =>
     typeof v === 'string' && v.trim() ? v.trim() : null;
+  const objectOrNull = (v: unknown): Record<string, string> | null =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>)
+            .filter(([, value]) => typeof value === 'string' && value.trim())
+            .map(([key, value]) => [key, String(value).trim()]),
+        )
+      : null;
   const firstProc = doc.firstProcurementDate;
+  const contactDetails = objectOrNull(doc.contactDetails);
   return {
+    tradingName: strOrNull(doc.tradingName),
+    registrationNumber: strOrNull(doc.registrationNumber),
+    taxNumber: strOrNull(doc.taxNumber),
+    bbbeeLevelStatus: strOrNull(doc.bbbeeLevelStatus),
+    certificateType: strOrNull(doc.certificateType),
+    procurementRecognition: finiteNumber(doc.procurementRecognition),
     flowThroughBlackOwnership: finiteNumber(doc.flowThroughBlackOwnership),
     blackDesignatedGroupOwnership: finiteNumber(doc.blackDesignatedGroupOwnership),
     empoweringSupplier: boolOrNull(doc.empoweringSupplier),
+    valueAddingSupplier: boolOrNull(doc.valueAddingSupplier),
+    measurementPeriod: strOrNull(doc.measurementPeriod),
     firstProcurementDate: firstProc ? isoDay(firstProc as string | Date) : null,
     sizeAtFirstProcurement: strOrNull(doc.sizeAtFirstProcurement),
     sdRecipient: boolOrNull(doc.sdRecipient),
@@ -217,6 +261,17 @@ function readExtendedFields(doc: Record<string, unknown>) {
     businessUnit: strOrNull(doc.businessUnit),
     sectorCode: strOrNull(doc.sectorCode),
     sectorName: strOrNull(doc.sectorName),
+    sanasAccreditationNumber: strOrNull(doc.sanasAccreditationNumber),
+    commissionerDetails: strOrNull(doc.commissionerDetails),
+    physicalAddress: strOrNull(doc.physicalAddress),
+    contactDetails: contactDetails && Object.keys(contactDetails).length > 0 ? contactDetails : null,
+    enrichmentStatus: strOrNull(doc.enrichmentStatus),
+    reviewFields: Array.isArray(doc.reviewFields)
+      ? doc.reviewFields.filter((field): field is string => typeof field === 'string' && field.trim().length > 0)
+      : [],
+    fieldConfidence: doc.fieldConfidence && typeof doc.fieldConfidence === 'object' && !Array.isArray(doc.fieldConfidence)
+      ? doc.fieldConfidence as Record<string, unknown>
+      : {},
   };
 }
 
@@ -251,6 +306,8 @@ export function normalizeFromLocal(rec: LocalStoreRecord): PublicCertificate {
     businessUnit: rec.businessUnit ?? null,
     sectorCode: rec.sectorCode ?? null,
     sectorName: rec.sectorName ?? null,
+    enrichmentStatus: null,
+    reviewFields: [],
     source: 'local',
     status: rec.status,
     metadataComplete: true,
@@ -399,13 +456,22 @@ export function publicCertificateToListRow(c: PublicCertificate): CertificateLis
     name: c.blobName || '',
     fileName: c.fileName || c.blobName?.split('/').pop() || '',
     companyName: displayName,
+    tradingName: c.tradingName ?? null,
+    registrationNumber: c.registrationNumber ?? null,
     vatNumber: c.vatNumber,
+    taxNumber: c.taxNumber ?? null,
     companySize: c.companySize,
     blackOwnership: c.blackOwnership,
     blackWomenOwnership: c.blackWomenOwnership,
     bbbeeLevel: c.bbbeeLevel,
+    bbbeeLevelStatus: c.bbbeeLevelStatus ?? null,
+    certificateType: c.certificateType ?? null,
+    procurementRecognition: c.procurementRecognition ?? null,
     certificateNumber: c.certificateNumber,
+    issueDate: c.issueDate,
     expiryDate: c.expiryDate,
+    agency: c.agency,
+    sanasAccreditationNumber: c.sanasAccreditationNumber ?? null,
     status: c.metadataComplete ? c.status : 'unknown',
     lastModified: c.lastModified,
     id: c.id,
@@ -414,6 +480,9 @@ export function publicCertificateToListRow(c: PublicCertificate): CertificateLis
     metadataComplete: c.metadataComplete,
     sectorCode: c.sectorCode ?? null,
     sectorName: c.sectorName ?? null,
+    enrichmentStatus: c.enrichmentStatus ?? null,
+    reviewFields: c.reviewFields ?? [],
+    fieldConfidence: c.fieldConfidence ?? {},
     location: c.location ?? null,
     businessUnit: c.businessUnit ?? null,
   };
@@ -424,15 +493,23 @@ export function publicCertificateToDetailJson(c: PublicCertificate) {
     id: c.id,
     slug: c.slug,
     companyName: c.metadataComplete ? c.companyName : 'Unknown company',
+    tradingName: c.tradingName ?? null,
+    registrationNumber: c.registrationNumber ?? null,
     vatNumber: c.vatNumber,
+    taxNumber: c.taxNumber ?? null,
     companySize: c.companySize,
     bbbeeLevel: c.bbbeeLevel,
+    bbbeeLevelStatus: c.bbbeeLevelStatus ?? null,
+    certificateType: c.certificateType ?? null,
+    procurementRecognition: c.procurementRecognition ?? null,
     bbbeeScore: c.bbbeeScore,
     blackOwnership: c.blackOwnership,
     blackWomenOwnership: c.blackWomenOwnership,
     flowThroughBlackOwnership: c.flowThroughBlackOwnership ?? null,
     blackDesignatedGroupOwnership: c.blackDesignatedGroupOwnership ?? null,
     empoweringSupplier: c.empoweringSupplier ?? null,
+    valueAddingSupplier: c.valueAddingSupplier ?? null,
+    measurementPeriod: c.measurementPeriod ?? null,
     firstProcurementDate: c.firstProcurementDate ?? null,
     sizeAtFirstProcurement: c.sizeAtFirstProcurement ?? null,
     sdRecipient: c.sdRecipient ?? null,
@@ -442,6 +519,13 @@ export function publicCertificateToDetailJson(c: PublicCertificate) {
     businessUnit: c.businessUnit ?? null,
     sectorCode: c.sectorCode ?? null,
     sectorName: c.sectorName ?? null,
+    sanasAccreditationNumber: c.sanasAccreditationNumber ?? null,
+    commissionerDetails: c.commissionerDetails ?? null,
+    physicalAddress: c.physicalAddress ?? null,
+    contactDetails: c.contactDetails ?? null,
+    enrichmentStatus: c.enrichmentStatus ?? null,
+    reviewFields: c.reviewFields ?? [],
+    fieldConfidence: c.fieldConfidence ?? {},
     verificationAgency: c.agency,
     agency: c.agency,
     certificateNumber: c.certificateNumber,
@@ -520,14 +604,30 @@ export function dedupePublicCertificates(certs: PublicCertificate[]): PublicCert
 
 export function certificateSearchHaystack(c: Pick<
   PublicCertificate,
-  'companyName' | 'vatNumber' | 'fileName' | 'bbbeeLevel' | 'certificateNumber' | 'sectorCode' | 'sectorName' | 'location' | 'businessUnit'
+  | 'companyName'
+  | 'vatNumber'
+  | 'fileName'
+  | 'bbbeeLevel'
+  | 'sectorCode'
+  | 'sectorName'
+  | 'companySize'
+  | 'blackOwnership'
+  | 'blackWomenOwnership'
+  | 'expiryDate'
+  | 'location'
+  | 'businessUnit'
 >): string {
+  const ext = c as PublicCertificate;
   return `
     ${c.companyName || ''}
     ${c.vatNumber || ''}
     ${c.fileName || ''}
     ${c.bbbeeLevel ?? ''}
-    ${c.certificateNumber || ''}
+    ${ext.bbbeeLevelStatus || ''}
+    ${c.companySize || ''}
+    ${c.blackOwnership ?? ''}
+    ${c.blackWomenOwnership ?? ''}
+    ${c.expiryDate || ''}
     ${c.sectorCode || ''}
     ${c.sectorName || ''}
     ${c.location || ''}

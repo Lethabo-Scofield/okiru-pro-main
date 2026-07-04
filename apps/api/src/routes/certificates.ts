@@ -41,12 +41,21 @@ import {
 import { ok, fail, failWith } from '../utils/apiResponse.js';
 import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
-import { resolveOkiruHubSector } from '../services/okiruHubSectors.js';
+import { OKIRU_HUB_SECTORS, resolveOkiruHubSector } from '../services/okiruHubSectors.js';
 import {
+  CERTIFICATE_ENRICHMENT_VERSION,
   ENRICHMENT_FIELDS,
+  PRODUCTION_CERTIFICATE_FIELDS,
+  getProductionCertificateCoverage,
   runCertificateEnrichmentJob,
+  runCertificateVatRecoveryJob,
   type EnrichmentField,
 } from '../services/certificateEnrichmentJob.js';
+import {
+  getCertificateTextExtractionCoverage,
+  runCertificateTextExtractionRetryJob,
+} from '../services/certificateTextExtractionJob.js';
+import type { CertificateExtractionMode, CertificateExtractionStatus } from '../services/certificateExtractionStatus.js';
 
 const logger = createLogger("Certificates");
 const router = Router();
@@ -67,6 +76,16 @@ function getBlobServiceClient(): BlobServiceClient | null {
 
 function getContainerClient(blobServiceClient: BlobServiceClient) {
   return getCertContainerClient(blobServiceClient);
+}
+
+function requireInternalApiKey(req: Request, res: Response): boolean {
+  const providedKey = req.headers['x-api-key'] as string | undefined;
+  const expectedKey = process.env.API_INTERNAL_KEY;
+  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
+    res.status(401).json({ message: 'Invalid or missing x-api-key header' });
+    return false;
+  }
+  return true;
 }
 
 /** Express may surface path/query values as `string | string[]`; normalize to a single string. */
@@ -123,6 +142,106 @@ function invalidateListAndStatsCache() {
       responseCache.delete(k);
     }
   }
+}
+
+const LIST_SAFE_PROJECTION = {
+  _id: 0,
+  id: 1,
+  blobName: 1,
+  fileName: 1,
+  supplierName: 1,
+  vatNumber: 1,
+  companySize: 1,
+  sectorCode: 1,
+  sectorName: 1,
+  bbbeeLevel: 1,
+  bbbeeLevelStatus: 1,
+  certificateType: 1,
+  blackOwnership: 1,
+  blackWomenOwnership: 1,
+  expiryDate: 1,
+  extractionStatus: 1,
+  enrichmentStatus: 1,
+  reviewFields: 1,
+  reviewCandidates: 1,
+  verified: 1,
+  slug: 1,
+  status: 1,
+  updatedAt: 1,
+} as const;
+
+function dateOnly(value: unknown): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function listSafeRowFromMongo(doc: Record<string, any>): CertificateListRow & {
+  company: string;
+  size: string | null;
+  sector: { code: string | null; name: string | null };
+  ownership: { black: number | null; blackWomen: number | null };
+  extractionStatus: string | null;
+  reviewRequired: boolean;
+  reviewCandidates: Record<string, unknown>;
+} {
+  const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
+  const fileName = typeof doc.fileName === 'string' && doc.fileName.trim()
+    ? doc.fileName
+    : blobBasename(blobName);
+  const companyName = typeof doc.supplierName === 'string' && doc.supplierName.trim()
+    ? doc.supplierName.trim()
+    : 'Unknown company (metadata missing)';
+  const expiryDate = dateOnly(doc.expiryDate);
+  const status = expiryDate ? statusFromExpiryDate(new Date(expiryDate)) : (doc.status || 'unknown');
+  const sector = resolveOkiruHubSector(doc.sectorCode);
+  const reviewRequired = doc.enrichmentStatus === 'review_required'
+    || doc.enrichmentStatus === 'failed'
+    || (!!doc.sectorCode && !sector)
+    || (Array.isArray(doc.reviewFields) && doc.reviewFields.length > 0);
+
+  return {
+    id: doc.id ?? null,
+    slug: doc.slug || buildCertSlug(companyName, doc.id ?? null),
+    name: blobName,
+    fileName,
+    company: companyName,
+    companyName,
+    size: doc.companySize ?? null,
+    companySize: doc.companySize ?? null,
+    sector: {
+      code: sector?.sectorCode ?? null,
+      name: sector?.sectorName ?? null,
+    },
+    sectorCode: sector?.sectorCode ?? null,
+    sectorName: sector?.sectorName ?? null,
+    vatNumber: doc.vatNumber ?? null,
+    bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
+    bbbeeLevelStatus: doc.bbbeeLevelStatus ?? null,
+    certificateType: doc.certificateType ?? null,
+    ownership: {
+      black: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+      blackWomen: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+    },
+    blackOwnership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+    blackWomenOwnership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+    expiryDate,
+    extractionStatus: doc.extractionStatus ?? null,
+    reviewRequired,
+    enrichmentStatus: doc.enrichmentStatus ?? null,
+    reviewFields: Array.isArray(doc.reviewFields) ? doc.reviewFields : [],
+    reviewCandidates: doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {},
+    status,
+    lastModified: dateOnly(doc.updatedAt),
+    verified: doc.verified === true,
+    metadataComplete: Boolean(doc.supplierName),
+    certificateNumber: null,
+  };
 }
 
 async function getPublicCertificatesCached(): Promise<PublicCertificate[]> {
@@ -268,9 +387,12 @@ function applyFilters(rows: CertificateRow[], q: {
         vatNumber: r.vatNumber,
         fileName: r.fileName,
         bbbeeLevel: r.bbbeeLevel,
-        certificateNumber: r.certificateNumber,
         sectorCode: r.sectorCode ?? null,
         sectorName: r.sectorName ?? null,
+        companySize: r.companySize ?? null,
+        blackOwnership: r.blackOwnership ?? null,
+        blackWomenOwnership: r.blackWomenOwnership ?? null,
+        expiryDate: r.expiryDate ?? null,
         location: r.location ?? null,
         businessUnit: r.businessUnit ?? null,
       }).includes(s),
@@ -396,6 +518,7 @@ router.get('/download', async (req: Request, res: Response) => {
 
 router.get('/list', async (req: Request, res: Response) => {
   try {
+    const startedAt = Date.now();
     const search = (req.query.search as string || '').trim();
     const status = (req.query.status as string || '').trim();
     const size = (req.query.size as string || '').trim();
@@ -415,6 +538,87 @@ router.get('/list', async (req: Request, res: Response) => {
     const cacheKey = `list:${search}|${status}|${size}|${sector}|${minOwnership ?? ''}|${maxOwnership ?? ''}|${sort}|${limit ?? 'all'}|${offset}`;
     const cached = getCached<unknown>(cacheKey);
     if (cached) return res.json(cached);
+
+    if (wantsPagination && isMongoConnected()) {
+      const mongoFilter: Record<string, unknown> = {};
+      if (status && status !== 'all') mongoFilter.status = status;
+      if (size && size !== 'all') mongoFilter.companySize = new RegExp(`^${escapeRegExp(size)}$`, 'i');
+      if (sector && sector !== 'all') mongoFilter.sectorCode = sector.toUpperCase();
+      if (typeof minOwnership === 'number' || typeof maxOwnership === 'number') {
+        mongoFilter.blackOwnership = {
+          ...(typeof minOwnership === 'number' ? { $gte: minOwnership } : {}),
+          ...(typeof maxOwnership === 'number' ? { $lte: maxOwnership } : {}),
+        };
+      }
+      if (search) {
+        const searchRegex = new RegExp(escapeRegExp(search), 'i');
+        const numericSearch = Number(search);
+        const expirySearch = /^\d{4}$/.test(search)
+          ? {
+              expiryDate: {
+                $gte: new Date(`${search}-01-01T00:00:00.000Z`),
+                $lt: new Date(`${Number(search) + 1}-01-01T00:00:00.000Z`),
+              },
+            }
+          : /^\d{4}-\d{2}-\d{2}$/.test(search)
+            ? {
+                expiryDate: {
+                  $gte: new Date(`${search}T00:00:00.000Z`),
+                  $lt: new Date(new Date(`${search}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000),
+                },
+              }
+            : null;
+        mongoFilter.$or = [
+          { supplierName: searchRegex },
+          { vatNumber: searchRegex },
+          { companySize: searchRegex },
+          { sectorCode: searchRegex },
+          { sectorName: searchRegex },
+          { bbbeeLevelStatus: searchRegex },
+          ...(expirySearch ? [expirySearch] : []),
+          ...(Number.isFinite(numericSearch) ? [
+            { bbbeeLevel: numericSearch },
+            { blackOwnership: numericSearch },
+            { blackWomenOwnership: numericSearch },
+          ] : []),
+        ];
+      }
+
+      const sortSpec: Record<string, 1 | -1> = sort === 'recent'
+        ? { updatedAt: -1, id: 1 }
+        : sort === 'expiring'
+          ? { expiryDate: 1, id: 1 }
+          : { verified: -1, updatedAt: -1, id: 1 };
+
+      const queryStartedAt = Date.now();
+      const [docs, total] = await Promise.all([
+        CertificateMetadataModel.find(mongoFilter, LIST_SAFE_PROJECTION)
+          .sort(sortSpec)
+          .skip(offset)
+          .limit(limit ?? 50)
+          .lean(),
+        CertificateMetadataModel.countDocuments(mongoFilter),
+      ]);
+      const queryMs = Date.now() - queryStartedAt;
+      const buildStartedAt = Date.now();
+      const items = (docs as Record<string, unknown>[]).map(listSafeRowFromMongo);
+      const buildMs = Date.now() - buildStartedAt;
+      const payload = ok({ items, total, limit: limit ?? 50, offset });
+
+      logger.info('Listed certificates fast path', {
+        total,
+        returned: items.length,
+        search: search || '(all)',
+        status: status || '(any)',
+        sort,
+        queryMs,
+        buildMs,
+        durationMs: Date.now() - startedAt,
+      });
+
+      setCached(cacheKey, payload);
+      return res.json(payload);
+    }
 
     const all = await loadAllRows();
     const filtered = applyFilters(all, { search, status, size, sector, minOwnership, maxOwnership });
@@ -442,6 +646,7 @@ router.get('/list', async (req: Request, res: Response) => {
       status: status || '(any)',
       sort,
       paginated: wantsPagination,
+      durationMs: Date.now() - startedAt,
     });
 
     if (wantsPagination) {
@@ -702,8 +907,66 @@ async function loadMongoMetadataMap(blobNames: string[]): Promise<Map<string, an
   }
 }
 
+const SEO_LIST_PROJECTION = {
+  _id: 0,
+  id: 1,
+  slug: 1,
+  supplierName: 1,
+  bbbeeLevel: 1,
+  bbbeeScore: 1,
+  blackOwnership: 1,
+  blackWomenOwnership: 1,
+  verificationAgency: 1,
+  certificateNumber: 1,
+  expiryDate: 1,
+  issueDate: 1,
+  blobName: 1,
+  status: 1,
+  updatedAt: 1,
+  vatNumber: 1,
+  companySize: 1,
+  verified: 1,
+} as const;
+
 router.get('/seo/list', async (_req: Request, res: Response) => {
   try {
+    const cached = getCached<unknown[]>('seo:list');
+    if (cached) return res.json(cached);
+
+    // Fast path: sitemap/SEO pages need lightweight rows, not the legacy
+    // blob-enumeration snapshot (which walks the whole Azure container and
+    // times out at registry scale).
+    if (isMongoConnected()) {
+      // Empty filter + indexed sort keeps this an index walk capped at ~1200
+      // docs instead of a full collection scan; rows without id/name are
+      // dropped below.
+      const docs = await CertificateMetadataModel.find({}, SEO_LIST_PROJECTION)
+        .sort({ updatedAt: -1 })
+        .limit(1200)
+        .lean() as Record<string, any>[];
+      const records = docs.filter((doc) => typeof doc.id === 'string' && doc.id && typeof doc.supplierName === 'string' && doc.supplierName.trim()).map((doc) => ({
+        id: doc.id ?? null,
+        slug: doc.slug || buildCertSlug(String(doc.supplierName), doc.id ?? null),
+        companyName: String(doc.supplierName),
+        bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
+        bbbeeScore: typeof doc.bbbeeScore === 'number' ? doc.bbbeeScore : null,
+        blackOwnership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+        blackWomenOwnership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+        verificationAgency: doc.verificationAgency ?? null,
+        certificateNumber: doc.certificateNumber ?? null,
+        expiryDate: dateOnly(doc.expiryDate),
+        issueDate: dateOnly(doc.issueDate),
+        blobName: doc.blobName ?? null,
+        status: doc.status ?? 'unknown',
+        updatedAt: dateOnly(doc.updatedAt) ?? '',
+        vatNumber: doc.vatNumber ?? null,
+        companySize: doc.companySize ?? null,
+        verified: doc.verified === true,
+      })).filter((record) => record.slug);
+      setCached('seo:list', records, 30 * 60_000);
+      return res.json(records);
+    }
+
     const certs = await getPublicCertificatesCached();
     const records = certs
       .filter((c) => c.slug)
@@ -721,7 +984,24 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
   if (!slug) return res.status(400).json({ message: 'slug required' });
 
   try {
-    let match = (await getPublicCertificatesCached()).find((c) => c.slug === slug) ?? null;
+    // Fast path: public slugs embed the certificate id, so resolve straight
+    // from Mongo instead of walking the legacy blob snapshot (which is slow
+    // and empty right after a cold start).
+    let match: ReturnType<typeof normalizeFromMongoAndParsed> = null;
+    const idTail = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(slug);
+    if (idTail && isMongoConnected()) {
+      const doc = await CertificateMetadataModel.findOne({ id: idTail[1] }, { extractedText: 0 }).lean() as Record<string, unknown> | null;
+      if (doc) {
+        match = normalizeFromMongoAndParsed(doc, null, {
+          name: typeof doc.blobName === 'string' ? doc.blobName : String(doc.fileName ?? ''),
+          lastModified: (doc.updatedAt as Date | string | null) ?? null,
+        });
+      }
+    }
+
+    if (!match) {
+      match = (await getPublicCertificatesCached()).find((c) => c.slug === slug) ?? null;
+    }
 
     if (!match) {
       const legacy = (await getPublicCertificatesCached()).find(
@@ -861,15 +1141,15 @@ router.post('/extract', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/enrich-missing', async (req: Request, res: Response) => {
-  const providedKey = req.headers['x-api-key'] as string | undefined;
-  const expectedKey = process.env.API_INTERNAL_KEY;
-  if (!expectedKey || !providedKey || providedKey !== expectedKey) {
-    return res.status(401).json({ message: 'Invalid or missing x-api-key header' });
-  }
+async function runCertificateEnrichmentEndpoint(
+  req: Request,
+  res: Response,
+  defaults: { onlyUsableText?: boolean; forceText?: boolean } = {},
+) {
+  if (!requireInternalApiKey(req, res)) return;
 
   const blobServiceClient = getBlobServiceClient();
-  if (!blobServiceClient) {
+  if (!blobServiceClient && defaults.onlyUsableText !== true) {
     return res.status(500).json({ message: 'Azure Storage is not configured.' });
   }
 
@@ -879,14 +1159,16 @@ router.post('/enrich-missing', async (req: Request, res: Response) => {
           typeof f === 'string' && (ENRICHMENT_FIELDS as readonly string[]).includes(f),
         )
       : undefined;
-    const result = await runCertificateEnrichmentJob(blobServiceClient, {
+    const fields = requestedFields?.length ? requestedFields : [...PRODUCTION_CERTIFICATE_FIELDS];
+    const result = await runCertificateEnrichmentJob((blobServiceClient ?? {}) as any, {
       limit: req.body?.limit,
       dryRun: req.body?.dryRun === true,
       force: req.body?.force === true,
-      forceText: req.body?.forceText === true,
+      forceText: defaults.forceText ?? (req.body?.forceText === true),
+      onlyUsableText: defaults.onlyUsableText ?? (req.body?.onlyUsableText === true),
       includeDetails: req.body?.includeDetails === true,
       reviewSampleLimit: req.body?.reviewSampleLimit,
-      fields: requestedFields,
+      fields,
     });
     if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
       invalidateListAndStatsCache();
@@ -895,6 +1177,435 @@ router.post('/enrich-missing', async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('Certificate enrichment job failed', err instanceof Error ? err : new Error(String(err)));
     return res.status(500).json({ message: 'Certificate enrichment failed', error: err.message });
+  }
+}
+
+router.post('/enrich-missing', async (req: Request, res: Response) => {
+  return runCertificateEnrichmentEndpoint(req, res);
+});
+
+router.post('/enrich-usable-text', async (req: Request, res: Response) => {
+  return runCertificateEnrichmentEndpoint(req, res, { onlyUsableText: true, forceText: false });
+});
+
+router.post('/recover-vat', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    const result = await runCertificateVatRecoveryJob({
+      limit: req.body?.limit,
+      dryRun: req.body?.dryRun !== false,
+      onlyMissing: req.body?.onlyMissing !== false,
+      onlyUsableText: req.body?.onlyUsableText !== false,
+      includeDetails: req.body?.includeDetails === true,
+    });
+    if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
+      invalidateListAndStatsCache();
+    }
+    return res.json(result);
+  } catch (err: any) {
+    logger.error('Certificate VAT recovery failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate VAT recovery failed', error: err.message });
+  }
+});
+
+function normalizeSubmittedVat(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const raw = String(value).trim();
+  if (!raw || !/^[\d\s.\-/]+$/.test(raw)) return null;
+  const digits = raw.replace(/\D/g, '');
+  if (!/^4\d{9}$/.test(digits)) return null;
+  return digits;
+}
+
+function vatPreviewUrls(blobName: string) {
+  return {
+    previewUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=inline`,
+    downloadUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=attachment`,
+  };
+}
+
+router.get('/vat-review-queue', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'MongoDB is not connected.' });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const filter = {
+      $or: [
+        { vatNumber: null },
+        { vatNumber: '' },
+        { vatNumber: { $exists: false } },
+      ],
+    };
+    const projection = {
+      _id: 0,
+      id: 1,
+      blobName: 1,
+      fileName: 1,
+      supplierName: 1,
+      companyName: 1,
+      companySize: 1,
+      sectorCode: 1,
+      sectorName: 1,
+      vatNumber: 1,
+      extractionStatus: 1,
+      extractionMode: 1,
+      extractedTextLength: 1,
+      extractionError: 1,
+      enrichmentStatus: 1,
+      reviewFields: 1,
+      reviewCandidates: 1,
+      fieldConfidence: 1,
+      updatedAt: 1,
+    };
+
+    const [docs, total] = await Promise.all([
+      CertificateMetadataModel.find(filter, projection)
+        .sort({ updatedAt: -1, id: 1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      CertificateMetadataModel.countDocuments(filter),
+    ]);
+
+    const items = docs.map((doc: any) => {
+      const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
+      const fileName = typeof doc.fileName === 'string' && doc.fileName.trim() ? doc.fileName : blobBasename(blobName);
+      const candidateMeta = doc.reviewCandidates?.vatNumber;
+      const candidates = Array.isArray(candidateMeta?.candidates)
+        ? candidateMeta.candidates.map((candidate: any) => ({
+            candidate: typeof candidate.value === 'string' ? candidate.value : null,
+            confidence: typeof candidate.confidence === 'number' ? candidate.confidence : null,
+            snippet: typeof candidate.snippet === 'string' ? candidate.snippet : '',
+            reason: candidateMeta.reason ?? null,
+          }))
+        : candidateMeta?.value
+          ? [{
+              candidate: String(candidateMeta.value),
+              confidence: typeof candidateMeta.confidence === 'number' ? candidateMeta.confidence : null,
+              snippet: String(candidateMeta.evidence ?? candidateMeta.sourceTextSnippet ?? ''),
+              reason: candidateMeta.reason ?? null,
+            }]
+          : [];
+      const reviewFields = Array.isArray(doc.reviewFields) ? doc.reviewFields : [];
+      const reviewReason = candidateMeta?.reason
+        ?? (reviewFields.includes('vatNumber') ? 'manual_vat_review_required' : null)
+        ?? (doc.extractionStatus && doc.extractionStatus !== 'completed' ? 'pending_text_recovery' : 'vat_missing');
+
+      return {
+        id: doc.id ?? null,
+        blobName,
+        fileName,
+        filename: fileName,
+        company: doc.supplierName ?? doc.companyName ?? null,
+        size: doc.companySize ?? null,
+        sector: {
+          code: doc.sectorCode ?? null,
+          name: doc.sectorName ?? null,
+        },
+        vatNumber: doc.vatNumber ?? null,
+        reviewReason,
+        vatCandidates: candidates,
+        extractionStatus: doc.extractionStatus ?? null,
+        extractionMode: doc.extractionMode ?? null,
+        extractedTextLength: doc.extractedTextLength ?? 0,
+        extractionError: doc.extractionError ?? null,
+        enrichmentStatus: doc.enrichmentStatus ?? null,
+        fieldConfidence: doc.fieldConfidence?.vatNumber ?? null,
+        reviewUrl: `/certificates?reviewBlob=${encodeURIComponent(blobName)}&field=vatNumber`,
+        documentUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=attachment`,
+        ...vatPreviewUrls(blobName),
+      };
+    });
+
+    return res.json({
+      total,
+      limit,
+      offset,
+      pagination: { total, limit, offset },
+      items,
+    });
+  } catch (err: any) {
+    logger.error('Certificate VAT review queue failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate VAT review queue failed', error: err.message });
+  }
+});
+
+router.post('/:id/confirm-vat', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'MongoDB is not connected.' });
+    }
+
+    const id = singleRouteParam(req.params.id).trim();
+    const vatNumber = normalizeSubmittedVat(req.body?.vatNumber);
+    if (!id) return res.status(400).json({ message: 'Certificate id is required.' });
+    if (!vatNumber) {
+      return res.status(400).json({ message: 'VAT number must be exactly 10 digits and start with 4.' });
+    }
+
+    const doc: any = await CertificateMetadataModel.findOne({ id }).lean();
+    if (!doc) return res.status(404).json({ message: 'Certificate not found.' });
+
+    const reviewCandidates = { ...(doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {}) };
+    delete reviewCandidates.vatNumber;
+    const reviewFields = Array.isArray(doc.reviewFields)
+      ? doc.reviewFields.filter((field: string) => field !== 'vatNumber')
+      : [];
+    const fieldConfidence = {
+      ...(doc.fieldConfidence && typeof doc.fieldConfidence === 'object' ? doc.fieldConfidence : {}),
+      vatNumber: {
+        confidence: 1,
+        source: 'manual_review',
+        extractionMethod: 'manual_confirmation',
+        evidence: typeof req.body?.note === 'string' ? req.body.note.slice(0, 300) : 'Confirmed by manual review',
+        version: CERTIFICATE_ENRICHMENT_VERSION,
+        at: new Date(),
+      },
+    };
+
+    await CertificateMetadataModel.updateOne(
+      { id },
+      {
+        $set: {
+          vatNumber,
+          vatNumberNormalized: normalizeVat(vatNumber),
+          fieldConfidence,
+          reviewCandidates,
+          reviewFields,
+          enrichmentStatus: reviewFields.length || Object.keys(reviewCandidates).length ? 'review_required' : 'completed',
+          lastEnrichedAt: new Date(),
+          enrichmentVersion: CERTIFICATE_ENRICHMENT_VERSION,
+          updatedAt: new Date(),
+        },
+        $push: {
+          auditLog: {
+            $each: [{
+              id: randomUUID(),
+              at: new Date(),
+              type: 'certificate_vat_manual_confirmation',
+              version: CERTIFICATE_ENRICHMENT_VERSION,
+              previousValue: doc.vatNumber ?? null,
+              vatNumber,
+              userId: (req.session as any)?.userId ?? null,
+            }],
+            $slice: -50,
+          },
+        },
+      },
+    );
+    invalidateListAndStatsCache();
+    return res.json({
+      ok: true,
+      id,
+      vatNumber,
+      previousValue: doc.vatNumber ?? null,
+      clearedReviewField: 'vatNumber',
+    });
+  } catch (err: any) {
+    logger.error('Certificate VAT confirmation failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate VAT confirmation failed', error: err.message });
+  }
+});
+
+router.get('/production-coverage', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    return res.json(await getProductionCertificateCoverage());
+  } catch (err: any) {
+    logger.error('Certificate production coverage failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate production coverage failed', error: err.message });
+  }
+});
+
+router.get('/extraction-coverage', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    const coverage = await getCertificateTextExtractionCoverage();
+    return res.json(coverage);
+  } catch (err: any) {
+    logger.error('Certificate extraction coverage failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate extraction coverage failed', error: err.message });
+  }
+});
+
+const REVIEW_QUEUE_FIELDS = [
+  'companyName',
+  'sectorCode',
+  'vatNumber',
+  'bbbeeLevel',
+  'companySize',
+  'blackOwnership',
+  'blackWomenOwnership',
+  'expiryDate',
+] as const;
+
+router.get('/review-queue', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  try {
+    if (!isMongoConnected()) {
+      return res.status(503).json({ message: 'MongoDB is not connected.' });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const requestedField = typeof req.query.field === 'string' ? req.query.field : null;
+    const validSectorCodes = OKIRU_HUB_SECTORS.map((sector) => sector.code);
+    const reviewFilter: Record<string, unknown> = {
+      $or: [
+        { enrichmentStatus: 'review_required' },
+        { reviewFields: { $exists: true, $ne: [] } },
+        { extractionStatus: { $in: ['text_too_short', 'failed', 'unsupported'] } },
+        { sectorCode: { $nin: [...validSectorCodes, null, ''] } },
+      ],
+    };
+    if (requestedField && REVIEW_QUEUE_FIELDS.includes(requestedField as typeof REVIEW_QUEUE_FIELDS[number])) {
+      reviewFilter.reviewFields = requestedField;
+    }
+
+    const projection = {
+      _id: 0,
+      id: 1,
+      blobName: 1,
+      fileName: 1,
+      supplierName: 1,
+      sectorCode: 1,
+      sectorName: 1,
+      vatNumber: 1,
+      bbbeeLevel: 1,
+      companySize: 1,
+      blackOwnership: 1,
+      blackWomenOwnership: 1,
+      expiryDate: 1,
+      extractionStatus: 1,
+      extractionMode: 1,
+      extractedTextLength: 1,
+      extractionError: 1,
+      enrichmentStatus: 1,
+      reviewFields: 1,
+      reviewCandidates: 1,
+      fieldConfidence: 1,
+      auditLog: { $slice: -1 },
+      updatedAt: 1,
+    };
+
+    const [docs, total, fieldCounts] = await Promise.all([
+      CertificateMetadataModel.find(reviewFilter, projection)
+        .sort({ updatedAt: -1, id: 1 })
+        .skip(offset)
+        .limit(limit)
+        .lean(),
+      CertificateMetadataModel.countDocuments(reviewFilter),
+      Promise.all(REVIEW_QUEUE_FIELDS.map(async (field) => {
+        const fieldFilter = field === 'sectorCode'
+          ? { ...reviewFilter, $or: [{ reviewFields: 'sectorCode' }, { sectorCode: { $nin: [...validSectorCodes, null, ''] } }] }
+          : { ...reviewFilter, reviewFields: field };
+        return [field, await CertificateMetadataModel.countDocuments(fieldFilter)] as const;
+      })),
+    ]);
+
+    const items = docs.map((doc: any) => {
+      const sector = resolveOkiruHubSector(doc.sectorCode);
+      const reviewFields = new Set<string>(Array.isArray(doc.reviewFields) ? doc.reviewFields : []);
+      if (doc.sectorCode && !sector) reviewFields.add('sectorCode');
+      if (doc.extractionStatus && ['text_too_short', 'failed', 'unsupported'].includes(doc.extractionStatus)) {
+        reviewFields.add('extractedText');
+      }
+      const blobName = typeof doc.blobName === 'string' ? doc.blobName : '';
+      const fileName = typeof doc.fileName === 'string' && doc.fileName.trim() ? doc.fileName : blobBasename(blobName);
+      return {
+        id: doc.id ?? null,
+        blobName,
+        fileName,
+        companyName: doc.supplierName ?? null,
+        reviewFields: Array.from(reviewFields),
+        extractionStatus: doc.extractionStatus ?? null,
+        extractionMode: doc.extractionMode ?? null,
+        extractedTextLength: doc.extractedTextLength ?? 0,
+        extractionError: doc.extractionError ?? null,
+        enrichmentStatus: doc.enrichmentStatus ?? null,
+        values: {
+          sectorCode: sector?.sectorCode ?? null,
+          sectorName: sector?.sectorName ?? null,
+          vatNumber: doc.vatNumber ?? null,
+          bbbeeLevel: typeof doc.bbbeeLevel === 'number' ? doc.bbbeeLevel : null,
+          companySize: doc.companySize ?? null,
+          blackOwnership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
+          blackWomenOwnership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
+          expiryDate: dateOnly(doc.expiryDate),
+        },
+        reviewCandidates: doc.reviewCandidates && typeof doc.reviewCandidates === 'object' ? doc.reviewCandidates : {},
+        fieldConfidence: doc.fieldConfidence ?? {},
+        latestAudit: Array.isArray(doc.auditLog) ? doc.auditLog[0] ?? null : null,
+        reviewUrl: `/certificates?reviewBlob=${encodeURIComponent(blobName)}`,
+        previewUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=inline`,
+        downloadUrl: `/api/certificates/download?file=${encodeURIComponent(blobName)}&mode=redirect&disposition=attachment`,
+      };
+    });
+
+    return res.json({
+      total,
+      limit,
+      offset,
+      productionFields: REVIEW_QUEUE_FIELDS,
+      fieldCounts: Object.fromEntries(fieldCounts),
+      items,
+    });
+  } catch (err: any) {
+    logger.error('Certificate review queue failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate review queue failed', error: err.message });
+  }
+});
+
+router.post('/retry-extraction', async (req: Request, res: Response) => {
+  if (!requireInternalApiKey(req, res)) return;
+
+  const blobServiceClient = getBlobServiceClient();
+  if (!blobServiceClient) {
+    return res.status(500).json({ message: 'Azure Storage is not configured.' });
+  }
+
+  try {
+    const allowedStatuses: CertificateExtractionStatus[] = ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'];
+    const allowedModes: CertificateExtractionMode[] = ['azure_document_intelligence', 'pdf_text', 'ocr', 'filename_only', 'none', 'failed'];
+    const statuses = Array.isArray(req.body?.statuses)
+      ? req.body.statuses.filter((status: unknown): status is CertificateExtractionStatus =>
+          typeof status === 'string' && allowedStatuses.includes(status as CertificateExtractionStatus),
+        )
+      : undefined;
+    const modes = Array.isArray(req.body?.modes)
+      ? req.body.modes.filter((mode: unknown): mode is CertificateExtractionMode =>
+          typeof mode === 'string' && allowedModes.includes(mode as CertificateExtractionMode),
+        )
+      : undefined;
+    const result = await runCertificateTextExtractionRetryJob(blobServiceClient, {
+      limit: req.body?.limit,
+      dryRun: req.body?.dryRun !== false,
+      force: req.body?.force === true,
+      includeDetails: req.body?.includeDetails !== false,
+      statuses,
+      modes,
+      onlyMissingText: req.body?.onlyMissingText !== false,
+      fileTimeoutMs: req.body?.fileTimeoutMs,
+      concurrency: req.body?.concurrency,
+    });
+    if (!result.dryRun && result.updated > 0) {
+      invalidateListAndStatsCache();
+    }
+    return res.json(result);
+  } catch (err: any) {
+    logger.error('Certificate extraction retry failed', err instanceof Error ? err : new Error(String(err)));
+    return res.status(500).json({ message: 'Certificate extraction retry failed', error: err.message });
   }
 });
 
@@ -1853,6 +2564,9 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
       if ('vatNumber' in updates) {
         updates['vatNumberNormalized'] = normalizeVat(updates['vatNumber'] as string | null);
       }
+      if ('bbbeeLevel' in updates) {
+        updates['bbbeeLevelStatus'] = updates['bbbeeLevel'] == null ? null : `Level ${updates['bbbeeLevel']}`;
+      }
       if ('expiryDate' in updates) {
         const exp = updates['expiryDate'] as Date | null;
         if (!exp) { updates['status'] = 'unknown'; }
@@ -1862,10 +2576,30 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
         }
       }
       updates['updatedAt'] = new Date();
-      await CertificateMetadataModel.updateOne({ id }, { $set: updates });
+      const confirmedFields = Object.keys(updates).filter((key) => !['updatedAt', 'vatNumberNormalized', 'status'].includes(key));
+      const unsetReviewCandidates = Object.fromEntries(
+        confirmedFields.map((field) => [`reviewCandidates.${field}`, '']),
+      );
+      const remainingReviewFields = Array.isArray(doc.reviewFields)
+        ? doc.reviewFields.filter((field: string) => !confirmedFields.includes(field))
+        : [];
+      const remainingReviewCandidates = doc.reviewCandidates && typeof doc.reviewCandidates === 'object'
+        ? Object.keys(doc.reviewCandidates).filter((field) => !confirmedFields.includes(field))
+        : [];
+      await CertificateMetadataModel.updateOne(
+        { id },
+        {
+          $set: {
+            ...updates,
+            reviewFields: remainingReviewFields,
+            enrichmentStatus: remainingReviewFields.length > 0 || remainingReviewCandidates.length > 0 ? 'review_required' : 'completed',
+          },
+          ...(Object.keys(unsetReviewCandidates).length ? { $unset: unsetReviewCandidates } : {}),
+        },
+      );
       invalidateListAndStatsCache();
       logger.info('Certificate patched', { id, fields: Object.keys(updates) });
-      const returnedFields = Object.keys(updates).filter((k) => !['updatedAt', 'vatNumberNormalized', 'status'].includes(k));
+      const returnedFields = confirmedFields;
       return res.json(ok({ id, updated: returnedFields }));
     } catch (err: any) {
       logger.error('Failed to patch certificate', err);

@@ -27,7 +27,25 @@ function findHeuristicValue(fieldName: string, text: string): { rawValue: string
   if (/vat/.test(fieldName)) {
     candidates.push({ pattern: 'vat_number', regex: /\b(4\d{9})\b/, confidence: 0.86 });
   }
-  if (/date|issued|signed|appointment|expiry|start|end|effective|incorporation|registration/.test(fieldName)) {
+  if (/expiry/.test(fieldName)) {
+    candidates.push({
+      pattern: 'expiry_date_label',
+      regex: /\b(?:Expiry|Expiration|Valid\s+Until|Valid\s+To)(?:\s*Date)?\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/i,
+      confidence: 0.86,
+    });
+  } else if (/signed/.test(fieldName)) {
+    candidates.push({
+      pattern: 'signed_date_label',
+      regex: /\b(?:Signed|Signature)\s*Date\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/i,
+      confidence: 0.86,
+    });
+  } else if (/issue|issued/.test(fieldName)) {
+    candidates.push({
+      pattern: 'issue_date_label',
+      regex: /\b(?:Issue|Issued)\s*Date\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/i,
+      confidence: 0.86,
+    });
+  } else if (/date|appointment|start|end|effective|incorporation|registration/.test(fieldName)) {
     candidates.push({
       pattern: 'date_value',
       regex: /\b(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})\b/,
@@ -72,6 +90,17 @@ function findHeuristicValue(fieldName: string, text: string): { rawValue: string
   return null;
 }
 
+function cleanExtractedRawValue(fieldName: string, rawValue: string): string {
+  if (!/name|entity|supplier|beneficiary|shareholder|employee|director|deponent/.test(fieldName)) {
+    return rawValue;
+  }
+
+  return rawValue
+    .split(/\s{2,}|\t|Certificate\s+Number|B[-\s]?BBEE\s+Status|Black\s+Ownership|Black\s+Female|Issue\s+Date|Expiry\s+Date|Empowering\s+Supplier|VAT\s+Number/i)[0]
+    .replace(/[.,;:]+$/g, '')
+    .trim();
+}
+
 export function extractFields(
   input: RawExtractionInput,
   fields: FieldKnowledge[],
@@ -91,7 +120,7 @@ export function extractFields(
       const regex = new RegExp(pattern.regex, 'i');
       const match = text.match(regex);
       if (match?.[1] || match?.[2]) {
-        rawValue = (match[2] ?? match[1]).trim().replace(/^[\s,:;\-]+/, '').trim();
+        rawValue = cleanExtractedRawValue(field.name, (match[2] ?? match[1]).trim().replace(/^[\s,:;\-]+/, '').trim());
         confidence = 0.9;
         textSnippet = snippetAround(text, match.index ?? 0, (match.index ?? 0) + match[0].length);
         matchedPatterns.push(pattern.name);
@@ -103,7 +132,7 @@ export function extractFields(
       const regex = fallbackRegexForField(field.name);
       const match = text.match(regex);
       if (match?.[1]) {
-        rawValue = match[1].trim().replace(/^[\s,:;\-]+/, '').trim();
+        rawValue = cleanExtractedRawValue(field.name, match[1].trim().replace(/^[\s,:;\-]+/, '').trim());
         confidence = 0.72;
         textSnippet = snippetAround(text, match.index ?? 0, (match.index ?? 0) + match[0].length);
         matchedPatterns.push(field.name);
@@ -113,7 +142,7 @@ export function extractFields(
     if (rawValue == null) {
       const heuristic = findHeuristicValue(field.name, text);
       if (heuristic) {
-        rawValue = heuristic.rawValue;
+        rawValue = cleanExtractedRawValue(field.name, heuristic.rawValue);
         confidence = heuristic.confidence;
         textSnippet = snippetAround(text, heuristic.start, heuristic.end);
         matchedPatterns.push(heuristic.pattern);

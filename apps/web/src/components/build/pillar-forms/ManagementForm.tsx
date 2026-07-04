@@ -44,6 +44,7 @@ import type { Employee, ManagementData } from "@toolkit/lib/types";
 import type { CalculatorConfig } from "@shared/schema";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { NumberTextInput } from "../NumberTextInput";
 
 // ============================================================================
 // Types & Constants
@@ -67,6 +68,8 @@ interface EmployeeFormState {
   designation: 'Board' | 'Executive' | 'Executive Director' | 'Other Executive Management' | 'Senior' | 'Middle' | 'Junior' | 'Skilled Technical' | 'Semi-skilled' | 'Unskilled';
   isDisabled: boolean;
   isForeign: boolean;
+  annualSalary: number;
+  votingRightsPercent: number;
   province?: 'Gauteng' | 'Western Cape' | 'KZN' | 'Eastern Cape' | 'Free State' | 'Limpopo' | 'Mpumalanga' | 'North West' | 'Northern Cape' | 'National';
   hireDate?: string;
   terminationDate?: string;
@@ -111,6 +114,8 @@ const emptyEmployeeForm: EmployeeFormState = {
   designation: 'Junior',
   isDisabled: false,
   isForeign: false,
+  annualSalary: 0,
+  votingRightsPercent: 0,
   province: 'National',
 };
 
@@ -162,6 +167,11 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
     };
   }, [data.employees]);
 
+  const totalAnnualSalary = useMemo(
+    () => (data.employees || []).reduce((sum, employee) => sum + (employee.annualSalary || 0), 0),
+    [data.employees],
+  );
+
   // Calculate score
   const calculatorConfig = useBbeeStore(state => state.calculatorConfig);
   const scoreResult = useMemo(() => {
@@ -189,6 +199,8 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
       designation: formState.designation,
       isDisabled: formState.isDisabled,
       isForeign: formState.isForeign,
+      annualSalary: formState.annualSalary,
+      votingRightsPercent: formState.votingRightsPercent,
       province: formState.province,
       hireDate: formState.hireDate,
       terminationDate: formState.terminationDate,
@@ -232,6 +244,8 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
       designation: employee.designation,
       isDisabled: employee.isDisabled || false,
       isForeign: employee.isForeign || false,
+      annualSalary: employee.annualSalary || 0,
+      votingRightsPercent: employee.votingRightsPercent || 0,
       province: employee.province,
       hireDate: employee.hireDate,
       terminationDate: employee.terminationDate,
@@ -272,7 +286,20 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
       </Card>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+        <Card className="p-3">
+          <div className="text-xs text-muted-foreground">Total Annual Salary</div>
+          <div className="text-lg font-bold">
+            {new Intl.NumberFormat('en-ZA', {
+              style: 'currency',
+              currency: 'ZAR',
+              maximumFractionDigits: 0,
+            }).format(totalAnnualSalary)}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {metrics.totalEmployees} employees
+          </div>
+        </Card>
         {[
           { label: 'Board', metric: metrics.board, target: '50-60%' },
           { label: 'Executive', metric: metrics.exec, target: '60%' },
@@ -519,6 +546,29 @@ export function ManagementForm({ data, onChange, eapProvince, className }: Manag
             </TabsContent>
 
             <TabsContent value="details" className="space-y-4 mt-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="empAnnualSalary">Annual Salary (R)</Label>
+                  <NumberTextInput
+                    id="empAnnualSalary"
+                    value={formState.annualSalary}
+                    onNumberChange={(value) => setFormState(s => ({ ...s, annualSalary: value }))}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="empVotingRights">Voting Rights (%)</Label>
+                  <NumberTextInput
+                    id="empVotingRights"
+                    min="0"
+                    max="100"
+                    value={formState.votingRightsPercent}
+                    onNumberChange={(value) => setFormState(s => ({ ...s, votingRightsPercent: value }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="empProvince">Province</Label>
                 <Select

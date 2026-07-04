@@ -61,6 +61,7 @@ const envSchema = z.object({
   GROQ_API_KEY: z.string().optional(),
 
   // Feature flags
+  DISABLE_CERTIFICATE_STARTUP_EXTRACTION: truthy,
   CERT_EXTRACTION_ON_STARTUP: truthy,
   ALLOW_IN_MEMORY_DB: truthy,
 });

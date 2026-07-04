@@ -152,6 +152,7 @@ router.get('/', async (req: Request, res: Response) => {
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const pillar = typeof req.query.pillar === 'string' ? req.query.pillar : undefined;
+    const dbOnly = req.query.dbOnly === '1' || req.query.dbOnly === 'true';
 
     if (isMongoConnected()) {
       const filter: Record<string, unknown> = {};
@@ -160,14 +161,18 @@ router.get('/', async (req: Request, res: Response) => {
       if (pillar && VALID_PILLARS.has(pillar)) filter.pillar = pillar || null;
       const docs = await FeedbackModel.find(filter).sort({ createdAt: -1 }).limit(500).lean();
       const items = docs.map(toRecord);
-      return res.json({ feedback: items, total: items.length, source: 'mongodb' });
+      return res.json({ feedback: items, total: items.length, source: 'mongodb', databaseConnected: true });
+    }
+
+    if (dbOnly) {
+      return res.json({ feedback: [], total: 0, source: 'mongodb', databaseConnected: false });
     }
 
     let items = [...memoryStore];
     if (status && VALID_STATUSES.has(status)) items = items.filter(i => i.status === status);
     if (category && VALID_CATEGORIES.has(category)) items = items.filter(i => i.category === category);
     if (pillar && VALID_PILLARS.has(pillar)) items = items.filter(i => (i.pillar ?? '') === pillar);
-    return res.json({ feedback: items, total: items.length, source: 'memory' });
+    return res.json({ feedback: items, total: items.length, source: 'memory', databaseConnected: false });
   } catch (err) {
     logger.error('Failed to list feedback', err as Error);
     return res.status(500).json({ message: 'Failed to list feedback' });
@@ -177,6 +182,7 @@ router.get('/', async (req: Request, res: Response) => {
 // Public read: feedback stats are viewable without login (see GET '/' above).
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
+    const dbOnly = _req.query.dbOnly === '1' || _req.query.dbOnly === 'true';
     if (isMongoConnected()) {
       const [total, open, inProgress, resolved, byCategory, byPillar] = await Promise.all([
         FeedbackModel.countDocuments({}),
@@ -194,7 +200,19 @@ router.get('/stats', async (_req: Request, res: Response) => {
       for (const row of byPillar as Array<{ _id: string | null; count: number }>) {
         pillarMap[row._id ?? 'general'] = row.count;
       }
-      return res.json({ total, open, inProgress, resolved, byCategory: categoryMap, byPillar: pillarMap, source: 'mongodb' });
+      return res.json({ total, open, inProgress, resolved, byCategory: categoryMap, byPillar: pillarMap, source: 'mongodb', databaseConnected: true });
+    }
+    if (dbOnly) {
+      return res.json({
+        total: 0,
+        open: 0,
+        inProgress: 0,
+        resolved: 0,
+        byCategory: {},
+        byPillar: {},
+        source: 'mongodb',
+        databaseConnected: false,
+      });
     }
     const total = memoryStore.length;
     const open = memoryStore.filter(i => i.status === 'open').length;
@@ -207,7 +225,7 @@ router.get('/stats', async (_req: Request, res: Response) => {
       const key = item.pillar ?? 'general';
       byPillar[key] = (byPillar[key] ?? 0) + 1;
     }
-    return res.json({ total, open, inProgress, resolved, byCategory, byPillar, source: 'memory' });
+    return res.json({ total, open, inProgress, resolved, byCategory, byPillar, source: 'memory', databaseConnected: false });
   } catch (err) {
     logger.error('Failed to compute feedback stats', err as Error);
     return res.status(500).json({ message: 'Failed to compute feedback stats' });

@@ -17,6 +17,7 @@ import type { CalculatorConfig } from "@shared/schema";
 import { calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { v4 as uuidv4 } from "uuid";
+import { NumberTextInput } from "../NumberTextInput";
 
 interface SEDFormProps {
   data: SEDData;
@@ -216,12 +217,12 @@ export function SEDForm({ data, onChange, npat = 0, className }: SEDFormProps) {
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">Amount (R)</Label>
-                <Input type="number" value={form.amount || ''} onChange={e => setForm(p => ({ ...p, amount: Number(e.target.value) }))} placeholder="0" />
+                <NumberTextInput value={form.amount} onNumberChange={value => setForm(p => ({ ...p, amount: value }))} placeholder="0" />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Black Beneficiary % (for weighting)</Label>
-              <Input type="number" min="0" max="100" value={form.blackBenefitPercent} onChange={e => setForm(p => ({ ...p, blackBenefitPercent: Number(e.target.value) }))} />
+              <NumberTextInput min="0" max="100" value={form.blackBenefitPercent} onNumberChange={value => setForm(p => ({ ...p, blackBenefitPercent: value }))} />
             </div>
           </div>
           <DialogFooter>

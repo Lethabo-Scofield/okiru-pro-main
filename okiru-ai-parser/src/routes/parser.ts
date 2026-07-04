@@ -10,6 +10,7 @@ import { createNeo4jOntologyRepository, MissingNeo4jConfigError } from '../../gr
 import type { OntologyRepository } from '../../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
 import { buildOntologyRecordsFromWorkbook, DEFAULT_ONTOLOGY_MATRIX_PATH, loadOntologyFromWorkbook } from '../../graph/ontology_loader.js';
+import { CaseParserService } from '../../parser/case_parser_service.js';
 import { ParserService } from '../../parser/parser_service.js';
 
 const logger = createLogger('ParserRoutes');
@@ -92,6 +93,50 @@ router.post('/resolve-file', upload.single('file'), async (req: Request, res: Re
   } catch (err) {
     logger.error('Parser file resolve failed', err as Error);
     return res.status(400).json(fail((err as Error).message, 'FILE_PARSE_FAILED'));
+  } finally {
+    await repository.close?.();
+  }
+});
+
+router.post('/resolve-case', async (req: Request, res: Response) => {
+  const repository = await getParserRepository();
+  try {
+    const documents = Array.isArray(req.body?.documents) ? req.body.documents : null;
+    if (!documents) {
+      return res.status(400).json(fail('Body must include documents[]', 'DOCUMENTS_REQUIRED'));
+    }
+
+    const service = new CaseParserService(repository);
+    const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
+    const result = await service.resolveCase(documents, caseId);
+    return res.status(result.status === 'failed' ? 422 : 200).json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res.status(400).json(fail(err.errors.map((e) => e.message).join('; '), 'INVALID_CASE_INPUT'));
+    }
+    logger.error('Parser case resolve failed', err as Error);
+    return res.status(500).json(fail('Parser case resolve failed', 'PARSER_CASE_RESOLVE_FAILED'));
+  } finally {
+    await repository.close?.();
+  }
+});
+
+router.post('/resolve-case-files', upload.array('files', 25), async (req: Request, res: Response) => {
+  const repository = await getParserRepository();
+  try {
+    const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
+    if (files.length === 0) {
+      return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+    }
+
+    const rawInputs = await Promise.all(files.map((file) => rawExtractionInputFromUpload(file)));
+    const service = new CaseParserService(repository);
+    const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
+    const result = await service.resolveCase(rawInputs, caseId);
+    return res.status(result.status === 'failed' ? 422 : 200).json(result);
+  } catch (err) {
+    logger.error('Parser case file resolve failed', err as Error);
+    return res.status(400).json(fail((err as Error).message, 'CASE_FILE_PARSE_FAILED'));
   } finally {
     await repository.close?.();
   }

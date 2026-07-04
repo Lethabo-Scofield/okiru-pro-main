@@ -3,6 +3,7 @@ import path from 'node:path';
 import XLSX from 'xlsx';
 import { createLogger } from '../src/logger.js';
 import type { FieldKnowledge, OntologyRecord, OntologyRepository } from './ontology_models.js';
+import { defaultDocumentKnowledge } from './ontology_queries.js';
 
 const logger = createLogger('ParserOntologyLoader');
 
@@ -95,6 +96,32 @@ function valueAt(row: unknown[], index: number): string {
   return index >= 0 ? cellText(row[index]) : '';
 }
 
+type CanonicalKnowledge = ReturnType<typeof defaultDocumentKnowledge>[number];
+
+const canonicalKnowledge = defaultDocumentKnowledge();
+
+function findCanonicalKnowledge(documentName: string): CanonicalKnowledge | null {
+  const normalized = documentName.toLowerCase();
+  if (/(full\s+supplier\s+schedule|supplier\s+spend\s+schedule|all\s+b-?bee\s+suppliers|supplier.*total\s+spend)/i.test(normalized)) {
+    return canonicalKnowledge.find((knowledge) => knowledge.document.name === 'Supplier Spend Schedule') ?? null;
+  }
+  if (/(sworn\s+affidavit|b-?bee\s+affidavit|bee\s+affidavit)/i.test(normalized)) {
+    return canonicalKnowledge.find((knowledge) => knowledge.document.name === 'B-BBEE Sworn Affidavit') ?? null;
+  }
+  if (/(b-?bee\s+certificate|bbbee\s+certificate|bee\s+certificate)/i.test(normalized)) {
+    return canonicalKnowledge.find((knowledge) => knowledge.document.name === 'B-BBEE Certificate') ?? null;
+  }
+  return null;
+}
+
+function mergeAliases(documentName: string, canonical: CanonicalKnowledge | null): string[] {
+  return Array.from(new Set([
+    documentName,
+    ...(canonical?.document.aliases ?? []),
+    canonical?.document.name,
+  ].filter((alias): alias is string => Boolean(alias))));
+}
+
 export function buildOntologyRecordsFromWorkbook(workbookPath: string): OntologyRecord[] {
   if (!fs.existsSync(workbookPath)) {
     throw new Error(`Ontology matrix not found at ${workbookPath}`);
@@ -124,7 +151,8 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
       const expectedData = valueAt(row, exampleIndex);
       const instruction = valueAt(row, instructionIndex);
       const code = pillarCode;
-      const fieldLabels = splitExpectedFields(expectedData, auditorChecks, instruction);
+      const canonical = findCanonicalKnowledge(documentName);
+      const fieldLabels = canonical ? [] : splitExpectedFields(expectedData, auditorChecks, instruction);
       const fields: FieldKnowledge[] = fieldLabels.map((label) => {
         const fieldName = fieldNameFromLabel(label);
         const dataType = inferDataType(label);
@@ -177,12 +205,12 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
         document: {
           name: documentName,
           description: auditorChecks || instruction || documentName,
-          aliases: [documentName],
+          aliases: mergeAliases(documentName, canonical),
           required: true,
           pillar_code: code,
           graph_version: GRAPH_VERSION,
         },
-        fields,
+        fields: canonical?.fields ?? fields,
       });
     }
   }

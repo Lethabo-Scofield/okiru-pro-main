@@ -141,6 +141,7 @@ export function registerFeedbackRoutes(
       const category = typeof req.query.category === 'string' ? req.query.category : undefined;
       const pillar = typeof req.query.pillar === 'string' ? req.query.pillar : undefined;
       const limit = Math.min(parseInt(String(req.query.limit ?? '500'), 10) || 500, 1000);
+      const dbOnly = req.query.dbOnly === '1' || req.query.dbOnly === 'true';
 
       if (isMongoConnected()) {
         const filter: Record<string, unknown> = {};
@@ -149,7 +150,11 @@ export function registerFeedbackRoutes(
         if (pillar && VALID_PILLARS.has(pillar)) filter.pillar = pillar || null;
         const docs = await FeedbackModel.find(filter).sort({ createdAt: -1 }).limit(limit).lean();
         const items = docs.map(toRecord);
-        return res.json({ feedback: items, total: items.length, source: 'mongodb' });
+        return res.json({ feedback: items, total: items.length, source: 'mongodb', databaseConnected: true });
+      }
+
+      if (dbOnly) {
+        return res.json({ feedback: [], total: 0, source: 'mongodb', databaseConnected: false });
       }
 
       let items = [...memoryStore];
@@ -157,7 +162,7 @@ export function registerFeedbackRoutes(
       if (category && VALID_CATEGORIES.has(category)) items = items.filter(i => i.category === category);
       if (pillar && VALID_PILLARS.has(pillar)) items = items.filter(i => (i.pillar ?? '') === pillar);
       items = items.slice(0, limit);
-      return res.json({ feedback: items, total: items.length, source: 'memory' });
+      return res.json({ feedback: items, total: items.length, source: 'memory', databaseConnected: false });
     } catch (err) {
       logger.error('Failed to list feedback', err);
       return res.status(500).json({ message: 'Failed to list feedback' });
@@ -165,8 +170,9 @@ export function registerFeedbackRoutes(
   });
 
   // Public read: feedback stats viewable without login (see GET '/api/feedback').
-  app.get("/api/feedback/stats", async (_req: Request, res: Response) => {
+  app.get("/api/feedback/stats", async (req: Request, res: Response) => {
     try {
+      const dbOnly = req.query.dbOnly === '1' || req.query.dbOnly === 'true';
       if (isMongoConnected()) {
         const [total, open, inProgress, resolved, byCategory] = await Promise.all([
           FeedbackModel.countDocuments({}),
@@ -179,7 +185,18 @@ export function registerFeedbackRoutes(
         for (const row of byCategory as Array<{ _id: string; count: number }>) {
           categoryMap[row._id] = row.count;
         }
-        return res.json({ total, open, inProgress, resolved, byCategory: categoryMap, source: 'mongodb' });
+        return res.json({ total, open, inProgress, resolved, byCategory: categoryMap, source: 'mongodb', databaseConnected: true });
+      }
+      if (dbOnly) {
+        return res.json({
+          total: 0,
+          open: 0,
+          inProgress: 0,
+          resolved: 0,
+          byCategory: {},
+          source: 'mongodb',
+          databaseConnected: false,
+        });
       }
       const total = memoryStore.length;
       const open = memoryStore.filter(i => i.status === 'open').length;
@@ -189,7 +206,7 @@ export function registerFeedbackRoutes(
       for (const item of memoryStore) {
         byCategory[item.category] = (byCategory[item.category] ?? 0) + 1;
       }
-      return res.json({ total, open, inProgress, resolved, byCategory, source: 'memory' });
+      return res.json({ total, open, inProgress, resolved, byCategory, source: 'memory', databaseConnected: false });
     } catch (err) {
       logger.error('Failed to compute feedback stats', err);
       return res.status(500).json({ message: 'Failed to compute feedback stats' });

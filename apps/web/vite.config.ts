@@ -61,6 +61,10 @@ export default defineConfig({
         target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
         changeOrigin: true,
       },
+      "/api/feedback": {
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
+        changeOrigin: true,
+      },
     },
     fs: {
       strict: false,

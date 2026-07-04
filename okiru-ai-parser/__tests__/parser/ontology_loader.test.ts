@@ -23,6 +23,29 @@ function createWorkbook(): string {
   return workbookPath;
 }
 
+function createNoisyWorkbook(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'okiru-parser-'));
+  const workbookPath = path.join(dir, 'noisy-matrix.xlsx');
+  const workbook = XLSX.utils.book_new();
+  const sheet = XLSX.utils.json_to_sheet([
+    {
+      'Document required': 'B-BBEE certificate or affidavit for each ESD/SD beneficiary entity',
+      'What auditor tests / looks for': 'Inspect that the certificate is valid and the status level is present',
+      'Example of expected data': 'Inspect certificate and confirm validity',
+      'Prompt template / extraction instruction': 'Inspect and return assessment notes',
+    },
+    {
+      'Document required': 'Full supplier schedule — all B-BBEE suppliers with total spend and B-BBEE status',
+      'What auditor tests / looks for': 'Confirm supplier spend, supplier name, level and black ownership',
+      'Example of expected data': 'Supplier schedule with total spend and B-BBEE status',
+      'Prompt template / extraction instruction': 'Inspect schedule',
+    },
+  ]);
+  XLSX.utils.book_append_sheet(workbook, sheet, 'ESD');
+  XLSX.writeFile(workbook, workbookPath);
+  return workbookPath;
+}
+
 describe('ontology loader', () => {
   it('builds records from workbook sheets', () => {
     const records = buildOntologyRecordsFromWorkbook(createWorkbook());
@@ -65,6 +88,35 @@ describe('ontology loader', () => {
       'entity_type',
       'registered_address',
       'cipc_stamp_present',
+    ]));
+  });
+
+  it('enriches noisy high-value matrix rows with canonical parser fields and aliases', () => {
+    const records = buildOntologyRecordsFromWorkbook(createNoisyWorkbook());
+    const certificate = records.find((record) => record.document.name.startsWith('B-BBEE certificate or affidavit'));
+    const schedule = records.find((record) => record.document.name.startsWith('Full supplier schedule'));
+
+    expect(certificate?.document.aliases).toEqual(expect.arrayContaining([
+      'B-BBEE Certificate',
+      'Supplier B-BBEE Certificate',
+    ]));
+    expect(certificate?.fields.map((field) => field.field.name)).toEqual(expect.arrayContaining([
+      'supplier_name',
+      'bee_level',
+      'black_ownership',
+      'expiry_date',
+    ]));
+    expect(certificate?.fields.map((field) => field.field.name)).not.toContain('inspect');
+
+    expect(schedule?.document.aliases).toEqual(expect.arrayContaining([
+      'Supplier Spend Schedule',
+      'Full supplier schedule',
+    ]));
+    expect(schedule?.fields.map((field) => field.field.name)).toEqual(expect.arrayContaining([
+      'supplier_name',
+      'spend_amount',
+      'bee_level',
+      'black_ownership',
     ]));
   });
 });

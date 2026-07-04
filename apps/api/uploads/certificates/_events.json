@@ -49,5 +49,194 @@
     "ipAddress": "127.0.0.1",
     "userAgent": "curl/8.14.1",
     "createdAt": "2026-05-05T02:11:01.493Z"
+  },
+  {
+    "id": "97ec8ff4-d1f0-4c38-ba04-139baf80f549",
+    "type": "download",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": null,
+    "metadata": {
+      "blobName": "2026  08 14 Afrilead Tech-EME.pdf",
+      "mode": "redirect"
+    },
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-25T23:12:24.869Z"
+  },
+  {
+    "id": "c47c24f9-e93a-43d2-97a2-0e522e76e32d",
+    "type": "download",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": null,
+    "metadata": {
+      "blobName": "2026  08 14 Afrilead Tech-EME.pdf",
+      "mode": "redirect"
+    },
+    "ipAddress": "127.0.0.1",
+    "userAgent": "curl/8.19.0",
+    "createdAt": "2026-06-25T23:12:58.631Z"
+  },
+  {
+    "id": "028c20af-c452-420c-8c3f-da3e5368befc",
+    "type": "download",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": null,
+    "metadata": {
+      "blobName": "2026 05 25 RED HAWK GROUP - EME.pdf",
+      "mode": null
+    },
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
+    "createdAt": "2026-06-26T02:30:55.100Z"
+  },
+  {
+    "id": "ea7bc35b-2dff-40eb-9227-a1cd9da9970a",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "2020/656263/07",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T00:48:11.111Z"
+  },
+  {
+    "id": "ac581204-6492-401e-9a45-0de715f1f6f7",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "Generic ICT Sector Code B-BBEE Verification",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T00:48:16.170Z"
+  },
+  {
+    "id": "2f9901b4-6d21-40c5-9031-0897003a0641",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "ICT",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T00:48:19.620Z"
+  },
+  {
+    "id": "8394511c-e9e8-4d93-bafc-cde41533e00b",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "2025/08",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T00:48:24.131Z"
+  },
+  {
+    "id": "02aa314c-fb5e-431f-8bd0-e431012c1c5c",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "2020/656263/07",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T00:48:48.878Z"
+  },
+  {
+    "id": "6f2f13aa-a999-42ad-8d34-3d8a27d36c7a",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "ICT",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T02:03:59.566Z"
+  },
+  {
+    "id": "6e148ea1-85e5-42b8-9ec8-13376e07ef3e",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "4123456789",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T02:04:01.369Z"
+  },
+  {
+    "id": "3916d002-e2b5-4a53-9c97-6592a5a780d1",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "Level 1",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T02:04:01.829Z"
+  },
+  {
+    "id": "e6760615-67e8-4086-9fb4-71ed1ff4984d",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "Generic",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T02:04:02.259Z"
+  },
+  {
+    "id": "4e892b5a-cc9a-4c77-9318-36a8bcd0d88b",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "51",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T02:04:02.691Z"
+  },
+  {
+    "id": "3aea7b06-bf9d-41ce-85fc-d221db85851f",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "2027",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T02:04:03.005Z"
+  },
+  {
+    "id": "aedb6888-e70c-44e0-bb93-1959799e29de",
+    "type": "search",
+    "certificateId": null,
+    "certificateSlug": null,
+    "userId": null,
+    "query": "DIESEL",
+    "metadata": null,
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT; Windows NT 10.0; en-US) WindowsPowerShell/5.1.26100.8655",
+    "createdAt": "2026-06-29T02:04:03.526Z"
   }
 ]

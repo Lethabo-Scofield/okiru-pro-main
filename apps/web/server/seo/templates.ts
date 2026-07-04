@@ -33,9 +33,11 @@ function pageShell(opts: {
 <meta property="og:description" content="${escapeHtml(description)}" />
 <meta property="og:url" content="${escapeHtml(canonical)}" />
 <meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />
+<meta property="og:image" content="${escapeHtml(origin)}/opengraph.jpg" />
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="${escapeHtml(title)}" />
 <meta name="twitter:description" content="${escapeHtml(description)}" />
+<meta name="twitter:image" content="${escapeHtml(origin)}/opengraph.jpg" />
 <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
@@ -332,6 +334,12 @@ Allow: /
 Disallow: /api/
 Disallow: /auth
 Disallow: /admin/
+Disallow: /dashboard
+Disallow: /workspace
+Disallow: /onboarding
+Disallow: /devmode
+Disallow: /esg/
+Disallow: /accept-invite
 
 Sitemap: ${origin}/sitemap.xml
 `;
