@@ -1196,7 +1196,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           isDisabled: coerceYesNo(e.isDisabled),
           isForeign: coerceYesNo(e.isForeign),
           annualSalary: e.annualSalary ?? 0,
-          votingRightsPercent: e.votingRightsPercent ?? 0,
+          // Board "exercisable voting rights" (% units). Workbook import persists
+          // this on the employee entity as `votingRights` (workbookRoutes.ts),
+          // while the manual UI writes `votingRightsPercent` — accept either so a
+          // workbook-imported board's voting weights reach calculateManagementScore
+          // instead of silently falling back to headcount. Both are already in
+          // percent (the grid column is a percentage), so no normalisation.
+          votingRightsPercent: e.votingRightsPercent ?? e.votingRights ?? 0,
           idNumber: e.idNumber || undefined,
           province: e.province || undefined,
           hireDate: e.hireDate || undefined,
