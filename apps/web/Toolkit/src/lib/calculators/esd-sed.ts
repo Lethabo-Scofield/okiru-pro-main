@@ -342,7 +342,14 @@ export function calculateSedScore(
 
     const ceBonusMax = opts?.isReinsurer ? 0 : (sc.ceBonusMaxPts ?? 1);
     const ceBonusTargetPct = sc.ceBonusNpatTarget ?? 0.001;
-    const ceBonusScore = safeRatio(data.ceBonusSpend ?? 0, npat * ceBonusTargetPct, ceBonusMax);
+    // Additional CE Contribution (1 bonus pt @ 0.1% NPAT) is DERIVED in the FSC
+    // template, not a separate input: SED & CE Scorecard I10 (non-Reinsurer) =
+    // MAX(SUM(Pillar="Consumer Education") − F7, 0) where F7 = NPAT × E7 (the
+    // 0.6% SED target amount). Mirror that when no explicit ceBonusSpend was
+    // captured, so CE spend beyond the threshold earns the bonus point exactly
+    // as the template awards it. An explicitly captured value still wins.
+    const derivedCeBonus = Math.max((data.ceSpend ?? 0) - npat * sedTargetPct, 0);
+    const ceBonusScore = safeRatio(data.ceBonusSpend ?? derivedCeBonus, npat * ceBonusTargetPct, ceBonusMax);
 
     const fundisaMax = sc.fundisaMaxPts ?? 2;
     const fundisaTargetPct = sc.fundisaNpatTarget ?? 0.002;

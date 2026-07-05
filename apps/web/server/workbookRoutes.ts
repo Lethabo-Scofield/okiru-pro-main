@@ -1244,6 +1244,16 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   const afsMeta = (sec["afs-additions"]?.meta ?? {}) as Record<string, unknown>;
   const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta, afsMeta);
 
+  // FSC Banks/LTI Empowerment Financing — the normalizer parses the workbook's
+  // "Empowerment Financing" facility table into esd.meta.efFacilities (the EF
+  // pillar shares the template's "EF & ESD Scorecard"). Carry it on financials
+  // (like afs) so it persists in the client financials blob and hydrates into
+  // calculateEmpowermentFinancingScore.
+  const esdMeta = (sec["esd"]?.meta ?? {}) as Record<string, unknown>;
+  if (Array.isArray(esdMeta.efFacilities) && (esdMeta.efFacilities as unknown[]).length > 0) {
+    (financials as any).empowermentFinancing = { facilities: esdMeta.efFacilities };
+  }
+
   // Procurement TMPS fallback (Polo feedback #10): suppliers were saved but never
   // scored because procurement targets are tmps × pct, and tmps only came from the
   // Financials TMPS field. If that wasn't supplied, derive tmps from total supplier
@@ -1547,6 +1557,7 @@ export function registerWorkbookRoutes(app: Express): void {
           if (f.fscSubSector) update.fscSubSector = f.fscSubSector;
           if (f.fscReinsurer !== undefined) update.fscReinsurer = f.fscReinsurer;
           if (f.afs) skillsExtra.afs = f.afs;
+          if ((f as any).empowermentFinancing) skillsExtra.empowermentFinancing = (f as any).empowermentFinancing;
           if (f.ceSpend != null) skillsExtra.ceSpend = f.ceSpend;
           if (f.ceBonusSpend != null) skillsExtra.ceBonusSpend = f.ceBonusSpend;
           if (f.fundisaSpend != null) skillsExtra.fundisaSpend = f.fundisaSpend;
