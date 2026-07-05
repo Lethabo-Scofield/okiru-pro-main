@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { 
-  Client, OwnershipData, ManagementData, SkillsData, 
+import {
+  Client, OwnershipData, ManagementData, SkillsData,
   ProcurementData, ESDData, SEDData, ScorecardResult,
   Shareholder, Employee, TrainingProgram, Supplier, Contribution, FinancialYear,
-  TrainingCategoryCode, AfsData,
+  TrainingCategoryCode, AfsData, EmpowermentFinancingData,
 } from './types';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
@@ -62,6 +62,7 @@ import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
 import { calculateYESScore } from './calculators/yes';
 import { calculateAfsScore } from './calculators/afs';
+import { calculateEmpowermentFinancingScore } from './calculators/empowermentFinancing';
 import {
   calculateTransportQseManagement,
   calculateTransportQseEmploymentEquity,
@@ -106,6 +107,7 @@ interface PillarState {
   esd: ESDData;
   sed: SEDData;
   afs: AfsData;
+  empowermentFinancing: EmpowermentFinancingData;
   scorecard: ScorecardResult;
 }
 
@@ -119,6 +121,7 @@ function snapshotPillarState(state: PillarState): PillarState {
     esd: deepClone(state.esd),
     sed: deepClone(state.sed),
     afs: deepClone(state.afs),
+    empowermentFinancing: deepClone(state.empowermentFinancing),
     scorecard: deepClone(state.scorecard),
   };
 }
@@ -158,6 +161,7 @@ const emptyProcurement: ProcurementData = { id: '', clientId: '', tmps: 0, suppl
 const emptyESD: ESDData = { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false };
 const emptySED: SEDData = { id: '', clientId: '', contributions: [] };
 const emptyAfs: AfsData = { id: '', clientId: '' };
+const emptyEmpowermentFinancing: EmpowermentFinancingData = { id: '', clientId: '' };
 
 /**
  * Factory function to build an empty scorecard from calculatorConfig.
@@ -715,6 +719,16 @@ function calculateScorecard(
   if (afsScore) {
     console.log('[SCORING-TRACE] Calculator output for AFS:', { score: afsScore.total, subSector: afsScore.subSector });
   }
+
+  // FSC Banks/LTI Empowerment Financing — EF-proper only (Targeted Investments
+  // 12 + Transaction Financing 3); SD/ED stay in the ESD pillar. Returns null
+  // for STI / Others / non-FSC (targetedInvestmentMaxPts+transactionFinancingMaxPts = 0).
+  const efScore = cfg.empowermentFinancing
+    ? calculateEmpowermentFinancingScore(state.empowermentFinancing, cfg)
+    : null;
+  if (efScore) {
+    console.log('[SCORING-TRACE] Calculator output for Empowerment Financing:', { score: efScore.total, max: efScore.maxPoints });
+  }
   // CRITICAL: Wire YES calculator - construct YESData from skills and management state
   // Training programs with isYesEmployee=true are treated as YES candidates
   const yesCandidates = state.skills.trainingPrograms
@@ -841,10 +855,11 @@ function calculateScorecard(
 
   const sdForTotal = sdTarget > 0 ? esdScore.sdTotal : 0;
   const afsForTotal = afsScore?.total ?? 0;
+  const efForTotal = efScore?.total ?? 0;
 
   const compulsoryTotal = ownScore.total + mgtScoreTotal + (eeTarget > 0 ? eeScoreTotal : 0);
   const electiveTotal = skillsForTotal + procForTotal + edForTotal + sedForTotal;
-  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + yesScore.score + yesScore.yesBonusPoints;
+  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + efForTotal + yesScore.score + yesScore.yesBonusPoints;
 
   const totalTarget = cfg?.totalMaxPoints ?? (
     ownTarget + mcTarget + eeTarget +
@@ -953,6 +968,13 @@ function calculateScorecard(
         weighting: afsScore.maxPoints,
       },
     } : {}),
+    ...(efScore ? {
+      empowermentFinancing: {
+        score: round2(efScore.total),
+        target: efScore.maxPoints,
+        weighting: efScore.maxPoints,
+      },
+    } : {}),
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
     achievedLevel: level,
     discountedLevel,
@@ -1046,6 +1068,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   esd: emptyESD,
   sed: emptySED,
   afs: emptyAfs,
+  empowermentFinancing: emptyEmpowermentFinancing,
   scorecard: emptyScorecard,
   pipelineOverrides: null,
   calculatorConfig: null,
@@ -1321,6 +1344,14 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           clientId,
           ...(data.afs ?? finExtras.afs ?? {}),
         } as AfsData,
+        // FSC Banks/LTI Empowerment Financing — persisted in the client
+        // financials blob by workbook submit (like afs); hydrate so
+        // calculateEmpowermentFinancingScore sees the facilities/scalars.
+        empowermentFinancing: {
+          id: '',
+          clientId,
+          ...((data as any).empowermentFinancing ?? (finExtras.empowermentFinancing as object | undefined) ?? {}),
+        } as EmpowermentFinancingData,
         scenarios: scenariosData,
         isScenarioMode: false,
         activeScenarioId: null,
@@ -1354,6 +1385,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       esd: emptyESD,
       sed: emptySED,
       afs: emptyAfs,
+      empowermentFinancing: emptyEmpowermentFinancing,
       scorecard: emptyScorecard,
       pipelineOverrides: null,
       calculatorConfig: null,
@@ -1378,6 +1410,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       esd: emptyESD,
       sed: emptySED,
       afs: emptyAfs,
+      empowermentFinancing: emptyEmpowermentFinancing,
       scorecard: buildEmptyScorecard(),
       pipelineOverrides: null,
       calculatorConfig: null,

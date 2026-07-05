@@ -20,6 +20,7 @@ import { calculateSkillsScore } from '@toolkit/lib/calculators/skills';
 import { calculateProcurementScore } from '@toolkit/lib/calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from '@toolkit/lib/calculators/esd-sed';
 import { calculateAfsScore } from '@toolkit/lib/calculators/afs';
+import { calculateEmpowermentFinancingScore } from '@toolkit/lib/calculators/empowermentFinancing';
 import { RCOGP_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/rcogp-generic';
 import { RCOGP_QSE_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/rcogp-qse';
 import { ICT_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/ict-generic';
@@ -151,8 +152,14 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           // calculateAfsScore returns null when the config has no AFS (FSC Generic / non-FSC).
           const afsData = { id: '', clientId: '', ...((p.financials as any)?.afs ?? {}) };
           const afs = calculateAfsScore(afsData as any, cfg)?.total ?? 0;
-          total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed + afs;
-          brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} afs${afs.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
+          // FSC Banks/LTI Empowerment Financing (EF-proper 15 pts: Targeted
+          // Investments 12 + Transaction Financing 3). Facilities ingested from
+          // the workbook "Empowerment Financing" sheet; the calculator returns
+          // null for STI/Others/non-FSC, so this is 0 outside Banks/LTI.
+          const efData = { id: '', clientId: '', ...((p.financials as any)?.empowermentFinancing ?? {}) };
+          const ef = calculateEmpowermentFinancingScore(efData as any, cfg)?.total ?? 0;
+          total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed + afs + ef;
+          brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} afs${afs.toFixed(0)} ef${ef.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
         }
         const lvl = levelFromConfig(total, cfg);
         scored++;

@@ -113,8 +113,9 @@ const banksAfsDataEmpty: AfsData = {
 // ---------------------------------------------------------------------------
 
 describe('FSC Banks — CalculatorConfig completeness', () => {
-  it('loads 130 total points', () => {
-    expect(CONFIG.totalMaxPoints).toBe(130);
+  it('loads 140 total points (incl. EF 15; template: core F12=121, C104=138)', () => {
+    // 25+21+23+24+7(SD)+5(ED)+15(EF)+12(AFS)+8 = 140
+    expect(CONFIG.totalMaxPoints).toBe(140);
   });
 
   it('sector identity is FSC / Generic', () => {
@@ -132,8 +133,11 @@ describe('FSC Banks — CalculatorConfig completeness', () => {
     expect(pc?.managementControl?.maxPoints).toBe(21);
     expect(pc?.skillsDevelopment?.maxPoints).toBe(23);
     expect(pc?.preferentialProcurement?.maxPoints).toBe(24);
-    expect(pc?.supplierDevelopment?.maxPoints).toBe(10);
-    expect(pc?.enterpriseDevelopment?.maxPoints).toBe(7);   // no stockbroker
+    // EF & ESD Scorecard - Banks: SD row C17 = 7 pts, ED base C19 = 3 (+1 grad
+    // +1 jobs = 5). The old 10/7 were the Others ESD-scorecard maxima.
+    expect(pc?.supplierDevelopment?.maxPoints).toBe(7);
+    expect(pc?.enterpriseDevelopment?.maxPoints).toBe(5);   // no stockbroker
+    expect((pc as any)?.empowermentFinancing?.maxPoints).toBe(15);
     expect(pc?.socioEconomicDevelopment?.maxPoints).toBe(8);
   });
 
@@ -162,22 +166,25 @@ describe('FSC Banks — CalculatorConfig completeness', () => {
 
   it('Banks SD target 1.8% NPAT (not 2% Others)', () => {
     expect(CONFIG.esd.supplierDevTarget).toBeCloseTo(0.018, 4);
-    expect(CONFIG.esd.supplierDevMax).toBe(10);
+    expect(CONFIG.esd.supplierDevMax).toBe(7); // EF & ESD - Banks C17
   });
 
   it('Banks ED target 0.2% NPAT (not 1% Others)', () => {
     expect(CONFIG.esd.enterpriseDevTarget).toBeCloseTo(0.002, 4);
-    expect(CONFIG.esd.enterpriseDevMax).toBe(5);
+    expect(CONFIG.esd.enterpriseDevMax).toBe(3); // EF & ESD - Banks C19 (3 base)
   });
 
   it('Banks has no stockbroker bonus (edStockbrokerBonusMax = 0)', () => {
     expect(CONFIG.esd.edStockbrokerBonusMax).toBe(0);
   });
 
-  it('EF config: Targeted Investments and Transaction Financing = 0 pts (Q44)', () => {
+  it('EF config: Targeted Investments 12 + Transaction Financing 3 (Q44 resolved from Banks sheet)', () => {
+    // EF & ESD Scorecard - Banks C14 =IF(D7="Banks",12,0) / C15 =IF(...,3,0)
+    // (FSC_Generic.md L15893/L15903). The old 0s were the template's
+    // default-"Others" formula artifact.
     const ef = CONFIG.empowermentFinancing!;
-    expect(ef.targetedInvestmentMaxPts).toBe(0);
-    expect(ef.transactionFinancingMaxPts).toBe(0);
+    expect(ef.targetedInvestmentMaxPts).toBe(12);
+    expect(ef.transactionFinancingMaxPts).toBe(3);
     expect(ef.sdTarget).toBeCloseTo(0.018, 4);
     expect(ef.edTarget).toBeCloseTo(0.002, 4);
   });
@@ -265,7 +272,7 @@ describe('FSC Banks golden — standard pillar scores', () => {
     expect(r.total).toBeCloseTo(21, 0);
   });
 
-  it('SD = 10/10 at 1.8% NPAT target', () => {
+  it('SD = 7/7 at 1.8% NPAT target (EF & ESD - Banks C17)', () => {
     const r = calculateEsdScore(
       {
         id: '1',
@@ -285,11 +292,11 @@ describe('FSC Banks golden — standard pillar scores', () => {
       NPAT,
       CONFIG,
     );
-    expect(r.supplierDev).toBeCloseTo(10, 1);
+    expect(r.supplierDev).toBeCloseTo(7, 1); // SD max 7 (EF & ESD - Banks C17)
     expect(r.sdSubMinimumMet).toBe(true);
   });
 
-  it('ED = 5/5 at 0.2% NPAT (Banks lower target)', () => {
+  it('ED = 3/3 at 0.2% NPAT (EF & ESD - Banks C19: 3 base)', () => {
     const r = calculateEsdScore(
       {
         id: '1',
@@ -309,10 +316,10 @@ describe('FSC Banks golden — standard pillar scores', () => {
       NPAT,
       CONFIG,
     );
-    expect(r.enterpriseDev).toBeCloseTo(5, 1);
+    expect(r.enterpriseDev).toBeCloseTo(3, 1); // ED base 3 (C19)
   });
 
-  it('Banks ED max = 7 (5 base + 1 grad + 1 jobs, no stockbroker)', () => {
+  it('Banks ED max = 5 (3 base + 1 grad + 1 jobs, no stockbroker)', () => {
     const r = calculateEsdScore(
       {
         id: '1',
@@ -332,7 +339,7 @@ describe('FSC Banks golden — standard pillar scores', () => {
       NPAT,
       CONFIG,
     );
-    expect(r.edTotal).toBeCloseTo(7, 1);
+    expect(r.edTotal).toBeCloseTo(5, 1); // 3 base + 1 grad + 1 jobs
     expect(r.stockbrokerBonus).toBe(0);
   });
 });
@@ -351,9 +358,10 @@ describe('FSC Banks — total points', () => {
       (pc?.supplierDevelopment?.maxPoints ?? 0) +
       (pc?.enterpriseDevelopment?.maxPoints ?? 0) +
       (pc?.socioEconomicDevelopment?.maxPoints ?? 0) +
-      (CONFIG.accessToFinancialServices?.maxPoints ?? 0);
-    // 25+21+23+24+10+7+8+12 = 130
-    expect(pillarSum).toBe(130);
-    expect(totalMaxPoints).toBe(130);
+      (CONFIG.accessToFinancialServices?.maxPoints ?? 0) +
+      ((pc as any)?.empowermentFinancing?.maxPoints ?? 0);
+    // 25+21+23+24+7+5+8+12+15(EF) = 140 (template: EF 12+3, SD 7, ED 3+1+1)
+    expect(pillarSum).toBe(140);
+    expect(totalMaxPoints).toBe(140);
   });
 });

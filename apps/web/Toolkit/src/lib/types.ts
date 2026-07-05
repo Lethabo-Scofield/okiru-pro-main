@@ -480,6 +480,59 @@ export interface AfsData {
   insurancePoliciesCompliant?: boolean;
 }
 
+/**
+ * One Empowerment Financing facility / transaction row, as captured by the
+ * BEE information-gathering workbook ("Empowerment Financing" sheet:
+ * Facility | EF Category | Counterparty | Date | Rand Value Advanced (R) |
+ * Outstanding Balance (R) | Qualifying %).
+ */
+export interface EfFacility {
+  id: string;
+  name: string;
+  /** EF Category — Targeted-Investment categories (Transformational
+   * Infrastructure, Affordable Housing, Agricultural Development, Black SME
+   * Financing) vs Transaction-Financing/Risk-Capital categories (B-BBEE
+   * Transaction Financing, Black Business Growth / PE). */
+  category: string;
+  /** Rand Value Advanced (R). */
+  valueAdvanced: number;
+  outstandingBalance?: number;
+  /** Qualifying % (0–100). Left unset when the workbook doesn't state it —
+   * never fabricated (unstated qualification scores 0, mirroring AFS). */
+  qualifyingPercent?: number;
+  date?: string;
+}
+
+/**
+ * FSC Banks (FS701) / Long-Term Insurers (FS702) Empowerment Financing inputs.
+ * Two shapes, both grounded in the master template / gathering workbook:
+ * - Template-exact scalars + Transaction Financing table (EF & ESD Scorecard -
+ *   Banks/Long Term sheets + tblTransactionFinancingData) — preferred when present.
+ * - Gathering-workbook facility table (EfFacility rows) — achieved/target derived
+ *   as the qualifying-weighted fraction of the declared EF portfolio.
+ */
+export interface EmpowermentFinancingData {
+  id: string;
+  clientId: string;
+  // ---- Template-exact scalar inputs ----
+  /** Banks C5: Balance Sheet Exposure (TI target component). */
+  balanceSheetExposure?: number;
+  /** Banks C6: Additional Targeted Investment exposure (TI target component). */
+  additionalTiExposure?: number;
+  /** Banks C7/D7: Balance Sheet Exposure relating to new loans written (TI achieved). */
+  newLoansExposure?: number;
+  /** LTI C5: Qualifying Exposure (TI target). */
+  qualifyingExposure?: number;
+  /** LTI C6: Portion of targeted investment target (TI achieved). */
+  targetedInvestmentPortion?: number;
+  /** Banks C9 / LTI C8: Portion of B-BBEE Transaction Financing and Risk Capital (TF target). */
+  tfPortfolioValue?: number;
+  /** Template tblTransactionFinancingData rows (plain SUM of Value = TF achieved). */
+  tfTransactions?: Array<{ value: number; endOfMonth?: string }>;
+  // ---- Gathering-workbook facility table ----
+  facilities?: EfFacility[];
+}
+
 export interface PillarScore {
   score: number;
   target: number;

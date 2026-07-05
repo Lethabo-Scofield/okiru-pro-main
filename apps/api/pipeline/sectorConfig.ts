@@ -302,16 +302,24 @@ const FSC_LEVELS_OTHERS = [
   { level: 8, minPoints: 37.12, recognition: 10 },
 ];
 
-/** Banks and LTI share identical thresholds. */
+/**
+ * Banks and LTI share identical thresholds.
+ * Template formula: Yn = Wn/111 × F12, W = 100/95/90/80/75/70/55/40, with the
+ * core denominator F12 = 121 (23 own + 21 MC + 20 skills + 15 PP + 15 EF +
+ * 7 SD + 3 ED + 5 SED&CE + 12 AFS — Scorecard Calculations F3:F12,
+ * FSC_Generic.md L17421–17496). The previous values (108.11…43.24) were
+ * W/111 × 120 — computed with EF excluded from the core; now that EF is
+ * scored, F12 = 121 per the template.
+ */
 const FSC_LEVELS_BANKS_LTI = [
-  { level: 1, minPoints: 108.11, recognition: 135 },
-  { level: 2, minPoints: 102.70, recognition: 125 },
-  { level: 3, minPoints: 97.30, recognition: 110 },
-  { level: 4, minPoints: 86.49, recognition: 100 },
-  { level: 5, minPoints: 81.08, recognition: 80 },
-  { level: 6, minPoints: 75.68, recognition: 60 },
-  { level: 7, minPoints: 59.46, recognition: 50 },
-  { level: 8, minPoints: 43.24, recognition: 10 },
+  { level: 1, minPoints: 109.01, recognition: 135 }, // 100/111 × 121 = 109.009…
+  { level: 2, minPoints: 103.56, recognition: 125 }, // 95/111 × 121
+  { level: 3, minPoints: 98.11, recognition: 110 },  // 90/111 × 121
+  { level: 4, minPoints: 87.21, recognition: 100 },  // 80/111 × 121
+  { level: 5, minPoints: 81.76, recognition: 80 },   // 75/111 × 121
+  { level: 6, minPoints: 76.31, recognition: 60 },   // 70/111 × 121
+  { level: 7, minPoints: 59.95, recognition: 50 },   // 55/111 × 121
+  { level: 8, minPoints: 43.60, recognition: 10 },   // 40/111 × 121
 ];
 
 const FSC_LEVELS_STI = [
@@ -733,21 +741,26 @@ export const FSC_BANKS: SectorConfig = {
   sectorCode: 'FSC',
   sectorName: 'Financial Sector Code (Banks — FS701)',
   scorecardType: 'Generic',
-  // 25+21+23+24+10+7(ED no stockbroker)+12(AFS)+8 = 130
-  totalMaxPoints: 130,
+  // 25+21+23+24+7(SD)+5(ED no stockbroker)+15(EF)+12(AFS)+8 = 140
+  totalMaxPoints: 140,
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    // Banks ED: 5 base + 1 grad + 1 jobs = 7 (no stockbroker row on Banks EF sheet)
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    // Banks SD row on the EF & ESD scorecard = 7 pts (C17 =IF(D7="Banks",7,0),
+    // FSC_Generic.md L15913) — the previous 10 was the Others ESD-scorecard value.
+    supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
+    // Banks ED: 3 base (C19, L15923) + 1 grad + 1 jobs = 5 (no stockbroker row on Banks EF sheet)
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    // EF: point values = 0 per Q44 (template defaults to Others sub-sector — all EF cells blank)
-    empowermentFinancing: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // EF-proper: Targeted Investments 12 (C14 =IF(D7="Banks",12,0), L15893) +
+    // Transaction Financing 3 (C15, L15903) = 15. The old 0 was a formula
+    // artifact of the template's default "Others" sub-sector (Q44 resolved —
+    // FSC-FULL-ANALYSIS.md §5.6; SD/ED/bonuses stay in the ESD pillar).
+    empowermentFinancing: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     // AFS Banks = 12 pts (verified from AFS Scorecard - Banks sheet)
     accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
   },
@@ -794,8 +807,9 @@ export const FSC_BANKS: SectorConfig = {
       bwo30Target: 0.10, bwo30MaxPts: 3,
       dgTarget: 0.02, dgMaxPts: 4,
     },
-    // Banks SD: 1.8% NPAT (vs 2% Others); ED: 0.2% NPAT (vs 1% Others); no stockbroker bonus
-    esd: { sdPercent: 1.8, sdMaxPts: 10, edPercent: 0.2, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 1 },
+    // Banks SD: 1.8% NPAT @ 7 pts; ED: 0.2% NPAT @ 3 pts base (EF & ESD Scorecard -
+    // Banks C17/C19 — the old 10/5 were the Others ESD-scorecard maxima); no stockbroker bonus
+    esd: { sdPercent: 1.8, sdMaxPts: 7, edPercent: 0.2, edMaxPts: 3, edGraduationBonus: 1, edJobsBonus: 1 },
     sed: { spendPercent: 1.0, maxPts: 8 },
   },
   levelThresholds: FSC_LEVELS_BANKS_LTI,
@@ -804,7 +818,11 @@ export const FSC_BANKS: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// FSC Banks verified: 25+21+23+24+10+7+12+8 = 130 (Banks sub-sector, EF=0 per Q44) ✓
+// FSC Banks verified vs template: 25+21+23+24+7+5+15(EF)+12+8 = 140 incl bonuses.
+// Template core F12 = 121 (own 23 + MC 21 + skills 20 + PP 15 + EF 15 + SD 7 + ED 3
+// + SED&CE 5 + AFS 12); C104 incl bonus = 138. Remaining app-vs-template pillar
+// deltas (own 25 vs 23+5bonus, PP 24 vs 15+4bonus, skills 23 vs 20+3bonus) are
+// pre-existing and tracked separately — SD/ED/EF now match the template exactly.
 // SD target 1.8%, ED target 0.2%; no stockbroker bonus (not on Banks EF&ESD sheet)
 // AFS: Transaction Point(5km,1pt) + Service Point(10km,1pt) + Sales Point(15km,2pts)
 //      + Electronic Access(2pts) + Point of Presence(3pts) + Active Accounts(3pts) = 12 ✓
@@ -821,20 +839,25 @@ export const FSC_LTI: SectorConfig = {
   sectorCode: 'FSC',
   sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
   scorecardType: 'Generic',
-  // 25+21+23+24+10+9(ED with stockbroker)+12(AFS)+8 = 132
-  totalMaxPoints: 132,
+  // 25+21+23+24+7(SD)+7(ED with stockbroker)+15(EF)+12(AFS)+8 = 142
+  totalMaxPoints: 142,
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    // LTI ED: 5 base + 1 grad + 1 jobs + 2 stockbroker = 9 (stockbroker on LTI EF sheet)
-    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 },
+    // LTI SD row on the EF & ESD scorecard = 7 pts (C16 =IF(LTI,7,0),
+    // FSC_Generic.md L16040) — the previous 10 was the Others ESD-scorecard value.
+    supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
+    // LTI ED: 3 base (C18, L16050) + 1 grad + 1 jobs + 2 stockbroker (C22, L16078) = 7
+    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    empowermentFinancing: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    // EF-proper: Targeted Investments 12 (C13 =IF(LTI,12,0), L16020) +
+    // Transaction Financing 3 (C14, L16030) = 15 (Q44 resolved — the old 0 was
+    // the template's default-"Others" formula artifact).
+    empowermentFinancing: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     accessToFinancialServices: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
@@ -880,8 +903,9 @@ export const FSC_LTI: SectorConfig = {
       bwo30Target: 0.10, bwo30MaxPts: 3,
       dgTarget: 0.02, dgMaxPts: 4,
     },
-    // LTI SD: 1.8% NPAT; ED: 0.2% NPAT; stockbroker bonus 0.5% NPAT / 2 pts (on EF sheet)
-    esd: { sdPercent: 1.8, sdMaxPts: 10, edPercent: 0.2, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 3 },
+    // LTI SD: 1.8% NPAT @ 7 pts; ED: 0.2% NPAT @ 3 pts base (EF & ESD Scorecard -
+    // Long Term C16/C18); stockbroker bonus 0.5% NPAT / 2 pts (C22, on EF sheet)
+    esd: { sdPercent: 1.8, sdMaxPts: 7, edPercent: 0.2, edMaxPts: 3, edGraduationBonus: 1, edJobsBonus: 3 },
     sed: { spendPercent: 1.0, maxPts: 8 },
   },
   levelThresholds: FSC_LEVELS_BANKS_LTI,
@@ -890,7 +914,10 @@ export const FSC_LTI: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
-// FSC LTI verified: 25+21+23+24+10+9+12+8 = 132 (LTI sub-sector, EF=0 per Q44) ✓
+// FSC LTI verified vs template: 25+21+23+24+7+7+15(EF)+12+8 = 142 incl bonuses.
+// Template core F12 = 121; C104 incl bonus = 140 (Q44 resolved — EF was a
+// default-"Others" formula artifact). Remaining app-vs-template pillar deltas
+// (own/PP/skills bonus framing) are pre-existing and tracked separately.
 // SD target 1.8%, ED target 0.2%, stockbroker bonus 0.5%/2pts included
 // AFS: Appropriate Products(3pts) + Market Penetration(7pts) + Transactional Access(80%/2pts) = 12 ✓
 
