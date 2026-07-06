@@ -15,6 +15,7 @@ import {
 } from "express";
 import { requireAuth } from "../middleware/requireAuth.js";
 import { storage } from "../../storage.js";
+import { isMongoConnected } from "../../db.js";
 import { createLogger } from "../logger.js";
 import {
   isAnalyticsConfigured,
@@ -44,12 +45,67 @@ function hasAnyRole(user: any, ...roles: string[]): boolean {
   return roles.some((r) => r === primary || secondary.includes(r));
 }
 
+const OFFLINE_DEMO_USER_ID = "demo-offline-user";
+
+/**
+ * Resolves the offline-demo caller from the trusted identity header the web
+ * proxy injects (see apps/web/server/apiProxy.ts). This is honoured ONLY when
+ * BOTH hold:
+ *  - the process is NOT production — Mongo connectivity is an operational state,
+ *    not a security boundary, so a production DB outage must never turn this
+ *    header into an auth bypass (a caller hitting apps/api:3000 directly would
+ *    otherwise skip the web proxy's header stripping); and
+ *  - MongoDB is unavailable — the exact condition under which offline demo/demo
+ *    login is permitted (when Mongo is up the servers share a real session
+ *    store and this path is unnecessary).
+ */
+function resolveOfflineDemoUser(
+  req: Request,
+): { id: string; role: string } | null {
+  if (process.env.NODE_ENV === "production") return null;
+  if (isMongoConnected()) return null;
+  const demoUser = req.headers["x-okiru-demo-user"];
+  if (demoUser !== OFFLINE_DEMO_USER_ID) return null;
+  const demoRole = req.headers["x-okiru-demo-role"];
+  return {
+    id: OFFLINE_DEMO_USER_ID,
+    role: typeof demoRole === "string" && demoRole ? demoRole : "admin",
+  };
+}
+
+/**
+ * Populates the session with the offline-demo identity (if present) before auth
+ * runs, so the demo account created on the web server can reach these proxied
+ * endpoints even though the two servers do not share an in-memory session store.
+ */
+function attachOfflineDemoSession(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) {
+  const demo = resolveOfflineDemoUser(req);
+  if (demo) {
+    (req.session as any).userId = demo.id;
+    (req as any).offlineDemoUser = demo;
+  }
+  next();
+}
+
 /** Requires the caller to be an admin or super_admin. */
 async function requireAdminOrSuperAdmin(
   req: Request,
   res: Response,
   next: NextFunction,
 ) {
+  const demo = (req as any).offlineDemoUser as
+    | { id: string; role: string }
+    | undefined;
+  if (demo) {
+    if (!hasAnyRole(demo, "admin", "super_admin")) {
+      return res.status(403).json({ message: "Admin access required" });
+    }
+    return next();
+  }
   if (!req.session.userId) {
     return res.status(401).json({ message: "Not authenticated" });
   }
@@ -91,7 +147,7 @@ async function respond<T>(
 
 const router = Router();
 
-router.use(requireAuth, requireAdminOrSuperAdmin);
+router.use(attachOfflineDemoSession, requireAuth, requireAdminOrSuperAdmin);
 
 /** GET /api/admin/analytics/overview?range=30d */
 router.get("/overview", async (req: Request, res: Response) => {
