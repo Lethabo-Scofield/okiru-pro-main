@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import heroBg from "@assets/image_1783014770940.png";
+import heroBg from "@assets/image_1783374759717.png";
 import ctaBg from "@assets/image_1783017701495.png";
 import ringLogo from "@assets/okiru_ring.png";
 import { PRODUCTS } from "./productLandingConfig";
