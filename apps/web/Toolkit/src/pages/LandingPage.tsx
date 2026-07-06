@@ -302,13 +302,6 @@ export const GLOBAL_CSS = `
   }
   @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hero-glow { animation: none; } }
 
-  .okiru-root .ok-hero-tag {
-    display: inline-flex; align-items: center; gap: 12px;
-    border: 1px solid rgba(255,255,255,0.13); background: rgba(255,255,255,0.04);
-    border-radius: 4px; padding: 6px 14px; margin-bottom: 22px;
-    font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.08em;
-    text-transform: uppercase; color: rgba(255,255,255,0.55);
-  }
   .okiru-root .ok-hero-tag-dot {
     width: 6px; height: 6px; border-radius: 50%; background: #34d399;
     box-shadow: 0 0 8px rgba(52,211,153,0.6); flex-shrink: 0;
@@ -318,8 +311,6 @@ export const GLOBAL_CSS = `
     0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(52,211,153,0.6); }
     50% { opacity: .5; box-shadow: 0 0 3px rgba(52,211,153,0.3); }
   }
-  .okiru-root .ok-hero-tag-div { width: 1px; height: 12px; background: rgba(255,255,255,0.15); }
-  .okiru-root .ok-hero-tag-brand { color: rgba(255,255,255,0.35); letter-spacing: 0.12em; }
 
   .okiru-root .ok-h1 {
     font-family: var(--serif); font-size: clamp(2.4rem, 4.4vw, 4rem);
@@ -436,7 +427,7 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-hero-visual { order: 2; max-width: 480px; margin: 0 auto; }
     .okiru-root .ok-h1, .okiru-root .ok-hero-sub { margin-left: auto; margin-right: auto; }
     .okiru-root .ok-h1-gradient { white-space: normal; }
-    .okiru-root .ok-hero-tag, .okiru-root .ok-hero-btns, .okiru-root .ok-hero-stats { justify-content: center; }
+    .okiru-root .ok-hero-btns, .okiru-root .ok-hero-stats { justify-content: center; }
   }
 
   /* ── PRODUCT SHOWCASE ── */
@@ -1081,12 +1072,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-content">
-              <div className="ok-hero-tag ok-anim-1">
-                <span className="ok-hero-tag-dot" aria-hidden />
-                ESG · B-BBEE · AI · Skills · WSP
-                <span className="ok-hero-tag-div" aria-hidden />
-                <span className="ok-hero-tag-brand">Okiru Consulting · Est. 2023</span>
-              </div>
               <h1 className="ok-h1 ok-anim-2">
                 Stop reporting.<br />
                 Start <span className="ok-h1-gradient" aria-label="compounding growth.">
