@@ -1,6 +1,7 @@
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { esgScoresFromPillars } from "@/lib/esgScoringDefaults";
 import { computeEsgDashboard, type EsgDashboardKpis } from "./dashboard";
+import { deriveEsgSummaryCells } from "./esgDeriveSummary";
 import { scoreEnvironmental } from "./environmental";
 import { scoreGovernance } from "./governance";
 import { scoreSocial } from "./social";
@@ -11,12 +12,17 @@ export type EsgScorecardResult = EsgDashboardKpis & {
   governanceRows: Record<string, number>;
 };
 
-export function computeEsgScorecard(workbook: EsgWorkbookData | null): EsgScorecardResult | null {
-  if (!workbook) return null;
-  const hasCells = Object.values(workbook.sections ?? {}).some(
+export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgScorecardResult | null {
+  if (!rawWorkbook) return null;
+  const hasCells = Object.values(rawWorkbook.sections ?? {}).some(
     (s) => Object.keys(s.cells ?? {}).length > 0,
   );
   if (!hasCells) return null;
+
+  // Derive the template's summary cells (E_Data L19/L46/L63, S_Data L12,
+  // G_Data F5/F13.., …) from the raw grid inputs so manually-entered data
+  // scores identically to an imported/fixture workbook (B-BBEE parity).
+  const workbook = deriveEsgSummaryCells(rawWorkbook);
 
   const e = scoreEnvironmental(workbook);
   const s = scoreSocial(workbook);

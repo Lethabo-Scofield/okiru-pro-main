@@ -65,7 +65,10 @@ export function scoreSocial(workbook: EsgWorkbookData): SocialScoreResult {
   const d19 = driverActive ? 5 : 0;
   const d20 = num(workbook, "G29") > 0 ? 4 : 0;
 
-  const initiatives = readEsgCell(workbook, "s-data", "_initiatives_count") ?? THR_CSI_INITIATIVES;
+  // CSI initiatives: count of filled rows in the s-data-csi register, derived by
+  // deriveEsgSummaryCells. Default 0 (NOT the threshold) — a company that filed
+  // no CSI register earns 0, not a free 5. (Was `?? THR_CSI_INITIATIVES`.)
+  const initiatives = readEsgCell(workbook, "s-data", "_initiatives_count") ?? 0;
   const d23 =
     initiatives >= THR_CSI_INITIATIVES
       ? 5
