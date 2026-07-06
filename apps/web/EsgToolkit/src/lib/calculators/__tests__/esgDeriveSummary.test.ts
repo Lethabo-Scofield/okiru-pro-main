@@ -10,7 +10,7 @@
  *   S_Data L12 = SUM(L5..L11); G_Data F5 = IF(B5>0,5,0); F13.. = Y/N→5/2.5/0
  */
 import { describe, it, expect } from "vitest";
-import { deriveEsgSummaryCells } from "../esgDeriveSummary";
+import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import { computeEsgScorecard } from "../index";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 

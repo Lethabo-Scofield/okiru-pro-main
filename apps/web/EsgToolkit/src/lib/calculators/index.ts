@@ -1,7 +1,7 @@
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { esgScoresFromPillars } from "@/lib/esgScoringDefaults";
 import { computeEsgDashboard, type EsgDashboardKpis } from "./dashboard";
-import { deriveEsgSummaryCells } from "./esgDeriveSummary";
+import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import { scoreEnvironmental } from "./environmental";
 import { scoreGovernance } from "./governance";
 import { scoreSocial } from "./social";
