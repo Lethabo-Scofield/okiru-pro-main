@@ -1,4 +1,4 @@
-import { readEsgCell, type EsgWorkbookData } from "./esgWorkbookStorage";
+import { readEsgCell, readEsgText, type EsgWorkbookData } from "./esgWorkbookStorage";
 import { countKing5Principles } from "./esgGridRows";
 
 export type EsgTouchedState = Record<string, Record<string, true>>;
@@ -63,11 +63,8 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     message: "Entity name required",
     evaluate: (wb) =>
       Boolean(
-        String(
-          readEsgCell(wb, "company-reporting-setup", "entity") ??
-            readEsgCell(wb, "cover", "entity") ??
-            "",
-        ).trim(),
+        readEsgText(wb, "company-reporting-setup", "entity") ||
+          readEsgText(wb, "cover", "entity"),
       ),
   },
   {
@@ -80,11 +77,8 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     message: "Reporting period required",
     evaluate: (wb) =>
       Boolean(
-        String(
-          readEsgCell(wb, "company-reporting-setup", "period") ??
-            readEsgCell(wb, "cover", "period") ??
-            "",
-        ).trim(),
+        readEsgText(wb, "company-reporting-setup", "period") ||
+          readEsgText(wb, "cover", "period"),
       ),
   },
   {
@@ -99,9 +93,8 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
       const y =
         readEsgCell(wb, "company-reporting-setup", "baselineYear") ??
         readEsgCell(wb, "cover", "baselineYear");
-      if (y == null || y === "") return true;
-      const n = Number(y);
-      return Number.isFinite(n) && n >= 2018 && n <= 2030;
+      if (y == null) return true; // readEsgCell already maps "" → null
+      return Number.isFinite(y) && y >= 2018 && y <= 2030;
     },
   },
   {
@@ -112,7 +105,7 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     severity: "warning",
     trigger: "submit",
     message: "Pick a sector before submit",
-    evaluate: (wb) => Boolean(String(readEsgCell(wb, "assumptions", "B8") ?? "").trim()),
+    evaluate: (wb) => Boolean(readEsgText(wb, "assumptions", "B8")),
   },
   {
     id: "assumptions.stance-required",
@@ -123,8 +116,10 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     trigger: "touched",
     message: 'Defaulted to "Standard"',
     evaluate: (wb) => {
-      const v = readEsgCell(wb, "assumptions", "B6");
-      return v == null || v === "" || String(v).trim() !== "";
+      // Informational only: stance (text) defaults to "Standard" when unset —
+      // never blocks. (Was read via readEsgCell, which number-coerced the text.)
+      void readEsgText(wb, "assumptions", "B6");
+      return true;
     },
   },
   {
@@ -208,7 +203,7 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     severity: "warning",
     trigger: "submit",
     message: "WSP submission status unknown",
-    evaluate: (wb) => Boolean(String(readEsgCell(wb, "s-data", "B45") ?? "").trim()),
+    evaluate: (wb) => Boolean(readEsgText(wb, "s-data", "B45")),
   },
   {
     id: "g-data.code-of-ethics",
@@ -218,7 +213,7 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     severity: "warning",
     trigger: "submit",
     message: "Code of ethics flag not set",
-    evaluate: (wb) => Boolean(String(readEsgCell(wb, "g-data", "B15") ?? "").trim()),
+    evaluate: (wb) => Boolean(readEsgText(wb, "g-data", "B15")),
   },
   {
     id: "g-data.popia-io",
@@ -228,7 +223,7 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     severity: "warning",
     trigger: "submit",
     message: "POPIA Information Officer flag not set",
-    evaluate: (wb) => Boolean(String(readEsgCell(wb, "g-data", "B17") ?? "").trim()),
+    evaluate: (wb) => Boolean(readEsgText(wb, "g-data", "B17")),
   },
   {
     id: "g-data.score-positive",
@@ -256,7 +251,7 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
     severity: "warning",
     trigger: "submit",
     message: "EE plan submission status not set",
-    evaluate: (wb) => Boolean(String(readEsgCell(wb, "ee", "B9") ?? "").trim()),
+    evaluate: (wb) => Boolean(readEsgText(wb, "ee", "B9")),
   },
   {
     id: "fleet.has-rows",

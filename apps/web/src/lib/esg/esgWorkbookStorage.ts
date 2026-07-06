@@ -106,3 +106,18 @@ export function readEsgCell(
   const n = typeof raw === "number" ? raw : Number(raw);
   return Number.isFinite(n) ? n : null;
 }
+
+/**
+ * Read a cell as raw TEXT (trimmed). Use for text inputs (entity name, "Yes"/
+ * "No" statuses, sector) — `readEsgCell` number-coerces, so a filled text value
+ * reads as null and rules like "Entity name required" fire on a filled entity,
+ * permanently blocking submit. Returns "" when absent.
+ */
+export function readEsgText(
+  workbook: EsgWorkbookData | null | undefined,
+  sectionId: string,
+  cellRef: string,
+): string {
+  const raw = workbook?.sections?.[sectionId]?.cells?.[cellRef];
+  return raw == null ? "" : String(raw).trim();
+}
