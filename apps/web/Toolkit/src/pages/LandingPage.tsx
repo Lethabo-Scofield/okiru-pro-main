@@ -386,9 +386,15 @@ export const GLOBAL_CSS = `
     font-family: var(--sans);
   }
   .okiru-root .ok-hero-card::after {
-    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 16px;
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 16px; z-index: 0;
     background: radial-gradient(120% 80% at 100% 0%, rgba(147,51,234,0.12) 0%, transparent 52%);
   }
+  .okiru-root .ok-hero-card::before {
+    content: ""; position: absolute; top: 0; bottom: 0; left: -55%; width: 42%; z-index: 3; pointer-events: none;
+    background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.055) 50%, transparent 100%);
+    transform: skewX(-14deg); animation: okiru-sheen 7.5s ease-in-out infinite;
+  }
+  @keyframes okiru-sheen { 0% { left: -55%; } 42%, 100% { left: 135%; } }
   .okiru-root .ok-hcard-top {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     padding: 16px 18px 14px; border-bottom: 1px solid rgba(255,255,255,0.07); position: relative; z-index: 1;
@@ -396,12 +402,6 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hcard-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .okiru-root .ok-hcard-title b { font-size: 13.5px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
   .okiru-root .ok-hcard-title span { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; color: var(--muted); }
-  .okiru-root .ok-hcard-live {
-    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-    font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #34d399;
-    background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.25); border-radius: 999px; padding: 4px 9px;
-  }
-  .okiru-root .ok-hcard-live i { width: 5px; height: 5px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px rgba(52,211,153,0.7); animation: okiru-tagPulse 2.4s ease-in-out infinite; }
   .okiru-root .ok-hcard-body { padding: 4px 18px 6px; position: relative; z-index: 1; }
   .okiru-root .ok-hcard-row {
     display: grid; grid-template-columns: 1fr 60px 46px 16px; align-items: center; gap: 11px;
@@ -429,7 +429,7 @@ export const GLOBAL_CSS = `
     font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #fbbf24;
     background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.28); border-radius: 999px; padding: 4px 9px;
   }
-  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hcard-fill, .okiru-root .ok-hcard-live i { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hcard-fill { animation: none; } .okiru-root .ok-hero-card::before { display: none; } }
   @media (max-width: 1040px) {
     .okiru-root .ok-hero-w { grid-template-columns: 1fr; gap: 40px; }
     .okiru-root .ok-hero-content { order: 1; text-align: center; }
@@ -1130,9 +1130,8 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 <div className="ok-hcard-top">
                   <div className="ok-hcard-title">
                     <b>Generic Scorecard</b>
-                    <span>B-BBEE · Live translation</span>
+                    <span>B-BBEE · Automated translation</span>
                   </div>
-                  <span className="ok-hcard-live"><i />Live</span>
                 </div>
                 <div className="ok-hcard-body">
                   {[
