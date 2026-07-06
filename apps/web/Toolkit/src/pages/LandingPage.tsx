@@ -598,22 +598,40 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-arch-sheet { font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em; color: rgba(255,255,255,.4); background: rgba(255,255,255,.04); border: 1px solid var(--rule); padding: 3px 8px; border-radius: 3px; }
 
   /* ── SECTION 07: FRAMEWORKS ── */
-  .okiru-root .ok-fw-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 32px; margin-top: 56px; }
-  .okiru-root .ok-fw-col-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; display: block; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
-  .okiru-root .ok-fw-items { list-style: none; }
-  .okiru-root .ok-fw-item { padding: 12px 10px 12px 12px; margin: 0 -10px 0 -12px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 3px; border-radius: 6px; transition: background .25s, padding-left .25s cubic-bezier(.16,1,.3,1); }
-  .okiru-root .ok-fw-item:last-child { border-bottom: none; }
-  .okiru-root .ok-fw-item:hover { background: rgba(255,255,255,0.03); padding-left: 18px; }
-  .okiru-root .ok-fw-name { font-size: 13.5px; color: var(--hi); font-weight: 500; }
-  .okiru-root .ok-fw-desc { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
-  .okiru-root .ok-fw-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+  .okiru-root .ok-fw-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; margin-top: 56px; }
+  .okiru-root .ok-fw-card {
+    position: relative; height: 100%; border: 1px solid var(--rule); border-radius: 16px; overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.008) 100%);
+    padding: 28px 26px 26px; transition: border-color .3s, transform .4s cubic-bezier(.16,1,.3,1), box-shadow .4s;
+  }
+  .okiru-root .ok-fw-card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--fw-accent) 0%, transparent 88%); opacity: .85;
+  }
+  .okiru-root .ok-fw-card::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .4s;
+    background: radial-gradient(ellipse 90% 55% at 12% 0%, var(--fw-glow) 0%, transparent 60%);
+  }
+  .okiru-root .ok-fw-card:hover { border-color: var(--fw-border); transform: translateY(-4px); box-shadow: 0 34px 64px -44px rgba(0,0,0,.8); }
+  .okiru-root .ok-fw-card:hover::after { opacity: 1; }
+  .okiru-root .ok-fw-head { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; position: relative; z-index: 1; }
+  .okiru-root .ok-fw-icon {
+    width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0; display: grid; place-items: center;
+    color: var(--fw-accent); background: var(--fw-glow); border: 1px solid var(--fw-border);
+  }
+  .okiru-root .ok-fw-head-text { display: flex; flex-direction: column; gap: 3px; }
+  .okiru-root .ok-fw-col-title { font-family: var(--sans); font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--hi); }
+  .okiru-root .ok-fw-count { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .okiru-root .ok-fw-chips { display: flex; flex-wrap: wrap; gap: 8px; position: relative; z-index: 1; }
   .okiru-root .ok-fw-chip {
-    font-family: var(--sans); font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.72);
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--sans); font-size: 12.5px; font-weight: 500; color: rgba(255,255,255,0.74);
     background: rgba(255,255,255,0.03); border: 1px solid var(--rule); border-radius: 999px;
-    padding: 8px 16px; white-space: nowrap; cursor: default;
+    padding: 7px 13px 7px 11px; white-space: nowrap; cursor: default;
     transition: color .25s, border-color .25s, background .25s, transform .25s cubic-bezier(.16,1,.3,1);
   }
-  .okiru-root .ok-fw-chip:hover { color: #fff; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
+  .okiru-root .ok-fw-chip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--fw-accent); flex-shrink: 0; opacity: .9; }
+  .okiru-root .ok-fw-chip:hover { color: #fff; background: var(--fw-glow); border-color: var(--fw-border); transform: translateY(-2px); }
 
   /* ── SECTION 08: OUTCOMES ── */
   .okiru-root .ok-outcomes-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 2px; margin-top: 56px; }
@@ -1207,20 +1225,41 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             </Reveal>
             <div className="ok-fw-grid">
               {[
-                { title:"Global Disclosure", items:["GHG Protocol","IFRS S1 + S2","TCFD","CDP","SBTi CNZS 2.0","ISO 14083","GRI"] },
-                { title:"South African Compliance", items:["King V","B-BBEE Codes","ISO 14001","EE / Skills Dev","NEMWA","POPIA"] },
-                { title:"Emission Factors", items:["DEFRA 2024","Eskom NERSA 2024","GLEC Framework","SBTi CNZS 2.0","IFRS S2","King V"] },
+                {
+                  title:"Global Disclosure", accent:"#22d3ee", glow:"rgba(34,211,238,0.12)", border:"rgba(34,211,238,0.32)",
+                  icon:(<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18"/></svg>),
+                  items:["GHG Protocol","IFRS S1 + S2","TCFD","CDP","SBTi CNZS 2.0","ISO 14083","GRI"],
+                },
+                {
+                  title:"South African Compliance", accent:"#a855f7", glow:"rgba(168,85,247,0.13)", border:"rgba(168,85,247,0.32)",
+                  icon:(<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4.6-3.1 7.7-7 9-3.9-1.3-7-4.4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg>),
+                  items:["King V","B-BBEE Codes","ISO 14001","EE / Skills Dev","NEMWA","POPIA"],
+                },
+                {
+                  title:"Emission Factors", accent:"#fbbf24", glow:"rgba(251,191,36,0.13)", border:"rgba(251,191,36,0.34)",
+                  icon:(<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 18a9 9 0 1 1 17 0"/><path d="M12 13l4-4"/><circle cx="12" cy="13" r="1"/></svg>),
+                  items:["DEFRA 2024","Eskom NERSA 2024","GLEC Framework","SBTi CNZS 2.0","IFRS S2","King V"],
+                },
               ].map((col, ci) => (
-                <div key={col.title}>
-                  <Reveal delay={ci > 0 ? `ok-d${ci}` : ""}>
-                    <span className="ok-fw-col-title">{col.title}</span>
+                <Reveal key={col.title} delay={ci > 0 ? `ok-d${ci}` : ""}>
+                  <div
+                    className="ok-fw-card"
+                    style={{ "--fw-accent": col.accent, "--fw-glow": col.glow, "--fw-border": col.border } as React.CSSProperties}
+                  >
+                    <div className="ok-fw-head">
+                      <span className="ok-fw-icon">{col.icon}</span>
+                      <span className="ok-fw-head-text">
+                        <span className="ok-fw-col-title">{col.title}</span>
+                        <span className="ok-fw-count">{col.items.length} standards</span>
+                      </span>
+                    </div>
                     <div className="ok-fw-chips">
                       {col.items.map((n) => (
                         <span key={n} className="ok-fw-chip">{n}</span>
                       ))}
                     </div>
-                  </Reveal>
-                </div>
+                  </div>
+                </Reveal>
               ))}
             </div>
           </div>
