@@ -60,6 +60,13 @@ const envSchema = z.object({
   AZURE_OPENAI_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
 
+  // Google Analytics (GA4 Data API) + Search Console — server-side only.
+  // All optional; analytics routes degrade gracefully when absent.
+  GOOGLE_ANALYTICS_PROPERTY_ID: z.string().optional(),
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: z.string().optional(),
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY: z.string().optional(),
+  GOOGLE_SEARCH_CONSOLE_PROPERTY: z.string().optional(),
+
   // Feature flags
   DISABLE_CERTIFICATE_STARTUP_EXTRACTION: truthy,
   CERT_EXTRACTION_ON_STARTUP: truthy,

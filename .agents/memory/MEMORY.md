@@ -1,2 +1,4 @@
 - [Supplier size term](supplier-size-term.md) — supplier-size enum is produced by TWO paths (workbook sections.ts + excelImport.ts); rename both or legacy term leaks back.
 - [Testing setup quirks](testing-setup.md) — vitest hoisted in apps/web only (apps/api has none); jsdom per-file docblock; avoid jest-dom/vitest import; import.meta.url not file:// under jsdom.
+- [SPA GA4 tracking](spa-ga4-tracking.md) — with a manual route-change page_view tracker, set send_page_view:false in gtag config or the first load double-counts.
+- [Web server proxy prefix](web-proxy-prefix.md) — new /api/* routes on apps/api need adding to PROXIED_PREFIXES AND a web-workflow restart (vite HMR won't reload Express).

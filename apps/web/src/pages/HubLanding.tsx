@@ -269,6 +269,22 @@ export default function HubLanding() {
                         </div>
                       </Link>
                     )}
+                    {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                      <Link
+                        href="/admin/analytics"
+                        onClick={() => setTeamMenuOpen(false)}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-white/[0.05] smooth text-left"
+                        data-testid="menu-item-admin-analytics"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-white/[0.06] border border-white/[0.08] grid place-items-center shrink-0">
+                          <LineChart className="h-4 w-4 text-[#d1d1d6]" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] font-medium text-white">Traffic analytics</div>
+                          <div className="text-[11px] text-[#8e8e93]">Visitors, sources, search performance</div>
+                        </div>
+                      </Link>
+                    )}
                     {user?.role === 'super_admin' && (
                       <Link
                         href="/super-admin"

@@ -20,6 +20,7 @@ import EntityBuilder from "@/pages/EntityBuilder";
 import DocumentProcessor from "@/pages/DocumentProcessor";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
+import AdminAnalytics from "@/pages/AdminAnalytics";
 import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
@@ -36,6 +37,7 @@ import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
+import { usePageViewTracking } from "@/lib/gaTracker";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
 const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
@@ -134,6 +136,7 @@ function EsgHubRedirect() {
 }
 
 function AppRouter() {
+  usePageViewTracking();
   return (
     <Switch>
       <Route path="/">
@@ -204,6 +207,9 @@ function AppRouter() {
       </Route>
       <Route path="/admin/certificates">
         <ProtectedRoute><AdminCertificates /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/analytics">
+        <ProtectedRoute><AdminAnalytics /></ProtectedRoute>
       </Route>
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
