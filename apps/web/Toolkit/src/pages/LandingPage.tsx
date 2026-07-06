@@ -1079,7 +1079,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 </span>
               </h1>
               <p className="ok-hero-sub ok-anim-3">
-                <strong>ESG, B-BBEE &amp; Skills Development</strong> — one toolkit,
+                <strong>ESG, B-BBEE &amp; Skills Development</strong>. One toolkit,
                 audit-grade, Net-Zero ready.
               </p>
               <div className="ok-hero-btns ok-anim-4">
@@ -1379,7 +1379,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 <span className="ok-eyebrow">Ready when you are</span>
                 <h2 className="ok-cta-h">Make your next disclosure the one that compounds.</h2>
                 <p className="ok-cta-sub">
-                  ESG, B-BBEE and Skills Development in one toolkit — progress you can
+                  ESG, B-BBEE and Skills Development in one toolkit. Progress you can
                   prove every quarter.
                 </p>
                 <div className="ok-cta-btns">
