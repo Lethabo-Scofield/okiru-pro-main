@@ -1,10 +1,9 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import Groq from "groq-sdk";
-import session from "express-session";
-import MongoStore from "connect-mongo";
 import bcrypt from "bcryptjs";
 import { storage } from "./storage";
+import { configureSession } from "./sessionConfig";
 import {
   resolveAssessmentAccess,
   filterPillarsForAccess,
@@ -176,39 +175,11 @@ export async function registerRoutes(
     app.set("trust proxy", 1);
   }
 
-  const sessionSecret = process.env.SESSION_SECRET;
-  if (isProduction && !sessionSecret) {
-    logger.error("SESSION_SECRET must be set in production");
-    process.exit(1);
-  }
-
-  logger.debug("Configuring session middleware...");
-
-  const sessionConfig: session.SessionOptions = {
-    secret: sessionSecret || "okiru-entity-studio-dev-secret",
-    resave: false,
-    saveUninitialized: false,
-    name: 'okiru.web.sid',
-    cookie: {
-      httpOnly: true,
-      secure: isProduction || isReplit,
-      sameSite: isReplit ? "none" : "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    },
-  };
-
-  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI;
-  if (mongoUri && isMongoConnected()) {
-    sessionConfig.store = MongoStore.create({
-      mongoUrl: mongoUri,
-      collectionName: "sessions",
-      touchAfter: 24 * 3600,
-    });
-  } else {
-    logger.warn("Using in-memory session store (MongoDB unavailable) - sessions will not persist across restarts");
-  }
-
-  app.use(session(sessionConfig));
+  // Session middleware is mounted by configureSession() in index.ts BEFORE the
+  // API proxy (so the proxy can read req.session). configureSession() is
+  // idempotent, so calling it here again is a safe no-op that keeps this path
+  // working if registerRoutes is ever used standalone (e.g. in tests).
+  configureSession(app);
 
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({

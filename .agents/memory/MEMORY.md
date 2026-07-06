@@ -2,3 +2,4 @@
 - [Testing setup quirks](testing-setup.md) — vitest hoisted in apps/web only (apps/api has none); jsdom per-file docblock; avoid jest-dom/vitest import; import.meta.url not file:// under jsdom.
 - [SPA GA4 tracking](spa-ga4-tracking.md) — with a manual route-change page_view tracker, set send_page_view:false in gtag config or the first load double-counts.
 - [Web server proxy prefix](web-proxy-prefix.md) — new /api/* routes on apps/api need adding to PROXIED_PREFIXES AND a web-workflow restart (vite HMR won't reload Express).
+- [Offline demo cross-server auth](offline-demo-cross-server-auth.md) — demo/demo session only lives on web server; proxied apps/api routes 401 offline unless proxy forwards a trusted identity header.
