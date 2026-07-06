@@ -321,12 +321,12 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hero-tag-brand { color: rgba(255,255,255,0.35); letter-spacing: 0.12em; }
 
   .okiru-root .ok-h1 {
-    font-family: var(--serif); font-size: clamp(2.8rem, 5.8vw, 5.2rem);
-    line-height: 1.12; letter-spacing: -0.035em; color: #ffffff; font-weight: 700;
+    font-family: var(--serif); font-size: clamp(2.4rem, 4.4vw, 4rem);
+    line-height: 1.1; letter-spacing: -0.035em; color: #ffffff; font-weight: 700;
     max-width: min(60rem, 100%); margin-bottom: 32px;
   }
   .okiru-root .ok-h1-gradient {
-    display: block; margin-top: 6px;
+    display: block; margin-top: 6px; white-space: nowrap;
     background: var(--grad-text);
     background-size: 220% 100%;
     -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
@@ -369,6 +369,49 @@ export const GLOBAL_CSS = `
   }
   .okiru-root .ok-hero-stat-div { width: 1px; height: 34px; background: rgba(255,255,255,0.1); }
   .okiru-root .ok-anim-5 { opacity: 0; animation: okiru-slideUp .6s ease forwards .6s; }
+
+  /* ── HERO LAYOUT + FLOATING SCORECARD ── */
+  .okiru-root .ok-hero-w {
+    display: grid; grid-template-columns: minmax(0,1fr) 380px;
+    gap: 64px; align-items: center;
+  }
+  .okiru-root .ok-hero-content { min-width: 0; }
+  .okiru-root .ok-hero-visual { opacity: 0; animation: okiru-slideUp .7s ease forwards .5s; }
+  .okiru-root .ok-hero-card {
+    position: relative; border-radius: 18px; padding: 26px 26px 28px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter: blur(20px) saturate(1.3); -webkit-backdrop-filter: blur(20px) saturate(1.3);
+    box-shadow: 0 34px 90px -34px rgba(0,0,0,0.85), inset 0 1px 0 rgba(255,255,255,0.08);
+    animation: okiru-cardFloat 6.5s ease-in-out infinite;
+  }
+  @keyframes okiru-cardFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hero-card { animation: none; } }
+  .okiru-root .ok-hero-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+  .okiru-root .ok-hero-card-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+  .okiru-root .ok-hero-card-live { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); }
+  .okiru-root .ok-hero-card-live::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px rgba(52,211,153,0.7); animation: okiru-tagPulse 2.4s ease-in-out infinite; }
+  .okiru-root .ok-hero-card-level { display: flex; align-items: center; gap: 18px; margin-bottom: 24px; }
+  .okiru-root .ok-hero-ring { position: relative; width: 92px; height: 92px; flex-shrink: 0; }
+  .okiru-root .ok-hero-ring svg { transform: rotate(-90deg); display: block; }
+  .okiru-root .ok-hero-ring circle.ok-ring-fill { stroke-dasharray: 263.9; stroke-dashoffset: 263.9; animation: okiru-ringFill 1.6s cubic-bezier(.16,1,.3,1) forwards .7s; }
+  @keyframes okiru-ringFill { to { stroke-dashoffset: 21; } }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hero-ring circle.ok-ring-fill { animation: none; stroke-dashoffset: 21; } }
+  .okiru-root .ok-hero-ring-label { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .okiru-root .ok-hero-ring-num { font-family: var(--serif); font-weight: 700; font-size: 1.5rem; color: #fff; line-height: 1; }
+  .okiru-root .ok-hero-ring-pct { font-family: var(--mono); font-size: 8px; letter-spacing: 0.14em; color: rgba(255,255,255,0.5); margin-top: 3px; }
+  .okiru-root .ok-hero-card-lvl { font-family: var(--serif); font-weight: 700; font-size: 1.7rem; color: #fff; letter-spacing: -0.02em; line-height: 1.05; }
+  .okiru-root .ok-hero-card-lvlsub { font-size: 12px; color: rgba(255,255,255,0.55); margin-top: 5px; line-height: 1.4; }
+  .okiru-root .ok-hero-bars { display: flex; flex-direction: column; gap: 13px; padding-top: 22px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .okiru-root .ok-hero-bar-head { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 7px; }
+  .okiru-root .ok-hero-bar-track { height: 5px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow: hidden; }
+  .okiru-root .ok-hero-bar-fill { height: 100%; border-radius: 999px; background: var(--grad-h); width: 0; animation: okiru-barGrow 1.4s cubic-bezier(.16,1,.3,1) forwards .8s; }
+  @keyframes okiru-barGrow { to { width: var(--w); } }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hero-bar-fill { animation: none; width: var(--w); } }
+  @media (max-width: 1040px) {
+    .okiru-root .ok-hero-w { grid-template-columns: 1fr; gap: 0; }
+    .okiru-root .ok-hero-visual { display: none; }
+  }
 
   .okiru-root .ok-btn-cta {
     display: inline-flex; align-items: center; gap: 9px; font-family: var(--sans);
@@ -966,6 +1009,55 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 <div className="ok-hero-stat">
                   <span className="ok-hero-stat-num">IFRS S1/S2</span>
                   <span className="ok-hero-stat-label">disclosure aligned</span>
+                </div>
+              </div>
+            </div>
+            <div className="ok-hero-visual" aria-hidden="true">
+              <div className="ok-hero-card">
+                <div className="ok-hero-card-top">
+                  <span className="ok-hero-card-title">B-BBEE Scorecard</span>
+                  <span className="ok-hero-card-live">Live</span>
+                </div>
+                <div className="ok-hero-card-level">
+                  <div className="ok-hero-ring">
+                    <svg width="92" height="92" viewBox="0 0 92 92">
+                      <defs>
+                        <linearGradient id="okHeroRing" x1="0" y1="0" x2="1" y2="1">
+                          <stop offset="0%" stopColor="#e8441a" />
+                          <stop offset="50%" stopColor="#06b6d4" />
+                          <stop offset="100%" stopColor="#9333ea" />
+                        </linearGradient>
+                      </defs>
+                      <circle cx="46" cy="46" r="42" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
+                      <circle className="ok-ring-fill" cx="46" cy="46" r="42" fill="none" stroke="url(#okHeroRing)" strokeWidth="6" strokeLinecap="round" />
+                    </svg>
+                    <div className="ok-hero-ring-label">
+                      <span className="ok-hero-ring-num">92</span>
+                      <span className="ok-hero-ring-pct">POINTS</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="ok-hero-card-lvl">Level 2</div>
+                    <div className="ok-hero-card-lvlsub">135% procurement recognition</div>
+                  </div>
+                </div>
+                <div className="ok-hero-bars">
+                  {[
+                    { name: "Ownership", w: "88%" },
+                    { name: "Skills Dev", w: "94%" },
+                    { name: "Enterprise & Supplier", w: "90%" },
+                    { name: "Socio-Economic", w: "100%" },
+                  ].map((b) => (
+                    <div key={b.name}>
+                      <div className="ok-hero-bar-head">
+                        <span>{b.name}</span>
+                        <span>{b.w}</span>
+                      </div>
+                      <div className="ok-hero-bar-track">
+                        <div className="ok-hero-bar-fill" style={{ ["--w" as string]: b.w }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
