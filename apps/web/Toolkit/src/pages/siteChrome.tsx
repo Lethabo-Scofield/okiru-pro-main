@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useLocation } from "wouter";
 import okiruLogo from "@toolkit-assets/okiru_logo_v2.png";
 import { PRODUCT_TABS } from "./productLandingConfig";
 
@@ -160,17 +161,37 @@ export function SiteNav({
    SITE FOOTER — shared across all marketing pages
 ───────────────────────────────────────────── */
 export function SiteFooter({ onNavigateAuth }: { onNavigateAuth?: () => void }) {
+  const [, navigate] = useLocation();
+  const go = (path: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(path);
+    window.scrollTo(0, 0);
+  };
+  const year = new Date().getFullYear();
   return (
     <footer>
       <div className="ok-w">
         <div className="ok-foot-grid">
+          <div className="ok-foot-brand">
+            <span className="ok-foot-brand-top">
+              <img src={okiruLogo} alt="" />
+              Okiru Consulting
+            </span>
+            <p className="ok-foot-brand-desc">
+              ESG, B-BBEE &amp; Skills Development in one audit-grade toolkit. Compliance. Strategy. Growth — built for South African organisations.
+            </p>
+            <div className="ok-foot-social">
+              <a href={OKIRU_LINKEDIN_URL} target="_blank" rel="noopener noreferrer" aria-label="Okiru Consulting on LinkedIn">
+                <LinkedInIcon size={16} />
+              </a>
+            </div>
+          </div>
           <div>
-            <div className="ok-foot-col-title">Contact</div>
+            <div className="ok-foot-col-title">Company</div>
             <div className="ok-foot-col-items">
-              <div className="ok-foot-col-item"><a href="mailto:contact@okiru.co.za">contact@okiru.co.za</a></div>
-              <div className="ok-foot-col-item">+27 78 104 6527</div>
-              <div className="ok-foot-col-item"><a href="https://okiru.co.za" target="_blank" rel="noopener">okiru.co.za</a></div>
-              <div className="ok-foot-col-item"><a href={OKIRU_LINKEDIN_URL} target="_blank" rel="noopener noreferrer">LinkedIn</a></div>
+              <div className="ok-foot-col-item"><a href="/about" onClick={go("/about")}>About</a></div>
+              <div className="ok-foot-col-item"><a href="/contact" onClick={go("/contact")}>Contact</a></div>
+              <div className="ok-foot-col-item"><button className="ok-foot-linkbtn" onClick={onNavigateAuth}>Sign in</button></div>
             </div>
           </div>
           <div>
@@ -182,20 +203,36 @@ export function SiteFooter({ onNavigateAuth }: { onNavigateAuth?: () => void }) 
             </div>
           </div>
           <div>
-            <div className="ok-foot-col-title">Frameworks</div>
+            <div className="ok-foot-col-title">Legal</div>
             <div className="ok-foot-col-items">
-              <div className="ok-foot-col-item" style={{ fontSize: 12, lineHeight: 1.8 }}>IFRS S1/S2 · GRI · TCFD · CDP · SBTi CNZS 2.0 · King V · B-BBEE Codes · EE Act · ISO 14001 · POPIA · ISO 14083</div>
+              <div className="ok-foot-col-item"><a href="/privacy" onClick={go("/privacy")}>Privacy Policy</a></div>
+              <div className="ok-foot-col-item"><a href="/terms" onClick={go("/terms")}>Terms of Service</a></div>
+              <div className="ok-foot-col-item"><a href="/privacy" onClick={go("/privacy")}>POPIA Compliance</a></div>
             </div>
           </div>
+          <div>
+            <div className="ok-foot-col-title">Contact</div>
+            <div className="ok-foot-col-items">
+              <div className="ok-foot-col-item"><a href="mailto:contact@okiru.co.za">contact@okiru.co.za</a></div>
+              <div className="ok-foot-col-item">+27 78 104 6527</div>
+              <div className="ok-foot-col-item"><a href="https://okiru.co.za" target="_blank" rel="noopener">okiru.co.za</a></div>
+              <div className="ok-foot-col-item">Braamfontein, Johannesburg</div>
+            </div>
+          </div>
+        </div>
+        <div className="ok-foot-frameworks">
+          <span className="ok-foot-col-title" style={{ marginBottom: 0 }}>Frameworks</span>
+          <span className="ok-foot-fw-list">IFRS S1/S2 · GRI · TCFD · CDP · SBTi CNZS 2.0 · King V · B-BBEE Codes · EE Act · ISO 14001 · POPIA · ISO 14083</span>
         </div>
         <div className="ok-foot-bottom">
           <span className="ok-foot-wm">
             <img src={okiruLogo} alt="" style={{ width: 22, height: 22, opacity: 0.85 }} />
             Okiru Consulting
           </span>
-          <span className="ok-foot-c">Compliance. Strategy. Growth. · Braamfontein, Johannesburg, South Africa</span>
+          <span className="ok-foot-c">© {year} Okiru Consulting · All rights reserved</span>
           <div className="ok-foot-links">
-            <button className="ok-foot-link" onClick={onNavigateAuth}>Sign in</button>
+            <a href="/privacy" className="ok-foot-link" onClick={go("/privacy")}>Privacy</a>
+            <a href="/terms" className="ok-foot-link" onClick={go("/terms")}>Terms</a>
             <a href="/devmode" className="ok-foot-link" data-testid="link-devmode">{`{DevMode}`}</a>
           </div>
         </div>
