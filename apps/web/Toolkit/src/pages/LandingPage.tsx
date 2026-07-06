@@ -39,7 +39,13 @@ export const GLOBAL_CSS = `
     --mono:  'IBM Plex Mono', ui-monospace, monospace;
     --serif: 'Inter', system-ui, -apple-system, sans-serif;
     --sans:  'Inter', system-ui, -apple-system, sans-serif;
-    background: var(--ink); color: var(--body);
+    background:
+      radial-gradient(ellipse 70% 45% at 12% 8%, rgba(147,51,234,0.055), transparent 60%),
+      radial-gradient(ellipse 60% 45% at 92% 42%, rgba(6,182,212,0.04), transparent 58%),
+      radial-gradient(ellipse 55% 40% at 50% 100%, rgba(232,68,26,0.035), transparent 62%),
+      var(--ink);
+    background-attachment: fixed;
+    color: var(--body);
     font-family: var(--sans); font-weight: 400;
     font-size: 15px; line-height: 1.65; overflow-x: hidden; min-height: 100%;
   }
@@ -383,10 +389,17 @@ export const GLOBAL_CSS = `
 
   /* ── SERVICE STRIP ── */
   .okiru-root .ok-services { display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); }
-  .okiru-root .ok-service { flex: 1; padding: 22px 32px; border-right: 1px solid var(--rule); transition: background .3s; }
+  .okiru-root .ok-service { flex: 1; padding: 22px 32px; border-right: 1px solid var(--rule); position: relative; overflow: hidden; transition: background .3s; }
   .okiru-root .ok-service:last-child { border-right: none; }
-  .okiru-root .ok-service:hover { background: rgba(255,255,255,0.02); }
-  .okiru-root .ok-service-name { font-family: var(--serif); font-size: 1.15rem; font-weight: 400; color: var(--hi); margin-bottom: 3px; }
+  .okiru-root .ok-service::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+    background: var(--grad-h); transform: scaleX(0); transform-origin: left;
+    transition: transform .4s cubic-bezier(.16,1,.3,1);
+  }
+  .okiru-root .ok-service:hover { background: rgba(255,255,255,0.025); }
+  .okiru-root .ok-service:hover::after { transform: scaleX(1); }
+  .okiru-root .ok-service-name { font-family: var(--serif); font-size: 1.15rem; font-weight: 400; color: var(--hi); margin-bottom: 3px; transition: color .3s; }
+  .okiru-root .ok-service:hover .ok-service-name { color: #fff; }
   .okiru-root .ok-service-meta { font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 
   /* ── QUOTE ── */
@@ -457,12 +470,19 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-challenge-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 2px; margin-top: 56px; }
   .okiru-root .ok-challenge-card {
     padding: 40px 36px; border: 1px solid var(--rule);
-    background: rgba(255,255,255,0.015); position: relative; overflow: hidden; transition: background .3s;
+    background: rgba(255,255,255,0.015); position: relative; overflow: hidden;
+    transition: background .35s, border-color .35s, transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s;
   }
-  .okiru-root .ok-challenge-card:hover { background: var(--card-hover); border-color: rgba(255,255,255,0.14); }
+  .okiru-root .ok-challenge-card:hover {
+    background: var(--card-hover); border-color: rgba(255,255,255,0.14);
+    transform: translateY(-3px); box-shadow: 0 22px 48px -26px rgba(0,0,0,0.8);
+  }
   .okiru-root .ok-challenge-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: var(--accent-line);
+    background: var(--accent-line); transition: background .35s, height .35s, box-shadow .35s;
+  }
+  .okiru-root .ok-challenge-card:hover::before {
+    height: 2px; background: var(--grad-h); box-shadow: 0 0 18px rgba(147,51,234,0.4);
   }
   .okiru-root .ok-challenge-label { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; display: block; }
   .okiru-root .ok-challenge-title { font-family: var(--serif); font-size: 1.3rem; color: var(--hi); font-weight: 400; letter-spacing: -0.02em; margin-bottom: 10px; }
@@ -526,8 +546,9 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-fw-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 32px; margin-top: 56px; }
   .okiru-root .ok-fw-col-title { font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; display: block; padding-bottom: 12px; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-fw-items { list-style: none; }
-  .okiru-root .ok-fw-item { padding: 12px 0; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 3px; }
+  .okiru-root .ok-fw-item { padding: 12px 10px 12px 12px; margin: 0 -10px 0 -12px; border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; gap: 3px; border-radius: 6px; transition: background .25s, padding-left .25s cubic-bezier(.16,1,.3,1); }
   .okiru-root .ok-fw-item:last-child { border-bottom: none; }
+  .okiru-root .ok-fw-item:hover { background: rgba(255,255,255,0.03); padding-left: 18px; }
   .okiru-root .ok-fw-name { font-size: 13.5px; color: var(--hi); font-weight: 500; }
   .okiru-root .ok-fw-desc { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.04em; }
 
