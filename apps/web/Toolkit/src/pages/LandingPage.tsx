@@ -3,7 +3,6 @@ import heroBg from "@assets/image_1783374759717.png";
 import ringLogo from "@assets/okiru_ring.png";
 import showcaseImg from "@assets/image_1783375720739.png";
 import showcaseImg2 from "@assets/image_1783375813984.png";
-import heroShot from "@assets/image_1783375903114.png";
 import { PRODUCTS } from "./productLandingConfig";
 import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome";
 
@@ -379,14 +378,58 @@ export const GLOBAL_CSS = `
   }
   .okiru-root .ok-hero-content { min-width: 0; }
   .okiru-root .ok-hero-visual { opacity: 0; animation: okiru-slideUp .7s ease forwards .5s; }
-  .okiru-root .ok-hero-shot {
-    display: block; width: 100%; height: auto; border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.14);
+  .okiru-root .ok-hero-card {
+    position: relative; width: 100%; border-radius: 16px; overflow: hidden;
+    background: linear-gradient(180deg, #0f1524 0%, #0b0f1a 100%);
+    border: 1px solid rgba(255,255,255,0.1);
     box-shadow: 0 40px 100px -34px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.06);
-    animation: okiru-cardFloat 6.5s ease-in-out infinite;
+    font-family: var(--sans);
   }
-  @keyframes okiru-cardFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hero-shot { animation: none; } }
+  .okiru-root .ok-hero-card::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 16px;
+    background: radial-gradient(120% 80% at 100% 0%, rgba(147,51,234,0.12) 0%, transparent 52%);
+  }
+  .okiru-root .ok-hcard-top {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 18px 14px; border-bottom: 1px solid rgba(255,255,255,0.07); position: relative; z-index: 1;
+  }
+  .okiru-root .ok-hcard-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .okiru-root .ok-hcard-title b { font-size: 13.5px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
+  .okiru-root .ok-hcard-title span { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; color: var(--muted); }
+  .okiru-root .ok-hcard-live {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: #34d399;
+    background: rgba(52,211,153,0.10); border: 1px solid rgba(52,211,153,0.25); border-radius: 999px; padding: 4px 9px;
+  }
+  .okiru-root .ok-hcard-live i { width: 5px; height: 5px; border-radius: 50%; background: #34d399; box-shadow: 0 0 8px rgba(52,211,153,0.7); animation: okiru-tagPulse 2.4s ease-in-out infinite; }
+  .okiru-root .ok-hcard-body { padding: 4px 18px 6px; position: relative; z-index: 1; }
+  .okiru-root .ok-hcard-row {
+    display: grid; grid-template-columns: 1fr 60px 46px 16px; align-items: center; gap: 11px;
+    padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .okiru-root .ok-hcard-name { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .okiru-root .ok-hcard-dot { width: 6px; height: 6px; border-radius: 2px; flex-shrink: 0; }
+  .okiru-root .ok-hcard-name b { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .okiru-root .ok-hcard-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.09); overflow: hidden; }
+  .okiru-root .ok-hcard-fill { height: 100%; border-radius: 999px; transform-origin: left; filter: saturate(1.15) brightness(1.05); box-shadow: 0 0 10px -2px currentColor; animation: okiru-barFill 1.1s cubic-bezier(.16,1,.3,1) both .55s; }
+  @keyframes okiru-barFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  .okiru-root .ok-hcard-score { font-family: var(--mono); font-size: 12px; font-weight: 600; color: #fff; text-align: right; }
+  .okiru-root .ok-hcard-status { display: grid; place-items: center; }
+  .okiru-root .ok-hcard-total {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 14px 18px; background: rgba(255,255,255,0.03); border-top: 1px solid rgba(255,255,255,0.1); position: relative; z-index: 1;
+  }
+  .okiru-root .ok-hcard-total-left { display: flex; align-items: center; gap: 9px; }
+  .okiru-root .ok-hcard-total-left b { font-size: 12.5px; font-weight: 700; color: #fff; }
+  .okiru-root .ok-hcard-total-right { display: flex; align-items: center; gap: 14px; }
+  .okiru-root .ok-hcard-total-score { font-family: var(--mono); font-size: 15px; font-weight: 700; color: #fff; }
+  .okiru-root .ok-hcard-total-score em { font-style: normal; font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+  .okiru-root .ok-hcard-risk {
+    display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono);
+    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #fbbf24;
+    background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.28); border-radius: 999px; padding: 4px 9px;
+  }
+  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hcard-fill, .okiru-root .ok-hcard-live i { animation: none; } }
   @media (max-width: 1040px) {
     .okiru-root .ok-hero-w { grid-template-columns: 1fr; gap: 40px; }
     .okiru-root .ok-hero-content { order: 1; text-align: center; }
@@ -947,6 +990,9 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-hero-btns { justify-content: center; }
     .okiru-root .ok-hero-stats { gap: 16px 22px; margin-top: 40px; }
     .okiru-root .ok-hero-stat-div { display: none; }
+    .okiru-root .ok-hcard-row { grid-template-columns: 1fr 48px 44px 16px; gap: 9px; }
+    .okiru-root .ok-hcard-top, .okiru-root .ok-hcard-total { padding-left: 15px; padding-right: 15px; }
+    .okiru-root .ok-hcard-body { padding-left: 15px; padding-right: 15px; }
     .okiru-root .ok-btn-cta, .okiru-root .ok-btn-sec { justify-content: center; }
     .okiru-root .ok-nz-targets { grid-template-columns: 1fr 1fr; }
     .okiru-root .ok-nz-milestones { grid-template-columns: 1fr; }
@@ -1080,12 +1126,59 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               </div>
             </div>
             <div className="ok-hero-visual" aria-hidden="true">
-              <img
-                className="ok-hero-shot"
-                src={heroShot}
-                alt=""
-                loading="eager"
-              />
+              <div className="ok-hero-card">
+                <div className="ok-hcard-top">
+                  <div className="ok-hcard-title">
+                    <b>Generic Scorecard</b>
+                    <span>B-BBEE · Live translation</span>
+                  </div>
+                  <span className="ok-hcard-live"><i />Live</span>
+                </div>
+                <div className="ok-hcard-body">
+                  {[
+                    { name:"Ownership", score:"23.00", pct:92, color:"#a855f7", status:"warn" },
+                    { name:"Management Control & EE", score:"19.40", pct:92, color:"#3b82f6", status:"warn" },
+                    { name:"Skills Development", score:"18.60", pct:81, color:"#10b981", status:"warn" },
+                    { name:"Preferential Procurement", score:"24.00", pct:100, color:"#f59e0b", status:"ok" },
+                    { name:"Supplier Development", score:"10.00", pct:100, color:"#ec4899", status:"ok" },
+                    { name:"Enterprise Development", score:"5.00", pct:56, color:"#f97316", status:"err" },
+                    { name:"Socio-Economic Development", score:"3.00", pct:38, color:"#38bdf8", status:"err" },
+                    { name:"YES Initiative", score:"0.00", pct:0, color:"#64748b", status:"err" },
+                  ].map((r) => (
+                    <div className="ok-hcard-row" key={r.name}>
+                      <span className="ok-hcard-name">
+                        <span className="ok-hcard-dot" style={{ background: r.color }} />
+                        <b>{r.name}</b>
+                      </span>
+                      <span className="ok-hcard-bar">
+                        <span className="ok-hcard-fill" style={{ width: `${r.pct}%`, background: r.color, color: r.color }} />
+                      </span>
+                      <span className="ok-hcard-score">{r.score}</span>
+                      <span className="ok-hcard-status">
+                        {r.status === "ok" ? (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        ) : r.status === "warn" ? (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5l9 16.5H3z" /><path d="M12 10v4" /><path d="M12 17h.01" /></svg>
+                        ) : (
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="ok-hcard-total">
+                  <span className="ok-hcard-total-left">
+                    <b>Grand Total</b>
+                  </span>
+                  <span className="ok-hcard-total-right">
+                    <span className="ok-hcard-total-score">103.00<em>/120</em></span>
+                    <span className="ok-hcard-risk">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5l9 16.5H3z" /><path d="M12 10v4" /><path d="M12 17h.01" /></svg>
+                      At Risk
+                    </span>
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
