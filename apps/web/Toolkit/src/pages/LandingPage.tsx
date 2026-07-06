@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import heroBg from "@assets/image_1783374759717.png";
 import ctaBg from "@assets/image_1783017701495.png";
 import ringLogo from "@assets/okiru_ring.png";
+import showcaseImg from "@assets/image_1783375720739.png";
 import { PRODUCTS } from "./productLandingConfig";
 import { SiteNav, SiteFooter, Reveal, DemoModal, ArrowRight } from "./siteChrome";
 
@@ -412,6 +413,28 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-hero-w { grid-template-columns: 1fr; gap: 0; }
     .okiru-root .ok-hero-visual { display: none; }
   }
+
+  /* ── PRODUCT SHOWCASE ── */
+  .okiru-root .ok-showcase { position: relative; padding: 48px 0 96px; }
+  .okiru-root .ok-showcase-head { text-align: center; margin-bottom: 44px; }
+  .okiru-root .ok-showcase-tag { display: inline-flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 16px; }
+  .okiru-root .ok-showcase-h { font-family: var(--serif); font-weight: 700; font-size: clamp(1.7rem, 3.2vw, 2.6rem); letter-spacing: -0.02em; color: #fff; }
+  .okiru-root .ok-showcase-stage { position: relative; }
+  .okiru-root .ok-showcase-stage::before {
+    content: ''; position: absolute; left: 50%; top: -8%; transform: translateX(-50%);
+    width: 72%; height: 78%; z-index: 0; pointer-events: none; filter: blur(70px);
+    background: radial-gradient(ellipse at center, rgba(147,51,234,0.24), rgba(6,182,212,0.10) 55%, transparent 72%);
+  }
+  .okiru-root .ok-frame {
+    position: relative; z-index: 1; border-radius: 14px; overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.12); background: rgba(13,18,32,0.7);
+    box-shadow: 0 50px 120px -40px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .okiru-root .ok-frame-bar { display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.03); }
+  .okiru-root .ok-frame-dots { display: flex; gap: 7px; }
+  .okiru-root .ok-frame-dots span { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,0.14); }
+  .okiru-root .ok-frame-url { flex: 1; max-width: 320px; margin: 0 auto; height: 22px; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.07); display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: rgba(255,255,255,0.45); }
+  .okiru-root .ok-frame-img { display: block; width: 100%; height: auto; }
 
   .okiru-root .ok-btn-cta {
     display: inline-flex; align-items: center; gap: 9px; font-family: var(--sans);
@@ -1089,6 +1112,33 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
             <svg width="12" height="14" viewBox="0 0 12 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="6" y1="1" x2="6" y2="13" /><polyline points="2 9 6 13 10 9" />
             </svg>
+          </div>
+        </section>
+
+        {/* ── PRODUCT SHOWCASE ── */}
+        <section className="ok-showcase">
+          <div className="ok-w">
+            <Reveal className="ok-showcase-head">
+              <span className="ok-showcase-tag">
+                <span className="ok-hero-tag-dot" aria-hidden />
+                Inside the platform
+              </span>
+              <h2 className="ok-showcase-h">One workspace. Every scorecard.</h2>
+            </Reveal>
+            <Reveal className="ok-showcase-stage">
+              <div className="ok-frame">
+                <div className="ok-frame-bar" aria-hidden="true">
+                  <div className="ok-frame-dots"><span /><span /><span /></div>
+                  <div className="ok-frame-url">app.okiru.pro</div>
+                </div>
+                <img
+                  className="ok-frame-img"
+                  src={showcaseImg}
+                  alt="Okiru Pro workspace — create and view scorecards, ESG toolkit, and B-BBEE Certificate Hub"
+                  loading="lazy"
+                />
+              </div>
+            </Reveal>
           </div>
         </section>
 
