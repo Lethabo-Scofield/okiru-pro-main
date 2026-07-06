@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import heroBg from "@assets/image_1783374759717.png";
-import ctaBg from "@assets/image_1783017701495.png";
 import ringLogo from "@assets/okiru_ring.png";
 import showcaseImg from "@assets/image_1783375720739.png";
 import showcaseImg2 from "@assets/image_1783375813984.png";
@@ -747,22 +746,23 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-social-handle { font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em; color: rgba(255,255,255,.4); }
 
   /* ── FINAL CTA ── */
-  .okiru-root .ok-cta { position: relative; overflow: hidden; padding: 128px 0; }
-  .okiru-root .ok-cta-photo {
-    position: absolute; inset: -40px; z-index: 0; pointer-events: none;
-    background-position: center; background-size: cover; background-repeat: no-repeat;
-    filter: blur(18px) saturate(1.05); opacity: 0.42; transform: scale(1.08);
+  .okiru-root .ok-cta { position: relative; overflow: hidden; padding: 112px 0; }
+  .okiru-root .ok-cta-glow {
+    position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 60% 60% at 50% 30%, rgba(147,51,234,0.10) 0%, transparent 70%);
   }
-  .okiru-root .ok-cta-bg {
-    position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  .okiru-root .ok-cta-card {
+    position: relative; z-index: 2; max-width: 820px; margin: 0 auto; text-align: center;
+    padding: 72px 64px; border: 1px solid var(--rule); border-radius: 24px;
     background:
-      radial-gradient(ellipse 70% 70% at 50% 0%, rgba(147,51,234,0.12) 0%, rgba(6,182,212,0.05) 40%, transparent 72%),
-      linear-gradient(180deg, var(--ink) 0%, rgba(11,15,26,0.55) 22%, rgba(11,15,26,0.55) 78%, var(--ink) 100%);
+      radial-gradient(ellipse 100% 130% at 50% -30%, rgba(147,51,234,0.14) 0%, transparent 58%),
+      linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.012) 100%);
+    box-shadow: 0 40px 90px -50px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.06);
   }
-  .okiru-root .ok-cta-inner { max-width: 760px; position: relative; z-index: 2; }
-  .okiru-root .ok-cta-h { font-family: var(--serif); font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; color: var(--hi); margin-bottom: 20px; }
-  .okiru-root .ok-cta-sub { font-size: 16px; color: var(--body); line-height: 1.7; margin-bottom: 36px; max-width: 580px; }
-  .okiru-root .ok-cta-btns { display: flex; gap: 14px; flex-wrap: wrap; }
+  .okiru-root .ok-cta-inner { position: relative; z-index: 2; }
+  .okiru-root .ok-cta-h { font-family: var(--serif); font-size: clamp(1.9rem, 3.6vw, 2.8rem); font-weight: 700; letter-spacing: -0.03em; line-height: 1.12; color: var(--hi); margin: 0 auto 18px; max-width: 16ch; }
+  .okiru-root .ok-cta-sub { font-size: 16px; color: var(--body); line-height: 1.7; margin: 0 auto 34px; max-width: 500px; }
+  .okiru-root .ok-cta-btns { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
 
   /* ── CEO / FOUNDER MESSAGE ── */
   .okiru-root .ok-ceo { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); background: linear-gradient(to bottom, rgba(147,51,234,0.03) 0%, transparent 60%); }
@@ -915,10 +915,14 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-modal { max-width: calc(100vw - 32px); }
     .okiru-root .ok-modal-head { padding: 24px 24px 0; }
     .okiru-root .ok-modal-body { padding: 20px 24px 24px; }
+    .okiru-root .ok-cta-card { padding: 48px 28px; border-radius: 20px; }
   }
   @media (max-width: 480px) {
     .okiru-root .ok-foot-grid { grid-template-columns: 1fr; }
     .okiru-root .ok-foot-brand { grid-column: auto; }
+    .okiru-root .ok-cta-card { padding: 36px 20px; }
+    .okiru-root .ok-cta-btns { flex-direction: column; }
+    .okiru-root .ok-cta-btns .ok-btn-cta, .okiru-root .ok-cta-btns .ok-btn-sec { justify-content: center; width: 100%; }
     .okiru-root .ok-h1 { font-size: 2.2rem; }
     .okiru-root .ok-section { padding: 52px 0; }
     .okiru-root .ok-section.ok-page-top { padding-top: 96px; }
@@ -1252,21 +1256,22 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
 
         {/* ── 06: FINAL CTA ── */}
         <section className="ok-section ok-cta" id="sec-cta">
-          <div className="ok-cta-photo" aria-hidden style={{ backgroundImage: `url(${ctaBg})` }} />
-          <div className="ok-cta-bg" aria-hidden />
+          <div className="ok-cta-glow" aria-hidden />
           <div className="ok-w">
-            <Reveal className="ok-cta-inner">
-              <span className="ok-eyebrow">Ready when you are</span>
-              <h2 className="ok-cta-h">Make your next disclosure the one that compounds.</h2>
-              <p className="ok-cta-sub">
-                ESG, B-BBEE and Skills Development in one toolkit — progress you can
-                prove every quarter.
-              </p>
-              <div className="ok-cta-btns">
-                <button className="ok-btn-cta" onClick={goRegister}>
-                  Get started <span className="arr"><ArrowRight size={14} /></span>
-                </button>
-                <button className="ok-btn-sec" onClick={goContact}>Talk to our team</button>
+            <Reveal className="ok-cta-card">
+              <div className="ok-cta-inner">
+                <span className="ok-eyebrow">Ready when you are</span>
+                <h2 className="ok-cta-h">Make your next disclosure the one that compounds.</h2>
+                <p className="ok-cta-sub">
+                  ESG, B-BBEE and Skills Development in one toolkit — progress you can
+                  prove every quarter.
+                </p>
+                <div className="ok-cta-btns">
+                  <button className="ok-btn-cta" onClick={goRegister}>
+                    Get started <span className="arr"><ArrowRight size={14} /></span>
+                  </button>
+                  <button className="ok-btn-sec" onClick={goContact}>Talk to our team</button>
+                </div>
               </div>
             </Reveal>
           </div>
