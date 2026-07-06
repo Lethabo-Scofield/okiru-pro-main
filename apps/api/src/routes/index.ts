@@ -40,6 +40,7 @@ import certificatesRouter from './certificates.js';
 import auditRouter from './audit.js';
 import onboardingRouter from './onboarding.js';
 import adminUsersRouter from './adminUsers.js';
+import adminAnalyticsRouter from './adminAnalytics.js';
 import feedbackRouter from './feedback.js';
 
 const isProd = process.env.NODE_ENV === "production";
@@ -194,6 +195,9 @@ export async function registerRoutes(
   // NOTE: /api/admin/workbook-backsync/health is mounted on apps/web (where
   // the back-sync outbox model is read). The ingress sends /api/admin/* to
   // web, so this endpoint can't live here.
+
+  // Admin: traffic analytics (GA4 + Search Console; admin / super_admin)
+  app.use('/api/admin/analytics', adminAnalyticsRouter);
 
   // Admin: user management (super_admin only)
   app.use('/api/admin/users', adminUsersRouter);

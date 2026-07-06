@@ -29,6 +29,8 @@ const PROXIED_PREFIXES = [
   "/api/certificates",
   /** Toolkit Excel import lives on the API app (`apps/api`); without this, requests hit the SPA and return HTML. */
   "/api/import",
+  /** Admin traffic analytics (GA4 + Search Console) live on the API app. */
+  "/api/admin/analytics",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [

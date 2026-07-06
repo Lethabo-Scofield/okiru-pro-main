@@ -75,6 +75,31 @@ cd apps/api && pnpm ingest:certificates
 - `apps/api/scripts/ingestCertificates.ts` — One-time ingestion script
 - `apps/api/src/routes/certificates.ts` — Search endpoint (with fallback to filename search)
 
+## Traffic Analytics — GA4 Tag + Admin Analytics (July 2026)
+Google Analytics tracking on the public site plus a protected `/admin/analytics` "Traffic Analytics" dashboard backed by secure server-side GA4 Data API + Search Console endpoints.
+
+### Public tracking tag
+- The GA4 `gtag.js` tag (measurement ID `G-WF69VTV757`) lives **once** in `apps/web/index.html` `<head>`, so it loads on every route the SPA serves.
+- SPA route changes are tracked via `usePageViewTracking()` (`apps/web/src/lib/gaTracker.ts`), called once in `AppRouter` (`apps/web/src/App.tsx`). It fires a `page_view` on each wouter location change; it is a safe no-op when `gtag` is unavailable.
+- The measurement ID is **only** used for the client tag — it is NOT the GA4 numeric Property ID used by the backend.
+
+### Admin page
+- Route `/admin/analytics` (`apps/web/src/pages/AdminAnalytics.tsx`), wrapped in `<ProtectedRoute>` with an internal admin/super_admin role check (`hasAnyRole`). Reachable from the Hub user menu (`HubLanding.tsx`, visible to admin + super_admin).
+- Uses the existing UI kit (Card/Table/Tabs/Select/Skeleton/Badge) and recharts. Date range selector (Today / 7d / 30d / 90d, default 30d). Tabs: **Overview** (metric cards with period-over-period change, real-time section auto-refreshing every 60s, traffic sources chart+table, searchable+paginated top pages, audience charts) and **Google Search** (Search Console totals + top queries + top pages).
+- Every section has loading skeletons, empty states, error states with a Retry button, and a "not connected" configuration message. No fabricated numbers.
+
+### Backend
+- Service: `apps/api/src/services/googleAnalytics.ts` — service-account JWT (`google-auth-library`) mints access tokens; GA4 Data API + Search Console are called over REST via `fetch` (no gRPC). In-memory cache: historical 10 min, realtime 60s. Requests have a 20s timeout. `isAnalyticsConfigured()` / `isSearchConsoleConfigured()` gate on env presence.
+- Routes: `apps/api/src/routes/adminAnalytics.ts`, mounted at `/api/admin/analytics` in `routes/index.ts`. Endpoints: `overview`, `realtime`, `sources`, `pages`, `audience`, `search-console`. All require auth + admin/super_admin, validate `range`, and return `{configured:false}` (200) when credentials are missing. Upstream Google errors are logged server-side and surfaced as a generic 502 — never leaking credentials or raw errors.
+- The web server proxies `/api/admin/analytics` to the API server (added to `PROXIED_PREFIXES` in `apps/web/server/apiProxy.ts`).
+- Shared response types are mirrored in `apps/web/src/types/analytics.ts` (web app does not import `@okiru/types`).
+
+### Setup required (Google Cloud) — analytics stays "not connected" until done
+1. Create a Google Cloud service account; download its JSON key.
+2. Enable **Google Analytics Data API** and **Google Search Console API** in that Cloud project.
+3. Grant the service account **read** access to: (a) the GA4 property (Analytics Admin → Property Access Management → Viewer), and (b) the Search Console property `sc-domain:okiru.pro` (already DNS-verified).
+4. Set the server env vars (see `apps/api/.env.example`): `GOOGLE_ANALYTICS_PROPERTY_ID` (numeric GA4 Property ID — NOT the measurement ID), `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (escaped `\n` handled automatically), `GOOGLE_SEARCH_CONSOLE_PROPERTY` (default `sc-domain:okiru.pro`).
+
 ## External Dependencies (require configuration)
 - **MongoDB** — set `MONGODB_URI` environment variable
 - **ArangoDB** — set `ARANGO_URL`, `ARANGO_USER`, `ARANGO_PASSWORD`, `ARANGO_DB`
