@@ -435,13 +435,11 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-showcase-head { text-align: center; margin-bottom: 44px; }
   .okiru-root .ok-showcase-tag { display: inline-flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 16px; }
   .okiru-root .ok-showcase-h { font-family: var(--serif); font-weight: 700; font-size: clamp(1.7rem, 3.2vw, 2.6rem); letter-spacing: -0.02em; color: #fff; }
-  .okiru-root .ok-showcase-tabs { display: inline-flex; gap: 5px; margin-top: 24px; padding: 5px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); }
-  .okiru-root .ok-showcase-tab { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255,255,255,0.5); background: transparent; border: 0; cursor: pointer; padding: 8px 18px; border-radius: 999px; transition: color .2s ease, background .2s ease; }
-  .okiru-root .ok-showcase-tab:hover { color: rgba(255,255,255,0.85); }
-  .okiru-root .ok-showcase-tab.is-active { color: #fff; background: var(--grad); box-shadow: 0 6px 18px -8px rgba(147,51,234,0.6); }
-  .okiru-root .ok-frame-img-in { animation: okiru-fadeIn .45s ease; }
-  @keyframes okiru-fadeIn { from { opacity: 0; } to { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-frame-img-in { animation: none; } }
+  .okiru-root .ok-showcase-stack { display: flex; flex-direction: column; gap: 88px; }
+  .okiru-root .ok-showcase-label {
+    display: block; text-align: center; margin-bottom: 22px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: rgba(255,255,255,0.55);
+  }
   .okiru-root .ok-showcase-stage { position: relative; }
   .okiru-root .ok-showcase-stage::before {
     content: ''; position: absolute; left: 50%; top: -8%; transform: translateX(-50%);
@@ -1014,7 +1012,6 @@ const SERVICES = [
 ───────────────────────────────────────────── */
 export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNavigateProduct, onNavigateAbout, onNavigateContact }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateProduct?: (slug: string) => void; onNavigateAbout?: () => void; onNavigateContact?: () => void }) {
   const [demoOpen, setDemoOpen] = useState(false);
-  const [showcaseTab, setShowcaseTab] = useState(0);
   const SHOWCASES = [
     { label: "Workspace", url: "app.okiru.pro", img: showcaseImg, alt: "Okiru Pro workspace — create and view scorecards, ESG toolkit, and B-BBEE Certificate Hub" },
     { label: "ESG Workbook", url: "app.okiru.pro/esg", img: showcaseImg2, alt: "Okiru Pro ESG Workbook — environmental data entry with monthly emissions by depot and scope" },
@@ -1204,36 +1201,26 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 Inside the platform
               </span>
               <h2 className="ok-showcase-h">One workspace. Every scorecard.</h2>
-              <div className="ok-showcase-tabs" aria-label="Product views">
-                {SHOWCASES.map((s, i) => (
-                  <button
-                    key={s.label}
-                    type="button"
-                    aria-pressed={showcaseTab === i}
-                    aria-label={`Show ${s.label} preview`}
-                    className={`ok-showcase-tab${showcaseTab === i ? " is-active" : ""}`}
-                    onClick={() => setShowcaseTab(i)}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
             </Reveal>
-            <Reveal className="ok-showcase-stage">
-              <div className="ok-frame">
-                <div className="ok-frame-bar" aria-hidden="true">
-                  <div className="ok-frame-dots"><span /><span /><span /></div>
-                  <div className="ok-frame-url">{SHOWCASES[showcaseTab].url}</div>
-                </div>
-                <img
-                  key={showcaseTab}
-                  className="ok-frame-img ok-frame-img-in"
-                  src={SHOWCASES[showcaseTab].img}
-                  alt={SHOWCASES[showcaseTab].alt}
-                  loading="lazy"
-                />
-              </div>
-            </Reveal>
+            <div className="ok-showcase-stack">
+              {SHOWCASES.map((s, i) => (
+                <Reveal key={s.label} className="ok-showcase-stage" delay={i > 0 ? "ok-d1" : ""}>
+                  <span className="ok-showcase-label">{s.label}</span>
+                  <div className="ok-frame">
+                    <div className="ok-frame-bar" aria-hidden="true">
+                      <div className="ok-frame-dots"><span /><span /><span /></div>
+                      <div className="ok-frame-url">{s.url}</div>
+                    </div>
+                    <img
+                      className="ok-frame-img"
+                      src={s.img}
+                      alt={s.alt}
+                      loading="lazy"
+                    />
+                  </div>
+                </Reveal>
+              ))}
+            </div>
           </div>
         </section>
 
