@@ -903,16 +903,16 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                 <span className="ok-hero-tag-brand">Okiru Consulting · Est. 2023</span>
               </div>
               <h1 className="ok-h1 ok-anim-2">
-                Turn compliance into<br />
-                <span className="ok-h1-gradient" aria-label="compounding growth.">
+                Stop reporting.<br />
+                Start <span className="ok-h1-gradient" aria-label="compounding growth.">
                   compounding gr<img src={ringLogo} alt="" aria-hidden="true" className="ok-h1-ring" />wth.
                 </span>
               </h1>
               <p className="ok-hero-sub ok-anim-3">
-                South African transformation, made measurable. We turn
-                <strong> ESG, B-BBEE &amp; Skills Development</strong> from once-a-year
-                box-ticking into audit-grade progress that compounds. One toolkit,
-                every framework, Net-Zero ready.
+                <strong>ESG, B-BBEE &amp; Skills Development</strong> — made measurable
+                for South Africa. One toolkit that turns annual box-ticking into
+                audit-grade progress that compounds. Every sector code, IFRS S1/S2
+                aligned, Net-Zero ready.
               </p>
               <div className="ok-hero-btns ok-anim-4">
                 <button className="ok-btn-cta" onClick={goRegister}>
