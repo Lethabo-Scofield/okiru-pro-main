@@ -13,6 +13,8 @@ import LandingWrapper from "@/pages/LandingWrapper";
 import ProductLandingWrapper from "@/pages/ProductLandingWrapper";
 import AboutWrapper from "@/pages/AboutWrapper";
 import ContactWrapper from "@/pages/ContactWrapper";
+import PrivacyWrapper from "@/pages/PrivacyWrapper";
+import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
 import Dashboard from "@/pages/Dashboard";
@@ -150,6 +152,12 @@ function AppRouter() {
       </Route>
       <Route path="/contact">
         <GuestRoute><ContactWrapper /></GuestRoute>
+      </Route>
+      <Route path="/privacy">
+        <PrivacyWrapper />
+      </Route>
+      <Route path="/terms">
+        <TermsWrapper />
       </Route>
       <Route path="/auth">
         <AuthWrapper />
