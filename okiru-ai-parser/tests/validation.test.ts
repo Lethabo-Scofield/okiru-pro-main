@@ -80,12 +80,9 @@ describe('production parser safety validation', () => {
     expect(result.status).toBe('review_required');
     expect(result.missing_fields).toEqual(['black_ownership', 'expiry_date']);
     expect(result.requires_human_review).toBe(true);
-    expect(result.calculator_payload).toEqual({
-      'supplier.name': 'ABC Suppliers Pty Ltd',
-      'supplier.bee_level': 2,
-    });
-    expect(result.calculator_payload).not.toHaveProperty('supplier.black_ownership');
-    expect(result.calculator_payload).not.toHaveProperty('supplier.certificate_expiry');
+    // Safety gate: review_required must never carry a calculator payload, even
+    // for the fields that individually passed. The whole document is unresolved.
+    expect(result.calculator_payload).toEqual({});
   });
 
   it('returns review_required when overall confidence is below 0.85', () => {
@@ -186,9 +183,9 @@ describe('production parser safety validation', () => {
     }));
 
     expect(result.status).toBe('review_required');
-    expect(result.calculator_payload).toEqual({
-      'supplier.name': 'ABC Suppliers Pty Ltd',
-    });
+    // Even though supplier.name individually passed, a review_required document
+    // emits no calculator payload at all.
+    expect(result.calculator_payload).toEqual({});
     expect(result.calculator_payload).not.toHaveProperty('supplier.bee_level');
   });
 });

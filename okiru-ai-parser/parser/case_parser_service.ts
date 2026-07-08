@@ -24,13 +24,57 @@ function caseIdFromInputs(inputs: RawExtractionInput[]): string {
   return explicit ?? `case_${Date.now()}`;
 }
 
-function mergeCalculatorPayload(documents: ParserOutput[]): Record<string, unknown> {
-  const payload: Record<string, unknown> = {};
+export interface CalculatorFieldConflict {
+  key: string;
+  values: unknown[];
+  sources: string[];
+}
+
+/**
+ * Combines calculator payloads across a case, but only from fully PASSED
+ * documents (review_required/failed carry no payload). When two passed
+ * documents disagree on the same calculator key, the value is withheld and the
+ * conflict is surfaced — one passed document must never silently overwrite
+ * another. Conflicting keys never enter the merged payload.
+ */
+function mergeCalculatorPayload(documents: ParserOutput[]): {
+  payload: Record<string, unknown>;
+  conflicts: CalculatorFieldConflict[];
+} {
+  const seen = new Map<string, { value: unknown; sources: string[] }[]>();
+
   for (const document of documents) {
-    if (document.status === 'failed') continue;
-    Object.assign(payload, document.calculator_payload);
+    if (document.status !== 'passed') continue;
+    for (const [key, value] of Object.entries(document.calculator_payload)) {
+      const bucket = seen.get(key) ?? [];
+      const existing = bucket.find((entry) => sameValue(entry.value, value));
+      if (existing) existing.sources.push(document.filename);
+      else bucket.push({ value, sources: [document.filename] });
+      seen.set(key, bucket);
+    }
   }
-  return payload;
+
+  const payload: Record<string, unknown> = {};
+  const conflicts: CalculatorFieldConflict[] = [];
+  for (const [key, bucket] of seen.entries()) {
+    if (bucket.length === 1) {
+      payload[key] = bucket[0].value;
+    } else {
+      conflicts.push({
+        key,
+        values: bucket.map((entry) => entry.value),
+        sources: bucket.flatMap((entry) => entry.sources),
+      });
+    }
+  }
+
+  return { payload, conflicts };
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a === 'number' && typeof b === 'number') return a === b;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
 }
 
 function reviewReasons(document: ParserOutput): string[] {
@@ -49,9 +93,17 @@ function missingRequiredDocuments(documents: ParserOutput[]): string[] {
     .map((group) => group.label);
 }
 
-function resolveCaseStatus(documents: ParserOutput[], missingDocuments: string[]): ParserCaseOutput['status'] {
+function resolveCaseStatus(
+  documents: ParserOutput[],
+  missingDocuments: string[],
+  conflicts: CalculatorFieldConflict[],
+): ParserCaseOutput['status'] {
   if (documents.length === 0 || documents.every((document) => document.status === 'failed')) return 'failed';
-  if (missingDocuments.length > 0 || documents.some((document) => document.status !== 'passed')) return 'review_required';
+  if (
+    missingDocuments.length > 0
+    || conflicts.length > 0
+    || documents.some((document) => document.status !== 'passed')
+  ) return 'review_required';
   return 'passed';
 }
 
@@ -65,6 +117,7 @@ export class CaseParserService {
   async resolveCase(rawInputs: RawExtractionInput[], caseId = caseIdFromInputs(rawInputs)): Promise<ParserCaseOutput> {
     const documents = await Promise.all(rawInputs.map((input) => this.parser.resolve(input)));
     const missingDocuments = missingRequiredDocuments(documents);
+    const { payload: mergedPayload, conflicts } = mergeCalculatorPayload(documents);
     const documentsNeedingReview = documents
       .filter((document) => document.status !== 'passed')
       .map((document) => ({
@@ -76,7 +129,7 @@ export class CaseParserService {
 
     const output: ParserCaseOutput = {
       case_id: caseId,
-      status: resolveCaseStatus(documents, missingDocuments),
+      status: resolveCaseStatus(documents, missingDocuments, conflicts),
       documents_detected: documents.map((document) => ({
         file_id: document.file_id,
         filename: document.filename,
@@ -94,7 +147,7 @@ export class CaseParserService {
       fields_extracted: Object.fromEntries(
         documents.map((document) => [document.filename, document.extracted_fields]),
       ),
-      calculator_payload: mergeCalculatorPayload(documents),
+      calculator_payload: mergedPayload,
       missing_required_documents: missingDocuments,
       documents_needing_review: documentsNeedingReview,
       audit_trail: {
@@ -103,9 +156,15 @@ export class CaseParserService {
         review_required_documents: documents.filter((document) => document.status === 'review_required').length,
         failed_documents: documents.filter((document) => document.status === 'failed').length,
         source_files: documents.map((document) => document.filename),
-        notes: missingDocuments.length > 0
-          ? [`Missing required document groups: ${missingDocuments.join(', ')}`]
-          : [],
+        notes: [
+          ...(missingDocuments.length > 0
+            ? [`Missing required document groups: ${missingDocuments.join(', ')}`]
+            : []),
+          ...conflicts.map((conflict) => (
+            `Conflicting values for ${conflict.key} across documents (${conflict.sources.join(', ')}); value withheld from calculator payload`
+          )),
+        ],
+        conflicting_fields: conflicts,
         document_audits: documents.map((document) => ({
           filename: document.filename,
           document_type: document.document_type,

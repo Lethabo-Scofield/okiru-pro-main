@@ -55,6 +55,10 @@ export const parserOutputSchema = z.object({
       reasons: z.array(z.string()),
     })).default([]),
     classification_reason: z.string().optional(),
+    rejected_calculator_keys: z.array(z.object({
+      key: z.string(),
+      reason: z.string(),
+    })).default([]),
   }),
 });
 
@@ -93,6 +97,11 @@ export const parserCaseOutputSchema = z.object({
     failed_documents: z.number(),
     source_files: z.array(z.string()),
     notes: z.array(z.string()),
+    conflicting_fields: z.array(z.object({
+      key: z.string(),
+      values: z.array(z.unknown()),
+      sources: z.array(z.string()),
+    })).default([]),
     document_audits: z.array(z.object({
       filename: z.string(),
       document_type: z.string(),

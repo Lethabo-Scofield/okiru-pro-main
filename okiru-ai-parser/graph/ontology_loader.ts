@@ -200,14 +200,20 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
         };
       });
 
+      // When an Excel row maps to a canonical document type, reuse the canonical
+      // NAME so the row reinforces the canonical type instead of creating a
+      // near-duplicate document node. Duplicates would otherwise collide during
+      // classification, shrinking the confidence margin and pushing genuine
+      // matches into "ambiguous" review. Non-canonical rows keep their own name.
+      const resolvedName = canonical?.document.name ?? documentName;
       records.push({
         pillar: { name: sheetName, code, graph_version: GRAPH_VERSION },
         document: {
-          name: documentName,
+          name: resolvedName,
           description: auditorChecks || instruction || documentName,
           aliases: mergeAliases(documentName, canonical),
           required: true,
-          pillar_code: code,
+          pillar_code: canonical?.document.pillar_code ?? code,
           graph_version: GRAPH_VERSION,
         },
         fields: canonical?.fields ?? fields,
