@@ -64,6 +64,9 @@ async function buildSupplierEvidence(
     // Calculator-ready inputs, produced only from documents that fully passed
     // the parser's safety gate. review_required/failed contribute nothing here.
     calculatorInputs: caseResult.calculator_payload,
+    // Per-supplier rows from any supplier spend schedule — the full procurement
+    // supplier list, each row individually validated + allowlisted.
+    supplierRows: caseResult.supplier_rows ?? [],
     missingRequiredDocuments: caseResult.missing_required_documents,
     documentsNeedingReview: caseResult.documents_needing_review,
     documentsDetected: caseResult.documents_detected,

@@ -148,6 +148,9 @@ export class CaseParserService {
         documents.map((document) => [document.filename, document.extracted_fields]),
       ),
       calculator_payload: mergedPayload,
+      supplier_rows: documents.flatMap((document) => (
+        (document.supplier_rows ?? []).map((row) => ({ ...row, source_file: document.filename }))
+      )),
       missing_required_documents: missingDocuments,
       documents_needing_review: documentsNeedingReview,
       audit_trail: {
