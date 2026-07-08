@@ -84,7 +84,41 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
   return res.status(500).json({ message: 'Internal Server Error' });
 });
 
+/**
+ * Fail-fast validation of required configuration at startup. Surfaces
+ * misconfiguration immediately instead of at first request.
+ */
+function validateStartupConfig(): void {
+  const isProd = process.env.NODE_ENV === 'production';
+  const errors: string[] = [];
+
+  const port = Number(process.env.PORT || 3200);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    errors.push(`PORT must be a valid port number (got "${process.env.PORT}")`);
+  }
+
+  if (isProd) {
+    if (!process.env.PARSER_ADMIN_TOKEN) {
+      logger.warn('PARSER_ADMIN_TOKEN is not set — the /load-ontology admin route will refuse requests (503)');
+    }
+    if (process.env.PARSER_REQUIRE_NEO4J === 'true'
+      && !(process.env.NEO4J_URI && process.env.NEO4J_USERNAME && process.env.NEO4J_PASSWORD)) {
+      errors.push('PARSER_REQUIRE_NEO4J=true but NEO4J_URI/USERNAME/PASSWORD are not all set');
+    }
+    if (!(process.env.NEO4J_URI && process.env.NEO4J_USERNAME && process.env.NEO4J_PASSWORD)) {
+      logger.warn('Neo4j is not configured in production — running on the bundled in-memory ontology');
+    }
+  }
+
+  if (errors.length > 0) {
+    logger.error('Invalid startup configuration', new Error(errors.join('; ')));
+    process.exit(1);
+  }
+}
+
+validateStartupConfig();
+
 const port = Number(process.env.PORT || 3200);
 app.listen(port, '0.0.0.0', () => {
-  logger.info('okiru-ai-parser listening', { port });
+  logger.info('okiru-ai-parser listening', { port, version: PARSER_VERSION, env: process.env.NODE_ENV || 'development' });
 });
