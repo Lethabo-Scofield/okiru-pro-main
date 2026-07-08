@@ -248,8 +248,8 @@ describe('parser calculator safety validation', () => {
     expect(result.status).toBe('review_required');
     expect(result.safe_fields).toContain('supplier_name');
     expect(result.unsafe_fields).toContain('bee_level');
-    expect(result.calculator_payload).toEqual({
-      'supplier.name': 'ABC Suppliers Pty Ltd',
-    });
+    // Safety gate: no calculator payload on review_required, even for the field
+    // that individually passed.
+    expect(result.calculator_payload).toEqual({});
   });
 });

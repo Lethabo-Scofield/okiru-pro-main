@@ -23,8 +23,56 @@ import {
 } from '../../pipeline/extraction/entityToParseResult.js';
 import { buildPipelineResult } from '../../pipeline/buildResult.js';
 import { generateScorecardSummary } from '../../pipeline/scorecardSummaryGenerator.js';
+import { resolveCaseWithParser, type ParserRawExtractionInput } from '../services/parserClient.js';
 
 const router = Router();
+
+/**
+ * Deterministic supplier-evidence extraction via the okiru-ai-parser service.
+ * Runs alongside the LLM and returns calculator-ready supplier inputs
+ * (supplier.name / bee_level / black_ownership / spend) plus a per-document
+ * review breakdown. Non-fatal: if the parser is unavailable the scorecard is
+ * returned unchanged. This never overrides the LLM/scorecard — it augments the
+ * response with a safe, auditable supplier-evidence layer.
+ */
+async function buildSupplierEvidence(
+  documentTexts: string[],
+  clientName: string | undefined,
+): Promise<Record<string, unknown> | null> {
+  if (process.env.PARSER_SUPPLIER_EVIDENCE_ENABLED === 'false') return null;
+
+  const documents: ParserRawExtractionInput[] = documentTexts
+    .map((text, index) => ({
+      file_id: `doc_${index + 1}`,
+      filename: `scorecard_document_${index + 1}.txt`,
+      mime_type: 'text/plain',
+      raw_text: text,
+    }))
+    .filter((doc) => doc.raw_text && doc.raw_text.trim().length > 0);
+
+  if (documents.length === 0) return null;
+
+  const outcome = await resolveCaseWithParser(documents, clientName ? `scorecard_${clientName}` : undefined);
+  if (!outcome.ok || !outcome.result) {
+    return { available: false, reason: outcome.error ?? 'parser_unavailable' };
+  }
+
+  const caseResult = outcome.result;
+  return {
+    available: true,
+    status: caseResult.status,
+    // Calculator-ready inputs, produced only from documents that fully passed
+    // the parser's safety gate. review_required/failed contribute nothing here.
+    calculatorInputs: caseResult.calculator_payload,
+    // Per-supplier rows from any supplier spend schedule — the full procurement
+    // supplier list, each row individually validated + allowlisted.
+    supplierRows: caseResult.supplier_rows ?? [],
+    missingRequiredDocuments: caseResult.missing_required_documents,
+    documentsNeedingReview: caseResult.documents_needing_review,
+    documentsDetected: caseResult.documents_detected,
+    auditTrail: caseResult.audit_trail,
+  };
+}
 
 interface ExtractAndScoreBody {
   documentTexts: string[];            // raw text from each uploaded document
@@ -114,11 +162,15 @@ router.post('/extract-and-score', async (req, res) => {
     }
     const confidence = buildConfidenceReport(extractionResults, requiredRoles, fieldToPillar);
 
+    // 8 — Deterministic supplier-evidence layer (parser). Non-fatal augmentation.
+    const supplierEvidence = await buildSupplierEvidence(documentTexts, clientName);
+
     return res.json({
       success: true,
       scorecard,
       scorecardSummary,
       confidence,
+      supplierEvidence,
       extractedEntities: extractionResults.filter(
         (r) => r.extractedValue !== null,
       ).length,

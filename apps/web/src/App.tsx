@@ -10,9 +10,11 @@ import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ProtectedRoute, GuestRoute, SuperAdminRoute } from "@/components/RouteGuards";
 import SuperAdmin from "@/pages/SuperAdmin";
 import LandingWrapper from "@/pages/LandingWrapper";
+import ProductLandingWrapper from "@/pages/ProductLandingWrapper";
 import AboutWrapper from "@/pages/AboutWrapper";
 import ContactWrapper from "@/pages/ContactWrapper";
-import ProductLandingWrapper from "@/pages/ProductLandingWrapper";
+import PrivacyWrapper from "@/pages/PrivacyWrapper";
+import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
 import Dashboard from "@/pages/Dashboard";
@@ -20,6 +22,7 @@ import EntityBuilder from "@/pages/EntityBuilder";
 import DocumentProcessor from "@/pages/DocumentProcessor";
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
+import AdminAnalytics from "@/pages/AdminAnalytics";
 import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
@@ -36,6 +39,7 @@ import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
+import { usePageViewTracking } from "@/lib/gaTracker";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
 const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
@@ -134,6 +138,7 @@ function EsgHubRedirect() {
 }
 
 function AppRouter() {
+  usePageViewTracking();
   return (
     <Switch>
       <Route path="/">
@@ -147,6 +152,12 @@ function AppRouter() {
       </Route>
       <Route path="/contact">
         <GuestRoute><ContactWrapper /></GuestRoute>
+      </Route>
+      <Route path="/privacy">
+        <PrivacyWrapper />
+      </Route>
+      <Route path="/terms">
+        <TermsWrapper />
       </Route>
       <Route path="/auth">
         <AuthWrapper />
@@ -204,6 +215,9 @@ function AppRouter() {
       </Route>
       <Route path="/admin/certificates">
         <ProtectedRoute><AdminCertificates /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/analytics">
+        <ProtectedRoute><AdminAnalytics /></ProtectedRoute>
       </Route>
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>

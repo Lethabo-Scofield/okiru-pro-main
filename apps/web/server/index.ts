@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import helmet from "helmet";
 import { registerRoutes } from "./routes";
 import { registerApiProxy } from "./apiProxy";
+import { configureSession } from "./sessionConfig";
 import { registerSeoRoutes } from "./seo";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -90,6 +91,10 @@ app.use((req, res, next) => {
   logger.debug("Connecting to ArangoDB...");
   await connectArango();
   logger.info("ArangoDB connection step completed");
+
+  // Session must be mounted BEFORE the proxy so the proxy can read
+  // req.session to forward the offline-demo identity to the API server.
+  configureSession(app);
 
   logger.debug("Registering API proxy...");
   registerApiProxy(app);

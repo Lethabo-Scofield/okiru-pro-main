@@ -29,6 +29,8 @@ const PROXIED_PREFIXES = [
   "/api/certificates",
   /** Toolkit Excel import lives on the API app (`apps/api`); without this, requests hit the SPA and return HTML. */
   "/api/import",
+  /** Admin traffic analytics (GA4 + Search Console) live on the API app. */
+  "/api/admin/analytics",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [
@@ -69,6 +71,23 @@ function proxyRequest(req: Request, res: Response): void {
   }
   delete headers["host"];
   headers["host"] = url.host;
+
+  // Offline-demo identity forwarding. When Mongo is down the web + API servers
+  // do NOT share a session store, so the demo/demo session created here is
+  // invisible to proxied API routes. We forward the *server-verified* demo
+  // identity as a trusted header so those routes can authorize it. Any
+  // client-supplied version is stripped first so it can never be spoofed.
+  // Disabled entirely in production so it can never become an auth bypass.
+  delete headers["x-okiru-demo-user"];
+  delete headers["x-okiru-demo-role"];
+  const session = (req as any).session;
+  if (
+    process.env.NODE_ENV !== "production" &&
+    session?.userId === "demo-offline-user"
+  ) {
+    headers["x-okiru-demo-user"] = "demo-offline-user";
+    headers["x-okiru-demo-role"] = session.userData?.role || "admin";
+  }
 
   const isHybridExtract = req.path.startsWith("/api/extract-entities-hybrid");
   const isLongRunning = isHybridExtract || req.path.startsWith("/api/import");

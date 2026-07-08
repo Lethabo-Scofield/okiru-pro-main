@@ -85,12 +85,9 @@ describe('real-world parser samples', () => {
     expect(result.status).toBe('review_required');
     expect(result.document_type).toBe('B-BBEE Certificate');
     expect(result.validation.missing_fields).toContain('expiry_date');
-    expect(result.calculator_payload).toMatchObject({
-      'supplier.name': 'Missing Expiry Trading Pty Ltd',
-      'supplier.bee_level': 3,
-      'supplier.black_ownership': 45,
-    });
-    expect(result.calculator_payload).not.toHaveProperty('supplier.certificate_expiry');
+    // Safety gate: a review_required document emits no calculator payload,
+    // even for the fields that were individually extracted safely.
+    expect(result.calculator_payload).toEqual({});
   });
 
   it('returns review_required and filters invalid supplier schedule ownership', async () => {
@@ -105,12 +102,9 @@ describe('real-world parser samples', () => {
     expect(result.status).toBe('review_required');
     expect(result.document_type).toBe('Supplier Spend Schedule');
     expect(result.validation.errors).toContain('Black ownership percentage must be between 0 and 100');
-    expect(result.calculator_payload).toMatchObject({
-      'supplier.name': 'Bad Ownership Supplier Pty Ltd',
-      'supplier.spend': 350000,
-      'supplier.bee_level': 2,
-    });
-    expect(result.calculator_payload).not.toHaveProperty('supplier.black_ownership');
+    // Safety gate: the invalid ownership makes the whole document review_required,
+    // so nothing (not even the valid spend/level) enters the calculator payload.
+    expect(result.calculator_payload).toEqual({});
   });
 
   it('fails unsupported random text with an empty calculator payload', async () => {

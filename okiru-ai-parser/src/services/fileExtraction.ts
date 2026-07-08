@@ -29,6 +29,33 @@ export interface UploadedFileLike {
   size: number;
 }
 
+function positiveIntEnv(name: string, fallback: number): number {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
+}
+
+// Resource bounds — configurable, with safe defaults — to keep a single upload
+// from exhausting CPU or memory (large PDFs, huge spreadsheets, slow OCR).
+const EXTRACTION_TIMEOUT_MS = positiveIntEnv('PARSER_EXTRACTION_TIMEOUT_MS', 60_000);
+const MAX_PDF_PAGES = positiveIntEnv('PARSER_MAX_PDF_PAGES', 100);
+const MAX_SHEET_ROWS = positiveIntEnv('PARSER_MAX_SHEET_ROWS', 20_000);
+const MAX_IMAGE_BYTES = positiveIntEnv('PARSER_MAX_IMAGE_BYTES', 15 * 1024 * 1024);
+
+class ExtractionTimeoutError extends Error {
+  constructor(ms: number) {
+    super(`File extraction timed out after ${ms}ms`);
+    this.name = 'ExtractionTimeoutError';
+  }
+}
+
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new ExtractionTimeoutError(ms)), ms);
+  });
+  return Promise.race([work, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
 async function extractPdfText(buffer: Buffer): Promise<string> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = pdfjs.getDocument({
@@ -36,8 +63,9 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   });
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
+  const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+  for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
     const text = content.items
@@ -65,7 +93,8 @@ function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[] 
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+    const allRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+    const rows = allRows.slice(0, MAX_SHEET_ROWS);
     tables.push({ sheetName, rows });
     parts.push(`Sheet: ${sheetName}`);
     parts.push(rowsToReadableText(rows));
@@ -167,12 +196,12 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
   });
 
   if (file.mimetype === 'application/pdf' || ext === '.pdf') {
-    rawText = await extractPdfText(file.buffer);
+    rawText = await withTimeout(extractPdfText(file.buffer), EXTRACTION_TIMEOUT_MS);
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     || ext === '.docx'
   ) {
-    rawText = await extractDocxText(file.buffer);
+    rawText = await withTimeout(extractDocxText(file.buffer), EXTRACTION_TIMEOUT_MS);
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     || file.mimetype === 'application/vnd.ms-excel'
@@ -189,7 +218,10 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
   } else if (file.mimetype === 'text/plain' || ext === '.txt') {
     rawText = file.buffer.toString('utf8');
   } else if (file.mimetype.startsWith('image/')) {
-    rawText = await extractImageText(file.buffer);
+    if (file.size > MAX_IMAGE_BYTES) {
+      throw new Error(`Image exceeds maximum size of ${MAX_IMAGE_BYTES} bytes`);
+    }
+    rawText = await withTimeout(extractImageText(file.buffer), EXTRACTION_TIMEOUT_MS);
   }
 
   if (!rawText.trim() && tables.length === 0) {

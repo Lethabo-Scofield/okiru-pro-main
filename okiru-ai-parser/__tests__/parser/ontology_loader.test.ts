@@ -51,7 +51,11 @@ describe('ontology loader', () => {
     const records = buildOntologyRecordsFromWorkbook(createWorkbook());
     expect(records).toHaveLength(1);
     expect(records[0].pillar.name).toBe('ESD');
-    expect(records[0].document.name).toBe('Supplier B-BBEE Certificate');
+    // Canonical rows collapse to the canonical document name so they reinforce
+    // (rather than duplicate) the canonical type; the original row label is kept
+    // as an alias for classification recall.
+    expect(records[0].document.name).toBe('B-BBEE Certificate');
+    expect(records[0].document.aliases).toContain('Supplier B-BBEE Certificate');
     expect(records[0].fields.length).toBeGreaterThan(0);
   });
 
@@ -91,14 +95,31 @@ describe('ontology loader', () => {
     ]));
   });
 
+  it('collapses the bundled matrix into a single canonical type per supported document (no duplicates)', async () => {
+    const repo = new InMemoryOntologyRepository();
+    const records = buildOntologyRecordsFromWorkbook('ontology/BBBEE_Verification_Document_Matrix_v3.xlsx');
+    await repo.upsertOntology(records);
+    const docTypes = await repo.listDocumentTypes();
+    const names = docTypes.map((doc) => doc.name);
+
+    // Each canonical supported type must appear exactly once, so it reinforces
+    // rather than collides with itself during classification.
+    for (const canonical of ['B-BBEE Certificate', 'B-BBEE Sworn Affidavit', 'Supplier Spend Schedule']) {
+      expect(names.filter((name) => name === canonical).length).toBe(1);
+    }
+  });
+
   it('enriches noisy high-value matrix rows with canonical parser fields and aliases', () => {
     const records = buildOntologyRecordsFromWorkbook(createNoisyWorkbook());
-    const certificate = records.find((record) => record.document.name.startsWith('B-BBEE certificate or affidavit'));
-    const schedule = records.find((record) => record.document.name.startsWith('Full supplier schedule'));
+    // Canonical dedup: the noisy row names collapse into the canonical types,
+    // with the original noisy label preserved as an alias.
+    const certificate = records.find((record) => record.document.name === 'B-BBEE Certificate');
+    const schedule = records.find((record) => record.document.name === 'Supplier Spend Schedule');
 
     expect(certificate?.document.aliases).toEqual(expect.arrayContaining([
       'B-BBEE Certificate',
       'Supplier B-BBEE Certificate',
+      'B-BBEE certificate or affidavit for each ESD/SD beneficiary entity',
     ]));
     expect(certificate?.fields.map((field) => field.field.name)).toEqual(expect.arrayContaining([
       'supplier_name',

@@ -51,14 +51,36 @@ async function getFallbackRepository(): Promise<OntologyRepository> {
 }
 
 async function getParserRepository(): Promise<OntologyRepository> {
+  let neo4jRepository: ReturnType<typeof createNeo4jOntologyRepository>;
   try {
-    return createNeo4jOntologyRepository();
+    neo4jRepository = createNeo4jOntologyRepository();
   } catch (err) {
-    if (err instanceof MissingNeo4jConfigError && process.env.NODE_ENV !== 'production') {
-      logger.warn('Neo4j parser graph is not configured; using in-memory parser ontology fallback');
-      return getFallbackRepository();
+    if (err instanceof MissingNeo4jConfigError) {
+      // Not configured at all: fallback in non-production, hard error in prod.
+      if (process.env.NODE_ENV !== 'production') {
+        logger.warn('Neo4j parser graph is not configured; using in-memory parser ontology fallback');
+        return getFallbackRepository();
+      }
+      throw err;
     }
     throw err;
+  }
+
+  // Configured — but verify it is actually reachable. A configured-but-down
+  // Neo4j must not take the whole service down: fall back to the bundled
+  // in-memory ontology (non-production) rather than 500 on every request.
+  try {
+    await neo4jRepository.ping();
+    return neo4jRepository;
+  } catch (err) {
+    await neo4jRepository.close?.().catch(() => undefined);
+    if (process.env.NODE_ENV === 'production' && process.env.PARSER_REQUIRE_NEO4J === 'true') {
+      throw err;
+    }
+    logger.warn('Neo4j parser graph is unreachable; using in-memory parser ontology fallback', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return getFallbackRepository();
   }
 }
 

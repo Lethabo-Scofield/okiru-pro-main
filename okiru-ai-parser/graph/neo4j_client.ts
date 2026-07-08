@@ -37,18 +37,33 @@ export class Neo4jOntologyRepository implements OntologyRepository {
   private async createDriver(config: Neo4jConfig): Promise<any> {
     const moduleName = 'neo4j-driver';
     const neo4j = await import(moduleName);
-    return neo4j.default.driver(config.uri, neo4j.default.auth.basic(config.username, config.password));
+    const connectionTimeoutMs = Number(process.env.NEO4J_CONNECTION_TIMEOUT_MS) || 10_000;
+    return neo4j.default.driver(
+      config.uri,
+      neo4j.default.auth.basic(config.username, config.password),
+      {
+        connectionAcquisitionTimeout: connectionTimeoutMs,
+        connectionTimeout: connectionTimeoutMs,
+        maxTransactionRetryTime: Number(process.env.NEO4J_RETRY_TIME_MS) || 8_000,
+      },
+    );
   }
 
   private async run<T>(query: string, params: Record<string, unknown>, map: (records: any[]) => T): Promise<T> {
     const driver = await this.driverPromise;
     const session = driver.session(this.database ? { database: this.database } : undefined);
+    const queryTimeoutMs = Number(process.env.NEO4J_QUERY_TIMEOUT_MS) || 15_000;
     try {
-      const result = await session.run(query, params);
+      const result = await session.run(query, params, { timeout: queryTimeoutMs });
       return map(result.records);
     } finally {
       await session.close();
     }
+  }
+
+  /** Fast connectivity probe used to decide whether to fall back to in-memory. */
+  async ping(): Promise<void> {
+    await this.run('RETURN 1 AS ok', {}, () => null);
   }
 
   async upsertOntology(records: OntologyRecord[]): Promise<{ nodes: number; relationships: number }> {

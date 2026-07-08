@@ -35,6 +35,15 @@ export const parserOutputSchema = z.object({
   status: z.enum(['passed', 'review_required', 'failed']),
   extracted_fields: z.record(extractedFieldSchema),
   calculator_payload: z.record(z.unknown()),
+  supplier_rows: z.array(z.object({
+    supplier_name: z.string().nullable(),
+    spend_amount: z.number().nullable(),
+    bee_level: z.number().nullable(),
+    black_ownership: z.number().nullable(),
+    calculator_fields: z.record(z.unknown()),
+    status: z.enum(['passed', 'review_required']),
+    issues: z.array(z.string()),
+  })).default([]),
   validation: z.object({
     passed: z.boolean(),
     warnings: z.array(z.string()),
@@ -55,6 +64,10 @@ export const parserOutputSchema = z.object({
       reasons: z.array(z.string()),
     })).default([]),
     classification_reason: z.string().optional(),
+    rejected_calculator_keys: z.array(z.object({
+      key: z.string(),
+      reason: z.string(),
+    })).default([]),
   }),
 });
 
@@ -79,6 +92,16 @@ export const parserCaseOutputSchema = z.object({
   documents_detected: z.array(caseDocumentSummarySchema),
   fields_extracted: z.record(z.record(extractedFieldSchema)),
   calculator_payload: z.record(z.unknown()),
+  supplier_rows: z.array(z.object({
+    supplier_name: z.string().nullable(),
+    spend_amount: z.number().nullable(),
+    bee_level: z.number().nullable(),
+    black_ownership: z.number().nullable(),
+    calculator_fields: z.record(z.unknown()),
+    status: z.enum(['passed', 'review_required']),
+    issues: z.array(z.string()),
+    source_file: z.string(),
+  })).default([]),
   missing_required_documents: z.array(z.string()),
   documents_needing_review: z.array(z.object({
     filename: z.string(),
@@ -93,6 +116,11 @@ export const parserCaseOutputSchema = z.object({
     failed_documents: z.number(),
     source_files: z.array(z.string()),
     notes: z.array(z.string()),
+    conflicting_fields: z.array(z.object({
+      key: z.string(),
+      values: z.array(z.unknown()),
+      sources: z.array(z.string()),
+    })).default([]),
     document_audits: z.array(z.object({
       filename: z.string(),
       document_type: z.string(),
