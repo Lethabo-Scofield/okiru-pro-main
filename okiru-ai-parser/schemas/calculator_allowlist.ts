@@ -17,12 +17,30 @@ export interface CalculatorKeySpec {
 }
 
 export const CALCULATOR_KEY_ALLOWLIST: readonly CalculatorKeySpec[] = [
+  // ── ESD / Procurement (supplier evidence) ──
   { key: 'supplier.name', type: 'string', description: 'Supplier legal/trading name' },
   { key: 'supplier.bee_level', type: 'number', description: 'Supplier B-BBEE status level (1-8)' },
   { key: 'supplier.black_ownership', type: 'number', description: 'Supplier black ownership percentage (0-100)' },
   { key: 'supplier.certificate_expiry', type: 'iso_date', description: 'Certificate expiry date (ISO yyyy-mm-dd)' },
   { key: 'supplier.affidavit_signed_date', type: 'iso_date', description: 'Affidavit signed date (ISO yyyy-mm-dd)' },
   { key: 'supplier.spend', type: 'number', description: 'Supplier spend amount excluding VAT' },
+
+  // ── Ownership pillar ──
+  { key: 'ownership.entity_name', type: 'string', description: 'Measured entity name' },
+  { key: 'ownership.black_ownership', type: 'number', description: 'Black ownership / voting rights percentage (0-100)' },
+  { key: 'ownership.black_women_ownership', type: 'number', description: 'Black women ownership percentage (0-100)' },
+
+  // ── Management Control pillar ──
+  { key: 'management.black_representation', type: 'number', description: 'Black representation percentage at the measured level (0-100)' },
+  { key: 'management.black_women_representation', type: 'number', description: 'Black women representation percentage (0-100)' },
+
+  // ── Skills Development pillar ──
+  { key: 'skills.total_spend', type: 'number', description: 'Total skills development spend' },
+  { key: 'skills.black_spend', type: 'number', description: 'Skills development spend on black employees' },
+
+  // ── Socio-Economic Development pillar ──
+  { key: 'sed.beneficiary_name', type: 'string', description: 'SED beneficiary name' },
+  { key: 'sed.contribution', type: 'number', description: 'SED contribution amount' },
 ] as const;
 
 const ALLOWLIST_BY_KEY = new Map<string, CalculatorKeySpec>(

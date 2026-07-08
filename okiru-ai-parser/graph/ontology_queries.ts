@@ -315,5 +315,113 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
         },
       ],
     },
+    {
+      document: {
+        name: 'Ownership Confirmation',
+        description: 'Ownership evidence: share certificate, share register, or ownership confirmation letter.',
+        aliases: ['Share Certificate', 'Share Register', 'Ownership Confirmation', 'Ownership Statement', 'Shareholding Certificate'],
+        required: true,
+        pillar_code: 'OWN',
+        graph_version,
+      },
+      fields: [
+        {
+          field: { name: 'entity_name', data_type: 'string', required: true, description: 'Measured entity name.', calculator_key: 'ownership.entity_name', graph_version },
+          rules: [{ name: 'required_entity_name', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Entity name not found', graph_version }],
+          patterns: [{ name: 'Entity Name', pattern_type: 'regex', examples: ['Measured Entity: ABC Pty Ltd'], regex: '(?:Measured\\s+Entity|Entity|Enterprise|Company)\\s*Name\\s*[:\\-]?\\s*([^\\n\\r]+)', semantic_hint: 'entity name', graph_version }],
+          calculator_requirements: [{ key: 'ownership.entity_name', expected_type: 'string', destination: 'manual_workbook', workbook_field: 'ownership.entityName', manual_flow_mapping: 'ownership entity name', graph_version }],
+        },
+        {
+          field: { name: 'black_ownership', data_type: 'percentage', required: true, description: 'Black ownership / voting rights percentage.', calculator_key: 'ownership.black_ownership', graph_version },
+          rules: [
+            { name: 'required_ownership_black', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Black ownership not found', graph_version },
+            { name: 'ownership_black_range', rule_type: 'range', severity: 'error', logic: 'percentage:0:100', failure_message: 'Black ownership percentage must be between 0 and 100', graph_version },
+          ],
+          patterns: [{ name: 'Black Ownership', pattern_type: 'regex', examples: ['Black Ownership: 51%'], regex: 'Black\\s+(?:Ownership|Voting\\s+Rights|Shareholding)(?:\\s+Percentage)?\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black ownership percentage', graph_version }],
+          calculator_requirements: [{ key: 'ownership.black_ownership', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'ownership.blackOwnership', manual_flow_mapping: 'ownership black ownership', graph_version }],
+        },
+        {
+          field: { name: 'black_women_ownership', data_type: 'percentage', required: false, description: 'Black women ownership percentage.', calculator_key: 'ownership.black_women_ownership', graph_version },
+          rules: [{ name: 'ownership_black_women_range', rule_type: 'range', severity: 'error', logic: 'percentage:0:100', failure_message: 'Black women ownership percentage must be between 0 and 100', graph_version }],
+          patterns: [{ name: 'Black Women Ownership', pattern_type: 'regex', examples: ['Black Women Ownership: 30%'], regex: 'Black\\s+(?:Women|Woman|Female)\\s+(?:Ownership|Shareholding)(?:\\s+Percentage)?\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black women ownership percentage', graph_version }],
+          calculator_requirements: [{ key: 'ownership.black_women_ownership', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'ownership.blackWomenOwnership', manual_flow_mapping: 'ownership black women ownership', graph_version }],
+        },
+      ],
+    },
+    {
+      document: {
+        name: 'Employment Equity Report',
+        description: 'Management control / employment equity evidence: EE report or board & management representation summary.',
+        aliases: ['Employment Equity Report', 'EE Report', 'EEA2', 'Management Control Report', 'Board Representation'],
+        required: true,
+        pillar_code: 'MAC',
+        graph_version,
+      },
+      fields: [
+        {
+          field: { name: 'black_representation', data_type: 'percentage', required: true, description: 'Black representation percentage at the measured level.', calculator_key: 'management.black_representation', graph_version },
+          rules: [
+            { name: 'required_black_representation', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Black representation not found', graph_version },
+            { name: 'black_representation_range', rule_type: 'range', severity: 'error', logic: 'percentage:0:100', failure_message: 'Black representation percentage must be between 0 and 100', graph_version },
+          ],
+          patterns: [{ name: 'Black Representation', pattern_type: 'regex', examples: ['Black Representation: 45%'], regex: 'Black\\s+(?:Representation|Management|Board\\s+Representation|Employees)(?:\\s+Percentage)?\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black representation percentage', graph_version }],
+          calculator_requirements: [{ key: 'management.black_representation', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'management.blackRepresentation', manual_flow_mapping: 'management black representation', graph_version }],
+        },
+        {
+          field: { name: 'black_women_representation', data_type: 'percentage', required: false, description: 'Black women representation percentage.', calculator_key: 'management.black_women_representation', graph_version },
+          rules: [{ name: 'black_women_representation_range', rule_type: 'range', severity: 'error', logic: 'percentage:0:100', failure_message: 'Black women representation percentage must be between 0 and 100', graph_version }],
+          patterns: [{ name: 'Black Women Representation', pattern_type: 'regex', examples: ['Black Women Representation: 25%'], regex: 'Black\\s+(?:Women|Woman|Female)\\s+(?:Representation|Management)(?:\\s+Percentage)?\\s*[:\\-]?\\s*([0-9]+(?:\\.[0-9]+)?\\s*%)', semantic_hint: 'black women representation percentage', graph_version }],
+          calculator_requirements: [{ key: 'management.black_women_representation', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'management.blackWomenRepresentation', manual_flow_mapping: 'management black women representation', graph_version }],
+        },
+      ],
+    },
+    {
+      document: {
+        name: 'Workplace Skills Plan',
+        description: 'Skills development evidence: Workplace Skills Plan (WSP), Annual Training Report (ATR), or training spend summary.',
+        aliases: ['Workplace Skills Plan', 'WSP', 'Annual Training Report', 'ATR', 'Skills Development Report', 'Training Spend Summary'],
+        required: true,
+        pillar_code: 'SKL',
+        graph_version,
+      },
+      fields: [
+        {
+          field: { name: 'skills_spend', data_type: 'money', required: true, description: 'Total skills development spend.', calculator_key: 'skills.total_spend', graph_version },
+          rules: [{ name: 'required_skills_spend', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Skills development spend not found', graph_version }],
+          patterns: [{ name: 'Skills Spend', pattern_type: 'regex', examples: ['Skills Development Spend: R 500000'], regex: '(?:Total\\s+)?(?:Skills\\s+Development|Training)\\s+Spend\\s*[:\\-]?\\s*(R\\s?[0-9][0-9,\\s]*(?:\\.[0-9]+)?\\s?(?:m|million|k|thousand)?)', semantic_hint: 'skills development spend', graph_version }],
+          calculator_requirements: [{ key: 'skills.total_spend', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'skills.totalSpend', manual_flow_mapping: 'skills total spend', graph_version }],
+        },
+        {
+          field: { name: 'black_skills_spend', data_type: 'money', required: false, description: 'Skills development spend on black employees.', calculator_key: 'skills.black_spend', graph_version },
+          rules: [],
+          patterns: [{ name: 'Black Skills Spend', pattern_type: 'regex', examples: ['Black Training Spend: R 350000'], regex: 'Black\\s+(?:Skills\\s+Development|Training)\\s+Spend\\s*[:\\-]?\\s*(R\\s?[0-9][0-9,\\s]*(?:\\.[0-9]+)?\\s?(?:m|million|k|thousand)?)', semantic_hint: 'black skills development spend', graph_version }],
+          calculator_requirements: [{ key: 'skills.black_spend', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'skills.blackSpend', manual_flow_mapping: 'skills black spend', graph_version }],
+        },
+      ],
+    },
+    {
+      document: {
+        name: 'SED Contribution Confirmation',
+        description: 'Socio-economic development evidence: SED contribution letter or proof of payment.',
+        aliases: ['SED Contribution Confirmation', 'Socio-Economic Development Contribution', 'SED Letter', 'SED Proof of Payment', 'CSI Contribution'],
+        required: true,
+        pillar_code: 'SED',
+        graph_version,
+      },
+      fields: [
+        {
+          field: { name: 'sed_contribution', data_type: 'money', required: true, description: 'SED contribution amount.', calculator_key: 'sed.contribution', graph_version },
+          rules: [{ name: 'required_sed_contribution', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'SED contribution amount not found', graph_version }],
+          patterns: [{ name: 'SED Contribution', pattern_type: 'regex', examples: ['SED Contribution: R 120000'], regex: '(?:SED|Socio[-\\s]?Economic\\s+Development|CSI)\\s+(?:Contribution|Spend|Amount)\\s*[:\\-]?\\s*(R\\s?[0-9][0-9,\\s]*(?:\\.[0-9]+)?\\s?(?:m|million|k|thousand)?)', semantic_hint: 'sed contribution amount', graph_version }],
+          calculator_requirements: [{ key: 'sed.contribution', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'sed.contribution', manual_flow_mapping: 'sed contribution', graph_version }],
+        },
+        {
+          field: { name: 'beneficiary_name', data_type: 'string', required: false, description: 'SED beneficiary name.', calculator_key: 'sed.beneficiary_name', graph_version },
+          rules: [],
+          patterns: [{ name: 'Beneficiary Name', pattern_type: 'regex', examples: ['Beneficiary: Rural Schools Trust'], regex: '(?:Beneficiary|Recipient)\\s*(?:Name)?\\s*[:\\-]?\\s*([^\\n\\r,;]+)', semantic_hint: 'sed beneficiary name', graph_version }],
+          calculator_requirements: [{ key: 'sed.beneficiary_name', expected_type: 'string', destination: 'manual_workbook', workbook_field: 'sed.beneficiaryName', manual_flow_mapping: 'sed beneficiary name', graph_version }],
+        },
+      ],
+    },
   ];
 }
