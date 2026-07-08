@@ -1,0 +1,201 @@
+We need to audit sector and pillar coverage for the Okiru parser.
+
+Project:
+
+```text
+C:\dev\Okiru.pro-monorepo
+```
+
+Focus:
+
+```text
+okiru-ai-parser
+apps/api
+```
+
+Goal:
+
+Check how many Okiru Hub sectors exist, which B-BBEE pillars apply to each sector, and make sure the parser coverage matches those sector/pillar requirements.
+
+Important distinction:
+
+```text
+Pillars = B-BBEE scoring elements
+Sectors = scorecard variants / sector codes
+```
+
+Known valid Okiru Hub sectors currently include:
+
+```text
+RCOGP
+ICT
+FSC
+AGRI
+```
+
+Do not count `GENERIC` as a trusted sector unless the app explicitly treats it as a valid scorecard sector. Earlier we found `GENERIC` was inflating sector coverage, so sector validation must stay strict.
+
+Tasks:
+
+1. Find the source of truth for sectors in the repo.
+
+Search for:
+
+```text
+RCOGP
+ICT
+FSC
+AGRI
+sector
+sectorCode
+scorecard
+pillars
+```
+
+Likely areas:
+
+```text
+apps/api
+apps/web
+okiru-ai-parser
+```
+
+Identify:
+
+* all valid sector codes
+* sector display names
+* which pillars each sector uses
+* any sector-specific calculator requirements
+* any sector-specific document requirements
+
+2. Create a sector/pillar coverage matrix.
+
+For each sector, list:
+
+```text
+Sector code
+Sector name
+Applicable pillars
+Required/expected document types per pillar
+Parser-supported document types
+Parser-supported fields
+Calculator keys emitted
+Coverage status
+```
+
+Coverage statuses:
+
+```text
+covered
+partially_covered
+not_covered
+unknown
+```
+
+3. Compare parser coverage against sector requirements.
+
+The parser currently claims canonical support for all five pillars:
+
+```text
+Ownership
+Management Control
+Skills Development
+Enterprise & Supplier Development / Procurement
+Socio-Economic Development
+```
+
+Confirm whether each pillar has:
+
+```text
+document type definitions
+aliases
+classification rules
+field extraction rules
+normalization rules
+validation rules
+calculator mappings
+tests
+```
+
+4. Check whether parser keys match actual calculator expectations.
+
+Current parser keys may include:
+
+```text
+ownership.*
+management.*
+skills.*
+supplier.*
+sed.*
+```
+
+Verify whether these keys map into the real scorecard calculator inputs for each sector.
+
+Do not assume a key is valid just because the parser emits it.
+
+5. Identify gaps.
+
+Report:
+
+```text
+Sector gaps
+Pillar gaps
+Document type gaps
+Field extraction gaps
+Calculator mapping gaps
+Test gaps
+```
+
+6. Add or update coverage tests.
+
+Add tests proving:
+
+* every valid sector is known
+* every valid sector has pillar mapping
+* every applicable pillar has parser document coverage
+* unsupported sector codes are rejected or marked review
+* GENERIC is not treated as trusted sector unless explicitly valid
+* parser calculator keys are allowlisted
+* sector/pillar coverage matrix stays in sync with code
+
+7. Output a clear report.
+
+Final report must include:
+
+```text
+1. Number of valid sectors
+2. List of valid sectors
+3. Pillars per sector
+4. Parser coverage per pillar
+5. Parser coverage per sector
+6. Missing document types
+7. Missing calculator mappings
+8. Tests added/updated
+9. Whether parser is ready for shadow mode per sector
+10. Whether parser is ready to drive live scoring per sector
+```
+
+Important:
+
+Do not claim full production coverage just because all five pillars exist.
+
+A sector is only covered when:
+
+```text
+sector is valid
+pillar mapping exists
+document coverage exists
+field rules exist
+calculator mappings are valid
+tests pass
+real documents can be validated in shadow mode
+```
+
+The safest final status should distinguish:
+
+```text
+ready for shadow mode
+ready for review-assisted use
+ready for live scoring
+not ready
+```
