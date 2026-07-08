@@ -6,6 +6,7 @@ import { parserOutputSchema } from '../schemas/parser_output.js';
 import { classifyDocument } from './classify_document.js';
 import { mapCalculatorPayload } from './calculator_mapper.js';
 import { extractFields } from './extract_fields.js';
+import { extractSupplierRows } from './extract_supplier_rows.js';
 import { parseRawExtractionInput } from './ingest.js';
 import { validateExtractedFields } from './validate.js';
 
@@ -130,6 +131,12 @@ export class ParserService {
       ...Object.values(extracted).flatMap((field) => field.matched_patterns),
     ]));
 
+    // Supplier spend schedules list many suppliers; extract each as its own
+    // calculator-ready row. Only attempted for schedule documents.
+    const supplierRows = /supplier\s+spend\s+schedule/i.test(knowledge.document.name)
+      ? extractSupplierRows({ raw_text: input.raw_text, tables: input.tables })
+      : [];
+
     return parserOutputSchema.parse({
       file_id: input.file_id,
       filename: input.filename,
@@ -139,6 +146,7 @@ export class ParserService {
       status,
       extracted_fields: extractedFields,
       calculator_payload: calculatorPayload,
+      supplier_rows: supplierRows,
       validation: {
         passed: validation.passed,
         warnings: validation.warnings,

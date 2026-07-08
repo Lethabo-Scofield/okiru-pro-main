@@ -35,6 +35,15 @@ export const parserOutputSchema = z.object({
   status: z.enum(['passed', 'review_required', 'failed']),
   extracted_fields: z.record(extractedFieldSchema),
   calculator_payload: z.record(z.unknown()),
+  supplier_rows: z.array(z.object({
+    supplier_name: z.string().nullable(),
+    spend_amount: z.number().nullable(),
+    bee_level: z.number().nullable(),
+    black_ownership: z.number().nullable(),
+    calculator_fields: z.record(z.unknown()),
+    status: z.enum(['passed', 'review_required']),
+    issues: z.array(z.string()),
+  })).default([]),
   validation: z.object({
     passed: z.boolean(),
     warnings: z.array(z.string()),
@@ -83,6 +92,16 @@ export const parserCaseOutputSchema = z.object({
   documents_detected: z.array(caseDocumentSummarySchema),
   fields_extracted: z.record(z.record(extractedFieldSchema)),
   calculator_payload: z.record(z.unknown()),
+  supplier_rows: z.array(z.object({
+    supplier_name: z.string().nullable(),
+    spend_amount: z.number().nullable(),
+    bee_level: z.number().nullable(),
+    black_ownership: z.number().nullable(),
+    calculator_fields: z.record(z.unknown()),
+    status: z.enum(['passed', 'review_required']),
+    issues: z.array(z.string()),
+    source_file: z.string(),
+  })).default([]),
   missing_required_documents: z.array(z.string()),
   documents_needing_review: z.array(z.object({
     filename: z.string(),

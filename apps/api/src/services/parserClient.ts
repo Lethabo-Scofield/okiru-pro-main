@@ -101,11 +101,23 @@ export async function resolveWithParser(
   }
 }
 
+export interface ParserSupplierRow {
+  supplier_name: string | null;
+  spend_amount: number | null;
+  bee_level: number | null;
+  black_ownership: number | null;
+  calculator_fields: Record<string, unknown>;
+  status: 'passed' | 'review_required';
+  issues: string[];
+  source_file: string;
+}
+
 export interface ParserCaseResult {
   case_id: string;
   status: 'passed' | 'review_required' | 'failed';
   documents_detected: Array<Record<string, unknown>>;
   calculator_payload: Record<string, unknown>;
+  supplier_rows: ParserSupplierRow[];
   missing_required_documents: string[];
   documents_needing_review: Array<Record<string, unknown>>;
   audit_trail: Record<string, unknown>;
