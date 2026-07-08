@@ -4,7 +4,7 @@ import { InMemoryOntologyRepository } from '../graph/ontology_queries.js';
 import type { ParserOutput, RawExtractionInput } from '../schemas/parser_output.js';
 import { parserOutputSchema } from '../schemas/parser_output.js';
 import { classifyDocument } from './classify_document.js';
-import { buildCalculatorPayload } from './calculator_mapper.js';
+import { mapCalculatorPayload } from './calculator_mapper.js';
 import { extractFields } from './extract_fields.js';
 import { parseRawExtractionInput } from './ingest.js';
 import { validateExtractedFields } from './validate.js';
@@ -103,9 +103,20 @@ export class ParserService {
       : requiresReview
         ? 'review_required'
         : 'passed';
-    const calculatorPayload = status === 'failed'
-      ? {}
-      : buildCalculatorPayload(knowledge.fields, extracted, validation.safe_fields);
+    // Safety gate: the calculator payload is produced ONLY for a fully passed
+    // document. review_required and failed always return an empty payload — a
+    // single safe field must never leak into calculation while the document as
+    // a whole is unresolved.
+    const mapping = status === 'passed'
+      ? mapCalculatorPayload(knowledge.fields, extracted, validation.safe_fields)
+      : { payload: {}, rejected: [] as Array<{ key: string; reason: string }> };
+    const calculatorPayload = mapping.payload;
+    if (mapping.rejected.length > 0) {
+      logger.warn('Rejected calculator keys outside allowlist', {
+        fileId: input.file_id,
+        rejected: mapping.rejected,
+      });
+    }
 
     const extractedFields = Object.fromEntries(
       Object.entries(extracted).map(([key, value]) => {
@@ -142,6 +153,7 @@ export class ParserService {
         requires_human_review: requiresReview,
         classification_candidates: classification.candidates ?? [],
         classification_reason: classification.reason,
+        rejected_calculator_keys: mapping.rejected,
       },
     });
   }

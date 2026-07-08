@@ -130,7 +130,9 @@ export function validateParsedDocument(input: ParsedDocumentValidationInput): Pa
       : 'passed';
 
   const outputSafeFields = status === 'failed' ? [] : Array.from(new Set(safeFields));
-  const outputCalculatorPayload = status === 'failed' ? {} : calculatorPayload;
+  // Safety gate: only a fully passed document may carry a calculator payload.
+  // review_required and failed always return an empty payload.
+  const outputCalculatorPayload = status === 'passed' ? calculatorPayload : {};
 
   return {
     status,
