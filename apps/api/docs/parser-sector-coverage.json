@@ -144,32 +144,37 @@
       ],
       "requiredFields": [
         "supplier_name",
+        "spend_amount",
         "supplier_bee_level",
         "supplier_black_ownership",
         "supplier_black_women_ownership",
-        "spend_amount",
         "enterprise_type",
         "tmps_denominator"
       ],
       "supportedFields": [
         "supplier_name",
+        "spend_amount",
         "supplier_bee_level",
         "supplier_black_ownership",
-        "spend_amount"
+        "supplier_black_women_ownership",
+        "enterprise_type",
+        "tmps_denominator (when explicitly stated)"
       ],
       "parserCalculatorKeys": [
         "supplier.name",
+        "supplier.spend",
         "supplier.bee_level",
         "supplier.black_ownership",
-        "supplier.spend"
+        "supplier.black_women_ownership",
+        "supplier.enterprise_type"
       ],
-      "actualScorecardInputMapping": "supplier_rows -> SupplierInput[] (name, spend, beeLevel, blackOwnership)",
+      "actualScorecardInputMapping": "supplier_rows -> SupplierInput[] (name, spend, beeLevel, blackOwnership→fraction, blackWomenOwnership→fraction, enterpriseType) + measured_procurement_spend -> tmps",
       "coverageStatus": "partially_covered",
       "readinessStatus": "review_assisted_ready",
       "gaps": [
-        "per-supplier blackWomenOwnership not extracted (bwo30 target unscored)",
-        "enterpriseType (EME/QSE/generic) not classified — QSE/EME procurement sub-targets cannot score",
-        "total measured procurement spend (tmps) denominator comes from financials, not the parser"
+        "live scoring is CONDITIONAL: requires TMPS (measured_procurement_spend) present — safeRatio returns 0 for every target when TMPS is missing",
+        "isForeignSupplier not flagged (defaults to included)",
+        "designated-group youth/disabled ownership not extracted (DG sub-target relies on blackOwnership≥51% only)"
       ]
     },
     {
@@ -402,32 +407,37 @@
       ],
       "requiredFields": [
         "supplier_name",
+        "spend_amount",
         "supplier_bee_level",
         "supplier_black_ownership",
         "supplier_black_women_ownership",
-        "spend_amount",
         "enterprise_type",
         "tmps_denominator"
       ],
       "supportedFields": [
         "supplier_name",
+        "spend_amount",
         "supplier_bee_level",
         "supplier_black_ownership",
-        "spend_amount"
+        "supplier_black_women_ownership",
+        "enterprise_type",
+        "tmps_denominator (when explicitly stated)"
       ],
       "parserCalculatorKeys": [
         "supplier.name",
+        "supplier.spend",
         "supplier.bee_level",
         "supplier.black_ownership",
-        "supplier.spend"
+        "supplier.black_women_ownership",
+        "supplier.enterprise_type"
       ],
-      "actualScorecardInputMapping": "supplier_rows -> SupplierInput[] (name, spend, beeLevel, blackOwnership)",
+      "actualScorecardInputMapping": "supplier_rows -> SupplierInput[] (name, spend, beeLevel, blackOwnership→fraction, blackWomenOwnership→fraction, enterpriseType) + measured_procurement_spend -> tmps",
       "coverageStatus": "partially_covered",
       "readinessStatus": "review_assisted_ready",
       "gaps": [
-        "per-supplier blackWomenOwnership not extracted (bwo30 target unscored)",
-        "enterpriseType (EME/QSE/generic) not classified — QSE/EME procurement sub-targets cannot score",
-        "total measured procurement spend (tmps) denominator comes from financials, not the parser"
+        "live scoring is CONDITIONAL: requires TMPS (measured_procurement_spend) present — safeRatio returns 0 for every target when TMPS is missing",
+        "isForeignSupplier not flagged (defaults to included)",
+        "designated-group youth/disabled ownership not extracted (DG sub-target relies on blackOwnership≥51% only)"
       ]
     },
     {

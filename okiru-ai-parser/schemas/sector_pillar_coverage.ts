@@ -98,6 +98,8 @@ export const PARSER_PILLAR_COVERAGE: readonly ParserPillarCoverage[] = [
       'supplier.name',
       'supplier.bee_level',
       'supplier.black_ownership',
+      'supplier.black_women_ownership',
+      'supplier.enterprise_type',
       'supplier.certificate_expiry',
       'supplier.affidavit_signed_date',
       'supplier.spend',

@@ -74,9 +74,12 @@ async function buildSupplierEvidence(
       scorecardType: adapted.scorecardType,
       suppliers: adapted.scorecardInputDraft.suppliers,
       contributions: adapted.scorecardInputDraft.contributions,
+      tmps: adapted.scorecardInputDraft.tmps,
       mappedPillars: adapted.mappedPillars,
       unmappedPillars: adapted.unmappedPillars,
       rejectedKeys: adapted.rejectedKeys,
+      procurementReadiness: adapted.procurementReadiness,
+      procurementBlockers: adapted.procurementBlockers,
       audit: adapted.audit,
     };
   }
