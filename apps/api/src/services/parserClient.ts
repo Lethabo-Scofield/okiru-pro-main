@@ -106,6 +106,8 @@ export interface ParserSupplierRow {
   spend_amount: number | null;
   bee_level: number | null;
   black_ownership: number | null;
+  black_women_ownership: number | null;
+  enterprise_type: 'eme' | 'qse' | 'generic' | null;
   calculator_fields: Record<string, unknown>;
   status: 'passed' | 'review_required';
   issues: string[];
@@ -118,6 +120,8 @@ export interface ParserCaseResult {
   documents_detected: Array<Record<string, unknown>>;
   calculator_payload: Record<string, unknown>;
   supplier_rows: ParserSupplierRow[];
+  /** Total Measured Procurement Spend (procurement denominator), or null. */
+  measured_procurement_spend: number | null;
   missing_required_documents: string[];
   documents_needing_review: Array<Record<string, unknown>>;
   audit_trail: Record<string, unknown>;
