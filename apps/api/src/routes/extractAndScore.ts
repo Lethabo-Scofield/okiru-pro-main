@@ -24,6 +24,7 @@ import {
 import { buildPipelineResult } from '../../pipeline/buildResult.js';
 import { generateScorecardSummary } from '../../pipeline/scorecardSummaryGenerator.js';
 import { resolveCaseWithParser, type ParserRawExtractionInput } from '../services/parserClient.js';
+import { isTrustedParserSector, mapParserCaseToSectorInput } from '../services/parserSectorAdapter.js';
 
 const router = Router();
 
@@ -38,6 +39,8 @@ const router = Router();
 async function buildSupplierEvidence(
   documentTexts: string[],
   clientName: string | undefined,
+  sectorCode: string,
+  scorecardType: string,
 ): Promise<Record<string, unknown> | null> {
   if (process.env.PARSER_SUPPLIER_EVIDENCE_ENABLED === 'false') return null;
 
@@ -58,6 +61,26 @@ async function buildSupplierEvidence(
   }
 
   const caseResult = outcome.result;
+
+  // Sector-aware calculator input DRAFT — only for audited target sectors
+  // (RCOGP/Generic, ICT/Generic). Maps passed parser output into the real
+  // scorecard input shape where it can be mapped safely, and reports gaps.
+  // This is a DRAFT for review, not live scoring input.
+  let sectorScorecardInputDraft: Record<string, unknown> | null = null;
+  if (isTrustedParserSector(sectorCode, scorecardType)) {
+    const adapted = mapParserCaseToSectorInput(sectorCode, scorecardType, caseResult);
+    sectorScorecardInputDraft = {
+      sectorCode: adapted.sectorCode,
+      scorecardType: adapted.scorecardType,
+      suppliers: adapted.scorecardInputDraft.suppliers,
+      contributions: adapted.scorecardInputDraft.contributions,
+      mappedPillars: adapted.mappedPillars,
+      unmappedPillars: adapted.unmappedPillars,
+      rejectedKeys: adapted.rejectedKeys,
+      audit: adapted.audit,
+    };
+  }
+
   return {
     available: true,
     status: caseResult.status,
@@ -67,6 +90,8 @@ async function buildSupplierEvidence(
     // Per-supplier rows from any supplier spend schedule — the full procurement
     // supplier list, each row individually validated + allowlisted.
     supplierRows: caseResult.supplier_rows ?? [],
+    // Sector-mapped DRAFT input (null for non-target sectors). Advisory only.
+    sectorScorecardInputDraft,
     missingRequiredDocuments: caseResult.missing_required_documents,
     documentsNeedingReview: caseResult.documents_needing_review,
     documentsDetected: caseResult.documents_detected,
@@ -163,7 +188,7 @@ router.post('/extract-and-score', async (req, res) => {
     const confidence = buildConfidenceReport(extractionResults, requiredRoles, fieldToPillar);
 
     // 8 — Deterministic supplier-evidence layer (parser). Non-fatal augmentation.
-    const supplierEvidence = await buildSupplierEvidence(documentTexts, clientName);
+    const supplierEvidence = await buildSupplierEvidence(documentTexts, clientName, sectorCode, scorecardType);
 
     return res.json({
       success: true,
