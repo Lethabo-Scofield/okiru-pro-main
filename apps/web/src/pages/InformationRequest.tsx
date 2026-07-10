@@ -55,6 +55,7 @@ import {
 } from "@/lib/workbookExcelNormalizer";
 import { importBeeGatheringExcel, type ExcelExtractionResult } from "@/lib/excelImport";
 import { ExcelImportPreviewModal } from "@/components/scorecard/ExcelImportPreviewModal";
+import { DocumentUploadStart } from "@/components/scorecard/DocumentUploadStart";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { invalidateClientData } from "@toolkit/lib/api";
 import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
@@ -326,6 +327,88 @@ function CompanyPicker({
     }
   };
 
+  /**
+   * Shared create-from-sections sequence used by BOTH Excel import and the
+   * document-upload start: create the client, import the workbook sections,
+   * submit (scores through the canonical workbook path), open the workbook.
+   * Returns true on success.
+   */
+  const createFromSections = async (
+    companyName: string,
+    sections: WorkbookSectionsInput,
+    opts?: { importMarker?: unknown; warnCount?: number },
+  ): Promise<boolean> => {
+    setCreating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: companyName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({
+          title: "Could not create company",
+          description: err.error || "Server error.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      const c = await res.json();
+      const clientId = c.clientId || c.id;
+      if (opts?.importMarker !== undefined) {
+        sessionStorage.setItem(
+          `okiru-excel-import-${clientId}`,
+          JSON.stringify({ extracted: opts.importMarker, importedAt: new Date().toISOString() }),
+        );
+      }
+      const importRes = await fetch(
+        `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sections }),
+        },
+      );
+      if (!importRes.ok) {
+        toast({ title: "Import failed", variant: "destructive" });
+        return false;
+      }
+      let submitted = false;
+      const submitRes = await fetch(
+        `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
+        { method: "POST", credentials: "include" },
+      );
+      if (submitRes.ok) {
+        submitted = true;
+        try {
+          await loadClientData(clientId);
+        } catch {
+          // Summary page will retry loadClientData.
+        }
+      }
+      const warnCount = opts?.warnCount ?? 0;
+      toast({
+        title: submitted
+          ? "Imported and synced to scorecard"
+          : warnCount > 0
+            ? "Imported with gaps"
+            : "Workbook imported",
+        description: submitted
+          ? companyName
+          : warnCount > 0
+            ? `${warnCount} warning(s) — open workbook and submit when ready.`
+            : `${companyName} — submit workbook to calculate score.`,
+      });
+      onPick(c);
+      return true;
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const filtered = useMemo(
     () =>
       companies.filter((c) => c.name?.toLowerCase().includes(search.toLowerCase())),
@@ -380,6 +463,24 @@ function CompanyPicker({
                 </>
               )}
             </button>
+
+            <div className="relative my-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#2c2c2e]" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">or</span>
+              </div>
+            </div>
+
+            {/* Document-upload start: preset expected-documents flow (parser-
+                classified evidence → workbook sections → same submit path). */}
+            <DocumentUploadStart
+              onCreate={async (companyName, sections) => {
+                await createFromSections(companyName, sections as WorkbookSectionsInput);
+              }}
+              creating={creating}
+            />
 
             <div className="relative my-5">
               <div className="absolute inset-0 flex items-center">
@@ -471,75 +572,15 @@ function CompanyPicker({
             const companyName = String(previewResult?.data?.companyName ?? "").trim();
             const sections = pendingSections;
             if (!companyName || !sections) return;
-            setCreating(true);
-            try {
-              const res = await fetch(`${API_BASE}/api/clients`, {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: companyName }),
-              });
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                toast({
-                  title: "Could not create company",
-                  description: err.error || "Server error.",
-                  variant: "destructive",
-                });
-                return;
-              }
-              const c = await res.json();
-              const clientId = c.clientId || c.id;
-              sessionStorage.setItem(
-                `okiru-excel-import-${clientId}`,
-                JSON.stringify({ extracted: previewResult?.data, importedAt: new Date().toISOString() }),
-              );
-              const importRes = await fetch(
-                `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
-                {
-                  method: "POST",
-                  credentials: "include",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ sections }),
-                },
-              );
-              if (!importRes.ok) {
-                toast({ title: "Import failed", variant: "destructive" });
-                return;
-              }
-              let submitted = false;
-              const submitRes = await fetch(
-                `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
-                { method: "POST", credentials: "include" },
-              );
-              if (submitRes.ok) {
-                submitted = true;
-                try {
-                  await loadClientData(clientId);
-                } catch {
-                  // Summary page will retry loadClientData.
-                }
-              }
-              const warnCount = previewResult?.warnings?.length ?? 0;
-              toast({
-                title: submitted
-                  ? "Imported and synced to scorecard"
-                  : warnCount > 0
-                    ? "Imported with gaps"
-                    : "Workbook imported",
-                description: submitted
-                  ? companyName
-                  : warnCount > 0
-                    ? `${warnCount} warning(s) — open workbook and submit when ready.`
-                    : `${companyName} — submit workbook to calculate score.`,
-              });
+            const ok = await createFromSections(companyName, sections, {
+              importMarker: previewResult?.data,
+              warnCount: previewResult?.warnings?.length ?? 0,
+            });
+            if (ok) {
               setPreviewOpen(false);
               setPendingFile(null);
               setPreviewResult(null);
               setPendingSections(null);
-              onPick(c);
-            } finally {
-              setCreating(false);
             }
           }}
         />
