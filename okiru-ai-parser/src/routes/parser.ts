@@ -10,7 +10,7 @@ import { createNeo4jOntologyRepository, MissingNeo4jConfigError } from '../../gr
 import type { OntologyRepository } from '../../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
 import { buildOntologyRecordsFromWorkbook, DEFAULT_ONTOLOGY_MATRIX_PATH, loadOntologyFromWorkbook } from '../../graph/ontology_loader.js';
-import { CaseParserService } from '../../parser/case_parser_service.js';
+import { CaseParserService, REQUIRED_DOCUMENT_GROUPS } from '../../parser/case_parser_service.js';
 import { ParserService } from '../../parser/parser_service.js';
 
 const logger = createLogger('ParserRoutes');
@@ -83,6 +83,28 @@ async function getParserRepository(): Promise<OntologyRepository> {
     return getFallbackRepository();
   }
 }
+
+/**
+ * The preset "documents expected to be uploaded" catalog — the ontology's
+ * document types (name, description, pillar, required) plus the case-level
+ * required groups the case parser enforces. Lets the UI render the upload
+ * checklist from the same source of truth that classification/validation use.
+ */
+router.get('/document-types', async (_req: Request, res: Response) => {
+  const repository = await getParserRepository();
+  try {
+    const types = await repository.listDocumentTypes();
+    return res.json({
+      document_types: types,
+      required_groups: REQUIRED_DOCUMENT_GROUPS,
+    });
+  } catch (err) {
+    logger.error('Listing parser document types failed', err as Error);
+    return res.status(500).json(fail('Could not list document types', 'DOCUMENT_TYPES_FAILED'));
+  } finally {
+    await repository.close?.();
+  }
+});
 
 router.post('/resolve', async (req: Request, res: Response) => {
   const repository = await getParserRepository();
