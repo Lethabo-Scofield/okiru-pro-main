@@ -1,16 +1,31 @@
 /**
- * Document-upload start option for /create-scorecard.
+ * Document-upload start for /create-scorecard — the flagship entry.
  *
- * EMS-style preset-documents flow: show the expected-documents checklist,
- * accept the raw evidence (PDF / Word / Excel / CSV / images), classify +
- * extract deterministically via okiru-ai-parser (/api/parser/resolve-case-files),
- * normalise the extracted values into workbook sections
- * (mapParserCaseToWorkbookSections), and hand the sections to the SAME
- * create → /api/workbook/:id/import → submit path Excel import uses — so the
- * score is computed by the one canonical calculator chain.
+ * Three acts:
+ *  1. The stage — an inviting drop surface + the expected-documents checklist.
+ *  2. Scanning theatre — files slide in, a shimmer sweeps while the parser
+ *     reads, then each file is stamped with its classification.
+ *  3. The reveal — the pillar rack lights up, stat tiles count up, and the
+ *     scorecard is created from the extracted values.
+ *
+ * Data flow is unchanged: okiru-ai-parser (/api/parser/resolve-case-files) →
+ * mapParserCaseToWorkbookSections → the SAME create → workbook import → submit
+ * path manual entry and Excel import use (one canonical calculator).
+ *
+ * Status visuals follow the dataviz rules: state = icon + label, never color
+ * alone; numbers/labels wear ink tokens, colored marks carry the state.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Check, CloudUpload, FileText, Loader2, Minus, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  CloudUpload,
+  FileText,
+  Loader2,
+  Minus,
+  Sparkles,
+  X,
+} from "lucide-react";
 import {
   mapParserCaseToWorkbookSections,
   type ParserCaseLike,
@@ -30,6 +45,39 @@ const CANONICAL_PILLARS: Record<string, string> = {
   SED: "Socio-Economic Development",
 };
 
+/** Pillar rack tiles — coverage pillar name → short label. */
+const PILLAR_TILES: Array<{ pillar: string; short: string }> = [
+  { pillar: "Ownership", short: "Ownership" },
+  { pillar: "Management Control", short: "Management" },
+  { pillar: "Skills Development", short: "Skills" },
+  { pillar: "Preferential Procurement", short: "Procurement" },
+  { pillar: "Socio-Economic Development", short: "SED" },
+  { pillar: "Financials", short: "Financials" },
+];
+
+/** rAF count-up for hero numbers. */
+function useCountUp(target: number, durationMs = 900): number {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (target <= 0) {
+      setValue(0);
+      return;
+    }
+    let raf = 0;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / durationMs);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - p, 3);
+      setValue(Math.round(target * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target, durationMs]);
+  return value;
+}
+
 export interface DocumentUploadStartProps {
   /** Create the client + import the mapped sections + open the workbook. */
   onCreate: (companyName: string, sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>) => Promise<void>;
@@ -43,6 +91,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [parseError, setParseError] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
   const [companyName, setCompanyName] = useState("");
+  const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -106,72 +155,59 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const removeFile = (name: string) => {
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
-    if (next.length === 0) {
-      setParserCase(null);
-    } else {
-      void parseFiles(next);
-    }
+    if (next.length === 0) setParserCase(null);
+    else void parseFiles(next);
   };
 
   const groupSatisfied = (g: { types: string[] }) => g.types.some((t) => docTypeSatisfied(t));
+
+  // Reveal stats
+  const supplierCount = parserCase?.supplier_rows?.length ?? 0;
+  const spendCaptured = (parserCase?.supplier_rows ?? []).reduce(
+    (s, r) => s + (Number(String(r.spend_amount ?? 0).replace(/[^0-9.]/g, "")) || 0),
+    0,
+  );
+  const valuesUp = useCountUp(mapped?.mappedRowCount ?? 0);
+  const suppliersUp = useCountUp(supplierCount);
+  const spendUp = useCountUp(spendCaptured, 1100);
+
+  const revealed = Boolean(mapped && !parsing && files.length > 0);
   const canCreate = Boolean(companyName.trim()) && (mapped?.mappedRowCount ?? 0) > 0 && !parsing && !creating;
+
+  const coverageByPillar = useMemo(
+    () => Object.fromEntries((mapped?.coverage ?? []).map((c) => [c.pillar, c])),
+    [mapped],
+  );
 
   return (
     <div data-testid="document-upload-start">
-      {/* Expected documents checklist */}
-      {catalog && (
-        <div className="rounded-xl bg-[#0e0e10] border border-[#2c2c2e] px-4 py-3 mb-4">
-          <p className="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2">
-            Documents we expect
-          </p>
-          <div className="space-y-1.5 mb-3">
-            {catalog.required_groups.map((g) => {
-              const ok = groupSatisfied(g);
-              return (
-                <div key={g.key} className="flex items-center gap-2 text-[13px]" data-testid={`docslot-${g.key}`}>
-                  {ok ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${files.length ? "text-amber-400" : "text-[#636366]"}`} />
-                  )}
-                  <span className={ok ? "text-[#d1d1d6]" : "text-[#8e8e93]"}>{g.label}</span>
-                  <span className="text-[10px] text-red-400 font-semibold">*</span>
-                  {!ok && files.length > 0 && (
-                    <span className="text-[11px] text-amber-300/70 ml-auto">Please attach — not found in your uploads</span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {catalog.document_types
-              .filter((t) => CANONICAL_PILLARS[t.pillar_code])
-              .map((t) => {
-                const ok = docTypeSatisfied(t.name);
-                return (
-                  <span
-                    key={t.name}
-                    title={`${CANONICAL_PILLARS[t.pillar_code]} — ${t.description}`}
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] border ${
-                      ok ? "text-emerald-400 border-emerald-900" : "text-[#8e8e93] border-[#2c2c2e]"
-                    } bg-[#1c1c1e]`}
-                  >
-                    {ok && <Check className="w-3 h-3" />}
-                    {t.name}
-                  </span>
-                );
-              })}
-          </div>
-        </div>
-      )}
+      {/* Scoped animation keyframes */}
+      <style>{`
+        @keyframes dusFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes dusShimmer { from { transform: translateX(-100%); } to { transform: translateX(220%); } }
+        @keyframes dusPulseRing { 0% { box-shadow: 0 0 0 0 rgba(167,139,250,0.28); } 70% { box-shadow: 0 0 0 14px rgba(167,139,250,0); } 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); } }
+        @keyframes dusStamp { 0% { opacity: 0; transform: scale(0.85); } 60% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
+        .dus-fade-up { animation: dusFadeUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+        .dus-stamp { animation: dusStamp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+      `}</style>
 
-      {/* Drop zone */}
+      {/* ACT 1 — the stage */}
       <div
-        className="rounded-xl border border-dashed border-[#2c2c2e] hover:border-[#48484a] bg-[#0e0e10] px-4 py-5 text-center cursor-pointer transition-colors mb-3"
+        className="relative rounded-2xl text-center cursor-pointer transition-all duration-300 overflow-hidden"
+        style={{
+          background: dragActive
+            ? "radial-gradient(120% 140% at 50% 0%, rgba(167,139,250,0.14), rgba(14,14,16,0.9) 60%)"
+            : "radial-gradient(120% 140% at 50% 0%, rgba(167,139,250,0.07), #0e0e10 62%)",
+          border: `1px dashed ${dragActive ? "#a78bfa" : "#3a3a3c"}`,
+          padding: files.length > 0 ? "18px 20px" : "40px 24px 34px",
+          transform: dragActive ? "scale(1.008)" : "scale(1)",
+        }}
         onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
+        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+        onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
         onDrop={(e) => {
           e.preventDefault();
+          setDragActive(false);
           if (e.dataTransfer.files?.length) addFiles(Array.from(e.dataTransfer.files));
         }}
         data-testid="docs-drop-zone"
@@ -188,33 +224,108 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
           }}
           data-testid="docs-file-input"
         />
-        <CloudUpload className="w-5 h-5 text-[#636366] mx-auto mb-1.5" />
-        <p className="text-[13px] text-[#d1d1d6] font-medium">
-          {files.length ? "Add more documents" : "Drop your documents here"}
-        </p>
-        <p className="text-[11px] text-[#636366] mt-0.5">PDF, Word, Excel, CSV or scans</p>
+
+        {files.length === 0 ? (
+          <>
+            <div
+              className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center transition-transform duration-300"
+              style={{
+                background: "linear-gradient(140deg, rgba(167,139,250,0.16), rgba(167,139,250,0.05))",
+                border: "1px solid rgba(167,139,250,0.3)",
+                animation: "dusPulseRing 2.6s ease-out infinite",
+                transform: dragActive ? "scale(1.1)" : "scale(1)",
+              }}
+            >
+              <CloudUpload className="w-6 h-6 text-violet-300" />
+            </div>
+            <h3
+              className="text-[19px] text-white mb-1"
+              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+            >
+              Drop your B-BBEE evidence
+            </h3>
+            <p className="text-[13px] text-[#8e8e93] mb-4 max-w-md mx-auto">
+              Certificates, affidavits, spend schedules, EE reports — PDF, Word, Excel or scans.
+              We read them, extract the real values, and build your scorecard.
+            </p>
+            <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-md mx-auto">
+              {["PDF", "DOCX", "XLSX", "CSV", "SCANS"].map((ext) => (
+                <span key={ext} className="px-2 py-0.5 rounded text-[10px] tracking-wide text-[#636366]" style={{ background: "#1c1c1e" }}>
+                  {ext}
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-center gap-2 text-[#8e8e93] hover:text-violet-300 transition-colors">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="text-[13px] font-medium">Add more documents</span>
+          </div>
+        )}
       </div>
 
-      {/* Uploaded files */}
+      {/* Expected documents — required slots (compact, below the stage) */}
+      {catalog && files.length === 0 && (
+        <div className="mt-3 px-1">
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5">
+            {catalog.required_groups.map((g) => (
+              <div key={g.key} className="flex items-center gap-1.5 text-[12px] text-[#8e8e93]" data-testid={`docslot-${g.key}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-[#48484a]" />
+                {g.label}
+                <span className="text-[10px] text-red-400/80 font-semibold -ml-0.5">*</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-1.5 text-[12px] text-[#636366]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#2c2c2e]" />
+              + ownership, EE &amp; skills documents strengthen the score
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ACT 2 — scanning theatre */}
       {files.length > 0 && (
-        <div className="space-y-1 mb-3">
-          {files.map((f) => {
+        <div className="mt-3 space-y-1.5">
+          {files.map((f, i) => {
             const detected = (parserCase?.documents_detected ?? []).find((d) => d.filename === f.name);
             return (
-              <div key={f.name} className="flex items-center gap-2 rounded-lg bg-[#0e0e10] border border-[#1c1c1e] px-3 py-2 text-[12px]">
-                <FileText className="w-3.5 h-3.5 text-[#636366] shrink-0" />
-                <span className="text-[#d1d1d6] truncate">{f.name}</span>
-                {parsing ? (
-                  <Loader2 className="w-3 h-3 animate-spin text-[#636366] ml-auto shrink-0" />
-                ) : detected ? (
-                  <span className="text-[#8e8e93] ml-auto shrink-0">→ {detected.document_type}</span>
-                ) : null}
+              <div
+                key={f.name}
+                className="dus-fade-up relative overflow-hidden flex items-center gap-3 rounded-xl px-3.5 py-2.5"
+                style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: `${i * 70}ms` }}
+              >
+                {/* shimmer sweep while parsing */}
+                {parsing && (
+                  <div className="absolute inset-y-0 left-0 w-1/3 pointer-events-none" style={{
+                    background: "linear-gradient(100deg, transparent, rgba(167,139,250,0.09), transparent)",
+                    animation: "dusShimmer 1.4s ease-in-out infinite",
+                  }} />
+                )}
+                <FileText className="w-4 h-4 text-[#636366] shrink-0" />
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="text-[13px] text-[#e5e5ea] truncate font-medium">{f.name}</div>
+                  <div className="text-[11px] mt-0.5">
+                    {parsing ? (
+                      <span className="text-[#636366] inline-flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Reading document…
+                      </span>
+                    ) : detected ? (
+                      <span className="dus-stamp inline-flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full ${detected.status === "passed" ? "bg-emerald-400" : detected.status === "review_required" ? "bg-amber-400" : "bg-red-400"}`} />
+                        <span className="text-[#a1a1a6]">{detected.document_type}</span>
+                        {detected.status === "review_required" && <span className="text-amber-300/70">· check after import</span>}
+                      </span>
+                    ) : (
+                      <span className="text-[#636366]">Unrecognised — will be skipped</span>
+                    )}
+                  </div>
+                </div>
                 <button
-                  onClick={() => removeFile(f.name)}
-                  className="p-0.5 text-[#48484a] hover:text-[#8e8e93] shrink-0"
+                  onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
+                  className="p-1 text-[#48484a] hover:text-[#8e8e93] shrink-0 transition-colors"
                   data-testid={`remove-${f.name}`}
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             );
@@ -222,70 +333,127 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
-      {parseError && (
-        <p className="text-[12px] text-red-400 mb-3">{parseError}</p>
-      )}
+      {parseError && <p className="text-[12px] text-red-400 mt-3">{parseError}</p>}
 
-      {/* Mapped coverage preview */}
-      {mapped && !parsing && (
-        <div className="rounded-xl bg-[#0e0e10] border border-[#2c2c2e] px-4 py-3 mb-4" data-testid="coverage-preview">
-          <p className="text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2">
-            What we&apos;ll fill into your workbook
+      {/* Missing required docs nudge */}
+      {revealed && catalog && catalog.required_groups.some((g) => !groupSatisfied(g)) && (
+        <div className="dus-fade-up mt-3 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5" style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.18)" }}>
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-[12px] text-amber-200/80 text-left">
+            Still missing:{" "}
+            {catalog.required_groups.filter((g) => !groupSatisfied(g)).map((g) => g.label).join("; ")}
+            {" "}— you can add these now or later in the workbook.
           </p>
-          <div className="space-y-1.5">
-            {mapped.coverage.map((c) => (
-              <div key={c.pillar} className="flex items-start gap-2 text-[12px]">
-                {c.status === "mapped" ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                ) : c.status === "needs-detail" ? (
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                ) : (
-                  <Minus className="w-3.5 h-3.5 text-[#48484a] shrink-0 mt-0.5" />
-                )}
-                <div>
-                  <span className={c.status === "mapped" ? "text-[#d1d1d6] font-medium" : "text-[#8e8e93] font-medium"}>
-                    {c.pillar}
-                  </span>
-                  <span className="text-[#636366]"> — {c.detail}</span>
-                  {c.extractedValue && (
-                    <span className="text-amber-300/80"> Extracted: {c.extractedValue}.</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
-      {/* Company name + create */}
-      {mapped && mapped.mappedRowCount > 0 && !parsing && (
-        <>
-          <label className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2">
-            Company name
-          </label>
-          <input
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
-            placeholder="e.g. Acme Holdings (Pty) Ltd"
-            className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] mb-3"
-            data-testid="docs-company-name"
-          />
-          <button
-            onClick={() => void onCreate(companyName.trim(), mapped.sections)}
-            disabled={!canCreate}
-            className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-[14px] font-semibold hover:bg-white/90 disabled:opacity-50 transition-colors"
-            data-testid="button-create-from-documents"
-          >
-            {creating ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>Create scorecard from {mapped.mappedRowCount} extracted value{mapped.mappedRowCount !== 1 ? "s" : ""}</>
-            )}
-          </button>
-          <p className="text-[11px] text-[#636366] mt-2 text-center">
-            You&apos;ll land in the workbook to review and complete anything the documents didn&apos;t cover — the score is calculated the same way as manual entry.
-          </p>
-        </>
+      {/* ACT 3 — the reveal */}
+      {revealed && mapped && (
+        <div className="mt-4">
+          {/* Pillar rack — status tiles light up */}
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-3" data-testid="coverage-preview">
+            {PILLAR_TILES.map((tile, i) => {
+              const c = coverageByPillar[tile.pillar];
+              const status = c?.status ?? "no-document";
+              const lit = status === "mapped";
+              const partial = status === "needs-detail";
+              return (
+                <div
+                  key={tile.pillar}
+                  className="dus-fade-up rounded-lg px-2 py-2 text-center transition-all duration-500"
+                  style={{
+                    animationDelay: `${120 + i * 90}ms`,
+                    background: lit ? "rgba(48,209,88,0.07)" : partial ? "rgba(255,214,10,0.05)" : "#111113",
+                    border: `1px solid ${lit ? "rgba(48,209,88,0.35)" : partial ? "rgba(255,214,10,0.25)" : "#1f1f21"}`,
+                  }}
+                  title={c ? `${tile.pillar}: ${c.detail}${c.extractedValue ? ` (extracted: ${c.extractedValue})` : ""}` : tile.pillar}
+                >
+                  <div className="flex items-center justify-center mb-1">
+                    {lit ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : partial ? (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    ) : (
+                      <Minus className="w-3.5 h-3.5 text-[#3a3a3c]" />
+                    )}
+                  </div>
+                  <div className={`text-[10px] font-medium leading-tight ${lit ? "text-emerald-200/90" : partial ? "text-amber-200/80" : "text-[#636366]"}`}>
+                    {tile.short}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Stat tiles — hero numbers count up */}
+          <div className="dus-fade-up grid grid-cols-3 gap-1.5 mb-4" style={{ animationDelay: "620ms" }}>
+            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
+              <div className="text-[22px] font-semibold text-white leading-none tabular-nums" data-testid="stat-values">{valuesUp}</div>
+              <div className="text-[10px] text-[#636366] mt-1 uppercase tracking-wider">Values extracted</div>
+            </div>
+            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
+              <div className="text-[22px] font-semibold text-white leading-none tabular-nums">{suppliersUp}</div>
+              <div className="text-[10px] text-[#636366] mt-1 uppercase tracking-wider">Suppliers found</div>
+            </div>
+            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
+              <div className="text-[22px] font-semibold text-white leading-none tabular-nums">
+                {spendUp >= 1_000_000 ? `R${(spendUp / 1_000_000).toFixed(1)}M` : spendUp >= 1_000 ? `R${Math.round(spendUp / 1_000)}k` : `R${spendUp}`}
+              </div>
+              <div className="text-[10px] text-[#636366] mt-1 uppercase tracking-wider">Spend captured</div>
+            </div>
+          </div>
+
+          {/* Detail lines for the amber tiles (extracted-but-needs-detail) */}
+          {mapped.coverage.some((c) => c.status === "needs-detail" && c.extractedValue) && (
+            <div className="dus-fade-up mb-4 space-y-1" style={{ animationDelay: "700ms" }}>
+              {mapped.coverage
+                .filter((c) => c.status === "needs-detail" && c.extractedValue)
+                .map((c) => (
+                  <p key={c.pillar} className="text-[11px] text-[#8e8e93] text-left">
+                    <span className="text-amber-300/80">{c.pillar}:</span> we extracted {c.extractedValue} — it needs
+                    per-person rows in the workbook to score.
+                  </p>
+                ))}
+            </div>
+          )}
+
+          {/* Company name + create */}
+          {mapped.mappedRowCount > 0 && (
+            <div className="dus-fade-up" style={{ animationDelay: "760ms" }}>
+              <input
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="Company name — e.g. Acme Holdings (Pty) Ltd"
+                className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#48484a] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
+                data-testid="docs-company-name"
+              />
+              <button
+                onClick={() => void onCreate(companyName.trim(), mapped.sections)}
+                disabled={!canCreate}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
+                style={{
+                  background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "#1c1c1e",
+                  color: canCreate ? "#000" : "#636366",
+                  boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
+                }}
+                data-testid="button-create-from-documents"
+              >
+                {creating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Build my scorecard from {mapped.mappedRowCount} extracted value{mapped.mappedRowCount !== 1 ? "s" : ""}
+                  </>
+                )}
+              </button>
+              <p className="text-[11px] text-[#48484a] mt-2 text-center">
+                You&apos;ll land in a pre-filled workbook — review, complete the gaps, and the score computes the
+                same way as manual entry.
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
