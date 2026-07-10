@@ -4,7 +4,19 @@ import type { ParserCaseOutput, ParserOutput, RawExtractionInput } from '../sche
 import { parserCaseOutputSchema } from '../schemas/parser_output.js';
 import { ParserService } from './parser_service.js';
 
-const REQUIRED_DOCUMENT_GROUPS = [
+export interface RequiredDocumentGroup {
+  key: string;
+  label: string;
+  /** Any non-failed document of one of these types satisfies the group. */
+  types: string[];
+}
+
+/**
+ * Case-level required-document groups. Exported so the UI can render the
+ * preset "documents expected to be uploaded" checklist from the same source
+ * the case parser enforces (GET /api/parser/document-types).
+ */
+export const REQUIRED_DOCUMENT_GROUPS: RequiredDocumentGroup[] = [
   {
     key: 'supplier_bbee_evidence',
     label: 'B-BBEE Certificate or Sworn Affidavit',

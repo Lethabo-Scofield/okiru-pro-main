@@ -1220,6 +1220,13 @@ export default function DocumentProcessor() {
   const [parserCase, setParserCase] = useState<any | null>(null);
   const [parserCaseStatus, setParserCaseStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
   const parserCaseFingerprint = useRef<string>('');
+  // Preset expected-documents catalog from the parser ontology
+  // (GET /api/parser/document-types): document types per pillar + the
+  // case-level required groups — the EMS-style upload checklist source.
+  const [expectedDocs, setExpectedDocs] = useState<{
+    document_types: Array<{ name: string; description: string; required: boolean; pillar_code: string }>;
+    required_groups: Array<{ key: string; label: string; types: string[] }>;
+  } | null>(null);
   // Approximate scorecard preview (score-preview step) — non-destructive
   // calculate-from-extraction so the user sees the score BEFORE reviewing.
   const [approxScore, setApproxScore] = useState<any | null>(null);
@@ -2955,6 +2962,26 @@ export default function DocumentProcessor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedFiles, flowMode]);
 
+  // Load the preset expected-documents catalog once for the documents flow.
+  useEffect(() => {
+    if (flowMode !== 'upload' || integratedToolkitUpload || expectedDocs) return;
+    void (async () => {
+      try {
+        const res = await fetch('/api/parser/document-types', { credentials: 'include' });
+        if (res.ok) setExpectedDocs(await res.json());
+      } catch (err) {
+        console.warn('[DocumentProcessor] expected-documents catalog unavailable:', err);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flowMode, integratedToolkitUpload]);
+
+  /** Is this expected document type satisfied by an uploaded, non-failed doc? */
+  const docTypeSatisfied = (typeName: string): boolean =>
+    (parserCase?.documents_detected || []).some(
+      (d: any) => d.document_type === typeName && d.status !== 'failed',
+    );
+
   /**
    * Approximate scorecard for the score-preview step. Same server mapping the
    * final Submit uses (calculate-from-extraction), but read-only: nothing is
@@ -3015,8 +3042,11 @@ export default function DocumentProcessor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
-  const startProcessing = async () => {
-    const unclassified = uploadedFiles.filter(f => !fileClassifications[String(f.id)]);
+  const startProcessing = async (classificationsOverride?: Record<string, number>) => {
+    // The preset-documents flow passes its auto-assignments directly because
+    // React state won't have flushed yet; the legacy classify page passes none.
+    const classifications = classificationsOverride ?? fileClassifications;
+    const unclassified = uploadedFiles.filter(f => !classifications[String(f.id)]);
     if (unclassified.length > 0) return;
 
     if (abortControllerRef.current) abortControllerRef.current.abort();
@@ -3033,11 +3063,16 @@ export default function DocumentProcessor() {
     setCurrentPage('extract');
 
     const documents = uploadedFiles.map((file) => {
-      const templateId = fileClassifications[String(file.id)];
+      const templateId = classifications[String(file.id)];
       const template = templates.find(t => t.id === templateId);
+      // Preset-documents flow: the parser's classification names the document
+      // (B-BBEE Certificate, Supplier Spend Schedule, …) — templates are gone.
+      const detected = (parserCase?.documents_detected || []).find(
+        (d: any) => d.filename === file.name,
+      );
       return {
         fileName: file.name, templateId,
-        templateName: template?.name || "Unknown",
+        templateName: detected?.document_type || template?.name || 'Document',
         entitiesToExtract: template?.entities || [],
         documentText: file.textContent || '',
       };
@@ -3120,7 +3155,7 @@ export default function DocumentProcessor() {
       const file = uploadedFiles[i];
       handleEvent('doc-start', { index: i, fileName: file.name });
 
-      const templateId = fileClassifications[String(file.id)];
+      const templateId = classifications[String(file.id)];
       const tmpl = templates.find(t => t.id === templateId);
       try {
         const { sectorCode, scorecardType } = resolveExtractionFromTemplateAndCompany(tmpl, companyInfo);
@@ -3182,7 +3217,7 @@ export default function DocumentProcessor() {
         handleEvent('doc-error', {
           index: i,
           fileName: file.name,
-          templateId: fileClassifications[String(file.id)],
+          templateId: classifications[String(file.id)],
           templateName: tmpl?.name || 'Extraction',
           entities: [{ name: 'ExtractionError', value: err.message || 'Could not extract entities', confidence: 0, status: 'error' }],
         });
@@ -3198,8 +3233,9 @@ export default function DocumentProcessor() {
     if (!file) return;
     const templateId = fileClassifications[String(file.id)];
     if (!templateId) return;
+    // Preset-documents flow uses the -1 sentinel (no template) — sector/type
+    // resolve from companyInfo, exactly like the batch path.
     const template = templates.find(t => t.id === templateId);
-    if (!template) return;
 
     setDocStatuses(prev => ({ ...prev, [fileIdx]: 'processing' }));
 
@@ -3236,7 +3272,10 @@ export default function DocumentProcessor() {
       const result = {
         fileName: file.name,
         templateId,
-        templateName: template?.name || 'Toolkit extraction',
+        templateName:
+          (parserCase?.documents_detected || []).find((d: any) => d.filename === file.name)?.document_type
+          || template?.name
+          || 'Document',
         entities: data.entities.map((e: any) => ({
           name: e.name,
           value: e.value,
@@ -3637,84 +3676,7 @@ export default function DocumentProcessor() {
         </div>
       </header>
 
-      <div className="bg-black px-6 py-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
-        <div className="w-full px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-          {(() => {
-            const isBuildFlow =
-              flowMode === 'build' ||
-              currentPage === 'build-foundation' ||
-              currentPage === 'build-pillars';
-            const isIntegratedUpload =
-              integratedToolkitUpload && flowMode === 'upload';
-
-            const steps = isBuildFlow
-              ? [
-                  { label: 'Mode', page: 'choose-mode' },
-                  { label: 'Foundation', page: 'build-foundation' },
-                  { label: 'Pillars', page: 'build-pillars' },
-                  { label: 'Scorecard', page: 'scorecard' },
-                ]
-              : isIntegratedUpload
-                ? [
-                    { label: 'Mode', page: 'choose-mode' },
-                    { label: 'Client', page: 'company-info' },
-                    { label: 'Requirements', page: 'upload-requirements' },
-                    { label: 'Upload', page: 'upload-kit-file' },
-                    { label: 'Review', page: 'upload-kit-review' },
-                    { label: 'Summary', page: 'summary' },
-                    { label: 'Scorecard', page: 'scorecard' },
-                  ]
-                : [
-                    { label: 'Mode', page: 'choose-mode' },
-                    { label: 'Upload', page: 'upload' },
-                    { label: 'Template', page: 'classify' },
-                    { label: 'Extract', page: 'extract' },
-                    { label: 'Score Preview', page: 'score-preview' },
-                    { label: 'Review', page: 'review' },
-                    { label: 'Summary', page: 'summary' },
-                    { label: 'Scorecard', page: 'scorecard' },
-                  ];
-
-            let currentStepIdx = steps.findIndex((s) => s.page === currentPage);
-            if (currentStepIdx < 0) currentStepIdx = 0;
-
-            return steps.map((step, idx) => {
-              const isComplete = idx < currentStepIdx;
-              const isCurrent = idx === currentStepIdx;
-              const canNavigate = isComplete;
-              return (
-                <React.Fragment key={step.label}>
-                  <div className={`flex items-center gap-2 ${canNavigate ? 'cursor-pointer group' : ''}`}
-                    onClick={() => { if (canNavigate) setCurrentPage(step.page as any); }}>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold transition-all ${
-                      isComplete
-                        ? 'bg-white text-black group-hover:bg-[#d1d1d6]'
-                        : isCurrent
-                          ? 'bg-white text-black'
-                          : 'bg-[#1c1c1e] text-[#48484a]'
-                    }`}>
-                      {isComplete ? <Check className="w-3 h-3" /> : idx + 1}
-                    </div>
-                    <span className={`text-[13px] font-medium hidden sm:inline transition-colors ${
-                      isComplete
-                        ? 'text-[#d1d1d6] group-hover:text-white'
-                        : isCurrent
-                          ? 'text-white'
-                          : 'text-[#48484a]'
-                    }`}>{step.label}</span>
-                  </div>
-                  {idx < steps.length - 1 && (
-                    <div className="flex-1 h-px mx-4" style={{ background: '#2c2c2e' }}>
-                      <div className="h-full transition-all duration-700" style={{ width: isComplete ? '100%' : '0%', background: '#636366' }}></div>
-                    </div>
-                  )}
-                </React.Fragment>
-              );
-            });
-          })()}
-        </div>
-      </div>
-
+      {/* Flow stepper removed per product direction — steps advance without a diagram. */}
       <main
         className={`flex-1 flex flex-col min-h-0 ${
           currentPage === 'review' || currentPage === 'upload-kit-review' ? 'overflow-hidden' : 'overflow-y-auto'
@@ -4384,18 +4346,94 @@ export default function DocumentProcessor() {
             <div className="max-w-2xl mx-auto w-full">
               <div className="mb-10">
                 <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Upload Documents</h2>
-                <p className="text-[#8e8e93] text-[15px] mt-1.5">Drag and drop files or click to browse.</p>
+                <p className="text-[#8e8e93] text-[15px] mt-1.5">
+                  These are the documents we expect for a scoreable extraction. Drop everything you have — we classify each file automatically.
+                </p>
               </div>
 
-              {templates.length === 0 && !loadingTemplates && (
-                <div className="rounded-xl p-4 mb-6 flex items-start gap-3" style={{ background: '#1a1a1a', border: '1px solid #2c2c2e' }}>
-                  <AlertTriangle className="w-4 h-4 text-[#8e8e93] mt-0.5 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-[#d1d1d6]">No templates available</p>
-                    <p className="text-xs text-[#636366] mt-1">Create a template in the Entity Builder first. <Link href="/builder" className="underline text-white">Go to Builder</Link></p>
+              {/* Preset expected-documents checklist (parser ontology catalog). */}
+              {expectedDocs && (() => {
+                const CANONICAL_PILLARS: Record<string, string> = {
+                  ESD: 'Enterprise & Supplier Development',
+                  OWN: 'Ownership',
+                  MAC: 'Management Control',
+                  SKL: 'Skills Development',
+                  SED: 'Socio-Economic Development',
+                };
+                const canonical = expectedDocs.document_types.filter((t) => CANONICAL_PILLARS[t.pillar_code]);
+                const matrix = expectedDocs.document_types.filter((t) => !CANONICAL_PILLARS[t.pillar_code]);
+                const matrixByPillar = matrix.reduce<Record<string, string[]>>((acc, t) => {
+                  const label = t.pillar_code
+                    .toLowerCase()
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, (c) => c.toUpperCase());
+                  (acc[label] ??= []).push(t.name);
+                  return acc;
+                }, {});
+                const groupSatisfied = (g: { types: string[] }) => g.types.some((t) => docTypeSatisfied(t));
+                const hasUploads = uploadedFiles.length > 0;
+                return (
+                  <div className="rounded-xl px-4 py-4 mb-6" style={{ background: '#111111', border: '1px solid #1c1c1e' }} data-testid="expected-documents-panel">
+                    <p className="text-[13px] font-semibold text-[#d1d1d6] mb-3">Expected documents</p>
+
+                    {/* Required groups — EMS-style slots. */}
+                    <div className="space-y-1.5 mb-4">
+                      {expectedDocs.required_groups.map((g) => {
+                        const ok = groupSatisfied(g);
+                        return (
+                          <div key={g.key} className="flex items-center gap-2.5 text-[13px]" data-testid={`required-slot-${g.key}`}>
+                            {ok
+                              ? <Check className="w-3.5 h-3.5 text-[#30d158] shrink-0" />
+                              : <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${hasUploads ? 'text-[#ffd60a]' : 'text-[#636366]'}`} />}
+                            <span className={ok ? 'text-[#d1d1d6]' : 'text-[#8e8e93]'}>{g.label}</span>
+                            <span className="text-[10px] text-[#ff453a] font-semibold">*</span>
+                            {!ok && hasUploads && (
+                              <span className="text-[11px] text-[#b8a25a] ml-auto">Please attach — not found in your uploads</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Auto-extractable types by pillar. */}
+                    <p className="text-[11px] uppercase tracking-wider text-[#636366] mb-2">We auto-extract from</p>
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {canonical.map((t) => {
+                        const ok = docTypeSatisfied(t.name);
+                        return (
+                          <span key={t.name} title={`${CANONICAL_PILLARS[t.pillar_code]} — ${t.description}`}
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] ${ok ? 'text-[#30d158]' : 'text-[#8e8e93]'}`}
+                            style={{ background: '#1c1c1e', border: `1px solid ${ok ? '#1d3a26' : '#2c2c2e'}` }}>
+                            {ok && <Check className="w-3 h-3" />}
+                            {t.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+
+                    {/* Full verification checklist (reference). */}
+                    {Object.keys(matrixByPillar).length > 0 && (
+                      <details className="group">
+                        <summary className="text-[12px] text-[#636366] hover:text-[#8e8e93] cursor-pointer select-none">
+                          Full verification checklist by pillar ({matrix.length} documents)
+                        </summary>
+                        <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {Object.entries(matrixByPillar).map(([pillar, names]) => (
+                            <div key={pillar}>
+                              <p className="text-[11px] font-semibold text-[#8e8e93] mb-1">{pillar}</p>
+                              <ul className="space-y-0.5">
+                                {names.map((n) => (
+                                  <li key={n} className="text-[11px] text-[#636366] leading-snug">• {n}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               <div
                 className="rounded-2xl text-center transition-all cursor-pointer mb-8"
@@ -4534,9 +4572,24 @@ export default function DocumentProcessor() {
                     >
                       Back
                     </button>
-                    <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
-                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-classify">
-                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
+                    <button onClick={async () => {
+                      if (!allReady || isSavingSession) return;
+                      // Preset-documents flow: no template assignment (Arango
+                      // templates retired) — the parser classifies each file
+                      // against the expected-documents catalog; extraction
+                      // keys off companyInfo sector/turnover. Mark every file
+                      // with the sentinel so the legacy classification gate
+                      // passes, then extract immediately.
+                      setIsSavingSession(true);
+                      const auto: Record<string, number> = {};
+                      for (const f of uploadedFiles) auto[String(f.id)] = -1;
+                      setFileClassifications(auto);
+                      await persistSession('extract');
+                      setIsSavingSession(false);
+                      setTimeout(() => { void startProcessing(auto); }, 0);
+                    }} disabled={!allReady || isSavingSession}
+                      className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-extract-documents">
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Extract from documents'}
                     </button>
                   </div>
                 </>
@@ -4785,9 +4838,9 @@ export default function DocumentProcessor() {
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={() => setCurrentPage('classify')}
+                  onClick={() => setCurrentPage('upload')}
                   className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
-                  data-testid="button-back-classify"
+                  data-testid="button-back-upload"
                 >
                   Back
                 </button>
@@ -4897,7 +4950,7 @@ export default function DocumentProcessor() {
                     Back
                   </button>
                   {!allDone && (
-                    <button onClick={startProcessing} disabled={anyProcessing}
+                    <button onClick={() => { void startProcessing(); }} disabled={anyProcessing}
                       className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-start-extract">
                       {anyProcessing ? (
                         <><Loader2 className="w-3.5 h-3.5 mr-1.5 inline-block animate-spin" />Extracting...</>
