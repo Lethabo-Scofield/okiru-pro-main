@@ -107,6 +107,7 @@ interface ProcessorSession {
     | 'classify'
     | 'extract'
     | 'processing'
+    | 'score-preview'
     | 'review'
     | 'summary'
     | 'scorecard'
@@ -1192,6 +1193,7 @@ export default function DocumentProcessor() {
     | 'classify'
     | 'extract'
     | 'processing'
+    | 'score-preview'
     | 'review'
     | 'summary'
     | 'populating'
@@ -1213,6 +1215,16 @@ export default function DocumentProcessor() {
   const [fileClassifications, setFileClassifications] = useState<Record<string, number>>({});
   const [fileDocTypes, setFileDocTypes] = useState<Record<string, 'digital' | 'scanned'>>({});
   const [extractionResults, setExtractionResults] = useState<any[]>([]);
+  // okiru-ai-parser case result: per-document classification + required-docs
+  // coverage + calculator payload (deterministic parser at /api/parser/*).
+  const [parserCase, setParserCase] = useState<any | null>(null);
+  const [parserCaseStatus, setParserCaseStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+  const parserCaseFingerprint = useRef<string>('');
+  // Approximate scorecard preview (score-preview step) — non-destructive
+  // calculate-from-extraction so the user sees the score BEFORE reviewing.
+  const [approxScore, setApproxScore] = useState<any | null>(null);
+  const [approxLoading, setApproxLoading] = useState(false);
+  const [approxError, setApproxError] = useState<string | null>(null);
   const [isDragActive, setIsDragActive] = useState(false);
   const [templates, setTemplates] = useState<StoredTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -1845,8 +1857,11 @@ export default function DocumentProcessor() {
     }
   }, [toast]);
 
-  const handleModeSelect = useCallback((mode: 'upload' | 'build') => {
-    setFlowMode(mode);
+  const handleModeSelect = useCallback((mode: 'upload' | 'documents' | 'build') => {
+    // 'documents' = raw source documents (certificates, affidavits, spend
+    // schedules…) through the multi-document flow with okiru-ai-parser
+    // assistance; 'upload' = the single integrated toolkit workbook.
+    setFlowMode(mode === 'build' ? 'build' : 'upload');
     // Clear stale Zustand store data when starting either flow mode
     useBbeeStore.getState().startNewSession();
 
@@ -1865,12 +1880,20 @@ export default function DocumentProcessor() {
 
     setIntegratedToolkitUpload(mode === 'upload');
 
-    if (mode === 'upload') {
+    if (mode === 'upload' || mode === 'documents') {
       setToolkitSectorCode('');
       setToolkitImportedFile(null);
       setToolkitExtractionResult(null);
       setToolkitFoundationPreview({});
       setToolkitPillarPreview({});
+      // Fresh multi-document state for the source-documents path.
+      setUploadedFiles([]);
+      setFileClassifications({});
+      setExtractionResults([]);
+      setParserCase(null);
+      setParserCaseStatus('idle');
+      parserCaseFingerprint.current = '';
+      setApproxScore(null);
       setCurrentPage('company-info');
     } else {
       // FIXED: Generate sessionId early for anonymous users so they get isolated sessionStorage
@@ -2890,6 +2913,108 @@ export default function DocumentProcessor() {
     return entities;
   };
 
+  /**
+   * Send the ACTUAL uploaded files (PDF/DOCX/XLSX/CSV/TXT/images) to the
+   * okiru-ai-parser as one case. The parser classifies each document
+   * (B-BBEE Certificate, Sworn Affidavit, Supplier Spend Schedule, Ownership
+   * Confirmation, EE Report, WSP, SED Confirmation), extracts per-type fields
+   * deterministically, and reports required-document coverage
+   * (missing_required_documents) + documents_needing_review.
+   */
+  const runParserCase = async (files: UploadedFile[]) => {
+    const fingerprint = files.map((f) => `${f.id}:${f.name}`).join('|');
+    if (fingerprint === parserCaseFingerprint.current) return;
+    parserCaseFingerprint.current = fingerprint;
+    setParserCaseStatus('running');
+    try {
+      const form = new FormData();
+      for (const f of files.slice(0, 25)) form.append('files', f.file, f.name);
+      form.append('case_id', `processor_${sessionId || Date.now()}`);
+      const res = await fetch(`/api/parser/resolve-case-files`, {
+        method: 'POST',
+        credentials: 'include',
+        body: form,
+      });
+      // 422 = case parsed but needs review — still a valid body.
+      if (!res.ok && res.status !== 422) throw new Error(`parser ${res.status}`);
+      const data = await res.json();
+      setParserCase(data);
+      setParserCaseStatus('done');
+    } catch (err) {
+      console.warn('[DocumentProcessor] parser case failed (non-fatal):', err);
+      setParserCase(null);
+      setParserCaseStatus('error');
+    }
+  };
+
+  // Auto-run the parser case whenever the upload set settles (all files ready).
+  useEffect(() => {
+    if (flowMode !== 'upload' || integratedToolkitUpload) return;
+    const ready = uploadedFiles.length > 0 && uploadedFiles.every((f) => f.status === 'ready');
+    if (ready) void runParserCase(uploadedFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uploadedFiles, flowMode]);
+
+  /**
+   * Approximate scorecard for the score-preview step. Same server mapping the
+   * final Submit uses (calculate-from-extraction), but read-only: nothing is
+   * persisted and the store is not hydrated. Shown BEFORE entity review so the
+   * user sees what the score would be as-extracted — and what fixing flagged
+   * extractions could recover.
+   */
+  const computeApproximateScore = async () => {
+    setApproxLoading(true);
+    setApproxError(null);
+    try {
+      const sectorCode = companyInfo.sector || 'RCOGP';
+      const { scorecardType } = determineScorecardType(sectorCode, companyInfo.annualTurnover);
+      const allEntities: any[] = [];
+      const allTables: any = {};
+      for (const doc of extractionResults) {
+        for (const entity of (doc.entities || [])) {
+          if (entity.status !== 'rejected') allEntities.push(entity);
+        }
+        const t = (doc as any).tables || {};
+        for (const key of ['shareholders', 'employees', 'suppliers', 'contributions', 'trainingPrograms', 'ownershipFinancials', 'financials']) {
+          if (t[key]?.length) {
+            if (!allTables[key]) allTables[key] = [];
+            allTables[key].push(...t[key]);
+          }
+        }
+      }
+      const res = await fetch(`${API_BASE}/api/calculate-from-extraction`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: `preview-${sessionId || Date.now()}`,
+          sectorCode,
+          scorecardType,
+          entities: allEntities,
+          tables: allTables,
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || errBody.details || `Scoring returned ${res.status}`);
+      }
+      const raw = await res.json();
+      setApproxScore(raw.scorecard ?? raw);
+    } catch (err) {
+      setApproxError(err instanceof Error ? err.message : 'Could not compute the preview score');
+      setApproxScore(null);
+    } finally {
+      setApproxLoading(false);
+    }
+  };
+
+  // Compute the approximate score when the preview step opens.
+  useEffect(() => {
+    if (currentPage === 'score-preview' && !approxScore && !approxLoading) {
+      void computeApproximateScore();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
   const startProcessing = async () => {
     const unclassified = uploadedFiles.filter(f => !fileClassifications[String(f.id)]);
     if (unclassified.length > 0) return;
@@ -2929,7 +3054,10 @@ export default function DocumentProcessor() {
       });
       setExtractionResults(finalResults);
       persistSession('review', { results: finalResults });
-      setTimeout(() => setCurrentPage('review'), 600);
+      // Show the approximate scorecard FIRST (score-preview), then the user
+      // continues into entity review to fix anything extracted poorly.
+      setApproxScore(null);
+      setTimeout(() => setCurrentPage('score-preview'), 600);
     };
 
     const handleEvent = (eventType: string, data: any) => {
@@ -3541,6 +3669,7 @@ export default function DocumentProcessor() {
                     { label: 'Upload', page: 'upload' },
                     { label: 'Template', page: 'classify' },
                     { label: 'Extract', page: 'extract' },
+                    { label: 'Score Preview', page: 'score-preview' },
                     { label: 'Review', page: 'review' },
                     { label: 'Summary', page: 'summary' },
                     { label: 'Scorecard', page: 'scorecard' },
@@ -3878,7 +4007,11 @@ export default function DocumentProcessor() {
                       const sid = sessionId || generateSessionId();
                       if (!sessionId) { setSessionId(sid); sessionCreatedAt.current = new Date().toISOString(); }
                       setToolkitSectorCode(normalizeSectorCodeForExtraction(companyInfo.sector));
-                      const nextPage = flowMode === 'upload' ? 'upload-requirements' : 'choose-mode';
+                      // Integrated workbook path → requirements checklist;
+                      // raw source-documents path → multi-document upload.
+                      const nextPage = flowMode === 'upload'
+                        ? (integratedToolkitUpload ? 'upload-requirements' : 'upload')
+                        : 'choose-mode';
                       await apiSaveSession({
                         id: sid, companyInfo,
                         createdAt: sessionCreatedAt.current,
@@ -3887,8 +4020,8 @@ export default function DocumentProcessor() {
                         filesData: [], fileClassifications: {},
                         extractionResults: [], docStatuses: {}, isComplete: false,
                         flowMode: flowMode ?? undefined,
-                        integratedToolkitUpload: flowMode === 'upload' ? true : undefined,
-                        integratedToolkitState: flowMode === 'upload'
+                        integratedToolkitUpload: flowMode === 'upload' ? integratedToolkitUpload : undefined,
+                        integratedToolkitState: flowMode === 'upload' && integratedToolkitUpload
                           ? {
                               sectorCode: normalizeSectorCodeForExtraction(companyInfo.sector),
                               extractionResult: undefined,
@@ -4347,6 +4480,51 @@ export default function DocumentProcessor() {
                       </div>
                     ))}
                   </div>
+
+                  {/* okiru-ai-parser document coverage: per-file classification +
+                      required-document checklist + review flags. */}
+                  <div className="rounded-xl px-4 py-3 mb-8" style={{ background: '#111111', border: '1px solid #1c1c1e' }} data-testid="parser-coverage-card">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-[13px] font-medium text-[#d1d1d6]">Document coverage</p>
+                      {parserCaseStatus === 'running' && (
+                        <span className="text-[11px] text-[#636366] inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Analysing documents…</span>
+                      )}
+                      {parserCaseStatus === 'error' && (
+                        <span className="text-[11px] text-[#8e6a3a]">Document analysis unavailable</span>
+                      )}
+                    </div>
+                    {parserCase && (
+                      <>
+                        {(parserCase.documents_detected || []).length > 0 && (
+                          <div className="space-y-1 mb-2">
+                            {(parserCase.documents_detected || []).map((d: any, i: number) => (
+                              <div key={i} className="flex items-center gap-2 text-[12px]">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${d.status === 'passed' ? 'bg-[#30d158]' : d.status === 'review_required' ? 'bg-[#ffd60a]' : 'bg-[#ff453a]'}`} />
+                                <span className="text-[#8e8e93] truncate max-w-[220px]">{d.filename}</span>
+                                <span className="text-[#636366]">→ {d.document_type || 'Unrecognised'}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {(parserCase.missing_required_documents || []).length > 0 && (
+                          <div className="rounded-lg px-3 py-2 mt-1" style={{ background: '#1c1608', border: '1px solid #3a2e10' }} data-testid="missing-docs-warning">
+                            <p className="text-[12px] font-medium text-[#ffd60a] mb-1">Still needed for a complete score</p>
+                            <ul className="list-disc ml-4 text-[12px] text-[#b8a25a]">
+                              {(parserCase.missing_required_documents || []).map((m: string, i: number) => (
+                                <li key={i}>{m}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {(parserCase.documents_needing_review || []).length > 0 && (
+                          <p className="text-[11px] text-[#636366] mt-2">
+                            {(parserCase.documents_needing_review || []).length} document{(parserCase.documents_needing_review || []).length !== 1 ? 's' : ''} flagged for review — you can fix extracted values after extraction.
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+
                   <div className="flex gap-3">
                     <button
                       type="button"
@@ -4528,6 +4706,97 @@ export default function DocumentProcessor() {
                 <button onClick={async () => { if (allClassified && !isSavingSession) { setIsSavingSession(true); await persistSession('extract'); setIsSavingSession(false); setCurrentPage('extract'); } }} disabled={!allClassified || isSavingSession}
                   className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-extract">
                   {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {currentPage === 'score-preview' && (
+            <div className="max-w-2xl mx-auto w-full" data-testid="score-preview-page">
+              <div className="mb-8 text-center">
+                <h2 className="text-[28px] font-semibold text-white tracking-tight leading-tight">Approximate Scorecard</h2>
+                <p className="text-[#8e8e93] text-[15px] mt-1.5">
+                  Based on what was extracted from your documents — before any corrections.
+                </p>
+              </div>
+
+              {approxLoading && (
+                <div className="flex flex-col items-center py-16">
+                  <Loader2 className="w-8 h-8 animate-spin text-[#636366] mb-4" />
+                  <p className="text-[13px] text-[#636366]">Calculating your approximate score…</p>
+                </div>
+              )}
+
+              {!approxLoading && approxError && (
+                <div className="rounded-xl p-4 mb-6 text-center" style={{ background: '#1a1a1a', border: '1px solid #2c2c2e' }}>
+                  <p className="text-[13px] text-[#8e8e93]">Couldn't calculate a preview score ({approxError}).</p>
+                  <p className="text-[12px] text-[#636366] mt-1">You can still review the extracted values and score at the end.</p>
+                </div>
+              )}
+
+              {!approxLoading && approxScore && (
+                <>
+                  <div className="rounded-2xl p-8 mb-6 text-center" style={{ background: '#111111', border: '1px solid #2c2c2e' }}>
+                    <p className="text-[12px] uppercase tracking-wider text-[#636366] mb-2">Approximate B-BBEE Level</p>
+                    <div className="text-[56px] font-bold text-white leading-none mb-2" data-testid="approx-level">
+                      {approxScore.beeLevel === 9 || approxScore.beeLevel == null ? 'NC' : `Level ${approxScore.beeLevel}`}
+                    </div>
+                    <p className="text-[15px] text-[#8e8e93]" data-testid="approx-points">
+                      {Number(approxScore.totalPoints ?? 0).toFixed(1)} / {Number(approxScore.maxPoints ?? 0).toFixed(0)} points
+                    </p>
+                  </div>
+
+                  {Array.isArray(approxScore.pillars) && approxScore.pillars.length > 0 && (
+                    <div className="rounded-xl px-4 py-3 mb-6" style={{ background: '#111111', border: '1px solid #1c1c1e' }}>
+                      <p className="text-[13px] font-medium text-[#d1d1d6] mb-3">Pillar breakdown (as extracted)</p>
+                      <div className="space-y-2.5">
+                        {approxScore.pillars.map((p: any) => (
+                          <div key={p.pillarCode || p.pillarName}>
+                            <div className="flex items-center justify-between text-[12px] mb-1">
+                              <span className="text-[#8e8e93]">{p.pillarName || p.pillarCode}</span>
+                              <span className="text-[#636366]">{Number(p.points ?? 0).toFixed(1)} / {Number(p.maxPoints ?? 0).toFixed(0)}</span>
+                            </div>
+                            <div className="h-1.5 rounded-full overflow-hidden" style={{ background: '#1c1c1e' }}>
+                              <div className="h-full rounded-full bg-white transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(p.percentage ?? (p.maxPoints ? (p.points / p.maxPoints) * 100 : 0))))}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!approxLoading && (
+                <div className="rounded-xl px-4 py-3 mb-8" style={{ background: '#1c1608', border: '1px solid #3a2e10' }}>
+                  <p className="text-[13px] font-medium text-[#ffd60a] mb-1">This is only as good as the extraction</p>
+                  <p className="text-[12px] text-[#b8a25a]">
+                    Values the documents didn't state clearly may be missing or wrong — every one you fix in the next step can only move this score up.
+                    {parserCase && (parserCase.documents_needing_review || []).length > 0 && (
+                      <> {(parserCase.documents_needing_review || []).length} document{(parserCase.documents_needing_review || []).length !== 1 ? 's were' : ' was'} flagged for review.</>
+                    )}
+                    {parserCase && (parserCase.missing_required_documents || []).length > 0 && (
+                      <> Missing: {(parserCase.missing_required_documents || []).join('; ')}.</>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage('classify')}
+                  className="px-5 py-3 bg-[#1c1c1e] text-[#8e8e93] hover:text-white rounded-xl text-[13px] font-medium transition-colors"
+                  data-testid="button-back-classify"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => setCurrentPage('review')}
+                  className="flex-1 px-5 py-3 bg-white text-black rounded-xl text-[13px] font-semibold transition-transform hover:scale-[1.01]"
+                  data-testid="button-review-fix"
+                >
+                  Review &amp; fix extracted values →
                 </button>
               </div>
             </div>
