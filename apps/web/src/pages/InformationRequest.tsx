@@ -427,54 +427,13 @@ function CompanyPicker({
               Create Scorecard
             </h2>
             <p className="text-[14px] text-[#8e8e93] mt-1.5">
-              Enter your company&apos;s B-BBEE information to generate your scorecard.
+              Drop your documents and we build it — or start from a blank workbook.
             </p>
           </div>
 
           <div className="px-6 sm:px-8 py-5">
-            <label
-              htmlFor="new-company-name"
-              className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2"
-            >
-              Company name
-            </label>
-            <input
-              id="new-company-name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && create()}
-              placeholder="e.g. Acme Holdings (Pty) Ltd"
-              className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10 mb-3"
-              data-testid="input-new-company"
-              autoFocus
-            />
-            <button
-              onClick={create}
-              disabled={!newName.trim() || creating}
-              className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-[14px] font-semibold press-sm hover:bg-white/90 disabled:opacity-50 smooth"
-              data-testid="button-start-scorecard"
-            >
-              {creating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  Start New Scorecard
-                  <ChevronRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
-
-            <div className="relative my-5">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#2c2c2e]" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">or</span>
-              </div>
-            </div>
-
-            {/* Document-upload start: preset expected-documents flow (parser-
-                classified evidence → workbook sections → same submit path). */}
+            {/* HERO — document-upload start: preset expected-documents flow
+                (parser-classified evidence → workbook sections → same submit path). */}
             <DocumentUploadStart
               onCreate={async (companyName, sections) => {
                 await createFromSections(companyName, sections as WorkbookSectionsInput);
@@ -482,16 +441,43 @@ function CompanyPicker({
               creating={creating}
             />
 
-            <div className="relative my-5">
+            <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-[#2c2c2e]" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">or</span>
+                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">prefer another way?</span>
               </div>
             </div>
 
-            <div className="flex justify-center">
+            {/* Secondary paths: blank workbook + Excel import */}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2.5 items-stretch">
+              <div className="flex gap-2">
+                <input
+                  id="new-company-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && create()}
+                  placeholder="Company name — start a blank workbook"
+                  className="flex-1 bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10"
+                  data-testid="input-new-company"
+                />
+                <button
+                  onClick={create}
+                  disabled={!newName.trim() || creating}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#2c2c2e] text-[#e5e5ea] text-[13px] font-semibold hover:bg-[#3a3a3c] disabled:opacity-50 transition-colors whitespace-nowrap"
+                  data-testid="button-start-scorecard"
+                >
+                  {creating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      Start blank
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
               <ExcelImportButton
                 label="Import from Excel"
                 onImport={async (file) => {
