@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "arthouse",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/Administrator/Documents/arthouse", "run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "arthouse-built",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/Administrator/Documents/arthouse", "run", "preview"],
+      "port": 4173
+    },
+    {
+      "name": "okiru-web-client",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/Administrator/Documents/GitHub/okiru-pro-main/apps/web", "run", "dev:client"],
+      "port": 5000
+    },
+    {
+      "name": "okiru-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/Administrator/Documents/GitHub/okiru-pro-main/apps/web", "run", "dev"],
+      "port": 5000
+    }
+  ]
+}

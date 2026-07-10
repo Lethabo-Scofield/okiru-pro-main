@@ -65,7 +65,10 @@ function getOfflineDemoUser(): User {
     fullName: "Demo User",
     email: "demo@okiru.pro",
     role: "admin",
-    secondaryRoles: [],
+    // Offline demo (Mongo-less local dev ONLY — this path never activates in
+    // prod): grant super_admin so the full product surface, incl. the
+    // /processor upload flow, is reachable when demoing locally.
+    secondaryRoles: ["super_admin"],
     organizationId: "demo-offline-workspace",
     organizationName: "Demo Workspace",
     profilePicture: null,
