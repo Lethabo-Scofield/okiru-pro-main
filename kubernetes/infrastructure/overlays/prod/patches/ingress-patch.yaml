@@ -135,6 +135,16 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # okiru-ai-parser document routes — web Express proxies /api/parser/*
+          # to the parser service. Longer prefix than /api so nginx picks it
+          # before the api catch-all (apps/api has no parser proxy → would 404).
+          - path: /api/parser
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           - path: /api
             pathType: Prefix
             backend:
