@@ -27,6 +27,7 @@ resources:
   - deployments/api.yaml
   - deployments/web.yaml
   - deployments/compute.yaml
+  - deployments/parser.yaml
 
   # Services
   - services/services.yaml

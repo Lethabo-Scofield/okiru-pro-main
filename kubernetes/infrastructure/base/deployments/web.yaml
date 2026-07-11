@@ -87,6 +87,11 @@ spec:
                 configMapKeyRef:
                   name: app-config
                   key: API_SERVER_URL
+            # okiru-ai-parser (document→calculator service). apps/web/server/
+            # apiProxy.ts forwards /api/parser/* here; without it the proxy
+            # defaults to 127.0.0.1:3200 (local only) and document upload 502s.
+            - name: PARSER_SERVICE_URL
+              value: "http://parser:3200"
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:

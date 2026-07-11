@@ -32,10 +32,37 @@ import {
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
 
+interface RequiredGroup {
+  key: string;
+  label: string;
+  types: string[];
+  pillar?: string;
+  required?: boolean;
+  autoExtract?: boolean;
+  note?: string;
+}
+
+interface SectorOption {
+  code: string;
+  label: string;
+  subSectors?: Array<{ value: string; label: string }>;
+}
+
 interface ExpectedDocsCatalog {
   document_types: Array<{ name: string; description: string; required: boolean; pillar_code: string }>;
-  required_groups: Array<{ key: string; label: string; types: string[] }>;
+  required_groups: RequiredGroup[];
+  sector_options?: SectorOption[];
 }
+
+/** workbook company-information meta value for each parser sector code. */
+const SECTOR_TO_WORKBOOK: Record<string, string> = {
+  Generic: "Generic",
+  CONSTRUCTION: "CONSTRUCTION",
+  FSC: "FSC",
+  TRANSPORT: "TRANSPORT",
+  ICT: "ICT",
+  AGRI: "AGRI",
+};
 
 const CANONICAL_PILLARS: Record<string, string> = {
   ESD: "Enterprise & Supplier Development",
@@ -92,18 +119,28 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [dragActive, setDragActive] = useState(false);
+  const [sector, setSector] = useState("Generic");
+  const [subSector, setSubSector] = useState("");
+  const [size, setSize] = useState("Generic"); // Generic | QSE | EME
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // Re-fetch the expected-documents checklist whenever the sector context
+  // changes — the required documents differ by sector code and entity size.
   useEffect(() => {
     void (async () => {
       try {
-        const res = await fetch("/api/parser/document-types", { credentials: "include" });
+        const params = new URLSearchParams({ sector, size });
+        if (subSector) params.set("subSector", subSector);
+        const res = await fetch(`/api/parser/document-types?${params.toString()}`, { credentials: "include" });
         if (res.ok) setCatalog(await res.json());
       } catch {
         // checklist is progressive enhancement — uploads still work without it
       }
     })();
-  }, []);
+  }, [sector, subSector, size]);
+
+  const sectorOptions = catalog?.sector_options ?? [];
+  const activeSector = sectorOptions.find((s) => s.code === sector);
 
   const mapped: ParserWorkbookMapResult | null = useMemo(
     () => (parserCase ? mapParserCaseToWorkbookSections(parserCase) : null),
@@ -174,6 +211,26 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const revealed = Boolean(mapped && !parsing && files.length > 0);
   const canCreate = Boolean(companyName.trim()) && (mapped?.mappedRowCount ?? 0) > 0 && !parsing && !creating;
 
+  // Create the scorecard, stamping the chosen sector into company-information
+  // meta so the workbook scores under the correct sector calculator (Generic /
+  // Construction / FSC / Transport …) rather than always defaulting to Generic.
+  const handleCreate = () => {
+    if (!mapped) return;
+    const sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }> = { ...mapped.sections };
+    const companyMeta: Record<string, unknown> = {
+      companyName: companyName.trim(),
+      industrySector: SECTOR_TO_WORKBOOK[sector] ?? "Generic",
+      scorecardType: size,
+    };
+    if (sector === "CONSTRUCTION" && subSector) companyMeta.constructionSubSector = subSector;
+    if (sector === "FSC" && subSector) companyMeta.fscSubSector = subSector;
+    sections["company-information"] = {
+      ...(sections["company-information"] ?? {}),
+      meta: { ...(sections["company-information"]?.meta ?? {}), ...companyMeta },
+    };
+    void onCreate(companyName.trim(), sections);
+  };
+
   const coverageByPillar = useMemo(
     () => Object.fromEntries((mapped?.coverage ?? []).map((c) => [c.pillar, c])),
     [mapped],
@@ -190,6 +247,48 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         .dus-fade-up { animation: dusFadeUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
         .dus-stamp { animation: dusStamp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
       `}</style>
+
+      {/* Sector selector — drives the sector-aware document checklist and the
+          scorecard's calculator. B-BBEE evidence differs by sector + size. */}
+      {sectorOptions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="sector-selector">
+          <span className="text-[11px] text-[#8e8e93] uppercase tracking-wider">Sector</span>
+          <select
+            value={sector}
+            onChange={(e) => { setSector(e.target.value); setSubSector(""); }}
+            className="bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-2.5 py-1.5 text-[13px] text-[#e5e5ea] outline-none focus:border-violet-500/50"
+            data-testid="sector-select"
+          >
+            {sectorOptions.map((s) => (
+              <option key={s.code} value={s.code}>{s.label}</option>
+            ))}
+          </select>
+          {activeSector?.subSectors && (
+            <select
+              value={subSector}
+              onChange={(e) => setSubSector(e.target.value)}
+              className="bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-2.5 py-1.5 text-[13px] text-[#e5e5ea] outline-none focus:border-violet-500/50"
+              data-testid="subsector-select"
+            >
+              <option value="">Select…</option>
+              {activeSector.subSectors.map((ss) => (
+                <option key={ss.value} value={ss.value}>{ss.label}</option>
+              ))}
+            </select>
+          )}
+          <select
+            value={size}
+            onChange={(e) => setSize(e.target.value)}
+            className="bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-2.5 py-1.5 text-[13px] text-[#e5e5ea] outline-none focus:border-violet-500/50"
+            data-testid="size-select"
+            title="Entity size by turnover"
+          >
+            <option value="Generic">Large (Generic)</option>
+            <option value="QSE">QSE (R10m–R50m)</option>
+            <option value="EME">EME (&lt; R10m)</option>
+          </select>
+        </div>
+      )}
 
       {/* ACT 1 — the stage */}
       <div
@@ -264,21 +363,29 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         )}
       </div>
 
-      {/* Expected documents — required slots (compact, below the stage) */}
+      {/* Expected documents — sector-aware checklist (below the stage) */}
       {catalog && files.length === 0 && (
         <div className="mt-3 px-1">
-          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5">
+          <p className="text-[11px] text-[#636366] text-center mb-2">
+            Documents for <span className="text-[#8e8e93]">{activeSector?.label ?? sector}</span>
+            {size !== "Generic" ? ` · ${size}` : ""} — <span className="text-emerald-400/70">◆ we auto-extract</span>,{" "}
+            <span className="text-[#8e8e93]">◇ attach for your verifier</span>
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
             {catalog.required_groups.map((g) => (
-              <div key={g.key} className="flex items-center gap-1.5 text-[12px] text-[#8e8e93]" data-testid={`docslot-${g.key}`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-[#48484a]" />
-                {g.label}
-                <span className="text-[10px] text-red-400/80 font-semibold -ml-0.5">*</span>
+              <div
+                key={g.key}
+                className="flex items-center gap-1.5 text-[12px] text-[#8e8e93]"
+                data-testid={`docslot-${g.key}`}
+                title={g.note ?? ""}
+              >
+                <span className={g.autoExtract ? "text-emerald-400/80 text-[9px]" : "text-[#48484a] text-[9px]"}>
+                  {g.autoExtract ? "◆" : "◇"}
+                </span>
+                <span className="truncate">{g.label}</span>
+                {g.required !== false && <span className="text-[10px] text-red-400/70 font-semibold -ml-0.5">*</span>}
               </div>
             ))}
-            <div className="flex items-center gap-1.5 text-[12px] text-[#636366]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#2c2c2e]" />
-              + ownership, EE &amp; skills documents strengthen the score
-            </div>
           </div>
         </div>
       )}
@@ -335,17 +442,30 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
       {parseError && <p className="text-[12px] text-red-400 mt-3">{parseError}</p>}
 
-      {/* Missing required docs nudge */}
-      {revealed && catalog && catalog.required_groups.some((g) => !groupSatisfied(g)) && (
-        <div className="dus-fade-up mt-3 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5" style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.18)" }}>
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-[12px] text-amber-200/80 text-left">
-            Still missing:{" "}
-            {catalog.required_groups.filter((g) => !groupSatisfied(g)).map((g) => g.label).join("; ")}
-            {" "}— you can add these now or later in the workbook.
-          </p>
-        </div>
-      )}
+      {/* Missing required docs nudge — only for docs the parser can detect
+          (auto-extractable). Evidence-only docs are guidance, not detectable. */}
+      {(() => {
+        if (!revealed || !catalog) return null;
+        const detectableMissing = catalog.required_groups.filter(
+          (g) => g.required !== false && g.autoExtract && !groupSatisfied(g),
+        );
+        const evidenceOnly = catalog.required_groups.filter((g) => g.required !== false && !g.autoExtract);
+        if (detectableMissing.length === 0 && evidenceOnly.length === 0) return null;
+        return (
+          <div className="dus-fade-up mt-3 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5" style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.18)" }}>
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-[12px] text-amber-200/80 text-left">
+              {detectableMissing.length > 0 && (
+                <>Still missing: {detectableMissing.map((g) => g.label).join("; ")}. </>
+              )}
+              {evidenceOnly.length > 0 && (
+                <>Have ready for your verifier: {evidenceOnly.map((g) => g.label).join("; ")}. </>
+              )}
+              You can add these now or in the workbook.
+            </p>
+          </div>
+        );
+      })()}
 
       {/* ACT 3 — the reveal */}
       {revealed && mapped && (
@@ -428,7 +548,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 data-testid="docs-company-name"
               />
               <button
-                onClick={() => void onCreate(companyName.trim(), mapped.sections)}
+                onClick={handleCreate}
                 disabled={!canCreate}
                 className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
                 style={{
