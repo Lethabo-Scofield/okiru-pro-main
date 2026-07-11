@@ -57,12 +57,16 @@ async function getParserRepository(): Promise<OntologyRepository> {
     neo4jRepository = createNeo4jOntologyRepository();
   } catch (err) {
     if (err instanceof MissingNeo4jConfigError) {
-      // Not configured at all: fallback in non-production, hard error in prod.
-      if (process.env.NODE_ENV !== 'production') {
-        logger.warn('Neo4j parser graph is not configured; using in-memory parser ontology fallback');
-        return getFallbackRepository();
+      // Not configured at all: use the bundled in-memory ontology (the canonical
+      // document types + verification matrix). Neo4j is an optional graph store,
+      // not a hard dependency — the parser classifies and extracts fully on the
+      // in-memory ontology. An operator who genuinely requires Neo4j can enforce
+      // it with PARSER_REQUIRE_NEO4J=true (same flag as the unreachable branch).
+      if (process.env.PARSER_REQUIRE_NEO4J === 'true') {
+        throw err;
       }
-      throw err;
+      logger.warn('Neo4j parser graph is not configured; using in-memory parser ontology fallback');
+      return getFallbackRepository();
     }
     throw err;
   }
