@@ -154,6 +154,36 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       ),
     );
 
+  const humanizeField = (f: string): string =>
+    f.replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+
+  /**
+   * Content the parser could NOT read inside a specific uploaded document, split
+   * into `fields` (named data points it expected but couldn't extract) and
+   * `notes` (validation messages, e.g. low confidence). Surfaced during the flow
+   * so the user knows exactly what to complete rather than finding gaps later.
+   */
+  const docMissingContent = (filename: string): { fields: string[]; notes: string[] } => {
+    const detected = (parserCase?.documents_detected ?? []).find((d) => d.filename === filename);
+    const review = (parserCase?.documents_needing_review ?? []).find((r) => r.filename === filename);
+    const fields = new Set<string>();
+    const notes = new Set<string>();
+    for (const f of detected?.validation?.missing_fields ?? []) fields.add(humanizeField(f));
+    const rawNotes = [
+      ...(detected?.validation?.errors ?? []),
+      ...(detected?.validation?.warnings ?? []),
+      ...(review?.reasons ?? []),
+    ];
+    for (const n of rawNotes) {
+      const trimmed = (n ?? "").trim();
+      if (!trimmed) continue;
+      const m = /^(.*)\smissing$/i.exec(trimmed);
+      if (m) fields.add(humanizeField(m[1]));
+      else notes.add(trimmed);
+    }
+    return { fields: Array.from(fields), notes: Array.from(notes) };
+  };
+
   const parseFiles = async (list: File[]) => {
     if (list.length === 0) return;
     setParsing(true);
@@ -209,7 +239,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const spendUp = useCountUp(spendCaptured, 1100);
 
   const revealed = Boolean(mapped && !parsing && files.length > 0);
-  const canCreate = Boolean(companyName.trim()) && (mapped?.mappedRowCount ?? 0) > 0 && !parsing && !creating;
+  // Missing documents never block: the user can always proceed and the workbook
+  // scores on whatever was extracted (even nothing — they complete it manually).
+  const canCreate = Boolean(companyName.trim()) && !parsing && !creating;
 
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
@@ -395,45 +427,71 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         <div className="mt-3 space-y-1.5">
           {files.map((f, i) => {
             const detected = (parserCase?.documents_detected ?? []).find((d) => d.filename === f.name);
+            const missing = parsing ? { fields: [], notes: [] } : docMissingContent(f.name);
+            const hasGaps = missing.fields.length > 0 || missing.notes.length > 0;
             return (
               <div
                 key={f.name}
-                className="dus-fade-up relative overflow-hidden flex items-center gap-3 rounded-xl px-3.5 py-2.5"
+                className="dus-fade-up relative overflow-hidden rounded-xl px-3.5 py-2.5"
                 style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: `${i * 70}ms` }}
               >
-                {/* shimmer sweep while parsing */}
-                {parsing && (
-                  <div className="absolute inset-y-0 left-0 w-1/3 pointer-events-none" style={{
-                    background: "linear-gradient(100deg, transparent, rgba(167,139,250,0.09), transparent)",
-                    animation: "dusShimmer 1.4s ease-in-out infinite",
-                  }} />
-                )}
-                <FileText className="w-4 h-4 text-[#636366] shrink-0" />
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="text-[13px] text-[#e5e5ea] truncate font-medium">{f.name}</div>
-                  <div className="text-[11px] mt-0.5">
-                    {parsing ? (
-                      <span className="text-[#636366] inline-flex items-center gap-1.5">
-                        <Loader2 className="w-3 h-3 animate-spin" /> Reading document…
-                      </span>
-                    ) : detected ? (
-                      <span className="dus-stamp inline-flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${detected.status === "passed" ? "bg-emerald-400" : detected.status === "review_required" ? "bg-amber-400" : "bg-red-400"}`} />
-                        <span className="text-[#a1a1a6]">{detected.document_type}</span>
-                        {detected.status === "review_required" && <span className="text-amber-300/70">· check after import</span>}
-                      </span>
-                    ) : (
-                      <span className="text-[#636366]">Unrecognised — will be skipped</span>
-                    )}
+                <div className="flex items-center gap-3">
+                  {/* shimmer sweep while parsing */}
+                  {parsing && (
+                    <div className="absolute inset-y-0 left-0 w-1/3 pointer-events-none" style={{
+                      background: "linear-gradient(100deg, transparent, rgba(167,139,250,0.09), transparent)",
+                      animation: "dusShimmer 1.4s ease-in-out infinite",
+                    }} />
+                  )}
+                  <FileText className="w-4 h-4 text-[#636366] shrink-0" />
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className="text-[13px] text-[#e5e5ea] truncate font-medium">{f.name}</div>
+                    <div className="text-[11px] mt-0.5">
+                      {parsing ? (
+                        <span className="text-[#636366] inline-flex items-center gap-1.5">
+                          <Loader2 className="w-3 h-3 animate-spin" /> Reading document…
+                        </span>
+                      ) : detected ? (
+                        <span className="dus-stamp inline-flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${detected.status === "passed" ? "bg-emerald-400" : detected.status === "review_required" ? "bg-amber-400" : "bg-red-400"}`} />
+                          <span className="text-[#a1a1a6]">{detected.document_type}</span>
+                          {detected.status === "passed" && !hasGaps && (
+                            <span className="text-emerald-400/70">· all read</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="text-[#636366]">Unrecognised — will be skipped</span>
+                      )}
+                    </div>
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
+                    className="p-1 text-[#48484a] hover:text-[#8e8e93] shrink-0 transition-colors self-start"
+                    data-testid={`remove-${f.name}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
-                  className="p-1 text-[#48484a] hover:text-[#8e8e93] shrink-0 transition-colors"
-                  data-testid={`remove-${f.name}`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+
+                {/* Missing content WITHIN this document — flagged during the flow
+                    so the user knows exactly what to complete in the workbook. */}
+                {hasGaps && (
+                  <div
+                    className="mt-2 ml-7 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5"
+                    style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.15)" }}
+                    data-testid={`missing-content-${f.name}`}
+                  >
+                    <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
+                    <span className="text-[11px] text-amber-200/80 leading-relaxed">
+                      {missing.fields.length > 0 && (
+                        <>Couldn&apos;t read {missing.fields.slice(0, 4).join(", ")}
+                          {missing.fields.length > 4 ? ` +${missing.fields.length - 4} more` : ""}. </>
+                      )}
+                      {missing.notes.length > 0 && <>{missing.notes.slice(0, 2).join("; ")}. </>}
+                      You can still continue and fill the gaps in the workbook.
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -537,42 +595,48 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </div>
           )}
 
-          {/* Company name + create */}
-          {mapped.mappedRowCount > 0 && (
-            <div className="dus-fade-up" style={{ animationDelay: "760ms" }}>
-              <input
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Company name — e.g. Acme Holdings (Pty) Ltd"
-                className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#48484a] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
-                data-testid="docs-company-name"
-              />
-              <button
-                onClick={handleCreate}
-                disabled={!canCreate}
-                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
-                style={{
-                  background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "#1c1c1e",
-                  color: canCreate ? "#000" : "#636366",
-                  boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
-                }}
-                data-testid="button-create-from-documents"
-              >
-                {creating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    Build my scorecard from {mapped.mappedRowCount} extracted value{mapped.mappedRowCount !== 1 ? "s" : ""}
-                  </>
-                )}
-              </button>
-              <p className="text-[11px] text-[#48484a] mt-2 text-center">
-                You&apos;ll land in a pre-filled workbook — review, complete the gaps, and the score computes the
-                same way as manual entry.
-              </p>
-            </div>
-          )}
+          {/* Company name + create — always available once documents are
+              processed, even with partial or zero extraction. Missing docs or
+              missing content never block: the workbook scores on what we have. */}
+          <div className="dus-fade-up" style={{ animationDelay: "760ms" }}>
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              placeholder="Company name — e.g. Acme Holdings (Pty) Ltd"
+              className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#48484a] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
+              data-testid="docs-company-name"
+            />
+            <button
+              onClick={handleCreate}
+              disabled={!canCreate}
+              className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
+              style={{
+                background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "#1c1c1e",
+                color: canCreate ? "#000" : "#636366",
+                boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
+              }}
+              data-testid="button-create-from-documents"
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : mapped.mappedRowCount > 0 ? (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Build my scorecard from {mapped.mappedRowCount} extracted value{mapped.mappedRowCount !== 1 ? "s" : ""}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Continue to workbook &amp; complete it there
+                </>
+              )}
+            </button>
+            <p className="text-[11px] text-[#48484a] mt-2 text-center">
+              {mapped.mappedRowCount > 0
+                ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
+                : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
+            </p>
+          </div>
         </div>
       )}
     </div>
