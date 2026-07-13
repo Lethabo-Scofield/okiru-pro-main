@@ -1,0 +1,535 @@
+{
+  "generatedAt": "2026-07-09",
+  "sectors": [
+    "RCOGP/Generic",
+    "ICT/Generic"
+  ],
+  "matrix": [
+    {
+      "sectorCode": "RCOGP",
+      "scorecardType": "Generic",
+      "pillar": "ownership",
+      "pillarPoints": 25,
+      "requiredDocuments": [
+        "Ownership Confirmation",
+        "Share Certificate",
+        "Share Register",
+        "CIPC registration evidence"
+      ],
+      "supportedDocuments": [
+        "Ownership Confirmation",
+        "Share Certificate",
+        "Share Register"
+      ],
+      "requiredFields": [
+        "entity_name",
+        "black_ownership_percentage",
+        "black_women_ownership_percentage",
+        "voting_rights",
+        "economic_interest",
+        "net_value",
+        "new_entrants"
+      ],
+      "supportedFields": [
+        "entity_name",
+        "black_ownership",
+        "black_women_ownership"
+      ],
+      "parserCalculatorKeys": [
+        "ownership.entity_name",
+        "ownership.black_ownership",
+        "ownership.black_women_ownership"
+      ],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "shadow_ready",
+      "gaps": [
+        "calcOwnership consumes ShareholderInput[] (per-shareholder voting rights, economic interest, net value, new-entrant, designated-group), not a single black-ownership %",
+        "parser produces flat percentages, not a shareholder list — cannot drive live ownership scoring"
+      ]
+    },
+    {
+      "sectorCode": "RCOGP",
+      "scorecardType": "Generic",
+      "pillar": "managementControl",
+      "pillarPoints": 19,
+      "requiredDocuments": [
+        "Employment Equity Report",
+        "Management control schedule",
+        "Organogram / board composition",
+        "Director/member list"
+      ],
+      "supportedDocuments": [
+        "Employment Equity Report"
+      ],
+      "requiredFields": [
+        "black_management_representation",
+        "black_women_management_representation",
+        "board_or_executive_representation",
+        "occupational_level",
+        "measurement_period"
+      ],
+      "supportedFields": [
+        "black_representation",
+        "black_women_representation"
+      ],
+      "parserCalculatorKeys": [
+        "management.black_representation",
+        "management.black_women_representation"
+      ],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "shadow_ready",
+      "gaps": [
+        "calcManagement consumes EmployeeInput[] (race/gender/designation per employee) and computes representation per occupational band itself",
+        "parser produces pre-computed percentages, not an employee list — cannot drive live management scoring"
+      ]
+    },
+    {
+      "sectorCode": "RCOGP",
+      "scorecardType": "Generic",
+      "pillar": "skillsDevelopment",
+      "pillarPoints": 25,
+      "requiredDocuments": [
+        "WSP",
+        "ATR",
+        "Training invoices",
+        "Attendance registers",
+        "Payroll / leviable amount evidence",
+        "EMP201"
+      ],
+      "supportedDocuments": [
+        "Workplace Skills Plan / ATR"
+      ],
+      "requiredFields": [
+        "total_skills_spend",
+        "black_people_skills_spend",
+        "leviable_amount",
+        "headcount",
+        "training_category",
+        "learnerships",
+        "absorption"
+      ],
+      "supportedFields": [
+        "skills_total_spend",
+        "skills_black_spend"
+      ],
+      "parserCalculatorKeys": [
+        "skills.total_spend",
+        "skills.black_spend"
+      ],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "shadow_ready",
+      "gaps": [
+        "calcSkills consumes TrainingProgramInput[] + leviableAmount + headcount and recomputes spend by category",
+        "parser produces spend totals, not per-programme records, and no leviable/headcount denominator — cannot drive live skills scoring"
+      ]
+    },
+    {
+      "sectorCode": "RCOGP",
+      "scorecardType": "Generic",
+      "pillar": "preferentialProcurement",
+      "pillarPoints": 29,
+      "requiredDocuments": [
+        "Supplier spend schedule",
+        "Supplier B-BBEE certificates",
+        "Supplier affidavits",
+        "Procurement schedule"
+      ],
+      "supportedDocuments": [
+        "Supplier Spend Schedule",
+        "B-BBEE Certificate",
+        "B-BBEE Sworn Affidavit"
+      ],
+      "requiredFields": [
+        "supplier_name",
+        "spend_amount",
+        "supplier_bee_level",
+        "supplier_black_ownership",
+        "supplier_black_women_ownership",
+        "enterprise_type",
+        "tmps_denominator"
+      ],
+      "supportedFields": [
+        "supplier_name",
+        "spend_amount",
+        "supplier_bee_level",
+        "supplier_black_ownership",
+        "supplier_black_women_ownership",
+        "enterprise_type",
+        "tmps_denominator (when explicitly stated)"
+      ],
+      "parserCalculatorKeys": [
+        "supplier.name",
+        "supplier.spend",
+        "supplier.bee_level",
+        "supplier.black_ownership",
+        "supplier.black_women_ownership",
+        "supplier.enterprise_type"
+      ],
+      "actualScorecardInputMapping": "supplier_rows -> SupplierInput[] (name, spend, beeLevel, blackOwnership→fraction, blackWomenOwnership→fraction, enterpriseType) + measured_procurement_spend -> tmps",
+      "coverageStatus": "partially_covered",
+      "readinessStatus": "review_assisted_ready",
+      "gaps": [
+        "live scoring is CONDITIONAL: requires TMPS (measured_procurement_spend) present — safeRatio returns 0 for every target when TMPS is missing",
+        "isForeignSupplier not flagged (defaults to included)",
+        "designated-group youth/disabled ownership not extracted (DG sub-target relies on blackOwnership≥51% only)"
+      ]
+    },
+    {
+      "sectorCode": "RCOGP",
+      "scorecardType": "Generic",
+      "pillar": "supplierDevelopment",
+      "pillarPoints": 10,
+      "requiredDocuments": [
+        "SD contribution evidence",
+        "Proof of payment",
+        "Beneficiary agreements"
+      ],
+      "supportedDocuments": [],
+      "requiredFields": [
+        "beneficiary",
+        "contribution_amount",
+        "contribution_type",
+        "benefit_factor",
+        "payment_date"
+      ],
+      "supportedFields": [],
+      "parserCalculatorKeys": [],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "not_ready",
+      "gaps": [
+        "parser has no SD contribution document type; calcEsd needs ContributionInput[] (category sd) with benefit factors"
+      ]
+    },
+    {
+      "sectorCode": "RCOGP",
+      "scorecardType": "Generic",
+      "pillar": "enterpriseDevelopment",
+      "pillarPoints": 7,
+      "requiredDocuments": [
+        "ED contribution evidence",
+        "Proof of payment",
+        "Beneficiary agreements"
+      ],
+      "supportedDocuments": [],
+      "requiredFields": [
+        "beneficiary",
+        "contribution_amount",
+        "contribution_type",
+        "benefit_factor",
+        "payment_date"
+      ],
+      "supportedFields": [],
+      "parserCalculatorKeys": [],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "not_ready",
+      "gaps": [
+        "parser has no ED contribution document type; calcEsd needs ContributionInput[] (category ed) with benefit factors"
+      ]
+    },
+    {
+      "sectorCode": "RCOGP",
+      "scorecardType": "Generic",
+      "pillar": "socioEconomicDevelopment",
+      "pillarPoints": 5,
+      "requiredDocuments": [
+        "SED agreement",
+        "Beneficiary confirmation",
+        "Proof of payment",
+        "Beneficiary demographic evidence"
+      ],
+      "supportedDocuments": [
+        "SED Contribution Confirmation"
+      ],
+      "requiredFields": [
+        "beneficiary_name",
+        "contribution_amount",
+        "payment_date",
+        "black_beneficiary_percentage",
+        "npat_denominator"
+      ],
+      "supportedFields": [
+        "beneficiary_name",
+        "contribution_amount"
+      ],
+      "parserCalculatorKeys": [
+        "sed.contribution",
+        "sed.beneficiary_name"
+      ],
+      "actualScorecardInputMapping": "sed.contribution -> ContributionInput{category:\"sed\", amount}",
+      "coverageStatus": "partially_covered",
+      "readinessStatus": "review_assisted_ready",
+      "gaps": [
+        "NPAT denominator (calcSed divides spend by NPAT) comes from financials, not the parser",
+        "black-beneficiary % and payment date not extracted"
+      ]
+    },
+    {
+      "sectorCode": "ICT",
+      "scorecardType": "Generic",
+      "pillar": "ownership",
+      "pillarPoints": 25,
+      "requiredDocuments": [
+        "Ownership Confirmation",
+        "Share Certificate",
+        "Share Register",
+        "CIPC registration evidence"
+      ],
+      "supportedDocuments": [
+        "Ownership Confirmation",
+        "Share Certificate",
+        "Share Register"
+      ],
+      "requiredFields": [
+        "entity_name",
+        "black_ownership_percentage",
+        "black_women_ownership_percentage",
+        "voting_rights",
+        "economic_interest",
+        "net_value",
+        "new_entrants"
+      ],
+      "supportedFields": [
+        "entity_name",
+        "black_ownership",
+        "black_women_ownership"
+      ],
+      "parserCalculatorKeys": [
+        "ownership.entity_name",
+        "ownership.black_ownership",
+        "ownership.black_women_ownership"
+      ],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "shadow_ready",
+      "gaps": [
+        "calcOwnership consumes ShareholderInput[] (per-shareholder voting rights, economic interest, net value, new-entrant, designated-group), not a single black-ownership %",
+        "parser produces flat percentages, not a shareholder list — cannot drive live ownership scoring"
+      ]
+    },
+    {
+      "sectorCode": "ICT",
+      "scorecardType": "Generic",
+      "pillar": "managementControl",
+      "pillarPoints": 23,
+      "requiredDocuments": [
+        "Employment Equity Report",
+        "Management control schedule",
+        "Organogram / board composition",
+        "Director/member list"
+      ],
+      "supportedDocuments": [
+        "Employment Equity Report"
+      ],
+      "requiredFields": [
+        "black_management_representation",
+        "black_women_management_representation",
+        "board_or_executive_representation",
+        "occupational_level",
+        "measurement_period"
+      ],
+      "supportedFields": [
+        "black_representation",
+        "black_women_representation"
+      ],
+      "parserCalculatorKeys": [
+        "management.black_representation",
+        "management.black_women_representation"
+      ],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "shadow_ready",
+      "gaps": [
+        "calcManagement consumes EmployeeInput[] (race/gender/designation per employee) and computes representation per occupational band itself",
+        "parser produces pre-computed percentages, not an employee list — cannot drive live management scoring"
+      ]
+    },
+    {
+      "sectorCode": "ICT",
+      "scorecardType": "Generic",
+      "pillar": "skillsDevelopment",
+      "pillarPoints": 25,
+      "requiredDocuments": [
+        "WSP",
+        "ATR",
+        "Training invoices",
+        "Attendance registers",
+        "Payroll / leviable amount evidence",
+        "EMP201"
+      ],
+      "supportedDocuments": [
+        "Workplace Skills Plan / ATR"
+      ],
+      "requiredFields": [
+        "total_skills_spend",
+        "black_people_skills_spend",
+        "leviable_amount",
+        "headcount",
+        "training_category",
+        "learnerships",
+        "absorption"
+      ],
+      "supportedFields": [
+        "skills_total_spend",
+        "skills_black_spend"
+      ],
+      "parserCalculatorKeys": [
+        "skills.total_spend",
+        "skills.black_spend"
+      ],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "shadow_ready",
+      "gaps": [
+        "calcSkills consumes TrainingProgramInput[] + leviableAmount + headcount and recomputes spend by category",
+        "parser produces spend totals, not per-programme records, and no leviable/headcount denominator — cannot drive live skills scoring"
+      ]
+    },
+    {
+      "sectorCode": "ICT",
+      "scorecardType": "Generic",
+      "pillar": "preferentialProcurement",
+      "pillarPoints": 27,
+      "requiredDocuments": [
+        "Supplier spend schedule",
+        "Supplier B-BBEE certificates",
+        "Supplier affidavits",
+        "Procurement schedule"
+      ],
+      "supportedDocuments": [
+        "Supplier Spend Schedule",
+        "B-BBEE Certificate",
+        "B-BBEE Sworn Affidavit"
+      ],
+      "requiredFields": [
+        "supplier_name",
+        "spend_amount",
+        "supplier_bee_level",
+        "supplier_black_ownership",
+        "supplier_black_women_ownership",
+        "enterprise_type",
+        "tmps_denominator"
+      ],
+      "supportedFields": [
+        "supplier_name",
+        "spend_amount",
+        "supplier_bee_level",
+        "supplier_black_ownership",
+        "supplier_black_women_ownership",
+        "enterprise_type",
+        "tmps_denominator (when explicitly stated)"
+      ],
+      "parserCalculatorKeys": [
+        "supplier.name",
+        "supplier.spend",
+        "supplier.bee_level",
+        "supplier.black_ownership",
+        "supplier.black_women_ownership",
+        "supplier.enterprise_type"
+      ],
+      "actualScorecardInputMapping": "supplier_rows -> SupplierInput[] (name, spend, beeLevel, blackOwnership→fraction, blackWomenOwnership→fraction, enterpriseType) + measured_procurement_spend -> tmps",
+      "coverageStatus": "partially_covered",
+      "readinessStatus": "review_assisted_ready",
+      "gaps": [
+        "live scoring is CONDITIONAL: requires TMPS (measured_procurement_spend) present — safeRatio returns 0 for every target when TMPS is missing",
+        "isForeignSupplier not flagged (defaults to included)",
+        "designated-group youth/disabled ownership not extracted (DG sub-target relies on blackOwnership≥51% only)"
+      ]
+    },
+    {
+      "sectorCode": "ICT",
+      "scorecardType": "Generic",
+      "pillar": "supplierDevelopment",
+      "pillarPoints": 10,
+      "requiredDocuments": [
+        "SD contribution evidence",
+        "Proof of payment",
+        "Beneficiary agreements"
+      ],
+      "supportedDocuments": [],
+      "requiredFields": [
+        "beneficiary",
+        "contribution_amount",
+        "contribution_type",
+        "benefit_factor",
+        "payment_date"
+      ],
+      "supportedFields": [],
+      "parserCalculatorKeys": [],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "not_ready",
+      "gaps": [
+        "parser has no SD contribution document type; calcEsd needs ContributionInput[] (category sd) with benefit factors"
+      ]
+    },
+    {
+      "sectorCode": "ICT",
+      "scorecardType": "Generic",
+      "pillar": "enterpriseDevelopment",
+      "pillarPoints": 18,
+      "requiredDocuments": [
+        "ED contribution evidence",
+        "Proof of payment",
+        "Beneficiary agreements"
+      ],
+      "supportedDocuments": [],
+      "requiredFields": [
+        "beneficiary",
+        "contribution_amount",
+        "contribution_type",
+        "benefit_factor",
+        "payment_date"
+      ],
+      "supportedFields": [],
+      "parserCalculatorKeys": [],
+      "actualScorecardInputMapping": null,
+      "coverageStatus": "not_covered",
+      "readinessStatus": "not_ready",
+      "gaps": [
+        "parser has no ED contribution document type; calcEsd needs ContributionInput[] (category ed) with benefit factors"
+      ]
+    },
+    {
+      "sectorCode": "ICT",
+      "scorecardType": "Generic",
+      "pillar": "socioEconomicDevelopment",
+      "pillarPoints": 12,
+      "requiredDocuments": [
+        "SED agreement",
+        "Beneficiary confirmation",
+        "Proof of payment",
+        "Beneficiary demographic evidence"
+      ],
+      "supportedDocuments": [
+        "SED Contribution Confirmation"
+      ],
+      "requiredFields": [
+        "beneficiary_name",
+        "contribution_amount",
+        "payment_date",
+        "black_beneficiary_percentage",
+        "npat_denominator"
+      ],
+      "supportedFields": [
+        "beneficiary_name",
+        "contribution_amount"
+      ],
+      "parserCalculatorKeys": [
+        "sed.contribution",
+        "sed.beneficiary_name"
+      ],
+      "actualScorecardInputMapping": "sed.contribution -> ContributionInput{category:\"sed\", amount}",
+      "coverageStatus": "partially_covered",
+      "readinessStatus": "review_assisted_ready",
+      "gaps": [
+        "NPAT denominator (calcSed divides spend by NPAT) comes from financials, not the parser",
+        "black-beneficiary % and payment date not extracted"
+      ]
+    }
+  ]
+}

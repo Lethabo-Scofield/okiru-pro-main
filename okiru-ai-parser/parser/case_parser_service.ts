@@ -175,6 +175,10 @@ export class CaseParserService {
       supplier_rows: documents.flatMap((document) => (
         (document.supplier_rows ?? []).map((row) => ({ ...row, source_file: document.filename }))
       )),
+      // TMPS denominator: first document that stated an explicit total wins.
+      measured_procurement_spend: documents
+        .map((document) => document.measured_procurement_spend)
+        .find((value): value is number => typeof value === 'number' && value > 0) ?? null,
       missing_required_documents: missingDocuments,
       documents_needing_review: documentsNeedingReview,
       audit_trail: {

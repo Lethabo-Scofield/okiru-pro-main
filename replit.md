@@ -212,6 +212,10 @@ pnpm --filter rest-express exec vitest run \
 pnpm --filter @okiru/api exec vitest run __tests__/fscScorecard.test.ts
 ```
 
+## Parser Sector/Pillar Coverage Audit (July 2026)
+- **Matrix**: `okiru-ai-parser/schemas/sector_pillar_coverage.ts` — machine-readable sector/pillar coverage: `TRUSTED_SECTOR_CODES` (RCOGP, ICT, FSC, AGRI, TRANSPORT, CONSTRUCTION — GENERIC is a scorecard *type*, never a trusted sector), per-config pillar-point snapshots mirroring `ALL_CONFIGS` in `apps/api/pipeline/sectorConfig.ts`, parser doc-type/calculator-key coverage per pillar, and per-config readiness (`review_assisted` | `shadow_mode`; `live_scoring` is forbidden while parser output stays advisory-only in `extractAndScore.ts`).
+- **Tests**: `okiru-ai-parser/__tests__/parser/sector_pillar_coverage.test.ts` (trust rules, allowlist/ontology sync, readiness rules) + `apps/api/__tests__/sectorParserCoverage.test.ts` (matrix ↔ sectorConfig one-to-one sync). vitest is firewalled in Replit — run the mirror script instead: `cd apps/api && pnpm exec tsx scripts/checkSectorParserCoverage.ts` (13 checks, all passing).
+
 ## Enterprise Security (Apr 2026)
 The platform was upgraded for enterprise security review. Full deliverable in `ENTERPRISE_SECURITY_REVIEW.md`.
 
