@@ -21,6 +21,8 @@ export const CALCULATOR_KEY_ALLOWLIST: readonly CalculatorKeySpec[] = [
   { key: 'supplier.name', type: 'string', description: 'Supplier legal/trading name' },
   { key: 'supplier.bee_level', type: 'number', description: 'Supplier B-BBEE status level (1-8)' },
   { key: 'supplier.black_ownership', type: 'number', description: 'Supplier black ownership percentage (0-100)' },
+  { key: 'supplier.black_women_ownership', type: 'number', description: 'Supplier black women ownership percentage (0-100)' },
+  { key: 'supplier.enterprise_type', type: 'string', description: 'Supplier enterprise type: eme | qse | generic' },
   { key: 'supplier.certificate_expiry', type: 'iso_date', description: 'Certificate expiry date (ISO yyyy-mm-dd)' },
   { key: 'supplier.affidavit_signed_date', type: 'iso_date', description: 'Affidavit signed date (ISO yyyy-mm-dd)' },
   { key: 'supplier.spend', type: 'number', description: 'Supplier spend amount excluding VAT' },
