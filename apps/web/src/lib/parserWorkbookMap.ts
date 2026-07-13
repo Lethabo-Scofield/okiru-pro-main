@@ -32,9 +32,23 @@ export interface ParserCaseLike {
     filename?: string;
     document_type?: string;
     status?: string;
+    overall_confidence?: number;
+    validation?: {
+      warnings?: string[];
+      errors?: string[];
+      /** Field keys the parser expected for this document type but could not read. */
+      missing_fields?: string[];
+    };
   }>;
   fields_extracted?: Record<string, Record<string, { normalized_value?: unknown; raw_value?: unknown; confidence?: number }>>;
   missing_required_documents?: string[];
+  /** Per-document review reasons (missing fields / validation errors) for docs the parser flagged. */
+  documents_needing_review?: Array<{
+    filename?: string;
+    document_type?: string;
+    status?: string;
+    reasons?: string[];
+  }>;
 }
 
 export interface WorkbookSectionPatch {
