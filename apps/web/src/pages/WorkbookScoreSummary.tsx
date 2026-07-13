@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Award, ChevronRight, Loader2, ScanLine } from "lucide-react";
+import { Award, ChevronRight, FileText, Loader2, ScanLine, Sparkles } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
@@ -26,9 +26,16 @@ function formatLevel(level: number): string {
 interface WorkbookScoreSummaryProps {
   companyId: string;
   companyName: string;
+  /**
+   * Provisional mode is the destination of the document-upload flow: the score
+   * is computed by the SAME calculator, but framed as an indicative estimate
+   * from the uploaded documents, and the primary action pushes the user into
+   * the workbook to review/complete rather than to the read-only scorecard.
+   */
+  provisional?: boolean;
 }
 
-export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSummaryProps) {
+export function WorkbookScoreSummary({ companyId, companyName, provisional = false }: WorkbookScoreSummaryProps) {
   const [, navigate] = useLocation();
   const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId } = useBbeeStore();
   const [refreshing, setRefreshing] = useState(true);
@@ -103,6 +110,11 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
     navigate("/toolkit/scorecard");
   };
 
+  const openWorkbook = () => {
+    sessionStorage.setItem("okiru-workbook-from", "summary");
+    navigate(`/create-scorecard/${encodeURIComponent(companyId)}`);
+  };
+
   const sector = client.sectorCode || client.industry || "—";
   const displayLevel = scorecard.isDiscounted ? scorecard.discountedLevel : scorecard.achievedLevel;
   const isFsc = sector.toUpperCase() === "FSC";
@@ -115,9 +127,11 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
     <div className="max-w-4xl mx-auto py-4 space-y-6" data-testid="workbook-score-summary">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-[24px] font-bold text-white tracking-tight">Scorecard Summary</h2>
+          <h2 className="text-[24px] font-bold text-white tracking-tight">
+            {provisional ? "Your indicative B-BBEE score" : "Scorecard Summary"}
+          </h2>
           <p className="text-[#8e8e93] text-[14px] mt-1">
-            High-level results for{" "}
+            {provisional ? "Estimated from the documents you uploaded for " : "High-level results for "}
             <span className="text-white font-medium">{companyName}</span>
           </p>
           <p className="text-[13px] text-[#636366] mt-1">
@@ -135,15 +149,35 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
         </div>
         <button
           type="button"
-          onClick={goToScorecard}
+          onClick={provisional ? openWorkbook : goToScorecard}
           disabled={loading}
           className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[13px] transition-colors shrink-0 disabled:opacity-60"
-          data-testid="button-continue-scorecard"
+          data-testid={provisional ? "button-open-workbook-top" : "button-continue-scorecard"}
         >
-          <ScanLine className="w-4 h-4" />
-          View Scorecard
+          {provisional ? <FileText className="w-4 h-4" /> : <ScanLine className="w-4 h-4" />}
+          {provisional ? "Open workbook to refine" : "View Scorecard"}
         </button>
       </div>
+
+      {/* Provisional framing — the score is real (same calculator) but not the
+          final verified result; the documents may be incomplete. */}
+      {provisional && (
+        <div
+          className="rounded-2xl px-4 py-3.5 flex items-start gap-3"
+          style={{ background: "rgba(167,139,250,0.06)", border: "1px solid rgba(167,139,250,0.22)" }}
+          data-testid="provisional-banner"
+        >
+          <Sparkles className="w-4 h-4 text-violet-300 shrink-0 mt-0.5" />
+          <div className="text-[13px] leading-relaxed">
+            <span className="text-violet-200 font-semibold">This is an indicative score, not your final B-BBEE result.</span>
+            <span className="text-[#a1a1a6]">
+              {" "}It’s calculated the same way as a full assessment, but only from the documents you uploaded — anything
+              they didn’t cover reads as zero. Open the workbook to review the extracted values, complete the gaps, and
+              finalise your verified score.
+            </span>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="rounded-2xl p-12 flex flex-col items-center justify-center gap-3 text-[#8e8e93] text-sm" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
@@ -183,28 +217,47 @@ export function WorkbookScoreSummary({ companyId, companyName }: WorkbookScoreSu
             <ScorecardPillarList pillars={pillarRows} />
           </div>
 
-          <div className="flex justify-end gap-3 flex-wrap">
-            <button
-              type="button"
-              onClick={() => {
-                sessionStorage.setItem('okiru-workbook-from', 'summary');
-                navigate(`/create-scorecard/${encodeURIComponent(companyId)}`);
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[13px] text-[#d1d1d6] smooth press-sm"
-              data-testid="button-back-workbook"
-            >
-              ← Edit Workbook
-            </button>
-            <button
-              type="button"
-              onClick={goToScorecard}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[14px] transition-colors"
-              data-testid="button-continue-scorecard-bottom"
-            >
-              Continue to Scorecard
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          {provisional ? (
+            <div className="flex justify-end gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={goToScorecard}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[13px] text-[#d1d1d6] smooth press-sm"
+                data-testid="button-view-scorecard-provisional"
+              >
+                <ScanLine className="w-4 h-4" /> View full scorecard
+              </button>
+              <button
+                type="button"
+                onClick={openWorkbook}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[14px] transition-colors"
+                data-testid="button-open-workbook-bottom"
+              >
+                Open workbook to refine
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-end gap-3 flex-wrap">
+              <button
+                type="button"
+                onClick={openWorkbook}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[13px] text-[#d1d1d6] smooth press-sm"
+                data-testid="button-back-workbook"
+              >
+                ← Edit Workbook
+              </button>
+              <button
+                type="button"
+                onClick={goToScorecard}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-[#e5e5ea] text-black rounded-xl font-semibold text-[14px] transition-colors"
+                data-testid="button-continue-scorecard-bottom"
+              >
+                Continue to Scorecard
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>

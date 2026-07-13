@@ -259,9 +259,12 @@ function ExcelImportButton({
 
 function CompanyPicker({
   onPick,
+  onLandEstimate,
   mode = "picker",
 }: {
   onPick: (c: Company) => void;
+  /** Document flow: land on the provisional live-score page instead of the workbook. */
+  onLandEstimate?: (c: Company) => void;
   mode?: "picker" | "create";
 }) {
   const { user } = useAuth();
@@ -336,7 +339,7 @@ function CompanyPicker({
   const createFromSections = async (
     companyName: string,
     sections: WorkbookSectionsInput,
-    opts?: { importMarker?: unknown; warnCount?: number },
+    opts?: { importMarker?: unknown; warnCount?: number; landOn?: "workbook" | "estimate" },
   ): Promise<boolean> => {
     setCreating(true);
     try {
@@ -402,7 +405,11 @@ function CompanyPicker({
             ? `${warnCount} warning(s) — open workbook and submit when ready.`
             : `${companyName} — submit workbook to calculate score.`,
       });
-      onPick(c);
+      if (opts?.landOn === "estimate" && onLandEstimate) {
+        onLandEstimate(c);
+      } else {
+        onPick(c);
+      }
       return true;
     } finally {
       setCreating(false);
@@ -436,7 +443,8 @@ function CompanyPicker({
                 (parser-classified evidence → workbook sections → same submit path). */}
             <DocumentUploadStart
               onCreate={async (companyName, sections) => {
-                await createFromSections(companyName, sections as WorkbookSectionsInput);
+                // Document flow lands on the provisional live-score page, not the workbook.
+                await createFromSections(companyName, sections as WorkbookSectionsInput, { landOn: "estimate" });
               }}
               creating={creating}
             />
@@ -1996,6 +2004,8 @@ export default function InformationRequest() {
   const pageTitle = basePath === "/create-scorecard" ? "Create Scorecard" : "Information Request";
   const isCreateScorecardFlow = basePath === "/create-scorecard";
   const isSummaryStep = isCreateScorecardFlow && /\/summary\/?$/.test(location);
+  // Provisional live-score page — the destination of the document-upload flow.
+  const isEstimateStep = isCreateScorecardFlow && /\/estimate\/?$/.test(location);
   const resolvedCompanyId = params.companyId || picked?.clientId || picked?.id || "";
 
   // Dynamic back button: remember where the user navigated from.
@@ -2054,6 +2064,13 @@ export default function InformationRequest() {
     setPicked(c);
     const id = c.clientId || c.id;
     if (id) navigate(`${basePath}/${id}`, { replace: true });
+  };
+
+  // Document flow: land on the provisional live-score page (not the workbook).
+  const handlePickEstimate = (c: Company) => {
+    setPicked(c);
+    const id = c.clientId || c.id;
+    if (id) navigate(`/create-scorecard/${encodeURIComponent(id)}/estimate`, { replace: true });
   };
 
   const handleBack = () => {
@@ -2115,7 +2132,7 @@ export default function InformationRequest() {
             </p>
           </div>
         )}
-        {!isSummaryStep && picked && (
+        {!isSummaryStep && !isEstimateStep && picked && (
           <div className="mb-6">
             <h1 className="text-[24px] font-semibold tracking-tight text-white">
               {picked.name}
@@ -2127,13 +2144,15 @@ export default function InformationRequest() {
         )}
 
         {picked ? (
-          isSummaryStep && resolvedCompanyId ? (
+          isEstimateStep && resolvedCompanyId ? (
+            <WorkbookScoreSummary companyId={resolvedCompanyId} companyName={picked.name} provisional />
+          ) : isSummaryStep && resolvedCompanyId ? (
             <WorkbookScoreSummary companyId={resolvedCompanyId} companyName={picked.name} />
           ) : (
             <WorkbookView company={picked} onBack={handleBack} />
           )
         ) : isCreateScorecardFlow ? (
-          <CompanyPicker onPick={handlePick} mode="create" />
+          <CompanyPicker onPick={handlePick} onLandEstimate={handlePickEstimate} mode="create" />
         ) : (
           <CompanyPicker onPick={handlePick} />
         )}
