@@ -212,7 +212,7 @@ function LakeTradingDemoEntry({
 function ExcelImportButton({
   onImport,
   disabled,
-  label = "Import from Excel",
+  label = "Import Excel (free)",
 }: {
   onImport: (file: File) => Promise<void>;
   disabled?: boolean;
@@ -375,7 +375,7 @@ function CompanyPicker({
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  Start New Scorecard
+                  Start Manually (free)
                   <ChevronRight className="h-4 w-4" />
                 </>
               )}
@@ -577,10 +577,10 @@ function CompanyPicker({
               className="text-[22px] font-semibold text-white tracking-tight leading-tight"
               style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
-              Start a new company
+              Create scorecard
             </h2>
             <p className="text-[13px] text-[#a1a1a6] mt-1.5 max-w-md">
-              Create a fresh workbook, or import an existing BEE Information Gathering file from Excel.
+              Start manually for free, or import an existing BEE Information Gathering Excel file for free.
             </p>
             <div className="mt-4 flex gap-2">
               <input
@@ -598,14 +598,14 @@ function CompanyPicker({
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-violet-500 text-white text-[13px] font-semibold press-sm hover:bg-violet-400 disabled:opacity-40 disabled:hover:bg-violet-500 smooth shadow-[0_8px_24px_-8px_rgba(139,92,246,0.6)]"
                 data-testid="button-create-company"
               >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Create<ChevronRight className="h-4 w-4" /></>}
+                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Start free<ChevronRight className="h-4 w-4" /></>}
               </button>
             </div>
           </div>
           <div className="md:pl-4 md:border-l md:border-white/[0.08]">
             <div className="text-[11px] uppercase tracking-[0.16em] text-[#8e8e93] mb-2">Or</div>
             <ExcelImportButton
-              label="Import from Excel"
+              label="Import Excel (free)"
               onImport={async (file) => {
               const result = await importBeeGatheringExcel(file, API_BASE);
               if (!result.extraction.isBeeGatheringFormat) {
