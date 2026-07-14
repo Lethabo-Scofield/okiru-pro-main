@@ -16,6 +16,7 @@ import {
   AlertCircle,
   CheckCircle2,
   X,
+  CreditCard,
   Building2,
   Users,
   GraduationCap,
@@ -940,17 +941,124 @@ export interface ToolkitExcelDropZoneProps {
   className?: string;
 }
 
+const PARSER_SERVICE_URL = String((import.meta as any).env?.VITE_PARSER_SERVICE_URL || 'http://127.0.0.1:3200').replace(/\/+$/, '');
+
+interface ParserQuoteFile {
+  fileId: string;
+  filename: string;
+  detectedDocumentType: string;
+  processingEffort: 'standard' | 'high';
+  structure: {
+    format: string;
+    pages: number | null;
+    sheets: number | null;
+    rows: number | null;
+    estimatedUnits: number;
+  };
+  pricing: {
+    currency: string;
+    unitPriceCents: number;
+    subtotalCents: number;
+  };
+  reasons: string[];
+  warnings: string[];
+}
+
+interface ParserQuote {
+  quoteId: string;
+  status: 'quoted';
+  currency: string;
+  files: ParserQuoteFile[];
+  subtotalCents: number;
+  totalProcessingUnits: number;
+  expiresAt: string;
+  paymentStatus: 'not_started';
+  nextAction: 'proceed_to_payment';
+  notes: string[];
+}
+
+function formatQuoteMoney(cents: number, currency: string) {
+  return new Intl.NumberFormat('en-ZA', {
+    style: 'currency',
+    currency,
+  }).format(cents / 100);
+}
+
+function formatQuoteDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleString('en-ZA', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatQuoteStructure(file: ParserQuoteFile) {
+  const parts: string[] = [];
+  if (file.structure.pages != null) parts.push(`${file.structure.pages} page${file.structure.pages === 1 ? '' : 's'}`);
+  if (file.structure.sheets != null) parts.push(`${file.structure.sheets} sheet${file.structure.sheets === 1 ? '' : 's'}`);
+  if (file.structure.rows != null) parts.push(`${file.structure.rows} row${file.structure.rows === 1 ? '' : 's'}`);
+  parts.push(`${file.structure.estimatedUnits} unit${file.structure.estimatedUnits === 1 ? '' : 's'}`);
+  return parts.join(' / ');
+}
+
 /** Upload + extraction (blocking) dropzone reused from the toolkit path */
 export function ToolkitExcelDropZone({ onExtractionPayload, className }: ToolkitExcelDropZoneProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [quote, setQuote] = useState<ParserQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [paymentPlaceholderVisible, setPaymentPlaceholderVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const resetQuote = useCallback(() => {
+    setQuote(null);
+    setQuoteError(null);
+    setPaymentPlaceholderVisible(false);
+  }, []);
+
+  const requestQuote = useCallback(async (f: File) => {
+    setQuoteLoading(true);
+    setQuoteError(null);
+    setQuote(null);
+    setPaymentPlaceholderVisible(false);
+    try {
+      const formData = new FormData();
+      formData.append('files', f);
+      const res = await fetch(`${PARSER_SERVICE_URL}/api/parser/quote-files`, {
+        method: 'POST',
+        body: formData,
+      });
+      const raw = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = raw?.error?.message || raw?.message || 'Could not create upload quote';
+        throw new Error(message);
+      }
+      setQuote((raw?.data ?? raw) as ParserQuote);
+    } catch (err: any) {
+      setQuoteError(err?.message || 'Could not create upload quote');
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, []);
 
   const handleFile = useCallback(
     async (f: File) => {
       setFile(f);
+      setError(null);
+      resetQuote();
+      await requestQuote(f);
+    },
+    [requestQuote, resetQuote],
+  );
+
+  const runExtraction = useCallback(
+    async (f: File) => {
       setError(null);
       setUploading(true);
 
@@ -1014,8 +1122,8 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
       <div>
         <h3 className="text-lg font-semibold text-white mb-1">Upload your B-BBEE toolkit workbook</h3>
         <p className="text-sm" style={{ color: '#8e8e93' }}>
-          One workbook (.xlsx / .xls / .csv) with your scorecard pillars — extraction starts right after you choose the file.
-          {' '}PDF is accepted but may yield less structured data.
+          Choose a workbook, CSV, or PDF to price the paid extraction before any processing starts.
+          {' '}Manual entry and Excel import from the main screen remain free.
         </p>
       </div>
 
@@ -1080,12 +1188,111 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
               onClick={() => {
                 setFile(null);
                 setError(null);
+                resetQuote();
               }}
               className="p-1 rounded-lg hover:bg-white/5"
               aria-label="Clear file"
             >
               <X className="w-4 h-4" style={{ color: '#8e8e93' }} />
             </button>
+          )}
+        </div>
+      )}
+
+      {file && (
+        <div className="rounded-xl overflow-hidden" style={{ background: '#111', border: '1px solid #2c2c2e' }}>
+          <div className="px-4 py-3 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
+                {quoteLoading ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#8e8e93' }} /> : <CreditCard className="w-4 h-4" style={{ color: '#8e8e93' }} />}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white">Paid upload quote</p>
+                <p className="text-xs" style={{ color: '#636366' }}>Generated only for upload extraction.</p>
+              </div>
+            </div>
+            {quote && (
+              <div className="text-right shrink-0">
+                <p className="text-base font-semibold text-white">{formatQuoteMoney(quote.subtotalCents, quote.currency)}</p>
+                <p className="text-[11px]" style={{ color: '#636366' }}>{quote.totalProcessingUnits} unit{quote.totalProcessingUnits === 1 ? '' : 's'}</p>
+              </div>
+            )}
+          </div>
+
+          {quoteLoading && (
+            <div className="px-4 py-4 text-sm flex items-center gap-2" style={{ color: '#8e8e93' }}>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Inspecting file structure before extraction...
+            </div>
+          )}
+
+          {quoteError && (
+            <div className="px-4 py-4 flex items-start gap-3">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
+              <div>
+                <p className="text-sm font-medium text-white">Quote could not be created</p>
+                <p className="text-xs mt-1" style={{ color: '#8e8e93' }}>{quoteError}</p>
+              </div>
+            </div>
+          )}
+
+          {quote && !quoteLoading && !quoteError && (
+            <div className="px-4 py-4 space-y-3">
+              {quote.files.map((quotedFile) => (
+                <div key={quotedFile.fileId} className="rounded-lg p-3" style={{ background: '#0b0b0c', border: '1px solid #1c1c1e' }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white truncate">{quotedFile.filename}</p>
+                      <p className="text-xs mt-0.5" style={{ color: '#636366' }}>{quotedFile.detectedDocumentType}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase" style={{ background: '#1c1c1e', color: quotedFile.processingEffort === 'high' ? '#f59e0b' : '#8e8e93' }}>
+                      {quotedFile.processingEffort}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]" style={{ color: '#8e8e93' }}>
+                    <span>{quotedFile.structure.format.toUpperCase()}</span>
+                    <span style={{ color: '#3a3a3c' }}>/</span>
+                    <span>{formatQuoteStructure(quotedFile)}</span>
+                    <span style={{ color: '#3a3a3c' }}>/</span>
+                    <span>{formatQuoteMoney(quotedFile.pricing.subtotalCents, quotedFile.pricing.currency)}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2" style={{ borderTop: '1px solid #1c1c1e' }}>
+                <div>
+                  <p className="text-xs" style={{ color: '#636366' }}>Quote expires {formatQuoteDate(quote.expiresAt)}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: '#48484a' }}>No extraction, scoring, OCR, or parser validation has run yet.</p>
+                </div>
+                <Button
+                  type="button"
+                  variant={paymentPlaceholderVisible ? 'secondary' : 'default'}
+                  size="sm"
+                  onClick={() => setPaymentPlaceholderVisible(true)}
+                  disabled={uploading}
+                >
+                  Proceed to payment
+                </Button>
+              </div>
+              {paymentPlaceholderVisible && (
+                <div className="rounded-lg p-3 flex items-start gap-3" style={{ background: '#151515', border: '1px solid #2c2c2e' }}>
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#8e8e93' }} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">Payment integration placeholder</p>
+                    <p className="text-xs mt-1" style={{ color: '#8e8e93' }}>Gateway connection is not enabled yet. This confirms the quote step before extraction.</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-3"
+                      disabled={uploading}
+                      onClick={() => void runExtraction(file)}
+                    >
+                      {uploading ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Wand2 className="w-3.5 h-3.5 mr-1.5" />}
+                      Start extraction
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -1125,6 +1332,7 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
               onClick={() => {
                 setFile(null);
                 setError(null);
+                resetQuote();
               }}
               className="text-xs mt-2 underline"
               style={{ color: '#f87171' }}

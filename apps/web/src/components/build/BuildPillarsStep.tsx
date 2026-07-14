@@ -481,7 +481,7 @@ export function BuildPillarsStep({
           {onPopulateFromUpload && (
             <Button type="button" variant="outline" size="sm" className="gap-2" onClick={onPopulateFromUpload}>
               <Upload className="h-4 w-4" />
-              Populate with upload
+              Upload & quote
             </Button>
           )}
           <div className="text-right min-w-[4.5rem]">

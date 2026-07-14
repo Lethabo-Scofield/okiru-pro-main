@@ -85,11 +85,10 @@ export function BuildPopulateUploadDialog({
         )}
       >
         <DialogHeader>
-          <DialogTitle>Populate with upload</DialogTitle>
+          <DialogTitle>Upload & quote</DialogTitle>
           <DialogDescription>
-            Upload your B-BBEE toolkit workbook (.xlsx, .csv, or PDF). We run the same structured extract as{' '}
-            <span className="text-foreground font-medium">Upload &amp; extract</span>, then merge rows into your manual
-            forms — without switching workflows.
+            Upload your B-BBEE toolkit workbook (.xlsx, .csv, or PDF). We first show an upfront quote, then
+            extraction can run after the payment placeholder. Manual entry and Excel import remain free.
           </DialogDescription>
         </DialogHeader>
 

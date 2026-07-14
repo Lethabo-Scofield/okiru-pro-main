@@ -314,7 +314,7 @@ export function FoundationStep({
               {showPopulateFromUpload && onPopulateFromUpload && (
                 <Button type="button" variant="secondary" className="gap-2 shrink-0" onClick={onPopulateFromUpload}>
                   <Upload className="h-4 w-4" />
-                  Populate with upload
+                  Upload & quote
                 </Button>
               )}
               {showLoadFromClient && onLoadFromClient && (
@@ -325,9 +325,9 @@ export function FoundationStep({
               )}
               <p className="text-xs text-muted-foreground leading-relaxed">
                 {showPopulateFromUpload && showLoadFromClient
-                  ? 'Upload a toolkit workbook or load from an existing client record to fill all fields.'
+                  ? 'Upload extraction is quote-first. Loading from client is free.'
                   : showPopulateFromUpload
-                    ? 'Upload a toolkit workbook — same extract as the integrated flow — to fill client info, financials, and pillar tables where columns match (you stay in manual build).'
+                    ? 'Upload a toolkit workbook, CSV, or PDF only when you want paid extraction. Manual entry stays free.'
                     : 'Load foundation and pillar data from an existing client record.'}
               </p>
             </div>
