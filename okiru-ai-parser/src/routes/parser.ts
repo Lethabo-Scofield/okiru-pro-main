@@ -6,6 +6,7 @@ import { createLogger } from '../logger.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
 import { fail, ok } from '../utils/apiResponse.js';
 import { rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
+import { quoteUploadedFiles } from '../services/pricingQuote.js';
 import { createNeo4jOntologyRepository, MissingNeo4jConfigError } from '../../graph/neo4j_client.js';
 import type { OntologyRepository } from '../../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
@@ -161,6 +162,21 @@ router.post('/resolve-case-files', upload.array('files', 25), async (req: Reques
     return res.status(400).json(fail((err as Error).message, 'CASE_FILE_PARSE_FAILED'));
   } finally {
     await repository.close?.();
+  }
+});
+
+router.post('/quote-files', upload.array('files', 25), async (req: Request, res: Response) => {
+  try {
+    const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
+    if (files.length === 0) {
+      return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+    }
+
+    const quote = await quoteUploadedFiles(files);
+    return res.json(ok(quote));
+  } catch (err) {
+    logger.error('Parser pricing quote failed', err as Error);
+    return res.status(400).json(fail((err as Error).message, 'QUOTE_FAILED'));
   }
 });
 
