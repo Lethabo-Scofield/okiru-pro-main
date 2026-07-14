@@ -47,12 +47,15 @@ import {
   FileImage, File, FileQuestion, Building2, ScanLine, Monitor, HelpCircle, LogOut,
   Pencil, Plus, Maximize2, Minimize2, Save, ArrowRightCircle, Send,
   ExternalLink, Users, Briefcase, BookOpen, ShoppingCart, Heart, Wand2, RotateCw,
+  CreditCard,
 } from 'lucide-react';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.mjs',
   import.meta.url
 ).toString();
+
+const PARSER_SERVICE_URL = String((import.meta as any).env?.VITE_PARSER_SERVICE_URL || 'http://127.0.0.1:3200').replace(/\/+$/, '');
 
 interface StoredTemplate {
   id: number;
@@ -77,6 +80,40 @@ interface UploadedFile {
   status: 'uploading' | 'ready' | 'error';
   textContent: string;
   documentId?: string;
+}
+
+interface ParserQuoteFile {
+  fileId: string;
+  filename: string;
+  detectedDocumentType: string;
+  processingEffort: 'standard' | 'high';
+  structure: {
+    format: string;
+    pages: number | null;
+    sheets: number | null;
+    rows: number | null;
+    estimatedUnits: number;
+  };
+  pricing: {
+    currency: string;
+    unitPriceCents: number;
+    subtotalCents: number;
+  };
+  reasons: string[];
+  warnings: string[];
+}
+
+interface ParserQuote {
+  quoteId: string;
+  status: 'quoted';
+  currency: string;
+  files: ParserQuoteFile[];
+  subtotalCents: number;
+  totalProcessingUnits: number;
+  expiresAt: string;
+  paymentStatus: 'not_started';
+  nextAction: 'proceed_to_payment';
+  notes: string[];
 }
 
 interface CompanyInfo {
@@ -577,6 +614,33 @@ function FileFormatBadge({ type, size = 'md' }: { type: string; size?: 'sm' | 'm
       </span>
     </div>
   );
+}
+
+function formatQuoteMoney(cents: number, currency: string) {
+  return new Intl.NumberFormat('en-ZA', {
+    style: 'currency',
+    currency,
+  }).format(cents / 100);
+}
+
+function formatQuoteDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown';
+  return date.toLocaleString('en-ZA', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatQuoteStructure(file: ParserQuoteFile) {
+  const parts: string[] = [];
+  if (file.structure.pages != null) parts.push(`${file.structure.pages} page${file.structure.pages === 1 ? '' : 's'}`);
+  if (file.structure.sheets != null) parts.push(`${file.structure.sheets} sheet${file.structure.sheets === 1 ? '' : 's'}`);
+  if (file.structure.rows != null) parts.push(`${file.structure.rows} row${file.structure.rows === 1 ? '' : 's'}`);
+  parts.push(`${file.structure.estimatedUnits} unit${file.structure.estimatedUnits === 1 ? '' : 's'}`);
+  return parts.join(' / ');
 }
 
 function parseCSVRows(text: string): string[][] {
@@ -1210,6 +1274,10 @@ export default function DocumentProcessor() {
   });
   const sessionCreatedAt = useRef<string>(new Date().toISOString());
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [parserQuote, setParserQuote] = useState<ParserQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [paymentPlaceholderVisible, setPaymentPlaceholderVisible] = useState(false);
   const [fileClassifications, setFileClassifications] = useState<Record<string, number>>({});
   const [fileDocTypes, setFileDocTypes] = useState<Record<string, 'digital' | 'scanned'>>({});
   const [extractionResults, setExtractionResults] = useState<any[]>([]);
@@ -2742,6 +2810,39 @@ export default function DocumentProcessor() {
     return `[Unsupported file format: ${file.name}. Supported formats: PDF, DOCX, XLSX, XLS, TXT, CSV, EML, JSON]`;
   };
 
+  const requestParserQuote = useCallback(async (files: File[]) => {
+    if (files.length === 0) {
+      setParserQuote(null);
+      setQuoteError(null);
+      return;
+    }
+
+    setQuoteLoading(true);
+    setQuoteError(null);
+    setPaymentPlaceholderVisible(false);
+    try {
+      const fd = new FormData();
+      files.forEach((file) => fd.append('files', file));
+      const res = await fetch(`${PARSER_SERVICE_URL}/api/parser/quote-files`, {
+        method: 'POST',
+        body: fd,
+      });
+      const raw = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = raw?.error?.message || raw?.message || 'Could not create upfront parser quote';
+        throw new Error(message);
+      }
+      const quote = raw?.data ?? raw;
+      setParserQuote(quote as ParserQuote);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not create upfront parser quote';
+      setParserQuote(null);
+      setQuoteError(message);
+    } finally {
+      setQuoteLoading(false);
+    }
+  }, []);
+
   const handleFiles = (files: File[]) => {
     const newFiles: UploadedFile[] = files.map(file => ({
       id: Date.now() + Math.random(),
@@ -2750,7 +2851,11 @@ export default function DocumentProcessor() {
       type: file.name.split('.').pop()?.toUpperCase() || 'UNKNOWN',
       uploadProgress: 0, status: 'uploading' as const, textContent: '',
     }));
+    setParserQuote(null);
+    setQuoteError(null);
+    setPaymentPlaceholderVisible(false);
     setUploadedFiles(prev => [...prev, ...newFiles]);
+    void requestParserQuote([...uploadedFiles.map(f => f.file), ...files]);
     newFiles.forEach((newFile) => {
       void (async () => {
         try {
@@ -2788,7 +2893,12 @@ export default function DocumentProcessor() {
   };
 
   const removeFile = (fileId: number) => {
-    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
+    const nextFiles = uploadedFiles.filter(f => f.id !== fileId);
+    setUploadedFiles(nextFiles);
+    setParserQuote(null);
+    setQuoteError(null);
+    setPaymentPlaceholderVisible(false);
+    void requestParserQuote(nextFiles.map(f => f.file));
     const c = { ...fileClassifications }; delete c[String(fileId)]; setFileClassifications(c);
   };
 
@@ -3322,6 +3432,7 @@ export default function DocumentProcessor() {
 
   const allClassified = uploadedFiles.length > 0 && uploadedFiles.every(f => fileClassifications[String(f.id)]);
   const allReady = uploadedFiles.length > 0 && uploadedFiles.every(f => f.status === 'ready');
+  const canContinueAfterQuote = allReady && !!parserQuote && !quoteLoading && !quoteError && paymentPlaceholderVisible;
   const totalEntities = extractionResults.reduce((a, r) => a + (r.entities ?? []).length, 0);
   const approvedCount = extractionResults.reduce((a, r) => a + r.entities.filter((e: any) => e.status === 'approved').length, 0);
 
@@ -4319,7 +4430,7 @@ export default function DocumentProcessor() {
                       {uploadedFiles.length} document{uploadedFiles.length !== 1 ? 's' : ''}
                       {!allReady && <span className="text-[#636366] ml-2 inline-flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />Processing...</span>}
                     </p>
-                    <button onClick={() => { setUploadedFiles([]); setFileClassifications({}); }} className="text-[12px] text-[#48484a] hover:text-[#8e8e93] transition-colors" data-testid="button-clear-all">
+                    <button onClick={() => { setUploadedFiles([]); setFileClassifications({}); setParserQuote(null); setQuoteError(null); setPaymentPlaceholderVisible(false); }} className="text-[12px] text-[#48484a] hover:text-[#8e8e93] transition-colors" data-testid="button-clear-all">
                       Clear all
                     </button>
                   </div>
@@ -4347,6 +4458,96 @@ export default function DocumentProcessor() {
                       </div>
                     ))}
                   </div>
+                  <div className="rounded-2xl mb-6 overflow-hidden" style={{ background: '#111111', border: '1px solid #1c1c1e' }} data-testid="parser-pricing-quote">
+                    <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: '1px solid #1c1c1e' }}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
+                          {quoteLoading ? <Loader2 className="w-4 h-4 text-[#8e8e93] animate-spin" /> : <CreditCard className="w-4 h-4 text-[#8e8e93]" />}
+                        </div>
+                        <div>
+                          <p className="text-[13px] font-semibold text-white">Upfront parser quote</p>
+                          <p className="text-[11px] text-[#636366]">Structure check only. Parser processing starts after payment.</p>
+                        </div>
+                      </div>
+                      {parserQuote && (
+                        <div className="text-right">
+                          <p className="text-[16px] font-semibold text-white">{formatQuoteMoney(parserQuote.subtotalCents, parserQuote.currency)}</p>
+                          <p className="text-[11px] text-[#636366]">{parserQuote.totalProcessingUnits} unit{parserQuote.totalProcessingUnits === 1 ? '' : 's'}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {quoteLoading && (
+                      <div className="px-4 py-4 text-[13px] text-[#8e8e93] flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Inspecting file structure...
+                      </div>
+                    )}
+
+                    {quoteError && (
+                      <div className="px-4 py-4 flex items-start gap-3">
+                        <AlertTriangle className="w-4 h-4 text-[#ff9f0a] mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-[13px] font-medium text-white">Quote could not be created</p>
+                          <p className="text-[12px] text-[#8e8e93] mt-1">{quoteError}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {parserQuote && !quoteLoading && !quoteError && (
+                      <div className="px-4 py-4 space-y-4">
+                        <div className="space-y-2">
+                          {parserQuote.files.map((file) => (
+                            <div key={file.fileId} className="rounded-xl p-3" style={{ background: '#0b0b0c', border: '1px solid #1c1c1e' }}>
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <p className="text-[13px] font-medium text-white truncate">{file.filename}</p>
+                                  <p className="text-[11px] text-[#636366] mt-0.5">{file.detectedDocumentType}</p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <p className="text-[13px] font-semibold text-white">{formatQuoteMoney(file.pricing.subtotalCents, file.pricing.currency)}</p>
+                                  <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${file.processingEffort === 'high' ? 'text-[#ffb340]' : 'text-[#8e8e93]'}`} style={{ background: '#1c1c1e' }}>
+                                    {file.processingEffort}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[#8e8e93]">
+                                <span>{file.structure.format.toUpperCase()}</span>
+                                <span className="text-[#3a3a3c]">/</span>
+                                <span>{formatQuoteStructure(file)}</span>
+                              </div>
+                              {file.reasons.length > 0 && (
+                                <p className="text-[11px] text-[#636366] mt-2">{file.reasons[0]}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-3" style={{ borderTop: '1px solid #1c1c1e' }}>
+                          <div>
+                            <p className="text-[11px] text-[#636366]">Quote expires {formatQuoteDate(parserQuote.expiresAt)}</p>
+                            <p className="text-[11px] text-[#48484a] mt-0.5">No OCR, LLM, validation, scoring, or parser resolution has run.</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentPlaceholderVisible(true)}
+                            className="px-4 py-2 bg-white hover:bg-[#e5e5ea] text-black rounded-xl text-[12px] font-semibold transition-colors"
+                            data-testid="button-proceed-payment-placeholder"
+                          >
+                            Proceed to payment
+                          </button>
+                        </div>
+                        {paymentPlaceholderVisible && (
+                          <div className="rounded-xl px-3 py-3 flex items-start gap-3" style={{ background: '#151515', border: '1px solid #2c2c2e' }} data-testid="payment-integration-placeholder">
+                            <CheckCircle2 className="w-4 h-4 text-[#8e8e93] mt-0.5 shrink-0" />
+                            <div>
+                              <p className="text-[13px] font-medium text-white">Payment integration placeholder</p>
+                              <p className="text-[12px] text-[#8e8e93] mt-1">Gateway connection is intentionally out of scope for Phase 1. The quote is ready for the next integration step.</p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="flex gap-3">
                     <button
                       type="button"
@@ -4356,9 +4557,9 @@ export default function DocumentProcessor() {
                     >
                       Back
                     </button>
-                    <button onClick={async () => { if (allReady && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!allReady || isSavingSession}
+                    <button onClick={async () => { if (canContinueAfterQuote && !isSavingSession) { setIsSavingSession(true); await persistSession('classify'); setIsSavingSession(false); setCurrentPage('classify'); } }} disabled={!canContinueAfterQuote || isSavingSession}
                       className="flex-1 py-3 bg-white hover:bg-[#e5e5ea] disabled:bg-[#1c1c1e] disabled:text-[#48484a] text-black rounded-xl font-semibold text-[13px] transition-colors" data-testid="button-next-classify">
-                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : 'Continue'}
+                      {isSavingSession ? <><Loader2 className="w-3.5 h-3.5 mr-2 inline-block animate-spin" />Saving...</> : quoteLoading ? 'Preparing quote...' : !parserQuote ? 'Quote required' : !paymentPlaceholderVisible ? 'Proceed to payment first' : 'Continue'}
                     </button>
                   </div>
                 </>
