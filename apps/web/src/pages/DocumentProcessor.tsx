@@ -4332,6 +4332,7 @@ export default function DocumentProcessor() {
             <div className="max-w-3xl mx-auto w-full space-y-6">
               <div className="rounded-2xl p-6" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
                 <ToolkitExcelDropZone
+                  quoteBeforeExtraction
                   onExtractionPayload={(data, file) => {
                     setToolkitImportedFile(file);
                     setToolkitExtractionResult(data);
