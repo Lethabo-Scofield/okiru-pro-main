@@ -67,7 +67,7 @@ export interface SkillsResult {
  * @domain-rule pillar:skills_development, slide:87
  * @see docs/domain/pillars/03_skills_development.md#learning-program-categories
  */
-const CATEGORY_LABELS: Record<TrainingCategoryCode, { label: string; examples: string }> = {
+export const CATEGORY_LABELS: Record<TrainingCategoryCode, { label: string; examples: string }> = {
   A: { label: "Learning Institution (Degree/Diploma)", examples: "University degree with no workplace involvement" },
   B: { label: "Workplace + Learning Institution", examples: "Internship as part of qualification" },
   C: { label: "Apprenticeship (SAQA aligned)", examples: "Workplace accredited apprenticeship" },
@@ -77,7 +77,7 @@ const CATEGORY_LABELS: Record<TrainingCategoryCode, { label: string; examples: s
   G: { label: "Uncertified Internal Training", examples: "On-the-job training (no points for non-black)" },
 };
 
-function mapLegacyCategory(cat: TrainingProgram['category']): TrainingCategoryCode {
+export function mapLegacyCategory(cat: TrainingProgram['category']): TrainingCategoryCode {
   switch (cat) {
     case 'bursary': return 'A';
     case 'internship': return 'B';
@@ -302,6 +302,7 @@ export function calculateSkillsScore(
   data: SkillsData,
   config?: CalculatorConfig,
   eapProvince?: string,
+  eapYear?: number,
 ): SkillsResult {
   console.log('[SCORING-TRACE] calculateSkillsScore received:', {
     leviableAmount: data.leviableAmount,
@@ -417,7 +418,7 @@ export function calculateSkillsScore(
   const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';
   const eapBreakdowns = isQse
     ? {}
-    : buildSkillsEAPBreakdowns(trainingPrograms, province);
+    : buildSkillsEAPBreakdowns(trainingPrograms, province, eapYear);
 
   return {
     learningProgrammes: round2(learningScore),

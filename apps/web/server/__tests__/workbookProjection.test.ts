@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { WorkbookData } from '../workbookRoutes';
-import { projectWorkbookToClient } from '../workbookRoutes';
+import { projectWorkbookToClient, toCalculatorSectorCode } from '../workbookRoutes';
 import { buildLakeTradingWorkbookSections } from '../../src/lib/lakeTradingWorkbookFixture';
 import {
   LAKE_NPAT,
@@ -327,5 +327,27 @@ describe('Lake Trading — projectWorkbookToClient → calculators', () => {
     );
     const grand = own.total + mgmt.total + 0 /* skills */ + proc.total + esd.sdTotal + esd.edTotal + sed.total;
     expect(grand).toBeCloseTo(62.17, 0);
+  });
+});
+
+describe('toCalculatorSectorCode — industry label → calculator sector code', () => {
+  it('maps the Generic label to RCOGP (the only mismatch; otherwise scorecards total 0)', () => {
+    expect(toCalculatorSectorCode('Generic')).toBe('RCOGP');
+    expect(toCalculatorSectorCode('generic')).toBe('RCOGP');
+    expect(toCalculatorSectorCode(' GENERIC ')).toBe('RCOGP');
+  });
+
+  it('passes every other sector through unchanged (label already equals its code)', () => {
+    expect(toCalculatorSectorCode('ICT')).toBe('ICT');
+    expect(toCalculatorSectorCode('FSC')).toBe('FSC');
+    expect(toCalculatorSectorCode('AGRI')).toBe('AGRI');
+    expect(toCalculatorSectorCode('CONSTRUCTION')).toBe('CONSTRUCTION');
+    expect(toCalculatorSectorCode('TRANSPORT')).toBe('TRANSPORT');
+    expect(toCalculatorSectorCode('RCOGP')).toBe('RCOGP');
+  });
+
+  it('empty / unknown labels are left for the store default (RCOGP) rather than mis-mapped', () => {
+    expect(toCalculatorSectorCode('')).toBe('');
+    expect(toCalculatorSectorCode(undefined)).toBe('');
   });
 });

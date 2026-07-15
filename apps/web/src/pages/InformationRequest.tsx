@@ -55,6 +55,7 @@ import {
 } from "@/lib/workbookExcelNormalizer";
 import { importBeeGatheringExcel, type ExcelExtractionResult } from "@/lib/excelImport";
 import { ExcelImportPreviewModal } from "@/components/scorecard/ExcelImportPreviewModal";
+import { DocumentUploadStart } from "@/components/scorecard/DocumentUploadStart";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { invalidateClientData } from "@toolkit/lib/api";
 import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
@@ -258,9 +259,12 @@ function ExcelImportButton({
 
 function CompanyPicker({
   onPick,
+  onLandEstimate,
   mode = "picker",
 }: {
   onPick: (c: Company) => void;
+  /** Document flow: land on the provisional live-score page instead of the workbook. */
+  onLandEstimate?: (c: Company) => void;
   mode?: "picker" | "create";
 }) {
   const { user } = useAuth();
@@ -326,6 +330,92 @@ function CompanyPicker({
     }
   };
 
+  /**
+   * Shared create-from-sections sequence used by BOTH Excel import and the
+   * document-upload start: create the client, import the workbook sections,
+   * submit (scores through the canonical workbook path), open the workbook.
+   * Returns true on success.
+   */
+  const createFromSections = async (
+    companyName: string,
+    sections: WorkbookSectionsInput,
+    opts?: { importMarker?: unknown; warnCount?: number; landOn?: "workbook" | "estimate" },
+  ): Promise<boolean> => {
+    setCreating(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/clients`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: companyName }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({
+          title: "Could not create company",
+          description: err.error || "Server error.",
+          variant: "destructive",
+        });
+        return false;
+      }
+      const c = await res.json();
+      const clientId = c.clientId || c.id;
+      if (opts?.importMarker !== undefined) {
+        sessionStorage.setItem(
+          `okiru-excel-import-${clientId}`,
+          JSON.stringify({ extracted: opts.importMarker, importedAt: new Date().toISOString() }),
+        );
+      }
+      const importRes = await fetch(
+        `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sections }),
+        },
+      );
+      if (!importRes.ok) {
+        toast({ title: "Import failed", variant: "destructive" });
+        return false;
+      }
+      let submitted = false;
+      const submitRes = await fetch(
+        `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
+        { method: "POST", credentials: "include" },
+      );
+      if (submitRes.ok) {
+        submitted = true;
+        try {
+          await loadClientData(clientId);
+        } catch {
+          // Summary page will retry loadClientData.
+        }
+      }
+      const warnCount = opts?.warnCount ?? 0;
+      toast({
+        title: submitted
+          ? "Imported and synced to scorecard"
+          : warnCount > 0
+            ? "Imported with gaps"
+            : "Workbook imported",
+        description: submitted
+          ? companyName
+          : warnCount > 0
+            ? `${warnCount} warning(s) — open workbook and submit when ready.`
+            : `${companyName} — submit workbook to calculate score.`,
+      });
+      if (opts?.landOn === "estimate" && onLandEstimate) {
+        onLandEstimate(c);
+      } else {
+        onPick(c);
+      }
+      return true;
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const filtered = useMemo(
     () =>
       companies.filter((c) => c.name?.toLowerCase().includes(search.toLowerCase())),
@@ -344,55 +434,59 @@ function CompanyPicker({
               Create Scorecard
             </h2>
             <p className="text-[14px] text-[#8e8e93] mt-1.5">
-              Enter your company&apos;s B-BBEE information to generate your scorecard.
+              Drop your documents and we build it — or start from a blank workbook.
             </p>
           </div>
 
           <div className="px-6 sm:px-8 py-5">
-            <label
-              htmlFor="new-company-name"
-              className="block text-[12px] font-semibold text-[#8e8e93] uppercase tracking-wider mb-2"
-            >
-              Company name
-            </label>
-            <input
-              id="new-company-name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && create()}
-              placeholder="e.g. Acme Holdings (Pty) Ltd"
-              className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10 mb-3"
-              data-testid="input-new-company"
-              autoFocus
+            {/* HERO — document-upload start: preset expected-documents flow
+                (parser-classified evidence → workbook sections → same submit path). */}
+            <DocumentUploadStart
+              onCreate={async (companyName, sections) => {
+                // Document flow lands on the provisional live-score page, not the workbook.
+                await createFromSections(companyName, sections as WorkbookSectionsInput, { landOn: "estimate" });
+              }}
+              creating={creating}
             />
-            <button
-              onClick={create}
-              disabled={!newName.trim() || creating}
-              className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-white text-black text-[14px] font-semibold press-sm hover:bg-white/90 disabled:opacity-50 smooth"
-              data-testid="button-start-scorecard"
-            >
-              {creating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  Start Manually (free)
-                  <ChevronRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
-
-            <div className="relative my-5">
+            <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-[#2c2c2e]" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">or</span>
+                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">prefer another way?</span>
               </div>
             </div>
 
-            <div className="flex justify-center">
+            {/* Secondary paths: blank workbook + Excel import */}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2.5 items-stretch">
+              <div className="flex gap-2">
+                <input
+                  id="new-company-name"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && create()}
+                  placeholder="Company name — start a blank workbook"
+                  className="flex-1 bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10"
+                  data-testid="input-new-company"
+                />
+                <button
+                  onClick={create}
+                  disabled={!newName.trim() || creating}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#2c2c2e] text-[#e5e5ea] text-[13px] font-semibold hover:bg-[#3a3a3c] disabled:opacity-50 transition-colors whitespace-nowrap"
+                  data-testid="button-start-scorecard"
+                >
+                  {creating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      Start blank (free)
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </>
+                  )}
+                </button>
+              </div>
               <ExcelImportButton
-                label="Import from Excel"
+                label="Import Excel (free)"
                 onImport={async (file) => {
                 const result = await importBeeGatheringExcel(file, API_BASE);
                 if (!result.extraction.isBeeGatheringFormat) {
@@ -471,75 +565,15 @@ function CompanyPicker({
             const companyName = String(previewResult?.data?.companyName ?? "").trim();
             const sections = pendingSections;
             if (!companyName || !sections) return;
-            setCreating(true);
-            try {
-              const res = await fetch(`${API_BASE}/api/clients`, {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name: companyName }),
-              });
-              if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                toast({
-                  title: "Could not create company",
-                  description: err.error || "Server error.",
-                  variant: "destructive",
-                });
-                return;
-              }
-              const c = await res.json();
-              const clientId = c.clientId || c.id;
-              sessionStorage.setItem(
-                `okiru-excel-import-${clientId}`,
-                JSON.stringify({ extracted: previewResult?.data, importedAt: new Date().toISOString() }),
-              );
-              const importRes = await fetch(
-                `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
-                {
-                  method: "POST",
-                  credentials: "include",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ sections }),
-                },
-              );
-              if (!importRes.ok) {
-                toast({ title: "Import failed", variant: "destructive" });
-                return;
-              }
-              let submitted = false;
-              const submitRes = await fetch(
-                `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
-                { method: "POST", credentials: "include" },
-              );
-              if (submitRes.ok) {
-                submitted = true;
-                try {
-                  await loadClientData(clientId);
-                } catch {
-                  // Summary page will retry loadClientData.
-                }
-              }
-              const warnCount = previewResult?.warnings?.length ?? 0;
-              toast({
-                title: submitted
-                  ? "Imported and synced to scorecard"
-                  : warnCount > 0
-                    ? "Imported with gaps"
-                    : "Workbook imported",
-                description: submitted
-                  ? companyName
-                  : warnCount > 0
-                    ? `${warnCount} warning(s) — open workbook and submit when ready.`
-                    : `${companyName} — submit workbook to calculate score.`,
-              });
+            const ok = await createFromSections(companyName, sections, {
+              importMarker: previewResult?.data,
+              warnCount: previewResult?.warnings?.length ?? 0,
+            });
+            if (ok) {
               setPreviewOpen(false);
               setPendingFile(null);
               setPreviewResult(null);
               setPendingSections(null);
-              onPick(c);
-            } finally {
-              setCreating(false);
             }
           }}
         />
@@ -1969,6 +2003,8 @@ export default function InformationRequest() {
   const pageTitle = basePath === "/create-scorecard" ? "Create Scorecard" : "Information Request";
   const isCreateScorecardFlow = basePath === "/create-scorecard";
   const isSummaryStep = isCreateScorecardFlow && /\/summary\/?$/.test(location);
+  // Provisional live-score page — the destination of the document-upload flow.
+  const isEstimateStep = isCreateScorecardFlow && /\/estimate\/?$/.test(location);
   const resolvedCompanyId = params.companyId || picked?.clientId || picked?.id || "";
 
   // Dynamic back button: remember where the user navigated from.
@@ -2027,6 +2063,13 @@ export default function InformationRequest() {
     setPicked(c);
     const id = c.clientId || c.id;
     if (id) navigate(`${basePath}/${id}`, { replace: true });
+  };
+
+  // Document flow: land on the provisional live-score page (not the workbook).
+  const handlePickEstimate = (c: Company) => {
+    setPicked(c);
+    const id = c.clientId || c.id;
+    if (id) navigate(`/create-scorecard/${encodeURIComponent(id)}/estimate`, { replace: true });
   };
 
   const handleBack = () => {
@@ -2088,7 +2131,7 @@ export default function InformationRequest() {
             </p>
           </div>
         )}
-        {!isSummaryStep && picked && (
+        {!isSummaryStep && !isEstimateStep && picked && (
           <div className="mb-6">
             <h1 className="text-[24px] font-semibold tracking-tight text-white">
               {picked.name}
@@ -2100,13 +2143,15 @@ export default function InformationRequest() {
         )}
 
         {picked ? (
-          isSummaryStep && resolvedCompanyId ? (
+          isEstimateStep && resolvedCompanyId ? (
+            <WorkbookScoreSummary companyId={resolvedCompanyId} companyName={picked.name} provisional />
+          ) : isSummaryStep && resolvedCompanyId ? (
             <WorkbookScoreSummary companyId={resolvedCompanyId} companyName={picked.name} />
           ) : (
             <WorkbookView company={picked} onBack={handleBack} />
           )
         ) : isCreateScorecardFlow ? (
-          <CompanyPicker onPick={handlePick} mode="create" />
+          <CompanyPicker onPick={handlePick} onLandEstimate={handlePickEstimate} mode="create" />
         ) : (
           <CompanyPicker onPick={handlePick} />
         )}

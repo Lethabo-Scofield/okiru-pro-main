@@ -20,6 +20,7 @@ import { calculateSkillsScore } from '@toolkit/lib/calculators/skills';
 import { calculateProcurementScore } from '@toolkit/lib/calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from '@toolkit/lib/calculators/esd-sed';
 import { calculateAfsScore } from '@toolkit/lib/calculators/afs';
+import { calculateEmpowermentFinancingScore } from '@toolkit/lib/calculators/empowermentFinancing';
 import { RCOGP_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/rcogp-generic';
 import { RCOGP_QSE_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/rcogp-qse';
 import { ICT_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/ict-generic';
@@ -29,6 +30,15 @@ import { FSC_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-generic'
 import { FSC_BANKS_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-banks';
 import { FSC_LTI_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-lti';
 import { FSC_STI_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-sti';
+import { TRANSPORT_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/transport-generic';
+import { TRANSPORT_QSE_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/transport-qse';
+import {
+  calculateTransportQseManagement,
+  calculateTransportQseEmploymentEquity,
+  calculateTransportLargeManagementControl,
+  calculateTransportLargeEmploymentEquity,
+  calculateTransportLargeSkills,
+} from '@toolkit/lib/calculators/transport';
 import { buildConstructionCalculatorConfig, isConstructionSector } from '@toolkit/lib/sectors/construction';
 import { buildConstructionScoringInput } from '@toolkit/lib/calculators/construction-map';
 import { calculateConstructionScorecard } from '../../../api/pipeline/constructionScoring';
@@ -59,7 +69,11 @@ function configFor(sector: string, type: string, subSector: string): CalculatorC
     if (/short/i.test(subSector)) return FSC_STI_CALCULATOR_CONFIG;
     return FSC_GENERIC_CALCULATOR_CONFIG;
   }
-  return null; // TRANSPORT etc. — config fetched from API, not bundled
+  // Transport bundled configs derive from the pipeline TRANSPORT_GENERIC /
+  // TRANSPORT_QSE (docs/Transport Codes.xlsx "Road Freight Large"/"Road
+  // Freight QSE") — same source the live store now uses.
+  if (s === 'TRANSPORT') return qse ? TRANSPORT_QSE_CALCULATOR_CONFIG : TRANSPORT_GENERIC_CALCULATOR_CONFIG;
+  return null;
 }
 
 suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => {
@@ -90,23 +104,62 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
 
         let total = 0;
         let brk = '';
-        if (isConstructionSector(sector)) {
-          const state = { client: { sectorCode: sector, scorecardType: type, constructionSubSector: subSector, npat, leviableAmount: leviable, eapProvince: 'National' }, ownership: { shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }, management: { employees: p.employees }, skills: { leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] }, procurement: { tmps, suppliers: p.suppliers }, esd: { contributions: p.esdContributions }, sed: { contributions: p.sedContributions } };
+        if (sector.toUpperCase() === 'TRANSPORT') {
+          // Transport scores via the mirrored transport calculators (pipeline
+          // calcTransport* semantics). QSE = Ownership + MC + EE compulsory +
+          // BEST elective of Skills/PP/ED/SED (choose-one, Transport Codes).
+          const own = calculateOwnershipScore({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 } as any, cfg).total;
+          const mgmtData = { id: '', clientId: '', employees: p.employees } as any;
+          const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
+          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg).total;
+          const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
+          if (/qse/i.test(type)) {
+            const mc = calculateTransportQseManagement(mgmtData, cfg).score;
+            const ee = calculateTransportQseEmploymentEquity(mgmtData, cfg, 'Gauteng').score;
+            const sk = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng', 2025).total;
+            const elective = Math.max(sk, proc, esd.edTotal, sed);
+            total = own + mc + ee + elective;
+            brk = ` | own${own.toFixed(0)} mc${mc.toFixed(0)} ee${ee.toFixed(0)} elective${elective.toFixed(0)} (sk${sk.toFixed(0)}/pp${proc.toFixed(0)}/ed${esd.edTotal.toFixed(0)}/sed${sed.toFixed(0)})`;
+          } else {
+            const mc = calculateTransportLargeManagementControl(mgmtData, cfg).score;
+            const ee = calculateTransportLargeEmploymentEquity(mgmtData, cfg).score;
+            const sk = calculateTransportLargeSkills({ id: '', clientId: '', leviableAmount: leviable, headcount: p.employees.length, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg).total;
+            total = own + mc + ee + sk + proc + esd.sdTotal + esd.edTotal + sed;
+            brk = ` | own${own.toFixed(0)} mc${mc.toFixed(0)} ee${ee.toFixed(0)} sk${sk.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} sed${sed.toFixed(0)} | emp${p.employees.length}`;
+          }
+        } else if (isConstructionSector(sector)) {
+          const state = { client: { sectorCode: sector, scorecardType: type, constructionSubSector: subSector, npat, leviableAmount: leviable, eapProvince: 'National', eapYear: 2025 }, ownership: { shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }, management: { employees: p.employees }, skills: { leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] }, procurement: { tmps, suppliers: p.suppliers }, esd: { contributions: p.esdContributions }, sed: { contributions: p.sedContributions } };
           const { entityType, input } = buildConstructionScoringInput(state, cfg);
           total = calculateConstructionScorecard(entityType, input).totalScore;
         } else {
           const own = calculateOwnershipScore({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 } as any, cfg).total;
-          const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any } as any, cfg, 'Gauteng').total;
-          const skills = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng').total;
+          // eapYear 2025: the Toolkit Testing Data workbooks were filled and
+          // expert-verified under the 25th CEE EAP dataset — pin the vintage so
+          // the harness stays faithful to those workbooks (live default = 26th CEE, 2026).
+          const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any } as any, cfg, 'Gauteng', 2025).total;
+          const skills = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng', 2025).total;
           const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
           const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
-          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg).total;
+          // FSC "SED & CE Scorecard" adds Consumer Education + Fundisa lines
+          // (calculateSedScore scores them only when the config is FSC). The live
+          // store passes these from client state, so the harness must too to stay
+          // a faithful mirror — otherwise FSC SED is under-reported. Sourced from
+          // projectWorkbookToClient's financials (mapWorkbookFinancialsToClient
+          // reads the SED & CE section meta). Non-FSC: fields absent → no change.
+          const fin2 = (p.financials as any) ?? {};
+          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any, ceSpend: fin2.ceSpend, ceBonusSpend: fin2.ceBonusSpend, fundisaSpend: fin2.fundisaSpend } as any, npat, cfg).total;
           // FSC Banks/LTI/STI carry an Access to Financial Services pillar (12 pts).
           // calculateAfsScore returns null when the config has no AFS (FSC Generic / non-FSC).
           const afsData = { id: '', clientId: '', ...((p.financials as any)?.afs ?? {}) };
           const afs = calculateAfsScore(afsData as any, cfg)?.total ?? 0;
-          total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed + afs;
-          brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} afs${afs.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
+          // FSC Banks/LTI Empowerment Financing (EF-proper 15 pts: Targeted
+          // Investments 12 + Transaction Financing 3). Facilities ingested from
+          // the workbook "Empowerment Financing" sheet; the calculator returns
+          // null for STI/Others/non-FSC, so this is 0 outside Banks/LTI.
+          const efData = { id: '', clientId: '', ...((p.financials as any)?.empowermentFinancing ?? {}) };
+          const ef = calculateEmpowermentFinancingScore(efData as any, cfg)?.total ?? 0;
+          total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed + afs + ef;
+          brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} afs${afs.toFixed(0)} ef${ef.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
         }
         const lvl = levelFromConfig(total, cfg);
         scored++;

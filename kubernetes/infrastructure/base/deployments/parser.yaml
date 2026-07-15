@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: parser
+  labels:
+    app: parser
+    component: backend
+    tier: parser
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: parser
+  template:
+    metadata:
+      labels:
+        app: parser
+        component: backend
+        tier: parser
+    spec:
+      imagePullSecrets:
+        - name: acr-pull-secret
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - parser
+                topologyKey: kubernetes.io/hostname
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: parser
+          image: okiruproacrde4d539b.azurecr.io/okiru-pro/parser:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3200
+              name: http
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3200"
+            # Neo4j is optional — the parser falls back to its in-memory
+            # ontology (the canonical document types + verification matrix) when
+            # no Neo4j URI is configured. These are wired only if the secret
+            # exists, so document parsing works with or without a graph DB.
+            - name: NEO4J_URI
+              valueFrom:
+                secretKeyRef:
+                  name: parser-credentials
+                  key: NEO4J_URI
+                  optional: true
+            - name: NEO4J_USER
+              valueFrom:
+                secretKeyRef:
+                  name: parser-credentials
+                  key: NEO4J_USER
+                  optional: true
+            - name: NEO4J_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: parser-credentials
+                  key: NEO4J_PASSWORD
+                  optional: true
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=768"
+          volumeMounts:
+            - name: tmp-vol
+              mountPath: /tmp
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "1Gi"
+              cpu: "750m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3200
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 10
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3200
+              scheme: HTTP
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+            successThreshold: 1
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 3200
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: tmp-vol
+          emptyDir:
+            sizeLimit: 200Mi

@@ -12,6 +12,7 @@ import type { OntologyRepository } from '../../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
 import { buildOntologyRecordsFromWorkbook, DEFAULT_ONTOLOGY_MATRIX_PATH, loadOntologyFromWorkbook } from '../../graph/ontology_loader.js';
 import { CaseParserService } from '../../parser/case_parser_service.js';
+import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_documents.js';
 import { ParserService } from '../../parser/parser_service.js';
 
 const logger = createLogger('ParserRoutes');
@@ -57,12 +58,16 @@ async function getParserRepository(): Promise<OntologyRepository> {
     neo4jRepository = createNeo4jOntologyRepository();
   } catch (err) {
     if (err instanceof MissingNeo4jConfigError) {
-      // Not configured at all: fallback in non-production, hard error in prod.
-      if (process.env.NODE_ENV !== 'production') {
-        logger.warn('Neo4j parser graph is not configured; using in-memory parser ontology fallback');
-        return getFallbackRepository();
+      // Not configured at all: use the bundled in-memory ontology (the canonical
+      // document types + verification matrix). Neo4j is an optional graph store,
+      // not a hard dependency — the parser classifies and extracts fully on the
+      // in-memory ontology. An operator who genuinely requires Neo4j can enforce
+      // it with PARSER_REQUIRE_NEO4J=true (same flag as the unreachable branch).
+      if (process.env.PARSER_REQUIRE_NEO4J === 'true') {
+        throw err;
       }
-      throw err;
+      logger.warn('Neo4j parser graph is not configured; using in-memory parser ontology fallback');
+      return getFallbackRepository();
     }
     throw err;
   }
@@ -84,6 +89,34 @@ async function getParserRepository(): Promise<OntologyRepository> {
     return getFallbackRepository();
   }
 }
+
+/**
+ * The preset "documents expected to be uploaded" catalog — the ontology's
+ * document types (name, description, pillar, required) plus the case-level
+ * required groups the case parser enforces. Lets the UI render the upload
+ * checklist from the same source of truth that classification/validation use.
+ */
+router.get('/document-types', async (req: Request, res: Response) => {
+  const repository = await getParserRepository();
+  try {
+    const types = await repository.listDocumentTypes();
+    const required_groups = getRequiredDocumentGroups({
+      sector: typeof req.query.sector === 'string' ? req.query.sector : undefined,
+      size: typeof req.query.size === 'string' ? req.query.size : undefined,
+      subSector: typeof req.query.subSector === 'string' ? req.query.subSector : undefined,
+    });
+    return res.json({
+      document_types: types,
+      required_groups,
+      sector_options: SECTOR_OPTIONS,
+    });
+  } catch (err) {
+    logger.error('Listing parser document types failed', err as Error);
+    return res.status(500).json(fail('Could not list document types', 'DOCUMENT_TYPES_FAILED'));
+  } finally {
+    await repository.close?.();
+  }
+});
 
 router.post('/resolve', async (req: Request, res: Response) => {
   const repository = await getParserRepository();

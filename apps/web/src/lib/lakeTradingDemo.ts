@@ -33,6 +33,10 @@ export const lakeTradingClientInfo: ClientInformationData = {
   sectorCode: 'RCOGP',
   industry: 'Retail',
   eapProvince: 'Gauteng',
+  // The Lake workbook (and its ground-truth 63.56) was scored under the 25th
+  // CEE EAP dataset — pin the vintage so the demo keeps matching the printed
+  // workbook after newer CEE reports are ingested (26th CEE = 2026 default).
+  eapYear: 2025,
   annualTurnover: LAKE_REVENUE,
   numberOfEmployees: LAKE_HEADCOUNT,
   financialYearEnd: '2026-02-28',

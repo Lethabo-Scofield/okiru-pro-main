@@ -186,6 +186,9 @@ function AppRouter() {
       <Route path="/create-scorecard/:companyId/summary">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>
+      <Route path="/create-scorecard/:companyId/estimate">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
       <Route path="/create-scorecard/:companyId">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>

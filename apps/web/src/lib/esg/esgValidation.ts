@@ -1,4 +1,5 @@
 import type { EsgWorkbookData } from "./esgWorkbookStorage";
+import { deriveEsgSummaryCells } from "./esgDeriveSummary";
 import {
   evaluateEsgRules,
   type EsgRuleEvaluation,
@@ -43,7 +44,12 @@ export function validateEsgWorkbook(
   touched?: EsgTouchedState,
   mode: EsgRulesMode = "live",
 ): EsgValidationIssue[] {
-  return evaluateEsgRules(workbook, touched ?? {}, mode).map(toIssue);
+  // Derive the template summary cells (L12/L46/L63/F13.., …) first so rules that
+  // gate on them (headcount > 0, governance score > 0, months complete) evaluate
+  // against the same values the scorer sees — otherwise a fully-filled manual
+  // workbook is permanently blocked from submit.
+  const derived = workbook ? deriveEsgSummaryCells(workbook) : workbook;
+  return evaluateEsgRules(derived, touched ?? {}, mode).map(toIssue);
 }
 
 /** Submit gate — King5 + legacy critical checks. */

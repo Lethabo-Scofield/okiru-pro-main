@@ -584,6 +584,93 @@ function deriveCompanyMetaFromSheets(wb: XLSX.WorkBook): Record<string, unknown>
   return out;
 }
 
+/**
+ * FSC "Consumer Education" is its own per-programme contribution table (Programme
+ * Name | Description | Date | Spend (R) | % Black Beneficiaries | Reach), but the
+ * FSC "SED & CE Scorecard" needs a single aggregate `ceSpend` (total CE spend)
+ * that calculateSedScore compares to the 0.4%-of-NPAT target. Sum the "Spend (R)"
+ * column. The workbook's own Sector Targets sheet expresses CE achievement as the
+ * FULL CE spend ÷ NPAT (e.g. 0.6% = R2.52M ÷ R420M), so the aggregate is the
+ * whole Spend column — not a black-weighted subset (which would give 0.54%).
+ * Returns 0 when the sheet or its Spend column is absent (never fabricated).
+ */
+function deriveConsumerEducationSpend(rows: unknown[][]): number {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const joined = (rows[i] || []).map((c) => norm(String(c ?? ""))).join("|");
+    if (/spend|contribution|amount/.test(joined) && /programme|program|description|beneficiar|reach/.test(joined)) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return 0;
+  const header = (rows[headerIdx] as unknown[]).map((c) => norm(String(c ?? "")));
+  const spendCol = header.findIndex((h) => h.includes("spend") || h.includes("contribution") || h.includes("randvalue") || h.includes("amount"));
+  if (spendCol < 0) return 0;
+  let total = 0;
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i] as unknown[];
+    if (!r) continue;
+    const v = Number(String(r[spendCol] ?? "").replace(/[^0-9.\-]/g, ""));
+    if (Number.isFinite(v) && v > 0) total += v;
+  }
+  return total;
+}
+
+/**
+ * FSC Banks/LTI "Empowerment Financing" sheet — a per-facility table
+ * (Facility / Transaction Name | EF Category | Counterparty | Date |
+ * Rand Value Advanced (R) | Outstanding Balance (R) | Qualifying % | Notes).
+ * Parse it faithfully into EfFacility-shaped rows so
+ * calculateEmpowermentFinancingScore can score Targeted Investments (12) +
+ * Transaction Financing (3). Fields the sheet doesn't carry are left unset —
+ * never fabricated. Returns [] when the sheet/columns are absent.
+ */
+function deriveEmpowermentFinancingFacilities(rows: unknown[][]): Array<Record<string, unknown>> {
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const joined = (rows[i] || []).map((c) => norm(String(c ?? ""))).join("|");
+    if (/category/.test(joined) && (/advanced|value|amount/.test(joined) || /facility|transaction/.test(joined))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx < 0) return [];
+  const header = (rows[headerIdx] as unknown[]).map((c) => norm(String(c ?? "")));
+  const find = (...keys: string[]) => header.findIndex((h) => keys.some((k) => h.includes(k)));
+  const nameCol = find("facility", "transactionname", "name", "description");
+  const catCol = find("category");
+  const advCol = find("advanced", "randvalue", "value", "amount");
+  const outCol = find("outstanding");
+  const qualCol = find("qualifying");
+  const dateCol = find("date");
+  if (catCol < 0 || advCol < 0) return [];
+
+  const num = (v: unknown): number => {
+    const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const out: Array<Record<string, unknown>> = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i] as unknown[];
+    if (!r) continue;
+    const category = String(r[catCol] ?? "").trim();
+    const valueAdvanced = num(r[advCol]);
+    if (!category || valueAdvanced <= 0) continue;
+    const facility: Record<string, unknown> = {
+      id: `ef-${i}`,
+      name: nameCol >= 0 ? String(r[nameCol] ?? "").trim() : "",
+      category,
+      valueAdvanced,
+    };
+    if (outCol >= 0 && num(r[outCol]) > 0) facility.outstandingBalance = num(r[outCol]);
+    if (qualCol >= 0 && String(r[qualCol] ?? "").trim() !== "") facility.qualifyingPercent = num(r[qualCol]);
+    if (dateCol >= 0 && String(r[dateCol] ?? "").trim() !== "") facility.date = String(r[dateCol]).trim();
+    out.push(facility);
+  }
+  return out;
+}
+
 export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const warnings: string[] = [];
   const mappedSheets: Record<string, string> = {};
@@ -632,6 +719,88 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
       payload = { ...payload, rows: [...(payload.rows ?? []), ...rows] };
     }
     sections[sectionKey] = payload;
+  }
+
+  // W-fsc-ce: the FSC "Consumer Education" sheet is unmapped (a per-programme
+  // table, not a grid section), so its spend never reached the SED & CE
+  // scorecard and the Consumer Education line scored 0 despite real workbook
+  // data. Aggregate its Spend column into sed.meta.ceSpend so calculateSedScore
+  // (which already scores CE for FSC) can award it. Never overwrites an explicit
+  // aggregate; only sets when a real spend is found.
+  const ceSheetName = wb.SheetNames.find((n) => /consumer\s*education/i.test(n));
+  if (ceSheetName) {
+    const ceMatrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[ceSheetName], { header: 1, defval: "" }) as unknown[][];
+    const ceSpend = deriveConsumerEducationSpend(ceMatrix);
+    if (ceSpend > 0) {
+      const sed = sections["sed"] ?? { rows: [] };
+      const meta = (sed.meta ?? {}) as Record<string, unknown>;
+      if (meta.ceSpend == null || Number(meta.ceSpend) === 0) {
+        sections["sed"] = { ...sed, meta: { ...meta, ceSpend } };
+      }
+    }
+  }
+
+  // W-fsc-ce2: template-shaped FSC exports carry one "SED & CE Data" table with a
+  // Pillar column routing rows to Socioeconomic Development / Consumer Education /
+  // Fundisa Retail Fund (tblSEDnCEData — SED & CE Scorecard I7/I8/I11 SUMIFS on
+  // those exact Pillar strings). The sheet name matches no section hint, so CE and
+  // Fundisa spend never reached the scorecard. Aggregate them into sed.meta.
+  // (Additional CE needs no input — the template derives it: I10 = MAX(CE − 0.6%
+  // NPAT, 0), mirrored in calculateSedScore.) Never overwrites explicit values.
+  const sedCeSheetName = wb.SheetNames.find((n) => /sed\s*&?\s*ce\s*data/i.test(n));
+  if (sedCeSheetName) {
+    const matrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sedCeSheetName], { header: 1, defval: "" }) as unknown[][];
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(matrix.length, 8); i++) {
+      const joined = (matrix[i] || []).map((c) => norm(String(c ?? ""))).join("|");
+      if (/pillar/.test(joined) && /amount/.test(joined)) { headerIdx = i; break; }
+    }
+    if (headerIdx >= 0) {
+      const header = (matrix[headerIdx] as unknown[]).map((c) => norm(String(c ?? "")));
+      const pillarCol = header.findIndex((h) => h.includes("pillar"));
+      // Prefer the workbook's own "Recognised Amount" (benefit-factored) over raw Amount.
+      let amountCol = header.findIndex((h) => h.includes("recognisedamount"));
+      if (amountCol < 0) amountCol = header.findIndex((h) => h === "amount" || h.includes("amount"));
+      if (pillarCol >= 0 && amountCol >= 0) {
+        let ce = 0;
+        let fundisa = 0;
+        for (let i = headerIdx + 1; i < matrix.length; i++) {
+          const r = matrix[i] as unknown[];
+          if (!r) continue;
+          const pillar = norm(String(r[pillarCol] ?? ""));
+          const v = Number(String(r[amountCol] ?? "").replace(/[^0-9.\-]/g, ""));
+          if (!Number.isFinite(v) || v <= 0) continue;
+          if (pillar.includes("consumereducation")) ce += v;
+          else if (pillar.includes("fundisa")) fundisa += v;
+        }
+        if (ce > 0 || fundisa > 0) {
+          const sed = sections["sed"] ?? { rows: [] };
+          const meta = (sed.meta ?? {}) as Record<string, unknown>;
+          const next: Record<string, unknown> = { ...meta };
+          if (ce > 0 && (meta.ceSpend == null || Number(meta.ceSpend) === 0)) next.ceSpend = ce;
+          if (fundisa > 0 && (meta.fundisaSpend == null || Number(meta.fundisaSpend) === 0)) next.fundisaSpend = fundisa;
+          sections["sed"] = { ...sed, meta: next };
+        }
+      }
+    }
+  }
+
+  // W-fsc-ef: the FSC "Empowerment Financing" sheet is unmapped (a per-facility
+  // table, not a grid section), so its R-billions of qualifying facilities never
+  // reached the EF pillar and Empowerment Financing scored 0 for Banks/LTI.
+  // Parse the facilities into esd.meta.efFacilities (EF shares the template's
+  // "EF & ESD Scorecard") for calculateEmpowermentFinancingScore.
+  const efSheetName = wb.SheetNames.find((n) => /empowerment\s*financ/i.test(n));
+  if (efSheetName) {
+    const efMatrix = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[efSheetName], { header: 1, defval: "" }) as unknown[][];
+    const efFacilities = deriveEmpowermentFinancingFacilities(efMatrix);
+    if (efFacilities.length > 0) {
+      const esd = sections["esd"] ?? { rows: [] };
+      const meta = (esd.meta ?? {}) as Record<string, unknown>;
+      if (!Array.isArray(meta.efFacilities) || (meta.efFacilities as unknown[]).length === 0) {
+        sections["esd"] = { ...esd, meta: { ...meta, efFacilities } };
+      }
+    }
   }
 
   // R19: derive missing company meta (name/sector/type/sub-sector) from any

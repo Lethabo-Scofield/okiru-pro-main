@@ -5,7 +5,8 @@
  * Config: FSC_LTI_CALCULATOR_CONFIG
  *
  * Key LTI differences from FSC Generic (Others):
- * - Grand total: 132 pts (+AFS 12 pts; same stockbroker bonus)
+ * - Grand total: 142 pts incl. EF 15 (template: EF & ESD Scorecard - Long Term
+ *   C13/C14 = 12+3; SD C16 = 7; ED C18 = 3 base + grad + jobs + stockbroker 2)
  * - SD target: 1.8% NPAT (not 2%)
  * - ED target: 0.2% NPAT (not 1%); stockbroker bonus still present (0.5%/2pts)
  * - EF Targeted Investments + Transaction Financing: 0 pts (Q44)
@@ -51,8 +52,9 @@ const ltiAfsDataPartial: AfsData = {
 // ---------------------------------------------------------------------------
 
 describe('FSC LTI — CalculatorConfig completeness', () => {
-  it('loads 132 total points', () => {
-    expect(CONFIG.totalMaxPoints).toBe(132);
+  it('loads 142 total points (incl. EF 15; template: core F12=121, C104=140)', () => {
+    // 25+21+23+24+7(SD)+7(ED incl stockbroker)+15(EF)+12(AFS)+8 = 142
+    expect(CONFIG.totalMaxPoints).toBe(142);
   });
 
   it('sector identity is FSC / Generic', () => {
@@ -70,8 +72,11 @@ describe('FSC LTI — CalculatorConfig completeness', () => {
     expect(pc?.managementControl?.maxPoints).toBe(21);
     expect(pc?.skillsDevelopment?.maxPoints).toBe(23);
     expect(pc?.preferentialProcurement?.maxPoints).toBe(24);
-    expect(pc?.supplierDevelopment?.maxPoints).toBe(10);
-    expect(pc?.enterpriseDevelopment?.maxPoints).toBe(9);  // includes stockbroker
+    // EF & ESD Scorecard - Long Term: SD C16 = 7; ED C18 = 3 base (+1 grad
+    // +1 jobs +2 stockbroker = 7). The old 10/9 were the Others ESD maxima.
+    expect(pc?.supplierDevelopment?.maxPoints).toBe(7);
+    expect(pc?.enterpriseDevelopment?.maxPoints).toBe(7);  // includes stockbroker
+    expect((pc as any)?.empowermentFinancing?.maxPoints).toBe(15);
     expect(pc?.socioEconomicDevelopment?.maxPoints).toBe(8);
   });
 
@@ -108,14 +113,16 @@ describe('FSC LTI — CalculatorConfig completeness', () => {
     expect(ef.edTarget).toBeCloseTo(0.002, 4);
   });
 
-  it('LTI total pillar sum = 132', () => {
+  it('LTI total pillar sum = 142', () => {
     const pc = CONFIG.pillarConfigs!;
     const sum = (pc.ownership?.maxPoints ?? 0) + (pc.managementControl?.maxPoints ?? 0) +
       (pc.skillsDevelopment?.maxPoints ?? 0) + (pc.preferentialProcurement?.maxPoints ?? 0) +
       (pc.supplierDevelopment?.maxPoints ?? 0) + (pc.enterpriseDevelopment?.maxPoints ?? 0) +
       (pc.socioEconomicDevelopment?.maxPoints ?? 0) +
-      (CONFIG.accessToFinancialServices?.maxPoints ?? 0);
-    expect(sum).toBe(132);
+      (CONFIG.accessToFinancialServices?.maxPoints ?? 0) +
+      ((pc as any).empowermentFinancing?.maxPoints ?? 0);
+    // 25+21+23+24+7+7+8+12+15(EF) = 142
+    expect(sum).toBe(142);
   });
 });
 
@@ -173,7 +180,7 @@ describe('FSC LTI — AFS scoring', () => {
 // ---------------------------------------------------------------------------
 
 describe('FSC LTI — ESD scoring (modified targets)', () => {
-  it('SD = 10/10 at 1.8% NPAT', () => {
+  it('SD = 7/7 at 1.8% NPAT (EF & ESD - Long Term C16)', () => {
     const r = calculateEsdScore(
       {
         id: '1', clientId: 'sanlam-lti',
@@ -186,11 +193,11 @@ describe('FSC LTI — ESD scoring (modified targets)', () => {
       NPAT,
       CONFIG,
     );
-    expect(r.supplierDev).toBeCloseTo(10, 1);
+    expect(r.supplierDev).toBeCloseTo(7, 1); // SD max 7 (C16)
     expect(r.sdSubMinimumMet).toBe(true);
   });
 
-  it('ED with stockbroker bonus = 9/9 total', () => {
+  it('ED with stockbroker bonus = 7/7 total (3 base +1+1+2)', () => {
     const r = calculateEsdScore(
       {
         id: '1', clientId: 'sanlam-lti',
@@ -205,6 +212,6 @@ describe('FSC LTI — ESD scoring (modified targets)', () => {
       CONFIG,
     );
     expect(r.stockbrokerBonus).toBeCloseTo(2, 1);
-    expect(r.edTotal).toBeCloseTo(9, 1);
+    expect(r.edTotal).toBeCloseTo(7, 1); // 3 base (C18) + 1 + 1 + 2 stockbroker
   });
 });

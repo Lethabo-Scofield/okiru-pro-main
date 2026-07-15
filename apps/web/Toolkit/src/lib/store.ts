@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { 
-  Client, OwnershipData, ManagementData, SkillsData, 
+import {
+  Client, OwnershipData, ManagementData, SkillsData,
   ProcurementData, ESDData, SEDData, ScorecardResult,
   Shareholder, Employee, TrainingProgram, Supplier, Contribution, FinancialYear,
-  TrainingCategoryCode, AfsData,
+  TrainingCategoryCode, AfsData, EmpowermentFinancingData,
 } from './types';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
@@ -62,11 +62,18 @@ import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
 import { calculateYESScore } from './calculators/yes';
 import { calculateAfsScore } from './calculators/afs';
+import { calculateEmpowermentFinancingScore } from './calculators/empowermentFinancing';
 import {
   calculateTransportQseManagement,
   calculateTransportQseEmploymentEquity,
   isTransportQseSector,
+  calculateTransportLargeManagementControl,
+  calculateTransportLargeEmploymentEquity,
+  calculateTransportLargeSkills,
+  isTransportLargeSector,
 } from './calculators/transport';
+import { TRANSPORT_GENERIC_CALCULATOR_CONFIG } from './sectors/transport-generic';
+import { TRANSPORT_QSE_CALCULATOR_CONFIG } from './sectors/transport-qse';
 import {
   deepClone,
   round2,
@@ -100,6 +107,7 @@ interface PillarState {
   esd: ESDData;
   sed: SEDData;
   afs: AfsData;
+  empowermentFinancing: EmpowermentFinancingData;
   scorecard: ScorecardResult;
 }
 
@@ -113,6 +121,7 @@ function snapshotPillarState(state: PillarState): PillarState {
     esd: deepClone(state.esd),
     sed: deepClone(state.sed),
     afs: deepClone(state.afs),
+    empowermentFinancing: deepClone(state.empowermentFinancing),
     scorecard: deepClone(state.scorecard),
   };
 }
@@ -152,6 +161,7 @@ const emptyProcurement: ProcurementData = { id: '', clientId: '', tmps: 0, suppl
 const emptyESD: ESDData = { id: '', clientId: '', contributions: [], graduationBonus: false, jobsCreatedBonus: false };
 const emptySED: SEDData = { id: '', clientId: '', contributions: [] };
 const emptyAfs: AfsData = { id: '', clientId: '' };
+const emptyEmpowermentFinancing: EmpowermentFinancingData = { id: '', clientId: '' };
 
 /**
  * Factory function to build an empty scorecard from calculatorConfig.
@@ -366,6 +376,8 @@ interface BbeeState extends PillarState {
   updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => void;
   /** Update the industry VERTICAL (Manufacturing, Retail, etc.) used for industry-norm lookup. Distinct from sectorCode/industrySector which drive the scorecard. */
   updateIndustry: (industry: string) => void;
+  /** Update the CEE report vintage used for MC/Skills EAP targets (undefined = latest). */
+  updateEapYear: (eapYear: number | undefined) => void;
 
   loadCalculatorConfig: (clientId: string) => Promise<void>;
   saveCalculatorConfig: (config: CalculatorConfig) => Promise<void>;
@@ -619,6 +631,7 @@ function calculateScorecard(
 
   assertSectorConfigLoaded(cfg, state.client);
   const transportQse = isTransportQseSector(state.client.sectorCode, state.client.scorecardType);
+  const transportLarge = !transportQse && isTransportLargeSector(state.client.sectorCode, state.client.scorecardType);
   const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;
 
   console.log('[SCORING-TRACE] Calculator input for ownership:', {
@@ -645,11 +658,26 @@ function calculateScorecard(
     const tqEe = calculateTransportQseEmploymentEquity(state.management, cfg, state.client.eapProvince);
     eeScoreTotal = tqEe.score;
     console.log('[SCORING-TRACE] Calculator output for employmentEquity:', { score: tqEe.score, subMin: true });
+  } else if (transportLarge) {
+    // Transport Large: MC 11 + EE 18 are SEPARATE pillars (Transport Codes
+    // "Road Freight Large" rows 23-31 / 33-43). Previously this branch fell
+    // through to the generic MC calculator and EE stayed 0 — the 18 EE points
+    // were counted in the target but never scored.
+    console.log('[SCORING-TRACE] Calculator input for managementControl (Transport Large):', {
+      employees: state.management.employees?.length ?? 0,
+    });
+    const tlMc = calculateTransportLargeManagementControl(state.management, cfg);
+    mgtScoreTotal = tlMc.score;
+    console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: tlMc.score, subMin: true });
+
+    const tlEe = calculateTransportLargeEmploymentEquity(state.management, cfg);
+    eeScoreTotal = tlEe.score;
+    console.log('[SCORING-TRACE] Calculator output for employmentEquity:', { score: tlEe.score, subMin: true });
   } else {
     console.log('[SCORING-TRACE] Calculator input for managementControl:', {
       employees: state.management.employees?.length ?? 0,
     });
-    const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince);
+    const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince, state.client.eapYear);
     mgtScoreTotal = mgtScore.total;
     console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: mgtScore.total, subMin: mgtScore.subMinimumMet });
   }
@@ -658,7 +686,11 @@ function calculateScorecard(
     leviableAmount: state.skills.leviableAmount,
     programs: state.skills.trainingPrograms?.length ?? 0,
   });
-  const skillScore = calculateSkillsScore(state.skills, cfg, state.client.eapProvince);
+  // Transport Large Skills is structurally different (5th indicator = black
+  // women in B/C/D programmes, not absorption) — use the mirrored calculator.
+  const skillScore = transportLarge
+    ? calculateTransportLargeSkills(state.skills, cfg)
+    : calculateSkillsScore(state.skills, cfg, state.client.eapProvince, state.client.eapYear);
   console.log('[SCORING-TRACE] Calculator output for skillsDevelopment:', { score: skillScore.total, subMin: skillScore.subMinimumMet });
 
   console.log('[SCORING-TRACE] Calculator input for procurement:', {
@@ -686,6 +718,16 @@ function calculateScorecard(
     : null;
   if (afsScore) {
     console.log('[SCORING-TRACE] Calculator output for AFS:', { score: afsScore.total, subSector: afsScore.subSector });
+  }
+
+  // FSC Banks/LTI Empowerment Financing — EF-proper only (Targeted Investments
+  // 12 + Transaction Financing 3); SD/ED stay in the ESD pillar. Returns null
+  // for STI / Others / non-FSC (targetedInvestmentMaxPts+transactionFinancingMaxPts = 0).
+  const efScore = cfg.empowermentFinancing
+    ? calculateEmpowermentFinancingScore(state.empowermentFinancing, cfg)
+    : null;
+  if (efScore) {
+    console.log('[SCORING-TRACE] Calculator output for Empowerment Financing:', { score: efScore.total, max: efScore.maxPoints });
   }
   // CRITICAL: Wire YES calculator - construct YESData from skills and management state
   // Training programs with isYesEmployee=true are treated as YES candidates
@@ -813,10 +855,11 @@ function calculateScorecard(
 
   const sdForTotal = sdTarget > 0 ? esdScore.sdTotal : 0;
   const afsForTotal = afsScore?.total ?? 0;
+  const efForTotal = efScore?.total ?? 0;
 
   const compulsoryTotal = ownScore.total + mgtScoreTotal + (eeTarget > 0 ? eeScoreTotal : 0);
   const electiveTotal = skillsForTotal + procForTotal + edForTotal + sedForTotal;
-  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + yesScore.score + yesScore.yesBonusPoints;
+  const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + efForTotal + yesScore.score + yesScore.yesBonusPoints;
 
   const totalTarget = cfg?.totalMaxPoints ?? (
     ownTarget + mcTarget + eeTarget +
@@ -925,6 +968,13 @@ function calculateScorecard(
         weighting: afsScore.maxPoints,
       },
     } : {}),
+    ...(efScore ? {
+      empowermentFinancing: {
+        score: round2(efScore.total),
+        target: efScore.maxPoints,
+        weighting: efScore.maxPoints,
+      },
+    } : {}),
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
     achievedLevel: level,
     discountedLevel,
@@ -1018,6 +1068,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   esd: emptyESD,
   sed: emptySED,
   afs: emptyAfs,
+  empowermentFinancing: emptyEmpowermentFinancing,
   scorecard: emptyScorecard,
   pipelineOverrides: null,
   calculatorConfig: null,
@@ -1066,6 +1117,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         fscSubSector: normalizeFscSubSector(data.client.fscSubSector ?? finExtras.fscSubSector) as Client['fscSubSector'],
         fscReinsurer: coerceYesNo(data.client.fscReinsurer ?? finExtras.fscReinsurer),
         eapProvince: (data.client.eapProvince || finExtras.eapProvince || 'National') as Client['eapProvince'],
+        // CEE vintage for MC/Skills EAP targets — persisted per client so legacy
+        // clients keep the dataset their workbook was scored under; undefined
+        // (new clients) = latest ingested CEE year (26th CEE = 2026).
+        eapYear: (data.client.eapYear ?? finExtras.eapYear) as number | undefined,
         industryNorm: data.client.industryNorm ?? (finExtras.industryNormPercent as number | undefined),
         // Foundation / company-detail fields that PATCH /api/clients/:id persists
         // and GET /:id/data returns, but which were previously DROPPED here — so
@@ -1164,7 +1219,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           isDisabled: coerceYesNo(e.isDisabled),
           isForeign: coerceYesNo(e.isForeign),
           annualSalary: e.annualSalary ?? 0,
-          votingRightsPercent: e.votingRightsPercent ?? 0,
+          // Board "exercisable voting rights" (% units). Workbook import persists
+          // this on the employee entity as `votingRights` (workbookRoutes.ts),
+          // while the manual UI writes `votingRightsPercent` — accept either so a
+          // workbook-imported board's voting weights reach calculateManagementScore
+          // instead of silently falling back to headcount. Both are already in
+          // percent (the grid column is a percentage), so no normalisation.
+          votingRightsPercent: e.votingRightsPercent ?? e.votingRights ?? 0,
           idNumber: e.idNumber || undefined,
           province: e.province || undefined,
           hireDate: e.hireDate || undefined,
@@ -1283,6 +1344,14 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           clientId,
           ...(data.afs ?? finExtras.afs ?? {}),
         } as AfsData,
+        // FSC Banks/LTI Empowerment Financing — persisted in the client
+        // financials blob by workbook submit (like afs); hydrate so
+        // calculateEmpowermentFinancingScore sees the facilities/scalars.
+        empowermentFinancing: {
+          id: '',
+          clientId,
+          ...((data as any).empowermentFinancing ?? (finExtras.empowermentFinancing as object | undefined) ?? {}),
+        } as EmpowermentFinancingData,
         scenarios: scenariosData,
         isScenarioMode: false,
         activeScenarioId: null,
@@ -1316,6 +1385,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       esd: emptyESD,
       sed: emptySED,
       afs: emptyAfs,
+      empowermentFinancing: emptyEmpowermentFinancing,
       scorecard: emptyScorecard,
       pipelineOverrides: null,
       calculatorConfig: null,
@@ -1340,6 +1410,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       esd: emptyESD,
       sed: emptySED,
       afs: emptyAfs,
+      empowermentFinancing: emptyEmpowermentFinancing,
       scorecard: buildEmptyScorecard(),
       pipelineOverrides: null,
       calculatorConfig: null,
@@ -1469,6 +1540,21 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     if (isAgriGenericSector(sectorCode, scorecardType)) {
       console.log('[SCORING-TRACE] Using bundled AGRI Generic calculator config');
       ready(AGRI_GENERIC_CALCULATOR_CONFIG);
+      return;
+    }
+    // Transport Sector Code — bundled configs derived from the pipeline
+    // TRANSPORT_GENERIC / TRANSPORT_QSE (docs/Transport Codes.xlsx). Previously
+    // TRANSPORT fell through to the remote fetch, so the toolkit could not
+    // score Transport clients when the API config wasn't reachable, and the
+    // Large EE pillar (18 pts) was never computed at all.
+    if (isTransportQseSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled Transport QSE calculator config');
+      ready(TRANSPORT_QSE_CALCULATOR_CONFIG);
+      return;
+    }
+    if (isTransportLargeSector(sectorCode, scorecardType)) {
+      console.log('[SCORING-TRACE] Using bundled Transport Large calculator config');
+      ready(TRANSPORT_GENERIC_CALCULATOR_CONFIG);
       return;
     }
 
@@ -1869,6 +1955,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       api.updateClient(state.activeClientId, { industry }).catch(console.error);
+    }
+  },
+
+  updateEapYear: (eapYear) => {
+    set((state) => ({ client: { ...state.client, eapYear } }));
+    get()._recalculateAll(); // MC + Skills EAP bands score against the selected CEE vintage
+    const state = get();
+    if (state.activeClientId) {
+      api.updateClient(state.activeClientId, { eapYear: eapYear ?? null }).catch(console.error);
     }
   },
 

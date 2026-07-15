@@ -93,3 +93,19 @@ spec:
     - port: 8000
       targetPort: 8000
       name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: parser
+  labels:
+    app: parser
+    component: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: parser
+  ports:
+    - port: 3200
+      targetPort: 3200
+      name: http

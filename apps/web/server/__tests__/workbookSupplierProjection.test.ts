@@ -55,8 +55,9 @@ describe('workbook numeric parsing — formatted strings must not zero out', () 
     // Financials: commas / currency / spaces no longer NaN→0
     expect(p.financials.revenue).toBe(1_000_000);
     expect(p.financials.npat).toBe(250_000);
-    // payroll "4 000 000" parsed (not NaN→0) → leviableAmount = payroll × 1%
-    expect(p.financials.leviableAmount).toBe(40_000);
+    // payroll "4 000 000" parsed (not NaN→0) → leviableAmount = full payroll
+    // (the skills-levy base; workbook: Leviable Amount for Skills = Total Payroll).
+    expect(p.financials.leviableAmount).toBe(4_000_000);
     // Supplier: "R 500,000" spend, "60%" black ownership → fraction 0.6 (≥51%)
     const sup = p.suppliers[0];
     expect(sup.spend).toBe(500_000);

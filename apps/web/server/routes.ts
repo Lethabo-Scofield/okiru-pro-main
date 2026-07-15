@@ -65,7 +65,10 @@ function getOfflineDemoUser(): User {
     fullName: "Demo User",
     email: "demo@okiru.pro",
     role: "admin",
-    secondaryRoles: [],
+    // Offline demo (Mongo-less local dev ONLY — this path never activates in
+    // prod): grant super_admin so the full product surface, incl. the
+    // /processor upload flow, is reachable when demoing locally.
+    secondaryRoles: ["super_admin"],
     organizationId: "demo-offline-workspace",
     organizationName: "Demo Workspace",
     profilePicture: null,
@@ -2082,7 +2085,7 @@ export async function registerRoutes(
         "beeCertificateNumber", "beeCertificateExpiry", "beeCertificateLevel", "verificationAgency",
         "logo",
         // Scoring inputs the Toolkit edits via PATCH /api/clients/:id
-        "revenue", "npat", "leviableAmount", "industryNorm", "eapProvince",
+        "revenue", "npat", "leviableAmount", "industryNorm", "eapProvince", "eapYear",
         "tmps", "companyValue", "outstandingDebt",
         // FSC + ESD + SED scalar fields that live on ClientModel
         "fscSubSector", "fscReinsurer", "combineExcoSenior", "farmWorkersIncluded",
@@ -2231,7 +2234,24 @@ export async function registerRoutes(
           leviableAmount: c.leviableAmount,
           industrySector: c.industrySector,
           eapProvince: c.eapProvince || "National",
-          industryNorm: undefined,
+          eapYear: c.eapYear ?? null,
+          industryNorm: c.industryNorm ?? undefined,
+          // CRITICAL FIX (connection audit — financials chain): the `financials`
+          // Mixed blob and the FSC/construction scalars are PERSISTED on the
+          // client (via workbook submit / PATCH) but were NEVER returned here, so
+          // loadClientData's `finExtras` was ALWAYS {} in production. That silently
+          // dropped every workbook financial extra — deemed-NPAT, groupLeviable,
+          // headcount, trainingManagerSalary, combineExcoSenior, CE/Fundisa spend,
+          // AFS — matching "all the financial info in the workbook wasn't in the
+          // toolkit". Surface them (the harness path already had this data).
+          financials: c.financials ?? null,
+          fscSubSector: c.fscSubSector ?? null,
+          fscReinsurer: c.fscReinsurer ?? null,
+          combineExcoSenior: c.combineExcoSenior ?? false,
+          farmWorkersIncluded: c.farmWorkersIncluded ?? true,
+          constructionSubSector: c.constructionSubSector ?? null,
+          pipelineOverrides: c.pipelineOverrides ?? null,
+          afs: c.afs ?? null,
           // Extended Foundation Layer fields
           sectorCode: c.sectorCode || c.industrySector || 'RCOGP',
           scorecardType: c.scorecardType || c.companySize || 'Generic',
@@ -2282,13 +2302,34 @@ export async function registerRoutes(
             }
           : empty({ tmps: 0, suppliers: [] }),
         esd: allow("esd")
-          ? { contributions: esdAll }
+          ? {
+              contributions: esdAll,
+              // ED bonuses persisted on the client but previously dropped here,
+              // so loadClientData's `data.esd?.graduationBonus` was always
+              // undefined → the ED graduation/jobs bonus points never scored live.
+              graduationBonus: c.graduationBonus ?? false,
+              jobsCreatedBonus: c.jobsCreatedBonus ?? false,
+              jobsCreatedCount: c.jobsCreatedCount ?? 0,
+              graduationEvidence: c.graduationEvidence ?? '',
+              jobsCreatedEvidence: c.jobsCreatedEvidence ?? '',
+            }
           : empty({ contributions: [] }),
         sed: allow("sed")
-          ? { contributions: sedAll }
+          ? {
+              contributions: sedAll,
+              // FSC Consumer Education + Fundisa spend — persisted but dropped
+              // here, so calculateSedScore's CE/Fundisa lines scored 0 live.
+              ceSpend: c.ceSpend ?? 0,
+              ceBonusSpend: c.ceBonusSpend ?? 0,
+              fundisaSpend: c.fundisaSpend ?? 0,
+            }
           : empty({ contributions: [] }),
         financialYears: fyRows,
         scenarios: scenRows,
+        // FSC Access to Financial Services (Banks/LTI/STI) — persisted in the
+        // client `afs` blob but previously never returned, so the 12-pt AFS
+        // pillar scored 0 on the live path for every FSC sub-sector client.
+        afs: allow("skills") ? (c.afs ?? null) : null,
         // Surface the scope decision to the client so the UI can show a
         // read-only/scoped banner — does NOT grant access; the filtering above
         // is the security boundary.
