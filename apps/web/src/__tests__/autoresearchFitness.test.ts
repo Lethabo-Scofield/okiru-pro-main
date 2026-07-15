@@ -73,7 +73,12 @@ suite('autoresearch fitness — Lake Trading bulk upload → 63.56', () => {
   // Senior Management? = Yes") — the real scoring path (Toolkit store) passes it,
   // so the fitness harness must too.
   const combineExcoSenior = Boolean((p.financials as any)?.combineExcoSenior);
-  const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any, combineExcoSenior } as any, CONFIG, 'Gauteng').total;
+  // eapYear 2025: the Lake workbook (and its 63.56 ground truth) was scored
+  // under the 25th CEE EAP dataset. The live default is the newest CEE year
+  // (26th = 2026); pinning the vintage here keeps the fixture faithful to the
+  // workbook it was verified against — see docs/Commission for Employment
+  // Equity 26th CEE Report.pdf pp.33-34 for the newer stats.
+  const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any, combineExcoSenior } as any, CONFIG, 'Gauteng', 2025).total;
   const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, CONFIG).total;
   const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any, graduationBonus: false, jobsCreatedBonus: false } as any, npat, CONFIG);
   const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, CONFIG).total;

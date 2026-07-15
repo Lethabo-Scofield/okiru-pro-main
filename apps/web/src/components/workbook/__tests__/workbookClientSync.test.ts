@@ -19,15 +19,15 @@ describe("mapWorkbookFinancialsToClient", () => {
     // Actual values only — no forecast fallback.
     expect(financials.revenue).toBe(40_000_000);
     expect(financials.npat).toBe(2_000_000);
-    // Leviable Amount = payroll × 1%.
-    expect(financials.leviableAmount).toBe(40_000);
+    // Leviable Amount for Skills = full Total Payroll (levy base), not the 1% SDL.
+    expect(financials.leviableAmount).toBe(4_000_000);
     expect(financials.tmps).toBe(12_000_000);
     expect(financials.scorecardType).toBe("QSE");
     expect(financials.industrySector).toBe("RCOGP");
     expect(financials.annualTurnover).toBe(40_000_000);
   });
 
-  it("derives leviableAmount as 1% of payroll", () => {
+  it("derives leviableAmount as the full Total Payroll (levy base)", () => {
     const financials = mapWorkbookFinancialsToClient(
       {
         revenue: 80_000_000,
@@ -42,8 +42,8 @@ describe("mapWorkbookFinancialsToClient", () => {
 
     expect(financials.revenue).toBe(80_000_000);
     expect(financials.npat).toBe(5_000_000);
-    // 6 000 000 × 1% = 60 000
-    expect(financials.leviableAmount).toBe(60_000);
+    // Leviable Amount for Skills = Total Payroll (workbook: the two are identical).
+    expect(financials.leviableAmount).toBe(6_000_000);
   });
 
   it("skips skills EAP province/year for QSE scorecards", () => {

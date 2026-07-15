@@ -4,7 +4,31 @@ import type { ParserCaseOutput, ParserOutput, RawExtractionInput } from '../sche
 import { parserCaseOutputSchema } from '../schemas/parser_output.js';
 import { ParserService } from './parser_service.js';
 
-const REQUIRED_DOCUMENT_GROUPS = [
+export interface RequiredDocumentGroup {
+  key: string;
+  label: string;
+  /** Any non-failed document of one of these types satisfies the group. */
+  types: string[];
+  /** Pillar this evidence feeds (OWN/MAC/SKL/ESD/SED/FIN/SECTOR). */
+  pillar?: string;
+  /** True when the group is required for the case to be complete (default true). */
+  required?: boolean;
+  /**
+   * True when the parser has an extractor that pulls values from this document
+   * type (feeds the workbook/score). False = evidence the verifier needs but
+   * the parser cannot yet read (user still uploads it / captures it manually).
+   */
+  autoExtract?: boolean;
+  /** Short guidance shown under the checklist row. */
+  note?: string;
+}
+
+/**
+ * Case-level required-document groups. Exported so the UI can render the
+ * preset "documents expected to be uploaded" checklist from the same source
+ * the case parser enforces (GET /api/parser/document-types).
+ */
+export const REQUIRED_DOCUMENT_GROUPS: RequiredDocumentGroup[] = [
   {
     key: 'supplier_bbee_evidence',
     label: 'B-BBEE Certificate or Sworn Affidavit',

@@ -11,7 +11,12 @@ RUN apk add --no-cache python3 make g++
 RUN npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
-RUN sed -i '/- canvas/d' pnpm-workspace.yaml
+# Skip building the `canvas` native addon — it needs cairo/pango/jpeg dev libs
+# that aren't in node:20-alpine and fails node-gyp on musl. Strip it in BOTH
+# pnpm-workspace forms: the `- canvas` list item (onlyBuiltDependencies) AND the
+# `canvas: true` map key (allowBuilds, added on the lethabo QA branch). Prod runs
+# fine without the native binding.
+RUN sed -i -e '/- canvas/d' -e '/^[[:space:]]*canvas:[[:space:]]*true/d' pnpm-workspace.yaml
 COPY packages/types/package.json packages/types/
 COPY packages/data-layer/package.json packages/data-layer/
 COPY apps/web/package.json apps/web/

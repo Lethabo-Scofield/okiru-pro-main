@@ -224,14 +224,17 @@ export function sectorConfigToFscLtiCalculatorConfig(sc: SectorConfig): Calculat
     },
 
     /**
-     * Empowerment Financing config for LTI.
-     * EF Targeted Investments and Transaction Financing = 0 pts (Q44).
-     * SD target 1.8% NPAT; ED target 0.2% NPAT; ED stockbroker bonus 0.5% / 2 pts.
+     * Empowerment Financing config for LTI (Q44 RESOLVED 2026-07-05).
+     * The old 0-pts placeholder was the template's default-"Others" formula
+     * artifact. The Long-Term sheet pins: Targeted Investments 12 (C13,
+     * FSC_Generic.md L16020) + Transaction Financing 3 (C14, L16030).
+     * SD 7 @ 1.8% NPAT (C16), ED 3 base @ 0.2% (C18) and the stockbroker bonus
+     * 2 @ 0.5% (C22) score via the ESD pillar.
      */
     empowermentFinancing: {
-      maxPoints: pEf?.maxPoints ?? 0,
-      targetedInvestmentMaxPts: 0,
-      transactionFinancingMaxPts: 0,
+      maxPoints: pEf?.maxPoints ?? 15,
+      targetedInvestmentMaxPts: 12,
+      transactionFinancingMaxPts: 3,
       sdMaxPts: esd.sdMaxPts,
       sdTarget: esd.sdPercent / 100,
       edMaxPts: esd.edMaxPts,

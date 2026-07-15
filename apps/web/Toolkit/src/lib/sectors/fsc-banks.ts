@@ -221,15 +221,18 @@ export function sectorConfigToFscBanksCalculatorConfig(sc: SectorConfig): Calcul
     },
 
     /**
-     * Empowerment Financing config for Banks.
-     * All EF point values are 0 (Q44 — not readable from template when sub-sector = Others).
-     * SD target changes to 1.8% NPAT; ED target changes to 0.2% NPAT.
-     * EF Targeted Investments and Transaction Financing: best-effort 0 pts pending expert sign-off.
+     * Empowerment Financing config for Banks (Q44 RESOLVED 2026-07-05).
+     * The old "all 0 pts pending expert sign-off" was a formula artifact — the
+     * blank template defaults sub-sector to "Others", where every EF cell is
+     * =IF(D7="Banks", pts, 0). The Banks sheet pins: Targeted Investments 12
+     * (C14, FSC_Generic.md L15893) + Transaction Financing 3 (C15, L15903).
+     * SD 7 @ 1.8% NPAT (C17) and ED 3 base @ 0.2% NPAT (C19) score via the ESD
+     * pillar (the sdMaxPts/edMaxPts mirrors below are informational).
      */
     empowermentFinancing: {
-      maxPoints: pEf?.maxPoints ?? 0,
-      targetedInvestmentMaxPts: 0,
-      transactionFinancingMaxPts: 0,
+      maxPoints: pEf?.maxPoints ?? 15,
+      targetedInvestmentMaxPts: 12,
+      transactionFinancingMaxPts: 3,
       sdMaxPts: esd.sdMaxPts,
       sdTarget: esd.sdPercent / 100,
       edMaxPts: esd.edMaxPts,

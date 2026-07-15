@@ -1,14 +1,17 @@
 /**
  * Mode Chooser Component
  *
- * Entry point for DocumentProcessor - lets user choose between
- * uploading existing documents or building a scorecard manually.
+ * Entry point for DocumentProcessor — two ways to start a scorecard:
+ * upload your evidence documents (preset expected-documents flow, parser
+ * classified) or build the scorecard manually pillar by pillar.
  */
 
-import { FileText, Building2, ArrowRight } from 'lucide-react';
+import { Building2, Files, ArrowRight } from 'lucide-react';
+
+export type ProcessorMode = 'upload' | 'documents' | 'build';
 
 interface ModeChooserProps {
-  onSelectMode: (mode: 'upload' | 'build') => void;
+  onSelectMode: (mode: ProcessorMode) => void;
 }
 
 export function ModeChooser({ onSelectMode }: ModeChooserProps) {
@@ -24,25 +27,28 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Upload Option */}
+        {/* Upload documents (preset expected-documents flow) */}
         <button
-          onClick={() => onSelectMode('upload')}
-          className="group relative p-6 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] hover:border-[#5e9bff]/50 hover:bg-[#1c1c1e]/80 transition-all duration-200 text-left"
+          onClick={() => onSelectMode('documents')}
+          className="group relative p-6 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] hover:border-[#bf5af2]/50 hover:bg-[#1c1c1e]/80 transition-all duration-200 text-left"
+          data-testid="mode-upload-documents"
         >
-          <div className="w-12 h-12 rounded-xl bg-[#5e9bff]/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <FileText className="w-6 h-6 text-[#5e9bff]" />
+          <div className="w-12 h-12 rounded-xl bg-[#bf5af2]/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+            <Files className="w-6 h-6 text-[#bf5af2]" />
           </div>
-          
+
           <h3 className="text-lg font-semibold text-white mb-2">
-            Upload & Extract
+            Upload Documents
           </h3>
-          
+
           <p className="text-[13px] text-[#8e8e93] mb-4 leading-relaxed">
-            Import existing B-BBEE toolkit files (Excel, PDF, or Word).
-            We'll extract the data automatically.
+            Drop your evidence — B-BBEE certificates, affidavits, spend
+            schedules, EE reports, or your toolkit workbook (PDF, Word, Excel).
+            We classify each document against the expected checklist, extract
+            what's needed and show your approximate score.
           </p>
-          
-          <div className="flex items-center gap-2 text-[#5e9bff] text-sm font-medium">
+
+          <div className="flex items-center gap-2 text-[#bf5af2] text-sm font-medium">
             <span>Get started</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </div>
@@ -52,20 +58,21 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
         <button
           onClick={() => onSelectMode('build')}
           className="group relative p-6 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] hover:border-emerald-500/50 hover:bg-[#1c1c1e]/80 transition-all duration-200 text-left"
+          data-testid="mode-build"
         >
           <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
             <Building2 className="w-6 h-6 text-emerald-400" />
           </div>
-          
+
           <h3 className="text-lg font-semibold text-white mb-2">
             Build Manually
           </h3>
-          
+
           <p className="text-[13px] text-[#8e8e93] mb-4 leading-relaxed">
-            Enter your B-BBEE data pillar by pillar. Best when you don't 
-            have a toolkit file or want to explore scenarios.
+            Enter your B-BBEE data pillar by pillar. Best when you don't
+            have documents at hand or want to explore scenarios.
           </p>
-          
+
           <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium">
             <span>Get started</span>
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />

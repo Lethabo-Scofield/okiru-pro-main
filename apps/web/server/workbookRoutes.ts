@@ -928,6 +928,21 @@ function parseBeeLevel(raw: unknown): number {
   return 0;
 }
 
+/**
+ * The workbook stores a human industry label in company-information.industrySector
+ * ("Generic", "ICT", "FSC", "AGRI", "CONSTRUCTION", "TRANSPORT"), but the Toolkit
+ * calculator config is keyed by sector CODE. Every label already equals its code
+ * EXCEPT the Generic Codes, whose code is "RCOGP". Without this remap an explicit
+ * "Generic" pick yields sectorCode "GENERIC", which matches no calculator config
+ * (isRcogpGenericSector wants "RCOGP") → every pillar weighting resolves to 0 →
+ * the scorecard totals 0. Blank scorecards escape this only because an EMPTY
+ * sectorCode defaults to RCOGP in the store; an explicit "Generic" does not.
+ */
+export function toCalculatorSectorCode(industrySector: unknown): string {
+  const code = s(industrySector).trim().toUpperCase();
+  return code === "GENERIC" ? "RCOGP" : code;
+}
+
 export function projectWorkbookToClient(wb: WorkbookData) {
   const sec = wb.sections;
   const finMeta = (sec["financial-information"]?.meta ?? {}) as Record<string, unknown>;
@@ -938,7 +953,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   // For trust / multi-beneficiary holders the workbook row can also carry an
   // explicit `blackOwnership` / `blackWomenOwnership` fraction (used by the
   // Lake demo seed for the Family Trust shareholder); when present we prefer it.
-  const sectorCode = s(companyMeta.industrySector).trim().toUpperCase();
+  const sectorCode = toCalculatorSectorCode(companyMeta.industrySector);
   const farmWorkersIncluded = companyMeta.farmWorkersIncluded !== false;
 
   const shareholders = (sec["ownership"]?.rows ?? []).map((r) => {
@@ -1244,6 +1259,16 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   const afsMeta = (sec["afs-additions"]?.meta ?? {}) as Record<string, unknown>;
   const financials = mapWorkbookFinancialsToClient(finMeta, companyMeta, skillsMeta, sedMeta, afsMeta);
 
+  // FSC Banks/LTI Empowerment Financing — the normalizer parses the workbook's
+  // "Empowerment Financing" facility table into esd.meta.efFacilities (the EF
+  // pillar shares the template's "EF & ESD Scorecard"). Carry it on financials
+  // (like afs) so it persists in the client financials blob and hydrates into
+  // calculateEmpowermentFinancingScore.
+  const esdMeta = (sec["esd"]?.meta ?? {}) as Record<string, unknown>;
+  if (Array.isArray(esdMeta.efFacilities) && (esdMeta.efFacilities as unknown[]).length > 0) {
+    (financials as any).empowermentFinancing = { facilities: esdMeta.efFacilities };
+  }
+
   // Procurement TMPS fallback (Polo feedback #10): suppliers were saved but never
   // scored because procurement targets are tmps × pct, and tmps only came from the
   // Financials TMPS field. If that wasn't supplied, derive tmps from total supplier
@@ -1514,7 +1539,7 @@ export function registerWorkbookRoutes(app: Express): void {
           }
           if (f.industrySector) {
             update.industrySector = f.industrySector;
-            update.sectorCode = f.industrySector;
+            update.sectorCode = toCalculatorSectorCode(f.industrySector);
           }
           if (f.scorecardType) {
             update.scorecardType = f.scorecardType;
@@ -1547,6 +1572,7 @@ export function registerWorkbookRoutes(app: Express): void {
           if (f.fscSubSector) update.fscSubSector = f.fscSubSector;
           if (f.fscReinsurer !== undefined) update.fscReinsurer = f.fscReinsurer;
           if (f.afs) skillsExtra.afs = f.afs;
+          if ((f as any).empowermentFinancing) skillsExtra.empowermentFinancing = (f as any).empowermentFinancing;
           if (f.ceSpend != null) skillsExtra.ceSpend = f.ceSpend;
           if (f.ceBonusSpend != null) skillsExtra.ceBonusSpend = f.ceBonusSpend;
           if (f.fundisaSpend != null) skillsExtra.fundisaSpend = f.fundisaSpend;
@@ -1556,6 +1582,12 @@ export function registerWorkbookRoutes(app: Express): void {
             update.financials = { ...(update.financials ?? {}), ...skillsExtra };
           }
           const cm = projected.companyMeta;
+          // Construction sub-sector (Contractor / BEP / Built-Environment QSE)
+          // lives in company-information meta. Persist it so the live store
+          // hydrates the correct construction CalculatorConfig on GET instead
+          // of defaulting to Contractor. Input ingestion only — never the engine.
+          const csub = String(cm.constructionSubSector ?? "").trim();
+          if (csub) update.constructionSubSector = csub;
           for (const key of [
             "tradingName",
             "registrationNumber",

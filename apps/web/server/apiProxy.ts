@@ -14,6 +14,14 @@ const logger = createLogger("ApiProxy");
 
 const API_BASE = process.env.API_SERVER_URL || "http://127.0.0.1:3000";
 
+/**
+ * okiru-ai-parser (standalone deterministic document parser, :3200). The
+ * browser uploads raw files (PDF/DOCX/XLSX/images) same-origin to
+ * /api/parser/resolve-case-files etc.; we stream them through to the parser
+ * service, whose own routes are also mounted at /api/parser — 1:1 mapping.
+ */
+const PARSER_BASE = process.env.PARSER_SERVICE_URL || "http://127.0.0.1:3200";
+
 const PROXIED_PREFIXES = [
   "/api/extract-entities-hybrid",
   "/api/entity-mappings",
@@ -31,6 +39,8 @@ const PROXIED_PREFIXES = [
   "/api/import",
   /** Admin traffic analytics (GA4 + Search Console) live on the API app. */
   "/api/admin/analytics",
+  /** okiru-ai-parser document parsing (streams multipart file uploads to :3200). */
+  "/api/parser",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [
@@ -58,8 +68,15 @@ function shouldProxy(path: string): boolean {
   return false;
 }
 
+/** Which upstream a path belongs to (parser service vs apps/api). */
+function proxyTargetFor(path: string): string {
+  if (path.startsWith("/api/parser")) return PARSER_BASE;
+  return API_BASE;
+}
+
 function proxyRequest(req: Request, res: Response): void {
-  const url = new URL(req.originalUrl, API_BASE);
+  const targetBase = proxyTargetFor(req.path);
+  const url = new URL(req.originalUrl, targetBase);
 
   const headers: Record<string, string> = {};
   for (const [key, value] of Object.entries(req.headers)) {
@@ -106,10 +123,10 @@ function proxyRequest(req: Request, res: Response): void {
   });
 
   proxyReq.on("error", (err) => {
-    logger.error("Proxy request failed", err, { method: req.method, url: req.originalUrl, target: API_BASE });
+    logger.error("Proxy request failed", err, { method: req.method, url: req.originalUrl, target: targetBase });
     if (!res.headersSent) {
       res.status(502).json({
-        message: `API server unavailable at ${API_BASE}. Ensure the API server is running.`,
+        message: `Upstream unavailable at ${targetBase}. Ensure the service is running.`,
         detail: err.message,
       });
     }

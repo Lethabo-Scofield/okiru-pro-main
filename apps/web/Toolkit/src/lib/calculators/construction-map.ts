@@ -43,12 +43,13 @@ export function buildConstructionScoringInput(
   const subSector: 'Contractor' | 'BEP' = subSectorRaw === 'BEP' ? 'BEP' : 'Contractor';
   const entityType = resolveConstructionScorecardKey(client.scorecardType, subSectorRaw);
   const eapProvince = client.eapProvince;
+  const eapYear = client.eapYear;
   const npat = Number(client.npat ?? 0);
 
   // Run the Toolkit calculators purely to harvest rawStats (their points are ignored).
   const own = calculateOwnershipScore(state.ownership, cfg);
-  const mgmt = calculateManagementScore(state.management, cfg, eapProvince);
-  const skills = calculateSkillsScore(state.skills, cfg, eapProvince);
+  const mgmt = calculateManagementScore(state.management, cfg, eapProvince, eapYear);
+  const skills = calculateSkillsScore(state.skills, cfg, eapProvince, eapYear);
   const proc = calculateProcurementScore(state.procurement, cfg);
   const esd = calculateEsdScore(state.esd, npat, cfg);
   const sed = calculateSedScore(state.sed, npat, cfg);
