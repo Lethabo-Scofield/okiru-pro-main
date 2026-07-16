@@ -27,6 +27,7 @@ import {
   Wand2,
 } from 'lucide-react';
 import { cn } from '@toolkit/lib/utils';
+import { Button } from '@toolkit/components/ui/button';
 import type { FoundationData } from '@/components/build/FoundationStep';
 import type { BuildPillarsData } from '@/components/build/BuildPillarsStep';
 import { EMPTY_CLIENT_INFO } from '@/components/build/ClientInformationForm';
