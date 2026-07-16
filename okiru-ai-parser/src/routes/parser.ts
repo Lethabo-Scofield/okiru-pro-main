@@ -7,6 +7,14 @@ import { requireAdminToken } from '../middleware/adminAuth.js';
 import { fail, ok } from '../utils/apiResponse.js';
 import { rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
+import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
+import {
+  createYocoCheckout,
+  verifyYocoWebhook,
+  isPaymentSucceeded,
+  isPaymentFailed,
+  simulatedPaymentAllowed,
+} from '../services/yocoPayment.js';
 import { createNeo4jOntologyRepository, MissingNeo4jConfigError } from '../../graph/neo4j_client.js';
 import type { OntologyRepository } from '../../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
@@ -17,6 +25,15 @@ import { ParserService } from '../../parser/parser_service.js';
 
 const logger = createLogger('ParserRoutes');
 const router = Router();
+
+/**
+ * Whether extraction is gated on payment. Defaults to ON: paid work must never
+ * become free because someone forgot to set a flag. Only an explicit
+ * PARSER_REQUIRE_PAYMENT=false opens it (for local dev / the free manual path).
+ */
+function extractionRequiresPayment(): boolean {
+  return process.env.PARSER_REQUIRE_PAYMENT !== 'false';
+}
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
@@ -177,14 +194,31 @@ router.post('/resolve-case', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * Extraction (flow step 7) — the ONLY place real Azure effort is spent, so it
+ * is gated on payment. The gate fails closed and re-fingerprints the uploaded
+ * files against the paid quote, so a cheap quote can't be used to extract
+ * expensive documents.
+ */
 router.post('/resolve-case-files', upload.array('files', 25), async (req: Request, res: Response) => {
+  const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
+  if (files.length === 0) {
+    return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+  }
+
+  if (extractionRequiresPayment()) {
+    const quoteId = typeof req.body?.quote_id === 'string' ? req.body.quote_id : undefined;
+    const gate = await authoriseExtraction(quoteId, files);
+    if (!gate.ok) {
+      logger.warn('Extraction refused by payment gate', { code: gate.code, quoteId });
+      return res.status(gate.status).json(fail(gate.message, gate.code));
+    }
+    // Burn the quote so one payment buys exactly one extraction.
+    await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
+  }
+
   const repository = await getParserRepository();
   try {
-    const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
-    if (files.length === 0) {
-      return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
-    }
-
     const rawInputs = await Promise.all(files.map((file) => rawExtractionInputFromUpload(file)));
     const service = new CaseParserService(repository);
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
@@ -198,6 +232,10 @@ router.post('/resolve-case-files', upload.array('files', 25), async (req: Reques
   }
 });
 
+/**
+ * Quote (flow step 5) — free and deterministic. Records the quote against a
+ * content fingerprint of these exact files so payment can be bound to them.
+ */
 router.post('/quote-files', upload.array('files', 25), async (req: Request, res: Response) => {
   try {
     const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
@@ -206,11 +244,131 @@ router.post('/quote-files', upload.array('files', 25), async (req: Request, res:
     }
 
     const quote = await quoteUploadedFiles(files);
+    await getQuoteStore().put({
+      quoteId: quote.quoteId,
+      fingerprint: fingerprintFiles(files),
+      currency: quote.currency,
+      totalCents: quote.totals.totalCents,
+      paymentStatus: 'not_started',
+      createdAt: Date.now(),
+      expiresAt: new Date(quote.expiresAt).getTime(),
+      quote,
+    });
     return res.json(ok(quote));
   } catch (err) {
     logger.error('Parser pricing quote failed', err as Error);
     return res.status(400).json(fail((err as Error).message, 'QUOTE_FAILED'));
   }
+});
+
+/**
+ * Payment (flow step 6) — hand the user a Yoco hosted-checkout URL for a quote.
+ * We never touch card data; Yoco's page does.
+ */
+router.post('/quotes/:quoteId/checkout', async (req: Request, res: Response) => {
+  const quoteId = String(req.params.quoteId);
+  try {
+    const record = await getQuoteStore().get(quoteId);
+    if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
+    if (record.paymentStatus === 'paid') {
+      return res.status(409).json(fail('This quote is already paid', 'ALREADY_PAID'));
+    }
+    if (Date.now() > record.expiresAt) {
+      return res.status(410).json(fail('That quote has expired. Request a new quote.', 'QUOTE_EXPIRED'));
+    }
+
+    const checkout = await createYocoCheckout({
+      quoteId: record.quoteId,
+      amountCents: record.totalCents,
+      currency: record.currency,
+    });
+    await getQuoteStore().update(quoteId, { paymentStatus: 'pending', providerRef: checkout.checkoutId });
+
+    return res.json(ok({
+      quoteId,
+      redirectUrl: checkout.redirectUrl,
+      amountCents: record.totalCents,
+      currency: record.currency,
+      simulated: checkout.simulated,
+    }));
+  } catch (err) {
+    logger.error('Yoco checkout failed', err as Error);
+    return res.status(502).json(fail((err as Error).message, 'CHECKOUT_FAILED'));
+  }
+});
+
+/** Read a quote's payment state (the UI polls this after returning from Yoco). */
+router.get('/quotes/:quoteId', async (req: Request, res: Response) => {
+  const record = await getQuoteStore().get(String(req.params.quoteId));
+  if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
+  return res.json(ok({
+    quoteId: record.quoteId,
+    paymentStatus: record.paymentStatus,
+    currency: record.currency,
+    totalCents: record.totalCents,
+    expiresAt: new Date(record.expiresAt).toISOString(),
+    consumed: Boolean(record.consumedAt),
+    quote: record.quote,
+  }));
+});
+
+/**
+ * Yoco webhook — the ONLY thing allowed to mark a quote paid. The signature is
+ * verified first; an unsigned payload is just an attacker claiming payment.
+ * Mounted with a raw body parser (see server.ts) so the signature covers bytes.
+ */
+router.post('/webhooks/yoco', async (req: Request, res: Response) => {
+  const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body ?? {});
+  const id = String(req.header('webhook-id') ?? '');
+  const timestamp = String(req.header('webhook-timestamp') ?? '');
+  const signature = String(req.header('webhook-signature') ?? '');
+
+  if (!verifyYocoWebhook({ id, timestamp, rawBody, signatureHeader: signature })) {
+    logger.warn('Rejected Yoco webhook with an invalid signature', { id });
+    return res.status(401).json(fail('Invalid webhook signature', 'BAD_SIGNATURE'));
+  }
+
+  let event: { type?: string; payload?: { metadata?: { quoteId?: string }; id?: string } };
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    return res.status(400).json(fail('Malformed webhook body', 'BAD_BODY'));
+  }
+
+  const quoteId = event.payload?.metadata?.quoteId;
+  if (!quoteId) return res.json(ok({ ignored: true, reason: 'no quoteId in metadata' }));
+
+  if (isPaymentSucceeded(String(event.type))) {
+    await getQuoteStore().update(quoteId, {
+      paymentStatus: 'paid',
+      paidAt: Date.now(),
+      providerRef: event.payload?.id,
+    });
+    logger.info('Quote marked paid by Yoco webhook', { quoteId });
+  } else if (isPaymentFailed(String(event.type))) {
+    await getQuoteStore().update(quoteId, { paymentStatus: 'failed' });
+    logger.info('Quote payment failed', { quoteId, type: event.type });
+  }
+
+  return res.json(ok({ received: true }));
+});
+
+/**
+ * Local-only: mark a quote paid without Yoco, so the flow can be exercised
+ * before live keys exist. Hard-gated — never available in production.
+ */
+router.post('/quotes/:quoteId/simulate-payment', async (req: Request, res: Response) => {
+  if (!simulatedPaymentAllowed()) {
+    return res.status(404).json(fail('Not found', 'NOT_FOUND'));
+  }
+  const record = await getQuoteStore().update(String(req.params.quoteId), {
+    paymentStatus: 'paid',
+    paidAt: Date.now(),
+    providerRef: `sim_${req.params.quoteId}`,
+  });
+  if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
+  logger.warn('Quote marked paid by SIMULATED payment (development only)', { quoteId: record.quoteId });
+  return res.json(ok({ quoteId: record.quoteId, paymentStatus: record.paymentStatus, simulated: true }));
 });
 
 router.post('/load-ontology', requireAdminToken, async (req: Request, res: Response) => {
