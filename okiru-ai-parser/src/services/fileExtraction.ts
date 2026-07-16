@@ -56,7 +56,13 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   return Promise.race([work, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
+/**
+ * Reads a PDF's TEXT LAYER only — it never OCRs. That makes it free and safe to
+ * run at quote time, and it doubles as the digital-vs-scan differentiator: a
+ * healthy string means a digital PDF (tokenize it exactly), an empty/near-empty
+ * one means the pages are images and real OCR will be needed later.
+ */
+export async function extractPdfText(buffer: Buffer): Promise<string> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buffer),
@@ -81,12 +87,12 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   return pages.join('\n\n');
 }
 
-async function extractDocxText(buffer: Buffer): Promise<string> {
+export async function extractDocxText(buffer: Buffer): Promise<string> {
   const result = await mammoth.extractRawText({ buffer });
   return result.value;
 }
 
-function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[] } {
+export function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[] } {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const tables: unknown[] = [];
   const parts: string[] = [];
@@ -150,7 +156,7 @@ function splitCsvLine(line: string): string[] {
   return cells;
 }
 
-function extractCsvText(rawCsv: string): { text: string; tables: unknown[] } {
+export function extractCsvText(rawCsv: string): { text: string; tables: unknown[] } {
   const lines = rawCsv.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length === 0) return { text: '', tables: [] };
 
