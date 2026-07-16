@@ -1,60 +1,119 @@
+/**
+ * The quote (flow step 5).
+ *
+ * The invariants that matter are safety + honesty, inherited from the original
+ * phase-1 tests:
+ *   - a quote is produced from STRUCTURE ONLY — no OCR, no Azure, no extraction
+ *   - an image is priced as high effort WITHOUT being OCR-ed
+ *   - CSV/spreadsheet rows are counted (size drives the price)
+ *   - documents are classified for display
+ *
+ * What changed: the price is no longer arbitrary "processing units" — it is
+ * derived from predicted Azure tokens (tokenPrediction.ts), with three line
+ * items (extraction / normalisation / entity mapping).
+ */
 import { describe, expect, it } from 'vitest';
 import { quoteUploadedFiles } from '../../src/services/pricingQuote.js';
 import type { UploadedFileLike } from '../../src/services/fileExtraction.js';
 
-function file(overrides: Partial<UploadedFileLike>): UploadedFileLike {
-  return {
-    originalname: 'sample.txt',
-    mimetype: 'text/plain',
-    size: 12,
-    buffer: Buffer.from('hello world'),
-    ...overrides,
-  };
+function upload(originalname: string, mimetype: string, content: string | Buffer): UploadedFileLike {
+  const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content, 'utf8');
+  return { originalname, mimetype, buffer, size: buffer.length };
 }
 
-describe('pricing quote', () => {
-  it('quotes lightweight files without running extraction output', async () => {
+describe('pricing quote — shape & guarantees', () => {
+  it('quotes a digital document from structure only, with exact tokens', async () => {
     const quote = await quoteUploadedFiles([
-      file({
-        originalname: 'certificate.txt',
-        mimetype: 'text/plain',
-        size: 128,
-        buffer: Buffer.from('B-BBEE certificate'),
-      }),
+      upload('valid-bbee-certificate.txt', 'text/plain', 'B-BBEE certificate\nSupplier: Example Pty Ltd\nLevel 2'),
     ]);
 
     expect(quote.quoteId).toMatch(/^quote_/);
+    expect(quote.status).toBe('quoted');
     expect(quote.currency).toBe('ZAR');
     expect(quote.paymentStatus).toBe('not_started');
-    expect(quote.totalProcessingUnits).toBe(1);
-    expect(quote.subtotalCents).toBeGreaterThan(0);
+    expect(quote.nextAction).toBe('proceed_to_payment');
+    expect(quote.model).toBeTruthy();
+
+    expect(quote.files).toHaveLength(1);
     expect(quote.files[0]).toMatchObject({
-      filename: 'certificate.txt',
+      filename: 'valid-bbee-certificate.txt',
       detectedDocumentType: 'B-BBEE certificate',
       processingEffort: 'standard',
-      structure: {
-        format: 'text',
-        pages: 1,
-        estimatedUnits: 1,
-      },
+      requiresOcr: false,
+      kind: 'text',
     });
+    // Exact basis => no band, and a real token count.
+    expect(quote.files[0].tokens.basis).toBe('exact-text');
+    expect(quote.files[0].tokens.band).toBeNull();
+    expect(quote.files[0].tokens.input).toBeGreaterThan(0);
+
+    // The quote must state plainly that nothing was spent to produce it.
+    expect(quote.notes.join(' ')).toMatch(/No Azure call, OCR, vision, extraction or scoring/i);
   });
 
-  it('counts CSV row bands as processing units', async () => {
-    const rows = ['name,value', ...Array.from({ length: 1001 }, (_, index) => `row ${index},${index}`)];
+  it('bills the three things we actually do, and they sum to the total', async () => {
     const quote = await quoteUploadedFiles([
-      file({
-        originalname: 'supplier-spend.csv',
-        mimetype: 'text/csv',
-        size: rows.join('\n').length,
-        buffer: Buffer.from(rows.join('\n')),
-      }),
+      upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2, 51% black ownership'),
     ]);
 
-    expect(quote.files[0].structure.format).toBe('csv');
-    expect(quote.files[0].structure.rows).toBe(1001);
-    expect(quote.files[0].structure.estimatedUnits).toBe(3);
-    expect(quote.totalProcessingUnits).toBe(3);
-    expect(quote.subtotalCents).toBe(quote.files[0].pricing.subtotalCents);
+    expect(quote.lineItems.map((li) => li.key)).toEqual(['extraction', 'normalisation', 'entity_mapping']);
+    const sum = quote.lineItems.reduce((n, li) => n + li.cents, 0);
+    expect(quote.totals.totalCents).toBeCloseTo(sum, 2);
+    expect(quote.totals.predictedInputTokens).toBeGreaterThan(0);
+    // Extraction is the only line that tracks the document.
+    expect(quote.lineItems[0].detail).toMatch(/predicted tokens/);
+  });
+
+  it('prices an image as high effort WITHOUT OCR-ing it, and bands the estimate', async () => {
+    const quote = await quoteUploadedFiles([
+      // Not a decodable image: if quoting tried to OCR, this would fail or hang.
+      upload('scanned-certificate.png', 'image/png', Buffer.from([0x89, 0x50, 0x4e, 0x47])),
+    ]);
+
+    const f = quote.files[0];
+    expect(f.processingEffort).toBe('high');
+    expect(f.requiresOcr).toBe(true);
+    expect(f.kind).toBe('image');
+    expect(f.tokens.basis).toBe('estimated-scan');
+    expect(f.tokens.band).not.toBeNull();
+    expect(f.pricing.isUpperBound).toBe(true);
+    expect(quote.totals.isUpperBound).toBe(true);
+    expect(f.reasons.join(' ')).toMatch(/OCR/i);
+    // The user must be told the scan number is a ceiling, not a guess.
+    expect(quote.notes.join(' ')).toMatch(/upper bound|never charged more/i);
+  });
+
+  it('counts CSV rows and classifies the document — size drives the price', async () => {
+    const csv = ['supplier,spend', 'A,100', 'B,200', 'C,300'].join('\n');
+    const quote = await quoteUploadedFiles([upload('supplier-spend-schedule.csv', 'text/csv', csv)]);
+
+    expect(quote.files[0]).toMatchObject({
+      detectedDocumentType: 'Supplier evidence / schedule',
+      processingEffort: 'standard',
+      kind: 'csv',
+    });
+    expect(quote.files[0].structure).toMatchObject({ sheets: 1, rows: 3 });
+  });
+
+  it('a bigger schedule costs more than a smaller one', async () => {
+    const head = 'supplier,spend';
+    const small = await quoteUploadedFiles([upload('s.csv', 'text/csv', [head, 'A,100'].join('\n'))]);
+    const big = await quoteUploadedFiles([
+      upload('b.csv', 'text/csv', [head, ...Array.from({ length: 400 }, (_, i) => `Supplier ${i},${i * 100}`)].join('\n')),
+    ]);
+    expect(big.files[0].structure.rows!).toBeGreaterThan(small.files[0].structure.rows!);
+    expect(big.totals.totalCents).toBeGreaterThan(small.totals.totalCents);
+  });
+
+  it('a scan costs more than a digital document', async () => {
+    const digital = await quoteUploadedFiles([upload('a.txt', 'text/plain', 'Acme Level 2 certificate')]);
+    const scan = await quoteUploadedFiles([upload('s.png', 'image/png', Buffer.from([0x89, 0x50]))]);
+    expect(scan.totals.totalCents).toBeGreaterThan(digital.totals.totalCents);
+  });
+
+  it('rejects unsupported file types rather than quoting them', async () => {
+    await expect(
+      quoteUploadedFiles([upload('malware.exe', 'application/x-msdownload', 'MZ')]),
+    ).rejects.toThrow(/Unsupported file type/);
   });
 });
