@@ -51,6 +51,29 @@ describe('pricing quote — shape & guarantees', () => {
     expect(quote.notes.join(' ')).toMatch(/No Azure call, OCR, vision, extraction or scoring/i);
   });
 
+  it('the price IS the predicted Azure cost — nothing is invented on top', async () => {
+    const quote = await quoteUploadedFiles([
+      upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2, 51% black ownership'),
+      upload('scan.png', 'image/png', Buffer.from([0x89, 0x50])),
+    ]);
+
+    // Total must equal Azure's predicted cost (margin defaults to 1.0), not a
+    // number we made up. Deterministic local work adds nothing.
+    expect(quote.totals.totalCents).toBeCloseTo(quote.totals.azureCents, 2);
+    expect(quote.lineItems.find((li) => li.key === 'normalisation')!.cents).toBe(0);
+    expect(quote.lineItems.find((li) => li.key === 'entity_mapping')!.cents).toBe(0);
+
+    // ...and the Azure figure is itemised so the price can be checked against
+    // the model's own rate card: tokens + OCR pages.
+    const b = quote.azureBreakdown;
+    expect(b.model).toBeTruthy();
+    expect(b.inputTokens).toBeGreaterThan(0);
+    expect(b.ocrPages).toBe(1); // the scan
+    expect(b.ocrCents).toBeGreaterThan(0);
+    expect(quote.totals.azureCents).toBeCloseTo(b.inputCents + b.outputCents + b.ocrCents, 2);
+    expect(quote.notes.join(' ')).toMatch(/predicted Azure cost/i);
+  });
+
   it('bills the three things we actually do, and they sum to the total', async () => {
     const quote = await quoteUploadedFiles([
       upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2, 51% black ownership'),
