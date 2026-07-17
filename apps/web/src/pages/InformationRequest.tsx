@@ -214,10 +214,12 @@ function ExcelImportButton({
   onImport,
   disabled,
   label = "Import Excel (free)",
+  className,
 }: {
   onImport: (file: File) => Promise<void>;
   disabled?: boolean;
   label?: string;
+  className?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -247,13 +249,31 @@ function ExcelImportButton({
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={disabled || importing}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm disabled:opacity-60"
+        className={
+          className ??
+          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm disabled:opacity-60"
+        }
         data-testid="button-import-excel"
       >
         {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
         {label}
       </button>
     </>
+  );
+}
+
+function ExcelLogoMark({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true" className={className}>
+      <rect x="14" y="6" width="28" height="36" rx="4" fill="#185C37" />
+      <path d="M22 10h16v7H22zM22 19h16v7H22zM22 28h16v10H22z" fill="#21A366" />
+      <path d="M30 10h8v28h-8z" fill="#107C41" opacity="0.72" />
+      <rect x="6" y="12" width="22" height="24" rx="3.5" fill="#107C41" />
+      <path
+        d="M12.4 18h4.1l2.2 4.4L21.1 18h3.8l-4 7 4.3 7h-4.1l-2.5-4.7-2.7 4.7h-3.9l4.5-7.1L12.4 18Z"
+        fill="white"
+      />
+    </svg>
   );
 }
 
@@ -277,6 +297,7 @@ function CompanyPicker({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewResult, setPreviewResult] = useState<ExcelExtractionResult | null>(null);
   const [pendingSections, setPendingSections] = useState<WorkbookSectionsInput | null>(null);
+  const [setupMethod, setSetupMethod] = useState<"choose" | "upload" | "manual" | "excel">("choose");
   const { toast } = useToast();
   const loadClientData = useBbeeStore((s) => s.loadClientData);
   const showLakeDemo = isSuperAdmin(user);
@@ -328,6 +349,60 @@ function CompanyPicker({
     } finally {
       setCreating(false);
     }
+  };
+
+  const handleExcelImport = async (file: File) => {
+    const result = await importBeeGatheringExcel(file, API_BASE);
+    if (!result.extraction.isBeeGatheringFormat) {
+      const fallback = await normalizeExcelFileWithAi(file, API_BASE);
+      if (fallback.criticalBlocked) {
+        toast({
+          title: "Import blocked - fix critical fields",
+          description: formatWorkbookValidationSummary(fallback.validationIssues, 5),
+          variant: "destructive",
+        });
+        return;
+      }
+      const companyName = String(
+        fallback.sections["company-information"]?.meta?.companyName ?? "",
+      ).trim();
+      if (!companyName) {
+        toast({
+          title: "Unrecognized Excel layout",
+          description:
+            "Upload a BEE Information Gathering file or a workbook with Company / Legal Name.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setPendingFile(file);
+      setPreviewResult({
+        data: {
+          companyName,
+          sector: String(fallback.sections["company-information"]?.meta?.industrySector ?? ""),
+          scorecardType: String(fallback.sections["company-information"]?.meta?.scorecardType ?? ""),
+          revenue: Number(fallback.sections["financial-information"]?.meta?.revenue ?? 0) || undefined,
+          npat: Number(fallback.sections["financial-information"]?.meta?.npat ?? 0) || undefined,
+        },
+        warnings: fallback.warnings,
+        fieldStatuses: { companyName: "mapped" },
+        fieldConfidences: {},
+        fieldSources: {},
+        isBeeGatheringFormat: true,
+        unmappedFields: [],
+        ownershipChainTiers: [],
+        mappedSheets: Object.keys(fallback.mappedSheets),
+        extractedFieldCount: fallback.extractedFieldCount,
+        sectionSummary: buildSectionSummary(fallback.sections),
+      });
+      setPendingSections(fallback.sections);
+      setPreviewOpen(true);
+      return;
+    }
+    setPendingFile(file);
+    setPreviewResult(result.extraction);
+    setPendingSections(result.sections);
+    setPreviewOpen(true);
   };
 
   /**
@@ -434,74 +509,294 @@ function CompanyPicker({
   );
 
   if (mode === "create") {
+    const SetupShell = ({
+      step,
+      title,
+      description,
+      children,
+    }: {
+      step: string;
+      title: string;
+      description: string;
+      children: ReactNode;
+    }) => (
+      <div className="mx-auto max-w-[740px] px-4 py-8 sm:py-12">
+        <style>{`
+          @keyframes setupReveal {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+          .setup-reveal { animation: setupReveal 220ms ease-out both; }
+        `}</style>
+        <div className="rounded-[28px] border border-white/[0.08] bg-[#141416] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
+            <div className="mb-8 flex items-center justify-between">
+              <span className="text-[12px] font-medium text-[#8e8e93]">{step}</span>
+              {setupMethod !== "choose" && (
+                <button
+                  type="button"
+                  onClick={() => setSetupMethod("choose")}
+                  className="rounded-full px-3 py-1.5 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.06] hover:text-white"
+                >
+                  Back
+                </button>
+              )}
+            </div>
+            <div className="mb-8 text-center">
+              <h2
+                className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white sm:text-[44px]"
+                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+              >
+                {title}
+              </h2>
+              <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#a1a1a6]">{description}</p>
+            </div>
+            {children}
+        </div>
+      </div>
+    );
+
+    if (setupMethod === "choose" || setupMethod === "manual" || setupMethod === "excel") {
+      const options = [
+        {
+          key: "upload" as const,
+          title: "Upload documents",
+          description: "Get a quote before AI extraction begins.",
+          icon: Upload,
+          badge: "Quote first",
+          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
+        },
+        {
+          key: "manual" as const,
+          title: "Enter details manually",
+          description: "Create and complete the scorecard for free.",
+          icon: Building2,
+          badge: "Free",
+          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
+        },
+        {
+          key: "excel" as const,
+          title: "Import Excel workbook",
+          description: "Continue from an existing RCOGP workbook.",
+          icon: ExcelLogoMark,
+          badge: "Free",
+          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
+        },
+      ];
+      return (
+        <SetupShell step="1 of 4" title="Create a scorecard" description="Choose how you would like to begin.">
+          <div className="space-y-2.5">
+            {options.map(({ key, title, description, icon: Icon, badge, badgeClass }) => {
+              const selected = setupMethod === key;
+              const dimmed = setupMethod !== "choose" && !selected;
+              return (
+                <div
+                  key={key}
+                  className={`transition-opacity duration-200 ${dimmed ? "pointer-events-none opacity-45" : "opacity-100"}`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSetupMethod(key)}
+                    className={`group flex w-full items-center gap-4 rounded-[20px] border px-4 py-4 text-left transition-colors ${
+                      selected
+                        ? "border-white/[0.10] bg-[#1c1c1e]"
+                        : "border-white/[0.08] bg-[#1c1c1e] hover:border-white/[0.16] hover:bg-[#222225]"
+                    }`}
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.06] text-[#d1d1d6]">
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[16px] font-semibold text-white">{title}</span>
+                      <span className="mt-0.5 block text-[13px] leading-5 text-[#a1a1a6]">{description}</span>
+                    </span>
+                    <span className={`hidden shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:inline-flex ${badgeClass}`}>
+                      {badge}
+                    </span>
+                    <ChevronRight className={`h-5 w-5 transition-transform group-hover:translate-x-0.5 ${selected ? "text-[#8e8e93]" : "text-[#636366] group-hover:text-white"}`} />
+                  </button>
+
+                  {selected && key === "manual" && (
+                    <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[#111113] p-4">
+                      <p className="mb-3 text-[13px] font-medium text-[#a1a1a6]">Enter the company name to start a free workbook.</p>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <input
+                          id="new-company-name"
+                          value={newName}
+                          onChange={(e) => setNewName(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && create()}
+                          placeholder="Company name"
+                          className="h-12 min-w-0 flex-1 rounded-2xl border border-white/[0.10] bg-[#141416] px-4 text-[15px] text-white outline-none transition-colors placeholder:text-[#636366] focus:border-white/30 focus:ring-4 focus:ring-white/[0.06]"
+                          data-testid="input-new-company"
+                        />
+                        <button
+                          onClick={create}
+                          disabled={!newName.trim() || creating}
+                          className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:cursor-not-allowed disabled:bg-[#2c2c2e] disabled:text-[#636366]"
+                          data-testid="button-start-scorecard"
+                        >
+                          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create free scorecard"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {selected && key === "excel" && (
+                    <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[#111113] p-5 text-center">
+                      <ExcelLogoMark className="mx-auto h-10 w-10" />
+                      <p className="mt-3 text-[13px] text-[#a1a1a6]">Upload an existing RCOGP workbook. This path is free.</p>
+                      <div className="mt-4">
+                        <ExcelImportButton
+                          label="Choose workbook"
+                          className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#107C41] px-6 text-[15px] font-semibold text-white transition-colors hover:bg-[#185C37] disabled:opacity-60"
+                          onImport={handleExcelImport}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-[13px]">
+            {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} compact />}
+            <a href="/dashboard" className="font-medium text-[#d1d1d6] hover:text-white hover:underline">
+              View saved scorecards
+            </a>
+          </div>
+          <ExcelImportPreviewModal
+            open={previewOpen}
+            fileName={pendingFile?.name ?? ""}
+            result={previewResult}
+            importing={creating}
+            onClose={() => {
+              if (creating) return;
+              setPreviewOpen(false);
+              setPendingFile(null);
+              setPreviewResult(null);
+              setPendingSections(null);
+            }}
+            onConfirm={async () => {
+              const companyName = String(previewResult?.data?.companyName ?? "").trim();
+              const sections = pendingSections;
+              if (!companyName || !sections) return;
+              const ok = await createFromSections(companyName, sections, {
+                importMarker: previewResult?.data,
+                warnCount: previewResult?.warnings?.length ?? 0,
+              });
+              if (ok) {
+                setPreviewOpen(false);
+                setPendingFile(null);
+                setPreviewResult(null);
+                setPendingSections(null);
+              }
+            }}
+          />
+        </SetupShell>
+      );
+    }
+
+    if (setupMethod === "upload") {
+      return (
+        <SetupShell step="2 of 4" title="Set up document upload" description="We will guide you through the profile, upload and quote.">
+          <DocumentUploadStart
+            onCreate={async (companyName, sections, extras) => {
+              await createFromSections(companyName, sections as WorkbookSectionsInput, {
+                landOn: "estimate",
+                verdicts: extras?.verdicts,
+              });
+            }}
+            creating={creating}
+          />
+        </SetupShell>
+      );
+    }
+
     return (
-      <div className="max-w-3xl mx-auto py-6">
-        <div className="rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] overflow-hidden">
-          <div className="px-6 sm:px-8 pt-6 pb-5 border-b border-[#2c2c2e]">
-            <h2
-              className="text-[22px] sm:text-[26px] font-semibold tracking-tight text-white"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-            >
-              Create Scorecard
-            </h2>
-            <p className="text-[14px] text-[#8e8e93] mt-1.5">
-              Drop your documents and we build it — or start from a blank workbook.
-            </p>
+      <div className="max-w-5xl mx-auto py-5">
+        <div className="rounded-[28px] bg-[#111113] border border-white/[0.10] overflow-hidden shadow-[0_22px_70px_rgba(0,0,0,0.28)]">
+          <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-white/[0.07]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2
+                  className="text-[26px] sm:text-[32px] font-semibold tracking-tight text-white leading-tight"
+                  style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+                >
+                  Create scorecard
+                </h2>
+                <p className="text-[13px] text-[#98989f] mt-2 max-w-xl leading-5">
+                  Upload documents for a quote, or use a free setup path.
+                </p>
+              </div>
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-[#d1d1d6]">
+                <Upload className="h-3.5 w-3.5 text-[#a78bfa]" />
+                Quote before processing
+              </div>
+            </div>
           </div>
 
-          <div className="px-6 sm:px-8 py-5">
+          <div className="px-4 sm:px-5 py-5 space-y-4">
             {/* HERO — document-upload start: preset expected-documents flow
                 (parser-classified evidence → workbook sections → same submit path). */}
-            <DocumentUploadStart
-              onCreate={async (companyName, sections, extras) => {
-                // Document flow lands on the provisional live-score page, not the workbook.
-                await createFromSections(companyName, sections as WorkbookSectionsInput, {
-                  landOn: "estimate",
-                  verdicts: extras?.verdicts,
-                });
-              }}
-              creating={creating}
-            />
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-[#2c2c2e]" />
-              </div>
-              <div className="relative flex justify-center">
-                <span className="bg-[#1c1c1e] px-3 text-[12px] text-[#636366]">prefer another way?</span>
-              </div>
+            <div className="rounded-[24px] border border-violet-300/20 bg-[#17151d] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+              <DocumentUploadStart
+                onCreate={async (companyName, sections, extras) => {
+                  // Document flow lands on the provisional live-score page, not the workbook.
+                  await createFromSections(companyName, sections as WorkbookSectionsInput, {
+                    landOn: "estimate",
+                    verdicts: extras?.verdicts,
+                  });
+                }}
+                creating={creating}
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#636366]">Free setup</p>
+              <div className="h-px flex-1 bg-white/[0.07] ml-3" />
             </div>
 
             {/* Secondary paths: blank workbook + Excel import */}
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2.5 items-stretch">
-              <div className="flex gap-2">
-                <input
-                  id="new-company-name"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && create()}
-                  placeholder="Company name — start a blank workbook"
-                  className="flex-1 bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none focus:border-[#48484a] focus:ring-2 focus:ring-white/10"
-                  data-testid="input-new-company"
-                />
-                <button
-                  onClick={create}
-                  disabled={!newName.trim() || creating}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#2c2c2e] text-[#e5e5ea] text-[13px] font-semibold hover:bg-[#3a3a3c] disabled:opacity-50 transition-colors whitespace-nowrap"
-                  data-testid="button-start-scorecard"
-                >
-                  {creating ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      Start blank (free)
-                      <ChevronRight className="h-3.5 w-3.5" />
-                    </>
-                  )}
-                </button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
+              <div className="rounded-[18px] border border-white/[0.08] bg-[#18181a] p-3.5">
+                <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[#f2f2f7]">
+                  <Building2 className="h-4 w-4 text-[#8e8e93]" />
+                  Manual entry
+                </div>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    id="new-company-name"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && create()}
+                    placeholder="Company name"
+                    className="min-w-0 flex-1 bg-[#0c0c0e] border border-white/[0.10] rounded-xl px-3.5 py-2.5 text-[13px] text-white placeholder-[#636366] outline-none focus:border-violet-300/40 focus:ring-2 focus:ring-violet-300/10"
+                    data-testid="input-new-company"
+                  />
+                  <button
+                    onClick={create}
+                    disabled={!newName.trim() || creating}
+                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#2c2c2e] text-[#f2f2f7] text-[13px] font-semibold hover:bg-[#3a3a3c] disabled:opacity-50 transition-colors whitespace-nowrap"
+                    data-testid="button-start-scorecard"
+                  >
+                    {creating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        Start free
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
-              <ExcelImportButton
-                label="Import Excel (free)"
-                onImport={async (file) => {
+              <div className="rounded-[18px] border border-white/[0.08] bg-[#18181a] p-3.5">
+                <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[#f2f2f7]">
+                  <Download className="h-4 w-4 text-[#8e8e93]" />
+                  Excel import
+                </div>
+                <ExcelImportButton
+                  label="Import workbook"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.10] bg-[#0c0c0e] px-3.5 py-2.5 text-[13px] font-semibold text-[#e5e5ea] transition-colors hover:border-white/[0.16] hover:bg-[#222225] disabled:opacity-60"
+                  onImport={async (file) => {
                 const result = await importBeeGatheringExcel(file, API_BASE);
                 if (!result.extraction.isBeeGatheringFormat) {
                   const fallback = await normalizeExcelFileWithAi(file, API_BASE);
@@ -555,6 +850,7 @@ function CompanyPicker({
             />
             </div>
           </div>
+          </div>
 
           {showLakeDemo && (
             <div className="px-6 sm:px-8 py-4 border-t border-[#2c2c2e] bg-amber-500/[0.03]">
@@ -594,7 +890,7 @@ function CompanyPicker({
 
         <p className="text-center text-[13px] text-[#636366] mt-5">
           Already have a scorecard?{" "}
-          <a href="/dashboard" className="text-violet-300 hover:text-violet-200 underline underline-offset-2">
+          <a href="/dashboard" className="text-[#d1d1d6] hover:text-white underline underline-offset-2">
             View saved companies
           </a>
         </p>
@@ -2125,8 +2421,8 @@ export default function InformationRequest() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-10">
-        {!isSummaryStep && !picked && (
+      <main className={basePath === "/create-scorecard" && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
+        {!isSummaryStep && !picked && basePath !== "/create-scorecard" && (
           <div className="mb-10 max-w-3xl">
             <div className="flex items-center gap-2 mb-4 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80" />
