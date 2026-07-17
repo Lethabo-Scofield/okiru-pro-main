@@ -217,18 +217,21 @@ export function azureCostFor(prediction: TokenPrediction): AzureCostBreakdown {
     ? Math.ceil(prediction.band.upperTokens * OUTPUT_TOKEN_RATIO)
     : prediction.expectedOutputTokens;
 
-  const inputCents = (billableInput / 1000) * INPUT_COST_PER_1K_CENTS;
-  const outputCents = (billableOutput / 1000) * OUTPUT_COST_PER_1K_CENTS;
-  const ocrCents = prediction.requiresOcr ? (prediction.pages ?? 1) * OCR_COST_PER_PAGE_CENTS : 0;
-  const azureCents = inputCents + outputCents + ocrCents;
+  // Round each component FIRST, then sum the rounded parts. Rounding the sum
+  // instead would leave the itemisation a cent off the total — and a price
+  // that doesn't add up is a price the user can't check against Azure's rates.
+  const inputCents = round2((billableInput / 1000) * INPUT_COST_PER_1K_CENTS);
+  const outputCents = round2((billableOutput / 1000) * OUTPUT_COST_PER_1K_CENTS);
+  const ocrCents = round2(prediction.requiresOcr ? (prediction.pages ?? 1) * OCR_COST_PER_PAGE_CENTS : 0);
+  const azureCents = round2(inputCents + outputCents + ocrCents);
 
   return {
     currency: CURRENCY,
     model: AZURE_MODEL,
-    inputCents: round2(inputCents),
-    outputCents: round2(outputCents),
-    ocrCents: round2(ocrCents),
-    azureCents: round2(azureCents),
+    inputCents,
+    outputCents,
+    ocrCents,
+    azureCents,
     totalCents: round2(azureCents * MARGIN_MULTIPLIER),
     marginMultiplier: MARGIN_MULTIPLIER,
     isUpperBound: prediction.band != null,

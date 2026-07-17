@@ -81,6 +81,20 @@ export interface PricingQuote {
     /** True if any document was a scan, making the total an upper bound. */
     isUpperBound: boolean;
   };
+  /**
+   * What Azure itself will charge, itemised — the quote is derived from exactly
+   * this, so the user can see the price is Azure's, not ours.
+   */
+  azureBreakdown: {
+    model: string;
+    inputTokens: number;
+    inputCents: number;
+    outputTokens: number;
+    outputCents: number;
+    ocrPages: number;
+    ocrCents: number;
+    marginMultiplier: number;
+  };
   expiresAt: string;
   paymentRequired: true;
   paymentStatus: 'not_started';
@@ -90,9 +104,18 @@ export interface PricingQuote {
 
 const CURRENCY = process.env.PARSER_QUOTE_CURRENCY || 'ZAR';
 const QUOTE_TTL_MINUTES = numEnv('PARSER_QUOTE_TTL_MINUTES', 30);
-/** PLACEHOLDER flat fees per document — deterministic local work. */
-const NORMALISATION_FEE_CENTS = numEnv('PARSER_NORMALISATION_FEE_CENTS', 150);
-const MAPPING_FEE_CENTS = numEnv('PARSER_MAPPING_FEE_CENTS', 100);
+/**
+ * The quote IS the predicted Azure cost of the whole job — so anything that
+ * does not call Azure adds nothing to it. Normalisation and entity mapping are
+ * deterministic local work today (regex + ontology + the workbook mapper), so
+ * they carry no model cost and default to 0.
+ *
+ * These stay configurable for the day either step starts calling the model (or
+ * a margin is wanted), but they must never be used to invent a price that
+ * isn't grounded in real Azure spend.
+ */
+const NORMALISATION_FEE_CENTS = numEnv('PARSER_NORMALISATION_FEE_CENTS', 0);
+const MAPPING_FEE_CENTS = numEnv('PARSER_MAPPING_FEE_CENTS', 0);
 
 function numEnv(name: string, fallback: number): number {
   const raw = Number(process.env[name]);
@@ -130,6 +153,11 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
   let inputTokens = 0;
   let outputTokens = 0;
   let anyUpperBound = false;
+  // Itemised Azure spend — the quote is nothing more than the sum of these.
+  let azInputCents = 0;
+  let azOutputCents = 0;
+  let azOcrCents = 0;
+  let ocrPages = 0;
 
   for (const [index, file] of files.entries()) {
     if (!SUPPORTED_UPLOAD_MIME_TYPES.has(file.mimetype)) {
@@ -141,6 +169,10 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
 
     extractionCents += cost.totalCents;
     azureCents += cost.azureCents;
+    azInputCents += cost.inputCents;
+    azOutputCents += cost.outputCents;
+    azOcrCents += cost.ocrCents;
+    if (prediction.requiresOcr) ocrPages += prediction.pages ?? 1;
     inputTokens += prediction.band ? prediction.band.upperTokens : prediction.inputTokens;
     outputTokens += prediction.expectedOutputTokens;
     if (cost.isUpperBound) anyUpperBound = true;
@@ -182,13 +214,17 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
     {
       key: 'normalisation',
       label: 'Normalisation',
-      detail: 'units, dates, percentages, B-BBEE levels',
+      detail: normalisationCents > 0
+        ? 'units, dates, percentages, B-BBEE levels'
+        : 'units, dates, percentages, B-BBEE levels — done locally, no model cost',
       cents: normalisationCents,
     },
     {
       key: 'entity_mapping',
       label: 'Entity mapping',
-      detail: 'suppliers, shareholders, contributions → workbook',
+      detail: mappingCents > 0
+        ? 'suppliers, shareholders, contributions → workbook'
+        : 'suppliers, shareholders, contributions → workbook — done locally, no model cost',
       cents: mappingCents,
     },
   ];
@@ -198,6 +234,7 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
   const notes = [
     'Quote is derived from each document’s text layer and structure only.',
     'No Azure call, OCR, vision, extraction or scoring has been run yet.',
+    `This price is the predicted Azure cost for ${TOKEN_PREDICTION_CONFIG.model} — tokens plus OCR pages — worked out before the model is called.`,
   ];
   if (anyUpperBound) {
     notes.push('Scanned documents are estimated from page count and quoted at the upper bound — you are never charged more than this.');
@@ -216,6 +253,16 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
       azureCents: round2(azureCents),
       totalCents,
       isUpperBound: anyUpperBound,
+    },
+    azureBreakdown: {
+      model: TOKEN_PREDICTION_CONFIG.model,
+      inputTokens,
+      inputCents: round2(azInputCents),
+      outputTokens,
+      outputCents: round2(azOutputCents),
+      ocrPages,
+      ocrCents: round2(azOcrCents),
+      marginMultiplier: TOKEN_PREDICTION_CONFIG.marginMultiplier,
     },
     expiresAt: new Date(Date.now() + QUOTE_TTL_MINUTES * 60 * 1000).toISOString(),
     paymentRequired: true,
