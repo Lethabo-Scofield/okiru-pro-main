@@ -25,6 +25,7 @@ import {
   Loader2,
   Minus,
   Sparkles,
+  Upload,
   X,
 } from "lucide-react";
 import {
@@ -208,6 +209,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [sector, setSector] = useState("Generic");
   const [subSector, setSubSector] = useState("");
   const [size, setSize] = useState("Generic"); // Generic | QSE | EME
+  const [setupStep, setSetupStep] = useState<"profile" | "upload">("profile");
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -447,6 +449,94 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     [mapped],
   );
 
+  if (setupStep === "profile") {
+    const sizeOptions = [
+      { value: "Generic", label: "Large / Generic", detail: "Annual turnover above R50m" },
+      { value: "QSE", label: "QSE", detail: "Annual turnover R10m to R50m" },
+      { value: "EME", label: "EME", detail: "Annual turnover below R10m" },
+    ];
+    return (
+      <div className="mx-auto max-w-md" data-testid="document-profile-step">
+        <div className="space-y-6">
+          {sectorOptions.length > 0 && (
+            <div>
+              <p className="mb-2 text-[12px] font-medium text-[#8e8e93]">Sector</p>
+              <div className="space-y-2">
+                {sectorOptions.map((s) => (
+                  <button
+                    key={s.code}
+                    type="button"
+                    onClick={() => {
+                      setSector(s.code);
+                      setSubSector("");
+                    }}
+                    className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors ${
+                      sector === s.code
+                        ? "border-white/[0.18] bg-white/[0.06]"
+                        : "border-white/[0.08] bg-[#1c1c1e] hover:bg-[#222225]"
+                    }`}
+                    data-testid={`sector-option-${s.code}`}
+                  >
+                    <span className="text-[14px] font-medium text-white">{s.label}</span>
+                    {sector === s.code && <Check className="h-4 w-4 text-white" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeSector?.subSectors && (
+            <div>
+              <label className="mb-2 block text-[12px] font-medium text-[#8e8e93]">Sub-sector</label>
+              <select
+                value={subSector}
+                onChange={(e) => setSubSector(e.target.value)}
+                className="h-12 w-full rounded-2xl border border-white/[0.10] bg-[#0e0e10] px-4 text-[14px] text-white outline-none focus:border-white/30 focus:ring-4 focus:ring-white/[0.06]"
+                data-testid="subsector-select"
+              >
+                <option value="">Select</option>
+                {activeSector.subSectors.map((ss) => (
+                  <option key={ss.value} value={ss.value}>{ss.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <p className="mb-2 text-[12px] font-medium text-[#8e8e93]">Organisation size</p>
+            <div className="rounded-2xl border border-white/[0.08] bg-[#0e0e10] p-1">
+              {sizeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSize(option.value)}
+                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors ${
+                    size === option.value ? "bg-[#1c1c1e] shadow-sm" : "hover:bg-white/[0.04]"
+                  }`}
+                  data-testid={`size-option-${option.value}`}
+                >
+                  <span>
+                    <span className="block text-[14px] font-semibold text-white">{option.label}</span>
+                    <span className="block text-[12px] text-[#8e8e93]">{option.detail}</span>
+                  </span>
+                  {size === option.value && <Check className="h-4 w-4 text-white" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSetupStep("upload")}
+            className="h-12 w-full rounded-full bg-white text-[15px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div data-testid="document-upload-start">
       {/* Scoped animation keyframes */}
@@ -459,9 +549,30 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         .dus-stamp { animation: dusStamp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
       `}</style>
 
+      <div className="mb-5 text-center">
+        <p className="text-[12px] font-medium text-[#8e8e93]">3 of 4</p>
+        <h3
+          className="mt-2 text-[34px] font-semibold leading-[1.05] tracking-tight text-white"
+          style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+        >
+          Add your documents
+        </h3>
+        <p className="mx-auto mt-2 max-w-md text-[15px] leading-6 text-[#a1a1a6]">
+          Upload what you have. We will identify what is present, missing or needs review.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setSetupStep("profile")}
+        className="mb-4 rounded-full px-3 py-1.5 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.06] hover:text-white"
+      >
+        Back
+      </button>
+
       {/* Sector selector — drives the sector-aware document checklist and the
           scorecard's calculator. B-BBEE evidence differs by sector + size. */}
-      {sectorOptions.length > 0 && (
+      {false && sectorOptions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="sector-selector">
           <span className="text-[11px] text-[#8e8e93] uppercase tracking-wider">Sector</span>
           <select
@@ -482,7 +593,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               data-testid="subsector-select"
             >
               <option value="">Select…</option>
-              {activeSector.subSectors.map((ss) => (
+              {activeSector?.subSectors?.map((ss) => (
                 <option key={ss.value} value={ss.value}>{ss.label}</option>
               ))}
             </select>
@@ -503,13 +614,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
       {/* ACT 1 — the stage */}
       <div
-        className="relative rounded-2xl text-center cursor-pointer transition-all duration-300 overflow-hidden"
+        className="relative rounded-[20px] text-center cursor-pointer transition-all duration-300 overflow-hidden"
         style={{
           background: dragActive
-            ? "radial-gradient(120% 140% at 50% 0%, rgba(167,139,250,0.14), rgba(14,14,16,0.9) 60%)"
-            : "radial-gradient(120% 140% at 50% 0%, rgba(167,139,250,0.07), #0e0e10 62%)",
-          border: `1px dashed ${dragActive ? "#a78bfa" : "#3a3a3c"}`,
-          padding: files.length > 0 ? "18px 20px" : "40px 24px 34px",
+            ? "#111827"
+            : "#0e0e10",
+          border: `1px dashed ${dragActive ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.16)"}`,
+          padding: files.length > 0 ? "16px 18px" : "28px 20px 26px",
           transform: dragActive ? "scale(1.008)" : "scale(1)",
         }}
         onClick={() => inputRef.current?.click()}
@@ -538,27 +649,44 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         {files.length === 0 ? (
           <>
             <div
-              className="w-14 h-14 rounded-2xl mx-auto mb-4 flex items-center justify-center transition-transform duration-300"
+              className="w-11 h-11 rounded-2xl mx-auto mb-3 flex items-center justify-center transition-transform duration-300"
               style={{
-                background: "linear-gradient(140deg, rgba(167,139,250,0.16), rgba(167,139,250,0.05))",
-                border: "1px solid rgba(167,139,250,0.3)",
-                animation: "dusPulseRing 2.6s ease-out infinite",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.10)",
                 transform: dragActive ? "scale(1.1)" : "scale(1)",
               }}
             >
-              <CloudUpload className="w-6 h-6 text-violet-300" />
+              <CloudUpload className="w-5 h-5 text-[#d1d1d6]" />
             </div>
             <h3
-              className="text-[19px] text-white mb-1"
+              className="text-[18px] text-white mb-1"
               style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
-              Drop your B-BBEE evidence
+              Upload documents
             </h3>
-            <p className="text-[13px] text-[#8e8e93] mb-4 max-w-md mx-auto">
+            <p className="hidden">
               Certificates, affidavits, spend schedules, EE reports — PDF, Word, Excel or scans.
               We read them, extract the real values, and build your scorecard.
             </p>
-            <div className="flex items-center justify-center gap-1.5 flex-wrap max-w-md mx-auto">
+            <p className="text-[13px] text-[#a1a1a6] mb-4 max-w-sm mx-auto leading-5">
+              Get a quote before AI extraction starts.
+            </p>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] focus:outline-none focus:ring-4 focus:ring-white/[0.08]"
+              onClick={(e) => {
+                e.stopPropagation();
+                inputRef.current?.click();
+              }}
+              data-testid="button-upload-documents"
+            >
+              <Upload className="h-4 w-4" />
+              Upload documents
+            </button>
+            <p className="mt-3 text-[11px] text-[#86868b]">
+              Quote shown before processing.
+            </p>
+            <div className="hidden">
               {["PDF", "DOCX", "XLSX", "CSV", "SCANS"].map((ext) => (
                 <span key={ext} className="px-2 py-0.5 rounded text-[10px] tracking-wide text-[#636366]" style={{ background: "#1c1c1e" }}>
                   {ext}
@@ -575,26 +703,51 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       </div>
 
       {/* Expected documents — sector-aware checklist (below the stage) */}
-      {catalog && files.length === 0 && (
-        <div className="mt-3 px-1">
-          <p className="text-[11px] text-[#636366] text-center mb-2">
+      {false && catalog && files.length === 0 && (
+        <div className="mt-3 rounded-[18px] border border-white/[0.07] bg-[#111113] p-3.5">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[13px] font-semibold text-[#f2f2f7]">What to upload</p>
+              <p className="mt-0.5 text-[11px] text-[#8e8e93]">
+                Start with these documents. We read what we can and keep the rest ready for verification.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[10.5px] font-medium text-[#d1d1d6]">
+                {activeSector?.label ?? sector}
+              </span>
+              {size !== "Generic" && (
+                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[10.5px] font-medium text-[#d1d1d6]">
+                  {size}
+                </span>
+              )}
+            </div>
+          </div>
+          <p className="hidden">
             Documents for <span className="text-[#8e8e93]">{activeSector?.label ?? sector}</span>
             {size !== "Generic" ? ` · ${size}` : ""} — <span className="text-emerald-400/70">◆ we auto-extract</span>,{" "}
             <span className="text-[#8e8e93]">◇ attach for your verifier</span>
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-            {catalog.required_groups.map((g) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {catalog?.required_groups.map((g) => (
               <div
                 key={g.key}
-                className="flex items-center gap-1.5 text-[12px] text-[#8e8e93]"
+                className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-[12px] text-[#d1d1d6]"
                 data-testid={`docslot-${g.key}`}
                 title={g.note ?? ""}
               >
-                <span className={g.autoExtract ? "text-emerald-400/80 text-[9px]" : "text-[#48484a] text-[9px]"}>
+                <span className="hidden">
                   {g.autoExtract ? "◆" : "◇"}
                 </span>
-                <span className="truncate">{g.label}</span>
-                {g.required !== false && <span className="text-[10px] text-red-400/70 font-semibold -ml-0.5">*</span>}
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1c1c1e] text-[#a1a1a6]">
+                  {g.autoExtract ? <Check className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                </span>
+                <span className="min-w-0 flex-1 leading-4">{g.label}</span>
+                {g.required !== false && (
+                  <span className="shrink-0 rounded-full bg-[#2c2c2e] px-2 py-0.5 text-[10px] font-medium text-[#d1d1d6]">
+                    Required
+                  </span>
+                )}
               </div>
             ))}
           </div>
