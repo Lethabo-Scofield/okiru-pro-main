@@ -339,7 +339,13 @@ function CompanyPicker({
   const createFromSections = async (
     companyName: string,
     sections: WorkbookSectionsInput,
-    opts?: { importMarker?: unknown; warnCount?: number; landOn?: "workbook" | "estimate" },
+    opts?: {
+      importMarker?: unknown;
+      warnCount?: number;
+      landOn?: "workbook" | "estimate";
+      /** Per-document verdicts from the document flow, shown on the estimate page. */
+      verdicts?: unknown;
+    },
   ): Promise<boolean> => {
     setCreating(true);
     try {
@@ -365,6 +371,11 @@ function CompanyPicker({
           `okiru-excel-import-${clientId}`,
           JSON.stringify({ extracted: opts.importMarker, importedAt: new Date().toISOString() }),
         );
+      }
+      if (opts?.verdicts !== undefined) {
+        // Hand the document-flow verdicts to the provisional score page (same
+        // sessionStorage convention the Excel import marker uses).
+        sessionStorage.setItem(`okiru-doc-verdicts-${clientId}`, JSON.stringify(opts.verdicts));
       }
       const importRes = await fetch(
         `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
@@ -442,9 +453,12 @@ function CompanyPicker({
             {/* HERO — document-upload start: preset expected-documents flow
                 (parser-classified evidence → workbook sections → same submit path). */}
             <DocumentUploadStart
-              onCreate={async (companyName, sections) => {
+              onCreate={async (companyName, sections, extras) => {
                 // Document flow lands on the provisional live-score page, not the workbook.
-                await createFromSections(companyName, sections as WorkbookSectionsInput, { landOn: "estimate" });
+                await createFromSections(companyName, sections as WorkbookSectionsInput, {
+                  landOn: "estimate",
+                  verdicts: extras?.verdicts,
+                });
               }}
               creating={creating}
             />

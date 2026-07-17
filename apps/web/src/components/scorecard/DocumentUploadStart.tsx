@@ -31,6 +31,7 @@ import {
   type ParserCaseLike,
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
+import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
 
 interface RequiredGroup {
   key: string;
@@ -106,8 +107,16 @@ function useCountUp(target: number, durationMs = 900): number {
 }
 
 export interface DocumentUploadStartProps {
-  /** Create the client + import the mapped sections + open the workbook. */
-  onCreate: (companyName: string, sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>) => Promise<void>;
+  /**
+   * Create the client + import the mapped sections + land on the provisional
+   * score page. `verdicts` rides along so that page can show the honest
+   * per-document ledger (found / confused / none) the requote is argued from.
+   */
+  onCreate: (
+    companyName: string,
+    sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>,
+    extras?: { verdicts?: VerdictReport },
+  ) => Promise<void>;
   creating: boolean;
 }
 
@@ -260,7 +269,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       ...(sections["company-information"] ?? {}),
       meta: { ...(sections["company-information"]?.meta ?? {}), ...companyMeta },
     };
-    void onCreate(companyName.trim(), sections);
+    // Carry the per-document verdicts to the provisional score page.
+    const verdicts = parserCase ? assessDocuments(parserCase) : undefined;
+    void onCreate(companyName.trim(), sections, { verdicts });
   };
 
   const coverageByPillar = useMemo(

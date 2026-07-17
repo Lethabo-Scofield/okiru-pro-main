@@ -4,6 +4,7 @@ import { Award, ChevronRight, FileText, Loader2, ScanLine, Sparkles } from "luci
 import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
+import type { VerdictReport, EntityVerdict } from "@/lib/documentVerdicts";
 import { fscSubSectorDisplayLabel, normalizeFscSubSector } from "@toolkit/lib/sectors/fsc-utils";
 
 const PILLAR_META: { key: string; label: string; color: string }[] = [
@@ -23,6 +24,22 @@ function formatLevel(level: number): string {
   return level >= 9 ? "Non-Compliant" : `Level ${level}`;
 }
 
+/**
+ * Verdict encoding — colour AND shape, never colour alone, so the state reads
+ * in greyscale and for colour-blind users. Semantic hues only; the violet
+ * accent means "this costs money" elsewhere and must not leak in here.
+ */
+const VERDICT_COLOR: Record<EntityVerdict, string> = {
+  found: "#30d158",
+  confused: "#ffd60a",
+  none: "#ff453a",
+};
+const VERDICT_GLYPH: Record<EntityVerdict, string> = {
+  found: "◼",
+  confused: "◆",
+  none: "●",
+};
+
 interface WorkbookScoreSummaryProps {
   companyId: string;
   companyName: string;
@@ -37,6 +54,19 @@ interface WorkbookScoreSummaryProps {
 
 export function WorkbookScoreSummary({ companyId, companyName, provisional = false }: WorkbookScoreSummaryProps) {
   const [, navigate] = useLocation();
+  // The document flow stashes its per-document verdicts here before landing on
+  // this page (same sessionStorage convention as the Excel import marker).
+  const [verdictReport, setVerdictReport] = useState<VerdictReport | null>(null);
+
+  useEffect(() => {
+    if (!provisional || !companyId) return;
+    try {
+      const raw = sessionStorage.getItem(`okiru-doc-verdicts-${companyId}`);
+      if (raw) setVerdictReport(JSON.parse(raw) as VerdictReport);
+    } catch {
+      // The ledger is additive — the score still stands without it.
+    }
+  }, [provisional, companyId]);
   const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId } = useBbeeStore();
   const [refreshing, setRefreshing] = useState(true);
 
@@ -216,6 +246,60 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
             </div>
             <ScorecardPillarList pillars={pillarRows} />
           </div>
+
+          {/* The honest ledger — what each document actually gave us. This is
+              what a requote is argued from, so it names gaps rather than
+              hiding them. Colour + shape, so the state survives greyscale. */}
+          {provisional && verdictReport && verdictReport.verdicts.length > 0 && (
+            <div className="rounded-2xl overflow-hidden" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }} data-testid="document-verdicts">
+              <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: "1px solid #1e1e1e" }}>
+                <p className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">What each document gave us</p>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <span className="text-[#30d158]">◼ {verdictReport.counts.found} found</span>
+                  {verdictReport.counts.confused > 0 && <span className="text-[#ffd60a]">◆ {verdictReport.counts.confused} needs a look</span>}
+                  {verdictReport.counts.none > 0 && <span className="text-[#ff453a]">● {verdictReport.counts.none} nothing</span>}
+                </div>
+              </div>
+              <div className="divide-y" style={{ borderColor: "#1e1e1e" }}>
+                {verdictReport.verdicts.map((v) => (
+                  <div key={v.filename} className="px-5 py-3 flex items-start gap-3" style={{ borderTop: "1px solid #141414" }}>
+                    <span className="mt-1 shrink-0" style={{ color: VERDICT_COLOR[v.verdict], fontSize: 10 }}>
+                      {VERDICT_GLYPH[v.verdict]}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-[13px] text-[#e5e5ea] font-medium truncate">{v.filename}</span>
+                        <span className="text-[11px] text-[#636366]">{v.documentType}</span>
+                      </div>
+                      <div className="text-[12px] mt-0.5" style={{ color: VERDICT_COLOR[v.verdict] }}>{v.summary}</div>
+                      {v.gaps.length > 0 && (
+                        <div className="text-[11px] text-[#8e8e93] mt-1">
+                          Couldn’t read: {v.gaps.slice(0, 3).join(", ")}
+                          {v.gaps.length > 3 ? ` +${v.gaps.length - 3} more` : ""}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* Requote — argued from the gaps above, priced only on new files. */}
+              <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderTop: "1px solid #1e1e1e", background: "rgba(167,139,250,.05)" }}>
+                <p className="text-[12px] text-[#a1a1a6] max-w-[46ch]">
+                  Missing a pillar? Add the documents that cover it — you’re quoted for the new files only, never for
+                  anything we’ve already read.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/create-scorecard")}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#e5e5ea] text-black text-[13px] font-semibold shrink-0"
+                  data-testid="button-add-documents-requote"
+                >
+                  Add documents &amp; requote
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {provisional ? (
             <div className="flex justify-end gap-3 flex-wrap">
