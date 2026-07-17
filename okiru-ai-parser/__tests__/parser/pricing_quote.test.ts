@@ -51,20 +51,19 @@ describe('pricing quote — shape & guarantees', () => {
     expect(quote.notes.join(' ')).toMatch(/No Azure call, OCR, vision, extraction or scoring/i);
   });
 
-  it('the price IS the predicted Azure cost — nothing is invented on top', async () => {
+  it('the extraction price IS the predicted Azure cost — nothing invented on top', async () => {
     const quote = await quoteUploadedFiles([
       upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2, 51% black ownership'),
       upload('scan.png', 'image/png', Buffer.from([0x89, 0x50])),
     ]);
 
-    // Total must equal Azure's predicted cost (margin defaults to 1.0), not a
-    // number we made up. Deterministic local work adds nothing.
-    expect(quote.totals.totalCents).toBeCloseTo(quote.totals.azureCents, 2);
+    // Extraction is Azure's cost, and the local (non-model) steps add nothing.
+    expect(quote.lineItems.find((li) => li.key === 'extraction')!.cents).toBeCloseTo(quote.totals.azureCents, 2);
     expect(quote.lineItems.find((li) => li.key === 'normalisation')!.cents).toBe(0);
     expect(quote.lineItems.find((li) => li.key === 'entity_mapping')!.cents).toBe(0);
 
-    // ...and the Azure figure is itemised so the price can be checked against
-    // the model's own rate card: tokens + OCR pages.
+    // The Azure figure is itemised so the price can be checked against the
+    // model's own rate card: tokens + OCR pages, and it must reconcile.
     const b = quote.azureBreakdown;
     expect(b.model).toBeTruthy();
     expect(b.inputTokens).toBeGreaterThan(0);
@@ -74,12 +73,34 @@ describe('pricing quote — shape & guarantees', () => {
     expect(quote.notes.join(' ')).toMatch(/predicted Azure cost/i);
   });
 
-  it('bills the three things we actually do, and they sum to the total', async () => {
+  it('applies the card minimum VISIBLY when the Azure cost is unchargeable', async () => {
+    // Reading a couple of small documents costs Azure a fraction of a cent —
+    // no card processor can settle that, so the floor must apply and be shown.
+    const quote = await quoteUploadedFiles([
+      upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2'),
+    ]);
+
+    expect(quote.totals.azureCents).toBeLessThan(200);
+    const min = quote.lineItems.find((li) => li.key === 'minimum_charge');
+    expect(min).toBeDefined();
+    // The line item makes up exactly the shortfall — the Azure figure is never
+    // inflated to reach the floor.
+    expect(quote.totals.totalCents).toBe(200);
+    expect(quote.lineItems.reduce((n, li) => n + li.cents, 0)).toBeCloseTo(200, 2);
+    expect(min!.detail).toMatch(/can’t settle below/i);
+    expect(quote.notes.join(' ')).toMatch(/minimum applies/i);
+    // And the charge must be a whole, positive number of cents Yoco can take.
+    expect(Number.isInteger(Math.round(quote.totals.totalCents))).toBe(true);
+    expect(Math.round(quote.totals.totalCents)).toBeGreaterThan(0);
+  });
+
+  it('bills the three things we actually do, and the lines sum to the total', async () => {
     const quote = await quoteUploadedFiles([
       upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2, 51% black ownership'),
     ]);
 
-    expect(quote.lineItems.map((li) => li.key)).toEqual(['extraction', 'normalisation', 'entity_mapping']);
+    // The three activities always lead; a minimum-charge line may follow.
+    expect(quote.lineItems.slice(0, 3).map((li) => li.key)).toEqual(['extraction', 'normalisation', 'entity_mapping']);
     const sum = quote.lineItems.reduce((n, li) => n + li.cents, 0);
     expect(quote.totals.totalCents).toBeCloseTo(sum, 2);
     expect(quote.totals.predictedInputTokens).toBeGreaterThan(0);
@@ -118,20 +139,24 @@ describe('pricing quote — shape & guarantees', () => {
     expect(quote.files[0].structure).toMatchObject({ sheets: 1, rows: 3 });
   });
 
-  it('a bigger schedule costs more than a smaller one', async () => {
+  // NOTE: these assert the AZURE cost, not the charged total. At realistic
+  // document sizes the Azure cost is a fraction of a cent, so the card minimum
+  // floors every small job to the same total — size only moves the amount once
+  // the true cost clears the floor. The cost model must still be monotonic.
+  it('a bigger schedule costs Azure more than a smaller one', async () => {
     const head = 'supplier,spend';
     const small = await quoteUploadedFiles([upload('s.csv', 'text/csv', [head, 'A,100'].join('\n'))]);
     const big = await quoteUploadedFiles([
       upload('b.csv', 'text/csv', [head, ...Array.from({ length: 400 }, (_, i) => `Supplier ${i},${i * 100}`)].join('\n')),
     ]);
     expect(big.files[0].structure.rows!).toBeGreaterThan(small.files[0].structure.rows!);
-    expect(big.totals.totalCents).toBeGreaterThan(small.totals.totalCents);
+    expect(big.totals.azureCents).toBeGreaterThan(small.totals.azureCents);
   });
 
-  it('a scan costs more than a digital document', async () => {
+  it('a scan costs Azure more than a digital document', async () => {
     const digital = await quoteUploadedFiles([upload('a.txt', 'text/plain', 'Acme Level 2 certificate')]);
     const scan = await quoteUploadedFiles([upload('s.png', 'image/png', Buffer.from([0x89, 0x50]))]);
-    expect(scan.totals.totalCents).toBeGreaterThan(digital.totals.totalCents);
+    expect(scan.totals.azureCents).toBeGreaterThan(digital.totals.azureCents);
   });
 
   it('rejects unsupported file types rather than quoting them', async () => {

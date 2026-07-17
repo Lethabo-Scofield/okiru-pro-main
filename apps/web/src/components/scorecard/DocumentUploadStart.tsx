@@ -20,6 +20,7 @@ import {
   AlertTriangle,
   Check,
   CloudUpload,
+  CreditCard,
   FileText,
   Loader2,
   Minus,
@@ -53,6 +54,82 @@ interface ExpectedDocsCatalog {
   document_types: Array<{ name: string; description: string; required: boolean; pillar_code: string }>;
   required_groups: RequiredGroup[];
   sector_options?: SectorOption[];
+}
+
+/** The free, structure-only price scan (POST /api/parser/quote-files). */
+interface ParserQuote {
+  quoteId: string;
+  currency: string;
+  model: string;
+  files: Array<{
+    filename: string;
+    detectedDocumentType: string;
+    kind: string;
+    requiresOcr: boolean;
+    tokens: { basis: string; input: number; band: { lowerTokens: number; upperTokens: number } | null };
+    structure: { pages: number | null; sheets: number | null; rows: number | null };
+    pricing: { extractionCents: number; isUpperBound: boolean };
+    reasons: string[];
+  }>;
+  lineItems: Array<{ key: string; label: string; detail: string; cents: number }>;
+  totals: {
+    predictedInputTokens: number;
+    predictedOutputTokens: number;
+    azureCents: number;
+    totalCents: number;
+    isUpperBound: boolean;
+  };
+  azureBreakdown: {
+    model: string;
+    inputTokens: number;
+    inputCents: number;
+    outputTokens: number;
+    outputCents: number;
+    ocrPages: number;
+    ocrCents: number;
+  };
+  expiresAt: string;
+  notes: string[];
+}
+
+/** Rands, shown to 2dp unless the amount is genuinely sub-cent. */
+function money(cents: number, currency = "ZAR"): string {
+  const symbol = currency === "ZAR" ? "R" : `${currency} `;
+  if (cents > 0 && cents < 1) return `${symbol}${(cents / 100).toFixed(4)}`;
+  return `${symbol}${(cents / 100).toFixed(2)}`;
+}
+
+/**
+ * Fold a newly-read case into what we already had.
+ *
+ * A requote only ever pays for NEW documents, so the previously-extracted ones
+ * must survive: their detections, fields, supplier rows and calculator payload
+ * all carry forward. The new round wins on conflicts (it is the more recent
+ * read of that filename), but it can never delete an earlier good document.
+ */
+function mergeCases(kept: ParserCaseLike | null, fresh: ParserCaseLike): ParserCaseLike {
+  if (!kept) return fresh;
+  const byName = <T extends { filename?: string }>(a: T[] = [], b: T[] = []): T[] => {
+    const out = new Map<string, T>();
+    for (const item of a) out.set(String(item.filename), item);
+    for (const item of b) out.set(String(item.filename), item);
+    return Array.from(out.values());
+  };
+  return {
+    ...kept,
+    ...fresh,
+    documents_detected: byName(kept.documents_detected, fresh.documents_detected),
+    documents_needing_review: byName(kept.documents_needing_review, fresh.documents_needing_review),
+    fields_extracted: { ...(kept.fields_extracted ?? {}), ...(fresh.fields_extracted ?? {}) },
+    calculator_payload: { ...(kept.calculator_payload ?? {}), ...(fresh.calculator_payload ?? {}) },
+    supplier_rows: [
+      // Keep earlier suppliers, drop any whose source file was re-read.
+      ...(kept.supplier_rows ?? []).filter(
+        (r) => !(fresh.documents_detected ?? []).some((d) => d.filename === r.source_file),
+      ),
+      ...(fresh.supplier_rows ?? []),
+    ],
+  };
 }
 
 /** workbook company-information meta value for each parser sector code. */
@@ -131,6 +208,15 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [sector, setSector] = useState("Generic");
   const [subSector, setSubSector] = useState("");
   const [size, setSize] = useState("Generic"); // Generic | QSE | EME
+  // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
+  const [quote, setQuote] = useState<ParserQuote | null>(null);
+  const [quoting, setQuoting] = useState(false);
+  const [paying, setPaying] = useState(false);
+  /**
+   * Documents already extracted and paid for in a previous round. A requote
+   * must never lose or re-charge these — they carry straight through.
+   */
+  const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Re-fetch the expected-documents checklist whenever the sector context
@@ -155,6 +241,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     () => (parserCase ? mapParserCaseToWorkbookSections(parserCase) : null),
     [parserCase],
   );
+
+  /** The quote's row for a file — what we know from the free structure scan. */
+  const quoted = (filename: string) => quote?.files.find((f) => f.filename === filename);
 
   const docTypeSatisfied = (typeName: string): boolean =>
     Boolean(
@@ -193,29 +282,107 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     return { fields: Array.from(fields), notes: Array.from(notes) };
   };
 
-  const parseFiles = async (list: File[]) => {
+  /**
+   * Step 3–5: scan the documents for a PRICE only. This reads structure and
+   * text layers locally — it never OCRs, never calls Azure, and never extracts
+   * entities. It is free, and it is all we are allowed to do before payment.
+   */
+  const runQuote = async (list: File[]) => {
     if (list.length === 0) return;
+    setQuoting(true);
+    setParseError(null);
+    try {
+      const form = new FormData();
+      for (const f of list.slice(0, 25)) form.append("files", f, f.name);
+      const res = await fetch("/api/parser/quote-files", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      if (!res.ok) throw new Error(`Could not price these documents (${res.status})`);
+      const body = await res.json();
+      setQuote((body.data ?? body) as ParserQuote);
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : "Could not price the documents");
+      setQuote(null);
+    } finally {
+      setQuoting(false);
+    }
+  };
+
+  /**
+   * Step 7: the paid work. Only runs once the quote is paid, and sends the
+   * quote id so the server can verify payment and that these are the exact
+   * files that were paid for.
+   */
+  const runExtraction = async (list: File[], quoteId: string) => {
     setParsing(true);
     setParseError(null);
     try {
       const form = new FormData();
       for (const f of list.slice(0, 25)) form.append("files", f, f.name);
       form.append("case_id", `create_scorecard_${Date.now()}`);
+      form.append("quote_id", quoteId);
       const res = await fetch("/api/parser/resolve-case-files", {
         method: "POST",
         credentials: "include",
         body: form,
       });
+      if (res.status === 402 || res.status === 409 || res.status === 410) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error?.message ?? "Payment could not be verified for these documents");
+      }
       if (!res.ok && res.status !== 422) throw new Error(`Parser returned ${res.status}`);
       const data = (await res.json()) as ParserCaseLike & { calculator_payload?: Record<string, unknown> };
-      setParserCase(data);
+      // Merge with anything already paid for and read in an earlier round, so a
+      // requote never loses (or re-charges for) documents we already have.
+      setParserCase(mergeCases(keptCase, data));
       const entity = String(data.calculator_payload?.["ownership.entity_name"] ?? "").trim();
       if (entity) setCompanyName((prev) => prev || entity);
     } catch (err) {
-      setParseError(err instanceof Error ? err.message : "Could not analyse the documents");
-      setParserCase(null);
+      setParseError(err instanceof Error ? err.message : "Could not read the documents");
     } finally {
       setParsing(false);
+    }
+  };
+
+  /** Step 6: pay the quote, then read. */
+  const payAndExtract = async () => {
+    if (!quote) return;
+    setPaying(true);
+    setParseError(null);
+    try {
+      const res = await fetch(`/api/parser/quotes/${encodeURIComponent(quote.quoteId)}/checkout`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.error?.message ?? "Could not start payment");
+
+      const data = body.data ?? body;
+      if (data?.simulated) {
+        // Local development: no live Yoco keys, so settle the quote server-side
+        // and carry on. This route does not exist in production.
+        const sim = await fetch(`/api/parser/quotes/${encodeURIComponent(quote.quoteId)}/simulate-payment`, {
+          method: "POST",
+          credentials: "include",
+        });
+        if (!sim.ok) throw new Error("Simulated payment failed");
+        await runExtraction(files, quote.quoteId);
+        return;
+      }
+
+      // Live: hand off to Yoco's hosted page. We never touch card details.
+      if (data?.redirectUrl) {
+        sessionStorage.setItem("okiru-parser-quote", quote.quoteId);
+        window.location.href = data.redirectUrl;
+        return;
+      }
+      throw new Error("Payment provider did not return a checkout link");
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : "Payment failed");
+    } finally {
+      setPaying(false);
     }
   };
 
@@ -225,14 +392,15 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f);
     }
     setFiles(next);
-    void parseFiles(next);
+    void runQuote(next);
   };
 
   const removeFile = (name: string) => {
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
-    if (next.length === 0) setParserCase(null);
-    else void parseFiles(next);
+    setQuote(null);
+    if (next.length === 0) setParserCase(keptCase);
+    else void runQuote(next);
   };
 
   const groupSatisfied = (g: { types: string[] }) => g.types.some((t) => docTypeSatisfied(t));
@@ -470,8 +638,20 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                             <span className="text-emerald-400/70">· all read</span>
                           )}
                         </span>
+                      ) : quoted(f.name) ? (
+                        // Priced, not read. Say only what we actually know from
+                        // the structure scan — never claim a verdict yet.
+                        <span className="inline-flex items-center gap-1.5 text-[#636366]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#48484a]" />
+                          {quoted(f.name)!.requiresOcr ? "Scan — needs OCR" : "Digital"}
+                          <span className="text-[#48484a]">·</span>
+                          <span className="font-mono">{quoted(f.name)!.tokens.input.toLocaleString()} tok</span>
+                          <span className="text-[#48484a]">· not read yet</span>
+                        </span>
+                      ) : quoting ? (
+                        <span className="text-[#636366]">Sizing…</span>
                       ) : (
-                        <span className="text-[#636366]">Unrecognised — will be skipped</span>
+                        <span className="text-[#636366]">Queued</span>
                       )}
                     </div>
                   </div>
@@ -510,6 +690,110 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       )}
 
       {parseError && <p className="text-[12px] text-red-400 mt-3">{parseError}</p>}
+
+      {/* Pricing the documents — free, structure-only, nothing read yet. */}
+      {quoting && (
+        <div className="mt-3 flex items-center gap-2 text-[12px] text-[#8e8e93]">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-300" />
+          Checking size and format to price these documents — nothing is read yet.
+        </div>
+      )}
+
+      {/* ── STEP 5/6 — the payment summary. The price IS the predicted Azure
+             cost, itemised, so it reads as derived rather than decided. ── */}
+      {quote && !parserCase && !quoting && (
+        <div
+          className="dus-fade-up mt-4 rounded-2xl overflow-hidden"
+          style={{ background: "#0e0e10", border: "1px solid rgba(167,139,250,.28)" }}
+          data-testid="payment-summary"
+        >
+          <div className="px-4 py-3" style={{ borderBottom: "1px solid #1f1f21", background: "rgba(167,139,250,.06)" }}>
+            <p className="text-[11px] font-semibold text-violet-300 uppercase tracking-wider">Quote — before we read anything</p>
+            <p className="text-[11.5px] text-[#8e8e93] mt-1">
+              We’ve only looked at each file’s size and format. This is what {quote.azureBreakdown.model} will cost to
+              read, normalise and map them.
+            </p>
+          </div>
+
+          {/* Per document: what it is, and what it costs to read. */}
+          <div className="px-4 py-2">
+            {quote.files.map((f) => (
+              <div key={f.filename} className="flex items-center gap-2 py-1.5 text-[12px]" style={{ borderBottom: "1px solid #141418" }}>
+                <span className={`pill text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${f.requiresOcr ? "text-violet-300" : "text-[#8e8e93]"}`}
+                  style={{ background: f.requiresOcr ? "rgba(167,139,250,.12)" : "#1c1c1e", border: `1px solid ${f.requiresOcr ? "rgba(167,139,250,.3)" : "#2c2c2e"}` }}>
+                  {f.requiresOcr ? "SCAN" : "DIGITAL"}
+                </span>
+                <span className="text-[#d1d1d6] truncate flex-1 min-w-0">{f.filename}</span>
+                <span className="text-[10.5px] text-[#636366] font-mono tabular-nums whitespace-nowrap">
+                  {f.tokens.band
+                    ? `~${f.tokens.input.toLocaleString()} tok`
+                    : `${f.tokens.input.toLocaleString()} tok`}
+                </span>
+                <span className="text-[11.5px] text-[#a1a1a6] font-mono tabular-nums w-[70px] text-right">
+                  {money(f.pricing.extractionCents, quote.currency)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* What Azure itself charges — so the price can be checked, not trusted. */}
+          <div className="px-4 py-2.5" style={{ background: "#0b0b0e", borderTop: "1px solid #1f1f21", borderBottom: "1px solid #1f1f21" }}>
+            <p className="text-[10px] uppercase tracking-wider text-[#636366] mb-1.5">What Azure charges</p>
+            <div className="grid grid-cols-3 gap-2 text-[11px] font-mono tabular-nums text-[#8e8e93]">
+              <div>input {quote.azureBreakdown.inputTokens.toLocaleString()} tok<div className="text-[#d1d1d6]">{money(quote.azureBreakdown.inputCents, quote.currency)}</div></div>
+              <div>output {quote.azureBreakdown.outputTokens.toLocaleString()} tok<div className="text-[#d1d1d6]">{money(quote.azureBreakdown.outputCents, quote.currency)}</div></div>
+              <div>OCR {quote.azureBreakdown.ocrPages} pg<div className="text-[#d1d1d6]">{money(quote.azureBreakdown.ocrCents, quote.currency)}</div></div>
+            </div>
+          </div>
+
+          <div className="px-4 py-3">
+            {quote.lineItems.map((li) => (
+              <div key={li.key} className="flex items-baseline justify-between gap-3 py-1 text-[12px]">
+                <span className="text-[#a1a1a6]">{li.label}</span>
+                <span className="text-[#636366] text-[10.5px] flex-1 truncate">{li.detail}</span>
+                <span className="text-[#d1d1d6] font-mono tabular-nums">{money(li.cents, quote.currency)}</span>
+              </div>
+            ))}
+            <div className="flex items-baseline justify-between mt-3 pt-3" style={{ borderTop: "1px solid rgba(167,139,250,.28)" }}>
+              <span className="text-[11px] uppercase tracking-wider text-[#636366]">
+                Total{quote.totals.isUpperBound ? " · upper bound" : ""}
+              </span>
+              <span className="text-[26px] text-white tabular-nums" style={{ fontFamily: "'Instrument Serif', Georgia, serif" }}>
+                {money(quote.totals.totalCents, quote.currency)}
+              </span>
+            </div>
+            {quote.totals.isUpperBound && (
+              <p className="text-[10.5px] text-[#636366] mt-1 text-right">
+                Scanned pages are estimated from page count — you’re never charged more than this.
+              </p>
+            )}
+
+            <div className="flex gap-2 mt-3 flex-wrap">
+              <button
+                onClick={() => void payAndExtract()}
+                disabled={paying || parsing}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-[13.5px] font-semibold disabled:opacity-50"
+                style={{ background: "#00a3ff", color: "#00121f", boxShadow: "0 0 22px rgba(0,163,255,.18)" }}
+                data-testid="button-pay-yoco"
+              >
+                {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                Pay {money(quote.totals.totalCents, quote.currency)} with Yoco
+              </button>
+            </div>
+            <p className="text-[10.5px] text-[#48484a] mt-2 text-center">
+              Nothing in your documents is read until this is paid. Prefer not to pay? Capture manually below — it’s free.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Reading — the paid work, after payment only. */}
+      {parsing && (
+        <div className="mt-3 flex items-center gap-2 text-[12px] text-violet-200">
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-300" />
+          Paid — reading your documents, normalising and mapping entities…
+        </div>
+      )}
 
       {/* Missing required docs nudge — only for docs the parser can detect
           (auto-extractable). Evidence-only docs are guidance, not detectable. */}

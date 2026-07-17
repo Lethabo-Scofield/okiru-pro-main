@@ -58,7 +58,7 @@ export interface PricingQuoteFile {
 }
 
 export interface QuoteLineItem {
-  key: 'extraction' | 'normalisation' | 'entity_mapping';
+  key: 'extraction' | 'normalisation' | 'entity_mapping' | 'minimum_charge';
   label: string;
   detail: string;
   cents: number;
@@ -116,6 +116,20 @@ const QUOTE_TTL_MINUTES = numEnv('PARSER_QUOTE_TTL_MINUTES', 30);
  */
 const NORMALISATION_FEE_CENTS = numEnv('PARSER_NORMALISATION_FEE_CENTS', 0);
 const MAPPING_FEE_CENTS = numEnv('PARSER_MAPPING_FEE_CENTS', 0);
+/**
+ * The floor a card payment can actually settle at.
+ *
+ * Pricing at pure Azure cost produces sub-cent amounts (reading three
+ * documents costs Azure a few hundredths of a cent). No card processor can
+ * charge that — Yoco's practical minimum is around R2.00 — so without a floor
+ * the checkout simply fails with "amount must be positive".
+ *
+ * This is the one place the price is NOT purely Azure's: when the true cost is
+ * below the floor we charge the floor, and we say so on the quote rather than
+ * quietly inflating the Azure figure. Set to 0 only if payment moves to
+ * prepaid credits or monthly aggregation, where a per-job floor stops applying.
+ */
+const MINIMUM_CHARGE_CENTS = numEnv('PARSER_MINIMUM_CHARGE_CENTS', 200);
 
 function numEnv(name: string, fallback: number): number {
   const raw = Number(process.env[name]);
@@ -229,7 +243,21 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
     },
   ];
 
-  const totalCents = round2(lineItems.reduce((sum, li) => sum + li.cents, 0));
+  const derivedCents = round2(lineItems.reduce((sum, li) => sum + li.cents, 0));
+
+  // Apply the card-payment floor, visibly. The user sees the true Azure cost
+  // AND the amount that will actually be charged — we never dress the Azure
+  // figure up to reach the minimum.
+  const minimumApplies = MINIMUM_CHARGE_CENTS > 0 && derivedCents < MINIMUM_CHARGE_CENTS;
+  if (minimumApplies) {
+    lineItems.push({
+      key: 'minimum_charge',
+      label: 'Minimum charge',
+      detail: `this job costs ${CURRENCY} ${(derivedCents / 100).toFixed(4)} to run — card payments can’t settle below ${CURRENCY} ${(MINIMUM_CHARGE_CENTS / 100).toFixed(2)}`,
+      cents: round2(MINIMUM_CHARGE_CENTS - derivedCents),
+    });
+  }
+  const totalCents = minimumApplies ? round2(MINIMUM_CHARGE_CENTS) : derivedCents;
 
   const notes = [
     'Quote is derived from each document’s text layer and structure only.',
@@ -238,6 +266,11 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
   ];
   if (anyUpperBound) {
     notes.push('Scanned documents are estimated from page count and quoted at the upper bound — you are never charged more than this.');
+  }
+  if (minimumApplies) {
+    notes.push(
+      `The Azure cost of this job is ${CURRENCY} ${(derivedCents / 100).toFixed(4)}, which is below what a card payment can settle, so the ${CURRENCY} ${(MINIMUM_CHARGE_CENTS / 100).toFixed(2)} minimum applies.`,
+    );
   }
 
   return {
