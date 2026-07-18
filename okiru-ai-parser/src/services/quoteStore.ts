@@ -17,7 +17,7 @@
  *
  * PRODUCTION LIMITATION — the default store is in-memory, which is correct for
  * one process but WRONG for the 2-replica deployment: a quote created on pod A
- * is invisible to pod B, and a Yoco webhook landing on the wrong pod would not
+ * is invisible to pod B, and a PayFast ITN landing on the wrong pod would not
  * mark it paid. Before real money, back this with shared state (the cluster
  * already runs Redis, which fits: TTL'd keys, exactly this shape). The
  * QuoteStore interface exists so that swap is a drop-in.
@@ -35,7 +35,7 @@ export interface QuoteRecord {
   currency: string;
   totalCents: number;
   paymentStatus: PaymentStatus;
-  /** Yoco checkout id / payment reference. Never card data. */
+  /** Provider payment reference. Never card data. */
   providerRef?: string;
   createdAt: number;
   expiresAt: number;

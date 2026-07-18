@@ -541,15 +541,17 @@ function CompanyPicker({
                 </button>
               )}
             </div>
-            <div className="mb-8 text-center">
-              <h2
-                className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white sm:text-[44px]"
-                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-              >
-                {title}
-              </h2>
-              <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#a1a1a6]">{description}</p>
-            </div>
+            {title && (
+              <div className="mb-8 text-center">
+                <h2
+                  className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white sm:text-[44px]"
+                  style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+                >
+                  {title}
+                </h2>
+                {description && <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#a1a1a6]">{description}</p>}
+              </div>
+            )}
             {children}
         </div>
       </div>
@@ -576,14 +578,18 @@ function CompanyPicker({
         {
           key: "excel" as const,
           title: "Import Excel workbook",
-          description: "Continue from an existing RCOGP workbook.",
+          description: "Continue from an existing RCOGP workbook. Unmapped sheets are matched with AI.",
           icon: ExcelLogoMark,
-          badge: "Free",
-          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
+          badge: "Uses AI",
+          badgeClass: "border-violet-300/25 bg-violet-300/[0.06] text-[#c4b5fd]",
         },
       ];
       return (
-        <SetupShell step="1 of 4" title="Create a scorecard" description="Choose how you would like to begin.">
+        <SetupShell
+          step={setupMethod === "choose" ? "Step 1 of 3" : "Step 2 of 3"}
+          title="Create a scorecard"
+          description="Choose how you would like to begin."
+        >
           <div className="space-y-2.5">
             {options.map(({ key, title, description, icon: Icon, badge, badgeClass }) => {
               const selected = setupMethod === key;
@@ -697,7 +703,7 @@ function CompanyPicker({
 
     if (setupMethod === "upload") {
       return (
-        <SetupShell step="2 of 4" title="Set up document upload" description="We will guide you through the profile, upload and quote.">
+        <SetupShell step="Step 2 of 3" title="" description="">
           <DocumentUploadStart
             onCreate={async (companyName, sections, extras) => {
               await createFromSections(companyName, sections as WorkbookSectionsInput, {
