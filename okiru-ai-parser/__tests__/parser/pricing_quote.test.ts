@@ -57,10 +57,12 @@ describe('pricing quote — shape & guarantees', () => {
       upload('scan.png', 'image/png', Buffer.from([0x89, 0x50])),
     ]);
 
-    // Extraction is Azure's cost, and the local (non-model) steps add nothing.
+    // The whole job is priced as one line at Azure's cost. Normalisation and
+    // mapping carry no fee by default, so they fold in rather than appearing as
+    // their own confusing "$0" lines.
     expect(quote.lineItems.find((li) => li.key === 'extraction')!.cents).toBeCloseTo(quote.totals.azureCents, 2);
-    expect(quote.lineItems.find((li) => li.key === 'normalisation')!.cents).toBe(0);
-    expect(quote.lineItems.find((li) => li.key === 'entity_mapping')!.cents).toBe(0);
+    expect(quote.lineItems.some((li) => li.key === 'normalisation')).toBe(false);
+    expect(quote.lineItems.some((li) => li.key === 'entity_mapping')).toBe(false);
 
     // The Azure figure is itemised so the price can be checked against the
     // model's own rate card: tokens + OCR pages, and it must reconcile.
@@ -89,23 +91,23 @@ describe('pricing quote — shape & guarantees', () => {
     expect(quote.lineItems.reduce((n, li) => n + li.cents, 0)).toBeCloseTo(200, 2);
     expect(min!.detail).toMatch(/can’t settle below/i);
     expect(quote.notes.join(' ')).toMatch(/minimum applies/i);
-    // And the charge must be a whole, positive number of cents Yoco can take.
+    // And the charge must be a whole, positive number of cents the processor can take.
     expect(Number.isInteger(Math.round(quote.totals.totalCents))).toBe(true);
     expect(Math.round(quote.totals.totalCents)).toBeGreaterThan(0);
   });
 
-  it('bills the three things we actually do, and the lines sum to the total', async () => {
+  it('prices the job as one processing line, and the lines sum to the total', async () => {
     const quote = await quoteUploadedFiles([
       upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2, 51% black ownership'),
     ]);
 
-    // The three activities always lead; a minimum-charge line may follow.
-    expect(quote.lineItems.slice(0, 3).map((li) => li.key)).toEqual(['extraction', 'normalisation', 'entity_mapping']);
+    // Processing leads; a minimum-charge line may follow. No separate zero lines.
+    expect(quote.lineItems[0].key).toBe('extraction');
     const sum = quote.lineItems.reduce((n, li) => n + li.cents, 0);
     expect(quote.totals.totalCents).toBeCloseTo(sum, 2);
     expect(quote.totals.predictedInputTokens).toBeGreaterThan(0);
-    // Extraction is the only line that tracks the document.
-    expect(quote.lineItems[0].detail).toMatch(/predicted tokens/);
+    // The processing line tracks the document (its token estimate).
+    expect(quote.lineItems[0].detail).toMatch(/tokens/);
   });
 
   it('prices an image as high effort WITHOUT OCR-ing it, and bands the estimate', async () => {

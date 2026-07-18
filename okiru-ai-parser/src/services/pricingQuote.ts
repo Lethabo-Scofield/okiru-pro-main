@@ -7,15 +7,11 @@
  * OCR, no vision, no extraction — which is the whole point: price first, work
  * second.
  *
- * Three line items, because they are the three things we actually do and the
- * three things the user is buying:
- *   1. Extraction        — the real Azure token + OCR cost (derived)
- *   2. Normalisation     — units, dates, percentages, B-BBEE levels
- *   3. Entity mapping    — suppliers/shareholders/contributions → workbook rows
- *
- * Normalisation and mapping are deterministic local work; their fees are flat
- * per document and are PLACEHOLDERS until priced. Extraction is the only line
- * that moves with the document.
+ * One price for the whole job: read the documents, make the extracted values
+ * mapper-ready, and place them in the workbook — one pipeline, one line. The
+ * price is the predicted Azure cost, floored to what a card can actually settle
+ * (see MINIMUM_CHARGE_CENTS). Normalisation/mapping only ever get their own line
+ * if they carry a fee of their own; by default they fold into processing.
  */
 import path from 'node:path';
 import { SUPPORTED_UPLOAD_MIME_TYPES, type UploadedFileLike } from './fileExtraction.js';
@@ -121,7 +117,7 @@ const MAPPING_FEE_CENTS = numEnv('PARSER_MAPPING_FEE_CENTS', 0);
  *
  * Pricing at pure Azure cost produces sub-cent amounts (reading three
  * documents costs Azure a few hundredths of a cent). No card processor can
- * charge that — Yoco's practical minimum is around R2.00 — so without a floor
+ * charge that — a card processor's practical minimum is around R2.00 — so without a floor
  * the checkout simply fails with "amount must be positive".
  *
  * This is the one place the price is NOT purely Azure's: when the true cost is
@@ -218,30 +214,27 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
   const mappingCents = round2(docCount * MAPPING_FEE_CENTS);
   const scanCount = quotedFiles.filter((f) => f.requiresOcr).length;
 
+  // One price for the whole job. Extraction reads the documents; normalisation
+  // then makes the extracted values mapper-ready and mapping places them in the
+  // workbook — one continuous pipeline, priced together. We only itemise
+  // normalisation / mapping as their own lines if they ever carry a fee of
+  // their own; by default they fold into processing.
   const lineItems: QuoteLineItem[] = [
     {
       key: 'extraction',
-      label: 'Extraction',
-      detail: `read ${docCount} document${docCount === 1 ? '' : 's'}${scanCount ? ` (${scanCount} scanned)` : ''} · ${inputTokens.toLocaleString()} predicted tokens`,
-      cents: round2(extractionCents),
-    },
-    {
-      key: 'normalisation',
-      label: 'Normalisation',
-      detail: normalisationCents > 0
-        ? 'units, dates, percentages, B-BBEE levels'
-        : 'units, dates, percentages, B-BBEE levels — done locally, no model cost',
-      cents: normalisationCents,
-    },
-    {
-      key: 'entity_mapping',
-      label: 'Entity mapping',
-      detail: mappingCents > 0
-        ? 'suppliers, shareholders, contributions → workbook'
-        : 'suppliers, shareholders, contributions → workbook — done locally, no model cost',
-      cents: mappingCents,
+      label: 'Document processing',
+      detail: `${docCount} document${docCount === 1 ? '' : 's'}${scanCount ? ` · ${scanCount} scanned` : ''} · ~${inputTokens.toLocaleString()} tokens`,
+      cents: round2(extractionCents + normalisationCents + mappingCents),
     },
   ];
+  if (normalisationCents > 0) {
+    lineItems.push({ key: 'normalisation', label: 'Normalisation', detail: 'units, dates, percentages, B-BBEE levels', cents: normalisationCents });
+    lineItems[0].cents = round2(lineItems[0].cents - normalisationCents);
+  }
+  if (mappingCents > 0) {
+    lineItems.push({ key: 'entity_mapping', label: 'Entity mapping', detail: 'suppliers, shareholders, contributions → workbook', cents: mappingCents });
+    lineItems[0].cents = round2(lineItems[0].cents - mappingCents);
+  }
 
   const derivedCents = round2(lineItems.reduce((sum, li) => sum + li.cents, 0));
 

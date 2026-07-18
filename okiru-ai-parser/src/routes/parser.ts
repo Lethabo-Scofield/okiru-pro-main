@@ -9,12 +9,11 @@ import { rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../se
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
 import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
 import {
-  createYocoCheckout,
-  verifyYocoWebhook,
-  isPaymentSucceeded,
-  isPaymentFailed,
+  createPayfastCheckout,
+  verifyPayfastItn,
+  isPaymentComplete,
   simulatedPaymentAllowed,
-} from '../services/yocoPayment.js';
+} from '../services/payfastPayment.js';
 import { createNeo4jOntologyRepository, MissingNeo4jConfigError } from '../../graph/neo4j_client.js';
 import type { OntologyRepository } from '../../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
@@ -262,8 +261,8 @@ router.post('/quote-files', upload.array('files', 25), async (req: Request, res:
 });
 
 /**
- * Payment (flow step 6) — hand the user a Yoco hosted-checkout URL for a quote.
- * We never touch card data; Yoco's page does.
+ * Payment (flow step 6) — hand the user a PayFast hosted-checkout URL for a quote.
+ * We never touch card data; PayFast's page does.
  */
 router.post('/quotes/:quoteId/checkout', async (req: Request, res: Response) => {
   const quoteId = String(req.params.quoteId);
@@ -277,12 +276,12 @@ router.post('/quotes/:quoteId/checkout', async (req: Request, res: Response) => 
       return res.status(410).json(fail('That quote has expired. Request a new quote.', 'QUOTE_EXPIRED'));
     }
 
-    const checkout = await createYocoCheckout({
+    const checkout = createPayfastCheckout({
       quoteId: record.quoteId,
       amountCents: record.totalCents,
       currency: record.currency,
     });
-    await getQuoteStore().update(quoteId, { paymentStatus: 'pending', providerRef: checkout.checkoutId });
+    await getQuoteStore().update(quoteId, { paymentStatus: 'pending' });
 
     return res.json(ok({
       quoteId,
@@ -292,12 +291,12 @@ router.post('/quotes/:quoteId/checkout', async (req: Request, res: Response) => 
       simulated: checkout.simulated,
     }));
   } catch (err) {
-    logger.error('Yoco checkout failed', err as Error);
+    logger.error('PayFast checkout failed', err as Error);
     return res.status(502).json(fail((err as Error).message, 'CHECKOUT_FAILED'));
   }
 });
 
-/** Read a quote's payment state (the UI polls this after returning from Yoco). */
+/** Read a quote's payment state (the UI polls this after returning from PayFast). */
 router.get('/quotes/:quoteId', async (req: Request, res: Response) => {
   const record = await getQuoteStore().get(String(req.params.quoteId));
   if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
@@ -313,48 +312,54 @@ router.get('/quotes/:quoteId', async (req: Request, res: Response) => {
 });
 
 /**
- * Yoco webhook — the ONLY thing allowed to mark a quote paid. The signature is
- * verified first; an unsigned payload is just an attacker claiming payment.
- * Mounted with a raw body parser (see server.ts) so the signature covers bytes.
+ * PayFast ITN — the ONLY thing allowed to mark a quote paid. We trust it only
+ * after (1) recomputing its signature and (2) confirming it server-to-server
+ * with PayFast, then (3) checking the amount matches the quote. Anything less is
+ * an attacker claiming payment.
  */
-router.post('/webhooks/yoco', async (req: Request, res: Response) => {
-  const rawBody = Buffer.isBuffer(req.body) ? req.body.toString('utf8') : JSON.stringify(req.body ?? {});
-  const id = String(req.header('webhook-id') ?? '');
-  const timestamp = String(req.header('webhook-timestamp') ?? '');
-  const signature = String(req.header('webhook-signature') ?? '');
+router.post('/webhooks/payfast', async (req: Request, res: Response) => {
+  // PayFast posts application/x-www-form-urlencoded; express.urlencoded has
+  // already parsed it into an object of strings.
+  const fields: Record<string, string> = {};
+  for (const [k, v] of Object.entries(req.body ?? {})) fields[k] = String(v);
 
-  if (!verifyYocoWebhook({ id, timestamp, rawBody, signatureHeader: signature })) {
-    logger.warn('Rejected Yoco webhook with an invalid signature', { id });
-    return res.status(401).json(fail('Invalid webhook signature', 'BAD_SIGNATURE'));
+  // Always 200 the ITN once received; PayFast retries on non-200 and the
+  // outcome is decided by our own checks below, not by the response code.
+  const quoteId = fields.m_payment_id || fields.custom_str1;
+  if (!quoteId) return res.json(ok({ ignored: true, reason: 'no m_payment_id' }));
+
+  const verified = await verifyPayfastItn(fields);
+  if (!verified) {
+    logger.warn('Rejected PayFast ITN that failed verification', { quoteId });
+    return res.status(400).json(fail('ITN verification failed', 'BAD_ITN'));
   }
 
-  let event: { type?: string; payload?: { metadata?: { quoteId?: string }; id?: string } };
-  try {
-    event = JSON.parse(rawBody);
-  } catch {
-    return res.status(400).json(fail('Malformed webhook body', 'BAD_BODY'));
-  }
+  const record = await getQuoteStore().get(quoteId);
+  if (!record) return res.json(ok({ ignored: true, reason: 'unknown quote' }));
 
-  const quoteId = event.payload?.metadata?.quoteId;
-  if (!quoteId) return res.json(ok({ ignored: true, reason: 'no quoteId in metadata' }));
-
-  if (isPaymentSucceeded(String(event.type))) {
+  // The amount PayFast settled must match what we quoted, to the cent.
+  const paidCents = Math.round(Number(fields.amount_gross ?? fields.amount ?? 0) * 100);
+  if (isPaymentComplete(fields) && paidCents === Math.round(record.totalCents)) {
     await getQuoteStore().update(quoteId, {
       paymentStatus: 'paid',
       paidAt: Date.now(),
-      providerRef: event.payload?.id,
+      providerRef: fields.pf_payment_id,
     });
-    logger.info('Quote marked paid by Yoco webhook', { quoteId });
-  } else if (isPaymentFailed(String(event.type))) {
+    logger.info('Quote marked paid by PayFast ITN', { quoteId });
+  } else if (String(fields.payment_status ?? '').toUpperCase() === 'FAILED') {
     await getQuoteStore().update(quoteId, { paymentStatus: 'failed' });
-    logger.info('Quote payment failed', { quoteId, type: event.type });
+    logger.info('Quote payment failed', { quoteId });
+  } else {
+    logger.warn('PayFast ITN not applied (status or amount mismatch)', {
+      quoteId, status: fields.payment_status, paidCents, expected: record.totalCents,
+    });
   }
 
   return res.json(ok({ received: true }));
 });
 
 /**
- * Local-only: mark a quote paid without Yoco, so the flow can be exercised
+ * Local-only: mark a quote paid without PayFast, so the flow can be exercised
  * before live keys exist. Hard-gated — never available in production.
  */
 router.post('/quotes/:quoteId/simulate-payment', async (req: Request, res: Response) => {

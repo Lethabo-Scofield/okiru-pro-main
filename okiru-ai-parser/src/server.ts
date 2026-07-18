@@ -23,10 +23,6 @@ const corsOrigin = process.env.PARSER_ALLOWED_ORIGINS
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(compression());
 app.use(cors({ origin: corsOrigin, credentials: true }));
-// The Yoco webhook signature is computed over the RAW bytes, so this route must
-// keep its unparsed body — it has to be mounted BEFORE express.json(), which
-// would otherwise consume the stream and leave nothing to verify.
-app.use('/api/parser/webhooks/yoco', express.raw({ type: '*/*', limit: JSON_BODY_LIMIT }));
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.urlencoded({ extended: false, limit: JSON_BODY_LIMIT }));
 

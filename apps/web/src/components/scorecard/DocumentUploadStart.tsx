@@ -21,6 +21,7 @@ import {
   AlertTriangle,
   Check,
   CloudUpload,
+  CreditCard,
   FileText,
   Loader2,
   Minus,
@@ -91,24 +92,6 @@ interface ParserQuote {
   };
   expiresAt: string;
   notes: string[];
-}
-
-function YocoLogoMark({ className = "h-5 w-auto" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 84 28" aria-label="Yoco" role="img" className={className}>
-      <text
-        x="0"
-        y="21"
-        fill="currentColor"
-        fontFamily="Inter, Arial, sans-serif"
-        fontSize="24"
-        fontWeight="800"
-        letterSpacing="-1.4"
-      >
-        yoco
-      </text>
-    </svg>
-  );
 }
 
 /** Rands, shown to 2dp unless the amount is genuinely sub-cent. */
@@ -238,6 +221,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  /** Monotonic id so only the latest quote request writes state (race guard). */
+  const quoteSeqRef = useRef(0);
+  /** Aborts any in-flight quote when a newer one starts, so requests never pile up. */
+  const quoteAbortRef = useRef<AbortController | null>(null);
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.
@@ -309,6 +296,17 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const runQuote = async (list: File[]) => {
     if (list.length === 0) return;
+    // Only the most recent quote request is allowed to write state. Without
+    // this, two overlapping requests can race and leave `quoting` stuck true
+    // (the earlier one resolves last), which hides the payment panel forever.
+    const seq = ++quoteSeqRef.current;
+    const isLatest = () => quoteSeqRef.current === seq;
+    // Cancel any quote still in flight so two rapid uploads can't both run — a
+    // stranded second request would leave `quoting` stuck true and hide the
+    // payment panel forever.
+    quoteAbortRef.current?.abort();
+    const controller = new AbortController();
+    quoteAbortRef.current = controller;
     setQuoting(true);
     setParseError(null);
     try {
@@ -318,15 +316,20 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         method: "POST",
         credentials: "include",
         body: form,
+        signal: controller.signal,
       });
       if (!res.ok) throw new Error(`Could not price these documents (${res.status})`);
       const body = await res.json();
-      setQuote((body.data ?? body) as ParserQuote);
+      if (isLatest()) setQuote((body.data ?? body) as ParserQuote);
     } catch (err) {
-      setParseError(err instanceof Error ? err.message : "Could not price the documents");
-      setQuote(null);
+      // An aborted request is a superseded one, not a failure — stay quiet.
+      if ((err as Error)?.name === "AbortError") return;
+      if (isLatest()) {
+        setParseError(err instanceof Error ? err.message : "Could not price the documents");
+        setQuote(null);
+      }
     } finally {
-      setQuoting(false);
+      if (isLatest()) setQuoting(false);
     }
   };
 
@@ -570,15 +573,16 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       `}</style>
 
       <div className="mb-5 text-center">
-        <p className="text-[12px] font-medium text-[#8e8e93]">3 of 4</p>
         <h3
-          className="mt-2 text-[34px] font-semibold leading-[1.05] tracking-tight text-white"
+          className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white"
           style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
         >
-          Add your documents
+          {quote && !parserCase ? "Review and pay" : "Add your documents"}
         </h3>
         <p className="mx-auto mt-2 max-w-md text-[15px] leading-6 text-[#a1a1a6]">
-          Upload what you have. We will identify what is present, missing or needs review.
+          {quote && !parserCase
+            ? "This is what it costs to process your documents. Nothing is read until you pay."
+            : "Upload what you have. We will identify what is present, missing or needs review."}
         </p>
       </div>
 
@@ -903,20 +907,21 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 </p>
               )}
 
-              <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+              <div className="mt-5 space-y-2">
                 <button
                   onClick={() => void payAndExtract()}
                   disabled={paying || parsing}
-                  className="inline-flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
-                  data-testid="button-pay-yoco"
+                  className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
+                  style={{ background: "#0e6fff", color: "#ffffff" }}
+                  data-testid="button-pay"
                 >
-                  {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <YocoLogoMark className="h-4 w-auto" />}
-                  Approve and process
+                  {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-[18px] w-[18px]" />}
+                  Pay {money(quote.totals.totalCents, quote.currency)} with PayFast
                 </button>
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="inline-flex h-12 items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[14px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
                 >
                   Change documents
                 </button>
