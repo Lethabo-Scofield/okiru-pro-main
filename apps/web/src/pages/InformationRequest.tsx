@@ -520,7 +520,7 @@ function CompanyPicker({
       description: string;
       children: ReactNode;
     }) => (
-      <div className="mx-auto max-w-[740px] px-4 py-8 sm:py-12">
+      <div className="mx-auto max-w-[980px] px-4 py-8 sm:py-12">
         <style>{`
           @keyframes setupReveal {
             from { opacity: 0; transform: translateY(-6px); }
