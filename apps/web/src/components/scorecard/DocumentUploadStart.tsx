@@ -238,6 +238,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const quoteRequestRef = useRef(0);
+  const MAX_UPLOAD_FILES = 25;
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.
@@ -309,11 +311,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const runQuote = async (list: File[]) => {
     if (list.length === 0) return;
+    const requestId = ++quoteRequestRef.current;
     setQuoting(true);
     setParseError(null);
     try {
       const form = new FormData();
-      for (const f of list.slice(0, 25)) form.append("files", f, f.name);
+      for (const f of list) form.append("files", f, f.name);
       const res = await fetch("/api/parser/quote-files", {
         method: "POST",
         credentials: "include",
@@ -321,12 +324,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       });
       if (!res.ok) throw new Error(`Could not price these documents (${res.status})`);
       const body = await res.json();
+      if (requestId !== quoteRequestRef.current) return;
       setQuote((body.data ?? body) as ParserQuote);
     } catch (err) {
+      if (requestId !== quoteRequestRef.current) return;
       setParseError(err instanceof Error ? err.message : "Could not price the documents");
       setQuote(null);
     } finally {
-      setQuoting(false);
+      if (requestId === quoteRequestRef.current) setQuoting(false);
     }
   };
 
@@ -340,7 +345,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     setParseError(null);
     try {
       const form = new FormData();
-      for (const f of list.slice(0, 25)) form.append("files", f, f.name);
+      for (const f of list) form.append("files", f, f.name);
       form.append("case_id", `create_scorecard_${Date.now()}`);
       form.append("quote_id", quoteId);
       const res = await fetch("/api/parser/resolve-case-files", {
@@ -411,6 +416,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     for (const f of incoming) {
       if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f);
     }
+    if (next.length > MAX_UPLOAD_FILES) {
+      quoteRequestRef.current += 1;
+      setParseError(`You can upload up to ${MAX_UPLOAD_FILES} documents at once. Remove ${next.length - MAX_UPLOAD_FILES} and try again.`);
+      setQuote(null);
+      setQuoting(false);
+      return;
+    }
     setFiles(next);
     void runQuote(next);
   };
@@ -418,6 +430,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const removeFile = (name: string) => {
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
+    quoteRequestRef.current += 1;
     setQuote(null);
     if (next.length === 0) setParserCase(keptCase);
     else void runQuote(next);

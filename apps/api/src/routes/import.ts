@@ -73,9 +73,8 @@ const upload = multer({
       'image/jpeg',
       'image/gif',
       'image/webp',
-      'image/svg+xml',
     ];
-    if (allowed.includes(file.mimetype) || /\.(xlsx?|csv|pdf|png|jpe?g|gif|webp|svg)$/i.test(file.originalname)) {
+    if (allowed.includes(file.mimetype) || /\.(xlsx?|csv|pdf|png|jpe?g|gif|webp)$/i.test(file.originalname)) {
       cb(null, true);
     } else {
       cb(new Error('Unsupported file type.'));
