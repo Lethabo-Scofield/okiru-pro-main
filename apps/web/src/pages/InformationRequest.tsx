@@ -835,6 +835,8 @@ function CompanyPicker({
                     fieldSources: {},
                     isBeeGatheringFormat: true,
                     mappedSheets: Object.keys(fallback.mappedSheets),
+                    unmappedFields: [],
+                    ownershipChainTiers: [],
                     extractedFieldCount: fallback.extractedFieldCount,
                     sectionSummary: buildSectionSummary(fallback.sections),
                   });
@@ -989,6 +991,8 @@ function CompanyPicker({
                   fieldSources: {},
                   isBeeGatheringFormat: true,
                   mappedSheets: Object.keys(fallback.mappedSheets),
+                  unmappedFields: [],
+                  ownershipChainTiers: [],
                   extractedFieldCount: fallback.extractedFieldCount,
                   sectionSummary: buildSectionSummary(fallback.sections),
                 });
@@ -1106,7 +1110,7 @@ function CompanyPicker({
             scorecardType: previewResult?.data.scorecardType,
             revenue: previewResult?.data.revenue,
             blackOwnership: previewResult?.data.blackOwnership,
-            employees: previewResult?.data.numberOfEmployees,
+            employees: previewResult?.data.yesEmployees,
           }));
           console.log('[SCORING-TRACE] Mapped to workbook sections:', Object.fromEntries(
             Object.entries(sections).map(([k, v]) => [k, (v as any)?.rows?.length ?? 0]),
@@ -2426,18 +2430,16 @@ export default function InformationRequest() {
           <div className="mb-10 max-w-3xl">
             <div className="flex items-center gap-2 mb-4 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80" />
-              {basePath === "/create-scorecard" ? "New Scorecard" : "Workbook"}
+              Workbook
             </div>
             <h1
               className="text-[40px] sm:text-[52px] font-semibold tracking-tight text-white leading-[1.04]"
               style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
-              {basePath === "/create-scorecard" ? "Let's build your scorecard." : "Company Assessment Workbook"}
+              Company Assessment Workbook
             </h1>
             <p className="mt-4 text-[15px] text-[#a1a1a6] leading-relaxed">
-              {basePath === "/create-scorecard"
-                ? "Pick a company below or import an existing workbook from Excel. You can save and come back anytime."
-                : "Structured spreadsheet collection — replaces manual onboarding sheets."}
+              Structured spreadsheet collection - replaces manual onboarding sheets.
             </p>
           </div>
         )}
