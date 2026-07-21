@@ -4,8 +4,18 @@ import mammoth from 'mammoth';
 import { createWorker } from 'tesseract.js';
 import { createLogger } from '../logger.js';
 import type { RawExtractionInput } from '../../schemas/parser_output.js';
+import {
+  htmlToMarkdown,
+  pptxToMarkdown,
+  reconstructPdfLines,
+  worksheetToMarkdown,
+} from './markdownConversion.js';
+import { convertWithDocling, doclingHandlesExtension, isDoclingEnabled } from './doclingClient.js';
+import { preprocessForOcr } from './imagePreprocessing.js';
 
 const logger = createLogger('FileExtraction');
+
+const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
 export const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
   'application/pdf',
@@ -13,6 +23,8 @@ export const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
+  PPTX_MIME,
+  'application/vnd.ms-powerpoint',
   'text/csv',
   'text/plain',
   'image/png',
@@ -87,9 +99,50 @@ export async function extractPdfText(buffer: Buffer): Promise<string> {
   return pages.join('\n\n');
 }
 
+/**
+ * Layout-aware markdown rendering of a digital PDF's text layer. Same source
+ * items as {@link extractPdfText}, but grouped into visual reading-order lines
+ * (via item x/y positions) and split into `## Page N` sections — the structure
+ * an LLM reads far more reliably than a single space-joined blob. Text-layer
+ * only, never OCR; returns '' when there is no digital text (a scan).
+ */
+export async function extractPdfMarkdown(buffer: Buffer): Promise<string> {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+  const pdf = await loadingTask.promise;
+  const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
+  const blocks: string[] = [];
+
+  for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const items = content.items
+      .map((item: unknown) => {
+        if (item && typeof item === 'object' && 'str' in item && 'transform' in item) {
+          const it = item as { str: string; transform: number[] };
+          return { str: String(it.str), x: it.transform[4] ?? 0, y: it.transform[5] ?? 0 };
+        }
+        return null;
+      })
+      .filter((v): v is { str: string; x: number; y: number } => Boolean(v && v.str.trim()));
+
+    const lines = reconstructPdfLines(items);
+    if (lines.length === 0) continue;
+    blocks.push([`## Page ${pageNumber}`, '', ...lines].join('\n'));
+  }
+
+  return blocks.join('\n\n');
+}
+
 export async function extractDocxText(buffer: Buffer): Promise<string> {
   const result = await mammoth.extractRawText({ buffer });
   return result.value;
+}
+
+/** DOCX → markdown via mammoth's HTML output (preserves tables, headings, lists). */
+export async function extractDocxMarkdown(buffer: Buffer): Promise<string> {
+  const result = await mammoth.convertToHtml({ buffer });
+  return htmlToMarkdown(result.value);
 }
 
 export function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[] } {
@@ -107,6 +160,22 @@ export function extractWorkbookText(buffer: Buffer): { text: string; tables: unk
   }
 
   return { text: parts.join('\n'), tables };
+}
+
+/**
+ * Render the structured `tables` array ([{ sheetName, rows }]) as markdown:
+ * one `## sheet` heading + pipe table per sheet. Shared by the XLSX and CSV
+ * branches so spreadsheets reach the LLM as native markdown tables.
+ */
+function tablesToMarkdown(tables: unknown[]): string {
+  const blocks: string[] = [];
+  for (const table of tables) {
+    if (!table || typeof table !== 'object') continue;
+    const { sheetName, rows } = table as { sheetName?: string; rows?: Array<Record<string, unknown>> };
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    blocks.push(worksheetToMarkdown(sheetName ?? 'Sheet', rows));
+  }
+  return blocks.join('\n\n');
 }
 
 function rowsToReadableText(rows: Array<Record<string, unknown>>): string {
@@ -173,9 +242,14 @@ export function extractCsvText(rawCsv: string): { text: string; tables: unknown[
 }
 
 async function extractImageText(buffer: Buffer): Promise<string> {
+  // Preprocess first: greyscale + contrast + upscale recovers substantially more
+  // characters from phone photos and low-DPI scans than OCR tuning does. Falls
+  // back to the original buffer if sharp is unavailable or preprocessing fails.
+  const { buffer: ocrInput } = await preprocessForOcr(buffer);
+
   const worker = await createWorker('eng');
   try {
-    const result = await worker.recognize(buffer);
+    const result = await worker.recognize(ocrInput);
     return result.data.text;
   } finally {
     await worker.terminate();
@@ -193,6 +267,9 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
 
   const ext = extensionFromFilename(file.originalname);
   let rawText = '';
+  // `markdown` is the structure-preserving rendering for LLM extractors; it stays
+  // additive so `raw_text` (what the regex extractor reads) never changes shape.
+  let markdown = '';
   let tables: unknown[] = [];
 
   logger.info('Extracting uploaded file', {
@@ -203,11 +280,13 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
 
   if (file.mimetype === 'application/pdf' || ext === '.pdf') {
     rawText = await withTimeout(extractPdfText(file.buffer), EXTRACTION_TIMEOUT_MS);
+    markdown = await withTimeout(extractPdfMarkdown(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => '');
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     || ext === '.docx'
   ) {
     rawText = await withTimeout(extractDocxText(file.buffer), EXTRACTION_TIMEOUT_MS);
+    markdown = await withTimeout(extractDocxMarkdown(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => '');
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     || file.mimetype === 'application/vnd.ms-excel'
@@ -217,28 +296,58 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
     const extracted = extractWorkbookText(file.buffer);
     rawText = extracted.text;
     tables = extracted.tables;
+    markdown = tablesToMarkdown(extracted.tables);
   } else if (file.mimetype === 'text/csv' || ext === '.csv') {
     const extracted = extractCsvText(file.buffer.toString('utf8'));
     rawText = extracted.text;
     tables = extracted.tables;
+    markdown = tablesToMarkdown(extracted.tables);
+  } else if (file.mimetype === PPTX_MIME || ext === '.pptx') {
+    const extracted = await withTimeout(pptxToMarkdown(file.buffer), EXTRACTION_TIMEOUT_MS);
+    rawText = extracted.text;
+    markdown = extracted.markdown;
   } else if (file.mimetype === 'text/plain' || ext === '.txt') {
     rawText = file.buffer.toString('utf8');
+    markdown = rawText;
   } else if (file.mimetype.startsWith('image/')) {
     if (file.size > MAX_IMAGE_BYTES) {
       throw new Error(`Image exceeds maximum size of ${MAX_IMAGE_BYTES} bytes`);
     }
     rawText = await withTimeout(extractImageText(file.buffer), EXTRACTION_TIMEOUT_MS);
+    markdown = rawText;
   }
 
   if (!rawText.trim() && tables.length === 0) {
     throw new Error('Could not extract readable text from uploaded file');
   }
 
+  // Optional upgrade: when the Docling sidecar is enabled it does layout-aware
+  // conversion with real table-structure recovery, which beats our text-layer
+  // rendering. It only ever replaces `markdown` (the LLM-facing field) — never
+  // `raw_text`, so the regex extractor is untouched. Any failure returns null and
+  // we silently keep the built-in conversion.
+  if (isDoclingEnabled() && doclingHandlesExtension(ext)) {
+    const docling = await convertWithDocling(file.buffer, file.originalname, file.mimetype);
+    if (docling) {
+      markdown = docling.markdown;
+      // Only adopt Docling's tables when our own converters found none, so the
+      // spreadsheet path keeps its exact structured `tables` shape.
+      if (tables.length === 0 && docling.tables.length > 0) {
+        tables = docling.tables.map((t) => ({ sheetName: `Table ${t.index + 1}`, rows: t.rows ?? [] }));
+      }
+    }
+  }
+
+  // Fall back to the plain text if a structured rendering could not be produced,
+  // so downstream LLM consumers always have a non-empty `markdown` to read.
+  if (!markdown.trim()) markdown = rawText;
+
   return {
     file_id: `upload_${Date.now()}`,
     filename: file.originalname,
     mime_type: file.mimetype,
     raw_text: rawText,
+    markdown,
     tables,
     metadata: {
       source: 'direct_upload',

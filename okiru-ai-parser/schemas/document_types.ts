@@ -4,6 +4,8 @@ export const SUPPORTED_DOCUMENT_MIME_TYPES = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-powerpoint',
   'text/csv',
   'text/plain',
   'image/png',
@@ -29,6 +31,13 @@ export interface RawExtractionInput {
   filename: string;
   mime_type: string;
   raw_text: string;
+  /**
+   * Structure-preserving markdown rendering of the same document (headings, pipe
+   * tables, lists). Optional and additive: `raw_text` remains the flat projection
+   * the deterministic regex extractor consumes, while LLM-based extractors read
+   * `markdown` because tables/headings are the semantic anchors they rely on.
+   */
+  markdown?: string;
   tables: unknown[];
   metadata: Record<string, unknown>;
 }

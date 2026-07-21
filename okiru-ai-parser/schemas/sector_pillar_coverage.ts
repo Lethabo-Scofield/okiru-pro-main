@@ -299,16 +299,20 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     sectorCode: 'FSC',
     scorecardType: 'Generic',
     sectorName: 'Financial Sector Code (Banks — FS701)',
-    totalMaxPoints: 130,
+    // Synced to sectorConfig FSC_BANKS: Empowerment Financing (15) applies to
+    // Banks (FS701)/LTI (FS702) only, and SD/ED are the template's EF & ESD
+    // scorecard rows (7/5) — the previous 10/7 were the "Others" ESD maxima.
+    totalMaxPoints: 140,
     pillarPoints: {
       ownership: 25, managementControl: 21, employmentEquity: 0, skillsDevelopment: 23,
-      preferentialProcurement: 24, supplierDevelopment: 10, enterpriseDevelopment: 7,
-      socioEconomicDevelopment: 8, yesInitiative: 0, empowermentFinancing: 0, accessToFinancialServices: 12,
+      preferentialProcurement: 24, supplierDevelopment: 7, enterpriseDevelopment: 5,
+      socioEconomicDevelopment: 8, yesInitiative: 0, empowermentFinancing: 15, accessToFinancialServices: 12,
     },
     readiness: 'shadow_mode',
     readinessReasons: [
       ADVISORY_ONLY_REASON,
       'Access to Financial Services (12 pts) is scored but invisible to the parser.',
+      'Empowerment Financing (15 pts) is scored but invisible to the parser.',
     ],
   },
   {
@@ -316,16 +320,18 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     sectorCode: 'FSC',
     scorecardType: 'Generic',
     sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
-    totalMaxPoints: 132,
+    // Synced to sectorConfig FSC_LTI — see the FSC_BANKS note above.
+    totalMaxPoints: 142,
     pillarPoints: {
       ownership: 25, managementControl: 21, employmentEquity: 0, skillsDevelopment: 23,
-      preferentialProcurement: 24, supplierDevelopment: 10, enterpriseDevelopment: 9,
-      socioEconomicDevelopment: 8, yesInitiative: 0, empowermentFinancing: 0, accessToFinancialServices: 12,
+      preferentialProcurement: 24, supplierDevelopment: 7, enterpriseDevelopment: 7,
+      socioEconomicDevelopment: 8, yesInitiative: 0, empowermentFinancing: 15, accessToFinancialServices: 12,
     },
     readiness: 'shadow_mode',
     readinessReasons: [
       ADVISORY_ONLY_REASON,
       'Access to Financial Services (12 pts) is scored but invisible to the parser.',
+      'Empowerment Financing (15 pts) is scored but invisible to the parser.',
     ],
   },
   {
