@@ -3,7 +3,11 @@
  * docs/SECTOR_TRUTH_LEDGER.md for all 11 implemented sectors.
  */
 import { describe, it, expect } from 'vitest';
-import { getSectorConfig, listSectorConfigs } from '../pipeline/sectorConfig.js';
+import {
+  getSectorConfig,
+  listSectorConfigs,
+  sumPillarMaxPoints as sumConfigPillarMaxPoints,
+} from '../pipeline/sectorConfig.js';
 import {
   CONSTRUCTION_QSE_SCORECARD,
   CONSTRUCTION_CONTRACTOR_SCORECARD,
@@ -13,23 +17,14 @@ import { LEDGER_GRAND_TOTALS, sectorSubElementKey } from '../pipeline/sectorSubE
 
 const ALL_SECTORS = listSectorConfigs();
 
+/**
+ * Delegates to the production implementation. This file used to carry its own
+ * copy, which silently drifted: it ignored `electiveGroupSizes` and `basePoints`
+ * and so reported 28 for Transport QSE (the largest single element) instead of
+ * 100. Duplicating the rule is what let it drift — there is now one.
+ */
 function sumPillarMaxPoints(sectorCode: string, scorecardType: string): number {
-  const config = getSectorConfig(sectorCode, scorecardType);
-  const pc = config.pillarConfigs;
-  const chooseOneGroups = new Map<string, number>();
-
-  let total = 0;
-  for (const [key, pillar] of Object.entries(pc)) {
-    if (!pillar || pillar.maxPoints <= 0) continue;
-    if (pillar.chooseOneGroup) {
-      const prev = chooseOneGroups.get(pillar.chooseOneGroup) ?? 0;
-      chooseOneGroups.set(pillar.chooseOneGroup, Math.max(prev, pillar.maxPoints));
-      continue;
-    }
-    total += pillar.maxPoints;
-  }
-  for (const pts of chooseOneGroups.values()) total += pts;
-  return total;
+  return sumConfigPillarMaxPoints(getSectorConfig(sectorCode, scorecardType));
 }
 
 function sumSubElements(sectorCode: string, scorecardType: string, pillarKey: string): number {

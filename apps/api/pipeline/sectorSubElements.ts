@@ -420,7 +420,13 @@ export const LEDGER_GRAND_TOTALS: Record<string, number> = {
   'FSC:Generic': 120,
   'AGRI:Generic': 132,
   'TRANSPORT:Generic': 108,
-  'TRANSPORT:QSE': 107,
+  // Any four of the seven elements × 25. Was 107, carried over from a
+  // "82 compulsory + one elective" reading that the sector code does not state
+  // and whose cited source (docs/SECTOR_TRUTH_LEDGER.md) is not in the repo.
+  // Corrected against certificate 13609 (Thandanani Transport, 30 Jan 2026),
+  // which scores 102 → Level 1 — impossible on a 107 denominator with EE forced
+  // in. See __tests__/transportQseScorecard.test.ts.
+  'TRANSPORT:QSE': 100,
   'CONSTRUCTION:QSE': 110,
   'CONSTRUCTION:Contractor': 123,
   'CONSTRUCTION:BEP': 123,

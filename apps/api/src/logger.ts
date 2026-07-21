@@ -32,8 +32,28 @@ function serializeError(err: unknown): Record<string, unknown> {
       ...((err as any).statusCode ? { statusCode: (err as any).statusCode } : {}),
     };
   }
-  if (err !== undefined && err !== null) return { message: String(err) };
-  return {};
+  if (err === undefined || err === null) return {};
+
+  // Non-Error objects: preserve their contents instead of String()-ing them.
+  // `String({ fileName, error })` is "[object Object]", which silently destroyed
+  // the entire payload — the reason upload failures logged as
+  // `{"error":{"message":"[object Object]"}}` with no usable diagnostics. This
+  // also rescues the common miscall `logger.error(msg, { ...meta })`, where a meta
+  // object is passed in the error slot.
+  if (typeof err === 'object') {
+    const source = err as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(source)) {
+      // Nested Errors (e.g. { cause: err }) are serialized properly too.
+      out[key] = value instanceof Error ? serializeError(value) : value;
+    }
+    // Some thrown values carry a non-enumerable message/stack.
+    if (!('message' in out) && typeof source.message === 'string') out.message = source.message;
+    if (!('stack' in out) && typeof source.stack === 'string') out.stack = source.stack;
+    return Object.keys(out).length > 0 ? out : { message: String(err) };
+  }
+
+  return { message: String(err) };
 }
 
 const LEVEL_COLORS: Record<LogLevel, string> = {

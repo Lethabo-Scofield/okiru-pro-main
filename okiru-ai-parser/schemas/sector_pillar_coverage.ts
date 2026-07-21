@@ -422,7 +422,9 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     sectorCode: 'TRANSPORT',
     scorecardType: 'QSE',
     sectorName: 'Transport Sector Code (QSE)',
-    totalMaxPoints: 107,
+    // Any four of the seven elements × 25. pillarPoints below are each element's
+    // bonus-inclusive maximum, which is why they do not sum to this total.
+    totalMaxPoints: 100,
     pillarPoints: {
       ownership: 28, managementControl: 27, employmentEquity: 27, skillsDevelopment: 25,
       preferentialProcurement: 25, supplierDevelopment: 0, enterpriseDevelopment: 25,

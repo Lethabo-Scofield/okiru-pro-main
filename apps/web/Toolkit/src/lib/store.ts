@@ -224,23 +224,39 @@ function mapJobTitleToDesignation(raw: string | undefined): string {
   return 'Junior';
 }
 
+// Ownership / MC / EE are here because Transport QSE elects any FOUR of its
+// seven elements — none of the seven is compulsory. Sectors that only make the
+// tail four elective simply never mark the first three with a group.
 type PillarConfigKey =
+  | 'ownership'
+  | 'managementControl'
+  | 'employmentEquity'
   | 'skillsDevelopment'
   | 'preferentialProcurement'
   | 'enterpriseDevelopment'
   | 'socioEconomicDevelopment';
 
 const ELECTIVE_CONFIG_TO_SCORECARD: Record<PillarConfigKey, keyof ScorecardResult> = {
+  ownership: 'ownership',
+  managementControl: 'managementControl',
+  employmentEquity: 'employmentEquity',
   skillsDevelopment: 'skillsDevelopment',
   preferentialProcurement: 'procurement',
   enterpriseDevelopment: 'enterpriseDevelopment',
   socioEconomicDevelopment: 'socioEconomicDevelopment',
 };
 
-/** Auto-select highest-scoring pillar per chooseOneGroup (Transport QSE electives). */
+/**
+ * Elect the highest-scoring members of each elective group.
+ *
+ * How many are elected comes from `electiveGroupSizes[group]`, defaulting to 1.
+ * Transport QSE elects FOUR of seven: where the entity has not chosen its four
+ * elements, the verification agency measures the four it scores best on.
+ */
 function resolveChooseOneElectives(
   pConfig: CalculatorConfig['pillarConfigs'],
   rawScores: Record<PillarConfigKey, number>,
+  electiveGroupSizes?: Record<string, number>,
 ): { chosenKey: PillarConfigKey | null; activeKeys: Set<PillarConfigKey> } {
   const groups = new Map<string, PillarConfigKey[]>();
   for (const key of Object.keys(ELECTIVE_CONFIG_TO_SCORECARD) as PillarConfigKey[]) {
@@ -252,11 +268,13 @@ function resolveChooseOneElectives(
   }
   const activeKeys = new Set<PillarConfigKey>();
   let chosenKey: PillarConfigKey | null = null;
-  for (const keys of groups.values()) {
-    const best = keys.reduce((a, b) => (rawScores[b] > rawScores[a] ? b : a), keys[0]);
-    activeKeys.add(best);
-    chosenKey = best;
-    console.log('[SCORING-TRACE] chooseOneGroup resolved:', keys.join(', '), '→ chosen:', best, `(${rawScores[best]} pts)`);
+  for (const [group, keys] of Array.from(groups.entries())) {
+    const size = electiveGroupSizes?.[group] ?? 1;
+    const elected = [...keys].sort((a, b) => (rawScores[b] ?? 0) - (rawScores[a] ?? 0)).slice(0, size);
+    for (const key of elected) activeKeys.add(key);
+    chosenKey = elected[0] ?? null;
+    console.log('[SCORING-TRACE] elective group resolved:', group, `best ${size} of`, keys.join(', '),
+      '→', elected.map((k) => `${k} (${rawScores[k] ?? 0})`).join(', '));
   }
   return { chosenKey, activeKeys };
 }
@@ -833,6 +851,9 @@ function calculateScorecard(
   const yesTarget = pConfig?.yesInitiative?.maxPoints ?? 0;
 
   const electiveRawScores: Record<PillarConfigKey, number> = {
+    ownership: ownScore.total,
+    managementControl: mgtScoreTotal,
+    employmentEquity: eeScoreTotal,
     skillsDevelopment: skillScore.total,
     preferentialProcurement: procScore.total,
     enterpriseDevelopment: esdScore.edTotal,
@@ -840,7 +861,7 @@ function calculateScorecard(
   };
   const hasChooseOne = Object.values(pConfig ?? {}).some(p => p?.chooseOneGroup);
   const { chosenKey: chosenElectiveKey, activeKeys: activeElectiveKeys } = hasChooseOne
-    ? resolveChooseOneElectives(pConfig, electiveRawScores)
+    ? resolveChooseOneElectives(pConfig, electiveRawScores, cfg?.electiveGroupSizes)
     : { chosenKey: null, activeKeys: new Set<PillarConfigKey>() };
 
   const electiveScoreForTotal = (key: PillarConfigKey, score: number): number => {
@@ -857,7 +878,13 @@ function calculateScorecard(
   const afsForTotal = afsScore?.total ?? 0;
   const efForTotal = efScore?.total ?? 0;
 
-  const compulsoryTotal = ownScore.total + mgtScoreTotal + (eeTarget > 0 ? eeScoreTotal : 0);
+  // Ownership / MC / EE are only unconditional where the sector does not make
+  // them electives. Transport QSE does, so an unelected element contributes 0 —
+  // which is how a real certificate shows Employment Equity 0.00 without that
+  // zero dragging the entity's level down.
+  const compulsoryTotal = electiveScoreForTotal('ownership', ownScore.total)
+    + electiveScoreForTotal('managementControl', mgtScoreTotal)
+    + (eeTarget > 0 ? electiveScoreForTotal('employmentEquity', eeScoreTotal) : 0);
   const electiveTotal = skillsForTotal + procForTotal + edForTotal + sedForTotal;
   const totalPoints = compulsoryTotal + electiveTotal + sdForTotal + afsForTotal + efForTotal + yesScore.score + yesScore.yesBonusPoints;
 

@@ -98,6 +98,18 @@ vi.mock('../../services/azureCertStorage.js', () => ({
       url: 'https://example.test/cert.pdf',
       downloadToBuffer: vi.fn(),
     })),
+    // The upload paths use getBlockBlobClient(...).uploadData(...). Without it
+    // every upload threw "getBlockBlobClient is not a function", which the route
+    // swallowed into a generic 500 — so these tests were failing on a missing
+    // mock, not on production behaviour.
+    getBlockBlobClient: vi.fn(() => ({
+      url: 'https://example.test/cert.pdf',
+      uploadData: vi.fn(async () => ({ requestId: 'test-request' })),
+      setMetadata: vi.fn(async () => ({})),
+      delete: vi.fn(async () => ({})),
+      deleteIfExists: vi.fn(async () => ({ succeeded: true })),
+      downloadToBuffer: vi.fn(async () => Buffer.from('')),
+    })),
     listBlobsFlat: vi.fn(async function* () {}),
   })),
 }));

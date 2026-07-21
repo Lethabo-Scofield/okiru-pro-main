@@ -18,6 +18,7 @@ import multer from 'multer';
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { inferTablesFromEntities } from '../../pipeline/extraction/aiEntityMapper.js';
+import { htmlToMarkdown, pptxToMarkdown } from '../../pipeline/extraction/documentMarkdown.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
 
@@ -117,8 +118,9 @@ import { ProvenanceTracker } from '../../pipeline/extraction/provenanceTracker.j
 import { smartExtractTables } from '../../pipeline/extraction/aiTableClassifier.js';
 import { Document, DocumentChunk } from '../../models.js';
 import { 
-  isScannedPdf, 
+  classifyPdfPages,
   extractFromScannedPdf,
+  extractFromScannedPages,
   extractTablesFromDigitalPdf,
   type VisionExtractionResult,
   type VisionTableResult,
@@ -443,11 +445,72 @@ async function parseFileToPages(
     }
 
     const totalText = pages.map(p => p.text).join(' ');
-    const scannedDetection = isScannedPdf(totalText);
-    
-    logger.info('PDF text extraction complete', { charCount: totalText.length, scannedDetected: scannedDetection });
-    
-    if (scannedDetection) {
+
+    // Classify EVERY page independently. A document is routinely mixed — a digital
+    // contract with a scanned certificate stapled in, or a photographed signature
+    // page. Judging the document as a whole (isScannedPdf(totalText)) makes those
+    // scanned pages look "digital" in aggregate, so they contribute empty text and
+    // their values are silently lost. Per-page routing sends each page to the
+    // pipeline it actually needs.
+    const pageClassification = classifyPdfPages(
+      pages.map((p, idx) => ({ pageNumber: idx + 1, text: p.text }))
+    );
+
+    logger.info('PDF page classification', {
+      charCount: totalText.length,
+      mode: pageClassification.mode,
+      scannedPages: pageClassification.scannedPages,
+      digitalPages: pageClassification.digitalPages.length,
+    });
+
+    // MIXED: OCR only the scanned pages, keep the digital pages' text layer.
+    if (pageClassification.mode === 'mixed') {
+      logger.info('Mixed PDF — routing scanned pages through vision OCR', {
+        scanned: pageClassification.scannedPages.length,
+        digital: pageClassification.digitalPages.length,
+      });
+      try {
+        const ocrResults = await extractFromScannedPages(
+          buffer,
+          pageClassification.scannedPages,
+          'RCOGP',
+          null
+        );
+
+        // Splice OCR text back into the correct page slots, preserving order.
+        for (const result of ocrResults) {
+          const pageNumber = result.metadata?.pageNumber;
+          const index = typeof pageNumber === 'number' ? pageNumber - 1 : -1;
+          if (index < 0 || index >= pages.length || !result.text?.trim()) continue;
+          pages[index] = {
+            pageId: pages[index].pageId,
+            text: result.text,
+            metadata: {
+              ...pages[index].metadata,
+              type: 'pdf_vision',
+              ocrConfidence: result.metadata?.ocrConfidence,
+              visionExtracted: true,
+              entities: result.entities || [],
+            },
+          };
+        }
+
+        const recovered = ocrResults.filter(r => r.text?.trim()).length;
+        logger.info('Mixed PDF OCR complete', {
+          requested: pageClassification.scannedPages.length,
+          recovered,
+        });
+      } catch (visionErr) {
+        // Scanned pages keep their (empty) text layer rather than failing the doc.
+        logger.warn('Mixed-PDF vision OCR failed; keeping text-layer pages', {
+          error: String(visionErr),
+        });
+      }
+
+      return pages;
+    }
+
+    if (pageClassification.mode === 'all_scanned') {
       logger.info('Switching to GPT-4o Vision OCR for scanned PDF');
       try {
         const visionResults = await extractFromScannedPdf(buffer, 'RCOGP', 'Generic', null);
@@ -553,30 +616,10 @@ async function parseFileToPages(
     try {
       const mammoth = await import('mammoth');
       const result = await mammoth.default.convertToHtml({ buffer });
-      const html = result.value;
 
-      // Convert HTML tables to pipe-delimited text for downstream extraction
-      let text = html
-        .replace(/<table[^>]*>/gi, '\n[TABLE]\n')
-        .replace(/<\/table>/gi, '\n[/TABLE]\n')
-        .replace(/<tr[^>]*>/gi, '')
-        .replace(/<\/tr>/gi, '\n')
-        .replace(/<t[hd][^>]*>/gi, ' | ')
-        .replace(/<\/t[hd]>/gi, '')
-        .replace(/<li[^>]*>/gi, '- ')
-        .replace(/<\/li>/gi, '\n')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<h[1-6][^>]*>/gi, '\n## ')
-        .replace(/<\/h[1-6]>/gi, '\n')
-        .replace(/<p[^>]*>/gi, '\n')
-        .replace(/<\/p>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
+      // Proper HTML→markdown: real pipe tables (not [TABLE] markers), headings and
+      // lists preserved — the structure the LLM extractor anchors on.
+      let text = htmlToMarkdown(result.value);
 
       if (result.messages?.length) {
         logger.warn('DOCX conversion warnings', { warnings: result.messages.map((m: any) => m.message).join('; ') });
@@ -611,6 +654,46 @@ async function parseFileToPages(
     }
 
     return [{ pageId: 'docx_1', text: '', metadata: { type: 'docx', error: 'Failed to parse' } }];
+  }
+
+  // PPTX — slides rendered as markdown headings + bullets (one page per ~5000 chars)
+  if (
+    mimetype === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    ext === 'pptx'
+  ) {
+    try {
+      const { markdown } = await pptxToMarkdown(buffer);
+      if (!markdown.trim()) {
+        return [{ pageId: 'pptx_1', text: '', metadata: { type: 'pptx', error: 'No slide text' } }];
+      }
+
+      const maxChunk = 5000;
+      const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
+      if (markdown.length <= maxChunk) {
+        pages.push({ pageId: 'pptx_1', text: markdown, metadata: { type: 'pptx' } });
+      } else {
+        const slides = markdown.split(/\n\n(?=## Slide )/);
+        let chunk = '';
+        let chunkNum = 1;
+        for (const slide of slides) {
+          if (chunk.length + slide.length > maxChunk && chunk.length > 0) {
+            pages.push({ pageId: `pptx_${chunkNum}`, text: chunk.trim(), metadata: { type: 'pptx', chunkNum } });
+            chunkNum++;
+            chunk = '';
+          }
+          chunk += slide + '\n\n';
+        }
+        if (chunk.trim()) {
+          pages.push({ pageId: `pptx_${chunkNum}`, text: chunk.trim(), metadata: { type: 'pptx', chunkNum } });
+        }
+      }
+
+      logger.info('PPTX extracted', { charCount: markdown.length, chunkCount: pages.length });
+      return pages;
+    } catch (error) {
+      logger.warn('PPTX parsing failed', { error: String(error) });
+      return [{ pageId: 'pptx_1', text: '', metadata: { type: 'pptx', error: 'Failed to parse' } }];
+    }
   }
 
   // Unsupported type

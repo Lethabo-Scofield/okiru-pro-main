@@ -2,14 +2,14 @@
  * Transport Sector Code — QSE CalculatorConfig for Toolkit scoring.
  * Derived from TRANSPORT_QSE in apps/api/pipeline/sectorConfig.ts, which
  * encodes docs/Transport Codes.xlsx "Road Freight QSE":
- *   Compulsory: Ownership 28 + MC 27 + EE 27 = 82
- *   Elective:   choose ONE of Skills 25 / PP 25 / ED 25 / SED 25
- *   Total:      107
+ *   Any FOUR of the seven elements, each weighted 25 → denominator 100.
+ *   Bonus points are earnable on top, so a score may exceed 100.
  *
  * MC/EE score via calculateTransportQseManagement / ...QseEmploymentEquity
  * (calculators/transport.ts). Electives score via the generic calculators;
- * the store's resolveChooseOneElectives keeps only the best elective
- * (chooseOneGroup: 'transport_qse_elective').
+ * the store's resolveChooseOneElectives keeps the best four members of
+ * chooseOneGroup 'transport_qse_elective' — which for this sector is all seven
+ * elements, none of them compulsory.
  */
 import {
   TRANSPORT_QSE,
@@ -35,7 +35,8 @@ export function sectorConfigToTransportQseCalculatorConfig(sc: SectorConfig): Ca
   return {
     sectorCode: sc.sectorCode,
     scorecardType: sc.scorecardType,
-    totalMaxPoints: sc.totalMaxPoints, // 107 (82 compulsory + best elective 25)
+    totalMaxPoints: sc.totalMaxPoints, // 100 (any four elements × 25)
+    electiveGroupSizes: sc.electiveGroupSizes, // { transport_qse_elective: 4 }
     ownership: {
       votingRightsMax: own.votingRightsMaxPts,             // 6
       womenBonusMax: own.womenVotingMaxPts,                // 2 (bonus: black women 10%)

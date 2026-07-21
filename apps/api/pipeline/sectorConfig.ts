@@ -47,11 +47,24 @@ export interface PillarConfig {
   hasSubMinimum: boolean;
   subMinimumPercent: number;
   /**
-   * If set, this pillar belongs to a "choose one" elective group.
-   * Only the single highest-scoring pillar in the group counts toward the total.
-   * Transport QSE uses 'transport_qse_elective' for Skills Dev / PP / Enterprise Dev / SED.
+   * If set, this pillar belongs to an elective group: only the highest-scoring
+   * members count toward the total. How many count is `electiveGroupSizes[group]`
+   * on the SectorConfig (default 1, hence the historical name).
+   *
+   * Transport QSE puts ALL SEVEN elements in one group of 4 — the sector code is
+   * measured on any four of the seven (see TRANSPORT_QSE).
    */
   chooseOneGroup?: string;
+  /**
+   * Denominator contribution when this pillar is an elected group member, where
+   * that differs from `maxPoints`.
+   *
+   * Transport QSE elements are each weighted 25 for the denominator, but
+   * `maxPoints` also carries bonus points (Ownership 28, MC 27, EE 27). Bonuses
+   * are earnable but do not enlarge the target — which is exactly how a real
+   * certificate reports 102 out of 100.
+   */
+  basePoints?: number;
   /** Ledger-aligned indicator rows for Super Admin display (Construction uses `indicators` instead). */
   subElements?: PillarSubElement[];
 }
@@ -216,6 +229,12 @@ export interface SectorConfig {
   sectorName: string;
   scorecardType: 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP';
   totalMaxPoints: number; // Total points including YES if applicable
+  /**
+   * How many members of each elective group count toward the score.
+   * Absent or unlisted groups mean 1 (the original "choose one" behaviour).
+   * Transport QSE: { transport_qse_elective: 4 } — any four of the seven elements.
+   */
+  electiveGroupSizes?: Record<string, number>;
   /** Optional indicator-level breakdown (Construction sectors). */
   indicators?: SectorIndicatorRow[];
   pillarConfigs: {
@@ -282,13 +301,35 @@ const TRANSPORT_LARGE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognit
   recognition,
 }));
 
-// Transport Sector QSE — 107 total (82 compulsory + 25 chosen elective)
-// Thresholds scaled proportionally from STANDARD_LEVELS (base 120) to 107.
-const TRANSPORT_QSE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognition }) => ({
-  level,
-  minPoints: Math.round((minPoints * 107) / 120 * 100) / 100,
-  recognition,
-}));
+/**
+ * Transport Sector QSE — the legacy (2007-framework) level table, on a base of
+ * 100 (any four elements × 25).
+ *
+ * These are NOT the amended-codes thresholds scaled to fit. The Transport Sector
+ * Code was never replaced by an aligned 5-element code, so it keeps the legacy
+ * bands: Level 1 >= 100, Level 2 85-99.99, Level 3 75-84.99, and so on. The
+ * previous table scaled STANDARD_LEVELS (an amended-codes, base-120 scale) by
+ * 107/120, which is a different scorecard's ladder applied to this one.
+ *
+ * Confirmed against certificate 13609: 102 points → Level 1 at 135% recognition.
+ *
+ * NOTE FOR REVIEW: Okiru's own "Okiru Toolkit (Transport QSE)_Template_v.1.1.xlsx"
+ * (Summary Scorecard rows 4-12) lists the AMENDED bands 100/95/90/80/75/70/40
+ * for this same scorecard. Both agree that >= 100 is Level 1, so Thandanani is
+ * unaffected either way, but they diverge sharply in the middle — an entity on 88
+ * is Level 2 here and Level 4 under the template. The template needs the same
+ * correction; flagged rather than silently reconciled.
+ */
+const TRANSPORT_QSE_LEVELS = [
+  { level: 1, minPoints: 100, recognition: 135 },
+  { level: 2, minPoints: 85, recognition: 125 },
+  { level: 3, minPoints: 75, recognition: 110 },
+  { level: 4, minPoints: 65, recognition: 100 },
+  { level: 5, minPoints: 55, recognition: 80 },
+  { level: 6, minPoints: 45, recognition: 60 },
+  { level: 7, minPoints: 40, recognition: 50 },
+  { level: 8, minPoints: 30, recognition: 10 },
+];
 
 // FSC level thresholds vary by sub-sector (Scoring Scale sheet — FSC-FULL-ANALYSIS §3)
 const FSC_LEVELS_OTHERS = [
@@ -1433,13 +1474,32 @@ export const TRANSPORT_GENERIC: SectorConfig = {
 // ---------------------------------------------------------------------------
 // Transport Sector — QSE (docs/Transport Codes.xlsx "Road Freight QSE" sheet)
 //
-// Structure: 3 compulsory pillars (Ownership 28 + MC 27 + EE 27 = 82 pts)
-//            + choose ONE of 4 elective pillars (Skills Dev / PP / Enterprise Dev / SED, each 25 pts)
-//            = 107 total.
+// Structure: ANY FOUR of the seven elements, each weighted 25 → denominator 100.
+// Bonus points are earnable on top, so a compliant entity can exceed 100.
 //
-// NOTE: Choose ONE of the 4 elective pillars (Skills Dev, PP, Enterprise Dev, SED) —
-//       only that pillar's 25 pts count toward the 107 total. Indicated by chooseOneGroup
-//       = 'transport_qse_elective' on each elective pillar.
+// The Transport Sector Code still follows the 2007 seven-element framework (it was
+// never replaced by an aligned 5-element code), so the QSE rule is "measured on
+// four of the seven elements". Where the entity has not elected four, the
+// verification agency takes the four highest-scoring ones.
+//
+// GROUND TRUTH — Thandanani Packers & Haulers cc t/a Thandanani Transport,
+// certificate 13609, final BEE verification report dated 30 January 2026
+// (docs/testdocs/Final Report - Thandanani Transport BE13609-300126.pdf):
+//
+//   Equity Ownership 25.00 | Management Control 27.00 | Employment Equity 0.00
+//   Skills Development 0.00 | Preferential Procurement 25.00
+//   Enterprise Development 0.00 | Socio-Economic Development 25.00
+//   TOTAL 102.00 → 135% recognition → LEVEL 1
+//
+// The best four (MC 27 + Own 25 + PP 25 + SED 25) reproduce 102 exactly. EE, SD
+// and ED report 0.00 because they were simply not among the four measured.
+//
+// THIS REPLACED an earlier model of "82 compulsory (Own + MC + EE) + one elective
+// of 25 = 107". That model was not sourced from the sector code: it forced EE into
+// the denominator and allowed only ONE elective, so Thandanani scored
+// 25 + 27 + 0 + 25 = 77 against a 107 target = Level 4 — three levels below the
+// certificate. Both defects are the same mistake: guessing a selection rule the
+// workbook never states.
 //
 // Source: docs/Transport Codes.xlsx — "Road Freight QSE" sheet
 // Ownership 28: voting 6 + EI 9 + fulfilment 1 + net value 9 + bonus women 2 + bonus ESOP 1
@@ -1451,19 +1511,22 @@ export const TRANSPORT_QSE: SectorConfig = {
   sectorCode: 'TRANSPORT',
   sectorName: 'Transport Sector Code (QSE)',
   scorecardType: 'QSE',
-  // 82 compulsory (Ownership 28 + MC 27 + EE 27) + 1 chosen elective of 4 × 25 = 107
-  totalMaxPoints: 107,
+  // Any four of the seven elements, 25 each → 100. Bonuses may exceed it.
+  totalMaxPoints: 100,
+  electiveGroupSizes: { transport_qse_elective: 4 },
   pillarConfigs: {
-    // --- Compulsory pillars ---
-    ownership: { maxPoints: 28, hasSubMinimum: false, subMinimumPercent: 0 },
-    managementControl: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
-    // --- Elective pillars (choose ONE; only the chosen 25 pts count toward 107) ---
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
-    preferentialProcurement: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
-    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Not a standalone elective
-    enterpriseDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
-    socioEconomicDevelopment: { maxPoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    // All seven elements are electives in ONE group of four. `basePoints: 25` is
+    // each element's weighting for the denominator; `maxPoints` additionally
+    // carries that element's bonus points, which are earnable but do not raise
+    // the target.
+    ownership: { maxPoints: 28, basePoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    managementControl: { maxPoints: 27, basePoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    employmentEquity: { maxPoints: 27, basePoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    skillsDevelopment: { maxPoints: 25, basePoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    preferentialProcurement: { maxPoints: 25, basePoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    supplierDevelopment: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Not a standalone element
+    enterpriseDevelopment: { maxPoints: 25, basePoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
+    socioEconomicDevelopment: { maxPoints: 25, basePoints: 25, hasSubMinimum: false, subMinimumPercent: 0, chooseOneGroup: 'transport_qse_elective' },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   },
   targets: {
@@ -1845,6 +1908,75 @@ export function enrichSectorApiPayload<T extends {
 }
 
 /** Full sector payloads for `/api/sectors` fallback when Arango is unavailable. */
+/**
+ * Sum a config's pillar `maxPoints`, respecting `chooseOneGroup`.
+ *
+ * Elective pillars sharing a `chooseOneGroup` are alternatives — only ONE counts
+ * toward the total (e.g. Transport QSE is 82 compulsory + 25 from a single chosen
+ * elective = 107, even though four 25-point electives are defined). A naive sum
+ * over `pillarConfigs` reports 182 for that config and is simply wrong.
+ *
+ * This lived only as copy-pasted helpers inside two test files, which noted that
+ * "the production validator today is the arithmetic identity" — i.e. there was
+ * none. It is production code now so callers and tests share one implementation.
+ */
+export function sumPillarMaxPoints(
+  config: Pick<SectorConfig, 'pillarConfigs'> & Partial<Pick<SectorConfig, 'electiveGroupSizes'>>,
+): number {
+  const groups = new Map<string, number[]>();
+  let total = 0;
+
+  for (const pillar of Object.values(config.pillarConfigs)) {
+    if (!pillar || pillar.maxPoints <= 0) continue;
+    const group = (pillar as { chooseOneGroup?: string }).chooseOneGroup;
+    if (group) {
+      // A group member contributes its weighting, not its bonus-inclusive max.
+      const points = (pillar as { basePoints?: number }).basePoints ?? pillar.maxPoints;
+      if (!groups.has(group)) groups.set(group, []);
+      groups.get(group)!.push(points);
+      continue;
+    }
+    total += pillar.maxPoints;
+  }
+
+  // Only the top `size` members of each group can be elected (default 1).
+  for (const [group, points] of groups) {
+    const size = config.electiveGroupSizes?.[group] ?? 1;
+    total += points.sort((a, b) => b - a).slice(0, size).reduce((sum, p) => sum + p, 0);
+  }
+  return total;
+}
+
+export interface SectorConfigIntegrityIssue {
+  configId: string;
+  declaredTotal: number;
+  pillarSum: number;
+}
+
+/**
+ * Check every shipped sector config for the arithmetic identity
+ * `sumPillarMaxPoints(config) === config.totalMaxPoints`.
+ *
+ * A mismatch means the scorecard can award a different number of points than it
+ * declares — which silently corrupts percentages and B-BBEE levels. Returns the
+ * offending configs (empty array = healthy) so both tests and runtime callers can
+ * assert on it instead of each re-deriving the arithmetic.
+ */
+export function findSectorConfigIntegrityIssues(): SectorConfigIntegrityIssue[] {
+  const issues: SectorConfigIntegrityIssue[] = [];
+  for (const config of ALL_CONFIGS) {
+    const pillarSum = sumPillarMaxPoints(config);
+    if (pillarSum !== config.totalMaxPoints) {
+      issues.push({
+        configId: `${config.sectorCode}_${config.scorecardType}`,
+        declaredTotal: config.totalMaxPoints,
+        pillarSum,
+      });
+    }
+  }
+  return issues;
+}
+
 export function listSectorConfigsFull(): Array<{
   code: string;
   name: string;

@@ -174,4 +174,12 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
       });
     });
   });
-})();
+})().catch((err) => {
+  // Startup must fail loudly. The `unhandledRejection` handler above only LOGS,
+  // which overrides Node's default exit-on-unhandled-rejection — so without this
+  // catch a throw during startup (e.g. the production session-store guard in
+  // registerRoutes) left a zombie: the process stayed alive, never reached
+  // httpServer.listen(), and served nothing while looking "up" to the platform.
+  logger.error("Fatal error during API startup — exiting", err as Error);
+  process.exit(1);
+});

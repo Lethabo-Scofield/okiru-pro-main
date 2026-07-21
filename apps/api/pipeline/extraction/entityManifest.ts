@@ -15,6 +15,22 @@ import { createLogger } from '../../src/logger.js';
 
 const logger = createLogger('EntityManifest');
 
+/**
+ * The default for a pillar the sector config does NOT define: zero points.
+ *
+ * The sector config is the governed source of truth for scorecard points — it is
+ * ledger-checked (sectorConfig.integrity.test.ts) and pinned per sector
+ * (fscScorecard.test.ts). A pillar missing from it is not part of that scorecard,
+ * so the manifest must never invent points for it.
+ *
+ * This replaces per-pillar fallbacks that hardcoded RCOGP Generic's weights
+ * (ownership 25, management control 19, skills 25, procurement 29, SD 10, ED 7,
+ * SED 5) plus FSC's 15/12/5. Those silently inflated any sector whose config
+ * omitted a pillar — the FSC manifest reached 152 points against a scorecard
+ * governed at 120. manifestConfigConsistency.test.ts now fails on any such gap.
+ */
+const MISSING_PILLAR_CONFIG = { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 } as const;
+
 // ---------------------------------------------------------------------------
 // Layer 5: Evidence — source of an extracted or entered value
 // ---------------------------------------------------------------------------
@@ -1677,7 +1693,7 @@ function sedCriteria(cfg: SectorConfig): CriterionEntity[] {
 // ===================================================================
 
 function buildOwnershipPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.ownership ?? { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.ownership ?? MISSING_PILLAR_CONFIG;
   return {
     pillarCode: 'ownership', pillarName: 'Ownership', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
@@ -1686,7 +1702,7 @@ function buildOwnershipPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildMCPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.managementControl ?? { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 };
+  const pc = cfg.pillarConfigs?.managementControl ?? MISSING_PILLAR_CONFIG;
   // For sectors that combine MC+EE, include EE entities in the MC pack
   const eePc = cfg.pillarConfigs?.employmentEquity;
   const isMCPlusEECombined = !eePc || eePc.maxPoints === 0 || eePc.maxPoints === undefined;
@@ -1704,7 +1720,7 @@ function buildMCPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildEEPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.employmentEquity ?? { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 };
+  const pc = cfg.pillarConfigs?.employmentEquity ?? MISSING_PILLAR_CONFIG;
   const eePc = cfg.pillarConfigs?.employmentEquity;
   const isMergedIntoMC = !eePc || eePc.maxPoints === 0 || eePc.maxPoints === undefined;
   return {
@@ -1716,7 +1732,7 @@ function buildEEPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildSkillsPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.skillsDevelopment ?? { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.skillsDevelopment ?? MISSING_PILLAR_CONFIG;
   return {
     pillarCode: 'skillsDevelopment', pillarName: 'Skills Development', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
@@ -1725,7 +1741,7 @@ function buildSkillsPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildProcurementPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.preferentialProcurement ?? { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 };
+  const pc = cfg.pillarConfigs?.preferentialProcurement ?? MISSING_PILLAR_CONFIG;
   return {
     pillarCode: 'preferentialProcurement', pillarName: 'Preferential Procurement', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? true, subMinimumThreshold: pc.maxPoints * ((pc.subMinimumPercent ?? 40) / 100),
@@ -1734,8 +1750,8 @@ function buildProcurementPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildESDPack(cfg: SectorConfig): PillarPack {
-  const sd = cfg.pillarConfigs?.supplierDevelopment ?? { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 };
-  const ed = cfg.pillarConfigs?.enterpriseDevelopment ?? { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 };
+  const sd = cfg.pillarConfigs?.supplierDevelopment ?? MISSING_PILLAR_CONFIG;
+  const ed = cfg.pillarConfigs?.enterpriseDevelopment ?? MISSING_PILLAR_CONFIG;
   const combinedMax = (sd.maxPoints ?? 0) + (ed.maxPoints ?? 0);
   return {
     pillarCode: 'enterpriseSupplierDevelopment', pillarName: 'Enterprise & Supplier Development', maxPoints: combinedMax,
@@ -1745,7 +1761,7 @@ function buildESDPack(cfg: SectorConfig): PillarPack {
 }
 
 function buildSEDPack(cfg: SectorConfig): PillarPack {
-  const pc = cfg.pillarConfigs?.socioEconomicDevelopment ?? { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 };
+  const pc = cfg.pillarConfigs?.socioEconomicDevelopment ?? MISSING_PILLAR_CONFIG;
   return {
     pillarCode: 'socioEconomicDevelopment', pillarName: 'Socio-Economic Development', maxPoints: pc.maxPoints,
     hasSubMinimum: pc.hasSubMinimum ?? false, subMinimumThreshold: (pc.maxPoints ?? 0) * ((pc.subMinimumPercent ?? 0) / 100),
@@ -1930,9 +1946,13 @@ export async function buildManifest(sectorCode: string, scorecardType: string): 
     const procPack = pillarPacks.find(p => p.pillarCode === 'preferentialProcurement');
     if (procPack) procPack.entities.push(...ICT_ENTITIES);
   } else if (upper === 'FSC') {
-    const efConfig = cfg.pillarConfigs.empowermentFinancing ?? { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 };
-    const afsConfig = cfg.pillarConfigs.accessToFinancialServices ?? { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 };
-    const ceConfig = cfg.pillarConfigs.consumerEducation ?? { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 };
+    // FSC's sector-specific pillars. Absent from the config means absent from the
+    // scorecard (Empowerment Financing is Banks/LTI-only, N/A for Generic), so
+    // they contribute zero. The packs are still pushed so EF/AFS/CE entities are
+    // still EXTRACTED; only the scoring weight depends on the config.
+    const efConfig = cfg.pillarConfigs.empowermentFinancing ?? MISSING_PILLAR_CONFIG;
+    const afsConfig = cfg.pillarConfigs.accessToFinancialServices ?? MISSING_PILLAR_CONFIG;
+    const ceConfig = cfg.pillarConfigs.consumerEducation ?? MISSING_PILLAR_CONFIG;
 
     pillarPacks.push({
       pillarCode: 'empowermentFinancing', pillarName: 'Empowerment Financing (FSC)', maxPoints: efConfig.maxPoints,
