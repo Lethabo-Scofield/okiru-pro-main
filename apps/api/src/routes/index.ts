@@ -65,9 +65,19 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   const sessionSecret = process.env.SESSION_SECRET;
-  if (isProd && !sessionSecret) {
-    logger.error("SESSION_SECRET environment variable is required in production");
-    process.exit(1);
+  // Read NODE_ENV at call time, not the module-level `isProd`. A startup guard
+  // must reflect the environment when the server actually starts; the
+  // module-level constant is frozen at import, which made this guard silently
+  // inert whenever something imported this module before NODE_ENV was set.
+  if (process.env.NODE_ENV === "production" && !sessionSecret) {
+    // Throw rather than process.exit(1): this is library code, and exiting from
+    // it is untestable (it kills the test worker) and steals the shutdown
+    // decision from the caller. The entrypoint (index.ts) catches startup
+    // failures and exits non-zero, so the fail-closed behaviour is unchanged.
+    throw new Error(
+      "SESSION_SECRET environment variable is required in production. " +
+        "Refusing to start with the development fallback secret.",
+    );
   }
 
   const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
@@ -94,6 +104,17 @@ export async function registerRoutes(
       ttl: 7 * 24 * 60 * 60,
     });
     logger.info("Session store: MongoDB");
+  } else if (process.env.NODE_ENV === "production") {
+    // Fail closed. Silently falling back to MemoryStore in production loses every
+    // session on restart, leaks memory (MemoryStore is explicitly not for
+    // production), and breaks horizontal scaling — with several replicas behind a
+    // load balancer, sessions are not shared, so users are logged out at random
+    // as requests land on different pods. Refuse to boot instead.
+    throw new Error(
+      "MongoDB is required for the session store in production. " +
+        "Refusing to start with an in-memory session store — set MONGO_URI/MONGODB_URI " +
+        "and ensure the database is reachable.",
+    );
   } else {
     logger.warn("Using in-memory session store (MongoDB unavailable)");
   }

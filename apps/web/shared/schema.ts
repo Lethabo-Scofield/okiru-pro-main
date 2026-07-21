@@ -17,6 +17,11 @@ export interface CalculatorConfig {
   sectorCode?: string;
   scorecardType?: string;
   totalMaxPoints: number;
+  /**
+   * How many members of each `chooseOneGroup` are elected (default 1).
+   * Transport QSE: { transport_qse_elective: 4 } — any four of seven elements.
+   */
+  electiveGroupSizes?: Record<string, number>;
   ownership: {
     votingRightsMax: number;
     womenBonusMax: number;

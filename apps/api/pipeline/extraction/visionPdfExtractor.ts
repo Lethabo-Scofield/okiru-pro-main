@@ -100,6 +100,114 @@ export async function pdfToBase64Images(
 }
 
 /**
+ * Convert a SPECIFIC set of pages to base64 images.
+ *
+ * Mixed documents (a digital contract with two scanned certificate pages stapled
+ * in, a signature page photographed and re-inserted) only need the scanned pages
+ * rasterised. Rendering the whole PDF would waste time and vision tokens on pages
+ * whose text layer is already perfect.
+ */
+export async function pdfPagesToBase64Images(
+  buffer: Buffer,
+  pageNumbers: number[]
+): Promise<Array<{ pageNumber: number; base64: string }>> {
+  if (pageNumbers.length === 0) return [];
+  logger.info(`Converting ${pageNumbers.length} specific page(s) to images`, { pages: pageNumbers });
+
+  const { fromBuffer } = await import('pdf2pic');
+  const convert = fromBuffer(buffer, {
+    density: 150,
+    format: 'png' as const,
+    width: 1654,
+    height: 2339,
+    quality: 90,
+  });
+
+  const images: Array<{ pageNumber: number; base64: string }> = [];
+  for (const pageNumber of pageNumbers) {
+    try {
+      const result = await convert(pageNumber, { responseType: 'base64' });
+      if (result?.base64) images.push({ pageNumber, base64: result.base64 });
+    } catch (pageErr) {
+      // One unrenderable page must not lose the rest of the document.
+      logger.error(`Failed to convert page ${pageNumber}`, pageErr);
+    }
+  }
+  return images;
+}
+
+export type PdfPageKind = 'digital' | 'scanned';
+
+export interface PdfPageClassification {
+  pageNumber: number;
+  kind: PdfPageKind;
+  charCount: number;
+}
+
+export interface PdfDocumentClassification {
+  pages: PdfPageClassification[];
+  scannedPages: number[];
+  digitalPages: number[];
+  /** all_digital / all_scanned take the fast paths; mixed needs per-page routing. */
+  mode: 'all_digital' | 'all_scanned' | 'mixed';
+}
+
+/**
+ * Classify EVERY page independently as digital or scanned.
+ *
+ * The whole-document check (`isScannedPdf(totalText)`) silently loses content in
+ * mixed files: eight digital pages plus two scanned ones look "digital" in
+ * aggregate, so the scanned pages contribute empty text and their values vanish.
+ * Classifying per page lets each one take the pipeline it actually needs.
+ */
+export function classifyPdfPages(
+  pages: Array<{ pageNumber: number; text: string }>
+): PdfDocumentClassification {
+  const classified: PdfPageClassification[] = pages.map((page) => {
+    const charCount = (page.text ?? '').replace(/\s+/g, ' ').trim().length;
+    return {
+      pageNumber: page.pageNumber,
+      kind: isScannedPdf(page.text ?? '') ? 'scanned' : 'digital',
+      charCount,
+    };
+  });
+
+  const scannedPages = classified.filter((p) => p.kind === 'scanned').map((p) => p.pageNumber);
+  const digitalPages = classified.filter((p) => p.kind === 'digital').map((p) => p.pageNumber);
+
+  const mode: PdfDocumentClassification['mode'] =
+    scannedPages.length === 0 ? 'all_digital'
+      : digitalPages.length === 0 ? 'all_scanned'
+        : 'mixed';
+
+  return { pages: classified, scannedPages, digitalPages, mode };
+}
+
+/**
+ * OCR only the given pages via vision, returning one result per page.
+ * Used for the mixed case, where the digital pages keep their existing text.
+ */
+export async function extractFromScannedPages(
+  buffer: Buffer,
+  pageNumbers: number[],
+  sectorCode: string,
+  entityManifest: any
+): Promise<VisionExtractionResult[]> {
+  const images = await pdfPagesToBase64Images(buffer, pageNumbers);
+  const results: VisionExtractionResult[] = [];
+
+  for (const image of images) {
+    try {
+      results.push(await extractFromImage(image.base64, image.pageNumber, sectorCode, entityManifest));
+    } catch (err) {
+      // A failed page degrades that page only; the rest of the document survives.
+      logger.error(`Vision OCR failed for page ${image.pageNumber}`, err);
+    }
+  }
+  return results;
+}
+
+/**
  * Extract entities from a single page image using GPT-4o Vision
  */
 export async function extractFromImage(

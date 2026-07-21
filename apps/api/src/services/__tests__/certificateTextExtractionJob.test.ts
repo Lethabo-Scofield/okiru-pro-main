@@ -94,7 +94,12 @@ describe('certificate text extraction coverage/retry job', () => {
         vatNumber: '4000000000',
       },
     ]);
-    updateOne.mockResolvedValue({});
+    // The job calls `CertificateMetadataModel.updateOne(...).exec()` (Mongoose
+    // returns a Query, not a Promise). Resolving updateOne directly left no
+    // `.exec()`, so every persist threw a TypeError that the job caught — the
+    // updates looked like silent no-ops (`updated: false`) even though the
+    // production code was correct.
+    updateOne.mockReturnValue({ exec: vi.fn().mockResolvedValue({}) });
     downloadToBuffer.mockRejectedValue(new Error('Blob not found'));
     extractTextWithAzureDocumentIntelligenceOnly.mockResolvedValue({
       configured: false,

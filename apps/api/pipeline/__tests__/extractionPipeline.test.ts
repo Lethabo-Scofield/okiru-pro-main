@@ -8,6 +8,7 @@ import {
   runExtractionPipelineFromParseResult,
 } from '../extractionPipeline.js';
 import { buildPipelineResult } from '../buildResult.js';
+import { resolveNpatForTargets } from '../npatResolution.js';
 
 const LAKE_NPAT = 33_862_998;
 const LAKE_REVENUE = 274_953_097;
@@ -545,15 +546,51 @@ describe('mapExtractedEntitiesToToolkitInput — Unit Tests', () => {
     expect(mapped.foundation.financials.tmps).toBe(LAKE_TMPS);
   });
 
-  it('computes deemed NPAT correctly', () => {
+  it('does NOT deem NPAT when prior-year history is missing', () => {
+    // A sub-quarter margin alone is not enough: both this pipeline and the
+    // canonical apps/web/src/lib/npatDeemedCalculation.ts it mirrors require
+    // prior-year history before substituting a deemed NPAT, and signal
+    // `priorYearsMissing` instead. mapExtractedEntitiesToToolkitInput always
+    // passes `priorYears: []`, so actual NPAT must be retained here.
     const parseResult = buildManualParseResult();
-    parseResult.client.npat = 100;
+    parseResult.client.npat = 100; // ~0.00004% margin, far below Retail's 1% quarter
     parseResult.client.industrySector = 'Retail';
     const mapped = mapExtractedEntitiesToToolkitInput(parseResult);
 
-    expect(mapped.foundation.financials.isBelowQuarter).toBe(true);
-    expect(mapped.foundation.financials.deemedNpatUsed).toBe(true);
-    expect(mapped.foundation.financials.deemedNpat).toBe(LAKE_REVENUE * 0.04);
+    expect(mapped.foundation.financials.deemedNpatUsed).toBe(false);
+    expect(mapped.foundation.financials.isBelowQuarter).toBe(false);
+    expect(mapped.foundation.financials.npat).toBe(100);
+  });
+
+  it('deems NPAT from the industry norm once prior years exist', () => {
+    // The path the mapping cannot currently reach — asserted directly on the
+    // resolver so the industry-norm fallback stays covered.
+    const result = resolveNpatForTargets({
+      currentRevenue: LAKE_REVENUE,
+      currentNpat: 100,
+      industryNormPercent: 4, // Retail
+      priorYears: [{ yearLabel: 'FY-1', revenue: LAKE_REVENUE, npat: 100 }],
+    });
+
+    // No prior year clears the quarter threshold, so it falls through to
+    // industry-norm-deemed: revenue x 4%.
+    expect(result.deemedNpatUsed).toBe(true);
+    expect(result.method).toBe('industry-norm-deemed');
+    expect(result.deemedNpat).toBeCloseTo(LAKE_REVENUE * 0.04, 6);
+  });
+
+  it('uses a qualifying prior year (Leibrandt) ahead of the industry norm', () => {
+    const result = resolveNpatForTargets({
+      currentRevenue: LAKE_REVENUE,
+      currentNpat: 100,
+      industryNormPercent: 4,
+      // A prior year at a 10% margin clears the 1% threshold and wins.
+      priorYears: [{ yearLabel: 'FY-1', revenue: 1_000_000, npat: 100_000 }],
+    });
+
+    expect(result.deemedNpatUsed).toBe(true);
+    expect(result.method).toBe('leibrandt');
+    expect(result.deemedNpat).toBeCloseTo(LAKE_REVENUE * 0.1, 6);
   });
 
   it('maps shareholders with correct black ownership percentages', () => {

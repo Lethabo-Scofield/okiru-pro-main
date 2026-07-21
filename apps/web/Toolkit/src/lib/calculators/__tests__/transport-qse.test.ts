@@ -75,10 +75,16 @@ function sectorConfigToCalculatorConfig(sc: ReturnType<typeof getSectorConfig>):
     },
     sed: { maxPoints: sed.maxPts, npatTarget: (sed.spendPercent ?? 1) / 100 },
     discounting: { dropLevels: 1, maxDropLevel: 8 },
+    // NOTE: this mirrors sectorConfigToTransportQseCalculatorConfig by hand. It
+    // is the third hand-rolled copy of that mapping found in this repo, and each
+    // one has drifted from production at least once — worth collapsing.
+    electiveGroupSizes: sc.electiveGroupSizes,
     pillarConfigs: {
-      ownership: { maxPoints: pOwn.maxPoints },
-      managementControl: { maxPoints: pMc.maxPoints },
-      employmentEquity: { maxPoints: pEe.maxPoints },
+      // Ownership / MC / EE carry the elective group too: Transport QSE elects
+      // any four of seven, so none of them is compulsory.
+      ownership: { maxPoints: pOwn.maxPoints, chooseOneGroup: pOwn.chooseOneGroup },
+      managementControl: { maxPoints: pMc.maxPoints, chooseOneGroup: pMc.chooseOneGroup },
+      employmentEquity: { maxPoints: pEe.maxPoints, chooseOneGroup: pEe.chooseOneGroup },
       skillsDevelopment: { maxPoints: pSk.maxPoints, chooseOneGroup: pSk.chooseOneGroup },
       preferentialProcurement: { maxPoints: pPp.maxPoints, chooseOneGroup: pPp.chooseOneGroup },
       enterpriseDevelopment: { maxPoints: pEd.maxPoints, chooseOneGroup: pEd.chooseOneGroup },
@@ -92,12 +98,24 @@ function sectorConfigToCalculatorConfig(sc: ReturnType<typeof getSectorConfig>):
 describe('Transport QSE scoring', () => {
   const cfg = sectorConfigToCalculatorConfig(getSectorConfig('TRANSPORT', 'QSE'));
 
-  it('loads 107 total max and compulsory pillar weightings', () => {
-    expect(cfg.totalMaxPoints).toBe(107);
+  it('loads a 100-point total: any four of seven elements, 25 each', () => {
+    // Was 107 ("82 compulsory + one elective"), which forced Employment Equity
+    // into the denominator and allowed only one elective. Certificate 13609
+    // (Thandanani Transport) scores 102 → Level 1 with EE at 0.00, which that
+    // model cannot produce. See apps/api/__tests__/transportQseScorecard.test.ts.
+    expect(cfg.totalMaxPoints).toBe(100);
+    expect(cfg.electiveGroupSizes?.transport_qse_elective).toBe(4);
+
+    // Element maxima are unchanged — they carry each element's bonus points, and
+    // bonuses are why a certified score can exceed the 100-point target.
     expect(cfg.pillarConfigs?.ownership?.maxPoints).toBe(28);
     expect(cfg.pillarConfigs?.managementControl?.maxPoints).toBe(27);
     expect(cfg.pillarConfigs?.employmentEquity?.maxPoints).toBe(27);
-    expect(cfg.pillarConfigs?.skillsDevelopment?.chooseOneGroup).toBe('transport_qse_elective');
+
+    // No element is compulsory: all seven compete for the four measured slots.
+    for (const key of ['ownership', 'managementControl', 'employmentEquity', 'skillsDevelopment'] as const) {
+      expect(cfg.pillarConfigs?.[key]?.chooseOneGroup).toBe('transport_qse_elective');
+    }
   });
 
   it('scores 100% black ownership at 28/28 even with companyValue=0', () => {

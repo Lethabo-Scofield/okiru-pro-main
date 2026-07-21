@@ -19,6 +19,87 @@ import {
 const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
+/**
+ * Fields a caller may never set or change through the API.
+ *
+ * `verifyClientAccess` controls WHICH client a caller may touch; it does not
+ * control WHICH FIELDS. Without this, `PATCH /:id` passed `req.body` straight to
+ * `storage.updateClient`, so an authorised user could set `organizationId` and
+ * move the record into another tenant, or overwrite `createdByUserId` / `id` /
+ * timestamps. Ownership and identity are server-assigned, never client-supplied.
+ */
+const PROTECTED_CLIENT_FIELDS = new Set([
+  'id',
+  '_id',
+  'organizationId',
+  'createdByUserId',
+  'createdAt',
+  'updatedAt',
+]);
+
+/** Numeric client fields that must never be negative. */
+const NON_NEGATIVE_CLIENT_FIELDS = [
+  'revenue',
+  'npat',
+  'leviableAmount',
+  'tmps',
+  'companyValue',
+  'outstandingDebt',
+  'numberOfEmployees',
+] as const;
+
+/**
+ * Validate a client payload. The route previously accepted anything, so a
+ * create with no name or a negative revenue was persisted and only surfaced
+ * later as a nonsensical scorecard. `requireName` is on for create, off for
+ * partial updates.
+ */
+function validateClientPayload(
+  body: Record<string, unknown>,
+  { requireName }: { requireName: boolean },
+): string[] {
+  const errors: string[] = [];
+
+  if (requireName) {
+    const name = body.name;
+    if (typeof name !== 'string' || name.trim() === '') {
+      errors.push('name is required');
+    }
+  } else if ('name' in body && (typeof body.name !== 'string' || body.name.trim() === '')) {
+    errors.push('name must be a non-empty string');
+  }
+
+  for (const field of NON_NEGATIVE_CLIENT_FIELDS) {
+    if (!(field in body) || body[field] === null || body[field] === undefined) continue;
+    const value = Number(body[field]);
+    if (!Number.isFinite(value)) errors.push(`${field} must be a number`);
+    else if (value < 0) errors.push(`${field} must not be negative`);
+  }
+
+  return errors;
+}
+
+/**
+ * Strip server-owned fields from a client-supplied payload. Returns the safe
+ * patch plus the names that were rejected, so the attempt can be audited rather
+ * than silently ignored.
+ */
+function stripProtectedClientFields(body: unknown): {
+  safe: Record<string, unknown>;
+  rejected: string[];
+} {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return { safe: {}, rejected: [] };
+  }
+  const safe: Record<string, unknown> = {};
+  const rejected: string[] = [];
+  for (const [key, value] of Object.entries(body as Record<string, unknown>)) {
+    if (PROTECTED_CLIENT_FIELDS.has(key)) rejected.push(key);
+    else safe[key] = value;
+  }
+  return { safe, rejected };
+}
+
 router.get('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), async (req: Request, res: Response) => {
   const orgId = req.session.organizationId!;
   const userId = req.session.userId!;
@@ -47,11 +128,23 @@ router.post('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async
   try {
     const orgId = req.session.organizationId!;
     const userId = req.session.userId!;
+    // Server-owned fields are stripped before the spread so a crafted body can
+    // never seed an id/timestamp or claim another tenant.
+    const { safe, rejected } = stripProtectedClientFields(req.body);
+    if (rejected.length) {
+      logger.warn('Rejected protected fields on client create', { rejected, userId, orgId });
+    }
+    const errors = validateClientPayload(safe, { requireName: true });
+    if (errors.length) {
+      return res.status(400).json({ message: 'Invalid client payload', errors });
+    }
+    // `safe` is an unknown-shaped record after stripping; validateClientPayload
+    // above has already enforced the required fields at runtime.
     const client = await storage.createClient({
-      ...req.body,
+      ...safe,
       organizationId: orgId,
       createdByUserId: userId,
-    });
+    } as Parameters<typeof storage.createClient>[0]);
     await recordAudit(req, {
       action: "client.create",
       resourceType: "client",
@@ -82,14 +175,36 @@ router.get('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), asyn
 router.patch('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
   const clientId = String(req.params.id);
-  const client = await storage.updateClient(clientId, req.body);
+  // verifyClientAccess gates WHICH client may be edited; this gates WHICH FIELDS.
+  // Without it a caller could reassign organizationId and move the record into
+  // another tenant.
+  const { safe, rejected } = stripProtectedClientFields(req.body);
+  if (rejected.length) {
+    logger.warn('Rejected protected fields on client update', {
+      rejected,
+      clientId,
+      userId: req.session.userId,
+    });
+    await recordAudit(req, {
+      action: "client.update.rejected_fields",
+      resourceType: "client",
+      resourceId: clientId,
+      result: "failure",
+      metadata: { rejected },
+    });
+  }
+  const errors = validateClientPayload(safe, { requireName: false });
+  if (errors.length) {
+    return res.status(400).json({ message: 'Invalid client payload', errors });
+  }
+  const client = await storage.updateClient(clientId, safe);
   if (!client) return res.status(404).json({ message: "Client not found" });
   await recordAudit(req, {
     action: "client.update",
     resourceType: "client",
     resourceId: client.id,
     result: "success",
-    metadata: { fields: Object.keys(req.body || {}) },
+    metadata: { fields: Object.keys(safe) },
   });
   // Phase 2 back-sync: propagate the client patch to the matching workbook
   // section.meta blobs. Non-blocking; no-op when INTERNAL_BACKSYNC_TOKEN is
@@ -97,7 +212,7 @@ router.patch('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), a
   // workbook is keyed correctly when the API id and clientId differ.
   fanOutClientMetaBackSync({
     companyId: String((client as any).clientId ?? client.id ?? clientId),
-    patch: req.body ?? {},
+    patch: safe,
   });
   return res.json(client);
 });

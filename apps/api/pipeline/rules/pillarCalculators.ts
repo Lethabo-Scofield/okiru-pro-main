@@ -157,6 +157,20 @@ export type TransportQseMeasuredElement =
   | 'enterpriseDevelopment'
   | 'socioEconomicDevelopment';
 
+/**
+ * KNOWN GAP — this fixed quartet is a placeholder, not the rule.
+ *
+ * Where an entity has not elected its four elements, the verification agency
+ * measures the four it scores HIGHEST on. This engine shapes the config before
+ * any score exists, so it cannot rank them here; picking a fixed quartet instead
+ * can measure an entity on its four worst elements. For certificate 13609 this
+ * default (Own 25 + MC 27 + EE 0 + Skills 0) yields 52 against the certified 102.
+ *
+ * Callers that know the elected four MUST pass `transportQseMeasuredElements`.
+ * The Toolkit scoring path (apps/web/Toolkit/src/lib/store.ts) already elects the
+ * best four correctly; doing the same here needs a two-pass restructure of
+ * calculateAllPillars (score all seven, then keep the best four).
+ */
 const TRANSPORT_QSE_DEFAULT_MEASURED: TransportQseMeasuredElement[] = [
   'ownership',
   'managementControl',
@@ -164,7 +178,12 @@ const TRANSPORT_QSE_DEFAULT_MEASURED: TransportQseMeasuredElement[] = [
   'skillsDevelopment',
 ];
 
-const TRANSPORT_QSE_LEVEL_CAP = 107;
+/**
+ * Any four Transport QSE elements are weighted 25 each, so the denominator is
+ * always 100 regardless of which four are measured. Was 107, which came from
+ * summing bonus-inclusive maxPoints for one particular quartet.
+ */
+const TRANSPORT_QSE_LEVEL_CAP = 100;
 
 function isTransportQseCfg(cfg: SectorConfig): boolean {
   return cfg.sectorCode === 'TRANSPORT' && cfg.scorecardType === 'QSE';
@@ -185,14 +204,20 @@ function applyTransportQseMeasuredElements(
     measured && measured.length === 4 ? measured : TRANSPORT_QSE_DEFAULT_MEASURED,
   );
 
+  // The denominator is the elements' WEIGHTING (25 each), not their
+  // bonus-inclusive maxPoints. Summing maxPoints made the target depend on which
+  // quartet was measured (Own+MC+EE+Skills gave 107) and left bonus points
+  // unable to lift a score above target — yet certificate 13609 reports
+  // 102 out of 100 precisely because Management Control's bonus exceeds its 25.
+  const basePointsOf = (pc: PillarConfig): number => pc.basePoints ?? pc.maxPoints;
   let activeSum = 0;
-  if (active.has('ownership')) activeSum += cfg.pillarConfigs.ownership.maxPoints;
-  if (active.has('managementControl')) activeSum += cfg.pillarConfigs.managementControl.maxPoints;
-  if (active.has('employmentEquity')) activeSum += eeBase.maxPoints;
-  if (active.has('skillsDevelopment')) activeSum += cfg.pillarConfigs.skillsDevelopment.maxPoints;
-  if (active.has('preferentialProcurement')) activeSum += cfg.pillarConfigs.preferentialProcurement.maxPoints;
-  if (active.has('enterpriseDevelopment')) activeSum += cfg.pillarConfigs.enterpriseDevelopment.maxPoints;
-  if (active.has('socioEconomicDevelopment')) activeSum += cfg.pillarConfigs.socioEconomicDevelopment.maxPoints;
+  if (active.has('ownership')) activeSum += basePointsOf(cfg.pillarConfigs.ownership);
+  if (active.has('managementControl')) activeSum += basePointsOf(cfg.pillarConfigs.managementControl);
+  if (active.has('employmentEquity')) activeSum += basePointsOf(eeBase);
+  if (active.has('skillsDevelopment')) activeSum += basePointsOf(cfg.pillarConfigs.skillsDevelopment);
+  if (active.has('preferentialProcurement')) activeSum += basePointsOf(cfg.pillarConfigs.preferentialProcurement);
+  if (active.has('enterpriseDevelopment')) activeSum += basePointsOf(cfg.pillarConfigs.enterpriseDevelopment);
+  if (active.has('socioEconomicDevelopment')) activeSum += basePointsOf(cfg.pillarConfigs.socioEconomicDevelopment);
 
   const pin = (key: TransportQseMeasuredElement, pc: PillarConfig): PillarConfig => ({
     ...pc,

@@ -1892,7 +1892,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
           if (blobServiceClient) {
             setImmediate(async () => {
               try { await processOneCertificate(blobServiceClient, newBlobName, true); }
-              catch (err: any) { logger.error('Background extraction failed', { blobName: newBlobName, error: err.message }); }
+              catch (err: any) { logger.error('Background extraction failed', err, { blobName: newBlobName }); }
             });
           }
         } else {
@@ -1943,7 +1943,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
           results,
         });
       } catch (uploadErr: any) {
-        logger.error('Certificate version upload failed', { error: uploadErr.message });
+        logger.error('Certificate version upload failed', uploadErr);
         return res.status(500).json(fail('Failed to add new version', 'VERSION_UPLOAD_FAILED'));
       }
     }
@@ -2029,7 +2029,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
           logger.info('Certificate uploaded (Azure)', { fileName: file.originalname, blobName });
         } catch (uploadErr: any) {
           results.push({ fileName: file.originalname, blobName: file.originalname, status: 'error', error: uploadErr.message });
-          logger.error('Failed to upload certificate', { fileName: file.originalname, error: uploadErr.message });
+          logger.error('Failed to upload certificate', uploadErr, { fileName: file.originalname });
         }
       }
 
@@ -2041,7 +2041,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
             try {
               await processOneCertificate(blobServiceClient, blobName, true);
             } catch (err: any) {
-              logger.error('Background extraction failed', { blobName, error: err.message });
+              logger.error('Background extraction failed', err, { blobName });
             }
           }
         });
@@ -2069,7 +2069,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
           logger.info('Certificate uploaded (local)', { fileName: file.originalname, id: rec.id });
         } catch (uploadErr: any) {
           results.push({ fileName: file.originalname, blobName: file.originalname, status: 'error', error: uploadErr.message });
-          logger.error('Failed to upload certificate locally', { fileName: file.originalname, error: uploadErr.message });
+          logger.error('Failed to upload certificate locally', uploadErr, { fileName: file.originalname });
         }
       }
     }

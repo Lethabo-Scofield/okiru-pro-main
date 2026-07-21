@@ -70,6 +70,9 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
     sectorCode: sc.sectorCode,
     scorecardType: sc.scorecardType,
     totalMaxPoints: sc.totalMaxPoints,
+    // Carried through so elective groups keep their size (Transport QSE elects
+    // four of seven). Dropping it silently degrades every group to "choose one".
+    electiveGroupSizes: sc.electiveGroupSizes,
     ownership: {
       votingRightsMax: own.votingRightsMaxPts,
       womenBonusMax: own.womenVotingMaxPts,
