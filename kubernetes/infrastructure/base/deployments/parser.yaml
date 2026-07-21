@@ -69,6 +69,13 @@ spec:
                 secretKeyRef:
                   name: redis-credentials
                   key: REDIS_URL
+            # REDIS_URL is credential-free (redis://redis:6379/0) but the server
+            # runs with --requirepass, so the password must be supplied here.
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: REDIS_PASSWORD
             # Neo4j is optional — the parser falls back to its in-memory
             # ontology (the canonical document types + verification matrix) when
             # no Neo4j URI is configured. These are wired only if the secret
