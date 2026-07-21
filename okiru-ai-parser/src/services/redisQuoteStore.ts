@@ -107,10 +107,20 @@ export class RedisQuoteStore implements QuoteStore {
  * and tests keep the in-memory store without ceremony — production wiring
  * decides whether that is acceptable (see server.ts).
  */
-export async function createRedisQuoteStore(url = process.env.REDIS_URL): Promise<RedisQuoteStore | null> {
+export async function createRedisQuoteStore(
+  url = process.env.REDIS_URL,
+  password = process.env.REDIS_PASSWORD,
+): Promise<RedisQuoteStore | null> {
   if (!url) return null;
 
-  const client: RedisClientType = createClient({ url });
+  // The shared REDIS_URL secret carries no credentials (`redis://redis:6379/0`)
+  // while the server runs with --requirepass, so connecting on the URL alone is
+  // reset by the server. The password is supplied separately rather than baked
+  // into the shared URL, which other services also consume.
+  const client: RedisClientType = createClient({
+    url,
+    ...(password && !url.includes('@') ? { password } : {}),
+  });
   // Without a listener, a connection error is an unhandled 'error' event and
   // takes the process down.
   client.on('error', (err) => logger.error('Redis client error', err as Error));
