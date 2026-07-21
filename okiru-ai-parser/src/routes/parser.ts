@@ -22,6 +22,7 @@ import { CaseParserService } from '../../parser/case_parser_service.js';
 import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_documents.js';
 import { ParserService } from '../../parser/parser_service.js';
 import { documentsByElement } from '../../schemas/verification_document_matrix.js';
+import { extractCaseEntities } from '../services/caseExtraction.js';
 
 const logger = createLogger('ParserRoutes');
 const router = Router();
@@ -252,7 +253,18 @@ router.post('/resolve-case-files', upload.array('files', 25), async (req: Reques
     const service = new CaseParserService(repository);
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
-    return res.status(result.status === 'failed' ? 422 : 200).json(result);
+
+    // AI extraction runs ACROSS the case, not per document, because evidence for
+    // one fact is spread over several files (entity name on the certificate and
+    // the CIPC record; NPAT in the AFS and the SED workpaper). It is additive:
+    // with no model configured this is skipped and the deterministic result is
+    // returned unchanged.
+    const entities = await extractCaseEntities(rawInputs);
+
+    return res.status(result.status === 'failed' && !entities ? 422 : 200).json({
+      ...result,
+      ai_entities: entities,
+    });
   } catch (err) {
     logger.error('Parser case file resolve failed', err as Error);
     return res.status(400).json(fail((err as Error).message, 'CASE_FILE_PARSE_FAILED'));
