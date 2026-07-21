@@ -17,6 +17,11 @@ import {
   type ExtractionModel,
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
+import {
+  fieldElementIndex,
+  mapEntitiesToCalculator,
+  type CalculatorMappingResult,
+} from './entityCalculatorMapping.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -37,6 +42,12 @@ export interface CaseExtractionResult extends CaseEntities {
   model: string;
   /** Per-document detail, so a value can be traced back to the prompt that found it. */
   extractions: DocumentExtraction[];
+  /**
+   * The extracted evidence expressed as calculator inputs — this is the part
+   * that can actually move a score. Contested and unmapped fields are excluded
+   * from `payload` and reported alongside it.
+   */
+  calculator: CalculatorMappingResult;
 }
 
 export async function extractCaseEntities(
@@ -66,12 +77,16 @@ export async function extractCaseEntities(
     allFiles: inputs.map((input) => input.filename),
   });
 
+  const calculator = mapEntitiesToCalculator(resolved, fieldElementIndex(extractions));
+
   logger.info('Case extraction complete', {
     files: inputs.length,
     documents: resolved.documentsExtracted,
     fields: Object.keys(resolved.fields).length,
     conflicts: resolved.conflicts.length,
+    calculatorKeys: Object.keys(calculator.payload).length,
+    heldForReview: calculator.needsReview.length,
   });
 
-  return { ...resolved, model: model.name, extractions };
+  return { ...resolved, model: model.name, extractions, calculator };
 }
