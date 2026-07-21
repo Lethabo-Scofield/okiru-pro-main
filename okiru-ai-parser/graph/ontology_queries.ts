@@ -54,7 +54,19 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
       document: {
         name: 'B-BBEE Certificate',
         description: 'Supplier B-BBEE status level certificate or affidavit evidence.',
-        aliases: ['BEE Certificate', 'BBBEE Certificate', 'B-BBEE Certificate', 'Supplier B-BBEE Certificate'],
+        // Includes the FORMAL titles a SANAS-accredited agency actually prints
+        // on the certificate. The short forms below are how people refer to it;
+        // the long forms are how the document names itself.
+        aliases: [
+          'BEE Certificate',
+          'BBBEE Certificate',
+          'B-BBEE Certificate',
+          'Supplier B-BBEE Certificate',
+          'B-BBEE Status Level Verification Certificate',
+          'BEE Status Level Verification Certificate',
+          'Status Level Verification Certificate',
+          'Verification Certificate',
+        ],
         required: true,
         pillar_code: 'ESD',
         graph_version,

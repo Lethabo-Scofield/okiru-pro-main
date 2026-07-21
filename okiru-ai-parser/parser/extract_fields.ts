@@ -1,6 +1,13 @@
 import type { FieldKnowledge } from '../graph/ontology_models.js';
 import type { ExtractedFieldOutput, RawExtractionInput } from '../schemas/parser_output.js';
 import { normalizeValue } from './normalize.js';
+import { checksumForField } from './checksums.js';
+
+// Confidence a value earns when its own checksum/format validates, and the ceiling
+// an invalid checksum forces it under (below validate.ts's 0.85 pass threshold, so
+// the field is flagged for review rather than silently trusted).
+const CHECKSUM_VALID_CONFIDENCE = 0.95;
+const CHECKSUM_INVALID_CEILING = 0.4;
 
 export interface ExtractedFieldWithMeta extends ExtractedFieldOutput {
   matched_patterns: string[];
@@ -151,6 +158,22 @@ export function extractFields(
 
     const normalizedValue = normalizeValue(rawValue, field.data_type);
     if (rawValue != null && normalizedValue == null) confidence = Math.min(confidence, 0.45);
+
+    // Checksum gate: if this field is a SA identifier, let its check digit / format
+    // confirm or discredit the OCR'd value. Valid → raise confidence; invalid →
+    // cap it under the pass threshold so validate.ts routes it to human review.
+    if (rawValue != null) {
+      const checksum = checksumForField(field.name, rawValue);
+      if (checksum) {
+        if (checksum.valid) {
+          confidence = Math.max(confidence, CHECKSUM_VALID_CONFIDENCE);
+          matchedPatterns.push('checksum_valid');
+        } else {
+          confidence = Math.min(confidence, CHECKSUM_INVALID_CEILING);
+          matchedPatterns.push(`checksum_failed:${checksum.reason ?? 'invalid'}`);
+        }
+      }
+    }
 
     output[field.name] = {
       raw_value: rawValue,

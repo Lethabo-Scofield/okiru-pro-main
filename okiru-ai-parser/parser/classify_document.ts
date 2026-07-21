@@ -109,10 +109,28 @@ function scoreCandidate(text: string, doc: DocumentTypeNode, knowledge: Document
   ]);
   for (const token of genericBeeSignals.matched) matchedEvidence.add(token);
 
-  const exactAliasScore = exactAliasMatches.length > 0 ? 0.6 : 0;
-  const nameScore = nameTokens.score * 0.2;
-  const descriptionScore = descriptionTokens.score * 0.08;
-  const fieldScore = fields.score * 0.28;
+  // WEIGHTING — the alias is ONE signal, not a master key.
+  //
+  // It used to be worth 0.6 on its own, which outweighed every substantive
+  // signal combined (0.2 + 0.08 + 0.28 + 0.06 = 0.62). That made confidence a
+  // measure of "does this document contain our label string" rather than "does
+  // it contain the evidence this document type is made of". Real documents
+  // title themselves "B-BBEE STATUS LEVEL VERIFICATION CERTIFICATE", never the
+  // literal alias "B-BBEE Certificate", so the 0.6 never fired and genuine
+  // certificates capped out around 0.39 — under REVIEW_CONFIDENCE, classified
+  // low_confidence, and returned to the user as a hard `failed` (HTTP 422).
+  //
+  // Field evidence (certificate number, status level, black ownership %,
+  // expiry) is what actually identifies a document, so it now carries the most
+  // weight and can reach confidence on its own. This does NOT loosen any
+  // safety gate: the calculator payload still requires status 'passed', which
+  // still requires confidence >= PASS_CONFIDENCE and clean validation. The
+  // effect is that a real certificate becomes 'review_required' (read, flagged
+  // for a human) instead of 'failed' (discarded).
+  const exactAliasScore = exactAliasMatches.length > 0 ? 0.34 : 0;
+  const nameScore = nameTokens.score * 0.22;
+  const descriptionScore = descriptionTokens.score * 0.06;
+  const fieldScore = fields.score * 0.32;
   const genericScore = genericBeeSignals.score * 0.06;
   const confidence = Math.min(0.99, exactAliasScore + nameScore + descriptionScore + fieldScore + genericScore);
 
@@ -136,16 +154,28 @@ function classifyStatus(best: DocumentClassificationCandidate | undefined, secon
     return { status: 'low_confidence', reason: 'Best document-type confidence is below review threshold', margin };
   }
 
-  if (best.confidence < PASS_CONFIDENCE) {
-    return { status: 'ambiguous', reason: 'Best document-type confidence requires human review', margin };
-  }
-
-  if (second && second.confidence >= REVIEW_CONFIDENCE && margin < AMBIGUITY_MARGIN) {
+  // The specific diagnosis comes first. "Too close to call between X and Y" is
+  // actionable — it tells a reviewer exactly what to disambiguate — whereas
+  // "below pass threshold" only restates the number. Checking the generic case
+  // first shadowed the specific one for every document under PASS_CONFIDENCE,
+  // which is precisely the band where candidates are most likely to be close.
+  // Closeness is what MARGIN measures, so the runner-up needs no separate
+  // absolute floor. It used to also require second >= REVIEW_CONFIDENCE, a
+  // threshold calibrated against the old alias-dominated scores; once evidence
+  // carries the weight, scores sit lower and that floor silently disabled the
+  // check. It is also near-redundant: best is already >= REVIEW_CONFIDENCE
+  // here, so a runner-up within AMBIGUITY_MARGIN is a credible alternative by
+  // construction.
+  if (second && margin < AMBIGUITY_MARGIN) {
     return {
       status: 'ambiguous',
       reason: `Top document-type candidates are too close (${best.document_type} vs ${second.document_type})`,
       margin,
     };
+  }
+
+  if (best.confidence < PASS_CONFIDENCE) {
+    return { status: 'ambiguous', reason: 'Best document-type confidence requires human review', margin };
   }
 
   return { status: 'classified', reason: 'Document type classified with sufficient confidence and margin', margin };

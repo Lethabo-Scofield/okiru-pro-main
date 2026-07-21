@@ -8,6 +8,9 @@ export const rawExtractionInputSchema = z.object({
     message: 'Unsupported file type',
   }),
   raw_text: z.string(),
+  // Additive: structure-preserving markdown for LLM-based extractors. `raw_text`
+  // stays the flat projection the regex extractor consumes, so this cannot regress it.
+  markdown: z.string().optional(),
   tables: z.array(z.unknown()).default([]),
   metadata: z.record(z.unknown()).default({}),
 });

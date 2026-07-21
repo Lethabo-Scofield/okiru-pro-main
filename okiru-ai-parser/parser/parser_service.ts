@@ -59,34 +59,18 @@ export class ParserService {
       });
     }
 
-    if (classification.status === 'ambiguous') {
-      return parserOutputSchema.parse({
-        file_id: input.file_id,
-        filename: input.filename,
-        document_type: classification.document_type,
-        pillar: classification.pillar,
-        overall_confidence: classification.confidence,
-        status: 'review_required',
-        extracted_fields: {},
-        calculator_payload: {},
-        validation: {
-          passed: false,
-          warnings: [classification.reason || 'Document type requires human review'],
-          errors: [],
-          missing_fields: [],
-        },
-        audit_trail: {
-          source_file: input.filename,
-          matched_patterns: classification.matched_evidence,
-          rules_applied: [],
-          graph_version: knowledge.document.graph_version,
-          requires_human_review: true,
-          classification_candidates: classification.candidates ?? [],
-          classification_reason: classification.reason,
-        },
-      });
-    }
-
+    // NOTE: 'ambiguous' does NOT short-circuit. It used to return early with
+    // `extracted_fields: {}`, which meant any document scoring between
+    // REVIEW_CONFIDENCE (0.6) and PASS_CONFIDENCE (0.85) was reported as
+    // review_required with NOTHING read out of it — the user saw an empty
+    // result and no reason. Since only >= 0.85 escaped that branch, most real
+    // documents produced nothing at all.
+    //
+    // An uncertain document type is a reason to SHOW the user what we found and
+    // flag it, not to discard the evidence. Extraction and validation run
+    // normally; the classification doubt is carried into the warnings below,
+    // and the calculator-payload gate further down is unchanged — an unresolved
+    // document still contributes nothing to scoring.
     const extracted = extractFields(input, knowledge.fields);
     logger.info('Fields extracted', { fileId: input.file_id, fields: Object.keys(extracted).length });
 
@@ -155,7 +139,12 @@ export class ParserService {
       measured_procurement_spend: measuredProcurementSpend,
       validation: {
         passed: validation.passed,
-        warnings: validation.warnings,
+        // Doubt about the document TYPE is surfaced alongside field-level
+        // warnings, so an uncertain classification is visible to the user
+        // rather than silently costing them their extracted values.
+        warnings: classification.status === 'ambiguous'
+          ? [classification.reason || 'Document type requires human review', ...validation.warnings]
+          : validation.warnings,
         errors: validation.errors,
         missing_fields: validation.missing_fields,
       },

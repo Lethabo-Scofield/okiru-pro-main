@@ -8,6 +8,8 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import helmet from 'helmet';
 import parserRouter from './routes/parser.js';
 import { createLogger } from './logger.js';
+import { setQuoteStore } from './services/quoteStore.js';
+import { createRedisQuoteStore } from './services/redisQuoteStore.js';
 
 const logger = createLogger('OkiruPaser');
 const app = express();
@@ -118,7 +120,53 @@ function validateStartupConfig(): void {
 
 validateStartupConfig();
 
+/**
+ * Quote state must be shared before money can be involved.
+ *
+ * The gate is only sound if every replica sees the same quote: the PayFast ITN
+ * can land on a different pod than the one that issued the quote. So if payment
+ * is required in production, REDIS_URL is mandatory — we refuse to boot rather
+ * than take payments we might not be able to honour. With the gate off there is
+ * no money at stake, so the in-memory store is fine.
+ */
+async function initialiseQuoteStore(): Promise<void> {
+  const paymentRequired = process.env.PARSER_REQUIRE_PAYMENT !== 'false';
+  const isProd = process.env.NODE_ENV === 'production';
+
+  try {
+    const store = await createRedisQuoteStore();
+    if (store) {
+      setQuoteStore(store);
+      return;
+    }
+  } catch (err) {
+    if (isProd && paymentRequired) throw err;
+    logger.warn('Redis quote store unavailable — falling back to in-memory store', {
+      reason: (err as Error).message,
+    });
+    return;
+  }
+
+  if (isProd && paymentRequired) {
+    throw new Error(
+      'REDIS_URL is required when PARSER_REQUIRE_PAYMENT is on: quote state must be shared '
+      + 'across replicas or a payment webhook can land on a pod that cannot see the quote.',
+    );
+  }
+  logger.warn('No REDIS_URL — quote store is in-memory (single process only)');
+}
+
 const port = Number(process.env.PORT || 3200);
-app.listen(port, '0.0.0.0', () => {
-  logger.info('okiru-ai-parser listening', { port, version: PARSER_VERSION, env: process.env.NODE_ENV || 'development' });
-});
+
+initialiseQuoteStore()
+  .then(() => {
+    app.listen(port, '0.0.0.0', () => {
+      logger.info('okiru-ai-parser listening', { port, version: PARSER_VERSION, env: process.env.NODE_ENV || 'development' });
+    });
+  })
+  .catch((err) => {
+    // Never leave the process alive-but-not-listening: that reads as healthy to
+    // the platform while serving nothing.
+    logger.error('Parser failed to start', err as Error);
+    process.exit(1);
+  });

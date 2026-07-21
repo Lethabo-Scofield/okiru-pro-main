@@ -10,7 +10,9 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval:extraction": "vitest run __tests__/eval/extractionEval.test.ts",
+    "eval:extraction:update": "node __tests__/eval/updateBaseline.mjs"
   },
   "dependencies": {
     "compression": "^1.8.1",
@@ -19,10 +21,13 @@
     "express": "^5.2.1",
     "gpt-tokenizer": "^3.4.0",
     "helmet": "^8.1.0",
+    "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "multer": "^2.1.1",
     "neo4j-driver": "^5.28.1",
     "pdfjs-dist": "^6.0.227",
+    "redis": "^5.12.1",
+    "sharp": "^0.35.3",
     "tesseract.js": "^7.0.0",
     "xlsx": "^0.18.5",
     "zod": "^3.25.76"
