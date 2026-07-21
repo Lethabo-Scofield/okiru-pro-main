@@ -76,7 +76,34 @@ function fieldEvidence(text: string, fields: FieldKnowledge[]): { score: number;
   };
 }
 
-function scoreCandidate(text: string, doc: DocumentTypeNode, knowledge: DocumentKnowledge | null): DocumentClassificationCandidate {
+/**
+ * How many document types claim each alias.
+ *
+ * An alias only one type claims is decisive: a page containing "COR14.3" or
+ * "EMP201" IS that document. An alias many types share ("SETA", "AFS") barely
+ * narrows anything. Weighting both the same made specific statutory documents
+ * score like generic ones and land under the review threshold.
+ */
+function buildAliasFrequency(docs: DocumentTypeNode[]): Map<string, number> {
+  const frequency = new Map<string, number>();
+  for (const doc of docs) {
+    const seen = new Set<string>();
+    for (const alias of [doc.name, ...doc.aliases].filter(Boolean)) {
+      const key = alias.toLowerCase().trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      frequency.set(key, (frequency.get(key) ?? 0) + 1);
+    }
+  }
+  return frequency;
+}
+
+function scoreCandidate(
+  text: string,
+  doc: DocumentTypeNode,
+  knowledge: DocumentKnowledge | null,
+  aliasFrequency?: Map<string, number>,
+): DocumentClassificationCandidate {
   const aliases = [doc.name, ...doc.aliases].filter(Boolean);
   const reasons: string[] = [];
   const matchedEvidence = new Set<string>();
@@ -127,7 +154,15 @@ function scoreCandidate(text: string, doc: DocumentTypeNode, knowledge: Document
   // still requires confidence >= PASS_CONFIDENCE and clean validation. The
   // effect is that a real certificate becomes 'review_required' (read, flagged
   // for a human) instead of 'failed' (discarded).
-  const exactAliasScore = exactAliasMatches.length > 0 ? 0.34 : 0;
+  // An alias no other document type claims is decisive evidence; a shared one is
+  // only a hint. Without this, "EMP201" (claimed by exactly one document) counted
+  // the same as "AFS" (claimed by many), and specific statutory documents scored
+  // like generic ones — landing just under REVIEW_CONFIDENCE and being reported
+  // to the user as unreadable.
+  const isDistinctive = exactAliasMatches.some(
+    (alias) => (aliasFrequency?.get(alias.toLowerCase().trim()) ?? 1) === 1,
+  );
+  const exactAliasScore = exactAliasMatches.length > 0 ? (isDistinctive ? 0.5 : 0.34) : 0;
   const nameScore = nameTokens.score * 0.22;
   const descriptionScore = descriptionTokens.score * 0.06;
   const fieldScore = fields.score * 0.32;
@@ -197,10 +232,11 @@ export async function classifyDocument(
   const documentTypes = Array.from(documentTypesByName.values());
   const text = `${input.filename}\n${input.raw_text}`;
 
+  const aliasFrequency = buildAliasFrequency(documentTypes);
   const candidates: DocumentClassificationCandidate[] = [];
   for (const doc of documentTypes) {
     const knowledge = await repository.getDocumentKnowledge(doc.name) ?? fallbackByName.get(doc.name.toLowerCase()) ?? null;
-    candidates.push(scoreCandidate(text, doc, knowledge));
+    candidates.push(scoreCandidate(text, doc, knowledge, aliasFrequency));
   }
 
   candidates.sort((a, b) => b.confidence - a.confidence);

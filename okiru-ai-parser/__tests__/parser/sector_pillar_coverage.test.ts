@@ -59,12 +59,18 @@ describe('parser coverage facts stay in sync with the ontology + allowlist', () 
     expect(matrixKeys).toEqual(allowlistKeys);
   });
 
-  it('matrix document types and pillar codes match the ontology exactly', async () => {
+  /**
+   * PARSER_PILLAR_COVERAGE describes the document types that carry calculator
+   * keys. The ontology is now broader than that: it also holds the verification
+   * matrix (109 documents the auditor asks for), which are recognised and
+   * prompted for but do not yet map to calculator keys.
+   *
+   * So the invariant is containment, not equality — plus the two checks below
+   * that stop containment from hiding a drift the old equality would have caught.
+   */
+  it('every covered document type exists in the ontology under the same pillar', async () => {
     const repo = new InMemoryOntologyRepository();
     const ontologyDocs = await repo.listDocumentTypes();
-    const ontologyNames = ontologyDocs.map((d) => d.name).sort();
-    const matrixNames = PARSER_PILLAR_COVERAGE.flatMap((p) => [...p.documentTypes]).sort();
-    expect(matrixNames).toEqual(ontologyNames);
 
     for (const coverage of PARSER_PILLAR_COVERAGE) {
       for (const docName of coverage.documentTypes) {
@@ -73,6 +79,25 @@ describe('parser coverage facts stay in sync with the ontology + allowlist', () 
         expect(doc?.pillar_code).toBe(coverage.parserPillar);
       }
     }
+  });
+
+  it('the ontology is the canonical types plus the verification matrix, with no name collisions', async () => {
+    const repo = new InMemoryOntologyRepository();
+    const ontologyDocs = await repo.listDocumentTypes();
+    const names = ontologyDocs.map((d) => d.name);
+
+    // No duplicates: a matrix entry must never shadow a canonical type, because
+    // only canonical types own calculator keys.
+    expect(new Set(names).size, 'duplicate document type names').toBe(names.length);
+
+    // Every calculator-bearing type is still present and still classifiable.
+    const covered = PARSER_PILLAR_COVERAGE.flatMap((p) => [...p.documentTypes]);
+    for (const docName of covered) {
+      expect(names, `canonical type lost from ontology: ${docName}`).toContain(docName);
+    }
+
+    // And the matrix actually landed — this is what the parser was missing.
+    expect(ontologyDocs.length).toBeGreaterThan(covered.length);
   });
 
   it('parser pillar codes are exactly those used by the ontology', async () => {

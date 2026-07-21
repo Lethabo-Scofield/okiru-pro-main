@@ -21,6 +21,7 @@ import { buildOntologyRecordsFromWorkbook, DEFAULT_ONTOLOGY_MATRIX_PATH, loadOnt
 import { CaseParserService } from '../../parser/case_parser_service.js';
 import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_documents.js';
 import { ParserService } from '../../parser/parser_service.js';
+import { documentsByElement } from '../../schemas/verification_document_matrix.js';
 
 const logger = createLogger('ParserRoutes');
 const router = Router();
@@ -132,6 +133,35 @@ router.get('/document-types', async (req: Request, res: Response) => {
   } finally {
     await repository.close?.();
   }
+});
+
+/**
+ * The verification document request — what to ask the client for, by element.
+ *
+ * `/document-types` answers "what can the parser recognise". This answers "what
+ * does a verification actually require", which is what the upload UI needs in
+ * order to ask for the right evidence up front. Asking well is the cheapest way
+ * to avoid a low score caused by missing documents rather than by performance.
+ *
+ * `whatTheAuditorTests` is the expert's own wording, so the UI can explain why a
+ * document is needed instead of just naming it.
+ */
+router.get('/required-documents', (_req: Request, res: Response) => {
+  const grouped = documentsByElement();
+  return res.json(ok({
+    elements: Object.entries(grouped).map(([element, docs]) => ({
+      element,
+      documentCount: docs.length,
+      documents: docs.map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        whatTheAuditorTests: doc.auditorTests,
+        exampleOfGoodData: doc.exampleData,
+        expectedFields: doc.expectedFields,
+      })),
+    })),
+    totalDocuments: Object.values(grouped).reduce((sum, docs) => sum + docs.length, 0),
+  }));
 });
 
 router.post('/resolve', async (req: Request, res: Response) => {

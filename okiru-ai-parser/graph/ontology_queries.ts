@@ -1,4 +1,5 @@
 import type { DocumentKnowledge, DocumentTypeNode, OntologyRepository } from './ontology_models.js';
+import { matrixDocumentKnowledge } from './matrix_ontology.js';
 
 export class InMemoryOntologyRepository implements OntologyRepository {
   private knowledge = new Map<string, DocumentKnowledge>();
@@ -47,7 +48,13 @@ export class InMemoryOntologyRepository implements OntologyRepository {
   }
 }
 
-export function defaultDocumentKnowledge(): DocumentKnowledge[] {
+/**
+ * The 7 hand-authored types. These own the regex patterns and calculator_key
+ * mappings, so they are the only types that can currently produce a calculator
+ * payload — and they take precedence over matrix entries that would compete with
+ * them (see matrixDocumentKnowledge).
+ */
+function canonicalDocumentKnowledge(): DocumentKnowledge[] {
   const graph_version = 'v1';
   return [
     {
@@ -436,4 +443,17 @@ export function defaultDocumentKnowledge(): DocumentKnowledge[] {
       ],
     },
   ];
+}
+
+/**
+ * Every document type the parser understands: the 7 canonical types plus the
+ * expert's verification matrix (109 documents across the five elements).
+ *
+ * Before this merge the parser recognised 7 of the ~109 documents a verification
+ * actually calls for, so most of a real client folder classified as "unsupported"
+ * and was reported back as a failure.
+ */
+export function defaultDocumentKnowledge(): DocumentKnowledge[] {
+  const canonical = canonicalDocumentKnowledge();
+  return [...canonical, ...matrixDocumentKnowledge(canonical)];
 }

@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "gen:matrix": "node scripts/generate-document-matrix.mjs",
     "eval:extraction": "vitest run __tests__/eval/extractionEval.test.ts",
     "eval:extraction:update": "node __tests__/eval/updateBaseline.mjs"
   },
