@@ -253,7 +253,10 @@ router.post('/quote-files', upload.array('files', 25), async (req: Request, res:
       expiresAt: new Date(quote.expiresAt).getTime(),
       quote,
     });
-    return res.json(ok(quote));
+    // The client must not guess whether money is involved: if the gate is off
+    // (no payment provider wired yet), it shows a review step instead of a
+    // pay button rather than sending the user to a checkout that cannot settle.
+    return res.json(ok({ ...quote, paymentRequired: extractionRequiresPayment() }));
   } catch (err) {
     logger.error('Parser pricing quote failed', err as Error);
     return res.status(400).json(fail((err as Error).message, 'QUOTE_FAILED'));

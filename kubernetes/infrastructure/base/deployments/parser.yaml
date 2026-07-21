@@ -51,6 +51,16 @@ spec:
               value: "production"
             - name: PORT
               value: "3200"
+            # Payment gate. The code defaults this ON and PayFast checkout fails
+            # closed, so without merchant keys every upload would dead-end at a
+            # checkout that cannot settle. It stays "false" until BOTH are true:
+            #   1. PAYFAST_MERCHANT_ID / _KEY / _PASSPHRASE exist as secrets here
+            #   2. the quote store is backed by Redis, not process memory
+            # (2) matters because this Deployment runs 2 replicas: an ITN landing
+            # on the pod that did not issue the quote would never mark it paid,
+            # and the user would be charged for an extraction they never get.
+            - name: PARSER_REQUIRE_PAYMENT
+              value: "false"
             # Neo4j is optional — the parser falls back to its in-memory
             # ontology (the canonical document types + verification matrix) when
             # no Neo4j URI is configured. These are wired only if the secret
