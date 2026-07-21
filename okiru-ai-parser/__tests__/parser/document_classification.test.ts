@@ -21,11 +21,21 @@ function customRepository(seed: DocumentKnowledge[]): InMemoryOntologyRepository
 
 const graphVersion = 'test';
 
+/**
+ * Two deliberately near-identical types, used to exercise the "too close to
+ * call" branch.
+ *
+ * The names are fictional on purpose. classifyDocument always merges the
+ * canonical ontology over whatever the repository returns, so a fixture named
+ * after a real document (these were once "CIPC COR39…" and "CIPC registration
+ * documents…") is silently shadowed by the real entry once that document exists
+ * in the ontology — and the test stops exercising its own fixture.
+ */
 const ambiguousDocs: DocumentKnowledge[] = [
   {
     document: {
-      name: 'CIPC COR39 — certificate of director amendments',
-      aliases: ['COR39 director amendments'],
+      name: 'Testco Form AA — certificate of director amendments',
+      aliases: ['Form AA director amendments'],
       description: 'Current directors appointment resignation active director list',
       required: true,
       pillar_code: 'OWNERSHIP',
@@ -35,9 +45,9 @@ const ambiguousDocs: DocumentKnowledge[] = [
   },
   {
     document: {
-      name: 'CIPC registration documents (COR14.1 / COR14.3)',
-      aliases: ['COR14.3 CIPC registration'],
-      description: 'CIPC company registration entity registration number directors',
+      name: 'Testco Form AB — registration documents',
+      aliases: ['Form AB registration'],
+      description: 'Company registration entity registration number directors',
       required: true,
       pillar_code: 'OWNERSHIP',
       graph_version: graphVersion,
@@ -116,26 +126,26 @@ describe('document type classification', () => {
 
   it('marks close document-type candidates as ambiguous', async () => {
     const result = await classifyDocument(rawText([
-      'CIPC document',
-      'COR39 director amendments',
-      'COR14.3 CIPC registration',
+      'Testco document',
+      'Form AA director amendments',
+      'Form AB registration',
       'Registration number 2018/123456/07',
       'Director list active directors registration amendments',
     ].join('\n')), customRepository(ambiguousDocs));
 
     expect(result.status).toBe('ambiguous');
     const topCandidateText = result.candidates?.slice(0, 2).map((candidate) => candidate.document_type).join('\n') ?? '';
-    expect(topCandidateText).toContain('CIPC COR39');
-    expect(topCandidateText).toContain('CIPC registration documents');
+    expect(topCandidateText).toContain('Testco Form AA');
+    expect(topCandidateText).toContain('Testco Form AB');
     expect(result.reason).toContain('too close');
   });
 
   it('does not extract or map calculator payload when classification is ambiguous', async () => {
     const service = new ParserService(customRepository(ambiguousDocs));
     const result = await service.resolve(rawText([
-      'CIPC document',
-      'COR39 director amendments',
-      'COR14.3 CIPC registration',
+      'Testco document',
+      'Form AA director amendments',
+      'Form AB registration',
       'Registration number 2018/123456/07',
       'Director list active directors registration amendments',
     ].join('\n')));
