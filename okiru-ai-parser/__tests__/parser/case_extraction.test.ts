@@ -101,6 +101,26 @@ describe('extracting a case whose evidence spans several formats', () => {
     expect(result!.filesWithNoExtraction).toContain('B-BBEE Strategy Pack_Nov25.pptx');
   });
 
+  it('carries the whole chain through to calculator inputs', async () => {
+    // document → entities → resolved case → allowlisted calculator payload.
+    // This is the chain that turns an uploaded PDF into a number on a scorecard.
+    const model: ExtractionModel = {
+      name: 'fake',
+      async complete(_system, user) {
+        if (!user.includes('EXPECTED JSON KEYS: entity_name')) return JSON.stringify({ not_this_document: true });
+        return JSON.stringify({ entity_name: 'Thandanani Transport', seta_name: 'TETA' });
+      },
+    };
+
+    const result = await extractCaseEntities(files, model);
+
+    expect(result!.calculator.payload['ownership.entity_name']).toBe('Thandanani Transport');
+    const entry = result!.calculator.entries.find((e) => e.key === 'ownership.entity_name')!;
+    expect(entry.sourceFiles.length).toBeGreaterThan(0);
+    // seta_name is real evidence with no calculator key — reported, not dropped.
+    expect(result!.calculator.unmapped.some((u) => u.field === 'seta_name')).toBe(true);
+  });
+
   it('is skipped entirely when no model is configured', async () => {
     // A missing API key must never turn a working upload into a failed one.
     expect(await extractCaseEntities(files, null)).toBeNull();
