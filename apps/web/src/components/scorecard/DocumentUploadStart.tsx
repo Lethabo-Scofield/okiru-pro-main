@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  ArrowRight,
   Check,
   CloudUpload,
   CreditCard,
@@ -92,6 +93,12 @@ interface ParserQuote {
   };
   expiresAt: string;
   notes: string[];
+  /**
+   * Whether the server will actually charge for this run. When the payment
+   * gate is off (no provider wired), we show the cost as information and let
+   * the user carry on rather than offering a checkout that cannot settle.
+   */
+  paymentRequired?: boolean;
 }
 
 /** Rands, shown to 2dp unless the amount is genuinely sub-cent. */
@@ -577,7 +584,11 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
           className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white"
           style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
         >
-          {quote && !parserCase ? "Review and pay" : "Add your documents"}
+          {quote && !parserCase
+            ? quote.paymentRequired === false
+              ? "Review your documents"
+              : "Review and pay"
+            : "Add your documents"}
         </h3>
         <p className="mx-auto mt-2 max-w-md text-[15px] leading-6 text-[#a1a1a6]">
           {quote && !parserCase
@@ -768,6 +779,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
           const totalPages = quote.files.reduce((sum, file) => sum + (file.structure.pages ?? 0), 0);
           const spreadsheetCount = quote.files.filter((file) => (file.structure.sheets ?? 0) > 0).length;
           const totalInputTokens = quote.files.reduce((sum, file) => sum + file.tokens.input, 0);
+          // The server decides whether money is involved. With the gate off this
+          // is a review step, not a checkout — never show a price we won't take.
+          const charging = quote.paymentRequired !== false;
           const expiry = new Date(quote.expiresAt);
           const expiryLabel = Number.isNaN(expiry.getTime())
             ? "Today"
@@ -790,15 +804,21 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">Processing quote</p>
+                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">
+                    {charging ? "Processing quote" : "Ready to process"}
+                  </p>
                   <h4
                     className="mt-2 text-[30px] font-semibold leading-none text-white"
                     style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                   >
-                    {money(quote.totals.totalCents, quote.currency)}
+                    {charging
+                      ? money(quote.totals.totalCents, quote.currency)
+                      : `${quote.files.length} document${quote.files.length === 1 ? "" : "s"}`}
                   </h4>
                   <p className="mt-2 max-w-sm text-[13px] leading-5 text-[#a1a1a6]">
-                    Approve this quote before we extract and map your documents.
+                    {charging
+                      ? "Approve this quote before we extract and map your documents."
+                      : "Check what we picked up before we extract and map your documents."}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/[0.07] bg-[#141416] px-4 py-3 text-right">
@@ -828,7 +848,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   <span>Effort</span>
                   <span>Units</span>
                   <span>Tokens</span>
-                  <span className="text-right">Charge</span>
+                  <span className="text-right">{charging ? "Charge" : "Est. cost"}</span>
                 </div>
                 {quote.files.map((file) => {
                   const units = file.structure.pages
@@ -879,6 +899,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 </div>
               </div>
 
+              {!charging && (
+                <p className="mt-3 text-[11px] text-[#636366]">
+                  This is what the run costs us to process. You are not charged for it.
+                </p>
+              )}
+
+              {charging && (
               <div className="mt-5 space-y-2 border-t border-white/[0.07] pt-4">
                 {quote.lineItems.map((item) => (
                   <div key={item.key} className="flex items-baseline justify-between gap-4 text-[13px]">
@@ -890,6 +917,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   </div>
                 ))}
               </div>
+              )}
 
               <div className="mt-5 rounded-2xl border border-white/[0.06] bg-[#111113] p-4">
                 <p className="text-[13px] font-semibold text-white">Included</p>
@@ -901,7 +929,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 </div>
               </div>
 
-              {quote.totals.isUpperBound && (
+              {charging && quote.totals.isUpperBound && (
                 <p className="mt-3 text-[11px] text-[#636366]">
                   Scanned documents are estimated conservatively. You will not be charged more than this quote.
                 </p>
@@ -909,14 +937,22 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
               <div className="mt-5 space-y-2">
                 <button
-                  onClick={() => void payAndExtract()}
+                  onClick={() => void (charging ? payAndExtract() : runExtraction(files, quote.quoteId))}
                   disabled={paying || parsing}
                   className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
                   style={{ background: "#0e6fff", color: "#ffffff" }}
-                  data-testid="button-pay"
+                  data-testid={charging ? "button-pay" : "button-process"}
                 >
-                  {paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-[18px] w-[18px]" />}
-                  Pay {money(quote.totals.totalCents, quote.currency)} with PayFast
+                  {paying || parsing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : charging ? (
+                    <CreditCard className="h-[18px] w-[18px]" />
+                  ) : (
+                    <ArrowRight className="h-[18px] w-[18px]" />
+                  )}
+                  {charging
+                    ? `Pay ${money(quote.totals.totalCents, quote.currency)} with PayFast`
+                    : "Read my documents"}
                 </button>
                 <button
                   type="button"
