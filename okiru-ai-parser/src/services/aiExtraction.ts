@@ -29,6 +29,7 @@
  *    carries the file it came from.
  */
 import { createLogger } from '../logger.js';
+import { chunkDocument, mergeChunkResults } from './documentChunking.js';
 import {
   aliasIndex,
   findDocumentById,
@@ -70,7 +71,8 @@ export interface ExtractionModel {
   complete(system: string, user: string): Promise<string>;
 }
 
-const MAX_DOCUMENT_CHARS = Number(process.env.AI_EXTRACTION_MAX_CHARS ?? 60_000);
+// NOTE: the old AI_EXTRACTION_MAX_CHARS truncation is gone — long documents are
+// chunked (documentChunking.ts) so nothing is silently dropped.
 
 /**
  * Azure OpenAI over plain fetch — the parser has no SDK dependency and does not
@@ -219,7 +221,22 @@ export async function extractWithSpec(
 ): Promise<DocumentExtraction> {
   // Markdown preferred: the values live in tables and under headings, and a flat
   // text projection destroys the row/column relationship they depend on.
-  const content = (input.markdown?.trim() || input.raw_text).slice(0, MAX_DOCUMENT_CHARS);
+  const source = input.markdown?.trim() || input.raw_text;
+
+  // A long document is CHUNKED, not truncated. `slice(0, MAX_DOCUMENT_CHARS)`
+  // was indistinguishable downstream from "the document does not contain that
+  // field", so a 300-page pack was read to roughly page 12 and the rest
+  // reported missing.
+  const { chunks, truncated, totalChars } = chunkDocument(source);
+  if (chunks.length > 1) {
+    logger.info('Document chunked for extraction', {
+      document: spec.id,
+      file: input.filename,
+      chunks: chunks.length,
+      totalChars,
+      truncated,
+    });
+  }
 
   const base: DocumentExtraction = {
     documentId: spec.id,
@@ -231,25 +248,53 @@ export async function extractWithSpec(
     exceptions: [],
   };
 
-  const user = [
+  const promptFor = (chunk: { text: string; index: number }): string => [
     `ANALYST INSTRUCTION:\n${spec.extractionPrompt}`,
     `\nEXPECTED JSON KEYS: ${spec.expectedFields.join(', ')}`,
     `\nWHAT CORRECT DATA LOOKS LIKE (for reference only, do not copy):\n${spec.exampleData}`,
-    `\nDOCUMENT (${input.filename}):\n${content}`,
+    chunks.length > 1
+      ? `\nNOTE: this is part ${chunk.index + 1} of ${chunks.length} of a long document. `
+        + 'Return only fields visible in THIS part; omit the rest. Do not infer from missing context.'
+      : '',
+    `\nDOCUMENT (${input.filename}):\n${chunk.text}`,
   ].join('\n');
 
-  let reply: string;
-  try {
-    reply = await model.complete(SYSTEM_PROMPT, user);
-  } catch (err) {
-    logger.error('Extraction model call failed', err as Error, { document: spec.id, file: input.filename });
-    return { ...base, error: (err as Error).message, missingFields: [...spec.expectedFields] };
+  // Chunks are read in parallel — they are independent, and a long document
+  // should not cost N sequential round trips.
+  const replies = await Promise.all(chunks.map(async (chunk) => {
+    try {
+      return { ok: true as const, reply: await model.complete(SYSTEM_PROMPT, promptFor(chunk)) };
+    } catch (err) {
+      logger.error('Extraction model call failed', err as Error, {
+        document: spec.id, file: input.filename, chunk: chunk.index,
+      });
+      return { ok: false as const, error: (err as Error).message };
+    }
+  }));
+
+  const successes = replies.filter((r) => r.ok);
+  if (successes.length === 0) {
+    const firstError = replies.find((r) => !r.ok);
+    return {
+      ...base,
+      error: firstError && !firstError.ok ? firstError.error : 'All extraction calls failed',
+      missingFields: [...spec.expectedFields],
+    };
   }
 
-  const parsed = parseModelJson(reply);
-  if (!parsed) {
+  const parsedChunks = successes
+    .map((r) => (r.ok ? parseModelJson(r.reply) : null))
+    .filter((p): p is Record<string, unknown> => p !== null);
+
+  if (parsedChunks.length === 0) {
     return { ...base, error: 'Model reply was not JSON', missingFields: [...spec.expectedFields] };
   }
+
+  // First non-empty wins: chunks overlap, and a document states its headline
+  // facts before its annexures, so a later part may FILL a field but never
+  // overwrite one found earlier.
+  const { merged } = mergeChunkResults(parsedChunks);
+  const parsed = merged;
 
   // The model's own escape hatch: this file is not the document we asked about.
   // Treated as "nothing found here", never as a failure.
