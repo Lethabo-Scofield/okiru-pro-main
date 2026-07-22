@@ -250,7 +250,19 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
       document: {
         name: 'Supplier Spend Schedule',
         description: 'Supplier spend schedule listing suppliers, invoice dates, amounts, B-BBEE levels, and ownership.',
-        aliases: ['Full supplier schedule', 'Supplier Spend Schedule', 'Supplier Name Invoice Number', 'Supplier Name,Invoice Number'],
+        // A spend schedule is a TABLE, so its identity shows up as a filename and
+        // as column headers, not as a title inside the document. These are the
+        // forms real schedules actually arrive as.
+        aliases: [
+          'Full supplier schedule',
+          'Supplier Spend Schedule',
+          'Supplier Schedule',
+          'Procurement Schedule',
+          'Procurement Spend',
+          'Supplier Spend',
+          'Supplier Name Invoice Number',
+          'Supplier Name,Invoice Number',
+        ],
         required: true,
         pillar_code: 'ESD',
         graph_version,
@@ -289,6 +301,12 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
           ],
           patterns: [
             { name: 'Amount Excl VAT', pattern_type: 'regex', examples: ['Amount Excl VAT: R 1250000'], regex: 'Amount\\s*Excl\\s*VAT\\s*[:\\-]?\\s*(R\\s?[0-9][0-9,\\s]*(?:\\.[0-9]+)?\\s?(?:m|million|k|thousand)?)', semantic_hint: 'supplier spend amount', graph_version },
+            // Column headers, which is how this field appears in a real schedule.
+            // Without these the classifier only recognised the prose form and a
+            // perfectly good spreadsheet scored below the review threshold.
+            { name: 'Spend', pattern_type: 'label', examples: ['Spend'], semantic_hint: 'supplier spend column', graph_version },
+            { name: 'Total Spend', pattern_type: 'label', examples: ['Total Spend'], semantic_hint: 'supplier spend column', graph_version },
+            { name: 'Procurement Spend', pattern_type: 'label', examples: ['Procurement Spend'], semantic_hint: 'supplier spend column', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.spend', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.spend', manual_flow_mapping: 'procurement.supplier.spend', graph_version },
