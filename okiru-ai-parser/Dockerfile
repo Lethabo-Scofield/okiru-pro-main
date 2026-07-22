@@ -21,6 +21,13 @@ RUN pnpm build
 FROM base AS runtime
 ENV NODE_ENV=production
 ENV PORT=3200
+# Ghostscript + GraphicsMagick rasterise scanned PDF pages to images so the
+# multimodal model can read them. Without these, documents whose pages are
+# images (share certificates, share registers, stamped statutory forms) yield
+# no text at all and the upload is rejected as unreadable.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ghostscript graphicsmagick \
+  && rm -rf /var/lib/apt/lists/*
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 COPY --from=build /app/dist ./dist
