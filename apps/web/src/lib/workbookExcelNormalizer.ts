@@ -282,11 +282,61 @@ function coerceValue(key: string, col: ColumnDef | undefined, raw: unknown): unk
   return String(raw).trim();
 }
 
-function findHeaderRow(rows: unknown[][]): number {
+/**
+ * Locate the header row.
+ *
+ * The naive rule — "first row with 2+ non-empty cells" — picks the TITLE row on
+ * every real client workbook, because those sheets open with a banner:
+ *
+ *   row 0:  Measured Entity: Thandanani… | Ownership Equity | Date & Initial:___
+ *   row 2:  Detail | Use dropdown | Use dropdown | …
+ *   row 3:  Name & Surname | ID Number | Race | Gender | Foreign | …   <- the real header
+ *   row 4:  1 | Venugopal Lutchman | 5608305112083 | Black | Male     <- the data
+ *
+ * Taking row 0 means the parser looks for shareholder columns among banner text,
+ * matches nothing, and returns ZERO rows. Measured on the real Thandanani
+ * workbook that emptied the Ownership sheet entirely, scoring 0 of 25 Ownership
+ * points and dropping a Level 1 entity (102) to Level 4.
+ *
+ * So: score each candidate row by how many cells match an EXPECTED column name,
+ * and take the best. Fall back to the old rule only when nothing matches, so
+ * sheets whose headers we don't model keep their previous behaviour.
+ */
+function findHeaderRow(rows: unknown[][], columns: ColumnDef[] = []): number {
+  const filledCount = (row: unknown[]): number =>
+    (row || []).filter((c) => c !== null && c !== undefined && String(c).trim() !== "").length;
+
+  if (columns.length > 0) {
+    const aliasList: string[] = [];
+    for (const col of columns) for (const alias of buildColumnAliases(col)) aliasList.push(norm(alias));
+    const aliases = new Set<string>(aliasList);
+
+    let bestIdx = -1;
+    let bestScore = 0;
+    // Scan further than the naive 8: banner + legend + dropdown-hint rows push
+    // the real header down on hand-built workbooks.
+    for (let i = 0; i < Math.min(rows.length, 25); i++) {
+      const row = rows[i] || [];
+      let score = 0;
+      for (const cell of row) {
+        const value = norm(String(cell ?? ""));
+        if (!value) continue;
+        // Exact alias match, or a header that leads with one ("ID Number (only
+        // to be completed…)" is still the ID Number column).
+        if (aliases.has(value) || aliasList.some((a) => a.length >= 4 && value.startsWith(a))) score += 1;
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = i;
+      }
+    }
+    // Two matching headers is enough to be a real header row and not a stray
+    // word in a banner.
+    if (bestIdx >= 0 && bestScore >= 2) return bestIdx;
+  }
+
   for (let i = 0; i < Math.min(rows.length, 8); i++) {
-    const row = rows[i] || [];
-    const filled = row.filter((c) => c !== null && c !== undefined && String(c).trim() !== "").length;
-    if (filled >= 2) return i;
+    if (filledCount(rows[i] || []) >= 2) return i;
   }
   return 0;
 }
@@ -422,7 +472,7 @@ function parseGridFromSheet(
   columns: ColumnDef[],
 ): WorkbookRow[] {
   if (rows.length < 2) return [];
-  const headerIdx = findHeaderRow(rows);
+  const headerIdx = findHeaderRow(rows, columns);
   const headers = (rows[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());
   // Two-pass column→key mapping. A column whose header EXACTLY matches a key's alias
   // owns that key; a looser substring match cannot override an exact-claimed key.
