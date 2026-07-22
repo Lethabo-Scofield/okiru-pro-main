@@ -35,6 +35,7 @@ import {
   type ParserCaseLike,
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
+import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
 import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
 
 interface RequiredGroup {
@@ -255,6 +256,21 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     () => (parserCase ? mapParserCaseToWorkbookSections(parserCase) : null),
     [parserCase],
   );
+
+  /**
+   * Matrix document ids the parser actually read something out of, so the
+   * checklist can show real coverage instead of a static wish list. Only
+   * extractions that produced values count — a document we recognised but got
+   * nothing from is not evidence.
+   */
+  const satisfiedDocumentIds = useMemo<string[]>(() => {
+    const extractions = (parserCase as { ai_entities?: { extractions?: Array<{ documentId?: string; values?: unknown[] }> } } | null)
+      ?.ai_entities?.extractions ?? [];
+    return extractions
+      .filter((extraction) => (extraction.values?.length ?? 0) > 0)
+      .map((extraction) => String(extraction.documentId ?? ""))
+      .filter(Boolean);
+  }, [parserCase]);
 
   /** The quote's row for a file — what we know from the free structure scan. */
   const quoted = (filename: string) => quote?.files.find((f) => f.filename === filename);
@@ -1050,6 +1066,16 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       </motion.div>
       )}
       </AnimatePresence>
+
+      {/* What a verification actually requires, in the expert's own words.
+          Shown before payment so the user can go and fetch what is missing
+          rather than paying to be told their score is low. Once documents have
+          been read it doubles as a coverage ledger. */}
+      {!quote && (
+        <div className="mt-3">
+          <RequiredDocumentsChecklist satisfiedDocumentIds={satisfiedDocumentIds} />
+        </div>
+      )}
 
       {/* Expected documents — sector-aware checklist (below the stage) */}
       {false && catalog && files.length === 0 && (
