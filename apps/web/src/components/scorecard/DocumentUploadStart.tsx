@@ -19,6 +19,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertTriangle,
+  FolderOpen,
   ArrowRight,
   Check,
   CloudUpload,
@@ -229,6 +230,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
+  /** Files a folder upload could not read — shown as a warning, not an error. */
+  const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
   /** Monotonic id so only the latest quote request writes state (race guard). */
   const quoteSeqRef = useRef(0);
   /** Aborts any in-flight quote when a newer one starts, so requests never pile up. */
@@ -430,6 +434,38 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     } finally {
       setPaying(false);
     }
+  };
+
+  /** Extensions the parser can read. Anything else is filtered with a warning. */
+  const READABLE = new Set([
+    ".pdf", ".docx", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx", ".ppt",
+    ".csv", ".txt", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".webp",
+  ]);
+
+  /**
+   * Whole-folder upload.
+   *
+   * A folder carries everything — including desktop.ini, thumbnails and
+   * whatever else lives alongside the evidence. Silently dropping those would
+   * be dishonest about what we read, and refusing the whole folder over one
+   * stray file would be worse. So: take what we can read, say plainly what was
+   * skipped, and let the user decide.
+   */
+  const addFolder = (incoming: File[]) => {
+    const readable: File[] = [];
+    const skipped: string[] = [];
+
+    for (const file of incoming) {
+      const dot = file.name.lastIndexOf(".");
+      const ext = dot === -1 ? "" : file.name.slice(dot).toLowerCase();
+      // Hidden/system files a folder picker sweeps up.
+      if (file.name.startsWith(".") || file.name === "Thumbs.db" || file.name === "desktop.ini") continue;
+      if (READABLE.has(ext) && file.size > 0) readable.push(file);
+      else skipped.push(file.name);
+    }
+
+    setSkippedFiles(skipped);
+    if (readable.length > 0) addFiles(readable);
   };
 
   const addFiles = (incoming: File[]) => {
@@ -782,12 +818,30 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             type="file"
             multiple
             className="hidden"
-            accept=".pdf,.txt,.csv,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
+            accept=".pdf,.txt,.csv,.doc,.docx,.xlsx,.xlsm,.xls,.pptx,.png,.jpg,.jpeg"
             onChange={(e) => {
               if (e.target.files?.length) addFiles(Array.from(e.target.files));
               e.currentTarget.value = "";
             }}
             data-testid="docs-file-input"
+          />
+          {/* Whole-folder upload. Clients keep their evidence in a folder, not
+              as a hand-picked list, and making them select 26 files one by one
+              is how documents get left out. Unsupported files are filtered with
+              a warning rather than failing the whole drop. */}
+          <input
+            ref={folderInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            // Non-standard but supported everywhere that matters; React needs
+            // these lowercased via the DOM attribute spelling.
+            {...{ webkitdirectory: "", directory: "" }}
+            onChange={(e) => {
+              if (e.target.files?.length) addFolder(Array.from(e.target.files));
+              e.currentTarget.value = "";
+            }}
+            data-testid="docs-folder-input"
           />
       <AnimatePresence mode="wait" initial={false}>
       {quote && !parserCase && !quoting && (
@@ -1046,6 +1100,18 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <Upload className="h-4 w-4" />
               Upload documents
             </button>
+            <button
+              type="button"
+              className="ml-2 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-5 py-2.5 text-[14px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.06]"
+              onClick={(e) => {
+                e.stopPropagation();
+                folderInputRef.current?.click();
+              }}
+              data-testid="button-upload-folder"
+            >
+              <FolderOpen className="h-4 w-4" />
+              Upload a folder
+            </button>
             <p className="mt-3 text-[11px] text-[#86868b]">
               Quote shown before processing.
             </p>
@@ -1066,6 +1132,29 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       </motion.div>
       )}
       </AnimatePresence>
+
+      {/* Folder upload skipped some files. A warning, not an error: the upload
+          still went ahead with everything readable, and the user decides
+          whether the skipped ones mattered. */}
+      {skippedFiles.length > 0 && (
+        <div
+          className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4"
+          data-testid="skipped-files-warning"
+        >
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-200">
+            <AlertTriangle className="h-4 w-4" />
+            {skippedFiles.length} file{skippedFiles.length === 1 ? "" : "s"} in that folder could not be read
+          </p>
+          <p className="mt-1 text-[12px] leading-5 text-[#a1a1a6]">
+            We only read PDFs, Word, Excel, PowerPoint, CSV and images. Everything else was left out —
+            if one of these was evidence, convert it and add it.
+          </p>
+          <p className="mt-2 truncate font-mono text-[11px] text-[#8e8e93]">
+            {skippedFiles.slice(0, 6).join(", ")}
+            {skippedFiles.length > 6 ? ` +${skippedFiles.length - 6} more` : ""}
+          </p>
+        </div>
+      )}
 
       {/* What a verification actually requires, in the expert's own words.
           Shown before payment so the user can go and fetch what is missing
