@@ -105,8 +105,30 @@ describe('extracting one document', () => {
       exceptions: ['Registration expired 2024-06-30 — zero points awarded'],
     })]);
 
-    const result = await extractWithSpec(model, SETA_SPEC, { filename: 'x.pdf', raw_text: 't' });
+    // The source must actually CONTAIN the extracted values, or the verify pass
+    // correctly raises its own exception for them — which is the point of it.
+    const result = await extractWithSpec(model, SETA_SPEC, {
+      filename: 'x.pdf',
+      raw_text: 'Entity: Acme\nCurrent status: expired\nRegistration expired 2024-06-30',
+    });
     expect(result.exceptions).toEqual(['Registration expired 2024-06-30 — zero points awarded']);
+    expect(result.ungroundedFields).toEqual([]);
+  });
+
+  it('flags a value that is not in the source document', async () => {
+    // A confident hallucination: correctly shaped, entirely absent from the
+    // document. Confidence scores do not catch this; going back to the source
+    // does. The value is REPORTED, never dropped.
+    const model = scriptedModel([JSON.stringify({ entity_name: 'Fabricated Holdings (Pty) Ltd' })]);
+
+    const result = await extractWithSpec(model, SETA_SPEC, {
+      filename: 'x.pdf',
+      raw_text: 'This document mentions no such entity.',
+    });
+
+    expect(result.ungroundedFields).toContain('entity_name');
+    expect(result.exceptions.join(' ')).toMatch(/not found in the source document/i);
+    expect(result.values.map((v) => v.field)).toContain('entity_name');
   });
 
   it('treats "not this document" as nothing found, not as an error', async () => {
