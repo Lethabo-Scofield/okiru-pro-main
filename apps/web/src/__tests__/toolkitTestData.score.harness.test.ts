@@ -8,7 +8,7 @@
  *
  * Run: TOOLKIT_SCORE=1 npx vitest run src/__tests__/toolkitTestData.score.harness.test.ts --pool=forks --poolOptions.forks.singleFork=true
  */
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { normalizeExcelBuffer } from '@/lib/workbookExcelNormalizer';
@@ -79,6 +79,29 @@ function configFor(sector: string, type: string, subSector: string): CalculatorC
 suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => {
   const files = readdirSync(DIR).filter((f) => f.toLowerCase().endsWith('.xlsx') && !f.startsWith('~$'));
 
+  /**
+   * PER-ELEMENT golden baseline.
+   *
+   * The Level-1 count and the grand total are both too coarse to protect
+   * scoring work: a total can hold at 63.56 while two pillars move in opposite
+   * directions and cancel out, and the Level-1 count only moves when a workbook
+   * crosses a band. This session changed a designation mapping, a skills
+   * denominator and header-row detection with neither signal noticing.
+   *
+   * So the baseline records EVERY element of EVERY workbook. Any movement fails
+   * with the workbook, the element, and both numbers.
+   *
+   * To accept an intended change: `TOOLKIT_SCORE=1 UPDATE_SCORE_BASELINE=1 npx
+   * vitest run src/__tests__/toolkitTestData.score.harness.test.ts --pool=forks`
+   * and commit the diff — which is then a REVIEWABLE record of exactly which
+   * pillars moved.
+   */
+  const BASELINE_PATH = resolve(__dirname, 'toolkitTestData.scoreBaseline.json');
+  type ElementScores = Record<string, number | string>;
+  const observed: Record<string, ElementScores> = {};
+
+  // 16 workbooks x full projection + scoring; the 5s default is not enough and
+  // the resulting TIMEOUT reads as a scoring failure, which is misleading.
   it(`scores all ${files.length} workbooks; reports Level-1 fitness`, () => {
     const rows: string[] = [];
     let level1 = 0;
@@ -164,6 +187,19 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
         const lvl = levelFromConfig(total, cfg);
         scored++;
         if (lvl === 1) level1++;
+
+        // Record the total, the level, and the PER-ELEMENT breakdown.
+        //
+        // The three scoring branches (Transport / construction / generic) hold
+        // their pillar values in different local variables, so rather than
+        // restructuring all three we record `brk` — which each branch already
+        // builds FROM those pillar values. Comparing it verbatim therefore
+        // catches any element moving, which is the protection required.
+        observed[f] = {
+          total: Math.round(total * 100) / 100,
+          level: lvl,
+          breakdown: brk.trim(),
+        };
         rows.push(`${f.slice(0, 30).padEnd(30)} | ${sector.padEnd(5)}/${type.slice(0,7).padEnd(7)} | tot ${total.toFixed(0).padStart(3)}/${cfg.totalMaxPoints} L${lvl === 99 ? 'NC' : lvl}${brk}`);
       } catch (e) {
         rows.push(`${f.slice(0, 34).padEnd(34)} | SCORE THREW: ${(e as Error).message.slice(0, 60)}`);
@@ -172,5 +208,56 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
     // eslint-disable-next-line no-console
     console.log('\n===== Toolkit Testing Data — SCORE fitness =====\n' + rows.join('\n') + `\n\nLEVEL-1: ${level1}/${scored} scored (${files.length} total). GOAL: ${files.length}/${files.length}.\n`);
     expect(files.length).toBeGreaterThan(0);
+  }, 120_000);
+
+  it('no element of any workbook has moved since the baseline', () => {
+    if (Object.keys(observed).length === 0) {
+      throw new Error('scoring pass produced no results — cannot compare a baseline');
+    }
+
+    if (process.env.UPDATE_SCORE_BASELINE) {
+      writeFileSync(BASELINE_PATH, `${JSON.stringify(observed, null, 2)}\n`);
+      // eslint-disable-next-line no-console
+      console.log(`baseline UPDATED: ${BASELINE_PATH} (${Object.keys(observed).length} workbooks)`);
+      return;
+    }
+
+    if (!existsSync(BASELINE_PATH)) {
+      throw new Error(
+        `No score baseline at ${BASELINE_PATH}. Create it with UPDATE_SCORE_BASELINE=1.`,
+      );
+    }
+
+    const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Record<string, ElementScores>;
+    const drift: string[] = [];
+
+    for (const [file, elements] of Object.entries(baseline)) {
+      const now = observed[file];
+      if (!now) {
+        drift.push(`${file}: MISSING — scored in the baseline, not scored now`);
+        continue;
+      }
+      for (const [element, was] of Object.entries(elements)) {
+        const is = now[element];
+        // Numbers: 0.01 absorbs float noise without hiding a real movement.
+        // The breakdown string is compared verbatim.
+        const moved = typeof was === 'string'
+          ? is !== was
+          : Math.abs((Number(is) || 0) - was) > 0.01;
+        if (moved) {
+          drift.push(`${file} · ${element}: ${was} -> ${is ?? 'undefined'}`);
+        }
+      }
+    }
+
+    for (const file of Object.keys(observed)) {
+      if (!baseline[file]) drift.push(`${file}: NEW — not in the baseline`);
+    }
+
+    expect(
+      drift,
+      `${drift.length} element(s) moved:\n  ${drift.join('\n  ')}\n\n`
+      + 'If intended, re-run with UPDATE_SCORE_BASELINE=1 and commit the diff.',
+    ).toEqual([]);
   });
 });
