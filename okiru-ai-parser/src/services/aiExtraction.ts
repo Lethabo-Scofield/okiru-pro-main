@@ -30,6 +30,7 @@
  */
 import { createLogger } from '../logger.js';
 import { chunkDocument, mergeChunkResults } from './documentChunking.js';
+import { groundValues } from './extractionGrounding.js';
 import {
   aliasIndex,
   findDocumentById,
@@ -57,6 +58,11 @@ export interface DocumentExtraction {
   missingFields: string[];
   /** Keys the model returned that the schema did not ask for. */
   unexpectedFields: string[];
+  /**
+   * Fields whose value could not be found in the source document. Reported,
+   * never dropped — a grounding miss is evidence for a reviewer, not proof.
+   */
+  ungroundedFields?: string[];
   /** Exceptions the expert's prompt asked the model to raise. */
   exceptions: string[];
   error?: string;
@@ -403,12 +409,33 @@ export async function extractWithSpec(
   const known = new Set([...spec.expectedFields, 'exceptions', 'not_this_document']);
   const unexpectedFields = Object.keys(parsed).filter((key) => !known.has(key) && !isEmptyValue(parsed[key]));
 
+  // ── VERIFY PASS ─────────────────────────────────────────────────────────
+  // Go back to the source and confirm the document actually says each value.
+  // Confidence does not catch a confident hallucination — an invented "Level 4"
+  // carries the same confidence as a read one. Mostly free: the prompt tells the
+  // model to copy values verbatim, so a string search settles it.
+  //
+  // An ungrounded value is NOT dropped. It is evidence for a reviewer; silently
+  // discarding it would be the same silent-zero failure in a new coat.
+  const grounded = groundValues(values.map((v) => ({ field: v.field, value: v.value })), source, {
+    file: input.filename,
+    document: spec.id,
+  });
+  const ungroundedFields = grounded
+    .filter((g) => g.verdict === 'ungrounded')
+    .map((g) => g.field);
+
+  const groundingExceptions = ungroundedFields.length > 0
+    ? [`Values not found in the source document (possible extraction error): ${ungroundedFields.join(', ')}`]
+    : [];
+
   return {
     ...base,
     values,
     missingFields,
     unexpectedFields,
-    exceptions: toExceptions(parsed.exceptions),
+    ungroundedFields,
+    exceptions: [...toExceptions(parsed.exceptions), ...groundingExceptions],
   };
 }
 
