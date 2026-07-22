@@ -14,6 +14,9 @@ vi.mock('pdf2pic', () => ({
 
 const { extractScannedPdfWithVision, visionExtractionConfigured } = await import('../../src/services/visionExtraction.js');
 
+/** Real PNG magic bytes, long enough to clear the sanity guard. */
+const PNG_B64 = `iVBORw0KGgo${'A'.repeat(200)}`;
+
 const originalFetch = globalThis.fetch;
 
 function configure(): void {
@@ -33,7 +36,9 @@ function mockPages(pages: number): void {
   renderMock.mockReset();
   renderMock.mockImplementation(async (page: number) => {
     if (page > pages) throw new Error('page out of range');
-    return { base64: `PAGE${page}` };
+    // Alternate the two shapes pdf2pic actually returns: raw base64 and a full
+    // data URI. Both must reach Azure as a single, correctly-prefixed URI.
+    return { base64: page % 2 === 0 ? `data:image/png;base64,${PNG_B64}` : PNG_B64 };
   });
 }
 
@@ -77,7 +82,20 @@ describe('transcribing a scan', () => {
     const parts = body.messages[1].content as Array<{ type: string; image_url?: { url: string } }>;
     const images = parts.filter((p) => p.type === 'image_url');
     expect(images).toHaveLength(2);
-    expect(images[0].image_url!.url).toMatch(/^data:image\/png;base64,PAGE1$/);
+    // Exactly one prefix, whichever shape pdf2pic handed back. Double-prefixing
+    // is what Azure rejected in production with "unsupported image".
+    for (const image of images) {
+      expect(image.image_url!.url).toBe(`data:image/png;base64,${PNG_B64}`);
+      expect(image.image_url!.url.match(/base64,/g)).toHaveLength(1);
+    }
+  });
+
+  it('refuses to send a rendered page that is not actually a PNG', async () => {
+    renderMock.mockReset();
+    renderMock.mockImplementation(async () => ({ base64: `JVBERi0x${'A'.repeat(200)}` })); // a PDF, not a PNG
+    mockModel('text');
+
+    expect(await extractScannedPdfWithVision(Buffer.from('x'), 'a.pdf')).toBeNull();
   });
 
   it('is deterministic — the same scan must not score differently between runs', async () => {

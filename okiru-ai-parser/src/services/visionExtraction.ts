@@ -69,7 +69,7 @@ async function pdfPagesToBase64(buffer: Buffer, maxPages: number): Promise<strin
   for (let page = 1; page <= maxPages; page += 1) {
     try {
       const rendered = await convert(page, { responseType: 'base64' });
-      const base64 = (rendered as { base64?: string }).base64;
+      const base64 = normaliseBase64((rendered as { base64?: string }).base64);
       if (!base64) break;
       images.push(base64);
     } catch {
@@ -79,6 +79,33 @@ async function pdfPagesToBase64(buffer: Buffer, maxPages: number): Promise<strin
     }
   }
   return images;
+}
+
+/** PNG magic bytes, base64-encoded — every PNG's payload starts with this. */
+const PNG_BASE64_PREFIX = 'iVBORw0KGgo';
+
+/**
+ * pdf2pic's `base64` field is not consistently shaped: depending on version it
+ * is either raw base64 or a full `data:image/png;base64,...` URI, and it can
+ * carry line breaks. Re-wrapping a data URI produces
+ * `data:image/png;base64,data:image/png;base64,...`, which Azure rejects with
+ * "You uploaded an unsupported image" — the exact failure seen in production on
+ * the Thandanani share certificate.
+ */
+function normaliseBase64(value: string | undefined): string | null {
+  if (!value) return null;
+
+  const withoutPrefix = value.includes('base64,') ? value.slice(value.lastIndexOf('base64,') + 7) : value;
+  const compact = withoutPrefix.replace(/\s+/g, '');
+  if (compact.length < 100) return null;
+
+  if (!compact.startsWith(PNG_BASE64_PREFIX)) {
+    logger.warn('Rendered page is not a PNG — refusing to send it as one', {
+      leading: compact.slice(0, 12),
+    });
+    return null;
+  }
+  return compact;
 }
 
 /**
