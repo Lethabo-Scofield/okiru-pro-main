@@ -1,14 +1,39 @@
-# Ingestion re-architecture — the plan
+# Parser re-architecture — the plan
 
 **Status:** agreed 2026-07-22 · **Branch:** `autoresearch/auto`
 
+## Two products, deliberately separate — do not merge them
+
+| | **Spreadsheet import** | **The parser** |
+|---|---|---|
+| Input | Our template, filled in | **Anything the client has** |
+| How it maps | Fixed sheet/column mapping to a known template | Understands each document |
+| If the file is unfamiliar | Correctly refuses / asks for the template | Must still read it |
+| Commercial | Free path | **The paid product** |
+| Correct engineering | Template-bound mapping is *right* here | String matching is *wrong* here |
+
+An earlier draft of this plan proposed unifying them. **That was a mistake.** The
+spreadsheet importer requires a specific template *by design* — sheet mapping
+against a known shape is the correct implementation of a template-bound feature,
+and its heuristics are legitimate maintenance, not technical debt.
+
+The parser is a different promise: **arbitrary documents in, correct scorecard
+entities out.** That is what clients pay for, and it is the only place the
+"AI decides what things MEAN" architecture belongs.
+
+*(Fixes made to the importer this session — header-row detection, MC designation
+vocabulary, SED sheet routing, TMPS harvest — remain valid work on that feature.
+They are not the strategic direction and are not what Phase 4 measures.)*
+
 ## Why
 
-Four consecutive ingestion bugs this session — header-row detection, Management
+Four consecutive bugs in the SPREADSHEET IMPORTER this session — header-row detection, Management
 Control designation vocabulary, SED sheet-name hints, TMPS harvest — were the
 same bug: *the workbook said X, our string matcher expected Y*. Each fix was
 real (Thandanani 26.00 → 69.57 against a verified 102.00), but patching cracks
-does not converge, because the meaning of a workbook lives in scattered
+does not converge where input is unconstrained. In the importer that is
+acceptable — the template is known. In the PARSER it is fatal, because the
+meaning of an arbitrary document cannot live in scattered
 string-matching: sheet hints in one file, column aliases in another, designation
 vocabularies in a third.
 
@@ -53,44 +78,106 @@ column semantics are plain. The scale risk is answered; the reading is proven.
 
 ---
 
-## Phase 1 — Template mapping engine *(the core)*
+## Phase 1 — Extraction that is worth paying for *(the core)*
 
 | | |
 |---|---|
-| **Goal** | Understand a workbook once; apply that understanding deterministically forever. |
-| **Gate** | Same file in ⇒ byte-identical sections out, across runs and replicas, with no model call after the first. |
+| **Goal** | Any document a client owns → every scorecard entity it contains, normalised, with provenance and confidence. |
+| **Gate** | On the 26-document Thandanani pack: nothing silently dropped, every extracted value traceable to a file, and a re-run produces identical output. |
 
-1. **Fingerprint** = sheet names + header rows only. **Never the data** — the
-   same template with different numbers must hash identically.
-2. **Propose** (first sighting only): headers-only markdown → model → proposed
-   `sheet → section` and `column → field` mappings, plus labelled totals
-   (TMPS, leviable amount, total contributions), each with confidence and a
-   cell reference.
-3. **Validate**: every proposed target must exist in the calculator allowlist.
-   Anything else is *reported as unmapped*, never silently dropped.
-4. **Persist** against the fingerprint (Redis is already wired for the parser).
-5. **Replay**: later uploads apply the stored mapping with **no model call**.
+The parser already has the right skeleton — classify → matrix prompts → extract →
+resolve across documents → map to calculator keys, with validation. What it does
+not yet have is the depth that justifies the price.
+
+**1. Stop truncating.** `AI_EXTRACTION_MAX_CHARS = 60,000` and
+`MAX_VISION_PAGES = 12` silently discard evidence. A 300-page pack is read to
+page 12 and the rest is *scored as absent*. Chunk and fan out instead
+(Phase 2b) — never truncate. Where a limit must exist, it is **reported**, not
+silent.
+
+**2. Multi-pass per document, not one shot.** Today each document gets one prompt
+and whatever comes back. Insane-level means:
+- **Pass A — locate.** What kind of document, what regions does it have (header
+  block, table, signature block, annexures)?
+- **Pass B — extract.** The matrix prompt for that type, run against the located
+  regions, not the whole blob.
+- **Pass C — sweep.** *"Which expected fields are still missing? Look again,
+  specifically for these."* A second look targeted at gaps recovers what a
+  single pass misses, and costs almost nothing relative to the value.
+- **Pass D — verify.** Re-read the source for each extracted value and confirm
+  it says that. Catches the confident hallucination that confidence scores do
+  not.
+
+**3. Documents outside the 109-type matrix must still yield entities.** Today an
+unrecognised type is a dead end. The parser should fall back to
+*entity-directed* extraction: "find any of these scorecard entities anywhere in
+this document", using the allowlist as the target set. A supplier certificate in
+an unfamiliar layout is still a supplier certificate.
+
+**4. Tables inside documents.** A share register, a spend schedule and an EE
+report are tables wherever they appear — in a PDF, a scan, or a deck. Table
+structure must survive extraction as rows, not be flattened to prose.
+(Document Intelligence would do this natively; it is not provisioned, so vision
++ markdown carries it today.)
+
+**5. Normalisation is part of the product, not a detail.** `R 4 157 140`,
+`(4 157 140)`, `4157140.00`, `4.16m` are one number. `14 March 2027`,
+`2027-03-14`, `14/03/2027` are one date. `Level Two`, `Level 2`, `2` are one
+level. SA ID numbers carry a checksum, a birth date and a citizenship digit that
+**cross-check** the extracted person. Every normaliser is deterministic code with
+its own tests — the model reads, code normalises.
+
+**6. Caching, so quality does not cost latency.** Key extraction results by
+document content hash. Re-uploading the same certificate re-uses the result;
+adding one new document to a pack re-reads only that document. This is what makes
+multi-pass affordable in wall-clock terms.
 
 **Non-negotiables**
-- Temperature 0.
-- The model never emits a score, a total, or a derived value — only *where
-  things are*.
-- A low-confidence mapping is quarantined for review, not applied.
-- Cell-level provenance on every mapped field (feeds Phase 3).
+- Temperature 0 everywhere.
+- The model never computes, sums, decides a level, or resolves a conflict between
+  documents. It reads. Code does the rest.
+- Every value carries **file + location + confidence**.
+- A field the parser could not find is **reported as not-found**, never defaulted
+  and never scored as zero.
 
-**Risks:** mapping drift between template versions (mitigate: fingerprint
-includes header text, so a changed template is a new fingerprint); model
-proposing a plausible-but-wrong column (mitigate: confidence + Phase 3 review +
-Phase 0 golden baseline).
+**Risks:** multi-pass raises cost per document (accepted — cost is not a
+constraint); more passes mean more chances to hallucinate (mitigated by Pass D
+and by verification against the source text, not against the model's own prior
+answer).
 
 ---
 
 ### 1a. How the AI actually understands — the heart of this
 
-This is the part that replaces four scattered heuristic systems, so it is worth
-being precise about *what the model is reasoning over* and *why a matcher cannot*.
+**The judgements the parser must make on an arbitrary document:**
 
-**What it reads.** Not raw cells — the structure-preserving markdown: sheet
+1. **What is this?** — a SANAS certificate, an affidavit, a share register, a
+   payroll export, a strategy deck. Titles vary, and most documents never restate
+   their own type; identity comes from letterheads, form codes (COR14.3, EEA2,
+   EMP201), and the shape of the content.
+2. **Which parts matter?** — a 40-page pack may carry one scoring fact. Locate
+   the header block, the table, the signature block; ignore the boilerplate.
+3. **What does each value mean here?** — the same number is a spend, a
+   percentage, a date serial or a headcount depending on context.
+4. **Whose is it?** — the measured entity's own black ownership, or a listed
+   supplier's? Getting this backwards puts a supplier's B-BBEE level on the
+   client's scorecard.
+5. **Is it still valid?** — expiry, signature, certification date. Extraction
+   says what a document contains; validity says whether it counts.
+
+None is a hard *reading* problem. Every one is "the client's document is shaped
+differently than we guessed" — an infinite space, which is exactly why
+enumerating it in rules never converges and a model that reads meaning does.
+
+**The importer bugs make the point concretely.** They are the same class of
+judgement, in a setting where we could see the ground truth — which is why they
+are useful evidence even though the importer stays template-bound:
+
+**What it reads.** The structure-preserving **markdown** — which is what the
+markdown conversion was built for. Headings, tables, reading order and labels
+survive; a flattened text blob loses exactly the structure these judgements
+depend on. For a scanned document the markdown comes from vision transcription;
+for a workbook, from sheet
 names, the first ~9 rows of every sheet (banner, legend, header), 2–3 sample
 data rows, and the position of every labelled total. Headers-only for the whole
 17-sheet SED workbook is **16,446 chars**.
@@ -174,23 +261,35 @@ after.
 
 ---
 
-## Phase 2 — Unify the two paths
+## Phase 2 — One destination, two front doors
 
 | | |
 |---|---|
-| **Goal** | One ingestion pipeline, not two. |
-| **Gate** | New path matches or beats the old on every Phase 0 workbook, per element. |
+| **Goal** | Two front doors, one contract — not one pipeline. |
+| **Gate** | A client uploading a filled template AND loose documents gets one scorecard with conflicts surfaced, not two competing answers. |
 
-The parser path **already works this way** (classify → matrix prompts → entities
-→ resolve → map, with confidence and provenance). The Excel path is a separate
-pre-AI pipeline. This is largely **unification, not invention**.
+**They stay separate.** See the top of this document. What they share is the
+*destination*, not the pipeline:
 
-1. Run both paths side by side; diff per element per workbook.
-2. Cut over **per section**, only where the new path matches or beats the old.
-3. Retire hint lists only after their section has cut over.
+```
+parser (any document)  ─┐
+                        ├─→ calculator keys → workbook → toolkit → score
+importer (our template) ┘
+```
 
-**Do not** delete the hint-based path until every section has cut over — it is
-load-bearing for Lake Trading.
+1. **One shared contract**: the calculator allowlist (Phase 1b) plus the
+   normalisers from Phase 1.5. Both paths emit the same typed, provenanced
+   values; neither invents its own vocabulary.
+2. **One shared reconciler**: `resolveCaseEntities` / `mergeWorkbooks` — so a
+   client who uploads *both* a filled template *and* loose documents gets one
+   coherent scorecard with conflicts surfaced, not two competing answers.
+3. **Separate mapping layers, permanently.** The importer keeps its sheet/column
+   mapping (correct for a known template). The parser keeps its
+   document-understanding layer (correct for unknown input). Neither borrows the
+   other's approach.
+
+**Do not** rewrite the importer to use the parser, or teach the parser about our
+template. Both would be worse at their own job.
 
 ---
 
@@ -266,17 +365,41 @@ single rule prevents the entire class of silent-zero failures this session found
 
 ---
 
-## Phase 4 — Close the Thandanani gaps
+## Phase 4 — Prove the parser on the real evidence pack
 
-Reference case: **102.00 = Level 1** (Transport QSE, certificate 13609). We are
-at **69.57**.
+**Measured through the PARSER, not the spreadsheet importer.** The importer's
+69.57 came from three of our own template workbooks; it says nothing about the
+paid product. The parser's test is the one that matters:
 
-| Gap | Points | Status |
+> Give the parser the **26 real Thandanani documents** — scanned share
+> certificate and register, salary report, EE report, invoices, strategy decks,
+> proposals, the audit pack — and see what scorecard comes out against a verified
+> **102.00 = Level 1** (Transport QSE, certificate 13609).
+
+That is the actual client experience: they upload what they have, not a filled-in
+template.
+
+**Reporting per document, not just a total.** For each of the 26:
+readable? · type identified? · entities expected vs extracted · what reached the
+calculator · what was reported as a gap. A total alone hides which documents the
+parser is failing.
+
+**Known starting position (2026-07-22):** classification is honest but not yet
+accurate — the scanned Share Register extracts real entities
+(`total_shares_in_issue`, `share_classes`, `holdings_table`) which then report
+`no_mapping`, because the allowlist has nowhere for them to land. **Phase 1b
+unblocks this**, which is why it comes first.
+
+**Expert-blocked regardless of extraction quality** — these are determinations,
+not readable data, and no amount of extraction quality resolves them:
+
+| Question | Points | Why code cannot answer it |
 |---|---:|---|
-| Procurement | 25 | TMPS harvested (R1 030 806.68) but `mergeWorkbooks` takes the gathering file's `tmps: 0` first. **Needs a decision: does a 0 total mean "not stated"?** |
-| SED | 25 | Sheet now routes (6 rows) but rows do not map to contribution amounts. Phase 1 should fix this outright. |
-| Ownership | 4 | Workbook has Voting Rights = 1, Economic Interest **blank**. Report reconciles via *"Economic & Voting Rights are the same: YES"* — the **agency's determination**, not data. **Expert-blocked.** |
-| Employment Equity | — | We score 23.57, report says **0**. Report's EE table puts all 12 employees in `W`; workbook says African/Indian. Only place we score *higher*. **Expert-blocked — data provenance, not code.** |
+| Blank Economic Interest with Voting Rights = 1 | 4 | The report reconciles via *"Economic & Voting Rights are the same: YES"* — the **agency's** determination |
+| EE race discrepancy | — | Report's EE table puts all 12 employees in `W`; the workbook says African/Indian. The only place we score *higher* than the verification |
+
+*(The importer-side gaps — TMPS merge precedence, SED contribution amounts —
+remain tracked as maintenance on that feature, not as parser work.)*
 
 ---
 
