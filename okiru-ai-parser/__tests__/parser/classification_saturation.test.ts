@@ -18,8 +18,16 @@ function input(filename: string, raw_text: string) {
   return { file_id: 'x', filename, raw_text, kind: 'text' } as never;
 }
 
+/**
+ * A long, non-identifying preamble. The point of these tests is that evidence
+ * buried in the BODY must not create confidence, so the term soup below has to
+ * sit past the header window — otherwise the fixture is simply a document that
+ * really does announce itself, and proves nothing.
+ */
+const PREAMBLE = `${'General notes and instructions for completing this file. '.repeat(40)}\n`;
+
 /** Every B-BBEE term, as a big workbook would contain them — but no header. */
-const WORKBOOK_BODY = [
+const WORKBOOK_TERMS = [
   'Sheet1', 'Sheet2', 'Sheet3',
   'black ownership', 'voting rights', 'economic interest', 'net value',
   'skills development', 'leviable amount', 'training spend', 'learnerships',
@@ -28,6 +36,9 @@ const WORKBOOK_BODY = [
   'employment equity', 'management control', 'top management', 'directors',
   'enterprise development', 'affidavit', 'sworn', 'turnover', 'revenue',
 ].join('\n').repeat(40);
+
+/** Terms only ever appear past the header window. */
+const WORKBOOK_BODY = PREAMBLE + WORKBOOK_TERMS;
 
 describe('a document is identified by what it says it is, not by what it mentions', () => {
   it('does not award high confidence to a workbook that merely contains every term', async () => {
