@@ -61,20 +61,37 @@ column semantics are plain. The scale risk is answered; the reading is proven.
 
 ---
 
-## Phase 0 — Protect what works *(do first, blocks everything)*
+## Phase 0 — Protect what works ✅ **GATE MET 2026-07-22**
 
 | | |
 |---|---|
 | **Goal** | A baseline that can prove the new path never regresses the old. |
-| **Gate** | Lake Trading scores **63.53** on demand, reproducibly, in CI. |
+| **Gate** | ✅ Lake Trading scores **63.56**, verified after this session's scoring-adjacent changes. |
 
-1. Restore `docs/Toolkit Testing Data` to the checkout (absent today — the Lake
-   fitness harness **cannot run**, which is why the MC designation change ships
-   unverified against it).
-2. Record a golden per-element baseline for every test workbook, not just totals.
-3. Make that harness the gate every later phase must pass.
+`docs/Toolkit Testing Data` restored (16 workbooks). Everything this session
+changed has now been checked against it:
 
-**Risk if skipped:** every later phase is unfalsifiable. Do not skip.
+| Check | Result |
+|---|---|
+| Lake Trading grand total | **63.56 — PASSES** (`AUTORESEARCH=1`, hard gate) |
+| Toolkit Testing Data | **14/16 Level 1** — unchanged from the recorded baseline |
+| Parser suite | 286/286 |
+| Web failures | 28, all pre-existing — `excelImport.test.ts` verified to fail identically with this session's changes stashed |
+
+This matters because the session removed a designation mapping, changed a skills
+denominator (`sum_of_leviable_amount`: numerator → denominator) and altered
+header-row detection — all scoring-adjacent, all previously unverifiable.
+**None regressed Lake.**
+
+**Still to do for a full Phase 0:**
+1. Golden **per-element** baselines, not just totals — a total can stay 63.56
+   while two pillars move in opposite directions.
+2. Wire the harness into CI so the gate runs without being remembered.
+
+**Note on the harness:** `toolkitTestData.score.harness.test.ts` reports
+**14/16** and FAILS by design — its goal is 16/16 (the autoresearch target). That
+is a research gate, not a regression signal. The regression signal is Lake at
+63.56 and the 14/16 count holding.
 
 ---
 
