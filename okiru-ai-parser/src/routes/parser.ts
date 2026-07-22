@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { createLogger } from '../logger.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
 import { fail, ok } from '../utils/apiResponse.js';
-import { rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
+import { isSupportedUpload, rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
 import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
 import {
@@ -39,8 +39,11 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (SUPPORTED_UPLOAD_MIME_TYPES.has(file.mimetype)) cb(null, true);
-    else cb(new Error(`Unsupported file type ${file.mimetype}`));
+    // Judge on type OR extension: a correct .xlsm arrives as
+    // application/octet-stream often enough that MIME alone rejected real
+    // client workbooks.
+    if (isSupportedUpload(file.mimetype, file.originalname)) cb(null, true);
+    else cb(new Error(`Unsupported file type ${file.mimetype} (${file.originalname})`));
   },
 });
 
