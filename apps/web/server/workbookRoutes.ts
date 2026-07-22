@@ -22,7 +22,7 @@ import {
 } from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
 import { coerceYesNo } from "../src/lib/yesNoValue";
-import { isBlackRace, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
+import { isBlackRace, isScoringDesignation, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import {
   getClient as memGetClient,
   canAccessClient as memCanAccessClient,
@@ -1056,10 +1056,24 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       if (id && empSeen.has(id)) continue;
       if (id) empSeen.add(id);
       // Lake Trading Fix Plan â”¬Âº1 Bug 2: translate workbook label Î“Ã¥Ã† calculator enum
-      const rawDesig = s((r as any).designation ?? (r as any).occupationalLevel);
-      const rawOcc = s((r as any).occupationalLevel ?? (r as any).designation);
-      const designation = mapDesignation(rawDesig);
-      const occupationalLevel = mapDesignation(rawOcc);
+      // Real workbooks carry BOTH a job title and an occupational level, in
+      // whichever order the sheet happens to use:
+      //   Position (Occupational Level): "Executive Management"   <- scores
+      //   Job Title:                     "Member"                 <- does not
+      // Taking `designation` first put the JOB TITLE into the scoring field, it
+      // matched no band, and Management Control scored 0 for an entity whose
+      // sole top manager is Black. So prefer whichever column actually names a
+      // band the scorecard counts, and only fall back to raw order when neither
+      // does (which leaves previous behaviour untouched).
+      const rawDesigCell = s((r as any).designation);
+      const rawOccCell = s((r as any).occupationalLevel);
+      const scoringCell = isScoringDesignation(rawDesigCell)
+        ? rawDesigCell
+        : isScoringDesignation(rawOccCell)
+          ? rawOccCell
+          : (rawDesigCell || rawOccCell);
+      const designation = mapDesignation(scoringCell);
+      const occupationalLevel = mapDesignation(rawOccCell || scoringCell);
       employees.push({
         name: s((r as any).name),
         surname: s((r as any).surname),
