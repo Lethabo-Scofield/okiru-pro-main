@@ -85,6 +85,95 @@ Phase 0 golden baseline).
 
 ---
 
+### 1a. How the AI actually understands — the heart of this
+
+This is the part that replaces four scattered heuristic systems, so it is worth
+being precise about *what the model is reasoning over* and *why a matcher cannot*.
+
+**What it reads.** Not raw cells — the structure-preserving markdown: sheet
+names, the first ~9 rows of every sheet (banner, legend, header), 2–3 sample
+data rows, and the position of every labelled total. Headers-only for the whole
+17-sheet SED workbook is **16,446 chars**.
+
+**The five judgements it makes, each of which broke a heuristic this session:**
+
+| Judgement | What the matcher did | What the model sees |
+|---|---|---|
+| **Self-description** — what IS this sheet? | Matched the *sheet name* `"Social Development"` against a hint list; missed; skipped the sheet; SED scored 0 with 77 rows in the file | Row 0 banner says **"Socio-Economic Development"**. The sheet announces itself *inside itself* — a place sheet-name matching structurally cannot look |
+| **Where the data starts** | Took the first row with ≥2 cells = the banner; hunted for shareholder columns in title text; returned 0 rows | Banner → legend ("Use dropdown") → header (row 7) → data (row 8). Obvious from layout |
+| **Vocabulary equivalence** | Knew `"Executive Director"` but not `"Top Management"`; one Black top manager scored 0/27 | Both name the top occupational band. Same concept, two industry vocabularies |
+| **Which column is which** | Two columns both claim to be a designation; took the job title (`"Member"`) over the occupational level | A job title and an occupational level are different kinds of thing; only one is a scorecard band |
+| **Labelled totals** | Needed a bespoke harvester per total, per sheet | `Total Value of Contributions made: 16700` and `Total Procurement Expenditure…: 1030806.68` are self-labelled. Reads them as a class, not as special cases |
+
+Note what these have in common: **none is a hard reading problem.** They are all
+"the client wrote it differently than we guessed." That is an infinite space —
+which is exactly why enumerating it in hint lists never converges, and why a
+model that reads meaning does.
+
+**Three passes, each with a different job:**
+
+1. **Structure** — for each sheet: where is the banner, the legend, the header
+   row, the first data row, the labelled totals? Output is *coordinates*, and it
+   is checkable: does the claimed header row actually sit above the claimed data?
+2. **Semantics** — what element does this sheet serve, and what does each column
+   mean in scorecard terms? Output is a *mapping* to allowlisted fields.
+3. **Verification** — apply the proposed mapping to the sample rows and ask:
+   do the resulting values make sense? A `% Black participation` of 45382 is an
+   Excel date serial in the wrong column; a contribution of `"Donation"` is a
+   type in the amount column. **This pass catches the plausible-but-wrong mapping
+   that confidence alone would not**, and it is cheap because it runs on 3 rows.
+
+**What the model is never asked.** It does not compute a percentage, sum a
+column, decide a level, or resolve a conflict between two files. Those are code.
+The single question it answers is: *"what does this cell mean?"*
+
+**Why this is safe to trust:** the mapping is proposed once, validated against
+the allowlist, verified against sample data, given a confidence, stored, and
+then **replayed deterministically forever**. A wrong mapping is a *visible*,
+reviewable, correctable artefact with a cell reference — not a silent zero
+discovered months later by comparing against a certificate.
+
+---
+
+## Phase 1b — Remove the allowlist ceiling *(runs alongside Phase 1)*
+
+| | |
+|---|---|
+| **Goal** | The allowlist stops being a cap on reachable score. |
+| **Gate** | Every input any calculator actually reads has a key. Proven by a test that fails when one does not. |
+
+Today `schemas/calculator_allowlist.ts` has **~18 keys**. It was written to gate
+what the *parser* could emit, not to describe what the *scorecard* consumes — so
+however good the mapping becomes, most of a scorecard is unreachable. Perfect
+extraction of `total_shares_in_issue`, `holdings_table`, `leviable_amount` or
+`consumer_education_spend` currently lands nowhere.
+
+**Do not hand-extend it.** A hand-written list is the same failure mode one layer
+up: it drifts from the calculators and nobody notices until a score is wrong.
+
+**Derive it instead.** The calculators are the source of truth for what the
+scorecard consumes:
+
+1. Enumerate every field each calculator reads from its input
+   (`ownership.ts`, `management.ts`, `skills.ts`, `procurement.ts`,
+   `esd-sed.ts`, `transport.ts`, `afs.ts`, `empowermentFinancing.ts`,
+   `constructionScoring.ts`).
+2. Generate the allowlist from that enumeration, with its runtime type.
+3. **Drift guard:** a test that fails when a calculator reads a field with no
+   key — the same pattern as `manifestConfigConsistency.test.ts` and
+   `documentMarkdown.sync.test.ts`, both of which already catch this class.
+
+**Keep the safety property.** The allowlist exists so a mapping mistake cannot
+inject an arbitrary calculator path. Deriving it *widens* the set to everything
+legitimately scoreable; it does not remove the gate. `admitCalculatorEntry`
+still validates key and runtime type on every value.
+
+**Sequencing:** this gates how much of Thandanani's remaining 32.43 is reachable,
+so size it **before** committing to a target score. Do it early in Phase 1, not
+after.
+
+---
+
 ## Phase 2 — Unify the two paths
 
 | | |
@@ -102,6 +191,59 @@ pre-AI pipeline. This is largely **unification, not invention**.
 
 **Do not** delete the hint-based path until every section has cut over — it is
 load-bearing for Lake Trading.
+
+---
+
+## Phase 2b — Parallel processing across instances
+
+| | |
+|---|---|
+| **Goal** | A submission of any size is processed in full, never truncated to fit a window. |
+| **Gate** | A 26-document, 100MB+ pack processes end to end with no input dropped, and produces the same result on a re-run. |
+
+**Why.** Evidence packs are not one file and do not fit one context window. The
+real Thandanani pack is 26 documents; a single toolkit workbook is 24MB / 617k
+chars. Today's answer is truncation (`AI_EXTRACTION_MAX_CHARS = 60,000`,
+`MAX_VISION_PAGES = 12`) — silently dropping evidence, which is precisely the
+failure mode this whole plan exists to end. **Cost is explicitly not a
+constraint**, so the correct answer is to shard and fan out rather than truncate.
+
+*(This reverses an earlier standing preference against multi-agent workflows,
+which was a cost decision. Recorded so the reversal is deliberate and not
+mistaken for drift.)*
+
+**Shape — fan out on the semantic work, keep reconciliation in code:**
+
+| Stage | Runs as | Parallelism | Notes |
+|---|---|---|---|
+| Shard | code | — | One unit per document; large workbooks split **per sheet** |
+| Classify | model | per shard | What is this? Cheap, headers only |
+| Extract | model | per shard | The element's own prompts; each shard sees only its own document |
+| Verify | model | per shard | Sample-row sanity (pass 3 above) |
+| **Reconcile** | **code** | — | `resolveCaseEntities` + `mergeWorkbooks` — **already built** |
+| Score | code | — | Deterministic, verified |
+
+**The safety property that makes this sound:** reconciliation is **code, not an
+agent**. Agents never negotiate with each other, never see each other's output,
+and never vote. Each returns typed values with provenance; deterministic code
+merges them, detects conflicts, and refuses to score contested fields. Without
+that, N agents means N opinions and an irreproducible score.
+
+**Rules**
+- Fan-out is **bounded by the input** (documents × sheets), never speculative.
+- Every shard is independently retryable and idempotent; a failed shard is a
+  *reported gap*, never a silent zero.
+- Temperature 0 everywhere; shard results keyed by content hash so a re-run
+  reuses them.
+- Order-independent merge — results must not depend on which shard finishes
+  first. Worth an explicit test: shuffle the shard order, expect identical output.
+- **Remove the truncation limits once sharding lands.** They are the bug this
+  phase exists to fix; leaving them in place silently defeats it.
+
+**Interaction with Phase 1:** mapping is per *template fingerprint*, so sharding
+a workbook by sheet does not multiply model cost after first sighting — shards
+replay the stored mapping. Fan-out is for *documents*, which have no fixed
+template, and for first-sighting mapping.
 
 ---
 
@@ -155,9 +297,11 @@ Track separately so they do not stall engineering:
 
 ## Known constraints
 
-- **The calculator allowlist is ~18 keys.** However good the mapping becomes,
-  this caps how much of a scorecard is reachable. **Size this early** rather than
-  discovering it at 85 points.
+- ~~**The calculator allowlist is ~18 keys.**~~ → now **Phase 1b**, derived from
+  the calculators with a drift guard. Size it before committing to a target score.
+- **Truncation is currently silent.** `AI_EXTRACTION_MAX_CHARS = 60,000` and
+  `MAX_VISION_PAGES = 12` drop evidence without telling anyone. Phase 2b removes
+  them; until then, treat any large-document result as partial.
 - **A submission is not one file.** The Thandanani gathering workbook has
   Procurement and Social Development completely empty; the evidence is in
   separate workbooks. Multi-file merge is built and must stay a first-class
@@ -170,6 +314,16 @@ Track separately so they do not stall engineering:
 
 ## Order, and why
 
-Phase 0 → 1 → 2 → 3, with Phase 4 falling out of 1 and 2. Phase 3 could move
-earlier if user-visible confidence matters more than closing the score gap —
-it is independent of 1 and 2 and uses data that already exists.
+**0 → 1 (+1b) → 2 (+2b) → 3**, with Phase 4 falling out of 1 and 2.
+
+- **1b runs early inside Phase 1**, not after — it sets the ceiling on everything
+  measurable, so a target score agreed before it is guesswork.
+- **2b can start as soon as 1 is proven**; it is orthogonal to the cut-over and
+  removes silent truncation, which is a correctness fix in its own right.
+- **3 can move ahead of 1 and 2 entirely** if users seeing *why* a score is low
+  matters more than closing the gap. It depends on data that already exists.
+  That is a product call, not a technical constraint.
+
+**The one-line summary:** the model reads meaning, code does arithmetic, mappings
+are cached per template so results are reproducible, work fans out so nothing is
+truncated, and every gap is shown rather than scored as zero.
