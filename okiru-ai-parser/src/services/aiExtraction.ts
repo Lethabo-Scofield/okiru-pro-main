@@ -213,6 +213,76 @@ export function selectSpecsForDocument(
     .map((hit) => hit.doc);
 }
 
+/**
+ * Whether the sweep pass runs. On by default — it is the difference between
+ * "the model had a go" and a genuine second look. Set AI_EXTRACTION_SWEEP=false
+ * to disable (tests that assert single-call behaviour, or cost investigations).
+ */
+function sweepEnabled(): boolean {
+  return process.env.AI_EXTRACTION_SWEEP !== 'false';
+}
+
+const SWEEP_SYSTEM_PROMPT = [
+  'You are re-reading a document to find SPECIFIC values a first pass missed.',
+  'You are given the exact field names still needed. Look for those and nothing else.',
+  'Rules:',
+  '- Return ONLY a JSON object keyed by the requested field names.',
+  '- A field genuinely absent from the document must be null. Never infer or estimate it.',
+  '- Values often sit in tables, footers, stamps or annexures rather than in prose — look there.',
+  '- The same fact may be worded differently than expected; match on MEANING, not on phrasing.',
+  '- Copy values exactly as printed. Do not convert currencies, dates or percentages.',
+].join('\n');
+
+/**
+ * Second, targeted look for fields the first pass did not return.
+ *
+ * Deliberately narrow: naming the handful of missing fields makes this a far
+ * easier question than the original omnibus prompt, which is why it recovers
+ * values rather than repeating the same omission.
+ *
+ * Failure is non-fatal — a failed sweep leaves the fields missing, exactly as
+ * they already were.
+ */
+async function sweepForMissingFields(
+  model: ExtractionModel,
+  spec: VerificationDocument,
+  filename: string,
+  chunks: Array<{ text: string; index: number }>,
+  missing: string[],
+): Promise<Record<string, unknown>> {
+  const ask = async (chunk: { text: string; index: number }): Promise<Record<string, unknown> | null> => {
+    const user = [
+      `DOCUMENT TYPE: ${spec.name}`,
+      `\nFIELDS STILL NEEDED (return exactly these keys): ${missing.join(', ')}`,
+      chunks.length > 1 ? `\nThis is part ${chunk.index + 1} of ${chunks.length}.` : '',
+      `\nDOCUMENT (${filename}):\n${chunk.text}`,
+    ].join('\n');
+
+    try {
+      return parseModelJson(await model.complete(SWEEP_SYSTEM_PROMPT, user));
+    } catch (err) {
+      logger.warn('Sweep pass failed — leaving fields missing', {
+        document: spec.id, file: filename, chunk: chunk.index, reason: (err as Error).message,
+      });
+      return null;
+    }
+  };
+
+  const replies = (await Promise.all(chunks.map(ask)))
+    .filter((r): r is Record<string, unknown> => r !== null);
+
+  if (replies.length === 0) return {};
+
+  const { merged } = mergeChunkResults(replies);
+  const recovered = missing.filter((field) => !isEmptyValue(merged[field]));
+  if (recovered.length > 0) {
+    logger.info('Sweep pass recovered fields a single pass missed', {
+      document: spec.id, file: filename, recovered, stillMissing: missing.length - recovered.length,
+    });
+  }
+  return merged;
+}
+
 /** Run one document's extraction prompt against one file. */
 export async function extractWithSpec(
   model: ExtractionModel,
@@ -299,6 +369,25 @@ export async function extractWithSpec(
   // The model's own escape hatch: this file is not the document we asked about.
   // Treated as "nothing found here", never as a failure.
   if (parsed.not_this_document === true) return base;
+
+  // ── SWEEP PASS ──────────────────────────────────────────────────────────
+  // A single pass reads a whole prompt's worth of fields at once and reliably
+  // overlooks some — particularly values sitting in tables, footers or under
+  // wording the prompt did not anticipate. Asking again, naming ONLY what is
+  // still missing, recovers those: a short, specific question is a far easier
+  // one to answer than the original omnibus instruction.
+  //
+  // Bounded to one extra round trip per document, and skipped entirely when the
+  // first pass found everything (the common case for clean documents).
+  const stillMissing = spec.expectedFields.filter((field) => isEmptyValue(parsed[field]));
+  if (stillMissing.length > 0 && sweepEnabled()) {
+    const swept = await sweepForMissingFields(model, spec, input.filename, chunks, stillMissing);
+    for (const [field, value] of Object.entries(swept)) {
+      // The sweep may only FILL a gap. It can never overwrite a value the first
+      // pass found — a second opinion must not silently replace a first answer.
+      if (isEmptyValue(parsed[field]) && !isEmptyValue(value)) parsed[field] = value;
+    }
+  }
 
   const values: ExtractedValue[] = [];
   const missingFields: string[] = [];
