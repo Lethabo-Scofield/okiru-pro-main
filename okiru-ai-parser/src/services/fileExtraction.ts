@@ -33,6 +33,10 @@ export const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
+  // Macro-enabled Excel. Every one of the client BEE Information Gathering
+  // files is .xlsm, so omitting this rejected the single most common upload.
+  'application/vnd.ms-excel.sheet.macroEnabled.12',
+  'application/vnd.ms-excel.sheet.macroenabled.12',
   PPTX_MIME,
   'application/vnd.ms-powerpoint',
   'text/csv',
@@ -266,12 +270,28 @@ async function extractImageText(buffer: Buffer): Promise<string> {
   }
 }
 
+/**
+ * Extensions we can read. Browsers and curl frequently send a correct file as
+ * `application/octet-stream` — especially .xlsm and .pptx — so the MIME type
+ * alone is not a safe gate. It rejected real client workbooks outright.
+ */
+export const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
+  '.pdf', '.docx', '.doc', '.xlsx', '.xlsm', '.xls', '.pptx', '.ppt',
+  '.csv', '.txt', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp',
+]);
+
+/** Accept when EITHER the declared type or the extension is one we support. */
+export function isSupportedUpload(mimetype: string, filename: string): boolean {
+  if (SUPPORTED_UPLOAD_MIME_TYPES.has(mimetype)) return true;
+  return SUPPORTED_UPLOAD_EXTENSIONS.has(extensionFromFilename(filename));
+}
+
 function extensionFromFilename(filename: string): string {
   return path.extname(filename).toLowerCase();
 }
 
 export async function rawExtractionInputFromUpload(file: UploadedFileLike): Promise<RawExtractionInput> {
-  if (!SUPPORTED_UPLOAD_MIME_TYPES.has(file.mimetype)) {
+  if (!isSupportedUpload(file.mimetype, file.originalname)) {
     throw new Error(`Unsupported file type ${file.mimetype}`);
   }
 
@@ -301,6 +321,7 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     || file.mimetype === 'application/vnd.ms-excel'
     || ext === '.xlsx'
+    || ext === '.xlsm'
     || ext === '.xls'
   ) {
     const extracted = extractWorkbookText(file.buffer);
