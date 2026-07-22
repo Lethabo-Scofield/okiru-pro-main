@@ -222,14 +222,40 @@ discovered months later by comparing against a certificate.
 
 ---
 
-## Phase 1b — Remove the allowlist ceiling *(runs alongside Phase 1)*
+## Phase 1b — Remove the allowlist ceiling ✅ **DONE 2026-07-22**
 
 | | |
 |---|---|
 | **Goal** | The allowlist stops being a cap on reachable score. |
-| **Gate** | Every input any calculator actually reads has a key. Proven by a test that fails when one does not. |
+| **Gate** | ✅ Every input any calculator actually reads has a key, proven by a failing-on-drift test. |
 
-Today `schemas/calculator_allowlist.ts` has **~18 keys**. It was written to gate
+**Delivered** (`e410fdc7`, `bb41e47f`): allowlist **21 → 70 keys**, derived from
+what `ownership.ts` / `management.ts` / `skills.ts` / `procurement.ts` /
+`esd-sed.ts` actually read. Drift guard added
+(`calculator_allowlist_coverage.test.ts`). The expert's real field names — read
+out of the 109-document matrix, 529 distinct fields — are now mapped onto them.
+The gate is unchanged: `admitCalculatorEntry` still validates key and runtime
+type, arbitrary paths still refused.
+
+**A real scoring bug fell out of it.** `sum_of_leviable_amount` was mapped to
+`skills.total_spend`. The Leviable Amount is the **denominator** (the SDL payroll
+base); it was mapped to the **numerator**. Any case carrying an EMP201 would have
+reported training spend as **100% of payroll** and scored Skills Development full
+marks off a payroll return with no training evidence. The old mapping's own
+comment called it "the denominator" while the code mapped it to spend — and a
+test had been asserting the buggy behaviour. Both corrected.
+
+**Two numbers now, deliberately distinct:** the allowlist describes **70** keys
+the scorecard can consume; `PARSER_PILLAR_COVERAGE` still declares **17** per
+document type. The printed measure (`ontology reaches 17/70`) tracks the second,
+not the mapping table, so it currently *understates* real reach. Making it
+measure the mapping table is the next task.
+
+---
+
+### Historical note (the state this phase started from)
+
+`schemas/calculator_allowlist.ts` had **~18 keys**. It was written to gate
 what the *parser* could emit, not to describe what the *scorecard* consumes — so
 however good the mapping becomes, most of a scorecard is unreachable. Perfect
 extraction of `total_shares_in_issue`, `holdings_table`, `leviable_amount` or
@@ -405,16 +431,54 @@ remain tracked as maintenance on that feature, not as parser work.)*
 
 ## Blocked on people, not code
 
-Track separately so they do not stall engineering:
+### ANSWERED from published sources (2026-07-22)
 
-1. **Chengetai** — does blank Economic Interest inherit Voting Rights as a
-   general rule, or was that case-specific? (Ownership, 4 pts)
+**Q: Does blank Economic Interest inherit Voting Rights?**
+**A: No — not as a general rule.** The Amended Codes treat Voting Rights (2.1)
+and Economic Interest (2.2) as **separate indicators with separate points** —
+governance versus financial benefit. They are measured independently, and the
+Thandanani report scores them separately (6 pts voting, 9 pts economic).
+
+So **do not auto-inherit.** What the report's *"Economic & Voting Rights are the
+same: YES"* records is a **case-specific finding** about the share structure: a
+single class of ordinary shares carries equal voting and economic rights, so the
+two numbers coincide. That is a determination about *this* register, not a rule.
+
+*Implementation:* the parser may infer equality **only** when the share register
+shows one ordinary class with no preference/restricted-voting indicators — and
+must flag it for confirmation, never apply it silently. The matrix already asks
+for `preference_shares_present`, `restricted_voting_indicators`,
+`voting_rights_per_class` and `share_class`, which is exactly the evidence that
+decides it. **Still worth Chengetai confirming** before it is wired in.
+
+**Q: Is Transport QSE really any four of seven at 25 points each?**
+**A: Yes — independently confirmed.** QSE transport entities choose **any four**
+of the seven elements, each weighted **25 points**, totalling **100**. This
+validates the engine and the base-100 denominator, and therefore that
+Thandanani's **102 ≥ 100 = Level 1**.
+
+**New finding — a latent bug the same source exposed.** Transport QSE thresholds
+are **R5m–R35m** revenue, not the generic codes' R10m–R50m.
+`inferScorecardTypeFromRevenue` applies the generic bands to every sector, so a
+transport entity on R40m would be tagged **QSE when it should be Large**, and
+scored on the wrong scorecard entirely. Thandanani (R10.8m) is QSE under both, so
+this case is unaffected — which is exactly why it went unnoticed. **Tracked as its
+own defect.**
+
+### Still open
+
+1. **Chengetai** — confirm the single-ordinary-class inference above before it is
+   wired in. (Ownership, 4 pts)
 2. **Chengetai** — the EE race discrepancy: different period, or excluded
-   employees? (EE, and it is the only place we over-score)
+   employees? (EE, and it is the only place we over-score). *Not answerable from
+   published rules — it is a question about which evidence was measured.*
 3. **Product** — does a `0` labelled total mean "not stated"? (Procurement, 25 pts)
-4. **Gazetted Codes** — pull the amended Codes + Integrated Transport Sector Code
-   as citable sources for (1) and (3). *The rules were never the problem; these
-   two judgement calls are the only place a citation helps.*
+   *Not addressed by the Codes; it is a data-entry convention question.*
+
+**Sources:** thedtic.gov.za (Codes of Good Practice), BEE Ratings-SA (ownership
+measurement principles), SERR Synergy (Transport Sector overview). Published
+commentary, not the gazette itself — treat as strong corroboration, and confirm
+anything score-changing with Chengetai.
 
 ---
 
