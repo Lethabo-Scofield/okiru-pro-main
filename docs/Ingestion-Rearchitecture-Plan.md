@@ -499,6 +499,44 @@ anything score-changing with Chengetai.
 
 ---
 
+## Validating the system against the actual law
+
+**Standing practice, not a one-off.** Where a scoring rule, threshold or
+definition is in question, look it up against published sources before writing
+code — and record the citation next to the rule.
+
+This has already paid twice in one session:
+
+| Question | What the sources settled |
+|---|---|
+| Does blank Economic Interest inherit Voting Rights? | **No.** The Amended Codes make them SEPARATE indicators with separate points. The report's "Economic & Voting Rights are the same: YES" is a case-specific finding about a single ordinary share class, not a rule. Stopped us inventing a 4-point inheritance. |
+| Is Transport QSE really any four of seven at 25 each? | **Yes**, total 100 — independently confirming the engine, the base-100 denominator, and 102 ≥ 100 = Level 1. |
+| *(unlooked-for)* | Transport QSE thresholds are **R5m–R35m**, not the generic R10m–R50m. Exposed a live bug putting R35m–R50m transport entities on the wrong scorecard entirely. |
+
+That third one is the argument for doing this routinely: **it was not the
+question being asked.** Reading the actual rule surfaced a defect no test would
+have caught, because every test case we had sat below R35m where the two bands
+agree.
+
+**What to check this way**
+- Element weightings, sub-minimums and the four-of-seven style electives
+- Level bands and recognition percentages per sector code
+- EME / QSE / Generic revenue thresholds — **these differ per sector code**
+- Definitions that decide inclusion: "Black" (African/Coloured/Indian),
+  Empowering Supplier, Value-Adding Supplier, designated groups
+- Measurement principles: flow-through, modified flow-through, exclusions
+
+**Rules of use**
+- Prefer the gazette and thedtic.gov.za. Verification-house commentary is strong
+  corroboration, **not** authority.
+- Record the source next to the rule in code, as `TRANSPORT_QSE_LEVELS` does.
+- **A citation never overrides the client's own certificate.** Where a verified
+  report and a published reading disagree, that is a question for Chengetai, not
+  a licence to change a score. Ground truth beats interpretation.
+- Anything score-changing still gets expert confirmation before it ships.
+
+---
+
 ## Known constraints
 
 - ~~**The calculator allowlist is ~18 keys.**~~ → now **Phase 1b**, derived from
