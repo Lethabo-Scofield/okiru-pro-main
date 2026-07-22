@@ -74,9 +74,11 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   { field: 'black_women_representation_percentage', calculatorKey: 'management.black_women_representation', elements: ['MANAGEMENT_CONTROL'], coerce: 'percentage' },
 
   // ── Skills development ──
-  // The Leviable Amount is the denominator for skills spend, per the matrix's
-  // EMP201 document ("Primary source for the Leviable Amount").
-  { field: 'sum_of_leviable_amount', calculatorKey: 'skills.total_spend', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
+  // The Leviable Amount is the DENOMINATOR (the SDL payroll base), not spend.
+  // It was previously mapped to skills.total_spend — the numerator — which
+  // would have reported training spend as 100% of payroll and scored the pillar
+  // full marks on an EMP201 alone. It has its own key since Phase 1b; the wrong
+  // mapping is removed rather than left to shadow the right one.
   { field: 'total_training_spend', calculatorKey: 'skills.total_spend', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
   { field: 'black_training_spend', calculatorKey: 'skills.black_spend', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
 
@@ -92,6 +94,45 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   { field: 'beneficiary_name', calculatorKey: 'sed.beneficiary_name', elements: ['SED'], coerce: 'text' },
   { field: 'total_sed_contributions', calculatorKey: 'sed.contribution', elements: ['SED'], coerce: 'money' },
   { field: 'contribution_amount', calculatorKey: 'sed.contribution', elements: ['SED'], coerce: 'money' },
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Mapped onto the keys derived in Phase 1b, using the field names the
+  // EXPERT'S PROMPTS actually ask for (verified against the 109-document
+  // matrix, not invented). Before this, these extracted correctly and reported
+  // `no_mapping` because the allowlist had nowhere to put them.
+  // ────────────────────────────────────────────────────────────────────────
+
+  // ── DENOMINATORS. Each one zeroes an entire pillar when absent, however many
+  //    rows were extracted: Thandanani held all 23 supplier rows and scored 0
+  //    for Procurement because TMPS was missing.
+  { field: 'total_pre_exclusions_tmps', calculatorKey: 'procurement.tmps', elements: ['ESD'], coerce: 'money' },
+  { field: 'sum_of_leviable_amount', calculatorKey: 'skills.leviable_amount', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
+  { field: 'total_entity_value', calculatorKey: 'ownership.company_value', elements: ['OWNERSHIP'], coerce: 'money' },
+  { field: 'current_year_revenue', calculatorKey: 'entity.revenue', coerce: 'money' },
+  { field: 'current_year_npat', calculatorKey: 'entity.npat', coerce: 'money' },
+
+  // ── Share register: a TABLE, one row per holder ──
+  { field: 'holder_name', calculatorKey: 'ownership.shareholder_name', elements: ['OWNERSHIP'], coerce: 'text' },
+  { field: 'total_shares_in_issue', calculatorKey: 'ownership.total_shares_in_issue', elements: ['OWNERSHIP'], coerce: 'number' },
+  { field: 'number_of_shares', calculatorKey: 'ownership.shares_held', elements: ['OWNERSHIP'], coerce: 'number' },
+  { field: 'total_economic_interest_received', calculatorKey: 'ownership.economic_interest', elements: ['OWNERSHIP'], coerce: 'percentage' },
+  { field: 'declared_race', calculatorKey: 'ownership.race', elements: ['OWNERSHIP'], coerce: 'text' },
+
+  // ── Employee register ──
+  { field: 'employee_name', calculatorKey: 'management.employee_name', elements: ['MANAGEMENT_CONTROL'], coerce: 'text' },
+  { field: 'id_number', calculatorKey: 'management.id_number', elements: ['MANAGEMENT_CONTROL'], coerce: 'text' },
+  { field: 'derived_gender', calculatorKey: 'management.gender', elements: ['MANAGEMENT_CONTROL'], coerce: 'text' },
+
+  // ── Skills ──
+  { field: 'learner_name', calculatorKey: 'skills.learner_name', elements: ['SKILLS_DEVELOPMENT'], coerce: 'text' },
+  { field: 'total_skills_dev_spend', calculatorKey: 'skills.total_spend', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
+
+  // ── Procurement / ESD ──
+  { field: 'claimed_spend_ex_vat', calculatorKey: 'procurement.supplier_spend', elements: ['ESD'], coerce: 'money' },
+  { field: 'amount_ex_vat', calculatorKey: 'procurement.supplier_spend', elements: ['ESD'], coerce: 'money' },
+  { field: 'certificate_expiry_date', calculatorKey: 'supplier.certificate_expiry', elements: ['ESD'], coerce: 'iso_date' },
+  { field: 'contribution_value', calculatorKey: 'esd.contribution', elements: ['ESD'], coerce: 'money' },
+  { field: 'contribution_type', calculatorKey: 'esd.contribution_type', elements: ['ESD'], coerce: 'text' },
 ];
 
 const MONTHS: Record<string, string> = {
