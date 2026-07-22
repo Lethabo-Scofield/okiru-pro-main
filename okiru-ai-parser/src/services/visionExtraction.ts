@@ -100,7 +100,10 @@ function normaliseBase64(value: string | undefined): string | null {
   if (compact.length < 100) return null;
 
   if (!compact.startsWith(PNG_BASE64_PREFIX)) {
-    logger.warn('Rendered page is not a PNG — refusing to send it as one', {
+    // Usually benign: past the last page, ghostscript returns its own message
+    // ("Requested FirstPage is greater than the number of pages") which pdf2pic
+    // hands back in the base64 field. Treated as end-of-document, not an error.
+    logger.debug('Rendered page is not a PNG — treating as end of document', {
       leading: compact.slice(0, 12),
     });
     return null;
