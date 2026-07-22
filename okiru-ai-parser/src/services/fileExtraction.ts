@@ -391,6 +391,21 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
       if (seen && seen.markdown.trim()) {
         rawText = seen.markdown;
         markdown = seen.markdown;
+
+        // If the page cap bit, SAY SO in the document itself. The caller was
+        // discarding this flag, so a partially-read scan was indistinguishable
+        // from a fully-read one and the untranscribed pages were scored as
+        // absent. Carrying it in the text means it reaches the user through
+        // every downstream path without new plumbing.
+        if (seen.truncated) {
+          const notice = `\n\n> NOTE: only the first ${seen.pagesRead} pages of this scanned document were transcribed. Later pages were not read.\n`;
+          rawText += notice;
+          markdown += notice;
+          logger.warn('Scanned document was longer than the vision page cap', {
+            filename: file.originalname,
+            pagesRead: seen.pagesRead,
+          });
+        }
       }
     }
   }
