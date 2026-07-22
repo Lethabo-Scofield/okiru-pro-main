@@ -106,13 +106,31 @@ describe('transcribing a scan', () => {
     expect(body.temperature).toBe(0);
   });
 
-  it('caps the page count and says so, rather than billing a 300-page pack', async () => {
-    mockPages(500);
+  it('caps the page count and REPORTS it, rather than reading a 500-page pack unbounded', async () => {
+    // The cap is configurable (PARSER_MAX_VISION_PAGES) and was raised from 12
+    // to 60 — cost is not the constraint, and stopping at page 12 silently
+    // scored the rest of a scanned pack as absent. What must hold is that a cap
+    // exists and that hitting it is VISIBLE.
+    process.env.PARSER_MAX_VISION_PAGES = '5';
+    try {
+      mockPages(500);
+      mockModel('text');
+
+      const result = await extractScannedPdfWithVision(Buffer.from('huge'), 'huge.pdf');
+      expect(result!.pagesRead).toBe(5);
+      expect(result!.truncated).toBe(true);
+    } finally {
+      delete process.env.PARSER_MAX_VISION_PAGES;
+    }
+  });
+
+  it('does not report truncation when the whole document fitted', async () => {
+    mockPages(3);
     mockModel('text');
 
-    const result = await extractScannedPdfWithVision(Buffer.from('huge'), 'huge.pdf');
-    expect(result!.pagesRead).toBeLessThanOrEqual(12);
-    expect(result!.truncated).toBe(true);
+    const result = await extractScannedPdfWithVision(Buffer.from('small'), 'small.pdf');
+    expect(result!.pagesRead).toBe(3);
+    expect(result!.truncated).toBe(false);
   });
 });
 

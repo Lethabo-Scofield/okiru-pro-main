@@ -24,8 +24,22 @@ import { createLogger } from '../logger.js';
 
 const logger = createLogger('VisionExtraction');
 
-/** Pages beyond this are ignored — cost and latency guard. */
-const MAX_VISION_PAGES = 12;
+/**
+ * Pages beyond this are not transcribed.
+ *
+ * Was 12, which silently stopped at roughly page 12 of a scanned pack and
+ * reported the rest as absent — the same silent-truncation bug fixed in the text
+ * path. Raised because cost is explicitly not the constraint here: an evidence
+ * pack that is genuinely 60 pages of scans should be READ, and a scanned share
+ * register is worth far more than the tokens it costs.
+ *
+ * The remaining ceiling exists only to stop a pathological upload running
+ * unbounded, and when it bites it is REPORTED via `truncated`, never silent.
+ */
+function maxVisionPages(): number {
+  const configured = Number(process.env.PARSER_MAX_VISION_PAGES);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 60;
+}
 /** 150 DPI is enough for stamped/handwritten certificates without huge payloads. */
 const RENDER_DPI = 150;
 const RENDER_WIDTH = 1700;
@@ -128,7 +142,7 @@ export async function extractScannedPdfWithVision(
 
   let images: string[];
   try {
-    images = await pdfPagesToBase64(buffer, MAX_VISION_PAGES);
+    images = await pdfPagesToBase64(buffer, maxVisionPages());
   } catch (err) {
     logger.warn('Could not rasterise PDF for vision extraction', {
       filename,
@@ -193,7 +207,7 @@ export async function extractScannedPdfWithVision(
     return {
       markdown,
       pagesRead: images.length,
-      truncated: images.length >= MAX_VISION_PAGES,
+      truncated: images.length >= maxVisionPages(),
     };
   } catch (err) {
     logger.error('Vision transcription failed', err as Error);
