@@ -8,7 +8,9 @@
  * The model is faked, so this runs offline and asserts the plumbing rather than
  * the model's judgement.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { resetExtractionCache } from '../../src/services/extractionCache.js';
+beforeEach(() => resetExtractionCache());
 import { extractCaseEntities } from '../../src/services/caseExtraction.js';
 import type { ExtractionModel } from '../../src/services/aiExtraction.js';
 import type { RawExtractionInput } from '../../schemas/document_types.js';

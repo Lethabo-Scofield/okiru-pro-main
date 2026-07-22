@@ -9,7 +9,9 @@
  * FILL a gap, never overwrite a first-pass answer; it must not fire when nothing
  * is missing; and its failure must leave the document exactly as it was.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetExtractionCache } from '../../src/services/extractionCache.js';
+beforeEach(() => resetExtractionCache());
 import { extractWithSpec } from '../../src/services/aiExtraction.js';
 import type { ExtractionModel } from '../../src/services/aiExtraction.js';
 import { VERIFICATION_DOCUMENT_MATRIX } from '../../schemas/verification_document_matrix.js';

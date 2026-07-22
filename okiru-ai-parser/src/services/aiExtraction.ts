@@ -33,6 +33,12 @@ import { chunkDocument, mergeChunkResults } from './documentChunking.js';
 import { groundValues } from './extractionGrounding.js';
 import { checksumForField } from '../../parser/checksums.js';
 import {
+  cachingEnabled,
+  extractionCacheKey,
+  getExtractionCache,
+  logCacheHit,
+} from './extractionCache.js';
+import {
   aliasIndex,
   findDocumentById,
   type VerificationDocument,
@@ -300,6 +306,31 @@ export async function extractWithSpec(
   // text projection destroys the row/column relationship they depend on.
   const source = input.markdown?.trim() || input.raw_text;
 
+  // Multi-pass extraction is the right amount of work to do ONCE. Adding one
+  // document to a pack must not re-read the other 25, and a requote must not
+  // re-read documents already paid for. Keyed on content AND prompt, so a
+  // corrected matrix prompt invalidates every result it produced.
+  const cacheKey = extractionCacheKey({
+    content: source,
+    documentId: spec.id,
+    extractionPrompt: spec.extractionPrompt,
+    expectedFields: spec.expectedFields,
+    model: model.name,
+  });
+  if (cachingEnabled()) {
+    const hit = getExtractionCache().get(cacheKey);
+    if (hit) {
+      logCacheHit(spec.id, input.filename);
+      // Re-stamp the filename: the same content may arrive under another name,
+      // and provenance must name the file the USER uploaded.
+      return {
+        ...hit,
+        sourceFile: input.filename,
+        values: hit.values.map((v) => ({ ...v, sourceFile: input.filename })),
+      };
+    }
+  }
+
   // A long document is CHUNKED, not truncated. `slice(0, MAX_DOCUMENT_CHARS)`
   // was indistinguishable downstream from "the document does not contain that
   // field", so a 300-page pack was read to roughly page 12 and the rest
@@ -451,7 +482,7 @@ export async function extractWithSpec(
     }
   }
 
-  return {
+  const result: DocumentExtraction = {
     ...base,
     values,
     missingFields,
@@ -459,6 +490,9 @@ export async function extractWithSpec(
     ungroundedFields,
     exceptions: [...toExceptions(parsed.exceptions), ...groundingExceptions, ...checksumExceptions],
   };
+
+  if (cachingEnabled()) getExtractionCache().set(cacheKey, result);
+  return result;
 }
 
 /**

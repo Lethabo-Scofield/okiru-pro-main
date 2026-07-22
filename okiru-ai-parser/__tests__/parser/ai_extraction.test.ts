@@ -6,7 +6,9 @@
  * how a reply becomes entities, what happens when the reply is malformed, and
  * how values from different files and formats resolve into one answer.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { resetExtractionCache } from '../../src/services/extractionCache.js';
+beforeEach(() => resetExtractionCache());
 import {
   extractDocument,
   extractWithSpec,
