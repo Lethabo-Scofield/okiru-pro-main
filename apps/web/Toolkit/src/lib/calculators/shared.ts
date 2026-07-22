@@ -116,6 +116,35 @@ const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
  * Map workbook / import designation labels to calculator band keys.
  * Fixes exco rows stored as "Other Executive Manager" scoring as zero.
  */
+/**
+ * The occupational-level bands the Management Control scorecard actually counts.
+ * Anything outside this set scores nowhere.
+ */
+export const SCORING_DESIGNATION_BANDS = new Set([
+  'Board',
+  'Executive',
+  'Executive Director',
+  'Other Executive Management',
+  'Senior',
+  'Middle',
+  'Junior',
+  'Skilled Technical',
+  'Semi-skilled',
+  'Unskilled',
+]);
+
+/**
+ * Does this value name a band the scorecard counts?
+ *
+ * Used to choose between two columns that both claim to be a designation. Real
+ * workbooks carry BOTH a job title ("Member", "Code 14 Driver") and an
+ * occupational level ("Executive Management") — and only the latter scores.
+ * Picking the wrong one silently empties a whole pillar.
+ */
+export function isScoringDesignation(raw: string | null | undefined): boolean {
+  return SCORING_DESIGNATION_BANDS.has(normalizeDesignationForScoring(raw));
+}
+
 export function normalizeDesignationForScoring(raw: string | null | undefined): string {
   const trimmed = String(raw ?? '').trim();
   // A blank designation matches NO band in the workbook (every MC Scorecard band
@@ -131,6 +160,13 @@ export function normalizeDesignationForScoring(raw: string | null | undefined): 
   if (lower.includes('non-executive') || lower.includes('non executive') || lower === 'director') {
     return 'Board';
   }
+  // Workbooks use TWO vocabularies for the same thing: the designation list
+  // ("Executive Director", "Senior Manager") and the EEA occupational-level list
+  // ("Top Management", "Senior Management"). Senior/Middle/Junior already fall
+  // through to the right band below; "Top Management" was the one gap, so an
+  // entity whose sheet used the occupational-level wording scored ZERO for
+  // Management Control. (Measured on Thandanani: one Black top manager, 0 of 27.)
+  if (lower.includes('top management') || lower.includes('top mgmt')) return 'Executive';
   if (lower.includes('executive director')) return 'Executive Director';
   if (lower.includes('other executive')) return 'Other Executive Management';
   if (lower.includes('senior')) return 'Senior';
