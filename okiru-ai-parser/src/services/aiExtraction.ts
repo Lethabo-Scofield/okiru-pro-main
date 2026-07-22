@@ -31,6 +31,7 @@
 import { createLogger } from '../logger.js';
 import { chunkDocument, mergeChunkResults } from './documentChunking.js';
 import { groundValues } from './extractionGrounding.js';
+import { checksumForField } from '../../parser/checksums.js';
 import {
   aliasIndex,
   findDocumentById,
@@ -429,13 +430,34 @@ export async function extractWithSpec(
     ? [`Values not found in the source document (possible extraction error): ${ungroundedFields.join(', ')}`]
     : [];
 
+  // ── CHECKSUM CROSS-CHECK ────────────────────────────────────────────────
+  // SA ID numbers, CIPC registrations and VAT numbers carry check digits. A
+  // failing checksum means the value was MISREAD — one transposed digit in an
+  // OCR'd scan produces a number that looks entirely plausible and identifies
+  // the wrong person. This is exactly the failure mode of the scanned documents
+  // the vision path now reads, and grounding cannot catch it: a misread digit
+  // grounds perfectly well against a blurry source.
+  //
+  // Reported, never dropped: a reviewer decides, and a real document with a
+  // genuinely malformed number is a finding in its own right.
+  const checksumExceptions: string[] = [];
+  for (const { field, value } of values) {
+    const result = checksumForField(field, value);
+    if (result && !result.valid) {
+      checksumExceptions.push(`${field} failed its checksum (${result.reason}) — likely misread: ${String(value)}`);
+      logger.warn('Extracted identifier failed its checksum', {
+        document: spec.id, file: input.filename, field, reason: result.reason,
+      });
+    }
+  }
+
   return {
     ...base,
     values,
     missingFields,
     unexpectedFields,
     ungroundedFields,
-    exceptions: [...toExceptions(parsed.exceptions), ...groundingExceptions],
+    exceptions: [...toExceptions(parsed.exceptions), ...groundingExceptions, ...checksumExceptions],
   };
 }
 
