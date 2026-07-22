@@ -4,6 +4,9 @@ export const SUPPORTED_DOCUMENT_MIME_TYPES = new Set([
   'application/msword',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
+  // Macro-enabled Excel — every client BEE Information Gathering file is .xlsm.
+  'application/vnd.ms-excel.sheet.macroEnabled.12',
+  'application/vnd.ms-excel.sheet.macroenabled.12',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'application/vnd.ms-powerpoint',
   'text/csv',
@@ -14,6 +17,27 @@ export const SUPPORTED_DOCUMENT_MIME_TYPES = new Set([
   'image/tiff',
   'image/webp',
 ]);
+
+/**
+ * Extensions we can read, for when the declared MIME type is generic.
+ *
+ * Browsers and curl frequently send a perfectly good .xlsm or .pptx as
+ * `application/octet-stream`. Judging on the declared type alone rejected the
+ * most common client upload there is, so acceptance is type OR extension —
+ * with this list keeping the fallback bounded rather than open.
+ */
+export const SUPPORTED_DOCUMENT_EXTENSIONS = new Set([
+  '.pdf', '.docx', '.doc', '.xlsx', '.xlsm', '.xls', '.pptx', '.ppt',
+  '.csv', '.txt', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp',
+]);
+
+/** True when either the declared type or the filename's extension is readable. */
+export function isReadableDocument(mimeType: string, filename: string): boolean {
+  if (SUPPORTED_DOCUMENT_MIME_TYPES.has(mimeType)) return true;
+  const dot = filename.lastIndexOf('.');
+  if (dot === -1) return false;
+  return SUPPORTED_DOCUMENT_EXTENSIONS.has(filename.slice(dot).toLowerCase());
+}
 
 export type ParserStatus = 'passed' | 'review_required' | 'failed';
 

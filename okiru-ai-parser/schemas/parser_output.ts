@@ -1,18 +1,26 @@
 import { z } from 'zod';
-import { SUPPORTED_DOCUMENT_MIME_TYPES } from './document_types.js';
+import { isReadableDocument } from './document_types.js';
 
 export const rawExtractionInputSchema = z.object({
   file_id: z.string().min(1),
   filename: z.string().min(1),
-  mime_type: z.string().min(1).refine((mime) => SUPPORTED_DOCUMENT_MIME_TYPES.has(mime), {
-    message: 'Unsupported file type',
-  }),
+  // Validated against the FILENAME too (see superRefine below), because a
+  // readable file often arrives declared as application/octet-stream.
+  mime_type: z.string().min(1),
   raw_text: z.string(),
   // Additive: structure-preserving markdown for LLM-based extractors. `raw_text`
   // stays the flat projection the regex extractor consumes, so this cannot regress it.
   markdown: z.string().optional(),
   tables: z.array(z.unknown()).default([]),
   metadata: z.record(z.unknown()).default({}),
+}).superRefine((input, ctx) => {
+  if (!isReadableDocument(input.mime_type, input.filename)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['mime_type'],
+      message: `Unsupported file type ${input.mime_type} (${input.filename})`,
+    });
+  }
 });
 
 export const fieldSourceSchema = z.object({
