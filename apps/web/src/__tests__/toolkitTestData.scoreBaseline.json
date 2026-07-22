@@ -1,0 +1,82 @@
+{
+  "Kgodiso_Industrial_Holdings_Generic_BBBEE.xlsx": {
+    "total": 112.36,
+    "level": 1,
+    "breakdown": "| own23 mc18 sk22 pp29 sd10 ed5 sed5 afs0 ef0 | npat52M tmps268M lev96M emp500 sup80"
+  },
+  "Khanya_Digital_Technologies_ICT_BBBEE.xlsx": {
+    "total": 124.72,
+    "level": 1,
+    "breakdown": "| own23 mc22 sk25 pp27 sd10 ed7 sed10 afs0 ef0 | npat66M tmps239M lev140M emp500 sup80"
+  },
+  "Khethiwe_Construction_Contractor_BBBEE.xlsx": {
+    "total": 79.47,
+    "level": 5,
+    "breakdown": ""
+  },
+  "Mzansi_Asset_Managers_FSC_Other_BBBEE.xlsx": {
+    "total": 105.78,
+    "level": 1,
+    "breakdown": "| own23 mc19 sk19 pp24 sd10 ed5 sed5 afs0 ef0 | npat64M tmps210M lev88M emp500 sup80"
+  },
+  "QSE_Kgodiso_Trading_Generic_BBBEE.xlsx": {
+    "total": 101.65,
+    "level": 1,
+    "breakdown": "| own25 mc15 sk26 pp21 sd5 ed5 sed5 afs0 ef0 | npat7M tmps20M lev19M emp70 sup60"
+  },
+  "QSE_Khanya_Digital_ICT_BBBEE.xlsx": {
+    "total": 108.65,
+    "level": 1,
+    "breakdown": "| own25 mc15 sk26 pp21 sd5 ed5 sed12 afs0 ef0 | npat7M tmps19M lev17M emp70 sup60"
+  },
+  "QSE_Khethiwe_Construction_BBBEE.xlsx": {
+    "total": 94.91,
+    "level": 3,
+    "breakdown": ""
+  },
+  "QSE_Mzansi_Advisory_FSC_Other_BBBEE.xlsx": {
+    "total": 105,
+    "level": 1,
+    "breakdown": "| own23 mc19 sk19 pp24 sd10 ed5 sed5 afs0 ef0 | npat8M tmps17M lev18M emp70 sup60"
+  },
+  "QSE_Sandile_Freight_Transport_BBBEE.xlsx": {
+    "total": 105,
+    "level": 1,
+    "breakdown": "| own28 mc27 ee25 elective25 (sk25/pp25/ed17/sed25)"
+  },
+  "QSE_Sechaba_Mutual_FSC_Banks_LongTerm_BBBEE.xlsx": {
+    "total": 123.53,
+    "level": 1,
+    "breakdown": "| own23 mc19 sk19 pp24 sd7 ed3 sed5 afs8 ef15 | npat7M tmps20M lev20M emp70 sup60"
+  },
+  "QSE_Setsoto_AgriGroup_AgriBEE_BBBEE.xlsx": {
+    "total": 120.75,
+    "level": 1,
+    "breakdown": "| own23 mc22 sk21 pp27 sd10 ed5 sed13 afs0 ef0 | npat5M tmps18M lev14M emp70 sup60"
+  },
+  "QSE_Vela_ShortTerm_FSC_BBBEE.xlsx": {
+    "total": 115.38,
+    "level": 1,
+    "breakdown": "| own23 mc19 sk17 pp24 sd10 ed5 sed5 afs12 ef0 | npat6M tmps17M lev17M emp70 sup60"
+  },
+  "Sandile_Freight_Logistics_Transport_BBBEE.xlsx": {
+    "total": 102.37,
+    "level": 1,
+    "breakdown": "| own21 mc11 ee18 sk14 pp20 sd13 sed5 | emp500"
+  },
+  "Sechaba_Financial_Group_FSC_Banks_LongTerm_BBBEE.xlsx": {
+    "total": 123.04,
+    "level": 1,
+    "breakdown": "| own23 mc19 sk19 pp24 sd7 ed3 sed5 afs8 ef15 | npat420M tmps963M lev520M emp500 sup80"
+  },
+  "Setsoto_AgriGroup_AgriBEE_BBBEE.xlsx": {
+    "total": 120.21,
+    "level": 1,
+    "breakdown": "| own23 mc22 sk20 pp27 sd10 ed5 sed13 afs0 ef0 | npat34M tmps188M lev72M emp500 sup80"
+  },
+  "Vela_ShortTerm_Insurance_FSC_BBBEE.xlsx": {
+    "total": 116.75,
+    "level": 1,
+    "breakdown": "| own23 mc19 sk19 pp24 sd10 ed5 sed5 afs12 ef0 | npat140M tmps432M lev210M emp500 sup80"
+  }
+}
