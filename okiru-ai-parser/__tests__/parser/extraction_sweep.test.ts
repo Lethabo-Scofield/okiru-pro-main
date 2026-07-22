@@ -142,3 +142,47 @@ describe('the sweep cannot make things worse', () => {
     }
   });
 });
+
+describe('checksum cross-check on extracted identifiers', () => {
+  const withIdField = VERIFICATION_DOCUMENT_MATRIX.find((d) =>
+    d.expectedFields.some((f) => /id_number/.test(f)))!;
+  const idField = withIdField.expectedFields.find((f) => /id_number/.test(f))!;
+
+  function modelReturning(value: string): ExtractionModel {
+    return { name: 'fake', complete: async () => JSON.stringify({ [idField]: value }) };
+  }
+
+  it('flags an ID number whose check digit does not match', async () => {
+    // One transposed digit in an OCR'd scan produces a plausible-looking number
+    // that identifies the WRONG PERSON. Grounding cannot catch it — a misread
+    // digit grounds perfectly well against a blurry source.
+    const bad = '5608305112084'; // real ID with the last digit changed
+    const result = await extractWithSpec(modelReturning(bad), withIdField, {
+      filename: 'id.pdf',
+      raw_text: `Identity Number: ${bad}`,
+    });
+
+    expect(result.exceptions.join(' ')).toMatch(/failed its checksum/i);
+  });
+
+  it('does not flag a valid ID number', async () => {
+    const good = '5608305112083'; // the real Thandanani shareholder ID
+    const result = await extractWithSpec(modelReturning(good), withIdField, {
+      filename: 'id.pdf',
+      raw_text: `Identity Number: ${good}`,
+    });
+
+    expect(result.exceptions.join(' ')).not.toMatch(/failed its checksum/i);
+  });
+
+  it('reports the bad value rather than dropping it', async () => {
+    const bad = '5608305112084';
+    const result = await extractWithSpec(modelReturning(bad), withIdField, {
+      filename: 'id.pdf',
+      raw_text: `Identity Number: ${bad}`,
+    });
+
+    // A reviewer decides; a genuinely malformed number is itself a finding.
+    expect(result.values.map((v) => v.field)).toContain(idField);
+  });
+});
