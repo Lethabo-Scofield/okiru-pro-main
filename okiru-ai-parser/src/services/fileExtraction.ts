@@ -13,6 +13,7 @@ import {
 import { convertWithDocling, doclingHandlesExtension, isDoclingEnabled } from './doclingClient.js';
 import { preprocessForOcr } from './imagePreprocessing.js';
 import { analyseWithDocumentIntelligence, documentIntelligenceConfigured } from './documentIntelligence.js';
+import { extractScannedPdfWithVision } from './visionExtraction.js';
 
 /**
  * Below this many characters a PDF/DOCX is treated as a scan, not a document
@@ -338,20 +339,37 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
   // otherwise be refused, and gated on emptiness so digital documents never pay
   // for a network round trip.
   const looksScanned = rawText.trim().length < MIN_TEXT_LAYER_CHARS && tables.length === 0;
-  if (looksScanned && documentIntelligenceConfigured()) {
-    logger.info('Text layer is empty — reading with Document Intelligence', {
+  if (looksScanned) {
+    logger.info('Text layer is empty — falling back to scanned-document readers', {
       filename: file.originalname,
       textLayerChars: rawText.trim().length,
     });
-    const analysed = await analyseWithDocumentIntelligence(file.buffer, file.mimetype, file.originalname);
-    if (analysed && analysed.text.trim()) {
-      rawText = analysed.text;
-      markdown = analysed.markdown || analysed.text;
-      if (tables.length === 0 && analysed.tables.length > 0) {
-        tables = analysed.tables.map((table, index) => ({
-          sheetName: `Table ${index + 1}`,
-          rows: table.cells,
-        }));
+
+    // Preferred: Document Intelligence, which is purpose-built and returns table
+    // structure. Used automatically if the subscription ever has it.
+    if (documentIntelligenceConfigured()) {
+      const analysed = await analyseWithDocumentIntelligence(file.buffer, file.mimetype, file.originalname);
+      if (analysed && analysed.text.trim()) {
+        rawText = analysed.text;
+        markdown = analysed.markdown || analysed.text;
+        if (tables.length === 0 && analysed.tables.length > 0) {
+          tables = analysed.tables.map((table, index) => ({
+            sheetName: `Table ${index + 1}`,
+            rows: table.cells,
+          }));
+        }
+      }
+    }
+
+    // Fallback: rasterise the pages and let the multimodal model read them.
+    // This is what actually runs today — Document Intelligence is not
+    // provisioned, gpt-4o is.
+    const stillEmpty = rawText.trim().length < MIN_TEXT_LAYER_CHARS;
+    if (stillEmpty && (file.mimetype === 'application/pdf' || ext === '.pdf')) {
+      const seen = await extractScannedPdfWithVision(file.buffer, file.originalname);
+      if (seen && seen.markdown.trim()) {
+        rawText = seen.markdown;
+        markdown = seen.markdown;
       }
     }
   }
