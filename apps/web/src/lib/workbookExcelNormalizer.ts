@@ -59,7 +59,12 @@ const SHEET_SECTION_HINTS: Array<{ sectionKey: string; hints: string[] }> = [
   // development" did NOT match it, so the whole ESD sheet was skipped and every
   // workbook lost its Supplier + Enterprise Development points. (W1a)
   { sectionKey: "esd", hints: ["enterprise & supplier development", "enterprise supplier development", "enterprise & supplier", "enterprise development", "supplier development", "esd", "es&sd"] },
-  { sectionKey: "sed", hints: ["socioeconomic", "socio-economic", "socio economic", "sed", "csi"] },
+  // "Social Development" is the real sheet name in the client SED workbook —
+  // none of the socio-economic spellings matched it, so the whole sheet was
+  // skipped and SED scored 0 of 25 with 77 populated rows sitting in the file.
+  // Listed AFTER "skills development" in each hint set so the longer, more
+  // specific match wins where a workbook contains both.
+  { sectionKey: "sed", hints: ["socioeconomic", "socio-economic", "socio economic", "social development", "social dev", "sed", "csi"] },
 ];
 
 const RACE_MAP: Record<string, string> = {
@@ -544,6 +549,52 @@ function countExtractedFields(sections: WorkbookSectionsInput): number {
  * projection already derives the same headcount + defaults EAP to National — this
  * just surfaces those values in the imported data. (user request)
  */
+/**
+ * Total Measured Procurement Spend is the Preferential Procurement DENOMINATOR,
+ * and without it the pillar scores 0 no matter how many suppliers are listed.
+ *
+ * It is not on the Finance sheet. Real workbooks state it as a labelled total in
+ * the Procurement sheet's summary block:
+ *
+ *   "Total Procurement Expenditure from suppliers for whom certificates have
+ *    been provided (Per the schedule below)" | 1030806.68
+ *
+ * Measured on Thandanani: that cell holds R1 030 806.68 while our financials
+ * carried tmps = 0, so 23 correctly-read suppliers scored nothing.
+ *
+ * ONLY a labelled total is taken. TMPS is never derived by summing supplier
+ * rows — the statutory figure has inclusions and exclusions a supplier list does
+ * not capture, so a sum would be a plausible-looking wrong denominator.
+ */
+function harvestProcurementTotals(wb: XLSX.WorkBook, sections: WorkbookSectionsInput): void {
+  // A standalone procurement workbook has no Finance sheet at all, so the
+  // section must be created rather than skipped — that is exactly the file the
+  // TMPS figure arrives in.
+  const financial = (sections["financial-information"] ??= { rows: [] });
+  const meta = (financial.meta ??= {});
+  // Never override a value the Finance sheet actually stated.
+  if (meta.tmps !== undefined && meta.tmps !== null && meta.tmps !== "" && Number(meta.tmps) > 0) return;
+
+  const sheetName = wb.SheetNames.find((name) => norm(name).includes("procurement"));
+  if (!sheetName) return;
+
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, defval: "" }) as unknown[][];
+  for (const row of rows.slice(0, 12)) {
+    if (!Array.isArray(row)) continue;
+    const label = norm(String(row[0] ?? ""));
+    if (!label.includes("total procurement expenditure") && !label.includes("total measured procurement")) continue;
+
+    // The value is the first positive number to the right of the label.
+    for (let col = 1; col < row.length; col++) {
+      const value = Number(String(row[col] ?? "").replace(/[R\s,]/g, ""));
+      if (Number.isFinite(value) && value > 0) {
+        meta.tmps = value;
+        return;
+      }
+    }
+  }
+}
+
 function deriveSectionDefaults(sections: WorkbookSectionsInput): void {
   const mcRows = sections['management-control']?.rows?.length ?? 0;
   const empRows = sections['employees']?.rows?.length ?? 0;
@@ -861,6 +912,10 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
     const ci = sections["company-information"] ?? { rows: [] };
     sections["company-information"] = { ...ci, meta: { ...derived, ...(ci.meta ?? {}) } };
   }
+
+  // TMPS lives on the Procurement sheet, not the Finance sheet — harvest it
+  // across before defaults are derived.
+  harvestProcurementTotals(wb, sections);
 
   // Fill derivable fields (headcount from the employee register, EAP → National)
   // so the form/preview show them instead of blanks. (user request)
