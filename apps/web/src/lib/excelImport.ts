@@ -1230,10 +1230,45 @@ function mergeCandidates(candidates: FieldCandidate[]): {
   return { data, confidences, sources };
 }
 
-function inferScorecardTypeFromRevenue(revenue: number | undefined): string | undefined {
+/**
+ * EME / QSE / Generic revenue thresholds, per sector.
+ *
+ * Sector codes set their OWN thresholds — they are not the generic codes'.
+ * Applying the generic bands everywhere put entities on the wrong scorecard
+ * entirely: a Transport entity on R40m was classified QSE when the Integrated
+ * Transport Sector Code makes it Large above R35m.
+ *
+ * Thandanani (R10.8m) is QSE under both sets, which is exactly why this went
+ * unnoticed — the case we had did not discriminate.
+ *
+ * [eme_below, qse_below] — at or above `qse_below` the entity is Generic/Large.
+ */
+const REVENUE_THRESHOLDS: Record<string, [number, number]> = {
+  // Integrated Transport Sector Code: EME < R5m, QSE R5m–R35m, Large > R35m.
+  TRANSPORT: [5_000_000, 35_000_000],
+  // Amended Codes of Good Practice: EME < R10m, QSE R10m–R50m, Generic > R50m.
+  DEFAULT: [10_000_000, 50_000_000],
+};
+
+/**
+ * Infer the scorecard type from revenue.
+ *
+ * NOTE this returns EME where revenue warrants it. The previous version could
+ * only ever return QSE or Generic, so every EME was mis-typed as a QSE and
+ * measured on a scorecard it is exempt from.
+ */
+export function inferScorecardTypeFromRevenue(
+  revenue: number | undefined,
+  sector?: string,
+): string | undefined {
   if (revenue === undefined) return undefined;
-  if (revenue >= 50_000_000) return "Generic";
-  return "QSE";
+
+  const key = (sector ?? "").toUpperCase();
+  const [emeBelow, qseBelow] = REVENUE_THRESHOLDS[key] ?? REVENUE_THRESHOLDS.DEFAULT;
+
+  if (revenue < emeBelow) return "EME";
+  if (revenue < qseBelow) return "QSE";
+  return "Generic";
 }
 
 export function isBeeGatheringWorkbook(wb: XLSX.WorkBook): boolean {
@@ -1426,10 +1461,15 @@ export function extractBeeGatheringBuffer(buffer: ArrayBuffer): ExcelExtractionR
     data.sector = normalizeSectorDeterministic(data.sector) || data.sector;
   }
   if (!data.scorecardType) {
-    data.scorecardType = inferScorecardTypeFromRevenue(data.revenue);
+    // Sector is normalised immediately above, so the sector-specific thresholds
+    // are available here — they must be, because the generic bands put a
+    // Transport entity on the wrong scorecard.
+    data.scorecardType = inferScorecardTypeFromRevenue(data.revenue, data.sector);
     if (data.scorecardType) {
       confidences.scorecardType = "low";
-      sources.scorecardType = "inferred from revenue";
+      sources.scorecardType = data.sector
+        ? `inferred from revenue (${data.sector} thresholds)`
+        : "inferred from revenue";
     }
   }
 
