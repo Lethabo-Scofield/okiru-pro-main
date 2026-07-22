@@ -17,6 +17,7 @@ import {
   type ExtractionModel,
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
+import { validateCase, type CaseValidation } from './auditorValidation.js';
 import {
   fieldElementIndex,
   mapEntitiesToCalculator,
@@ -48,6 +49,11 @@ export interface CaseExtractionResult extends CaseEntities {
    * from `payload` and reported alongside it.
    */
   calculator: CalculatorMappingResult;
+  /**
+   * The expert's auditor tests, run against the evidence. Advisory: it flags
+   * documents that would not survive verification, and never changes scoring.
+   */
+  validation: CaseValidation;
 }
 
 export async function extractCaseEntities(
@@ -79,6 +85,20 @@ export async function extractCaseEntities(
 
   const calculator = mapEntitiesToCalculator(resolved, fieldElementIndex(extractions));
 
+  // Would this evidence survive verification? Extraction says what a document
+  // contains; the auditor tests say whether it counts. A certificate that
+  // expired last month extracts perfectly and is still worthless. Advisory
+  // only — it never edits a value or changes the payload above.
+  const validation = await validateCase(
+    extractions.map((extraction) => ({
+      documentId: extraction.documentId,
+      sourceFile: extraction.sourceFile,
+      values: extraction.values,
+    })),
+    new Map(inputs.map((input) => [input.filename, input.markdown || input.raw_text || ''])),
+    model,
+  );
+
   logger.info('Case extraction complete', {
     files: inputs.length,
     documents: resolved.documentsExtracted,
@@ -88,5 +108,5 @@ export async function extractCaseEntities(
     heldForReview: calculator.needsReview.length,
   });
 
-  return { ...resolved, model: model.name, extractions, calculator };
+  return { ...resolved, model: model.name, extractions, calculator, validation };
 }
