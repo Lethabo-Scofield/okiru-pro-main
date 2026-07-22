@@ -31,11 +31,53 @@ function importantTokens(...values: string[]): string[] {
     .slice(0, 32);
 }
 
-function tokenCoverage(text: string, tokens: string[]): { score: number; matched: string[] } {
+/**
+ * How much text counts as the document's "header".
+ *
+ * A document declares what it IS at the top — a title, a letterhead, a form
+ * name. Evidence found there identifies the document; the same word found on
+ * page 40 of a workbook is incidental. Measured on the real Thandanani pack,
+ * matching anywhere in the body made every large file score 0.99 as a B-BBEE
+ * certificate, because a BEE workbook contains every BEE term somewhere.
+ */
+const HEADER_CHARS = 1200;
+
+/** Matches deep in the body still count, but they cannot carry a document alone. */
+const BODY_MATCH_WEIGHT = 0.3;
+
+interface MatchRegions {
+  /** Filename + opening of the document, normalised. */
+  header: string;
+  /** The whole document, normalised. */
+  full: string;
+}
+
+function matchRegions(filename: string, text: string): MatchRegions {
+  return {
+    header: normalizeForMatch(`${filename}\n${text.slice(0, HEADER_CHARS)}`),
+    full: normalizeForMatch(`${filename}\n${text}`),
+  };
+}
+
+/**
+ * Position-aware coverage: a token in the header scores 1, the same token only
+ * in the body scores BODY_MATCH_WEIGHT.
+ */
+function tokenCoverage(regions: MatchRegions, tokens: string[]): { score: number; matched: string[] } {
   if (tokens.length === 0) return { score: 0, matched: [] };
-  const normalizedText = normalizeForMatch(text);
-  const matched = tokens.filter((token) => normalizedText.includes(token));
-  return { score: matched.length / tokens.length, matched };
+
+  let weight = 0;
+  const matched: string[] = [];
+  for (const token of tokens) {
+    if (regions.header.includes(token)) {
+      weight += 1;
+      matched.push(token);
+    } else if (regions.full.includes(token)) {
+      weight += BODY_MATCH_WEIGHT;
+      matched.push(token);
+    }
+  }
+  return { score: weight / tokens.length, matched };
 }
 
 function safeRegexTest(regexSource: string | undefined, text: string): boolean {
@@ -47,30 +89,44 @@ function safeRegexTest(regexSource: string | undefined, text: string): boolean {
   }
 }
 
-function fieldEvidence(text: string, fields: FieldKnowledge[]): { score: number; matched: string[]; reasons: string[] } {
+function fieldEvidence(
+  regions: MatchRegions,
+  rawText: string,
+  fields: FieldKnowledge[],
+): { score: number; matched: string[]; reasons: string[] } {
   const expected = fields.filter((field) => field.field.required);
   const targetFields = expected.length > 0 ? expected : fields;
   if (targetFields.length === 0) return { score: 0, matched: [], reasons: [] };
 
   const matched = new Set<string>();
   const reasons: string[] = [];
+  let weight = 0;
 
   for (const fieldKnowledge of targetFields) {
     const fieldName = fieldKnowledge.field.name;
-    const label = fieldName.replace(/_/g, ' ');
+    const label = normalizeForMatch(fieldName.replace(/_/g, ' '));
+
+    // A labelled regex hit is strong evidence wherever it appears — it matches
+    // a shaped value ("Certificate Number: BEE/2026/00184"), not a bare word.
     const patternHit = fieldKnowledge.patterns.some((pattern) => {
-      if (pattern.regex && safeRegexTest(pattern.regex, text)) return true;
-      if (pattern.name && includesNormalized(text, pattern.name)) return true;
+      if (pattern.regex && safeRegexTest(pattern.regex, rawText)) return true;
+      if (pattern.name && regions.header.includes(normalizeForMatch(pattern.name))) return true;
       return false;
     });
-    if (patternHit || includesNormalized(text, label)) {
+
+    if (patternHit || (label && regions.header.includes(label))) {
       matched.add(fieldName);
+      weight += 1;
       reasons.push(`expected field matched: ${fieldName}`);
+    } else if (label && regions.full.includes(label)) {
+      // Present, but only deep in the body — corroborating, not identifying.
+      matched.add(fieldName);
+      weight += BODY_MATCH_WEIGHT;
     }
   }
 
   return {
-    score: matched.size / targetFields.length,
+    score: weight / targetFields.length,
     matched: Array.from(matched),
     reasons,
   };
@@ -100,6 +156,7 @@ function buildAliasFrequency(docs: DocumentTypeNode[]): Map<string, number> {
 
 function scoreCandidate(
   text: string,
+  filename: string,
   doc: DocumentTypeNode,
   knowledge: DocumentKnowledge | null,
   aliasFrequency?: Map<string, number>,
@@ -107,23 +164,29 @@ function scoreCandidate(
   const aliases = [doc.name, ...doc.aliases].filter(Boolean);
   const reasons: string[] = [];
   const matchedEvidence = new Set<string>();
+  const regions = matchRegions(filename, text);
 
-  const exactAliasMatches = aliases.filter((alias) => includesNormalized(text, alias));
-  for (const alias of exactAliasMatches) matchedEvidence.add(alias);
+  // An alias in the header is the document naming itself. The same alias buried
+  // in a 300-page pack is a mention, not an identity.
+  const exactAliasMatches = aliases.filter((alias) => regions.header.includes(normalizeForMatch(alias)));
+  const bodyAliasMatches = exactAliasMatches.length === 0
+    ? aliases.filter((alias) => regions.full.includes(normalizeForMatch(alias)))
+    : [];
+  for (const alias of [...exactAliasMatches, ...bodyAliasMatches]) matchedEvidence.add(alias);
   if (exactAliasMatches.length > 0) reasons.push(`exact alias/name matched: ${exactAliasMatches[0]}`);
 
-  const nameTokens = tokenCoverage(text, importantTokens(doc.name));
+  const nameTokens = tokenCoverage(regions, importantTokens(doc.name));
   for (const token of nameTokens.matched) matchedEvidence.add(token);
   if (nameTokens.matched.length > 0) reasons.push(`document-name tokens matched: ${nameTokens.matched.join(', ')}`);
 
-  const descriptionTokens = tokenCoverage(text, importantTokens(doc.description));
+  const descriptionTokens = tokenCoverage(regions, importantTokens(doc.description));
   for (const token of descriptionTokens.matched) matchedEvidence.add(token);
 
-  const fields = fieldEvidence(text, knowledge?.fields ?? []);
+  const fields = fieldEvidence(regions, text, knowledge?.fields ?? []);
   for (const field of fields.matched) matchedEvidence.add(field);
   reasons.push(...fields.reasons.slice(0, 8));
 
-  const genericBeeSignals = tokenCoverage(text, [
+  const genericBeeSignals = tokenCoverage(regions, [
     'b-bbee',
     'bbbee',
     'bee',
@@ -162,7 +225,11 @@ function scoreCandidate(
   const isDistinctive = exactAliasMatches.some(
     (alias) => (aliasFrequency?.get(alias.toLowerCase().trim()) ?? 1) === 1,
   );
-  const exactAliasScore = exactAliasMatches.length > 0 ? (isDistinctive ? 0.5 : 0.34) : 0;
+  const exactAliasScore = exactAliasMatches.length > 0
+    ? (isDistinctive ? 0.5 : 0.34)
+    // Body-only alias mentions get the same discount as body-only tokens: a
+    // pack that merely *refers* to a share register is not a share register.
+    : bodyAliasMatches.length > 0 ? 0.34 * BODY_MATCH_WEIGHT : 0;
   const nameScore = nameTokens.score * 0.22;
   const descriptionScore = descriptionTokens.score * 0.06;
   const fieldScore = fields.score * 0.32;
@@ -178,12 +245,37 @@ function scoreCandidate(
   };
 }
 
-function classifyStatus(best: DocumentClassificationCandidate | undefined, second: DocumentClassificationCandidate | undefined): Pick<DocumentClassification, 'status' | 'reason' | 'margin'> {
+/**
+ * How many candidates may clear the review threshold before we conclude the
+ * upload is a compendium rather than one document.
+ */
+const COMPENDIUM_CANDIDATES = 4;
+
+function classifyStatus(
+  best: DocumentClassificationCandidate | undefined,
+  second: DocumentClassificationCandidate | undefined,
+  allCandidates: DocumentClassificationCandidate[] = [],
+): Pick<DocumentClassification, 'status' | 'reason' | 'margin'> {
   if (!best || best.confidence <= 0) {
     return { status: 'unsupported', reason: 'No ontology document type matched the uploaded evidence', margin: 0 };
   }
 
   const margin = best.confidence - (second?.confidence ?? 0);
+
+  // A workbook or strategy pack contains the evidence for MANY document types
+  // at once, so many candidates clear the bar together. Naming one of them is
+  // guessing; the honest answer is that this upload is not a single document.
+  // (Measured: the 24MB Thandanani toolkit scored 0.99 as a "B-BBEE
+  // Certificate" with four other types also above threshold.)
+  const plausible = allCandidates.filter((candidate) => candidate.confidence >= REVIEW_CONFIDENCE);
+  if (plausible.length >= COMPENDIUM_CANDIDATES) {
+    return {
+      status: 'compendium',
+      reason: `This upload matches ${plausible.length} document types (${plausible.slice(0, 3).map((c) => c.document_type).join(', ')}…). `
+        + 'It looks like a workbook or pack containing several documents rather than one document.',
+      margin,
+    };
+  }
 
   if (best.confidence < REVIEW_CONFIDENCE) {
     return { status: 'low_confidence', reason: 'Best document-type confidence is below review threshold', margin };
@@ -230,19 +322,19 @@ export async function classifyDocument(
     documentTypesByName.set(knowledge.document.name.toLowerCase(), knowledge.document);
   }
   const documentTypes = Array.from(documentTypesByName.values());
-  const text = `${input.filename}\n${input.raw_text}`;
+  const text = input.raw_text;
 
   const aliasFrequency = buildAliasFrequency(documentTypes);
   const candidates: DocumentClassificationCandidate[] = [];
   for (const doc of documentTypes) {
     const knowledge = await repository.getDocumentKnowledge(doc.name) ?? fallbackByName.get(doc.name.toLowerCase()) ?? null;
-    candidates.push(scoreCandidate(text, doc, knowledge, aliasFrequency));
+    candidates.push(scoreCandidate(text, input.filename ?? '', doc, knowledge, aliasFrequency));
   }
 
   candidates.sort((a, b) => b.confidence - a.confidence);
   const best = candidates[0];
   const second = candidates[1];
-  const status = classifyStatus(best, second);
+  const status = classifyStatus(best, second, candidates);
 
   return {
     document_type: best?.document_type ?? 'Unsupported',

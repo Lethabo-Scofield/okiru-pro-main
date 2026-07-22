@@ -47,7 +47,8 @@ export interface DocumentClassification {
   pillar: string;
   confidence: number;
   matched_evidence: string[];
-  status?: 'classified' | 'ambiguous' | 'low_confidence' | 'unsupported';
+  /** 'compendium' = the upload holds several documents (a workbook or pack), not one. */
+  status?: 'classified' | 'ambiguous' | 'low_confidence' | 'unsupported' | 'compendium';
   candidates?: DocumentClassificationCandidate[];
   margin?: number;
   reason?: string;

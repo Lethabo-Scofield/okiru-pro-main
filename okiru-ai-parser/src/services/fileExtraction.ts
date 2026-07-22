@@ -12,6 +12,15 @@ import {
 } from './markdownConversion.js';
 import { convertWithDocling, doclingHandlesExtension, isDoclingEnabled } from './doclingClient.js';
 import { preprocessForOcr } from './imagePreprocessing.js';
+import { analyseWithDocumentIntelligence, documentIntelligenceConfigured } from './documentIntelligence.js';
+
+/**
+ * Below this many characters a PDF/DOCX is treated as a scan, not a document
+ * with a text layer. Scanners commonly leave a few stray characters behind
+ * (the real Thandanani scans yielded 0, 4 and 28), so the threshold sits above
+ * that noise floor rather than at zero.
+ */
+const MIN_TEXT_LAYER_CHARS = 120;
 
 const logger = createLogger('FileExtraction');
 
@@ -315,6 +324,36 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
     }
     rawText = await withTimeout(extractImageText(file.buffer), EXTRACTION_TIMEOUT_MS);
     markdown = rawText;
+  }
+
+  // SCANNED DOCUMENTS — the text layer is empty because the pages are images.
+  //
+  // Measured on the real Thandanani pack: the Share Certificate, Share Register
+  // and BI Register all returned ZERO characters, and those three carry the
+  // entire 25-point Ownership case. Before this, the upload was rejected as
+  // unreadable. Document Intelligence reads the scan and returns table
+  // structure with it.
+  //
+  // Deliberately placed BEFORE the throw so it rescues documents that would
+  // otherwise be refused, and gated on emptiness so digital documents never pay
+  // for a network round trip.
+  const looksScanned = rawText.trim().length < MIN_TEXT_LAYER_CHARS && tables.length === 0;
+  if (looksScanned && documentIntelligenceConfigured()) {
+    logger.info('Text layer is empty — reading with Document Intelligence', {
+      filename: file.originalname,
+      textLayerChars: rawText.trim().length,
+    });
+    const analysed = await analyseWithDocumentIntelligence(file.buffer, file.mimetype, file.originalname);
+    if (analysed && analysed.text.trim()) {
+      rawText = analysed.text;
+      markdown = analysed.markdown || analysed.text;
+      if (tables.length === 0 && analysed.tables.length > 0) {
+        tables = analysed.tables.map((table, index) => ({
+          sheetName: `Table ${index + 1}`,
+          rows: table.cells,
+        }));
+      }
+    }
   }
 
   if (!rawText.trim() && tables.length === 0) {
