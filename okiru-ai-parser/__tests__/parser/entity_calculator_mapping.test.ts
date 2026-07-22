@@ -161,14 +161,48 @@ describe('the safety rules', () => {
   });
 
   it('does not guess a mapping for a field it was never taught', () => {
+    // NOTE: this example used to be total_shares_in_issue. Phase 1b gave that a
+    // calculator key, so it is now correctly mapped and no longer demonstrates
+    // anything. Swapped for fields that are genuinely real evidence with no
+    // scorecard input: a commissioner-of-oaths attestation and an HPCSA
+    // registration number are things an auditor checks, not things that score.
     const result = mapFrom([
-      extraction('OWNERSHIP', 'reg.pdf', [['total_shares_in_issue', 100]]),
+      extraction('OWNERSHIP', 'affidavit.pdf', [
+        ['sworn_before_commissioner', 'Yes'],
+        ['hpcsa_number', 'PS0123456'],
+      ]),
     ]);
 
-    // total_shares_in_issue is real evidence, but no calculator key takes it.
-    // Inventing one is how a wrong level gets certified.
+    // Inventing a mapping for these is how a wrong level gets certified.
     expect(Object.keys(result.payload)).toHaveLength(0);
-    expect(result.unmapped).toContainEqual({ field: 'total_shares_in_issue', reason: 'no_mapping' });
+    expect(result.unmapped).toContainEqual({ field: 'sworn_before_commissioner', reason: 'no_mapping' });
+    expect(result.unmapped).toContainEqual({ field: 'hpcsa_number', reason: 'no_mapping' });
+  });
+
+  it('now maps the share-register fields Phase 1b made reachable', () => {
+    // The regression this whole phase exists to prevent: these extracted
+    // correctly from a SCANNED register and landed nowhere.
+    const result = mapFrom([
+      extraction('OWNERSHIP', 'share-register.pdf', [
+        ['total_shares_in_issue', 100],
+        ['holder_name', 'V Naidoo'],
+        ['number_of_shares', 100],
+      ]),
+    ]);
+
+    expect(result.payload['ownership.total_shares_in_issue']).toBe(100);
+    expect(result.payload['ownership.shareholder_name']).toBe('V Naidoo');
+    expect(result.payload['ownership.shares_held']).toBe(100);
+  });
+
+  it('maps the denominators, whose absence zeroes a whole pillar', () => {
+    const result = mapFrom([
+      extraction('ESD', 'procurement.xlsx', [['total_pre_exclusions_tmps', 'R 1 030 806.68']]),
+      extraction('SKILLS_DEVELOPMENT', 'emp201.pdf', [['sum_of_leviable_amount', 'R 4 249 500']]),
+    ]);
+
+    expect(result.payload['procurement.tmps']).toBeCloseTo(1030806.68, 2);
+    expect(result.payload['skills.leviable_amount']).toBe(4249500);
   });
 
   it('respects context: the same field name means different things per element', () => {
@@ -203,7 +237,13 @@ describe('coverage is reported honestly', () => {
       ]),
     ]);
 
-    expect(result.payload['skills.total_spend']).toBe(4249500);
+    // CORRECTED: this used to assert skills.total_spend, encoding a real bug —
+    // the leviable amount is the DENOMINATOR (the SDL payroll base), not spend.
+    // Mapping it to the numerator would have reported training spend as 100% of
+    // payroll and scored the pillar full marks off an EMP201 alone.
+    expect(result.payload['skills.leviable_amount']).toBe(4249500);
+    expect(result.payload['skills.total_spend']).toBeUndefined();
+
     // A WSP acknowledgement proves compliance but no calculator key consumes it —
     // reported rather than quietly dropped.
     expect(result.unmapped).toContainEqual({ field: 'submission_date', reason: 'no_mapping' });
