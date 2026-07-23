@@ -36,6 +36,7 @@ import {
   type ParserCaseLike,
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
+import { parserExtractionsToWorkbook, toWorkbookSections } from "@/lib/parserToWorkbook";
 import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
 import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
 
@@ -260,6 +261,30 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     () => (parserCase ? mapParserCaseToWorkbookSections(parserCase) : null),
     [parserCase],
   );
+
+  /**
+   * The AI-entity path: full extractions (share registers become many rows,
+   * TMPS lands in meta, dropdowns are matched, required gaps hunted). Runs
+   * alongside the legacy `mapped` result — the parser returns both shapes during
+   * the transition, and this one is preferred where it has data because it
+   * carries provenance, rejections and coverage the legacy shape does not.
+   */
+  const injected = useMemo(() => {
+    const extractions = (parserCase as {
+      ai_entities?: { extractions?: Array<{ documentId?: string; sourceFile?: string; element?: string; values?: Array<{ field: string; value: unknown }> }> };
+    } | null)?.ai_entities?.extractions;
+    if (!extractions?.length) return null;
+
+    return parserExtractionsToWorkbook(
+      extractions.map((e) => ({
+        documentId: String(e.documentId ?? ""),
+        sourceFile: String(e.sourceFile ?? ""),
+        element: e.element,
+        values: e.values ?? [],
+      })),
+      { sectorCode: sector, scorecardType: size },
+    );
+  }, [parserCase, sector, size]);
 
   /**
    * Matrix document ids the parser actually read something out of, so the
@@ -497,7 +522,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const suppliersUp = useCountUp(supplierCount);
   const spendUp = useCountUp(spendCaptured, 1100);
 
-  const revealed = Boolean(mapped && !parsing && files.length > 0);
+  const revealed = Boolean((mapped || injected) && !parsing && files.length > 0);
+
+  /** Rows the AI-entity path produced, added to the legacy mapper's count. */
+  const injectedRowCount = useMemo(
+    () => (injected ? Object.values(injected.rows).reduce((n, r) => n + (r?.length ?? 0), 0) : 0),
+    [injected],
+  );
+  const totalMappedRows = (mapped?.mappedRowCount ?? 0) + injectedRowCount;
   const quoteReady = Boolean(quote && !parserCase && !quoting);
   // Missing documents never block: the user can always proceed and the workbook
   // scores on whatever was extracted (even nothing — they complete it manually).
@@ -507,8 +539,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // meta so the workbook scores under the correct sector calculator (Generic /
   // Construction / FSC / Transport …) rather than always defaulting to Generic.
   const handleCreate = () => {
-    if (!mapped) return;
-    const sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }> = { ...mapped.sections };
+    if (!mapped && !injected) return;
+    const sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }> = { ...(mapped?.sections ?? {}) };
+
+    // Merge the AI-entity sections over the legacy ones. Grid rows are ADDITIVE
+    // (a share register's rows join the legacy supplier rows, they do not replace
+    // them); meta fills gaps the legacy shape left (TMPS, revenue). This is the
+    // point where the full extraction chain finally reaches the workbook.
+    if (injected) {
+      const injectedSections = toWorkbookSections(injected);
+      for (const [key, section] of Object.entries(injectedSections)) {
+        const existing = sections[key] ?? {};
+        sections[key] = {
+          rows: [...((existing.rows as unknown[]) ?? []), ...section.rows],
+          meta: { ...(section.meta ?? {}), ...(existing.meta ?? {}) },
+        };
+      }
+    }
     const companyMeta: Record<string, unknown> = {
       companyName: companyName.trim(),
       industrySector: SECTOR_TO_WORKBOOK[sector] ?? "Generic",
@@ -1480,10 +1527,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             >
               {creating ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
-              ) : mapped.mappedRowCount > 0 ? (
+              ) : totalMappedRows > 0 ? (
                 <>
                   <Sparkles className="h-4 w-4" />
-                  Build my scorecard from {mapped.mappedRowCount} extracted value{mapped.mappedRowCount !== 1 ? "s" : ""}
+                  Build my scorecard from {totalMappedRows} extracted value{totalMappedRows !== 1 ? "s" : ""}
                 </>
               ) : (
                 <>
@@ -1493,7 +1540,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               )}
             </button>
             <p className="text-[11px] text-[#48484a] mt-2 text-center">
-              {mapped.mappedRowCount > 0
+              {totalMappedRows > 0
                 ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
                 : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
             </p>

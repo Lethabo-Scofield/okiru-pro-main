@@ -249,6 +249,39 @@ export function injectIntoSection(
   return { cells, accepted, rejected };
 }
 
+/**
+ * Inject a single META value (entity-level fields like TMPS, revenue, NPAT).
+ *
+ * Meta fields live in a section's `meta` array, not its `columns`, so they need
+ * their own lookup — but they are still ColumnDefs and go through the identical
+ * type/validation path. Returns the coerced value or a rejection.
+ */
+export function injectMetaValue(
+  sectionKey: string,
+  field: string,
+  value: unknown,
+  options: { sectorCode?: string; scorecardType?: string; fscSubSector?: string } = {},
+): { ok: true; value: unknown } | { ok: false; rejection: InjectionRejection } {
+  const section = getSection(sectionKey, options.sectorCode, options.scorecardType, options.fscSubSector);
+  const column = (section?.meta ?? []).find((c) => c.key === field);
+  if (!column) {
+    return {
+      ok: false,
+      rejection: { field, value, reason: "unknown_field", detail: `"${field}" is not a meta field of ${section?.label ?? sectionKey}` },
+    };
+  }
+
+  const coerced = coerceToColumn(column, value);
+  if (!coerced.ok) {
+    return { ok: false, rejection: { field, value, reason: coerced.reason, detail: coerced.detail } };
+  }
+  const failure = column.validate?.(coerced.value);
+  if (failure) {
+    return { ok: false, rejection: { field, value, reason: "failed_validation", detail: failure } };
+  }
+  return { ok: true, value: coerced.value };
+}
+
 /** Which columns of a section are required but absent from a set of cells. */
 export function missingRequiredColumns(
   sectionKey: string,
