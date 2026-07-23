@@ -1,0 +1,163 @@
+/**
+ * Which of the 109 document specs is a document worth extracting against?
+ *
+ * The old answer — "does any alias appear as a substring" — is the brittle
+ * string-matching that made Phase 4 misfire: a clean per-sheet "Ownership"
+ * document did not contain the literal alias of any ownership spec, so it
+ * matched nothing and extracted nothing. Substring presence is not relevance.
+ *
+ * This replaces it with real lexical retrieval — BM25 over each spec's
+ * searchable text (name, aliases, description, expected fields, auditor tests,
+ * worked example) — plus an ELEMENT signal. When a document is a workbook sheet
+ * named "Ownership" or "Preferential Procurement", the sheet name is a near-
+ * certain statement of which element it serves, so specs of that element are
+ * boosted. The AI still gets the final say (it returns not_this_document for a
+ * wrong spec cheaply), so retrieval only has to get the RIGHT specs into the
+ * candidate set — precision comes from the model, recall from here.
+ *
+ * BM25 because it needs no model, no embeddings service, and no training: it is
+ * a deterministic ranking that rewards rare, discriminating terms ("leviable",
+ * "COR14.3", "beneficiary") over common ones. Exactly right for routing 109
+ * short, keyword-dense specs.
+ */
+import {
+  VERIFICATION_DOCUMENT_MATRIX,
+  type VerificationDocument,
+  type VerificationElement,
+} from '../../schemas/verification_document_matrix.js';
+
+/** Split into lowercase alphanumeric terms, dropping the very short. */
+function tokenize(text: string): string[] {
+  return (text.toLowerCase().match(/[a-z0-9]+/g) ?? []).filter((t) => t.length >= 3);
+}
+
+/** The searchable text of a spec — everything that says what it is FOR. */
+function specText(spec: VerificationDocument): string {
+  return [
+    spec.name,
+    spec.aliases.join(' '),
+    spec.auditorTests,
+    spec.expectedFields.join(' '),
+    spec.exampleData,
+  ].join(' ');
+}
+
+const K1 = 1.5;
+const B = 0.75;
+
+interface IndexedSpec {
+  spec: VerificationDocument;
+  termFreq: Map<string, number>;
+  length: number;
+}
+
+/** Built once — the matrix is static. */
+let index: {
+  docs: IndexedSpec[];
+  idf: Map<string, number>;
+  avgLength: number;
+} | null = null;
+
+function buildIndex(): NonNullable<typeof index> {
+  const docs: IndexedSpec[] = VERIFICATION_DOCUMENT_MATRIX.map((spec) => {
+    const terms = tokenize(specText(spec));
+    const termFreq = new Map<string, number>();
+    for (const term of terms) termFreq.set(term, (termFreq.get(term) ?? 0) + 1);
+    return { spec, termFreq, length: terms.length };
+  });
+
+  // Document frequency → inverse document frequency.
+  const docFreq = new Map<string, number>();
+  for (const doc of docs) {
+    for (const term of doc.termFreq.keys()) docFreq.set(term, (docFreq.get(term) ?? 0) + 1);
+  }
+  const n = docs.length;
+  const idf = new Map<string, number>();
+  for (const [term, df] of docFreq) {
+    // BM25 idf, floored at a small positive so a term in every spec still
+    // contributes a little rather than going negative.
+    idf.set(term, Math.max(0.01, Math.log((n - df + 0.5) / (df + 0.5) + 1)));
+  }
+
+  const avgLength = docs.reduce((sum, d) => sum + d.length, 0) / Math.max(1, n);
+  return { docs, idf, avgLength };
+}
+
+function getIndex(): NonNullable<typeof index> {
+  index ??= buildIndex();
+  return index;
+}
+
+/** BM25 score of a query's terms against one indexed spec. */
+function bm25(queryTerms: string[], doc: IndexedSpec, idf: Map<string, number>, avgLength: number): number {
+  let score = 0;
+  const seen = new Set<string>();
+  for (const term of queryTerms) {
+    if (seen.has(term)) continue;
+    seen.add(term);
+    const tf = doc.termFreq.get(term);
+    if (!tf) continue;
+    const termIdf = idf.get(term) ?? 0;
+    const denom = tf + K1 * (1 - B + B * (doc.length / avgLength));
+    score += termIdf * ((tf * (K1 + 1)) / denom);
+  }
+  return score;
+}
+
+/** Map a workbook sheet name (or filename fragment) to a scorecard element. */
+export function elementFromHint(hint: string | undefined): VerificationElement | null {
+  if (!hint) return null;
+  const h = hint.toLowerCase();
+  if (/(ownership|shareholding|share register|securities|equity)/.test(h)) return 'OWNERSHIP';
+  if (/(management control|employment equity|directors|ee profile|workforce|employees|board)/.test(h)) return 'MANAGEMENT_CONTROL';
+  if (/(skills|training|learnership|wsp|atr|leviable|bursar)/.test(h)) return 'SKILLS_DEVELOPMENT';
+  if (/(procurement|supplier|enterprise (&|and) supplier|esd|preferential)/.test(h)) return 'ESD';
+  if (/(socio.?economic|social development|\bsed\b|csi|beneficiar)/.test(h)) return 'SED';
+  return null;
+}
+
+export interface SpecCandidate {
+  spec: VerificationDocument;
+  score: number;
+}
+
+/**
+ * Rank the specs for a document.
+ *
+ * `elementHint` (usually the sheet name) boosts specs of that element, because a
+ * sheet named "Ownership" is ownership evidence far more reliably than any term
+ * match can establish. The boost is additive and bounded, so it lifts the right
+ * element's specs into the candidate set without letting a mislabelled sheet
+ * bury genuine BM25 evidence.
+ */
+export function rankSpecsForDocument(
+  text: string,
+  filename: string,
+  options: { limit?: number; elementHint?: string } = {},
+): SpecCandidate[] {
+  const { docs, idf, avgLength } = getIndex();
+  const queryTerms = tokenize(`${filename} ${text}`);
+  const hintElement = elementFromHint(options.elementHint) ?? elementFromHint(filename);
+
+  const ELEMENT_BOOST = 4; // enough to guarantee the element's specs are seen
+
+  const scored = docs.map(({ spec, termFreq, length }) => {
+    let score = bm25(queryTerms, { spec, termFreq, length }, idf, avgLength);
+    if (hintElement && spec.element === hintElement) score += ELEMENT_BOOST;
+    return { spec, score };
+  });
+
+  return scored
+    .filter((c) => c.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, options.limit ?? 8);
+}
+
+/** Convenience: just the spec ids, in rank order. */
+export function selectSpecIds(
+  text: string,
+  filename: string,
+  options: { limit?: number; elementHint?: string } = {},
+): string[] {
+  return rankSpecsForDocument(text, filename, options).map((c) => c.spec.id);
+}
