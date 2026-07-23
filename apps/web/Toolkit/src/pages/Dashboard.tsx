@@ -399,7 +399,7 @@ function CostPerPointSection({
   const skillsResult = calculateSkillsScore(skills, calculatorConfig);
   const procResult = calculateProcurementScore(procurement, calculatorConfig);
   const esdResult = calculateEsdScore(esd, client.npat, calculatorConfig);
-  const sedResult = calculateSedScore(sed, client.npat, calculatorConfig, { turnover: client.revenue });
+  const sedResult = calculateSedScore(sed, client.npat, calculatorConfig);
 
   const totalSkillsSpend = skillsResult.rawStats.totalRecognisedSpend;
   const totalProcSpend = procResult.recognisedSpend;

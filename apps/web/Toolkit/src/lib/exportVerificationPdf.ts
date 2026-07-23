@@ -107,7 +107,7 @@ export const exportVerificationPdf = (state: any, options: ExportOptions = {}) =
     skillCalc = calculateSkillsScore(state.skills || defaultSkills, cfg);
     procCalc = calculateProcurementScore(state.procurement || defaultProcurement, cfg);
     esdCalc = calculateEsdScore(state.esd || defaultEsd, state.client?.npat || 0, cfg);
-    sedCalc = calculateSedScore(state.sed || defaultSed, state.client?.npat || 0, cfg, { turnover: state.client?.revenue });
+    sedCalc = calculateSedScore(state.sed || defaultSed, state.client?.npat || 0, cfg);
   }
 
   // ─── PAGE 1: Cover Page ───

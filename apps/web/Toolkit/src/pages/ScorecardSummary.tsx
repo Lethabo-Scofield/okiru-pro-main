@@ -66,7 +66,7 @@ export default function ScorecardSummary() {
     try { return hasConfig ? calculateEsdScore(esd, client.npat, cfg!) : null; } catch { return null; }
   }, [esd, client.npat, cfg, hasConfig]);
   const sedResult = useMemo(() => {
-    try { return hasConfig ? calculateSedScore(sed, client.npat, cfg!, { turnover: client.revenue }) : null; } catch { return null; }
+    try { return hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null; } catch { return null; }
   }, [sed, client.npat, cfg, hasConfig]);
 
   if (!isLoaded) {
