@@ -7,7 +7,7 @@
  * are surfaced.
  */
 import { describe, expect, it } from "vitest";
-import { parserExtractionsToWorkbook, toWorkbookSections } from "../parserToWorkbook";
+import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "../parserToWorkbook";
 import type { ParserExtraction } from "../parserToWorkbook";
 
 function extraction(over: Partial<ParserExtraction> & { values: ParserExtraction["values"] }): ParserExtraction {
@@ -222,5 +222,46 @@ describe("shaping for the workbook", () => {
     const result = parserExtractionsToWorkbook([]);
     expect(result.rows).toEqual({});
     expect(result.coverage.complete).toBe(true);
+  });
+});
+
+describe("merging the legacy and AI-entity section shapes", () => {
+  it("prefers the AI-entity rows over the legacy rows for the same section", () => {
+    // The parser returns both: the legacy path emits one synthetic aggregate
+    // ownership row; the AI-entity path emits the real share register. Adding
+    // both would score the register PLUS a phantom 100% holder.
+    const legacy = {
+      ownership: { rows: [{ shareholderName: "Measured entity — aggregate black shareholding", votingRights: 100 }] },
+      procurement: { rows: [{ supplierName: "Alpha", spend: 1000 }] },
+    };
+    const injected = {
+      ownership: { rows: [{ shareholderName: "V Naidoo", votingRights: 60 }, { shareholderName: "N Dlamini", votingRights: 40 }] },
+    };
+
+    const merged = mergeWorkbookSections(legacy, injected);
+    // Ownership is the AI-entity register only — the synthetic aggregate is gone.
+    expect(merged.ownership.rows).toHaveLength(2);
+    expect(merged.ownership.rows!.map((r) => (r as Record<string, unknown>).shareholderName))
+      .toEqual(["V Naidoo", "N Dlamini"]);
+    // Procurement was untouched by the AI-entity path, so its legacy rows survive.
+    expect(merged.procurement.rows).toHaveLength(1);
+  });
+
+  it("keeps legacy rows for a section the AI-entity path left empty (meta only)", () => {
+    const legacy = { sed: { rows: [{ beneficiaryName: "Essentially Edenvale", amount: 16700 }] } };
+    const injected = { "financial-information": { rows: [], meta: { tmps: 1030806.68 } } };
+
+    const merged = mergeWorkbookSections(legacy, injected);
+    expect(merged.sed.rows).toHaveLength(1);
+    expect(merged["financial-information"].meta?.tmps).toBeCloseTo(1030806.68, 2);
+    expect(merged["financial-information"].rows ?? []).toHaveLength(0);
+  });
+
+  it("lets the legacy (deterministic) value win a meta conflict", () => {
+    const legacy = { "financial-information": { rows: [], meta: { tmps: 1030806.68 } } };
+    const injected = { "financial-information": { rows: [], meta: { tmps: 8100064 } } };
+
+    const merged = mergeWorkbookSections(legacy, injected);
+    expect(merged["financial-information"].meta?.tmps).toBeCloseTo(1030806.68, 2);
   });
 });
