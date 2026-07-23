@@ -203,30 +203,13 @@ export function extractSupplierRows(input: { raw_text?: string; tables?: unknown
  * Extracts the Total Measured Procurement Spend (TMPS) — the procurement
  * denominator — ONLY when explicitly stated as a labelled total. It is never
  * derived by summing supplier rows: statutory TMPS has inclusions/exclusions
- * that a supplier list does not capture, so guessing it would be unsafe (and a
- * model asked to "compute" it sums the wrong column — the very bug this avoids).
- *
- * Reads the labelled figure wherever the label sits, including a spreadsheet
- * that converted to a MARKDOWN TABLE ("| Total Measured Procurement Spend | R 1
- * 030 806.68 |") where a pipe and empty cells separate the label from its value,
- * and where the amount uses space thousands-separators. Prefers an R-prefixed
- * amount on the label's line; falls back to a thousands/decimal-formatted number
- * so a bare count ("2 suppliers") is never mistaken for the total.
+ * that a supplier list does not capture, so guessing it would be unsafe.
  */
-const TMPS_LABEL = /(?:Total\s+Measured\s+Procurement\s+Spend|Total\s+Procurement\s+Spend|Total\s+Measured\s+Spend|\bTMPS\b)[^\n\r]*/gi;
-const TMPS_MONEY = /R\s?[0-9][0-9\s,]*(?:\.[0-9]+)?\s?(?:m|million|k|thousand|bn|billion)?|[0-9]{1,3}(?:[\s,][0-9]{3})+(?:\.[0-9]+)?|[0-9]+\.[0-9]{2}/gi;
-
 export function extractMeasuredProcurementSpend(input: { raw_text?: string }): number | null {
   const text = input.raw_text ?? '';
-  for (const labelMatch of text.matchAll(TMPS_LABEL)) {
-    const line = labelMatch[0];
-    const tokens = line.match(TMPS_MONEY) ?? [];
-    if (tokens.length === 0) continue;
-    // Prefer the R-prefixed amount (the currency figure); otherwise the first
-    // money-shaped token on the label's line.
-    const chosen = tokens.find((t) => /R/i.test(t)) ?? tokens[0];
-    const value = normalizeMoney(chosen);
-    if (typeof value === 'number' && value > 0) return value;
-  }
-  return null;
+  const re = /(?:Total\s+Measured\s+Procurement\s+Spend|TMPS|Total\s+Procurement\s+Spend|Total\s+Measured\s+Spend)\s*[:\-]?\s*(R\s?[0-9][0-9,\s]*(?:\.[0-9]+)?\s?(?:m|million|k|thousand|bn|billion)?)/i;
+  const m = re.exec(text);
+  if (!m?.[1]) return null;
+  const value = normalizeMoney(m[1]);
+  return typeof value === 'number' && value > 0 ? value : null;
 }
