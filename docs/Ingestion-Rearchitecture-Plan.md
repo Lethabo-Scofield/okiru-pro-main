@@ -408,7 +408,47 @@ single rule prevents the entire class of silent-zero failures this session found
 
 ---
 
-## Phase 4 — Prove the parser on the real evidence pack
+## Phase 4 — FIRST REAL RUN (2026-07-23)
+
+Parser deployed with gpt-4o (`parser:9ddc2da7`), 6 core Thandanani documents sent
+to the LIVE endpoint. **HTTP 200 in 113s.** The first measurement against real
+evidence rather than synthetic extractions.
+
+**What worked — the plumbing is real:**
+- End to end on the live service: upload → vision/markdown → classify → extract
+  → resolve → calculator payload, no crash, no timeout.
+- The **scanned Share Register** (0 chars from the text layer, the document that
+  motivated the whole vision path) was READ: `ownership.total_shares_in_issue:
+  100`, `ownership.shares_held: 100`. Vision + extraction works on a real scan.
+- 18 document extractions across 6 files — mixed-document matching fired.
+- Parallel processing held; no conflicts; no validation failures.
+
+**What did NOT work — extraction ACCURACY on real evidence:**
+- Only **2 calculator keys** and **6 resolved fields**. The report needs
+  Ownership 25 + MC 27 + PP 25 + SED 25 = 102, which requires far more.
+- **Classification misfired on almost every document:**
+  - Share Certificate → "Memorandum of Incorporation" (wrong)
+  - The big multi-sheet BEE Information Gathering workbook → "Skills Development
+    schedule" (wrong — it holds ownership, employees, procurement, SED)
+  - Preferential Procurement workbook → "B-BBEE Sworn Affidavit" (wrong)
+  - SED workbook → "Skills Development schedule" (wrong)
+
+**The finding.** Every synthetic test passed because it fed a clean,
+single-purpose extraction. Real evidence is messier: a 17-sheet workbook
+flattened to markdown is too diffuse for the classifier to place and for one
+prompt to extract cleanly, so the multi-sheet workbooks — which carry most of
+the score — yield almost nothing. **The pipeline is sound; the accuracy on real
+multi-sheet workbooks is the gap**, and it is exactly the gap synthetic tests
+could never have shown. This is why Phase 4 existed.
+
+**Next (Phase 5, implied):** the parser needs to treat a multi-sheet workbook as
+what it is — MANY documents, one per sheet — and classify/extract per sheet,
+not per file. The importer already splits by sheet; the parser flattens. That is
+the highest-value next fix, and the real run is what surfaced it.
+
+---
+
+## Phase 4 (original spec) — Prove the parser on the real evidence pack
 
 **Measured through the PARSER, not the spreadsheet importer.** The importer's
 69.57 came from three of our own template workbooks; it says nothing about the
