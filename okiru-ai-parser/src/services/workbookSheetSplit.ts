@@ -51,6 +51,65 @@ function rowHasContent(row: Record<string, unknown>): boolean {
   });
 }
 
+/** How many cells in a row-array are non-blank. */
+function filledCount(row: unknown[]): number {
+  return row.filter((c) => c !== null && c !== undefined && String(c).trim() !== '').length;
+}
+
+/**
+ * Find the header row in a sheet's array-of-arrays.
+ *
+ * Client workbooks open with a banner ("Measured Entity: …"), a legend ("Use
+ * dropdown"), then the real column header, then data — exactly the layout that
+ * broke the importer. Taking row 0 makes the banner the headers and turns the
+ * whole sheet into garbage the model cannot read, which is why the Procurement,
+ * Ownership and SED sheets extracted nothing while Finance (no banner) did.
+ *
+ * The header row is the widest row in the opening block: a banner spans 1-3
+ * cells, the real header spans every column. Pick the row with the most filled
+ * cells in the first 15, breaking ties toward the later (lower) row, since the
+ * header sits below the banner.
+ */
+function findHeaderRow(matrix: unknown[][]): number {
+  let bestIdx = 0;
+  let bestFill = 0;
+  for (let i = 0; i < Math.min(matrix.length, 15); i += 1) {
+    const fill = filledCount(matrix[i] ?? []);
+    // Strictly greater, so a tie keeps the EARLIER row — in a clean sheet the
+    // header row and its data rows are equally wide and the header comes first.
+    // A banner is narrower than the header, so it loses on fill regardless.
+    if (fill > bestFill) {
+      bestFill = fill;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+/** Build header-keyed row objects from a sheet, skipping banner/legend rows. */
+function sheetRowsWithHeader(sheet: XLSX.WorkSheet, maxRows: number): Array<Record<string, unknown>> {
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][];
+  if (matrix.length === 0) return [];
+
+  const headerIdx = findHeaderRow(matrix);
+  const rawHeaders = (matrix[headerIdx] ?? []).map((c, i) => {
+    const label = String(c ?? '').replace(/\s+/g, ' ').trim();
+    return label || `col_${i}`;
+  });
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (let i = headerIdx + 1; i < matrix.length && rows.length < maxRows; i += 1) {
+    const cells = matrix[i] ?? [];
+    const obj: Record<string, unknown> = {};
+    for (let c = 0; c < rawHeaders.length; c += 1) {
+      const value = cells[c];
+      if (value !== undefined && value !== null && String(value).trim() !== '') obj[rawHeaders[c]] = value;
+    }
+    if (Object.keys(obj).length > 0) rows.push(obj);
+  }
+  return rows;
+}
+
 /**
  * Render one sheet's rows as a markdown table. Kept local (rather than reusing
  * the file-wide renderer) so a sheet split is self-contained and testable.
@@ -108,8 +167,9 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
 
-    const allRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-    const rows = allRows.slice(0, maxRows).filter(rowHasContent);
+    // Header-aware: skip the banner/legend rows and key data by the REAL column
+    // headers, so the markdown the model reads has meaningful columns.
+    const rows = sheetRowsWithHeader(sheet, maxRows).filter(rowHasContent);
     if (rows.length < minContent) continue;
 
     documents.push({
