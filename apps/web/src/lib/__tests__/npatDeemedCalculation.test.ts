@@ -48,16 +48,24 @@ describe("resolveNpatForTargets", () => {
     expect(result.effectiveNpat).toBe(10_000_000 * (industryNorm / 100));
   });
 
-  it("does not apply deemed NPAT without prior-year history", () => {
+  it("applies the industry-norm indicative NPAT when there is no prior-year history", () => {
+    // A low-profit / loss-making entity with no 5-year AFS still deems its NPAT
+    // off the Stats SA industry norm (revenue × norm), per the Amended Codes,
+    // rather than using the actual sub-threshold NPAT — which would zero the
+    // SED/ED targets. priorYearsMissing is still flagged for review. (This is the
+    // same method already applied when prior years exist but none qualify; it must
+    // apply when there are no prior years too — certificate BE13609 deemed
+    // Thandanani's NPAT this way.)
     const result = resolveNpatForTargets({
       currentRevenue: 10_000_000,
       currentNpat: 50_000,
       industryNormPercent: industryNorm,
       priorYears: [],
     });
-    expect(result.method).toBe("actual");
+    expect(result.method).toBe("industry-norm-deemed");
+    expect(result.deemedNpatUsed).toBe(true);
     expect(result.priorYearsMissing).toBe(true);
-    expect(result.effectiveNpat).toBe(50_000);
+    expect(result.effectiveNpat).toBe(10_000_000 * (industryNorm / 100));
   });
 
   it("rejects deemed override without prior-year rows", () => {
