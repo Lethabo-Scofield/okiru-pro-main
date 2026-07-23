@@ -87,6 +87,25 @@ describe('workbook supplier projection (Polo #8/#10)', () => {
     expect(PROCUREMENT_COLUMNS.some((c) => c.key === 'registrationNumber')).toBe(true);
   });
 
+  it('leaves isEmpoweringSupplier UNDEFINED when the row omits the column (not false)', () => {
+    // The procurement calc reads `isEmpoweringSupplier ?? (beeLevel 1-8)`. A
+    // parser-extracted supplier row has no "Empowering Supplier" cell; coercing
+    // that absence to `false` is NOT nullish, so it excluded every such supplier
+    // from the empowering-spend line — the ONLY scoring line for Transport QSE PP.
+    const p = projectWorkbookToClient(workbookWithSuppliers());
+    expect(p.suppliers[0].isEmpoweringSupplier).toBeUndefined();
+  });
+
+  it('keeps an explicit empowering flag when the row carries the column', () => {
+    const wb: WorkbookData = {
+      companyId: 'c', sections: {
+        'company-information': { meta: { industrySector: 'RCOGP' } },
+        procurement: { rows: [{ _id: 'x', supplierName: 'Ex', bbbeeLevel: '1', spend: 1000, empoweringSupplier: 'No' }] },
+      }, updatedAt: new Date().toISOString(),
+    } as any;
+    expect(projectWorkbookToClient(wb).suppliers[0].isEmpoweringSupplier).toBe(false);
+  });
+
   // A learner marked "No" for Foreign/Disabled must NOT come through as foreign/
   // disabled. The projection previously used Boolean("No") === true, so string
   // yes/no values (e.g. from Excel import) flipped the flags. coerceYesNo fixes it.

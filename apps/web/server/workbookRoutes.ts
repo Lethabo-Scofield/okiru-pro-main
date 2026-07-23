@@ -1178,6 +1178,18 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       const sizeRaw = s((r as any).currentSize);
       const enterpriseType = mapEnterpriseType(sizeRaw);
       const beeLevel = parseBeeLevel((r as any).bbbeeLevel);
+      // Empowering-supplier flag: UNKNOWN (undefined) when the row does not carry
+      // the column at all — parser-extracted supplier rows have supplierName/spend/
+      // level but no "Empowering Supplier" cell. The procurement calc reads
+      // `isEmpoweringSupplier ?? (beeLevel 1-8)`, so coercing an absent value to
+      // `false` (as coerceYesNo does) is NOT nullish and wrongly EXCLUDES every
+      // such supplier from the empowering-spend line — which is the ONLY scoring
+      // line for Transport QSE PP, zeroing the pillar. A row that DOES carry the
+      // cell keeps its explicit value (importer path unchanged).
+      const empoweringRaw = (r as any).empoweringSupplier;
+      const isEmpowering = empoweringRaw === undefined || empoweringRaw === null || String(empoweringRaw).trim() === ''
+        ? undefined
+        : coerceYesNo(empoweringRaw);
       suppliers.push({
         id: id ?? undefined,
         supplierName: s((r as any).supplierName),
@@ -1192,8 +1204,8 @@ export function projectWorkbookToClient(wb: WorkbookData) {
         beeLevel,
         vatNumber: s((r as any).vatNumber),
         measuredUnder: s((r as any).measuredUnder),
-        empoweringSupplier: coerceYesNo((r as any).empoweringSupplier),
-        isEmpoweringSupplier: coerceYesNo((r as any).empoweringSupplier),
+        empoweringSupplier: isEmpowering,
+        isEmpoweringSupplier: isEmpowering,
         // Carry both the raw % (for audit) and the fraction (for scoring)
         currentBlackOwnership: num((r as any).currentBlackOwnership),
         blackOwnership: blackOwnershipFraction,
