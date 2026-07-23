@@ -16,86 +16,16 @@ import {
   calculateTransportQseEmploymentEquity,
   calculateTransportQseManagement,
 } from "@toolkit/lib/calculators/transport";
-import { getSectorConfig } from "../../../../api/pipeline/sectorConfig";
+import { TRANSPORT_QSE_CALCULATOR_CONFIG } from "@toolkit/lib/sectors/transport-qse";
 import type { CalculatorConfig } from "../../../shared/schema";
 import * as XLSX from "xlsx";
 
+// Single source of truth: the production derivation the store scores with. The
+// hand-rolled copy this replaced had drifted (no electiveGroupSizes, and no
+// chooseOneGroup on ownership/MC/EE — the very fields the Transport QSE
+// any-four-of-seven total depends on).
 function transportQseCalculatorConfig(): CalculatorConfig {
-  const sc = getSectorConfig("TRANSPORT", "QSE");
-  const t = sc.targets || {};
-  const own = t.ownership || {};
-  const mc = t.managementControl || {};
-  const ee = t.employmentEquity || {};
-  const sk = t.skills || {};
-  const pr = t.procurement || {};
-  const esd = t.esd || {};
-  const sed = t.sed || {};
-  const pc = sc.pillarConfigs || {};
-  return {
-    totalMaxPoints: sc.totalMaxPoints,
-    ownership: {
-      votingRightsMax: own.votingRightsMaxPts,
-      womenBonusMax: own.womenVotingMaxPts,
-      economicInterestMax: own.economicInterestMaxPts,
-      netValueMax: own.netValueMaxPts,
-      targetEconomicInterest: own.economicInterestTarget,
-      subMinNetValue: 0,
-      votingRightsTarget: own.votingRightsTarget,
-      womenVotingTarget: own.womenVotingTarget,
-      womenEIMax: own.womenEIMaxPts,
-      womenEITarget: own.womenEITarget,
-      newEntrantsMax: own.newEntrantsMaxPts,
-      designatedGroupsMax: own.economicInterestDesignatedGroupMaxPts ?? 3,
-      designatedGroupsTarget: own.economicInterestDesignatedGroupTarget ?? 0.03,
-    },
-    management: {
-      boardBlackTarget: mc.boardBlackTarget,
-      boardBlackPoints: mc.boardBlackMaxPts,
-      boardWomenTarget: mc.boardBWTarget,
-      boardWomenPoints: mc.boardBWMaxPts,
-      execBlackTarget: mc.execBlackTarget,
-      execBlackPoints: mc.execBlackMaxPts,
-      execWomenTarget: mc.execBWTarget,
-      execWomenPoints: mc.execBWMaxPts,
-    },
-    managementControl: { maxPoints: pc.managementControl?.maxPoints ?? 27 },
-    employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 27 },
-    skills: {
-      generalMax: sk.learningProgrammesMaxPts,
-      bursaryMax: sk.bursaryMaxPts,
-      overallTarget: sk.overallSpendPercent,
-      bursaryTarget: sk.bursarySpendPercent,
-      subMinThreshold: 0,
-    },
-    procurement: {
-      baseMax: pr.allSuppliersMaxPts,
-      bonusMax: 0,
-      tmpsTarget: 0,
-      subMinThreshold: 0,
-      blackOwnedThreshold: pr.bo51Target,
-      allSuppliersTarget: pr.allSuppliersTarget,
-      allSuppliersMaxPts: pr.allSuppliersMaxPts,
-    },
-    esd: {
-      supplierDevMax: esd.sdMaxPts,
-      enterpriseDevMax: esd.edMaxPts,
-      supplierDevTarget: (esd.sdPercent ?? 2) / 100,
-      enterpriseDevTarget: (esd.edPercent ?? 1) / 100,
-    },
-    sed: { maxPoints: sed.maxPts, npatTarget: (sed.spendPercent ?? 1) / 100 },
-    discounting: { dropLevels: 1, maxDropLevel: 8 },
-    pillarConfigs: {
-      ownership: { maxPoints: pc.ownership?.maxPoints ?? 28 },
-      managementControl: { maxPoints: pc.managementControl?.maxPoints ?? 27 },
-      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 27 },
-      skillsDevelopment: { maxPoints: pc.skillsDevelopment?.maxPoints ?? 25, chooseOneGroup: pc.skillsDevelopment?.chooseOneGroup },
-      preferentialProcurement: { maxPoints: pc.preferentialProcurement?.maxPoints ?? 25, chooseOneGroup: pc.preferentialProcurement?.chooseOneGroup },
-      enterpriseDevelopment: { maxPoints: pc.enterpriseDevelopment?.maxPoints ?? 25, chooseOneGroup: pc.enterpriseDevelopment?.chooseOneGroup },
-      socioEconomicDevelopment: { maxPoints: pc.socioEconomicDevelopment?.maxPoints ?? 25, chooseOneGroup: pc.socioEconomicDevelopment?.chooseOneGroup },
-    },
-    benefitFactors: [],
-    industryNorms: [],
-  };
+  return TRANSPORT_QSE_CALCULATOR_CONFIG;
 }
 
 const RCOGP_GENERIC_CONFIG: CalculatorConfig = {

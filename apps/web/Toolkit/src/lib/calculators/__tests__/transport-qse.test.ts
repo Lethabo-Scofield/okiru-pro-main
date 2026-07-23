@@ -1,102 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { getSectorConfig } from '../../../../../../api/pipeline/sectorConfig';
 import { calculateOwnershipScore } from '../ownership';
 import { calculateTransportQseManagement, calculateTransportQseEmploymentEquity } from '../transport';
-import type { CalculatorConfig } from '../../../../../shared/schema';
+import { TRANSPORT_QSE_CALCULATOR_CONFIG } from '../../sectors/transport-qse';
 
-function sectorConfigToCalculatorConfig(sc: ReturnType<typeof getSectorConfig>): CalculatorConfig {
-  const t = sc.targets || {};
-  const own = t.ownership || {};
-  const mc = t.managementControl || {};
-  const ee = t.employmentEquity || {};
-  const sk = t.skills || {};
-  const pr = t.procurement || {};
-  const esd = t.esd || {};
-  const sed = t.sed || {};
-  const pc = sc.pillarConfigs || {};
-  const pOwn = pc.ownership || {};
-  const pMc = pc.managementControl || {};
-  const pEe = pc.employmentEquity || { maxPoints: 0 };
-  const pSk = pc.skillsDevelopment || {};
-  const pPp = pc.preferentialProcurement || {};
-  const pEd = pc.enterpriseDevelopment || {};
-  const pSed = pc.socioEconomicDevelopment || {};
-
-  return {
-    totalMaxPoints: sc.totalMaxPoints,
-    ownership: {
-      votingRightsMax: own.votingRightsMaxPts,
-      womenBonusMax: own.womenVotingMaxPts,
-      economicInterestMax: own.economicInterestMaxPts,
-      netValueMax: own.netValueMaxPts,
-      targetEconomicInterest: own.economicInterestTarget,
-      subMinNetValue: 0,
-      votingRightsTarget: own.votingRightsTarget,
-      womenVotingTarget: own.womenVotingTarget,
-      womenEIMax: own.womenEIMaxPts,
-      womenEITarget: own.womenEITarget,
-      newEntrantsMax: own.newEntrantsMaxPts,
-      designatedGroupsMax: own.economicInterestDesignatedGroupMaxPts ?? 3,
-      designatedGroupsTarget: own.economicInterestDesignatedGroupTarget ?? 0.03,
-    },
-    management: {
-      boardBlackTarget: mc.boardBlackTarget,
-      boardBlackPoints: mc.boardBlackMaxPts,
-      boardWomenTarget: mc.boardBWTarget,
-      boardWomenPoints: mc.boardBWMaxPts,
-      execBlackTarget: mc.execBlackTarget,
-      execBlackPoints: mc.execBlackMaxPts,
-      execWomenTarget: mc.execBWTarget,
-      execWomenPoints: mc.execBWMaxPts,
-    },
-    managementControl: { maxPoints: pMc.maxPoints },
-    employmentEquity: { maxPoints: pEe.maxPoints },
-    skills: {
-      generalMax: sk.learningProgrammesMaxPts,
-      bursaryMax: sk.bursaryMaxPts,
-      overallTarget: sk.overallSpendPercent,
-      bursaryTarget: sk.bursarySpendPercent,
-      subMinThreshold: 0,
-    },
-    procurement: {
-      baseMax: pr.allSuppliersMaxPts,
-      bonusMax: 0,
-      tmpsTarget: 0,
-      subMinThreshold: 0,
-      blackOwnedThreshold: pr.bo51Target,
-      allSuppliersTarget: pr.allSuppliersTarget,
-      allSuppliersMaxPts: pr.allSuppliersMaxPts,
-    },
-    esd: {
-      supplierDevMax: esd.sdMaxPts,
-      enterpriseDevMax: esd.edMaxPts,
-      supplierDevTarget: (esd.sdPercent ?? 2) / 100,
-      enterpriseDevTarget: (esd.edPercent ?? 1) / 100,
-    },
-    sed: { maxPoints: sed.maxPts, npatTarget: (sed.spendPercent ?? 1) / 100 },
-    discounting: { dropLevels: 1, maxDropLevel: 8 },
-    // NOTE: this mirrors sectorConfigToTransportQseCalculatorConfig by hand. It
-    // is the third hand-rolled copy of that mapping found in this repo, and each
-    // one has drifted from production at least once — worth collapsing.
-    electiveGroupSizes: sc.electiveGroupSizes,
-    pillarConfigs: {
-      // Ownership / MC / EE carry the elective group too: Transport QSE elects
-      // any four of seven, so none of them is compulsory.
-      ownership: { maxPoints: pOwn.maxPoints, chooseOneGroup: pOwn.chooseOneGroup },
-      managementControl: { maxPoints: pMc.maxPoints, chooseOneGroup: pMc.chooseOneGroup },
-      employmentEquity: { maxPoints: pEe.maxPoints, chooseOneGroup: pEe.chooseOneGroup },
-      skillsDevelopment: { maxPoints: pSk.maxPoints, chooseOneGroup: pSk.chooseOneGroup },
-      preferentialProcurement: { maxPoints: pPp.maxPoints, chooseOneGroup: pPp.chooseOneGroup },
-      enterpriseDevelopment: { maxPoints: pEd.maxPoints, chooseOneGroup: pEd.chooseOneGroup },
-      socioEconomicDevelopment: { maxPoints: pSed.maxPoints, chooseOneGroup: pSed.chooseOneGroup },
-    },
-    benefitFactors: [],
-    industryNorms: [],
-  };
-}
-
+// The Transport QSE CalculatorConfig comes from the single production derivation
+// (sectorConfigToTransportQseCalculatorConfig) — the same object the store scores
+// with. This test used to hand-roll its own copy; that (and two others) drifted
+// from production, so they were collapsed onto this one source.
 describe('Transport QSE scoring', () => {
-  const cfg = sectorConfigToCalculatorConfig(getSectorConfig('TRANSPORT', 'QSE'));
+  const cfg = TRANSPORT_QSE_CALCULATOR_CONFIG;
 
   it('loads a 100-point total: any four of seven elements, 25 each', () => {
     // Was 107 ("82 compulsory + one elective"), which forced Employment Equity
