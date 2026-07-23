@@ -1,0 +1,193 @@
+/**
+ * Parser output → workbook sections. The wiring that closes the loop.
+ *
+ *   document → extraction → field bridge → cell injection → workbook rows
+ *
+ * Everything either side of this already exists and validates independently:
+ * `targetForField` says WHERE a parser field belongs, `injectIntoSection` says
+ * whether the value can legally live there. This joins them and answers the one
+ * remaining question — how do a document's values become ROWS?
+ *
+ * ONE DOCUMENT IS NOT ONE ROW. A share certificate describes one shareholder; a
+ * share register describes twelve. So a value that arrives as an ARRAY of
+ * objects (the matrix asks for `holdings_table`, `management_breakdown_by_level_race_gender`
+ * and similar) expands into one row per entry, while scalar values on the same
+ * document form a single row. Flattening a register into one row would collapse
+ * twelve shareholders into one and score a fraction of the ownership.
+ *
+ * NOTHING IS FORCED. A value that cannot satisfy its column is reported, a field
+ * with no mapping is reported, and a required column left empty is reported.
+ * The caller gets rows it can trust plus an honest account of what is missing.
+ */
+import { injectIntoSection, injectMetaValue, type InjectionRejection } from "./workbookInjection";
+import {
+  huntRequiredFields,
+  targetForField,
+  type CoverageReport,
+  type WorkbookSectionKey,
+} from "./parserFieldBridge";
+
+/** One document's worth of extracted values, as the parser reports it. */
+export interface ParserExtraction {
+  documentId: string;
+  sourceFile: string;
+  values: Array<{ field: string; value: unknown }>;
+  /** Matrix element (OWNERSHIP | MANAGEMENT_CONTROL | SKILLS_DEVELOPMENT | ESD | SED). */
+  element?: string;
+}
+
+export interface WorkbookRow extends Record<string, unknown> {
+  _id: string;
+  /** Files this row's values came from — provenance, kept on the row itself. */
+  _sourceFiles?: string[];
+}
+
+export interface ParserToWorkbookResult {
+  /** Grid rows, per workbook section. */
+  rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>;
+  /** Entity-level values (TMPS, revenue, NPAT), per section. */
+  meta: Partial<Record<WorkbookSectionKey, Record<string, unknown>>>;
+  /** Values that could not be placed in a cell, with the reason. */
+  rejected: Array<InjectionRejection & { sourceFile: string }>;
+  /** Required columns still unfilled + parser fields with no mapping. */
+  coverage: CoverageReport;
+}
+
+let rowCounter = 0;
+function nextRowId(): string {
+  rowCounter += 1;
+  return `parsed_${Date.now().toString(36)}_${rowCounter}`;
+}
+
+/** Is this value a table — an array of row-shaped objects? */
+function isRowTable(value: unknown): value is Array<Record<string, unknown>> {
+  return Array.isArray(value)
+    && value.length > 0
+    && value.every((entry) => entry !== null && typeof entry === "object" && !Array.isArray(entry));
+}
+
+/**
+ * Turn parser extractions into workbook rows and meta.
+ *
+ * `options.element` on each extraction disambiguates fields that exist in more
+ * than one pillar (contribution_type is ESD or SED, never a guess).
+ */
+export function parserExtractionsToWorkbook(
+  extractions: ParserExtraction[],
+  options: { sectorCode?: string; scorecardType?: string } = {},
+): ParserToWorkbookResult {
+  const rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>> = {};
+  const meta: Partial<Record<WorkbookSectionKey, Record<string, unknown>>> = {};
+  const rejected: ParserToWorkbookResult["rejected"] = [];
+  const unmapped = new Set<string>();
+
+  const addRow = (section: WorkbookSectionKey, row: WorkbookRow) => {
+    (rows[section] ??= []).push(row);
+  };
+
+  for (const extraction of extractions) {
+    // Values for THIS document, split into the scalar ones (which together make
+    // one row per section) and the tabular ones (which make many).
+    const scalarBySection = new Map<WorkbookSectionKey, Array<{ field: string; value: unknown }>>();
+    const tables: Array<{ section: WorkbookSectionKey; entries: Array<Record<string, unknown>> }> = [];
+
+    for (const { field, value } of extraction.values) {
+      if (isRowTable(value)) {
+        // A table's own column names are parser fields too, so resolve the
+        // section from the FIRST entry's keys rather than from the table name.
+        const firstKey = Object.keys(value[0]).find((key) => targetForField(key, extraction.element));
+        const target = firstKey ? targetForField(firstKey, extraction.element) : null;
+        if (!target) {
+          unmapped.add(field);
+          continue;
+        }
+        tables.push({ section: target.section, entries: value });
+        continue;
+      }
+
+      const target = targetForField(field, extraction.element);
+      if (!target) {
+        unmapped.add(field);
+        continue;
+      }
+
+      if (target.meta) {
+        // Entity-level: one value for the whole case, not a row. Meta fields
+        // live in the section's `meta` array, not its `columns`, so they take
+        // the meta injection path — same type/validation rules, different lookup.
+        const bucket = (meta[target.section] ??= {});
+        const injected = injectMetaValue(target.section, target.column, value, options);
+        if (injected.ok) {
+          // First value wins — a later document may FILL a meta field but must
+          // not overwrite one already established.
+          if (bucket[target.column] === undefined) bucket[target.column] = injected.value;
+        } else {
+          rejected.push({ ...injected.rejection, sourceFile: extraction.sourceFile });
+        }
+        continue;
+      }
+
+      const list = scalarBySection.get(target.section) ?? [];
+      list.push({ field: target.column, value });
+      scalarBySection.set(target.section, list);
+    }
+
+    // Scalars: one row per section this document contributed to.
+    for (const [section, values] of Array.from(scalarBySection.entries())) {
+      const injected = injectIntoSection(section, values.map((v: { field: string; value: unknown }) => ({ ...v, sourceFile: extraction.sourceFile })), options);
+      for (const rejection of injected.rejected) {
+        rejected.push({ ...rejection, sourceFile: extraction.sourceFile });
+      }
+      if (Object.keys(injected.cells).length > 0) {
+        addRow(section, { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] });
+      }
+    }
+
+    // Tables: one row per entry. A share register is twelve shareholders, and
+    // flattening it would score a fraction of the ownership.
+    for (const table of tables) {
+      for (const entry of table.entries) {
+        const values = Object.entries(entry)
+          .map(([key, value]) => {
+            const target = targetForField(key, extraction.element);
+            if (!target) { unmapped.add(key); return null; }
+            return { field: target.column, value, sourceFile: extraction.sourceFile };
+          })
+          .filter((v): v is { field: string; value: unknown; sourceFile: string } => v !== null);
+
+        if (values.length === 0) continue;
+
+        const injected = injectIntoSection(table.section, values, options);
+        for (const rejection of injected.rejected) {
+          rejected.push({ ...rejection, sourceFile: extraction.sourceFile });
+        }
+        if (Object.keys(injected.cells).length > 0) {
+          addRow(table.section, { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] });
+        }
+      }
+    }
+  }
+
+  const coverage = huntRequiredFields(rows, Array.from(unmapped), options);
+  return { rows, meta, rejected, coverage };
+}
+
+/**
+ * Shape the result as workbook sections, ready to merge into a workbook.
+ *
+ * Mirrors the importer's section shape ({ rows, meta }) so both front doors
+ * hand the workbook the same thing — which is the Phase 2 contract.
+ */
+export function toWorkbookSections(
+  result: ParserToWorkbookResult,
+): Record<string, { rows: WorkbookRow[]; meta?: Record<string, unknown> }> {
+  const sections: Record<string, { rows: WorkbookRow[]; meta?: Record<string, unknown> }> = {};
+
+  for (const [section, sectionRows] of Object.entries(result.rows)) {
+    sections[section] = { rows: sectionRows ?? [] };
+  }
+  for (const [section, sectionMeta] of Object.entries(result.meta)) {
+    sections[section] = { rows: sections[section]?.rows ?? [], meta: sectionMeta };
+  }
+  return sections;
+}
