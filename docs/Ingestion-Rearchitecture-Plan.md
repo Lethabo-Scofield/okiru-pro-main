@@ -473,6 +473,53 @@ precondition for it.
 
 ---
 
+### Phase 4c — mapping-layer fixes: the last mile between extraction and score (2026-07-23)
+
+Extraction now lands every schedule as a table (BM25 spec selection + sheet-name
+element routing + `sheetTableExtraction`). The remaining zeros were in the
+MAPPING layer — the wiring from extracted rows to workbook cells to calculators.
+Root causes found and fixed (all verified by unit test; Lake Trading held 63.56):
+
+1. **Injection spoke the wrong vocabulary (MC = 0).** `workbookInjection.normaliseForColumn`
+   normalised extracted values to the SCORING engine's band names ("Board",
+   "Executive Director") and then matched them against the workbook DROPDOWN,
+   whose options are a different vocabulary ("Non-executive Director", "Top
+   Management"). A value read correctly was rejected at the door — "Executive
+   Management" → band "Executive Director", which the Occupational-Level dropdown
+   does not contain → Management Control scored 0 for an entity whose sole top
+   manager is Black. **Fix:** normalise using the workbook's OWN synonym maps
+   (`DESIGNATION_MAP`, `OCC_LEVEL_MAP`, `BBBEE_LEVEL_MAP`, `SUPPLIER_SIZE_MAP` from
+   `sections.ts` — the maps the Excel importer uses). Injection lands a dropdown
+   value; `projectWorkbookToClient` then translates it to the scoring band (its
+   existing job). **Rule: injection = dropdown vocabulary, projection = scoring band.
+   Never double-translate.**
+2. **Demographic fields hard-mapped to Management Control.** `race`/`gender`/
+   `id_number` share a column key across ownership, MC and skills; the bridge sent
+   them all to MC, so a share register's race scored a phantom employee and left
+   the shareholder raceless. **Fix:** element-route them (a share register's race
+   lands on the shareholder). This also hardened table section detection — a table
+   whose first mappable key was a demographic used to misroute the whole table.
+3. **`total_cost` was unmapped** — the per-learner spend was extracted and then
+   dropped, so Skills scored on nothing. **Fix:** map it (+ `training_cost`,
+   `course_cost`) to the skills grid.
+4. **The two parser shapes double-counted.** The route returns `{ ...deterministicResult,
+   ai_entities }` — legacy `supplier_rows`/`calculator_payload` AND the AI-entity
+   extractions — and the upload screen merged their rows ADDITIVELY. **Fix:**
+   `mergeWorkbookSections` — AI-entity rows are authoritative where present
+   (replace legacy), legacy survives only for sections the AI path left empty.
+
+**Not mapping — flagged, not touched (scoring/expert territory):**
+- **Transport QSE config totals 100** (`totalMaxPoints`, any-four-of-seven @25),
+  but the verified ground truth is **102 = Level 1**. 102 > 100 is unreachable
+  under this config; `excelImport.test.ts` already fails expecting 107. This is a
+  scoring-config discrepancy for the expert, and it means **102 cannot be reached
+  by mapping fixes alone** — the denominator itself is in question.
+- Procurement still 0: TMPS extracted as 8,100,064 (model summed line items) vs
+  the labelled R1,030,806.68 — extraction accuracy.
+- SED still 0: target computed from negative NPAT — a scoring rule + NPAT extraction.
+
+---
+
 ## Phase 4 (original spec) — Prove the parser on the real evidence pack
 
 **Measured through the PARSER, not the spreadsheet importer.** The importer's
