@@ -441,10 +441,35 @@ the score — yield almost nothing. **The pipeline is sound; the accuracy on rea
 multi-sheet workbooks is the gap**, and it is exactly the gap synthetic tests
 could never have shown. This is why Phase 4 existed.
 
-**Next (Phase 5, implied):** the parser needs to treat a multi-sheet workbook as
-what it is — MANY documents, one per sheet — and classify/extract per sheet,
-not per file. The importer already splits by sheet; the parser flattens. That is
-the highest-value next fix, and the real run is what surfaced it.
+### Phase 4b — per-sheet split deployed and re-measured (2026-07-23)
+
+Built and deployed the per-sheet split (`parser:d5fa9326`); a multi-sheet
+workbook now becomes one document per sheet. Re-ran the same 6 documents:
+
+| | First run | After split |
+|---|---|---|
+| Calculator keys | 2 | **3** |
+| Fields resolved | 6 | **10** |
+| Latency | 113s | 57s |
+
+The new key is `skills.leviable_amount: 2124744` — a DENOMINATOR (the Finance
+sheet, now its own document, classified as EMP201 and yielded the leviable
+amount). That is a real, correct win: the split works, and it recovered a value
+the flattened blob never could.
+
+**But the next bottleneck is now precise: SPEC SELECTION per sheet.** Only 4 of
+18 extractions produced values, and they were all the Finance sheets → EMP201.
+The Ownership, Procurement and Social Development sheets are now clean, focused
+documents — but they are not being matched to their element's prompts, so they
+extract nothing. `selectSpecsForDocument` chooses which of the 109 specs to run a
+document against from aliases/evidence in the text; a sheet named "Ownership"
+full of shareholder columns should run against the ownership specs and does not.
+
+**Next fix:** improve spec selection so a focused sheet meets its element's
+prompts — either by using the sheet NAME as a strong signal (an "Ownership" sheet
+is ownership evidence) or by widening the evidence match now that each document
+is single-purpose. This is the remaining distance to 102, and the split was the
+precondition for it.
 
 ---
 
