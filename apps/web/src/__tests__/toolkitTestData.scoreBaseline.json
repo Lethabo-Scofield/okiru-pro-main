@@ -42,7 +42,7 @@
   "QSE_Sandile_Freight_Transport_BBBEE.xlsx": {
     "total": 105,
     "level": 1,
-    "breakdown": "| own28 mc27 ee25 elective25 (sk25/pp25/ed17/sed25)"
+    "breakdown": "| best4=105 (own28/mc27/ee25/sk25/pp25/ed17/sed25)"
   },
   "QSE_Sechaba_Mutual_FSC_Banks_LongTerm_BBBEE.xlsx": {
     "total": 123.53,

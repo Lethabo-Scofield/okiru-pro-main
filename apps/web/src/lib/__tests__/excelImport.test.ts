@@ -287,7 +287,7 @@ describe("excelImport — Thandanani Transport fixture", () => {
     expect(Number(firstSh?.blackOwnership)).toBeGreaterThan(0);
   });
 
-  it("scores Thandanani Transport QSE at ~58-68 / 107 after import", () => {
+  it("scores Thandanani Transport QSE ownership+MC+EE after import (denominator 100)", () => {
     const extraction = extractBeeGatheringBuffer(buffer);
     const wb = XLSX.read(buffer, { type: "array", cellDates: true });
     const sections = mapExtractedToWorkbookSections(
@@ -304,7 +304,10 @@ describe("excelImport — Thandanani Transport fixture", () => {
     } as any);
 
     const cfg = transportQseCalculatorConfig();
-    expect(cfg.totalMaxPoints).toBe(107);
+    // Transport QSE denominator is 100 (any four of seven × 25 base points); the
+    // old 107 conflated the four richest elements' bonus-inclusive maxima with the
+    // denominator. See apps/api/__tests__/transportQseScorecard.test.ts (canonical).
+    expect(cfg.totalMaxPoints).toBe(100);
     expect(cfg.pillarConfigs?.ownership?.maxPoints).toBe(28);
 
     const own = calculateOwnershipScore(
