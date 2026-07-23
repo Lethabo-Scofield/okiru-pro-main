@@ -13,6 +13,7 @@ import {
 import { convertWithDocling, doclingHandlesExtension, isDoclingEnabled } from './doclingClient.js';
 import { preprocessForOcr } from './imagePreprocessing.js';
 import { analyseWithDocumentIntelligence, documentIntelligenceConfigured } from './documentIntelligence.js';
+import { splitWorkbookIntoSheets, shouldSplitWorkbook } from './workbookSheetSplit.js';
 import { extractScannedPdfWithVision } from './visionExtraction.js';
 
 /**
@@ -448,4 +449,58 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
       mime_type: file.mimetype,
     },
   };
+}
+
+/**
+ * Turn one upload into one OR MORE extraction inputs.
+ *
+ * A multi-sheet workbook is not one document — it is one document per sheet
+ * (Ownership, Employees, Procurement, Social Development…). Classifying and
+ * extracting it as a whole drowns the model: Phase 4's first real run
+ * classified a 17-sheet BEE workbook as "Skills Development schedule" and
+ * yielded almost nothing. Split per sheet and each sheet meets the prompts
+ * whose evidence it actually contains.
+ *
+ * Everything that is not a multi-sheet workbook — a PDF, a scan, a single-sheet
+ * spreadsheet, a CSV — passes straight through as one input, unchanged. The
+ * split can never make a file less readable: if it produces nothing, the
+ * whole-file input is used.
+ */
+export async function extractionInputsFromUpload(file: UploadedFileLike): Promise<RawExtractionInput[]> {
+  const ext = extensionFromFilename(file.originalname);
+  const isWorkbook = file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    || file.mimetype === 'application/vnd.ms-excel'
+    || file.mimetype === 'application/vnd.ms-excel.sheet.macroEnabled.12'
+    || file.mimetype === 'application/vnd.ms-excel.sheet.macroenabled.12'
+    || ext === '.xlsx' || ext === '.xlsm' || ext === '.xls';
+
+  if (isWorkbook) {
+    const sheets = splitWorkbookIntoSheets(file.buffer);
+    if (shouldSplitWorkbook(sheets)) {
+      logger.info('Splitting workbook into per-sheet documents', {
+        filename: file.originalname,
+        sheets: sheets.length,
+      });
+      return sheets.map((sheet) => ({
+        // Provenance names the sheet, so a value traces back to "File › Sheet".
+        file_id: `upload_${Date.now()}_${sheet.sheetName.replace(/\W+/g, '_')}`,
+        filename: `${file.originalname} › ${sheet.sheetName}`,
+        mime_type: file.mimetype,
+        raw_text: sheet.text,
+        markdown: sheet.markdown,
+        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows }],
+        metadata: {
+          source: 'direct_upload',
+          file_size: file.size,
+          mime_type: file.mimetype,
+          sheet_name: sheet.sheetName,
+          parent_file: file.originalname,
+        },
+      }));
+    }
+  }
+
+  // Not a multi-sheet workbook — one input, the existing path (which also
+  // handles scanned PDFs via vision, DOCX, PPTX, images, etc.).
+  return [await rawExtractionInputFromUpload(file)];
 }

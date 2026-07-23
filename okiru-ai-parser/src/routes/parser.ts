@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { createLogger } from '../logger.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
 import { fail, ok } from '../utils/apiResponse.js';
-import { isSupportedUpload, rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
+import { extractionInputsFromUpload, isSupportedUpload, rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
 import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
 import {
@@ -252,7 +252,11 @@ router.post('/resolve-case-files', upload.array('files', 25), async (req: Reques
 
   const repository = await getParserRepository();
   try {
-    const rawInputs = await Promise.all(files.map((file) => rawExtractionInputFromUpload(file)));
+    // A multi-sheet workbook becomes one input PER SHEET, so the Ownership sheet
+    // is classified and extracted against the ownership prompts and the
+    // Procurement sheet against the procurement prompts — instead of one prompt
+    // drowning in a 17-sheet blob (Phase 4 finding).
+    const rawInputs = (await Promise.all(files.map((file) => extractionInputsFromUpload(file)))).flat();
     const service = new CaseParserService(repository);
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
