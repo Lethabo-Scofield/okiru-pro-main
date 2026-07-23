@@ -19,6 +19,8 @@ import {
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
+import { extractSheetTable } from './sheetTableExtraction.js';
+import { elementFromHint } from './specRetrieval.js';
 import {
   fieldElementIndex,
   mapEntitiesToCalculator,
@@ -74,16 +76,33 @@ export async function extractCaseEntities(
   // the reconciler below resolves conflicts by "first document wins" — a race
   // that reordered documents would move a score between runs on identical
   // evidence.
-  const settled = await concurrentMap(inputs, documentConcurrency(), (input) =>
-    extractDocument(model, {
-      filename: input.filename,
-      markdown: input.markdown,
-      raw_text: input.raw_text,
-      // The sheet name (from the per-sheet split) is the strongest single signal
-      // of which element a workbook document serves — "Ownership", "Preferential
-      // Procurement", "Social Development". Retrieval boosts that element's specs.
-      elementHint: typeof input.metadata?.sheet_name === 'string' ? input.metadata.sheet_name : undefined,
-    }));
+  const settled = await concurrentMap(inputs, documentConcurrency(), async (input) => {
+    const sheetName = typeof input.metadata?.sheet_name === 'string' ? input.metadata.sheet_name : undefined;
+
+    // Matrix-spec extraction (single evidence records) AND, for a workbook sheet
+    // whose element is clear from its name, TABLE extraction (every row). The
+    // matrix specs cannot emit a table of suppliers/beneficiaries; this does,
+    // which is what carries the Procurement and SED points.
+    const [specResults, tableResult] = await Promise.all([
+      extractDocument(model, {
+        filename: input.filename,
+        markdown: input.markdown,
+        raw_text: input.raw_text,
+        elementHint: sheetName,
+      }),
+      (async () => {
+        const element = sheetName ? elementFromHint(sheetName) : null;
+        if (!element) return null;
+        return extractSheetTable(model, element, {
+          filename: input.filename,
+          markdown: input.markdown,
+          raw_text: input.raw_text,
+        });
+      })(),
+    ]);
+
+    return tableResult ? [...specResults, tableResult] : specResults;
+  });
 
   const extractions: DocumentExtraction[] = [];
   for (const result of settled) {
