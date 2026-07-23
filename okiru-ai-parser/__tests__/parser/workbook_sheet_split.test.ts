@@ -69,6 +69,30 @@ describe('splitting into sheets', () => {
     expect(doc.markdown).toContain('| V Naidoo | 100 |');
   });
 
+  it('finds the real header beneath a banner and legend (the client layout)', () => {
+    // The exact shape that broke extraction: banner, year, legend, THEN header,
+    // THEN data. Taking row 0 as the header makes the banner the column names
+    // and the sheet unreadable.
+    const buf = workbook({
+      Ownership: [
+        ['Measured Entity: Thandanani', 'Ownership Equity', 'Date & Initial:___'],
+        ['Year End: 28 Feb 2025'],
+        ['Use dropdown', 'Use dropdown', 'Use dropdown', 'Use dropdown'],
+        ['Name & Surname', 'ID Number', 'Race', 'Gender', 'Foreign'],
+        ['Venugopal Lutchman', '5608305112083', 'Black', 'Male', 'No'],
+        ['Nomsa Dlamini', '8801015800085', 'Black', 'Female', 'No'],
+      ],
+    });
+
+    const [doc] = splitWorkbookIntoSheets(buf);
+    // The header row is used, so the columns are meaningful and the banner is
+    // not a data row.
+    expect(doc.markdown).toContain('| Name & Surname | ID Number | Race | Gender | Foreign |');
+    expect(doc.markdown).toContain('Venugopal Lutchman');
+    expect(doc.markdown).not.toContain('Measured Entity');
+    expect(doc.rows).toHaveLength(2);
+  });
+
   it('returns nothing for a buffer that is not a workbook', () => {
     expect(splitWorkbookIntoSheets(Buffer.from('not a spreadsheet'))).toEqual([]);
   });
