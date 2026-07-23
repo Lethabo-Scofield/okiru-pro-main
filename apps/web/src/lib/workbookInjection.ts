@@ -21,6 +21,43 @@
  * this whole programme exists to end, one layer further in.
  */
 import { getSection, type ColumnDef, type SectionDef } from "@/components/workbook/sections";
+import { normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
+
+/**
+ * Normalise an extracted value toward what its column's dropdown expects, using
+ * the SAME domain logic the scoring engine uses. Extraction returns what the
+ * document says ("Level 4", "Executive Management", "Black"); the workbook
+ * dropdown wants "4", a designation band, "African". Without this the value is
+ * read correctly and then rejected at the door — the last-mile silent zero.
+ */
+function normaliseForColumn(columnKey: string, value: unknown): unknown {
+  const text = String(value ?? "").trim();
+  if (!text) return value;
+
+  // B-BBEE level: "Level 4" / "Level 4 Contributor" → "4" (dropdown is "1".."8").
+  if (/level$/i.test(columnKey) || columnKey === "bbbeeLevel") {
+    const m = text.match(/\b([1-8])\b/);
+    if (m) return m[1];
+    if (/non.?compliant/i.test(text)) return "Non-compliant";
+  }
+
+  // Race: "Black" is the umbrella; the register may state it. The scoring layer
+  // treats Black as African by default, so normalise to a dropdown race.
+  if (columnKey === "race") {
+    const normalised = normalizeRace(text);
+    if (normalised) return normalised;
+    if (/^black$/i.test(text)) return "African";
+  }
+
+  // Occupational level / designation: "Executive Management" → the band the
+  // scorecard counts, via the same map the calculators use.
+  if (columnKey === "occupationalLevel" || columnKey === "designation") {
+    const band = normalizeDesignationForScoring(text);
+    if (band && band !== "Unclassified") return band;
+  }
+
+  return value;
+}
 
 export interface InjectionValue {
   /** Workbook column key (e.g. "shareholderName", "votingRights"). */
@@ -174,7 +211,10 @@ export function coerceToColumn(
       const options = column.options ?? [];
       if (options.length === 0) return { ok: true, value: String(value).trim() };
 
-      const matched = matchOption(value, options);
+      // Normalise toward the dropdown's vocabulary first, using the scoring
+      // engine's own domain maps, then match.
+      const normalised = normaliseForColumn(column.key, value);
+      const matched = matchOption(normalised, options);
       if (matched === null) {
         // Never pick the closest: a wrong dropdown value scores silently.
         return {
