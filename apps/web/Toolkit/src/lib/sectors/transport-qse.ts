@@ -147,9 +147,15 @@ export function sectorConfigToTransportQseCalculatorConfig(sc: SectorConfig): Ca
       recognition: lt.recognition,
     })),
     pillarConfigs: {
-      ownership: { maxPoints: pc.ownership.maxPoints },                        // 28
-      managementControl: { maxPoints: pc.managementControl.maxPoints },        // 27
-      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 27 },   // 27
+      // Transport QSE is "any FOUR of the seven elements" — so ownership, MC and
+      // EE are ELECTIVES too, not compulsory pillars. The source TRANSPORT_QSE
+      // marks all seven with chooseOneGroup; this conversion must carry it onto
+      // ownership/MC/EE as well, or the store's elective selector never lets them
+      // into the best-four total and they silently score 0 (Thandanani: Ownership
+      // 25 + MC 27 dropped → 50 instead of 102).
+      ownership: { maxPoints: pc.ownership.maxPoints, chooseOneGroup: pc.ownership.chooseOneGroup },                       // 28
+      managementControl: { maxPoints: pc.managementControl.maxPoints, chooseOneGroup: pc.managementControl.chooseOneGroup }, // 27
+      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 27, chooseOneGroup: pc.employmentEquity?.chooseOneGroup }, // 27
       // Electives — the store's resolveChooseOneElectives keeps the best one.
       skillsDevelopment: { maxPoints: pc.skillsDevelopment.maxPoints, chooseOneGroup: pc.skillsDevelopment.chooseOneGroup },                 // 25
       preferentialProcurement: { maxPoints: pc.preferentialProcurement.maxPoints, chooseOneGroup: pc.preferentialProcurement.chooseOneGroup }, // 25

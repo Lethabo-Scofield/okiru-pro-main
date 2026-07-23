@@ -129,8 +129,10 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
         let brk = '';
         if (sector.toUpperCase() === 'TRANSPORT') {
           // Transport scores via the mirrored transport calculators (pipeline
-          // calcTransport* semantics). QSE = Ownership + MC + EE compulsory +
-          // BEST elective of Skills/PP/ED/SED (choose-one, Transport Codes).
+          // calcTransport* semantics). QSE = ANY FOUR of the seven elements
+          // (Transport Codes: no priority elements) — the best four scores count,
+          // matching how the store elects best-4-of-7 and the BE13609 certificate
+          // (Own 25 + MC 27 + PP 25 + SED 25 = 102 = Level 1).
           const own = calculateOwnershipScore({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 } as any, cfg).total;
           const mgmtData = { id: '', clientId: '', employees: p.employees } as any;
           const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
@@ -140,9 +142,13 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
             const mc = calculateTransportQseManagement(mgmtData, cfg).score;
             const ee = calculateTransportQseEmploymentEquity(mgmtData, cfg, 'Gauteng').score;
             const sk = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng', 2025).total;
-            const elective = Math.max(sk, proc, esd.edTotal, sed);
-            total = own + mc + ee + elective;
-            brk = ` | own${own.toFixed(0)} mc${mc.toFixed(0)} ee${ee.toFixed(0)} elective${elective.toFixed(0)} (sk${sk.toFixed(0)}/pp${proc.toFixed(0)}/ed${esd.edTotal.toFixed(0)}/sed${sed.toFixed(0)})`;
+            // Best FOUR of the seven element scores (Transport QSE any-four-of-seven).
+            const bestFour = [own, mc, ee, sk, proc, esd.edTotal, sed]
+              .sort((a, b) => b - a)
+              .slice(0, 4)
+              .reduce((s, v) => s + v, 0);
+            total = bestFour;
+            brk = ` | best4=${bestFour.toFixed(0)} (own${own.toFixed(0)}/mc${mc.toFixed(0)}/ee${ee.toFixed(0)}/sk${sk.toFixed(0)}/pp${proc.toFixed(0)}/ed${esd.edTotal.toFixed(0)}/sed${sed.toFixed(0)})`;
           } else {
             const mc = calculateTransportLargeManagementControl(mgmtData, cfg).score;
             const ee = calculateTransportLargeEmploymentEquity(mgmtData, cfg).score;
