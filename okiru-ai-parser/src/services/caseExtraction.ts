@@ -18,6 +18,7 @@ import {
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
+import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import {
   fieldElementIndex,
   mapEntitiesToCalculator,
@@ -62,18 +63,29 @@ export async function extractCaseEntities(
 ): Promise<CaseExtractionResult | null> {
   if (!model || inputs.length === 0) return null;
 
+  // Documents are read in PARALLEL, bounded. Each already fans its chunks out
+  // internally; this fans the documents out too, so a 26-file pack is not as
+  // slow as the sum of its files. Results are collected in INPUT order because
+  // the reconciler below resolves conflicts by "first document wins" — a race
+  // that reordered documents would move a score between runs on identical
+  // evidence.
+  const settled = await concurrentMap(inputs, documentConcurrency(), (input) =>
+    extractDocument(model, {
+      filename: input.filename,
+      markdown: input.markdown,
+      raw_text: input.raw_text,
+    }));
+
   const extractions: DocumentExtraction[] = [];
-  for (const input of inputs) {
-    try {
-      extractions.push(...await extractDocument(model, {
-        filename: input.filename,
-        markdown: input.markdown,
-        raw_text: input.raw_text,
-      }));
-    } catch (err) {
+  for (const result of settled) {
+    if (result.status === 'fulfilled' && result.value) {
+      extractions.push(...result.value);
+    } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they
       // have already paid to extract.
-      logger.error('AI extraction failed for file', err as Error, { file: input.filename });
+      logger.error('AI extraction failed for file', result.reason as Error, {
+        file: inputs[result.index]?.filename,
+      });
     }
   }
 
