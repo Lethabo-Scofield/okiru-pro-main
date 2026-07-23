@@ -191,3 +191,47 @@ export function toWorkbookSections(
   }
   return sections;
 }
+
+/** A section as either mapper hands it over: rows and/or entity-level meta. */
+export interface MergeableSection {
+  rows?: unknown[];
+  meta?: Record<string, unknown>;
+}
+
+/**
+ * Merge the legacy parser-case sections with the richer AI-entity sections.
+ *
+ * The parser returns BOTH shapes at once: the deterministic case result (with
+ * its own supplier / ownership / SED rows) and the AI-entity extractions. The
+ * AI-entity path reads whole SCHEDULES (every supplier, every shareholder, every
+ * beneficiary) and carries provenance, so where it produced ROWS for a section
+ * those are authoritative and REPLACE the legacy rows. Adding them instead would
+ * double-count the same suppliers and beneficiaries once they score, and for
+ * ownership would stack the legacy synthetic "aggregate black shareholding"
+ * holder on top of the real share register — distorting a share-weighted calc.
+ *
+ * Legacy rows survive only for sections the AI-entity path left empty, so no
+ * evidence the richer path missed is lost. Meta is merged with the LEGACY value
+ * winning a conflict — it is the deterministic reading of an entity-level number.
+ */
+export function mergeWorkbookSections(
+  legacy: Record<string, MergeableSection>,
+  injected: Record<string, MergeableSection>,
+): Record<string, MergeableSection> {
+  const out: Record<string, MergeableSection> = {};
+  for (const [key, section] of Object.entries(legacy)) {
+    out[key] = { rows: [...(section.rows ?? [])], ...(section.meta ? { meta: { ...section.meta } } : {}) };
+  }
+  for (const [key, section] of Object.entries(injected)) {
+    const existing = out[key] ?? {};
+    const injectedRows = section.rows ?? [];
+    const mergedMeta = { ...(section.meta ?? {}), ...(existing.meta ?? {}) };
+    const merged: MergeableSection = {
+      // Injected rows are authoritative WHERE PRESENT; otherwise keep legacy's.
+      rows: injectedRows.length > 0 ? injectedRows : (existing.rows ?? []),
+    };
+    if (Object.keys(mergedMeta).length > 0) merged.meta = mergedMeta;
+    out[key] = merged;
+  }
+  return out;
+}

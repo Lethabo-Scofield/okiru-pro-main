@@ -36,7 +36,7 @@ import {
   type ParserCaseLike,
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
-import { parserExtractionsToWorkbook, toWorkbookSections } from "@/lib/parserToWorkbook";
+import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
 import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
 import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
 import ExtractionConfidence from "./ExtractionConfidence";
@@ -541,22 +541,18 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // Construction / FSC / Transport …) rather than always defaulting to Generic.
   const handleCreate = () => {
     if (!mapped && !injected) return;
-    const sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }> = { ...(mapped?.sections ?? {}) };
 
-    // Merge the AI-entity sections over the legacy ones. Grid rows are ADDITIVE
-    // (a share register's rows join the legacy supplier rows, they do not replace
-    // them); meta fills gaps the legacy shape left (TMPS, revenue). This is the
-    // point where the full extraction chain finally reaches the workbook.
-    if (injected) {
-      const injectedSections = toWorkbookSections(injected);
-      for (const [key, section] of Object.entries(injectedSections)) {
-        const existing = sections[key] ?? {};
-        sections[key] = {
-          rows: [...((existing.rows as unknown[]) ?? []), ...section.rows],
-          meta: { ...(section.meta ?? {}), ...(existing.meta ?? {}) },
-        };
-      }
-    }
+    // The parser returns BOTH shapes: the deterministic case result and the
+    // AI-entity extractions. Where the AI-entity path read a whole schedule
+    // (every supplier / shareholder / beneficiary) its rows are authoritative and
+    // REPLACE the legacy rows for that section — adding them double-counts the
+    // same evidence once it scores. Legacy rows survive for sections the AI path
+    // left empty; meta is merged with the legacy (deterministic) value winning.
+    const sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }> = mergeWorkbookSections(
+      mapped?.sections ?? {},
+      injected ? toWorkbookSections(injected) : {},
+    );
+
     const companyMeta: Record<string, unknown> = {
       companyName: companyName.trim(),
       industrySector: SECTOR_TO_WORKBOOK[sector] ?? "Generic",
