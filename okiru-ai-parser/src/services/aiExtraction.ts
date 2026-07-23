@@ -422,7 +422,13 @@ export async function extractWithSpec(
   // Bounded to one extra round trip per document, and skipped entirely when the
   // first pass found everything (the common case for clean documents).
   const stillMissing = spec.expectedFields.filter((field) => isEmptyValue(parsed[field]));
-  if (stillMissing.length > 0 && sweepEnabled()) {
+  const foundSomething = spec.expectedFields.some((field) => !isEmptyValue(parsed[field]));
+  // Only sweep a spec the first pass got SOMETHING from. Zero fields found means
+  // this is almost certainly the wrong spec for this document (retrieval offers
+  // candidates; most are wrong), not a right document with hidden values — so a
+  // second look is a wasted model call. This is the single biggest latency cut
+  // once retrieval widened the candidate set.
+  if (stillMissing.length > 0 && foundSomething && sweepEnabled()) {
     const swept = await sweepForMissingFields(model, spec, input.filename, chunks, stillMissing);
     for (const [field, value] of Object.entries(swept)) {
       // The sweep may only FILL a gap. It can never overwrite a value the first
@@ -515,7 +521,7 @@ export async function extractDocument(
   const specs = options.specIds
     ? options.specIds.map(findDocumentById).filter((doc): doc is VerificationDocument => doc !== null)
     : rankSpecsForDocument(retrievalText, input.filename, {
-        limit: options.limit ?? 8,
+        limit: options.limit, // retrieval picks a smart default: 3 with a hint, 5 without
         elementHint: input.elementHint,
       }).map((c) => c.spec);
 

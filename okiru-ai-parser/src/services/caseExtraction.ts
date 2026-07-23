@@ -27,6 +27,11 @@ import {
 
 const logger = createLogger('CaseExtraction');
 
+/** Auditor validation is advisory and costs a model call per document — opt-in. */
+function auditorValidationEnabled(): boolean {
+  return process.env.PARSER_AUDITOR_VALIDATION === 'true';
+}
+
 /** Cached so a case does not rebuild the client per file. */
 let cachedModel: ExtractionModel | null | undefined;
 
@@ -102,18 +107,24 @@ export async function extractCaseEntities(
   const calculator = mapEntitiesToCalculator(resolved, fieldElementIndex(extractions));
 
   // Would this evidence survive verification? Extraction says what a document
-  // contains; the auditor tests say whether it counts. A certificate that
-  // expired last month extracts perfectly and is still worthless. Advisory
-  // only — it never edits a value or changes the payload above.
-  const validation = await validateCase(
-    extractions.map((extraction) => ({
-      documentId: extraction.documentId,
-      sourceFile: extraction.sourceFile,
-      values: extraction.values,
-    })),
-    new Map(inputs.map((input) => [input.filename, input.markdown || input.raw_text || ''])),
-    model,
-  );
+  // contains; the auditor tests say whether it counts. Advisory only — it never
+  // edits a value or changes the payload above.
+  //
+  // It is a model call PER extracted document, which doubles a large case's
+  // latency, so it is OPT-IN (PARSER_AUDITOR_VALIDATION=true). The score does
+  // not depend on it; it is a review aid. Off by default keeps a 20-document
+  // pack inside the request budget.
+  const validation = auditorValidationEnabled()
+    ? await validateCase(
+        extractions.map((extraction) => ({
+          documentId: extraction.documentId,
+          sourceFile: extraction.sourceFile,
+          values: extraction.values,
+        })),
+        new Map(inputs.map((input) => [input.filename, input.markdown || input.raw_text || ''])),
+        model,
+      )
+    : { documents: [], failures: [], unresolved: [] };
 
   logger.info('Case extraction complete', {
     files: inputs.length,
