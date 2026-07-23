@@ -123,7 +123,7 @@ describe("injecting a row", () => {
   it("reports a value it cannot place instead of forcing it", () => {
     const result = injectIntoSection("ownership", [
       { field: "shareholderName", value: "T Nkosi" },
-      { field: "race", value: "Black" }, // umbrella term, not a dropdown option
+      { field: "race", value: "Martian" }, // genuinely not a race
     ]);
 
     // The good value still lands...
@@ -131,6 +131,19 @@ describe("injecting a row", () => {
     // ...and the bad one is reported, not written.
     expect(result.cells.race).toBeUndefined();
     expect(result.rejected.map((r) => r.field)).toContain("race");
+  });
+
+  it("normalises B-BBEE umbrella 'Black' to a scoreable race", () => {
+    // "Black" is the umbrella (African/Coloured/Indian); the scoring layer treats
+    // it as African. Reading it correctly and then rejecting it would be a
+    // last-mile silent zero on ownership.
+    const result = injectIntoSection("ownership", [{ field: "race", value: "Black" }]);
+    expect(result.cells.race).toBe("African");
+  });
+
+  it("normalises 'Level 4' to the dropdown's '4'", () => {
+    const result = injectIntoSection("procurement", [{ field: "bbbeeLevel", value: "Level 4" }]);
+    expect(result.cells.bbbeeLevel).toBe("4");
   });
 
   it("reports a field that is not a column of the section", () => {
