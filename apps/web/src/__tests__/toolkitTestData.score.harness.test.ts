@@ -122,6 +122,12 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
         const leviable = Number(fin.payroll ?? fin.leviable ?? 0);
         const wb: WorkbookData = { companyId: 'h', ownerOrganizationId: null, ownerUserId: 'h', sections: imp.sections as any, updatedAt: new Date().toISOString() };
         const p = projectWorkbookToClient(wb);
+        // ESD/SED targets are % of NPAT, but for a loss-making entity the target
+        // uses the DEEMED NPAT (resolveEffectiveNpat: revenue × industry norm) —
+        // which projectWorkbookToClient already computed on financials.npat. Use
+        // that, matching the live store, so a loss-making SED scores on the deemed
+        // base rather than 0. (Raw meta npat would zero it.)
+        const effNpat = Number((p.financials as any)?.npat ?? npat);
         const cfg = configFor(sector, type, subSector);
         if (!cfg) { rows.push(`${f.slice(0, 34).padEnd(34)} | ${sector}/${type} | (no bundled config — API sector)`); continue; }
 
@@ -135,8 +141,8 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           // (Own 25 + MC 27 + PP 25 + SED 25 = 102 = Level 1).
           const own = calculateOwnershipScore({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 } as any, cfg).total;
           const mgmtData = { id: '', clientId: '', employees: p.employees } as any;
-          const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
-          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg).total;
+          const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, effNpat, cfg);
+          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, effNpat, cfg).total;
           const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
           if (/qse/i.test(type)) {
             const mc = calculateTransportQseManagement(mgmtData, cfg).score;
@@ -168,7 +174,7 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           const mgmt = calculateManagementScore({ id: '', clientId: '', employees: p.employees as any } as any, cfg, 'Gauteng', 2025).total;
           const skills = calculateSkillsScore({ id: '', clientId: '', leviableAmount: leviable, trainingPrograms: (p as any).trainingPrograms ?? [] } as any, cfg, 'Gauteng', 2025).total;
           const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
-          const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
+          const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, effNpat, cfg);
           // FSC "SED & CE Scorecard" adds Consumer Education + Fundisa lines
           // (calculateSedScore scores them only when the config is FSC). The live
           // store passes these from client state, so the harness must too to stay
@@ -176,7 +182,7 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           // projectWorkbookToClient's financials (mapWorkbookFinancialsToClient
           // reads the SED & CE section meta). Non-FSC: fields absent → no change.
           const fin2 = (p.financials as any) ?? {};
-          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any, ceSpend: fin2.ceSpend, ceBonusSpend: fin2.ceBonusSpend, fundisaSpend: fin2.fundisaSpend } as any, npat, cfg).total;
+          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any, ceSpend: fin2.ceSpend, ceBonusSpend: fin2.ceBonusSpend, fundisaSpend: fin2.fundisaSpend } as any, effNpat, cfg).total;
           // FSC Banks/LTI/STI carry an Access to Financial Services pillar (12 pts).
           // calculateAfsScore returns null when the config has no AFS (FSC Generic / non-FSC).
           const afsData = { id: '', clientId: '', ...((p.financials as any)?.afs ?? {}) };
