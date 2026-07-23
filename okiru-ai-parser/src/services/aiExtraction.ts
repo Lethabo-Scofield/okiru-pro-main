@@ -30,6 +30,7 @@
  */
 import { createLogger } from '../logger.js';
 import { chunkDocument, mergeChunkResults } from './documentChunking.js';
+import { rankSpecsForDocument, elementFromHint } from './specRetrieval.js';
 import { groundValues } from './extractionGrounding.js';
 import { checksumForField } from '../../parser/checksums.js';
 import {
@@ -59,6 +60,8 @@ export interface ExtractedValue {
 export interface DocumentExtraction {
   documentId: string;
   documentName: string;
+  /** Scorecard element this document serves — disambiguates ESD vs SED etc. */
+  element?: string;
   sourceFile: string;
   values: ExtractedValue[];
   /** Schema fields the model did not return — what to ask the user for. */
@@ -349,6 +352,7 @@ export async function extractWithSpec(
   const base: DocumentExtraction = {
     documentId: spec.id,
     documentName: spec.name,
+    element: spec.element,
     sourceFile: input.filename,
     values: [],
     missingFields: [],
@@ -501,12 +505,19 @@ export async function extractWithSpec(
  */
 export async function extractDocument(
   model: ExtractionModel,
-  input: { filename: string; markdown?: string; raw_text: string },
+  input: { filename: string; markdown?: string; raw_text: string; elementHint?: string },
   options: { specIds?: string[]; limit?: number } = {},
 ): Promise<DocumentExtraction[]> {
+  // Prefer markdown for RETRIEVAL too: a sheet's column headers ("Beneficiary",
+  // "% Black participation") are the terms that discriminate its element, and
+  // they live in the markdown table, not the flat text projection.
+  const retrievalText = input.markdown?.trim() || input.raw_text;
   const specs = options.specIds
     ? options.specIds.map(findDocumentById).filter((doc): doc is VerificationDocument => doc !== null)
-    : selectSpecsForDocument(input.raw_text, input.filename, { limit: options.limit });
+    : rankSpecsForDocument(retrievalText, input.filename, {
+        limit: options.limit ?? 8,
+        elementHint: input.elementHint,
+      }).map((c) => c.spec);
 
   if (specs.length === 0) return [];
 
@@ -522,5 +533,11 @@ export async function extractDocument(
   for (const spec of specs) {
     results.push(await extractWithSpec(model, spec, input));
   }
-  return results;
+
+  // Retrieval now offers CANDIDATES (BM25 surfaces weak matches); the model is
+  // the gate. A spec it tried but got nothing from is not evidence — returning
+  // it as an empty extraction would clutter the case and misreport a lunch
+  // receipt as N documents-we-found-nothing-in. Keep only extractions that
+  // produced values, or that errored (a failure the caller must see).
+  return results.filter((r) => r.values.length > 0 || Boolean(r.error));
 }

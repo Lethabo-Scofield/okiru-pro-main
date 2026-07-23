@@ -74,6 +74,10 @@ export async function extractCaseEntities(
       filename: input.filename,
       markdown: input.markdown,
       raw_text: input.raw_text,
+      // The sheet name (from the per-sheet split) is the strongest single signal
+      // of which element a workbook document serves — "Ownership", "Preferential
+      // Procurement", "Social Development". Retrieval boosts that element's specs.
+      elementHint: typeof input.metadata?.sheet_name === 'string' ? input.metadata.sheet_name : undefined,
     }));
 
   const extractions: DocumentExtraction[] = [];
