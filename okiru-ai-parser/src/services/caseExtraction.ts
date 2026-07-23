@@ -20,6 +20,7 @@ import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
+import { extractSheetFinancials, isFinancialsSheet } from './sheetFinancialsExtraction.js';
 import { elementFromHint } from './specRetrieval.js';
 import {
   fieldElementIndex,
@@ -83,7 +84,7 @@ export async function extractCaseEntities(
     // whose element is clear from its name, TABLE extraction (every row). The
     // matrix specs cannot emit a table of suppliers/beneficiaries; this does,
     // which is what carries the Procurement and SED points.
-    const [specResults, tableResult] = await Promise.all([
+    const [specResults, tableResult, financialsResult] = await Promise.all([
       extractDocument(model, {
         filename: input.filename,
         markdown: input.markdown,
@@ -99,9 +100,23 @@ export async function extractCaseEntities(
           raw_text: input.raw_text,
         });
       })(),
+      // Entity-level revenue + NPAT off a Finance / summary sheet — the two
+      // labelled figures the NPAT-based targets need but no matrix spec reliably
+      // extracts here (the AFS spec pulls cost-of-sales components, not these).
+      (async () => {
+        if (!isFinancialsSheet(sheetName)) return null;
+        return extractSheetFinancials(model, {
+          filename: input.filename,
+          markdown: input.markdown,
+          raw_text: input.raw_text,
+        });
+      })(),
     ]);
 
-    return tableResult ? [...specResults, tableResult] : specResults;
+    const results = [...specResults];
+    if (tableResult) results.push(tableResult);
+    if (financialsResult) results.push(financialsResult);
+    return results;
   });
 
   const extractions: DocumentExtraction[] = [];
