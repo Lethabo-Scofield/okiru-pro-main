@@ -39,6 +39,7 @@ import {
 import { parserExtractionsToWorkbook, toWorkbookSections } from "@/lib/parserToWorkbook";
 import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
 import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
+import ExtractionConfidence from "./ExtractionConfidence";
 
 interface RequiredGroup {
   key: string;
@@ -1434,6 +1435,15 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       })()}
 
       {/* ACT 3 — the reveal */}
+      {/* Confidence + gaps: what we read, what could not be placed, what is
+          still needed. Shown before the build button so a low score reads as a
+          to-do list, not a mystery. */}
+      {revealed && injected && (
+        <div className="mt-4">
+          <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
+        </div>
+      )}
+
       {revealed && mapped && (
         <div className="mt-4">
           {/* Pillar rack — status tiles light up */}
