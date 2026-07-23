@@ -129,11 +129,21 @@ export function resolveNpatForTargets(params: {
   }
 
   if (!hasPriorYears) {
+    // No 5-year AFS to find an indicative margin from a past profitable year.
+    // The Codes still provide for a DEEMED NPAT off the industry (Stats SA) norm
+    // — revenue × norm — rather than penalising a loss-making entity with a
+    // zero/negative target that scores its real SED/ED contribution as 0. This is
+    // the SAME industry-norm-deemed method applied below when prior years exist
+    // but none qualify; it must apply when there are no prior years at all.
+    // (Certificate BE13609 deemed Thandanani's NPAT this way; without it a live
+    // SED contribution of R6,500 scored 0 for want of a positive target.)
+    const deemed = currentRevenue * (industryNormPercent / 100);
     return {
-      effectiveNpat: currentNpat,
-      deemedNpat: currentNpat,
-      deemedNpatUsed: false,
-      method: "actual",
+      effectiveNpat: deemed,
+      deemedNpat: deemed,
+      deemedNpatUsed: true,
+      method: "industry-norm-deemed",
+      indicativeProfitMarginPercent: industryNormPercent,
       priorYearsMissing: true,
     };
   }
