@@ -49,6 +49,27 @@ describe("translating parser fields to workbook columns", () => {
     expect(targetForField("contribution_type", "SED")).toEqual({ section: "sed", column: "contributionType" });
   });
 
+  it("routes a demographic field to the element's own pillar, not always to MC", () => {
+    // race / gender / ID exist in ownership, MC and skills under the same column
+    // key. A share register's race belongs on the shareholder — sending it to
+    // Management Control scored a phantom employee and left the holder raceless.
+    expect(targetForField("race", "OWNERSHIP")).toEqual({ section: "ownership", column: "race" });
+    expect(targetForField("gender", "SKILLS_DEVELOPMENT")).toEqual({ section: "skills-development", column: "gender" });
+    expect(targetForField("id_number", "MANAGEMENT_CONTROL")).toEqual({ section: "management-control", column: "idNumber" });
+    // With no element it falls back to Management Control (the historical default).
+    expect(targetForField("race")).toEqual({ section: "management-control", column: "race" });
+  });
+
+  it("maps the learner-schedule spend so Skills does not score on nothing", () => {
+    expect(targetForField("total_cost")).toEqual({ section: "skills-development", column: "totalCost" });
+  });
+
+  it("scopes contribution_value to the element, like the other shared ESD/SED fields", () => {
+    expect(targetForField("contribution_value")).toBeNull();
+    expect(targetForField("contribution_value", "SED")).toEqual({ section: "sed", column: "amount" });
+    expect(targetForField("contribution_value", "ESD")).toEqual({ section: "esd", column: "amount" });
+  });
+
   it("maps every target onto a column that actually exists", () => {
     // A mapping to a column the workbook does not have is a silent no-op.
     for (const field of ["holder_name", "supplier_name", "beneficiary_name", "learner_name", "employee_name"]) {

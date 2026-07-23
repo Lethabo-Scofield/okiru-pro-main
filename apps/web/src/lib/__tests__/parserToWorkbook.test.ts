@@ -67,6 +67,79 @@ describe("a table becomes many rows", () => {
     expect(result.rows.ownership!.map((r) => r.shareholderName)).toEqual(["V Naidoo", "N Dlamini"]);
     expect(result.rows.ownership!.map((r) => r.numberOfShares)).toEqual([60, 40]);
   });
+
+  it("expands an employee register and lands the occupational level Management Control scores", () => {
+    // The whole MC chain in one row: the register's occupational level must reach
+    // a cell the scorecard can group by. "Executive Management" → the workbook's
+    // "Top Management" option → (downstream) the Executive band.
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "MANAGEMENT_CONTROL",
+        values: [
+          {
+            field: "employee_rows",
+            value: [
+              { employee_name: "V Lutchman", race: "Indian", gender: "Male", occupational_level: "Executive Management" },
+            ],
+          },
+        ],
+      }),
+    ]);
+
+    const row = result.rows["management-control"]![0];
+    expect(row.name).toBe("V Lutchman");
+    expect(row.race).toBe("Indian");
+    expect(row.occupationalLevel).toBe("Top Management");
+    // The scoring band is NOT forced into the cell — that is the projection's job.
+    expect(result.rejected.map((r) => r.field)).not.toContain("occupationalLevel");
+  });
+
+  it("expands an SED beneficiary schedule with amounts routed to the SED pillar", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "SED",
+        values: [
+          {
+            field: "beneficiary_rows",
+            value: [
+              { beneficiary_name: "Essentially Edenvale", contribution_value: "R 16 700", contribution_type: "Grant Contribution" },
+            ],
+          },
+        ],
+      }),
+    ]);
+
+    const row = result.rows.sed![0];
+    expect(row.beneficiaryName).toBe("Essentially Edenvale");
+    expect(row.amount).toBeCloseTo(16700, 2);
+    expect(row.contributionType).toBe("Grant Contribution");
+    // Nothing leaked into ESD.
+    expect(result.rows.esd ?? []).toHaveLength(0);
+  });
+
+  it("expands a learner schedule and keeps the per-learner spend", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "SKILLS_DEVELOPMENT",
+        values: [
+          {
+            field: "learner_rows",
+            value: [
+              { learner_name: "T Nkosi", race: "African", gender: "Female", category_code: "B", total_cost: "12000" },
+            ],
+          },
+        ],
+      }),
+    ]);
+
+    const row = result.rows["skills-development"]![0];
+    expect(row.learnerName).toBe("T Nkosi");
+    expect(row.race).toBe("African");
+    expect(row.categoryCode).toBe("B");
+    expect(row.totalCost).toBeCloseTo(12000, 2);
+    // total_cost used to be dropped as unmapped.
+    expect(result.coverage.unmapped).not.toContain("total_cost");
+  });
 });
 
 describe("entity-level values go to meta, not a row", () => {

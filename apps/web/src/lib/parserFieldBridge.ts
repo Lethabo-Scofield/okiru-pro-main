@@ -59,14 +59,13 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   black_women_ownership_percentage: { section: "ownership", column: "blackWomenOwnership" },
 
   // ── Management control / employment equity (one row per person) ──
+  // race / gender / id_number are NOT here: they exist under the same column key
+  // in ownership, management-control AND skills, so they are routed by element
+  // (see ROW_FIELD_BY_ELEMENT) — a share register's race must land on the
+  // shareholder, not on a phantom employee.
   employee_name: { section: "management-control", column: "name" },
   full_name: { section: "management-control", column: "name" },
   surname: { section: "management-control", column: "surname" },
-  id_number: { section: "management-control", column: "idNumber" },
-  declared_race: { section: "management-control", column: "race" },
-  race: { section: "management-control", column: "race" },
-  derived_gender: { section: "management-control", column: "gender" },
-  gender: { section: "management-control", column: "gender" },
   occupational_level: { section: "management-control", column: "occupationalLevel" },
   designation: { section: "management-control", column: "designation" },
   job_title: { section: "management-control", column: "designation" },
@@ -78,6 +77,11 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   program_name: { section: "skills-development", column: "programName" },
   category_code: { section: "skills-development", column: "categoryCode" },
   training_provider: { section: "skills-development", column: "trainingProvider" },
+  // The learner-schedule table carries the spend per learner; without this it
+  // was extracted and then dropped as unmapped, and Skills scored on nothing.
+  total_cost: { section: "skills-development", column: "totalCost" },
+  training_cost: { section: "skills-development", column: "totalCost" },
+  course_cost: { section: "skills-development", column: "courseCost" },
 
   // ── Preferential procurement (one row per supplier) ──
   supplier_name: { section: "procurement", column: "supplierName" },
@@ -91,7 +95,7 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   expiry_date: { section: "procurement", column: "certificateExpiryDate" },
 
   // ── Enterprise & supplier development ──
-  contribution_value: { section: "esd", column: "amount" },
+  // contribution_value is element-scoped (ESD vs SED share it) — see ELEMENT_SCOPED.
   contribution_description: { section: "esd", column: "contributionDescription" },
 
   // ── Socio-economic development ──
@@ -124,6 +128,36 @@ const ELEMENT_SCOPED: Record<string, Partial<Record<"ESD" | "SED", FieldTarget>>
     ESD: { section: "esd", column: "amount" },
     SED: { section: "sed", column: "amount" },
   },
+  contribution_value: {
+    ESD: { section: "esd", column: "amount" },
+    SED: { section: "sed", column: "amount" },
+  },
+};
+
+/** Element name (matrix vocabulary) → the workbook section that element's grid rows belong in. */
+const ELEMENT_SECTION: Partial<Record<string, WorkbookSectionKey>> = {
+  OWNERSHIP: "ownership",
+  MANAGEMENT_CONTROL: "management-control",
+  SKILLS_DEVELOPMENT: "skills-development",
+  ESD: "esd",
+  SED: "sed",
+};
+
+/**
+ * Row-level demographic fields that exist under the SAME column key in more than
+ * one pillar's grid: a share register, an employee register and a training
+ * schedule all carry race / gender / ID. The column key is fixed; only the
+ * SECTION depends on which document the row came from. Routing these by element
+ * keeps a scalar `race` on an ownership document out of Management Control
+ * (where a single hard-coded mapping used to send it, scoring a phantom
+ * employee and leaving the shareholder raceless).
+ */
+const ROW_FIELD_BY_ELEMENT: Record<string, { column: string; defaultSection: WorkbookSectionKey }> = {
+  race: { column: "race", defaultSection: "management-control" },
+  declared_race: { column: "race", defaultSection: "management-control" },
+  gender: { column: "gender", defaultSection: "management-control" },
+  derived_gender: { column: "gender", defaultSection: "management-control" },
+  id_number: { column: "idNumber", defaultSection: "management-control" },
 };
 
 /** Where does this parser field belong? Null when we were never taught. */
@@ -134,6 +168,15 @@ export function targetForField(field: string, element?: string): FieldTarget | n
     // Ambiguous without an element — better unmapped than in the wrong pillar.
     return byElement ?? null;
   }
+
+  // Element-routed demographic fields: same column, section chosen by the
+  // document's element (defaulting to Management Control when none is given).
+  const rowField = ROW_FIELD_BY_ELEMENT[field];
+  if (rowField) {
+    const section = (element && ELEMENT_SECTION[element]) || rowField.defaultSection;
+    return { section, column: rowField.column };
+  }
+
   return FIELD_TARGETS[field] ?? null;
 }
 

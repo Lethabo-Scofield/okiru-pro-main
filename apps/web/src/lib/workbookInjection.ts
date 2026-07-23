@@ -20,40 +20,69 @@
  * scores as nothing, and is invisible in review. That is the silent-zero failure
  * this whole programme exists to end, one layer further in.
  */
-import { getSection, type ColumnDef, type SectionDef } from "@/components/workbook/sections";
-import { normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
+import {
+  getSection,
+  SUPPLIER_SIZE_MAP,
+  DESIGNATION_MAP,
+  OCC_LEVEL_MAP,
+  BBBEE_LEVEL_MAP,
+  type ColumnDef,
+  type SectionDef,
+} from "@/components/workbook/sections";
+import { normalizeRace } from "@toolkit/lib/calculators/shared";
+
+/** Lower-case and strip non-alphanumerics — the key shape the workbook's synonym maps use. */
+function synonymKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
 
 /**
- * Normalise an extracted value toward what its column's dropdown expects, using
- * the SAME domain logic the scoring engine uses. Extraction returns what the
- * document says ("Level 4", "Executive Management", "Black"); the workbook
- * dropdown wants "4", a designation band, "African". Without this the value is
- * read correctly and then rejected at the door — the last-mile silent zero.
+ * Normalise an extracted value toward its column's DROPDOWN vocabulary, using
+ * the workbook's OWN synonym maps — the very maps the Excel importer consults.
+ *
+ * The distinction that matters: the workbook dropdowns speak one vocabulary
+ * ("Executive Director", "Top Management", "4", "EME"); the SCORING engine speaks
+ * another ("Board", "Executive", recognition multipliers). Injection's job is to
+ * land a value the DROPDOWN accepts — the projection layer
+ * (projectWorkbookToClient) then translates the dropdown label into the scoring
+ * band. Normalising to the scoring band HERE produced labels no dropdown holds
+ * ("Non-executive Director" → "Board", "Executive Management" → "Executive
+ * Director" which the Occupational-Level dropdown lacks), so a value read
+ * correctly was rejected at the door — the last-mile silent zero, one layer in.
  */
 function normaliseForColumn(columnKey: string, value: unknown): unknown {
   const text = String(value ?? "").trim();
   if (!text) return value;
+  const key = synonymKey(text);
 
-  // B-BBEE level: "Level 4" / "Level 4 Contributor" → "4" (dropdown is "1".."8").
+  // B-BBEE level: "Level 4" / "4" / "Non-compliant" → the "1".."8" | "Non-compliant" dropdown.
   if (/level$/i.test(columnKey) || columnKey === "bbbeeLevel") {
+    if (BBBEE_LEVEL_MAP[key]) return BBBEE_LEVEL_MAP[key];
     const m = text.match(/\b([1-8])\b/);
     if (m) return m[1];
     if (/non.?compliant/i.test(text)) return "Non-compliant";
   }
 
-  // Race: "Black" is the umbrella; the register may state it. The scoring layer
-  // treats Black as African by default, so normalise to a dropdown race.
+  // Race: umbrella "Black" and common import variants → African/Coloured/Indian/White
+  // (normalizeRace already yields exactly the dropdown's own vocabulary).
   if (columnKey === "race") {
     const normalised = normalizeRace(text);
     if (normalised) return normalised;
-    if (/^black$/i.test(text)) return "African";
   }
 
-  // Occupational level / designation: "Executive Management" → the band the
-  // scorecard counts, via the same map the calculators use.
-  if (columnKey === "occupationalLevel" || columnKey === "designation") {
-    const band = normalizeDesignationForScoring(text);
-    if (band && band !== "Unclassified") return band;
+  // Designation: EEA / job-band wording → the Designation dropdown vocabulary.
+  if (columnKey === "designation") {
+    if (DESIGNATION_MAP[key]) return DESIGNATION_MAP[key];
+  }
+
+  // Occupational level: "Executive Management" → "Top Management", etc.
+  if (columnKey === "occupationalLevel") {
+    if (OCC_LEVEL_MAP[key]) return OCC_LEVEL_MAP[key];
+  }
+
+  // Supplier size: "Exempted Micro Enterprise" → "EME", legacy "Large" → "Generic".
+  if (columnKey === "currentSize") {
+    if (SUPPLIER_SIZE_MAP[key]) return SUPPLIER_SIZE_MAP[key];
   }
 
   return value;
