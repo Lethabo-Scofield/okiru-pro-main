@@ -103,7 +103,7 @@ export default function SED() {
   };
 
   if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
-  const score = calculateSedScore(sed, npat, calculatorConfig, { turnover: client.revenue });
+  const score = calculateSedScore(sed, npat, calculatorConfig);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">

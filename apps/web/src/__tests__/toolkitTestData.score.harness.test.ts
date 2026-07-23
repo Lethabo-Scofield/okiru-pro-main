@@ -117,7 +117,6 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
         const subSector = String(meta.constructionSubSector ?? meta.fscSubSector ?? '');
         const fin = (imp.sections['financial-information']?.meta ?? {}) as Record<string, unknown>;
         const npat = Number(fin.npat ?? 0);
-        const revenue = Number(fin.revenue ?? 0); // turnover — feeds the loss-making deemed-profit SED target
         const tmps = Number(fin.tmps ?? 0);
         // Leviable amount for skills = total payroll (the Toolkit derives leviable from payroll).
         const leviable = Number(fin.payroll ?? fin.leviable ?? 0);
@@ -137,7 +136,7 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           const own = calculateOwnershipScore({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 } as any, cfg).total;
           const mgmtData = { id: '', clientId: '', employees: p.employees } as any;
           const esd = calculateEsdScore({ id: '', clientId: '', contributions: p.esdContributions as any } as any, npat, cfg);
-          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg, { turnover: revenue }).total;
+          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any } as any, npat, cfg).total;
           const proc = calculateProcurementScore({ id: '', clientId: '', tmps, suppliers: p.suppliers as any } as any, cfg).total;
           if (/qse/i.test(type)) {
             const mc = calculateTransportQseManagement(mgmtData, cfg).score;
@@ -177,7 +176,7 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           // projectWorkbookToClient's financials (mapWorkbookFinancialsToClient
           // reads the SED & CE section meta). Non-FSC: fields absent → no change.
           const fin2 = (p.financials as any) ?? {};
-          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any, ceSpend: fin2.ceSpend, ceBonusSpend: fin2.ceBonusSpend, fundisaSpend: fin2.fundisaSpend } as any, npat, cfg, { turnover: revenue }).total;
+          const sed = calculateSedScore({ id: '', clientId: '', contributions: p.sedContributions as any, ceSpend: fin2.ceSpend, ceBonusSpend: fin2.ceBonusSpend, fundisaSpend: fin2.fundisaSpend } as any, npat, cfg).total;
           // FSC Banks/LTI/STI carry an Access to Financial Services pillar (12 pts).
           // calculateAfsScore returns null when the config has no AFS (FSC Generic / non-FSC).
           const afsData = { id: '', clientId: '', ...((p.financials as any)?.afs ?? {}) };
