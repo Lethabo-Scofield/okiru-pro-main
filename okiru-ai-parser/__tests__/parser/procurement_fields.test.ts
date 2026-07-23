@@ -75,4 +75,24 @@ describe('TMPS (measured procurement spend) extraction', () => {
       'Supplier Name: Beta', 'Amount Excl VAT: R 480000',
     ].join('\n') })).toBeNull();
   });
+
+  it('reads the labelled total from a markdown-table row with space thousands-separators', () => {
+    // Thandanani's Preferential Procurement sheet converts to a table row like
+    // this; the labelled total is R1,030,806.68 and must be read verbatim, not
+    // summed from the supplier lines (which produced the wrong 8.1m).
+    expect(extractMeasuredProcurementSpend({
+      raw_text: '| Total Measured Procurement Spend (pre-exclusions) | | R 1 030 806.68 |',
+    })).toBeCloseTo(1030806.68, 2);
+  });
+
+  it('reads a bare thousands-separated total when no R prefix is present', () => {
+    expect(extractMeasuredProcurementSpend({ raw_text: 'TMPS | 1,030,806.68' })).toBeCloseTo(1030806.68, 2);
+  });
+
+  it('does not mistake a bare count on the label line for the total', () => {
+    // "2 suppliers" is not money-shaped; the R figure is the total.
+    expect(extractMeasuredProcurementSpend({
+      raw_text: 'Total Measured Procurement Spend across 2 suppliers: R 1 030 806.68',
+    })).toBeCloseTo(1030806.68, 2);
+  });
 });

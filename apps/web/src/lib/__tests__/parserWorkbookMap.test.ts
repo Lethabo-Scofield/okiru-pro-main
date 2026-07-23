@@ -137,3 +137,22 @@ describe('mapParserCaseToWorkbookSections — no fabrication + coverage', () => 
     expect(coverage.every((c) => c.status === 'no-document')).toBe(true);
   });
 });
+
+describe('mapParserCaseToWorkbookSections — TMPS denominator', () => {
+  it('routes the labelled measured procurement spend to financial-information.tmps', () => {
+    // The deterministic case result reads TMPS as a labelled total; this is the
+    // trustworthy denominator and (via the legacy-wins merge) overrides a model
+    // that summed the wrong column to an inflated figure.
+    const { sections } = mapParserCaseToWorkbookSections({ measured_procurement_spend: 1030806.68 } as any);
+    expect((sections['financial-information']?.meta as Record<string, unknown>)?.tmps).toBeCloseTo(1030806.68, 2);
+  });
+
+  it('does not create a TMPS when no labelled total was read (never guessed/summed)', () => {
+    // Suppliers present but no labelled TMPS: the mapper writes no denominator —
+    // projectWorkbookToClient derives it from supplier spend as a fallback later.
+    const { sections } = mapParserCaseToWorkbookSections({
+      supplier_rows: [{ supplier_name: 'A', spend_amount: 500000, status: 'passed' }],
+    } as any);
+    expect(sections['financial-information']).toBeUndefined();
+  });
+});
