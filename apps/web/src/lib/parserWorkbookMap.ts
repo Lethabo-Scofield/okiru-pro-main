@@ -20,13 +20,6 @@
 export interface ParserCaseLike {
   status?: string;
   calculator_payload?: Record<string, unknown>;
-  /**
-   * Total Measured Procurement Spend read as a LABELLED total from a spend
-   * schedule / AFS (never summed). The deterministic case result computes this
-   * ("first document that stated an explicit total wins"); it is the trustworthy
-   * TMPS and must beat any model that "computed" TMPS by summing the wrong column.
-   */
-  measured_procurement_spend?: number | null;
   supplier_rows?: Array<{
     supplier_name?: string;
     spend_amount?: number | string | null;
@@ -176,21 +169,6 @@ export function mapParserCaseToWorkbookSections(parserCase: ParserCaseLike): Par
       status: 'no-document',
       detail: 'Upload a Supplier Spend Schedule plus each supplier\'s B-BBEE certificate or affidavit.',
     });
-  }
-
-  // TMPS — the procurement DENOMINATOR — as a labelled total read verbatim, never
-  // summed. Procurement scores as recognised-spend / TMPS, so a TMPS inflated by
-  // a model summing the wrong column silently starves the pillar. This value
-  // lands in financial-information.meta and, because the legacy sections win the
-  // merge over the AI-entity sections, it overrides the model's computed TMPS.
-  const tmps = typeof parserCase.measured_procurement_spend === 'number' && parserCase.measured_procurement_spend > 0
-    ? parserCase.measured_procurement_spend
-    : undefined;
-  if (tmps !== undefined) {
-    sections['financial-information'] = {
-      ...(sections['financial-information'] ?? {}),
-      meta: { ...(sections['financial-information']?.meta ?? {}), tmps },
-    };
   }
 
   // ---- Ownership: an Ownership Confirmation document asserts the measured
