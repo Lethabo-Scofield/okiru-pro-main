@@ -295,11 +295,20 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   return result;
 }
 
+/**
+ * Indicative net-profit margin for the LOSS-MAKING deemed-profit target. When an
+ * entity makes no profit (NPAT <= 0), the Amended Codes / SANAS practice replaces
+ * the 1%-of-NPAT target with 1% x indicative margin x turnover, which the industry
+ * applies as 0.125% of turnover — a deemed 12.5% margin. (RSM / BEE Ratings: "What
+ * happens to your B-BBEE targets if you make a financial loss".)
+ */
+const DEEMED_NPAT_MARGIN = 0.125;
+
 export function calculateSedScore(
   data: SEDData,
   npat: number,
   config?: CalculatorConfig,
-  opts?: { isReinsurer?: boolean },
+  opts?: { isReinsurer?: boolean; turnover?: number },
 ): SedResult {
   console.log('[SCORING-TRACE] calculateSedScore received:', {
     npat,
@@ -359,6 +368,16 @@ export function calculateSedScore(
     target = npat * npatTargetPct;
   } else {
     target = npat * npatTargetPct;
+    // Loss-making entity: a non-positive NPAT makes the 1%-of-NPAT target
+    // meaningless, so it falls back to a deemed profit on TURNOVER —
+    // 1% x 12.5% indicative margin x turnover (= 0.125% of turnover). Without
+    // this a loss-making entity's real SED contribution scored 0 (safeRatio
+    // returns 0 for a non-positive target), so a certified loss-making SED (e.g.
+    // Thandanani: 25 pts for R16,700 vs turnover R10.8m, NPAT -R4.16m) could never
+    // be reproduced. Only fires when NPAT <= 0 and a turnover is supplied.
+    if (target <= 0 && opts?.turnover && opts.turnover > 0) {
+      target = npatTargetPct * DEEMED_NPAT_MARGIN * opts.turnover;
+    }
     score = safeRatio(rowSpend, target, maxPoints);
   }
 

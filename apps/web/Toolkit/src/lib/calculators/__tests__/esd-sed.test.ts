@@ -219,4 +219,51 @@ describe('calculateSedScore', () => {
       expect(result.actualSpend).toBe(80_000);
     });
   });
+
+  describe('loss-making entity — deemed-profit target on turnover', () => {
+    // Amended Codes / SANAS: NPAT <= 0 -> target = 1% x 12.5% indicative margin x
+    // turnover (= 0.125% of turnover). Reproduces certificate BE13609 (Thandanani
+    // Transport): SED 25 for R16,700 with turnover R10,826,271 and NPAT -R4.16m.
+    it('scores a contribution against 0.125% of turnover when NPAT <= 0', () => {
+      const result = calculateSedScore(
+        makeSedData({ contributions: [makeContribution({ amount: 16_700, category: 'socio_economic' })] }),
+        -4_157_140,
+        undefined,
+        { turnover: 10_826_271 },
+      );
+      expect(result.target).toBeCloseTo(13_532.84, 0); // 0.125% of 10,826,271
+      expect(result.total).toBe(5); // R16,700 > R13,533 -> full (generic max 5)
+    });
+
+    it('still scores 0 for a loss-making entity when no turnover is supplied (unchanged)', () => {
+      const result = calculateSedScore(
+        makeSedData({ contributions: [makeContribution({ amount: 16_700, category: 'socio_economic' })] }),
+        -4_157_140,
+      );
+      expect(result.total).toBe(0);
+    });
+
+    it('is proportional: a contribution below the deemed target scores less than full', () => {
+      const result = calculateSedScore(
+        makeSedData({ contributions: [makeContribution({ amount: 6_766, category: 'socio_economic' })] }),
+        -1_000,
+        undefined,
+        { turnover: 10_826_271 },
+      );
+      expect(result.total).toBeGreaterThan(2);
+      expect(result.total).toBeLessThan(3.5);
+    });
+
+    it('does not change a profitable entity (NPAT target still applies)', () => {
+      const result = calculateSedScore(
+        makeSedData({ contributions: [makeContribution({ amount: 100_000, category: 'socio_economic' })] }),
+        10_000_000,
+        undefined,
+        { turnover: 50_000_000 },
+      );
+      // Target stays 1% of NPAT = 100,000 -> full; turnover is ignored when NPAT > 0.
+      expect(result.target).toBe(100_000);
+      expect(result.total).toBe(5);
+    });
+  });
 });
