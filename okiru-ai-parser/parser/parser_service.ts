@@ -121,13 +121,10 @@ export class ParserService {
     const supplierRows = isSchedule
       ? extractSupplierRows({ raw_text: input.raw_text, tables: input.tables })
       : [];
-    // TMPS (procurement denominator) — read from an explicit labelled total
-    // WHEREVER it appears, never summed. It lives on the Finance / summary sheet
-    // ("Total Measured Procurement Spend  R 4,674,995"), NOT on the supplier
-    // schedule, so gating it to schedule documents (as the supplier-row extractor
-    // is) meant it was never found. The label is specific enough to run on any
-    // document safely; the value>0 guard skips the "R 0" exclusions line.
-    const measuredProcurementSpend = extractMeasuredProcurementSpend({ raw_text: input.raw_text });
+    // TMPS (procurement denominator) — only from an explicit labelled total.
+    const measuredProcurementSpend = isSchedule
+      ? extractMeasuredProcurementSpend({ raw_text: input.raw_text })
+      : null;
 
     return parserOutputSchema.parse({
       file_id: input.file_id,
