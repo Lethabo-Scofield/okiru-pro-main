@@ -60,7 +60,7 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
   const skillCalc = calculateSkillsScore(skillsData, cfg);
   const procCalc = calculateProcurementScore(state.procurement || defaultProcurement, cfg);
   const esdCalc = calculateEsdScore(esdData, state.client?.npat || 0, cfg);
-  const sedCalc = calculateSedScore(state.sed || defaultSed, state.client?.npat || 0, cfg);
+  const sedCalc = calculateSedScore(state.sed || defaultSed, state.client?.npat || 0, cfg, { turnover: state.client?.revenue });
 
   const deemedNpat = state.client.industryNorm && state.client.npat < (state.client.revenue * state.client.industryNorm * 0.25)
     ? state.client.revenue * state.client.industryNorm

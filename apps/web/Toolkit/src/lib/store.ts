@@ -726,6 +726,8 @@ function calculateScorecard(
   const esdScore = calculateEsdScore(state.esd, state.client.npat, cfg);
   const sedScore = calculateSedScore(state.sed, state.client.npat, cfg, {
     isReinsurer: Boolean(state.client.fscReinsurer),
+    // Turnover feeds the loss-making deemed-profit SED target (NPAT <= 0).
+    turnover: state.client.revenue,
   });
   console.log('[SCORING-TRACE] Calculator output for esd:', { sd: esdScore.sdTotal, ed: esdScore.edTotal });
   console.log('[SCORING-TRACE] Calculator output for sed:', { score: sedScore.total });
