@@ -67,5 +67,5 @@ export async function concurrentMap<I, O>(
 /** Concurrency limit for document extraction. Env-overridable; a sane default. */
 export function documentConcurrency(): number {
   const configured = Number(process.env.PARSER_DOCUMENT_CONCURRENCY);
-  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 6;
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 10;
 }

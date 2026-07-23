@@ -147,10 +147,15 @@ export function rankSpecsForDocument(
     return { spec, score };
   });
 
+  // A reliable element hint narrows hard: the top few specs of the right element
+  // are almost always the answer, and every extra candidate is a wasted model
+  // call. Without a hint, cast a slightly wider net.
+  const limit = options.limit ?? (hintElement ? 3 : 5);
+
   return scored
     .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, options.limit ?? 8);
+    .slice(0, limit);
 }
 
 /** Convenience: just the spec ids, in rank order. */
