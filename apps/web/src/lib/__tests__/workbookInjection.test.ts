@@ -146,6 +146,35 @@ describe("injecting a row", () => {
     expect(result.cells.bbbeeLevel).toBe("4");
   });
 
+  it("normalises an occupational level to the workbook's dropdown, not the scoring band", () => {
+    // "Executive Management" is the EEA occupational level on the register. The
+    // Occupational-Level dropdown says "Top Management" — the scoring engine's
+    // band ("Executive Director") is NOT one of its options, so normalising to
+    // the band silently emptied Management Control. Use the workbook's own map.
+    const result = injectIntoSection("management-control", [
+      { field: "occupationalLevel", value: "Executive Management" },
+    ]);
+    expect(result.cells.occupationalLevel).toBe("Top Management");
+    expect(result.rejected).toHaveLength(0);
+  });
+
+  it("keeps a designation that is already a dropdown option", () => {
+    // "Non-executive Director" IS a Designation option; the scoring map rewrote
+    // it to "Board", which the dropdown lacks, and it was rejected.
+    const result = injectIntoSection("management-control", [
+      { field: "designation", value: "Non-executive Director" },
+    ]);
+    expect(result.cells.designation).toBe("Non-executive Director");
+  });
+
+  it("normalises a supplier size phrase to the EME/QSE/Generic dropdown", () => {
+    const result = injectIntoSection("procurement", [
+      { field: "supplierName", value: "Alpha" },
+      { field: "currentSize", value: "Exempted Micro Enterprise" },
+    ]);
+    expect(result.cells.currentSize).toBe("EME");
+  });
+
   it("reports a field that is not a column of the section", () => {
     const result = injectIntoSection("ownership", [
       { field: "favourite_colour", value: "blue" },
