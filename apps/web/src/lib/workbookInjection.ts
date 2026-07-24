@@ -50,16 +50,29 @@ function synonymKey(value: string): string {
  * Director" which the Occupational-Level dropdown lacks), so a value read
  * correctly was rejected at the door — the last-mile silent zero, one layer in.
  */
+/** "one".."eight" → "1".."8" — certificates write "Level One Contributor". */
+const LEVEL_WORDS: Record<string, string> = {
+  one: "1", two: "2", three: "3", four: "4",
+  five: "5", six: "6", seven: "7", eight: "8",
+};
+
 function normaliseForColumn(columnKey: string, value: unknown): unknown {
+  // A boolean is a certificate's honest "empowering_supplier: true" — the
+  // Yes/No dropdowns speak strings, so hand them their own vocabulary.
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+
   const text = String(value ?? "").trim();
   if (!text) return value;
   const key = synonymKey(text);
 
-  // B-BBEE level: "Level 4" / "4" / "Non-compliant" → the "1".."8" | "Non-compliant" dropdown.
+  // B-BBEE level: "Level 4" / "4" / "Level One Contributor" / "Non-compliant"
+  // → the "1".."8" | "Non-compliant" dropdown.
   if (/level$/i.test(columnKey) || columnKey === "bbbeeLevel") {
     if (BBBEE_LEVEL_MAP[key]) return BBBEE_LEVEL_MAP[key];
     const m = text.match(/\b([1-8])\b/);
     if (m) return m[1];
+    const word = text.match(/level\s+(one|two|three|four|five|six|seven|eight)\b/i);
+    if (word) return LEVEL_WORDS[word[1].toLowerCase()];
     if (/non.?compliant/i.test(text)) return "Non-compliant";
   }
 

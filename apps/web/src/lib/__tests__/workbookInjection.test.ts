@@ -146,6 +146,19 @@ describe("injecting a row", () => {
     expect(result.cells.bbbeeLevel).toBe("4");
   });
 
+  it("normalises a certificate's 'Level One Contributor' to '1'", () => {
+    // Real certificates write the level in words — the Outsurance 2024
+    // certificate says exactly this, and it was rejected at the dropdown.
+    const result = injectIntoSection("procurement", [{ field: "bbbeeLevel", value: "Level One Contributor" }]);
+    expect(result.cells.bbbeeLevel).toBe("1");
+  });
+
+  it("accepts a boolean for a Yes/No dropdown — 'empowering_supplier: true'", () => {
+    const result = injectIntoSection("procurement", [{ field: "empoweringSupplier", value: true }]);
+    expect(result.rejected).toHaveLength(0);
+    expect(result.cells.empoweringSupplier === "Yes" || result.cells.empoweringSupplier === true).toBe(true);
+  });
+
   it("normalises an occupational level to the workbook's dropdown, not the scoring band", () => {
     // "Executive Management" is the EEA occupational level on the register. The
     // Occupational-Level dropdown says "Top Management" — the scoring engine's
