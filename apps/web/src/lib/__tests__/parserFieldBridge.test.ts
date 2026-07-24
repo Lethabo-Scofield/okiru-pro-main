@@ -72,12 +72,50 @@ describe("translating parser fields to workbook columns", () => {
 
   it("maps every target onto a column that actually exists", () => {
     // A mapping to a column the workbook does not have is a silent no-op.
-    for (const field of ["holder_name", "supplier_name", "beneficiary_name", "learner_name", "employee_name"]) {
-      const target = targetForField(field)!;
+    const cases: Array<[string, string | undefined]> = [
+      ["holder_name", undefined],
+      ["supplier_name", undefined],
+      ["beneficiary_name", "SED"],
+      ["beneficiary_name", "ESD"],
+      ["learner_name", undefined],
+      ["employee_name", undefined],
+      ["supplier_entity", undefined],
+      ["certificate_recognition_level", undefined],
+      ["empowering_supplier", undefined],
+      ["beneficiary_or_intermediary_name", undefined],
+      ["amount_paid", "SED"],
+      ["organisation", "SED"],
+    ];
+    for (const [field, element] of cases) {
+      const target = targetForField(field, element)!;
+      expect(target, `${field} (${element ?? "no element"}) has no mapping`).not.toBeNull();
       const section = getSection(target.section);
       const exists = (section?.columns ?? []).some((c) => c.key === target.column);
       expect(exists, `${field} -> ${target.section}.${target.column} does not exist`).toBe(true);
     }
+  });
+
+  it("routes supplier evidence PDFs — affidavit and certificate fields — to the supplier row", () => {
+    // A sworn EME/QSE affidavit names the supplier `supplier_entity`; the
+    // verification certificate states `certificate_recognition_level` and
+    // `empowering_supplier`. Without these a certificate produced a level with
+    // no name attached — a row that could never link to its spend.
+    expect(targetForField("supplier_entity")).toEqual({ section: "procurement", column: "supplierName" });
+    expect(targetForField("certificate_recognition_level")).toEqual({ section: "procurement", column: "bbbeeLevel" });
+    expect(targetForField("empowering_supplier")).toEqual({ section: "procurement", column: "empoweringSupplier" });
+    expect(targetForField("empowering_supplier_confirmed")).toEqual({ section: "procurement", column: "empoweringSupplier" });
+  });
+
+  it("routes a beneficiary to the pillar whose document named them", () => {
+    // An enterprise-development beneficiary is NOT an SED beneficiary. The ESD
+    // grid's beneficiary column is `supplierName` ("Beneficiary / Supplier").
+    expect(targetForField("beneficiary_name", "ESD")).toEqual({ section: "esd", column: "supplierName" });
+    expect(targetForField("beneficiary_name", "SED")).toEqual({ section: "sed", column: "beneficiaryName" });
+    expect(targetForField("beneficiary_name")).toBeNull();
+    expect(targetForField("amount_paid", "SED")).toEqual({ section: "sed", column: "amount" });
+    expect(targetForField("amount_paid")).toBeNull();
+    expect(targetForField("organisation", "SED")).toEqual({ section: "sed", column: "beneficiaryName" });
+    expect(targetForField("organisation", "ESD")).toBeNull();
   });
 });
 

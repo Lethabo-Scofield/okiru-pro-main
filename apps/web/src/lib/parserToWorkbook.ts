@@ -59,6 +59,133 @@ function nextRowId(): string {
   return `parsed_${Date.now().toString(36)}_${rowCounter}`;
 }
 
+/**
+ * ── Cross-document row linking ─────────────────────────────────────────────
+ *
+ * One supplier's evidence arrives as THREE documents: the workbook schedule
+ * row (name + spend), the B-BBEE certificate (name + level + expiry +
+ * empowering status), and the ledger (name + spend). Without linking, each
+ * became its own half-empty row — and a certificate's level never reached the
+ * row whose spend it qualifies, so the evidence never scored together.
+ *
+ * Rows in the same section are linked by NAME — normalised conservatively
+ * (case, punctuation, legal suffixes like "(Pty) Ltd" / "cc"), never fuzzily:
+ * "S. Nhlanhla" and "Sandile Nhlanhla" stay separate, because guessing that
+ * two names are the same person is how someone else's certificate ends up on
+ * the wrong supplier.
+ *
+ * Linking only ever FILLS BLANKS. If both rows carry a value for an EVIDENCE
+ * column (spend, amount, shares) and the values differ, the rows are NOT
+ * merged — two spend lines for the same supplier are two pieces of evidence,
+ * and collapsing them would delete money. A certificate (no spend) merging
+ * into a schedule row (spend, no level) conflicts on nothing, which is the
+ * whole point.
+ */
+const LINK_KEY_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
+  procurement: ["supplierName"],
+  esd: ["supplierName"],
+  sed: ["beneficiaryName"],
+  ownership: ["shareholderName"],
+  "management-control": ["name", "surname"],
+  "skills-development": ["learnerName"],
+};
+
+/** Columns that are evidence in themselves — a differing value blocks a merge. */
+const EVIDENCE_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
+  procurement: ["spend"],
+  esd: ["amount"],
+  sed: ["amount"],
+  ownership: ["numberOfShares", "shareholding", "votingRights", "economicInterest"],
+  "management-control": ["salary", "occupationalLevel"],
+  "skills-development": ["totalCost", "courseCost"],
+};
+
+/** "Thandanani Packers & Hauliers cc" → "thandanani packers and hauliers". */
+export function normaliseEntityName(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/\b(proprietary|pty|ltd|limited|cc|inc|incorporated|npc|npo|t\/a|ta)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cellBlank(value: unknown): boolean {
+  return value === undefined || value === null || String(value).trim() === "";
+}
+
+/** Same value? Numeric when both parse as numbers, else trimmed string equality. */
+function cellsAgree(a: unknown, b: unknown): boolean {
+  const numA = Number(String(a).replace(/[R\s,]/g, ""));
+  const numB = Number(String(b).replace(/[R\s,]/g, ""));
+  if (Number.isFinite(numA) && Number.isFinite(numB)) return Math.abs(numA - numB) < 0.005;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
+function canMerge(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow): boolean {
+  for (const column of EVIDENCE_COLUMNS[section] ?? []) {
+    if (!cellBlank(a[column]) && !cellBlank(b[column]) && !cellsAgree(a[column], b[column])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Fill `into`'s blanks from `from`; existing values are never overwritten. */
+function mergeInto(into: WorkbookRow, from: WorkbookRow): void {
+  for (const [column, value] of Object.entries(from)) {
+    if (column === "_id" || column === "_sourceFiles") continue;
+    if (cellBlank(into[column]) && !cellBlank(value)) into[column] = value;
+  }
+  const sources = new Set([...(into._sourceFiles ?? []), ...(from._sourceFiles ?? [])]);
+  if (sources.size > 0) into._sourceFiles = Array.from(sources);
+}
+
+/**
+ * Link each section's rows by entity name. Order-preserving: the first row for
+ * a name is kept and enriched; later mergeable rows fold into it; conflicting
+ * rows (real second spend lines) stay as their own rows.
+ */
+export function linkWorkbookRows(
+  rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
+): Partial<Record<WorkbookSectionKey, WorkbookRow[]>> {
+  const linked: Partial<Record<WorkbookSectionKey, WorkbookRow[]>> = {};
+
+  for (const [sectionKey, sectionRows] of Object.entries(rows)) {
+    const section = sectionKey as WorkbookSectionKey;
+    const keyColumns = LINK_KEY_COLUMNS[section];
+    if (!keyColumns || !sectionRows || sectionRows.length < 2) {
+      linked[section] = sectionRows;
+      continue;
+    }
+
+    const kept: WorkbookRow[] = [];
+    const byName = new Map<string, WorkbookRow[]>();
+
+    for (const row of sectionRows) {
+      const name = keyColumns.map((column) => normaliseEntityName(row[column])).join(" ").trim();
+      if (name === "") {
+        kept.push(row);
+        continue;
+      }
+      const candidates = byName.get(name) ?? [];
+      const target = candidates.find((candidate) => canMerge(section, candidate, row));
+      if (target) {
+        mergeInto(target, row);
+        continue;
+      }
+      candidates.push(row);
+      byName.set(name, candidates);
+      kept.push(row);
+    }
+
+    linked[section] = kept;
+  }
+
+  return linked;
+}
+
 /** Is this value a table — an array of row-shaped objects? */
 function isRowTable(value: unknown): value is Array<Record<string, unknown>> {
   return Array.isArray(value)
@@ -168,8 +295,12 @@ export function parserExtractionsToWorkbook(
     }
   }
 
-  const coverage = huntRequiredFields(rows, Array.from(unmapped), options);
-  return { rows, meta, rejected, coverage };
+  // Link before coverage: a certificate row enriched with its schedule row's
+  // spend is complete; counted separately both halves would report gaps.
+  const linkedRows = linkWorkbookRows(rows);
+
+  const coverage = huntRequiredFields(linkedRows, Array.from(unmapped), options);
+  return { rows: linkedRows, meta, rejected, coverage };
 }
 
 /**
