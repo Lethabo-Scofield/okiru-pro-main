@@ -108,8 +108,12 @@ function bm25(queryTerms: string[], doc: IndexedSpec, idf: Map<string, number>, 
 export function elementFromHint(hint: string | undefined): VerificationElement | null {
   if (!hint) return null;
   const h = hint.toLowerCase();
-  if (/(ownership|shareholding|share register|share certificate|securities|equity|cipc|cor\s*14|cor\s*39|\bmoi\b|bi register|beneficial interest)/.test(h)) return 'OWNERSHIP';
+  // Management Control is tested BEFORE Ownership: an "Employment Equity" sheet
+  // is people, but the bare `equity` in the ownership pattern used to claim it
+  // first — routing the employee register to shareholder extraction, which
+  // found nothing, and costing the whole EE pillar its rows.
   if (/(management control|employment equity|directors|ee profile|workforce|employees|board|eea\s*[124]\b|pay\s*roll|salary)/.test(h)) return 'MANAGEMENT_CONTROL';
+  if (/(ownership|shareholding|share register|share certificate|securities|equity|cipc|cor\s*14|cor\s*39|\bmoi\b|bi register|beneficial interest)/.test(h)) return 'OWNERSHIP';
   if (/(skills|training|learnership|wsp|atr|leviable|bursar|emp\s*201|\bseta\b|\bsdl\b)/.test(h)) return 'SKILLS_DEVELOPMENT';
   if (/(procurement|supplier|enterprise (&|and) supplier|esd|preferential|ledger)/.test(h)) return 'ESD';
   if (/(socio.?economic|social development|\bsed\b|csi|beneficiar)/.test(h)) return 'SED';
