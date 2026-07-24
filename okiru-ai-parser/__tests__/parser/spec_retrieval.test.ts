@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  elementFromContent,
   elementFromHint,
   rankSpecsForDocument,
   selectSpecIds,
@@ -26,6 +27,37 @@ describe('sheet-name → element', () => {
   it('returns null for a sheet name that names no element', () => {
     expect(elementFromHint('Instructions')).toBeNull();
     expect(elementFromHint(undefined)).toBeNull();
+  });
+
+  it('routes the real evidence-pack filenames — statutory forms, registers, ledgers', () => {
+    expect(elementFromHint('Thandanani Share Certificate THA001 1 of 1.pdf')).toBe('OWNERSHIP');
+    expect(elementFromHint('Thandanani BI Register.pdf')).toBe('OWNERSHIP');
+    expect(elementFromHint('CIPC (1).pdf')).toBe('OWNERSHIP');
+    expect(elementFromHint('EEA1.pdf')).toBe('MANAGEMENT_CONTROL');
+    expect(elementFromHint('Thandanani November Salary Report.pdf')).toBe('MANAGEMENT_CONTROL');
+    expect(elementFromHint('Pay roll Nov.pdf')).toBe('MANAGEMENT_CONTROL');
+    expect(elementFromHint('TST TRUCK LEDGER.xlsx')).toBe('ESD');
+  });
+
+  it('does NOT misroute the generic gathering-file name', () => {
+    // "BEE Information Gathering File" is every element at once; a hint here
+    // would narrow retrieval to the wrong one.
+    expect(elementFromHint('BEE Information Gathering File - Thandanani Transport.xlsm')).toBeNull();
+  });
+});
+
+describe('content → element (anonymous scans)', () => {
+  it('routes clear register language to OWNERSHIP', () => {
+    expect(elementFromContent(
+      'SECURITIES REGISTER of Thandanani Packers. This share register records… entries in the share register…',
+    )).toBe('OWNERSHIP');
+  });
+
+  it('returns null when signals are mixed or weak', () => {
+    expect(elementFromContent('share register mentioned once, plus accounts payable ledger entries')).toBeNull();
+    expect(elementFromContent('one mention of a share certificate')).toBeNull();
+    expect(elementFromContent('nothing relevant at all')).toBeNull();
+    expect(elementFromContent(undefined)).toBeNull();
   });
 });
 

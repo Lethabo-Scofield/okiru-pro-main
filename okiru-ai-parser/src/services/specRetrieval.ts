@@ -108,12 +108,43 @@ function bm25(queryTerms: string[], doc: IndexedSpec, idf: Map<string, number>, 
 export function elementFromHint(hint: string | undefined): VerificationElement | null {
   if (!hint) return null;
   const h = hint.toLowerCase();
-  if (/(ownership|shareholding|share register|securities|equity)/.test(h)) return 'OWNERSHIP';
-  if (/(management control|employment equity|directors|ee profile|workforce|employees|board)/.test(h)) return 'MANAGEMENT_CONTROL';
-  if (/(skills|training|learnership|wsp|atr|leviable|bursar)/.test(h)) return 'SKILLS_DEVELOPMENT';
-  if (/(procurement|supplier|enterprise (&|and) supplier|esd|preferential)/.test(h)) return 'ESD';
+  if (/(ownership|shareholding|share register|share certificate|securities|equity|cipc|cor\s*14|cor\s*39|\bmoi\b|bi register|beneficial interest)/.test(h)) return 'OWNERSHIP';
+  if (/(management control|employment equity|directors|ee profile|workforce|employees|board|eea\s*[124]\b|pay\s*roll|salary)/.test(h)) return 'MANAGEMENT_CONTROL';
+  if (/(skills|training|learnership|wsp|atr|leviable|bursar|emp\s*201|\bseta\b|\bsdl\b)/.test(h)) return 'SKILLS_DEVELOPMENT';
+  if (/(procurement|supplier|enterprise (&|and) supplier|esd|preferential|ledger)/.test(h)) return 'ESD';
   if (/(socio.?economic|social development|\bsed\b|csi|beneficiar)/.test(h)) return 'SED';
   return null;
+}
+
+/**
+ * Element from a document's CONTENT — the fallback for anonymous files.
+ *
+ * A scan named `0862_251204095622_001.pdf` says nothing; its text usually does.
+ * This is deliberately narrow: only phrases that are near-unambiguous statements
+ * of an element count, and a hint is returned ONLY on a clear winner (two or
+ * more hits, no other element scoring at all). Anything murkier returns null
+ * and the document takes the wide-net BM25 path — a wrong element boost narrows
+ * the candidate specs, which is worse than no boost.
+ */
+const CONTENT_SIGNALS: Array<{ element: VerificationElement; pattern: RegExp }> = [
+  { element: 'OWNERSHIP', pattern: /share register|share certificate|securities register|certificate of incorporation|memorandum of incorporation/gi },
+  { element: 'MANAGEMENT_CONTROL', pattern: /\beea[124]\b|employment equity act|occupational level/gi },
+  { element: 'SKILLS_DEVELOPMENT', pattern: /workplace skills plan|annual training report|learnership agreement|skills development levies/gi },
+  { element: 'ESD', pattern: /accounts payable|detailed ledger|remittance advice|supplier statement/gi },
+  { element: 'SED', pattern: /socio-?economic development|public benefit organisation/gi },
+];
+
+export function elementFromContent(text: string | undefined): VerificationElement | null {
+  if (!text) return null;
+  const sample = text.slice(0, 6000);
+  const hits = new Map<VerificationElement, number>();
+  for (const { element, pattern } of CONTENT_SIGNALS) {
+    const count = (sample.match(pattern) ?? []).length;
+    if (count > 0) hits.set(element, (hits.get(element) ?? 0) + count);
+  }
+  if (hits.size !== 1) return null;
+  const [element, count] = Array.from(hits.entries())[0];
+  return count >= 2 ? element : null;
 }
 
 export interface SpecCandidate {
@@ -137,7 +168,9 @@ export function rankSpecsForDocument(
 ): SpecCandidate[] {
   const { docs, idf, avgLength } = getIndex();
   const queryTerms = tokenize(`${filename} ${text}`);
-  const hintElement = elementFromHint(options.elementHint) ?? elementFromHint(filename);
+  const hintElement = elementFromHint(options.elementHint)
+    ?? elementFromHint(filename)
+    ?? elementFromContent(text);
 
   const ELEMENT_BOOST = 4; // enough to guarantee the element's specs are seen
 

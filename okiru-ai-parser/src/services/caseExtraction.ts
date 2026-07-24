@@ -35,6 +35,21 @@ function auditorValidationEnabled(): boolean {
   return process.env.PARSER_AUDITOR_VALIDATION === 'true';
 }
 
+/**
+ * The workbook split stores each sheet's parsed rows as
+ * `tables: [{ sheetName, rows }]`. `tables` is loosely typed at the schema
+ * boundary, so pull the rows out defensively — anything unshaped returns
+ * undefined and the table extractor falls back to its model read.
+ */
+function structuredRows(tables: unknown[] | undefined): Array<Record<string, unknown>> | undefined {
+  const first = tables?.[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const rows = (first as { rows?: unknown }).rows;
+  if (!Array.isArray(rows) || rows.length === 0) return undefined;
+  if (!rows.every((row) => row !== null && typeof row === 'object' && !Array.isArray(row))) return undefined;
+  return rows as Array<Record<string, unknown>>;
+}
+
 /** Cached so a case does not rebuild the client per file. */
 let cachedModel: ExtractionModel | null | undefined;
 
@@ -98,13 +113,20 @@ export async function extractCaseEntities(
           filename: input.filename,
           markdown: input.markdown,
           raw_text: input.raw_text,
+          // The parsed rows from the workbook split, when present — the
+          // deterministic table read consumes these so the model never has to
+          // re-type rows the code already parsed.
+          rows: structuredRows(input.tables),
         });
       })(),
-      // Entity-level revenue + NPAT off a Finance / summary sheet — the two
+      // Entity-level revenue + NPAT off a Finance / summary sheet OR a
+      // standalone financial document (an AFS / income-statement PDF) — the two
       // labelled figures the NPAT-based targets need but no matrix spec reliably
       // extracts here (the AFS spec pulls cost-of-sales components, not these).
       (async () => {
-        if (!isFinancialsSheet(sheetName)) return null;
+        const looksFinancial = isFinancialsSheet(sheetName)
+          || (!sheetName && isFinancialsSheet(input.filename));
+        if (!looksFinancial) return null;
         return extractSheetFinancials(model, {
           filename: input.filename,
           markdown: input.markdown,
