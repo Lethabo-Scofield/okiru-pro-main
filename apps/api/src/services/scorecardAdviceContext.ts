@@ -125,7 +125,6 @@ const PILLARS: Array<{ id: string; name: string; key: string; subminimumRequired
 function routeId(raw: string): string {
   return raw.replace(/^(session-|upload-|build-)/, '').replace(/^sess-/, '');
 }
-
 function num(v: unknown): number | undefined {
   const n = Number(v);
   return Number.isFinite(n) ? n : undefined;
@@ -368,4 +367,3 @@ export async function buildScorecardAdviceContext(args: {
     sources: buildSources(elements, args.scorecardId),
   };
 }
-

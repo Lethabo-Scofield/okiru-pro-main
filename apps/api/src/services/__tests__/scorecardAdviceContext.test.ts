@@ -140,4 +140,3 @@ describe('buildScorecardAdviceContext', () => {
     expect(context?.elements.find((e) => e.id === 'ownership')?.actualPoints).toBe(20);
   });
 });
-
