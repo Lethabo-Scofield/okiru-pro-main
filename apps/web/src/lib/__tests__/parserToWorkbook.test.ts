@@ -7,8 +7,14 @@
  * are surfaced.
  */
 import { describe, expect, it } from "vitest";
-import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "../parserToWorkbook";
-import type { ParserExtraction } from "../parserToWorkbook";
+import {
+  linkWorkbookRows,
+  mergeWorkbookSections,
+  normaliseEntityName,
+  parserExtractionsToWorkbook,
+  toWorkbookSections,
+} from "../parserToWorkbook";
+import type { ParserExtraction, WorkbookRow } from "../parserToWorkbook";
 
 function extraction(over: Partial<ParserExtraction> & { values: ParserExtraction["values"] }): ParserExtraction {
   return { documentId: "doc", sourceFile: "evidence.pdf", ...over };
@@ -222,6 +228,124 @@ describe("shaping for the workbook", () => {
     const result = parserExtractionsToWorkbook([]);
     expect(result.rows).toEqual({});
     expect(result.coverage.complete).toBe(true);
+  });
+});
+
+describe("cross-document row linking", () => {
+  const row = (cells: Record<string, unknown>, sources: string[] = []): WorkbookRow =>
+    ({ _id: Math.random().toString(36), ...cells, _sourceFiles: sources });
+
+  it("normalises legal suffixes, case and ampersands — never fuzzily", () => {
+    expect(normaliseEntityName("Thandanani Packers & Hauliers cc"))
+      .toBe(normaliseEntityName("THANDANANI PACKERS AND HAULIERS"));
+    expect(normaliseEntityName("Alpha (Pty) Ltd")).toBe(normaliseEntityName("alpha"));
+    // Initials are NOT expanded — guessing identity is how someone else's
+    // certificate lands on the wrong supplier.
+    expect(normaliseEntityName("S. Nhlanhla")).not.toBe(normaliseEntityName("Sandile Nhlanhla"));
+  });
+
+  it("links a supplier's certificate to their schedule row — one complete row", () => {
+    const linked = linkWorkbookRows({
+      procurement: [
+        row({ supplierName: "Dynamic Maintenance (Pty) Ltd", spend: 4876 }, ["workbook.xlsm › Procurement"]),
+        row({ supplierName: "DYNAMIC MAINTENANCE", bbbeeLevel: "4", empoweringSupplier: "Yes" }, ["dynamic-cert.pdf"]),
+      ],
+    });
+
+    expect(linked.procurement).toHaveLength(1);
+    const merged = linked.procurement![0];
+    expect(merged.spend).toBe(4876);
+    expect(merged.bbbeeLevel).toBe("4");
+    expect(merged.empoweringSupplier).toBe("Yes");
+    expect(merged._sourceFiles).toEqual(["workbook.xlsm › Procurement", "dynamic-cert.pdf"]);
+  });
+
+  it("keeps two DIFFERENT spend lines for the same supplier separate", () => {
+    // Two invoices are two pieces of evidence; collapsing them deletes money.
+    const linked = linkWorkbookRows({
+      procurement: [
+        row({ supplierName: "Alpha", spend: 1000 }),
+        row({ supplierName: "Alpha", spend: 2500 }),
+      ],
+    });
+    expect(linked.procurement).toHaveLength(2);
+  });
+
+  it("dedupes rows whose evidence AGREES", () => {
+    const linked = linkWorkbookRows({
+      procurement: [
+        row({ supplierName: "Alpha", spend: 1000 }),
+        row({ supplierName: "Alpha", spend: "R 1,000.00", bbbeeLevel: "2" }),
+      ],
+    });
+    expect(linked.procurement).toHaveLength(1);
+    expect(linked.procurement![0].bbbeeLevel).toBe("2");
+  });
+
+  it("never overwrites an existing value when filling blanks", () => {
+    const linked = linkWorkbookRows({
+      procurement: [
+        row({ supplierName: "Alpha", bbbeeLevel: "2" }),
+        row({ supplierName: "Alpha", bbbeeLevel: "5", spend: 700 }),
+      ],
+    });
+    expect(linked.procurement).toHaveLength(1);
+    expect(linked.procurement![0].bbbeeLevel).toBe("2");
+    expect(linked.procurement![0].spend).toBe(700);
+  });
+
+  it("keys employees on name AND surname", () => {
+    const linked = linkWorkbookRows({
+      "management-control": [
+        row({ name: "V", surname: "Naidoo", race: "Indian" }),
+        row({ name: "V", surname: "Naidoo", gender: "Male" }),
+        row({ name: "V", surname: "Lutchman" }),
+      ],
+    });
+    expect(linked["management-control"]).toHaveLength(2);
+    expect(linked["management-control"]![0].gender).toBe("Male");
+  });
+
+  it("leaves nameless rows and single-row sections untouched", () => {
+    const nameless = [row({ spend: 500 }), row({ spend: 700 })];
+    const linked = linkWorkbookRows({ procurement: nameless, sed: [row({ beneficiaryName: "OUTA" })] });
+    expect(linked.procurement).toHaveLength(2);
+    expect(linked.sed).toHaveLength(1);
+  });
+
+  it("links end-to-end through parserExtractionsToWorkbook", () => {
+    // The real shape of the evidence: the workbook schedule (a table) plus the
+    // supplier's certificate (a scalar document) in one upload.
+    const result = parserExtractionsToWorkbook([
+      {
+        documentId: "sheet_table__esd",
+        sourceFile: "wb.xlsm › Procurement",
+        element: "ESD",
+        values: [{
+          field: "supplier_rows",
+          value: [
+            { supplier_name: "Outsurance Ltd", claimed_spend_ex_vat: "12000" },
+            { supplier_name: "BP Edenvale", claimed_spend_ex_vat: "8000" },
+          ],
+        }],
+      },
+      {
+        documentId: "esd__valid_b_bbee_verification_certificate_per_sampled_supplier",
+        sourceFile: "Outsurance bbbee-certificate-2024.pdf",
+        element: "ESD",
+        values: [
+          { field: "supplier_name", value: "OUTSURANCE" },
+          { field: "certificate_recognition_level", value: "2" },
+          { field: "empowering_supplier", value: "Yes" },
+        ],
+      },
+    ]);
+
+    expect(result.rows.procurement).toHaveLength(2);
+    const outsurance = result.rows.procurement!.find((r) => String(r.supplierName).toLowerCase().startsWith("outsurance"))!;
+    expect(outsurance.spend).toBeCloseTo(12000, 2);
+    expect(outsurance.bbbeeLevel).toBe("2");
+    expect(outsurance._sourceFiles).toContain("Outsurance bbbee-certificate-2024.pdf");
   });
 });
 

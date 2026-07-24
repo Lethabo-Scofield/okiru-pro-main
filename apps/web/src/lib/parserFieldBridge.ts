@@ -85,21 +85,30 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
 
   // ── Preferential procurement (one row per supplier) ──
   supplier_name: { section: "procurement", column: "supplierName" },
+  // A sworn EME/QSE affidavit names the supplier `supplier_entity`, and a
+  // verification certificate states the level as `certificate_recognition_level`
+  // — the expert's field names on the two most common supplier evidence PDFs.
+  // Without these a certificate produced a level with no name attached to it.
+  supplier_entity: { section: "procurement", column: "supplierName" },
   registration_number: { section: "procurement", column: "registrationNumber" },
   vat_number: { section: "procurement", column: "vatNumber" },
   bee_status_level: { section: "procurement", column: "bbbeeLevel" },
   bee_level: { section: "procurement", column: "bbbeeLevel" },
+  certificate_recognition_level: { section: "procurement", column: "bbbeeLevel" },
+  empowering_supplier: { section: "procurement", column: "empoweringSupplier" },
+  empowering_supplier_confirmed: { section: "procurement", column: "empoweringSupplier" },
   claimed_spend_ex_vat: { section: "procurement", column: "spend" },
   amount_ex_vat: { section: "procurement", column: "spend" },
   certificate_expiry_date: { section: "procurement", column: "certificateExpiryDate" },
   expiry_date: { section: "procurement", column: "certificateExpiryDate" },
 
   // ── Enterprise & supplier development ──
-  // contribution_value is element-scoped (ESD vs SED share it) — see ELEMENT_SCOPED.
+  // contribution_value / beneficiary_name are element-scoped (ESD vs SED share
+  // them) — see ELEMENT_SCOPED.
   contribution_description: { section: "esd", column: "contributionDescription" },
 
   // ── Socio-economic development ──
-  beneficiary_name: { section: "sed", column: "beneficiaryName" },
+  beneficiary_or_intermediary_name: { section: "sed", column: "beneficiaryName" },
   black_beneficiary_percentage_declared: { section: "sed", column: "percentBenefitingBlack" },
   black_beneficiary_percentage_concluded: { section: "sed", column: "percentBenefitingBlack" },
 
@@ -131,6 +140,25 @@ const ELEMENT_SCOPED: Record<string, Partial<Record<"ESD" | "SED", FieldTarget>>
   contribution_value: {
     ESD: { section: "esd", column: "amount" },
     SED: { section: "sed", column: "amount" },
+  },
+  // Proof-of-payment documents name their figure `amount_paid` in both pillars.
+  amount_paid: {
+    ESD: { section: "esd", column: "amount" },
+    SED: { section: "sed", column: "amount" },
+  },
+  // A beneficiary is an ED/SD beneficiary or an SED beneficiary depending on
+  // which element's document named them. The ESD grid's beneficiary column is
+  // `supplierName` ("Beneficiary / Supplier"). Previously this was hard-mapped
+  // to SED, which dropped enterprise-development beneficiaries into the wrong
+  // pillar's grid.
+  beneficiary_name: {
+    ESD: { section: "esd", column: "supplierName" },
+    SED: { section: "sed", column: "beneficiaryName" },
+  },
+  // The SED beneficiary affidavit names the organisation `organisation`; too
+  // generic to map outside a SED document.
+  organisation: {
+    SED: { section: "sed", column: "beneficiaryName" },
   },
 };
 
