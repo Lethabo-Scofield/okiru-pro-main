@@ -288,6 +288,28 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   }, [parserCase, sector, size]);
 
   /**
+   * Reconciliation findings from the deterministic table read — a sheet whose
+   * labelled TOTAL the extracted rows do not sum to. Advisory and specific:
+   * only the sheet-table extractions raise these (the matrix specs' free-form
+   * exceptions would flood this panel), and they are shown so a surprising
+   * score traces back to the evidence instead of reading as a mystery.
+   */
+  const reconciliationFlags = useMemo(() => {
+    const extractions = (parserCase as {
+      ai_entities?: { extractions?: Array<{ documentId?: string; sourceFile?: string; exceptions?: unknown[] }> };
+    } | null)?.ai_entities?.extractions ?? [];
+    const flags: Array<{ sourceFile: string; note: string }> = [];
+    for (const e of extractions) {
+      if (!String(e.documentId ?? "").startsWith("sheet_table__")) continue;
+      for (const note of e.exceptions ?? []) {
+        const text = String(note ?? "").trim();
+        if (text) flags.push({ sourceFile: String(e.sourceFile ?? ""), note: text });
+      }
+    }
+    return flags;
+  }, [parserCase]);
+
+  /**
    * Matrix document ids the parser actually read something out of, so the
    * checklist can show real coverage instead of a static wish list. Only
    * extractions that produced values count — a document we recognised but got
@@ -1437,6 +1459,29 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       {revealed && injected && (
         <div className="mt-4">
           <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
+        </div>
+      )}
+
+      {/* Reconciliation flags — a labelled sheet total the extracted rows do
+          not sum to. Advisory: the workbook still builds; this says exactly
+          which evidence to double-check. */}
+      {revealed && reconciliationFlags.length > 0 && (
+        <div
+          className="dus-fade-up mt-3 rounded-lg px-3 py-2.5"
+          style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.25)" }}
+          data-testid="reconciliation-flags"
+        >
+          <div className="flex items-center gap-1.5 mb-1">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[11px] font-medium text-amber-200/90 uppercase tracking-wider">
+              Evidence that didn&apos;t reconcile
+            </span>
+          </div>
+          {reconciliationFlags.map((flag, i) => (
+            <p key={i} className="text-[11px] text-[#8e8e93] text-left">
+              <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
+            </p>
+          ))}
         </div>
       )}
 
