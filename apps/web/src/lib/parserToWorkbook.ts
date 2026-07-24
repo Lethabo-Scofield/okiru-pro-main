@@ -90,7 +90,7 @@ const LINK_KEY_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
   "skills-development": ["learnerName"],
 };
 
-/** Columns that are evidence in themselves — a differing value blocks a merge. */
+/** Columns that are evidence in themselves — present on both sides, no merge. */
 const EVIDENCE_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
   procurement: ["spend"],
   esd: ["amount"],
@@ -98,6 +98,21 @@ const EVIDENCE_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
   ownership: ["numberOfShares", "shareholding", "votingRights", "economicInterest"],
   "management-control": ["salary", "occupationalLevel"],
   "skills-development": ["totalCost", "courseCost"],
+};
+
+/**
+ * Columns that describe WHO the entity is rather than one transaction — a
+ * supplier's B-BBEE level holds for every spend line against them, a person's
+ * race for every training row. These propagate across a name-group's blanks,
+ * so one certificate qualifies ALL of its supplier's spend lines. Per-line
+ * facts (descriptions, dates, amounts) never propagate.
+ */
+const IDENTITY_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
+  procurement: ["bbbeeLevel", "empoweringSupplier", "currentSize", "registrationNumber", "vatNumber", "certificateExpiryDate", "currentBlackOwnership"],
+  sed: ["percentBenefitingBlack"],
+  ownership: ["race", "gender", "idNumber"],
+  "management-control": ["race", "gender", "idNumber"],
+  "skills-development": ["race", "gender", "idNumber"],
 };
 
 /** "Thandanani Packers & Hauliers cc" → "thandanani packers and hauliers". */
@@ -115,17 +130,17 @@ function cellBlank(value: unknown): boolean {
   return value === undefined || value === null || String(value).trim() === "";
 }
 
-/** Same value? Numeric when both parse as numbers, else trimmed string equality. */
-function cellsAgree(a: unknown, b: unknown): boolean {
-  const numA = Number(String(a).replace(/[R\s,]/g, ""));
-  const numB = Number(String(b).replace(/[R\s,]/g, ""));
-  if (Number.isFinite(numA) && Number.isFinite(numB)) return Math.abs(numA - numB) < 0.005;
-  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
-}
-
+/**
+ * Merge only when the rows are COMPLEMENTARY: no evidence column carries a
+ * value on both sides. A certificate (level, no spend) completes a schedule
+ * row (spend, no level). But two rows that BOTH state a spend/amount are two
+ * pieces of evidence even when the figures are identical — thirteen monthly
+ * R500 donations to the same beneficiary are thirteen contributions, and
+ * "deduplicating" equal figures deleted twelve of them.
+ */
 function canMerge(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow): boolean {
   for (const column of EVIDENCE_COLUMNS[section] ?? []) {
-    if (!cellBlank(a[column]) && !cellBlank(b[column]) && !cellsAgree(a[column], b[column])) {
+    if (!cellBlank(a[column]) && !cellBlank(b[column])) {
       return false;
     }
   }
@@ -178,6 +193,22 @@ export function linkWorkbookRows(
       candidates.push(row);
       byName.set(name, candidates);
       kept.push(row);
+    }
+
+    // Identity propagation: the certificate merged into ONE of the supplier's
+    // rows; its level and empowering status hold for all of them.
+    const identityColumns = IDENTITY_COLUMNS[section] ?? [];
+    if (identityColumns.length > 0) {
+      for (const group of Array.from(byName.values())) {
+        if (group.length < 2) continue;
+        for (const column of identityColumns) {
+          const value = group.map((r) => r[column]).find((v) => !cellBlank(v));
+          if (cellBlank(value)) continue;
+          for (const row of group) {
+            if (cellBlank(row[column])) row[column] = value;
+          }
+        }
+      }
     }
 
     linked[section] = kept;

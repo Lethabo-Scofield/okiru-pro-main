@@ -260,26 +260,39 @@ describe("cross-document row linking", () => {
     expect(merged._sourceFiles).toEqual(["workbook.xlsm › Procurement", "dynamic-cert.pdf"]);
   });
 
-  it("keeps two DIFFERENT spend lines for the same supplier separate", () => {
-    // Two invoices are two pieces of evidence; collapsing them deletes money.
+  it("keeps two spend lines for the same supplier separate — EVEN when equal", () => {
+    // Two invoices are two pieces of evidence; thirteen monthly R500 donations
+    // are thirteen contributions. "Deduplicating" equal figures deletes money.
     const linked = linkWorkbookRows({
       procurement: [
         row({ supplierName: "Alpha", spend: 1000 }),
         row({ supplierName: "Alpha", spend: 2500 }),
+        row({ supplierName: "Alpha", spend: 1000 }),
       ],
     });
-    expect(linked.procurement).toHaveLength(2);
+    expect(linked.procurement).toHaveLength(3);
+    const linkedSed = linkWorkbookRows({
+      sed: Array.from({ length: 13 }, () => row({ beneficiaryName: "Essentially Edenvale", amount: 500 })),
+    });
+    expect(linkedSed.sed).toHaveLength(13);
   });
 
-  it("dedupes rows whose evidence AGREES", () => {
+  it("a certificate qualifies EVERY spend line of its supplier", () => {
+    // The certificate merges into one row; its level and empowering status are
+    // the supplier's identity, so they propagate to the other spend lines too.
     const linked = linkWorkbookRows({
       procurement: [
         row({ supplierName: "Alpha", spend: 1000 }),
-        row({ supplierName: "Alpha", spend: "R 1,000.00", bbbeeLevel: "2" }),
+        row({ supplierName: "Alpha", spend: 1000 }),
+        row({ supplierName: "ALPHA (Pty) Ltd", bbbeeLevel: "2", empoweringSupplier: "Yes" }),
       ],
     });
-    expect(linked.procurement).toHaveLength(1);
+    expect(linked.procurement).toHaveLength(2);
     expect(linked.procurement![0].bbbeeLevel).toBe("2");
+    expect(linked.procurement![1].bbbeeLevel).toBe("2");
+    expect(linked.procurement![1].empoweringSupplier).toBe("Yes");
+    // Per-line evidence never propagates: both rows keep their own spend.
+    expect(linked.procurement!.map((r) => r.spend)).toEqual([1000, 1000]);
   });
 
   it("never overwrites an existing value when filling blanks", () => {
