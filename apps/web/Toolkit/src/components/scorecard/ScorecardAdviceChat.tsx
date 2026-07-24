@@ -208,8 +208,8 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
   }
 
   return (
-    <section className="overflow-hidden rounded-[22px] border border-white/10 bg-[#101012] text-white shadow-[0_30px_90px_-40px_rgba(0,0,0,0.95)]" data-testid="scorecard-advice-chat">
-      <div className="border-b border-white/10 px-5 py-4">
+    <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[#101012] text-white shadow-[0_30px_90px_-40px_rgba(0,0,0,0.95)]" data-testid="scorecard-advice-chat">
+      <div className="border-b border-white/10 bg-white/[0.018] px-5 py-4">
         <div className="flex items-start justify-between gap-3 pr-8">
           <div>
             <h2 className="text-[16px] font-semibold tracking-tight">Ask Okiru</h2>
@@ -223,18 +223,30 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
         </div>
       </div>
 
-      <div className={cn("grid gap-0", compact ? "lg:grid-cols-[1fr_230px]" : "lg:grid-cols-[1fr_270px]")}>
-        <div className={cn("flex flex-col", compact ? "min-h-[320px]" : "min-h-[380px]")}>
-          <div className={cn("flex-1 space-y-4 overflow-y-auto px-5 py-4", compact ? "max-h-[390px]" : "max-h-[500px]")}>
+      <div className={cn("grid gap-0", compact ? "lg:grid-cols-[1fr_240px]" : "lg:grid-cols-[1fr_280px]")}>
+        <div className={cn("flex flex-col", compact ? "min-h-[360px]" : "min-h-[420px]")}>
+          <div className={cn("flex-1 space-y-4 overflow-y-auto px-5 py-5", compact ? "max-h-[430px]" : "max-h-[540px]")}>
             {messages.length === 0 ? (
-              <div className={cn("h-full flex flex-col justify-center", compact ? "min-h-[180px]" : "min-h-[240px]")}>
-                <div className="max-w-[420px]">
-                  <p className="text-[18px] font-semibold tracking-tight text-white">What should we look at?</p>
-                  <p className="mt-2 text-[13px] leading-relaxed text-white/45">
+              <div className={cn("h-full flex flex-col justify-center", compact ? "min-h-[210px]" : "min-h-[260px]")}>
+                <div className="max-w-[460px]">
+                  <p className="text-[20px] font-semibold tracking-tight text-white">Ask about the score, evidence, or next step.</p>
+                  <p className="mt-2.5 text-[13px] leading-relaxed text-white/45">
                   {compact
-                    ? "Type or record a question. You can edit it before sending."
+                    ? "Speak or type naturally. Okiru can answer with tables and open the right toolkit page when helpful."
                     : "Ask about levels, weak pillars, subminimums, missing evidence, or the next best action."}
                   </p>
+                  <div className="mt-5 grid gap-2 sm:grid-cols-3">
+                    {["Explain the level", "Show weak pillars", "What should I open?"].map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => void sendMessage(label)}
+                        className="rounded-2xl border border-white/10 bg-white/[0.045] px-3 py-3 text-left text-[12px] text-white/70 transition hover:bg-white/[0.075] hover:text-white"
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -339,18 +351,18 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
           </div>
 
           <form
-            className="flex gap-2 border-t border-white/10 bg-black/20 p-3.5"
+            className="flex gap-2 border-t border-white/10 bg-black/25 p-4"
             onSubmit={(event) => {
               event.preventDefault();
               void sendMessage(input);
             }}
           >
-            <div className="flex-1 rounded-[18px] border border-white/10 bg-white/[0.055] shadow-inner shadow-black/10 focus-within:border-white/25">
+            <div className="flex-1 rounded-[20px] border border-white/10 bg-white/[0.055] shadow-inner shadow-black/10 focus-within:border-white/25">
               <textarea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={listening ? "Listening..." : "Ask or record your question..."}
-                className="max-h-28 min-h-[46px] w-full resize-none bg-transparent px-3.5 py-3 text-[13px] leading-relaxed text-white outline-none placeholder:text-white/30"
+                className="max-h-28 min-h-[48px] w-full resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed text-white outline-none placeholder:text-white/30"
                 maxLength={2000}
                 data-testid="scorecard-advice-input"
               />
@@ -366,7 +378,7 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
               onClick={toggleVoiceInput}
               disabled={!voiceSupported || loading}
               className={cn(
-                "flex h-[46px] w-[46px] items-center justify-center rounded-full border border-white/10 transition disabled:opacity-35",
+                "flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-full border border-white/10 transition disabled:opacity-35",
                 listening ? "bg-red-500 text-white shadow-[0_0_0_6px_rgba(239,68,68,0.12)]" : "bg-white/[0.065] text-white/72 hover:bg-white/12",
               )}
               data-testid="scorecard-advice-record"
@@ -377,7 +389,7 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
             <button
               type="submit"
               disabled={!input.trim() || loading || !scorecardId}
-              className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-white text-black shadow-[0_10px_24px_-14px_rgba(255,255,255,0.9)] transition hover:bg-white/90 disabled:opacity-35"
+              className="flex h-[48px] w-[48px] shrink-0 items-center justify-center rounded-full bg-white text-black shadow-[0_10px_24px_-14px_rgba(255,255,255,0.9)] transition hover:bg-white/90 disabled:opacity-35"
               data-testid="scorecard-advice-send"
               title="Send"
             >
@@ -387,8 +399,8 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
           {error && <p className="px-3 pb-3 text-[11px] text-red-400">{error}</p>}
         </div>
 
-        <aside className="border-t border-white/10 bg-white/[0.025] p-3.5 lg:border-l lg:border-t-0">
-          <p className="mb-2.5 px-1 text-[11px] font-medium text-white/38">Try asking</p>
+        <aside className="border-t border-white/10 bg-white/[0.025] p-4 lg:border-l lg:border-t-0">
+          <p className="mb-3 px-1 text-[11px] font-medium text-white/38">Useful prompts</p>
           <div className="space-y-1.5">
             {suggestedQuestions.slice(0, 6).map((question) => (
               <button
@@ -396,7 +408,7 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
                 type="button"
                 onClick={() => void sendMessage(question)}
                 disabled={loading}
-                className="w-full rounded-[14px] border border-transparent bg-transparent px-3 py-2.5 text-left text-[12px] leading-snug text-white/62 transition hover:border-white/10 hover:bg-white/[0.055] hover:text-white/82 disabled:opacity-50"
+                className="w-full rounded-[15px] border border-transparent bg-transparent px-3 py-2.5 text-left text-[12px] leading-snug text-white/60 transition hover:border-white/10 hover:bg-white/[0.055] hover:text-white/85 disabled:opacity-50"
               >
                 {question}
               </button>

@@ -298,7 +298,7 @@ function GlobalScorecardAdvisor() {
         whileHover={{ y: -1 }}
         whileTap={{ scale: 0.98 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-        className="fixed bottom-[4.75rem] right-5 z-[9998] flex items-center gap-2 rounded-full bg-zinc-950 py-2 pl-2 pr-4 text-[13px] font-medium text-white shadow-[0_12px_34px_-16px_rgba(0,0,0,0.8)] ring-1 ring-white/15 transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-black"
+        className="fixed bottom-[4.75rem] right-5 z-[9998] flex items-center gap-2 rounded-full bg-zinc-950 py-1.5 pl-1.5 pr-3.5 text-[13px] font-medium text-white shadow-[0_14px_36px_-18px_rgba(0,0,0,0.9)] ring-1 ring-white/15 transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-black"
       >
         <span className="relative h-8 w-8 shrink-0">
           <motion.span
@@ -314,7 +314,7 @@ function GlobalScorecardAdvisor() {
           <span className="pointer-events-none absolute left-[8px] top-[10px] h-[3px] w-[3px] rounded-full bg-white/85 shadow-[10px_0_0_rgba(255,255,255,0.85)]" />
           <span className="pointer-events-none absolute left-[10px] top-[18px] h-[5px] w-[12px] rounded-b-full border-b-2 border-white/85" />
         </span>
-        <span>Ask Okiru</span>
+        <span className="hidden sm:inline">Ask Okiru</span>
       </motion.button>
 
       <AnimatePresence>
@@ -329,7 +329,7 @@ function GlobalScorecardAdvisor() {
             transition={{ duration: 0.18 }}
           >
             <motion.div
-              className="absolute bottom-24 right-3 w-[calc(100vw-1.5rem)] max-w-[820px] overflow-hidden rounded-[22px] bg-[#101012] shadow-[0_30px_100px_-45px_rgba(0,0,0,1)] ring-1 ring-white/10 sm:right-5"
+              className="absolute bottom-24 right-3 w-[calc(100vw-1.5rem)] max-w-[860px] overflow-hidden rounded-[24px] bg-[#101012] shadow-[0_30px_100px_-45px_rgba(0,0,0,1)] ring-1 ring-white/10 sm:right-5"
               role="dialog"
               aria-modal="true"
               aria-label="Scorecard advisor"

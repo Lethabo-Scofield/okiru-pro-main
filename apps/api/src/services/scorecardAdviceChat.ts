@@ -1,6 +1,7 @@
 import { chatCompletion, isAzureOpenAIConfigured } from '../../pipeline/extraction/azureOpenAIClient.js';
 import { createLogger } from '../logger.js';
 import type { ScorecardAdviceContext, ScorecardAdviceSource } from './scorecardAdviceContext.js';
+import { getScorecardAdviceKnowledge, type ScorecardKnowledgeChunk } from './scorecardAdviceKnowledge.js';
 
 const logger = createLogger('ScorecardAdviceChat');
 
@@ -87,7 +88,7 @@ Rules:
 Return only JSON with:
 {
   "answer": "string",
-  "sourceIds": ["scorecard_element id or scorecard id"],
+  "sourceIds": ["scorecard_element id, scorecard id, or approved knowledge id"],
   "tables": [
     { "title": "string", "columns": ["string"], "rows": [["string"]] }
   ],
@@ -160,7 +161,18 @@ function compactContext(context: ScorecardAdviceContext): string {
   });
 }
 
-function parseModelResponse(raw: string, context: ScorecardAdviceContext): ScorecardAdviceChatResult {
+function compactKnowledge(chunks: ScorecardKnowledgeChunk[]): string {
+  return JSON.stringify(chunks.map((chunk) => ({
+    id: chunk.id,
+    title: chunk.title,
+    summary: chunk.summary,
+    source: chunk.source,
+    slideNumbers: chunk.slideNumbers,
+    relatedRoutes: chunk.relatedRoutes,
+  })));
+}
+
+function parseModelResponse(raw: string, context: ScorecardAdviceContext, knowledge: ScorecardKnowledgeChunk[]): ScorecardAdviceChatResult {
   try {
     const parsed = JSON.parse(raw) as {
       answer?: unknown;
@@ -176,11 +188,18 @@ function parseModelResponse(raw: string, context: ScorecardAdviceContext): Score
     const sources = sourceIds.length
       ? context.sources.filter((source) => sourceIds.includes(source.id))
       : context.sources.slice(0, 4);
+    const knowledgeSources = knowledge
+      .filter((chunk) => sourceIds.includes(chunk.id))
+      .map((chunk): ScorecardAdviceSource => ({
+        type: 'evidence',
+        id: chunk.id,
+        label: `${chunk.source}: ${chunk.title} (slides ${chunk.slideNumbers.join(', ')})`,
+      }));
     return {
       answer: typeof parsed.answer === 'string' && parsed.answer.trim()
         ? parsed.answer.trim()
         : 'I could not generate a reliable answer from the available scorecard context.',
-      sources,
+      sources: [...sources, ...knowledgeSources].slice(0, 6),
       suggestedQuestions: Array.isArray(parsed.suggestedQuestions)
         ? parsed.suggestedQuestions.filter((q): q is string => typeof q === 'string').slice(0, 4)
         : DEFAULT_SUGGESTIONS,
@@ -194,7 +213,14 @@ function parseModelResponse(raw: string, context: ScorecardAdviceContext): Score
     logger.warn('Invalid scorecard advice model output', { error: error instanceof Error ? error.message : String(error) });
     return {
       answer: raw.trim() || 'I could not generate a reliable answer from the available scorecard context.',
-      sources: context.sources.slice(0, 4),
+      sources: [
+        ...context.sources.slice(0, 4),
+        ...knowledge.slice(0, 2).map((chunk): ScorecardAdviceSource => ({
+          type: 'evidence',
+          id: chunk.id,
+          label: `${chunk.source}: ${chunk.title} (slides ${chunk.slideNumbers.join(', ')})`,
+        })),
+      ],
       suggestedQuestions: DEFAULT_SUGGESTIONS,
       warnings: ['The model returned an unstructured response; sources were attached from the authorised scorecard context.'],
       tables: [],
@@ -254,13 +280,22 @@ export async function runScorecardAdviceChat(args: {
     throw Object.assign(new Error('Azure OpenAI is not configured for scorecard advice.'), { status: 503 });
   }
 
+  const knowledge = getScorecardAdviceKnowledge({
+    message: args.message,
+    context: args.context,
+    limit: 5,
+  });
+
   const userPrompt = `Authorised scorecard context:
 ${compactContext(args.context)}
+
+Approved B-BBEE knowledge:
+${compactKnowledge(knowledge)}
 
 User question:
 ${args.message}
 
-Answer using only the authorised context. If a value is unavailable, say it is unavailable.`;
+Answer using only the authorised scorecard context and approved B-BBEE knowledge. If a value is unavailable, say it is unavailable. If you use approved knowledge, include its knowledge id in sourceIds.`;
 
   const raw = await chatCompletion(
     [
@@ -270,5 +305,5 @@ Answer using only the authorised context. If a value is unavailable, say it is u
     { temperature: 0.2, maxTokens: 900, responseFormat: { type: 'json_object' } },
   );
 
-  return parseModelResponse(raw, args.context);
+  return parseModelResponse(raw, args.context, knowledge);
 }

@@ -48,7 +48,7 @@ describe('scorecardAdviceChat', () => {
     configuredMock.mockReturnValue(true);
     chatCompletionMock.mockResolvedValue(JSON.stringify({
       answer: 'Skills Development is below subminimum.',
-      sourceIds: ['skills-development'],
+      sourceIds: ['skills-development', 'priority-elements-discounting'],
       tables: [
         {
           title: 'Priority gaps',
@@ -90,6 +90,11 @@ describe('scorecardAdviceChat', () => {
     expect(result.answer).toContain('Skills Development');
     expect(result.sources).toEqual([
       { type: 'scorecard_element', id: 'skills-development', label: 'Skills Development' },
+      {
+        type: 'evidence',
+        id: 'priority-elements-discounting',
+        label: 'Okiru B-BBEE Training Pack 2026: Priority elements and discounting (slides 25)',
+      },
     ]);
     expect(result.tables).toEqual([
       {
@@ -101,6 +106,21 @@ describe('scorecardAdviceChat', () => {
     expect(result.actions).toEqual([
       { label: 'Open Skills', route: '/toolkit/pillars/skills', reason: 'Review missing skills evidence.' },
     ]);
+  });
+
+  it('adds approved B-BBEE knowledge from the Okiru training pack to the model prompt', async () => {
+    const { runScorecardAdviceChat } = await import('../scorecardAdviceChat.js');
+
+    await runScorecardAdviceChat({
+      message: 'Did we fail a priority element subminimum?',
+      context,
+    });
+
+    const messages = chatCompletionMock.mock.calls[0][0];
+    const userPrompt = messages.find((m: any) => m.role === 'user')?.content || '';
+    expect(userPrompt).toContain('Approved B-BBEE knowledge');
+    expect(userPrompt).toContain('priority-elements-discounting');
+    expect(userPrompt).toContain('Okiru B-BBEE Training Pack 2026');
   });
 
   it('returns a controlled provider configuration error', async () => {
