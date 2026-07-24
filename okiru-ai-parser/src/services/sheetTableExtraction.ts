@@ -23,6 +23,7 @@
 import { createLogger } from '../logger.js';
 import type { DocumentExtraction, ExtractionModel } from './aiExtraction.js';
 import type { VerificationElement } from '../../schemas/verification_document_matrix.js';
+import { applyColumnMapping, mapSheetColumns } from './sheetColumnMapping.js';
 
 const logger = createLogger('SheetTableExtraction');
 
@@ -73,14 +74,56 @@ const SYSTEM_PROMPT = [
  * Extract the element's table from a sheet document. Returns a DocumentExtraction
  * carrying one array-of-objects value, or null when the element has no table
  * shape or the sheet yields no rows.
+ *
+ * When the caller supplies the sheet's PARSED rows (`input.rows`, header-keyed
+ * objects from the workbook split), the table is read DETERMINISTICALLY: the
+ * model only maps columns to fields, the code applies that mapping to every
+ * row. The model never re-types table data, so a 23-row schedule yields 23
+ * rows by construction. The legacy whole-table model read remains the fallback
+ * for content with no parsed rows (PDF tables) or when mapping fails.
  */
 export async function extractSheetTable(
   model: ExtractionModel,
   element: VerificationElement,
-  input: { filename: string; markdown?: string; raw_text: string },
+  input: { filename: string; markdown?: string; raw_text: string; rows?: Array<Record<string, unknown>> },
 ): Promise<DocumentExtraction | null> {
   const shape = ELEMENT_TABLE[element];
   if (!shape) return null;
+
+  if (input.rows && input.rows.length > 0) {
+    const mapping = await mapSheetColumns(model, shape, input.filename, input.rows);
+    if (mapping && Object.values(mapping).includes(shape.columns[0])) {
+      const table = applyColumnMapping(input.rows, mapping, shape);
+      if (table.rows.length > 0) {
+        logger.info('Extracted sheet table deterministically', {
+          file: input.filename,
+          element,
+          field: shape.field,
+          ...table.stats,
+          exceptions: table.exceptions.length,
+        });
+        return {
+          documentId: `sheet_table__${element.toLowerCase()}`,
+          documentName: `${element} table`,
+          element,
+          sourceFile: input.filename,
+          values: [{
+            field: shape.field,
+            value: table.rows,
+            sourceFile: input.filename,
+            sourceDocumentId: `sheet_table__${element.toLowerCase()}`,
+          }],
+          missingFields: [],
+          unexpectedFields: [],
+          exceptions: table.exceptions,
+        };
+      }
+    }
+    logger.warn('Deterministic table read yielded nothing — falling back to model read', {
+      file: input.filename,
+      element,
+    });
+  }
 
   const content = input.markdown?.trim() || input.raw_text;
   const user = [

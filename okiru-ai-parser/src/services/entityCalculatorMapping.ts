@@ -84,8 +84,15 @@ const FIELD_MAPPINGS: FieldMapping[] = [
 
   // ── Supplier evidence (ESD / procurement) ──
   { field: 'supplier_name', calculatorKey: 'supplier.name', coerce: 'text' },
+  // A sworn EME/QSE affidavit names the supplier `supplier_entity`; a
+  // verification certificate states the level as `certificate_recognition_level`.
+  // Both are the expert's own field names (matrix-verified) — without these the
+  // two most common supplier evidence documents produced nameless / level-less
+  // supplier records.
+  { field: 'supplier_entity', calculatorKey: 'supplier.name', elements: ['ESD'], coerce: 'text' },
   { field: 'bee_status_level', calculatorKey: 'supplier.bee_level', elements: ['ESD'], coerce: 'bee_level' },
   { field: 'bee_level', calculatorKey: 'supplier.bee_level', elements: ['ESD'], coerce: 'bee_level' },
+  { field: 'certificate_recognition_level', calculatorKey: 'supplier.bee_level', elements: ['ESD'], coerce: 'bee_level' },
   { field: 'certificate_expiry_date', calculatorKey: 'supplier.certificate_expiry', elements: ['ESD'], coerce: 'iso_date' },
   { field: 'expiry_date', calculatorKey: 'supplier.certificate_expiry', elements: ['ESD'], coerce: 'iso_date' },
   { field: 'total_claimed_spend', calculatorKey: 'supplier.spend', elements: ['ESD'], coerce: 'money' },
@@ -94,6 +101,8 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   { field: 'beneficiary_name', calculatorKey: 'sed.beneficiary_name', elements: ['SED'], coerce: 'text' },
   { field: 'total_sed_contributions', calculatorKey: 'sed.contribution', elements: ['SED'], coerce: 'money' },
   { field: 'contribution_amount', calculatorKey: 'sed.contribution', elements: ['SED'], coerce: 'money' },
+  // Proof-of-payment (cash grant / donation) names its figure `amount_paid`.
+  { field: 'amount_paid', calculatorKey: 'sed.contribution', elements: ['SED'], coerce: 'money' },
 
   // ────────────────────────────────────────────────────────────────────────
   // Mapped onto the keys derived in Phase 1b, using the field names the
