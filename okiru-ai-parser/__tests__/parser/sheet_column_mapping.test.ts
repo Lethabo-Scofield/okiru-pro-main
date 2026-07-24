@@ -120,14 +120,36 @@ describe('applyColumnMapping', () => {
     expect(result.exceptions[0]).toContain('1000');
   });
 
-  it('drops rows without the key column as summary noise', () => {
+  it('forward-fills the key through a merged-cell block — 13 monthly lines, one name', () => {
+    // The real SED sheet: "Essentially Edenvale" written once, then twelve
+    // dated R500 lines below it. All thirteen belong to that beneficiary.
+    const shape = { columns: ['beneficiary_name', 'contribution_value'], what: 'each SED beneficiary' };
+    const mapping = { Beneficiary: 'beneficiary_name', 'Amount of Contribution': 'contribution_value' };
     const rows = [
-      { 'Supplier Name': 'Alpha', 'Amount (Excl VAT)': 600 },
+      { Beneficiary: 'Essentially Edenvale', 'Amount of Contribution': 500 },
+      ...Array.from({ length: 12 }, () => ({ 'Amount of Contribution': 500 })),
+      { Beneficiary: 'Germiston Youth Centre', 'Amount of Contribution': 100 },
+      { 'Amount of Contribution': 100 },
+    ];
+    const result = applyColumnMapping(rows, mapping, shape);
+    expect(result.rows).toHaveLength(15);
+    expect(result.rows.filter((r) => r.beneficiary_name === 'Essentially Edenvale')).toHaveLength(13);
+    expect(result.rows[14].beneficiary_name).toBe('Germiston Youth Centre');
+    expect(result.stats.forwardFilledRows).toBe(13);
+  });
+
+  it('does not inherit a key before the first keyed row or across a TOTAL line', () => {
+    const rows = [
       { 'Amount (Excl VAT)': 999999 },
+      { 'Supplier Name': 'Alpha', 'Amount (Excl VAT)': 600 },
+      { 'Supplier Name': 'TOTAL', 'Amount (Excl VAT)': 600 },
+      { 'Amount (Excl VAT)': 777 },
     ];
     const result = applyColumnMapping(rows, SUPPLIER_MAPPING, SUPPLIER_SHAPE);
     expect(result.rows).toHaveLength(1);
-    expect(result.stats.keylessRowsSkipped).toBe(1);
+    expect(result.rows[0].supplier_name).toBe('Alpha');
+    expect(result.stats.keylessRowsSkipped).toBe(2);
+    expect(result.stats.totalRowsSkipped).toBe(1);
   });
 });
 

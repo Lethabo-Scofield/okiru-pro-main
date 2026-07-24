@@ -29,6 +29,16 @@ describe('sheet-name → element', () => {
     expect(elementFromHint(undefined)).toBeNull();
   });
 
+  it('routes an Employment Equity sheet to Management Control, not Ownership', () => {
+    // The bare `equity` in the ownership pattern used to claim this sheet
+    // first, sending the employee register to shareholder extraction.
+    expect(elementFromHint('Employment Equity')).toBe('MANAGEMENT_CONTROL');
+    expect(elementFromHint('wb.xlsm › Employment Equity')).toBe('MANAGEMENT_CONTROL');
+    // Genuine ownership names still route to OWNERSHIP.
+    expect(elementFromHint('Ownership')).toBe('OWNERSHIP');
+    expect(elementFromHint('Equity Ownership')).toBe('OWNERSHIP');
+  });
+
   it('routes the real evidence-pack filenames — statutory forms, registers, ledgers', () => {
     expect(elementFromHint('Thandanani Share Certificate THA001 1 of 1.pdf')).toBe('OWNERSHIP');
     expect(elementFromHint('Thandanani BI Register.pdf')).toBe('OWNERSHIP');

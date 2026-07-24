@@ -45,6 +45,8 @@ export interface DeterministicTableResult {
     extractedRows: number;
     totalRowsSkipped: number;
     keylessRowsSkipped: number;
+    /** Rows that inherited the key from the block above (merged-cell layout). */
+    forwardFilledRows: number;
   };
 }
 
@@ -189,10 +191,15 @@ function isTotalRow(row: Record<string, unknown>): boolean {
 /**
  * Apply a validated column mapping to every parsed row.
  *
- * The first target field in `shape.columns` is the row's KEY (the name column);
- * a row without it is summary noise, not evidence. Total rows are excluded from
- * the data but their labelled figures are captured, and the extracted rows are
- * summed against them — a mismatch is reported, never silently accepted.
+ * The first target field in `shape.columns` is the row's KEY (the name column).
+ * Real schedules write the key ONCE per block — a beneficiary's name on the
+ * first of thirteen monthly contribution lines, exactly how merged cells
+ * export. So a keyless row that still carries evidence INHERITS the key from
+ * the block above (forward-fill of the key only, nothing else). A keyless row
+ * before any keyed row is summary noise and is skipped. Total rows are
+ * excluded from the data but their labelled figures are captured, and the
+ * extracted rows are summed against them — a mismatch is reported, never
+ * silently accepted.
  */
 export function applyColumnMapping(
   rows: Array<Record<string, unknown>>,
@@ -204,6 +211,8 @@ export function applyColumnMapping(
   const labelledTotals: Record<string, number> = {};
   let totalRowsSkipped = 0;
   let keylessRowsSkipped = 0;
+  let forwardFilledRows = 0;
+  let lastKey = '';
 
   for (const row of rows) {
     const out: Record<string, unknown> = {};
@@ -215,6 +224,8 @@ export function applyColumnMapping(
 
     if (isTotalRow(row)) {
       totalRowsSkipped += 1;
+      // A total line closes its block: rows after it must not inherit the name.
+      lastKey = '';
       for (const [field, value] of Object.entries(out)) {
         if (field === keyField) continue;
         const numeric = toNumber(value);
@@ -223,10 +234,21 @@ export function applyColumnMapping(
       continue;
     }
 
-    const key = String(out[keyField] ?? '').trim();
+    let key = String(out[keyField] ?? '').trim();
     if (key === '') {
-      if (Object.keys(out).length > 0) keylessRowsSkipped += 1;
-      continue;
+      // Inherit the block's key only when the row still says something —
+      // an empty template line stays skipped even inside a block.
+      const hasEvidence = Object.keys(out).length > 0;
+      if (hasEvidence && lastKey !== '') {
+        out[keyField] = lastKey;
+        key = lastKey;
+        forwardFilledRows += 1;
+      } else {
+        if (hasEvidence) keylessRowsSkipped += 1;
+        continue;
+      }
+    } else {
+      lastKey = key;
     }
     mapped.push(out);
   }
@@ -259,6 +281,7 @@ export function applyColumnMapping(
       extractedRows: mapped.length,
       totalRowsSkipped,
       keylessRowsSkipped,
+      forwardFilledRows,
     },
   };
 }
