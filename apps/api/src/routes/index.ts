@@ -26,6 +26,7 @@ import importRouter from './import.js';
 import exportRouter from './export.js';
 import accuracyRouter from './accuracy.js';
 import scorecardRouter from './scorecard.js';
+import scorecardAdviceRouter from './scorecardAdvice.js';
 import templatesRouter from './templates.js';
 import documentsRouter from './documents.js';
 import extractAndScoreRouter from './extractAndScore.js';
@@ -157,6 +158,7 @@ export async function registerRoutes(
 
   // Scorecard & Computation Engine routes
   app.use('/api/scorecard', scorecardRouter);
+  app.use('/api/scorecards', scorecardAdviceRouter);
 
   // Template ingestion & graph inspection routes
   app.use('/api/templates', templatesRouter);
