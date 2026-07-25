@@ -20,6 +20,7 @@ import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
+import { extractLedgerTable } from './sheetLedgerExtraction.js';
 import { extractSheetFinancials, isFinancialsSheet } from './sheetFinancialsExtraction.js';
 import { elementFromHint } from './specRetrieval.js';
 import {
@@ -107,6 +108,18 @@ export async function extractCaseEntities(
         elementHint: sheetName,
       }),
       (async () => {
+        const rows = structuredRows(input.tables);
+
+        // A supplier LEDGER is read deterministically and needs no model call:
+        // it has no supplier column (the account is named in the filename) and
+        // its money is split across debit/credit columns that mean opposite
+        // things. Asking a model to "extract the supplier table" from one
+        // yields nothing, which is what happened to every ledger until now.
+        if (rows) {
+          const ledger = extractLedgerTable(rows, input.filename);
+          if (ledger) return ledger;
+        }
+
         const element = sheetName ? elementFromHint(sheetName) : null;
         if (!element) return null;
         return extractSheetTable(model, element, {
@@ -116,7 +129,7 @@ export async function extractCaseEntities(
           // The parsed rows from the workbook split, when present — the
           // deterministic table read consumes these so the model never has to
           // re-type rows the code already parsed.
-          rows: structuredRows(input.tables),
+          rows,
         });
       })(),
       // Entity-level revenue + NPAT off a Finance / summary sheet OR a
