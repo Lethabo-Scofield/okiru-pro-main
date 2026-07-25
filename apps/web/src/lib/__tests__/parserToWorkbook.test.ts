@@ -312,6 +312,32 @@ describe("cross-document row linking", () => {
     expect(linked.reconciliation[0].message).toContain("1,628,821.85");
   });
 
+  it("warns when a ledger matched nothing — the double-count risk", () => {
+    // Matching is exact by design, so "TST TRUCK" never becomes "TST Truc
+    // Chassis". Rather than guess, both rows survive and the risk is stated.
+    const linked = link({
+      procurement: [
+        row({ supplierName: "TST Truc Chassis", spend: 50271.3 }, ["wb.xlsm › Procurement"]),
+        row({ supplierName: "TST TRUCK", spend: 107605.5 }, ["TST TRUCK LEDGER.xlsx"]),
+      ],
+    });
+
+    expect(linked.rows.procurement).toHaveLength(2);
+    const warning = linked.reconciliation.find((f) => f.message.includes("counted twice"));
+    expect(warning).toBeDefined();
+    expect(warning!.message).toContain("TST TRUCK LEDGER.xlsx");
+  });
+
+  it("does not warn about a ledger that DID link", () => {
+    const linked = link({
+      procurement: [
+        row({ supplierName: "BP Edenvale", spend: 412797.4 }, ["wb.xlsm › Procurement"]),
+        row({ supplierName: "B P EDENVALE", spend: 1628821.85 }, ["B P EDENVALE LEDGER.xlsx"]),
+      ],
+    });
+    expect(linked.reconciliation.some((f) => f.message.includes("counted twice"))).toBe(false);
+  });
+
   it("says nothing when two documents agree", () => {
     const linked = link({
       procurement: [

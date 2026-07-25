@@ -244,14 +244,17 @@ export function extractLedgerTable(
     lines: reading.lines,
     spend: reading.spend,
     reconciles: reading.exceptions.length === 0,
+    possibleTmpsExclusion: reading.possibleTmpsExclusion,
   });
 
-  return {
-    documentId: 'sheet_table__esd',
-    documentName: 'Supplier ledger',
-    element: 'ESD',
-    sourceFile: filename,
-    values: [{
+  // A likely EXCLUSION is reported but NOT handed over as spend. Counting a
+  // municipal account toward TMPS inflates the denominator's numerator on our
+  // own judgement — the direction that gets a certificate revoked. The finding
+  // still reaches the user, who can enter it deliberately if the agency rules
+  // it includable.
+  const values = reading.possibleTmpsExclusion
+    ? []
+    : [{
       field: 'supplier_rows',
       value: [{
         supplier_name: reading.supplierName,
@@ -259,7 +262,14 @@ export function extractLedgerTable(
       }],
       sourceFile: filename,
       sourceDocumentId: 'sheet_table__esd',
-    }],
+    }];
+
+  return {
+    documentId: 'sheet_table__esd',
+    documentName: 'Supplier ledger',
+    element: 'ESD',
+    sourceFile: filename,
+    values,
     missingFields: [],
     unexpectedFields: [],
     exceptions: reading.exceptions,

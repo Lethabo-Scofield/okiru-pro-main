@@ -284,6 +284,24 @@ export function linkWorkbookRows(
       kept.push(row);
     }
 
+    // A ledger row that never linked to anything is either a supplier the
+    // schedule omits, or the SAME supplier under a different spelling — and in
+    // the second case its spend is now counted twice. Name matching is
+    // deliberately exact ("TST TRUCK" does not become "TST Truc Chassis"), so
+    // rather than guess, say so: the user can see both rows and decide.
+    for (const row of kept) {
+      const sources = row._sourceFiles ?? [];
+      if (sources.length !== 1 || !/ledger|statement/i.test(sources[0])) continue;
+      const name = keyColumns.map((column) => String(row[column] ?? "").trim()).filter(Boolean).join(" ");
+      if (!name) continue;
+      reconciliation.push({
+        section,
+        entity: name,
+        column: "supplierName",
+        message: `${sources[0]} did not match any supplier already on the schedule. If "${name}" is the same supplier under a different spelling, its spend is being counted twice — otherwise it is a supplier the schedule omits.`,
+      });
+    }
+
     // Identity propagation: the certificate merged into ONE of the supplier's
     // rows; its level and empowering status hold for all of them.
     const identityColumns = IDENTITY_COLUMNS[section] ?? [];
