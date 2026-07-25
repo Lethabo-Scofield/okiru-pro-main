@@ -476,6 +476,22 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
 
   if (isWorkbook) {
     const sheets = splitWorkbookIntoSheets(file.buffer);
+
+    // A SINGLE-sheet workbook is not worth splitting into one document, but it
+    // still has header-keyed rows, and the deterministic readers (supplier
+    // ledgers, spend schedules) need exactly those. Without this they saw only
+    // markdown and every single-sheet supplier ledger — which is how ledgers
+    // are always filed — extracted nothing.
+    if (sheets.length === 1) {
+      const [sheet] = sheets;
+      const input = await rawExtractionInputFromUpload(file);
+      return [{
+        ...input,
+        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows }],
+        metadata: { ...input.metadata, sheet_name: sheet.sheetName },
+      }];
+    }
+
     if (shouldSplitWorkbook(sheets)) {
       logger.info('Splitting workbook into per-sheet documents', {
         filename: file.originalname,
