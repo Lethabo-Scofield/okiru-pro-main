@@ -51,6 +51,12 @@ export interface ParserToWorkbookResult {
   rejected: Array<InjectionRejection & { sourceFile: string }>;
   /** Required columns still unfilled + parser fields with no mapping. */
   coverage: CoverageReport;
+  /**
+   * Where two documents describe the same entity but disagree on a figure —
+   * a supplier's own ledger against the client's schedule, most usefully.
+   * Advisory: the lower figure is scored and the gap is reported.
+   */
+  reconciliation: ReconciliationFinding[];
 }
 
 let rowCounter = 0;
@@ -126,25 +132,97 @@ export function normaliseEntityName(value: unknown): string {
     .trim();
 }
 
+/**
+ * The key two rows are considered the same entity by.
+ *
+ * One step looser than the display name, in two ways the real evidence forces —
+ * and neither of them fuzzy:
+ *
+ *  - SPACING is not identity. The client's schedule says "BP Edenvale"; the
+ *    ledger for that same account is filed as "B P EDENVALE".
+ *  - A TRAILING PLURAL is not identity. The schedule says "Subbiah
+ *    Enterprises", its ledger "SUBBIAH ENTERPRISE".
+ *
+ * Both are exact transformations, so they cannot drift the way edit-distance
+ * matching does: "S. Nhlanhla" and "Sandile Nhlanhla" still key apart, because
+ * guessing that two names are one person is how someone else's certificate
+ * lands on the wrong supplier.
+ */
+export function entityMatchKey(value: unknown): string {
+  return normaliseEntityName(value).replace(/\s+/g, "").replace(/s$/, "");
+}
+
 function cellBlank(value: unknown): boolean {
   return value === undefined || value === null || String(value).trim() === "";
 }
 
+/** Same value? Numeric when both parse as numbers, else trimmed string equality. */
+function cellsAgree(a: unknown, b: unknown): boolean {
+  const numA = Number(String(a).replace(/[R\s,]/g, ""));
+  const numB = Number(String(b).replace(/[R\s,]/g, ""));
+  if (Number.isFinite(numA) && Number.isFinite(numB)) return Math.abs(numA - numB) < 0.005;
+  return String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
+/** Do these two rows come from the very same document? */
+function shareASourceFile(a: WorkbookRow, b: WorkbookRow): boolean {
+  const left = a._sourceFiles ?? [];
+  const right = b._sourceFiles ?? [];
+  return left.some((file) => right.includes(file));
+}
+
+export interface ReconciliationFinding {
+  section: WorkbookSectionKey;
+  entity: string;
+  column: string;
+  message: string;
+}
+
+interface MergeDecision {
+  merge: boolean;
+  finding?: string;
+}
+
 /**
- * Merge only when the rows are COMPLEMENTARY: no evidence column carries a
- * value on both sides. A certificate (level, no spend) completes a schedule
- * row (spend, no level). But two rows that BOTH state a spend/amount are two
- * pieces of evidence even when the figures are identical — thirteen monthly
- * R500 donations to the same beneficiary are thirteen contributions, and
- * "deduplicating" equal figures deleted twelve of them.
+ * Should these two rows for the same entity become one?
+ *
+ * The distinction is WHICH DOCUMENT each came from.
+ *
+ * - SAME document: two line items, never merged. Thirteen monthly R500
+ *   donations to one beneficiary are thirteen contributions; collapsing equal
+ *   figures deletes money.
+ * - DIFFERENT documents: the same fact stated twice — a supplier's ledger and
+ *   the client's schedule both reporting that supplier's spend. Merged, so a
+ *   ledger corroborates a schedule row instead of doubling it.
+ *
+ * When two documents disagree on a figure the LOWER one is kept and the gap is
+ * reported. Never inflating a claim on our own judgement is the whole point:
+ * over-claiming is what gets a certificate revoked, and a client under-claiming
+ * against their own ledger is something to TELL them, not to silently correct.
  */
-function canMerge(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow): boolean {
+function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow, entity: string): MergeDecision {
+  let finding: string | undefined;
+
   for (const column of EVIDENCE_COLUMNS[section] ?? []) {
-    if (!cellBlank(a[column]) && !cellBlank(b[column])) {
-      return false;
+    if (cellBlank(a[column]) || cellBlank(b[column])) continue;
+    if (shareASourceFile(a, b)) return { merge: false };
+    if (cellsAgree(a[column], b[column])) continue;
+
+    const left = Number(String(a[column]).replace(/[R\s,]/g, ""));
+    const right = Number(String(b[column]).replace(/[R\s,]/g, ""));
+    if (Number.isFinite(left) && Number.isFinite(right)) {
+      const lower = Math.min(left, right);
+      const higher = Math.max(left, right);
+      const lowerFile = (left <= right ? a : b)._sourceFiles?.[0] ?? "one document";
+      const higherFile = (left <= right ? b : a)._sourceFiles?.[0] ?? "another document";
+      finding = `${entity}: ${higherFile} supports ${column} of ${higher.toLocaleString()} but ${lowerFile} claims ${lower.toLocaleString()} — a difference of ${(higher - lower).toLocaleString()}. The lower figure is being used; confirm which is in scope.`;
+      a[column] = lower;
+    } else {
+      finding = `${entity}: documents disagree on ${column} (${String(a[column])} vs ${String(b[column])}).`;
     }
   }
-  return true;
+
+  return { merge: true, finding };
 }
 
 /** Fill `into`'s blanks from `from`; existing values are never overwritten. */
@@ -164,8 +242,9 @@ function mergeInto(into: WorkbookRow, from: WorkbookRow): void {
  */
 export function linkWorkbookRows(
   rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
-): Partial<Record<WorkbookSectionKey, WorkbookRow[]>> {
+): { rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>; reconciliation: ReconciliationFinding[] } {
   const linked: Partial<Record<WorkbookSectionKey, WorkbookRow[]>> = {};
+  const reconciliation: ReconciliationFinding[] = [];
 
   for (const [sectionKey, sectionRows] of Object.entries(rows)) {
     const section = sectionKey as WorkbookSectionKey;
@@ -179,19 +258,29 @@ export function linkWorkbookRows(
     const byName = new Map<string, WorkbookRow[]>();
 
     for (const row of sectionRows) {
-      const name = keyColumns.map((column) => normaliseEntityName(row[column])).join(" ").trim();
-      if (name === "") {
+      const key = keyColumns.map((column) => entityMatchKey(row[column])).join("|").replace(/^\|+|\|+$/g, "");
+      if (key === "") {
         kept.push(row);
         continue;
       }
-      const candidates = byName.get(name) ?? [];
-      const target = candidates.find((candidate) => canMerge(section, candidate, row));
-      if (target) {
-        mergeInto(target, row);
-        continue;
+      const display = keyColumns.map((column) => String(row[column] ?? "").trim()).filter(Boolean).join(" ");
+      const candidates = byName.get(key) ?? [];
+
+      let merged = false;
+      for (const candidate of candidates) {
+        const decision = mergeDecision(section, candidate, row, display);
+        if (!decision.merge) continue;
+        if (decision.finding) {
+          reconciliation.push({ section, entity: display, column: "spend", message: decision.finding });
+        }
+        mergeInto(candidate, row);
+        merged = true;
+        break;
       }
+      if (merged) continue;
+
       candidates.push(row);
-      byName.set(name, candidates);
+      byName.set(key, candidates);
       kept.push(row);
     }
 
@@ -214,7 +303,7 @@ export function linkWorkbookRows(
     linked[section] = kept;
   }
 
-  return linked;
+  return { rows: linked, reconciliation };
 }
 
 /** Is this value a table — an array of row-shaped objects? */
@@ -328,10 +417,10 @@ export function parserExtractionsToWorkbook(
 
   // Link before coverage: a certificate row enriched with its schedule row's
   // spend is complete; counted separately both halves would report gaps.
-  const linkedRows = linkWorkbookRows(rows);
+  const linked = linkWorkbookRows(rows);
 
-  const coverage = huntRequiredFields(linkedRows, Array.from(unmapped), options);
-  return { rows: linkedRows, meta, rejected, coverage };
+  const coverage = huntRequiredFields(linked.rows, Array.from(unmapped), options);
+  return { rows: linked.rows, meta, rejected, coverage, reconciliation: linked.reconciliation };
 }
 
 /**

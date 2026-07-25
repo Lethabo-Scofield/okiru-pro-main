@@ -19,6 +19,7 @@ function result(over: Partial<ParserToWorkbookResult> = {}): ParserToWorkbookRes
     meta: {},
     rejected: [],
     coverage: { gaps: [], unmapped: [], complete: true },
+    reconciliation: [],
     ...over,
   };
 }

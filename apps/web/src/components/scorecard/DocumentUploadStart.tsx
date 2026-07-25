@@ -306,8 +306,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         if (text) flags.push({ sourceFile: String(e.sourceFile ?? ""), note: text });
       }
     }
+    // Cross-document disagreements found while linking — most usefully a
+    // supplier's own ledger against the client's schedule.
+    for (const finding of injected?.reconciliation ?? []) {
+      flags.push({ sourceFile: finding.entity, note: finding.message });
+    }
     return flags;
-  }, [parserCase]);
+  }, [parserCase, injected]);
 
   /**
    * Matrix document ids the parser actually read something out of, so the
