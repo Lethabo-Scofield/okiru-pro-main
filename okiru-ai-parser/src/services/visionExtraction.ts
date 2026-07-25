@@ -21,6 +21,7 @@
  *    tables (share registers, spend schedules) must keep their grid.
  */
 import { createLogger } from '../logger.js';
+import { isOcrSidecarEnabled, transcribeWithOcrSidecar } from './ocrClient.js';
 
 const logger = createLogger('VisionExtraction');
 
@@ -60,10 +61,30 @@ export interface VisionExtractionResult {
   markdown: string;
   pagesRead: number;
   truncated: boolean;
+  /** Which path read it — the OCR sidecar, or the general vision model. */
+  engine?: string;
 }
 
 export function visionExtractionConfigured(): boolean {
-  return Boolean(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY);
+  return Boolean(process.env.AZURE_OPENAI_ENDPOINT && process.env.AZURE_OPENAI_API_KEY)
+    || isOcrSidecarEnabled();
+}
+
+/**
+ * Pages per general-model call.
+ *
+ * The general vision path has a hard OUTPUT ceiling per call (a few thousand
+ * tokens). Showing it 60 pages and asking for one transcription therefore
+ * truncated the document mid-table and reported success — the silent-truncation
+ * class again, this time in the scanned path. Pages are batched so the ceiling
+ * is per-batch, and a batch that still hits it is REPORTED.
+ *
+ * The OCR sidecar has no such ceiling and reads every page in one pass, so this
+ * applies only to the fallback.
+ */
+function pagesPerVisionCall(): number {
+  const configured = Number(process.env.PARSER_VISION_PAGES_PER_CALL);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 2;
 }
 
 /**
@@ -135,11 +156,6 @@ export async function extractScannedPdfWithVision(
 ): Promise<VisionExtractionResult | null> {
   if (!visionExtractionConfigured()) return null;
 
-  const endpoint = process.env.AZURE_OPENAI_ENDPOINT!.replace(/\/+$/, '');
-  const apiKey = process.env.AZURE_OPENAI_API_KEY!;
-  const deployment = process.env.AZURE_MODEL_DEPLOYMENT ?? process.env.AZURE_OPENAI_DEPLOYMENT ?? 'gpt-4o';
-  const apiVersion = process.env.AZURE_OPENAI_API_VERSION ?? '2024-08-01-preview';
-
   let images: string[];
   try {
     images = await pdfPagesToBase64(buffer, maxVisionPages());
@@ -156,61 +172,129 @@ export async function extractScannedPdfWithVision(
     return null;
   }
 
-  const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
-  const content: Array<Record<string, unknown>> = [
-    { type: 'text', text: `Transcribe this document (${images.length} page(s)): ${filename}` },
-    ...images.map((base64) => ({
-      type: 'image_url',
-      image_url: { url: `data:image/png;base64,${base64}`, detail: 'high' },
-    })),
-  ];
+  const pageTruncated = images.length >= maxVisionPages();
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content },
-        ],
-        // Deterministic: the same scan must transcribe the same way twice, or a
-        // score could move between runs on identical evidence.
-        temperature: 0,
-        max_tokens: 4096,
-      }),
-    });
-
-    if (!response.ok) {
-      logger.warn('Vision transcription rejected', {
-        filename,
-        status: response.status,
-        detail: (await response.text().catch(() => '')).slice(0, 200),
-      });
-      return null;
-    }
-
-    const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const markdown = body.choices?.[0]?.message?.content?.trim() ?? '';
-    if (!markdown) {
-      logger.warn('Vision transcription returned no content', { filename });
-      return null;
-    }
-
-    logger.info('Scanned document transcribed with vision', {
-      filename,
-      pages: images.length,
-      characters: markdown.length,
-      model: deployment,
-    });
-
+  // The purpose-built OCR path first: it reads every page in ONE pass with no
+  // output ceiling, so a register spanning a page break stays one table.
+  const viaSidecar = await transcribeWithOcrSidecar(images, filename);
+  if (viaSidecar) {
     return {
-      markdown,
-      pagesRead: images.length,
-      truncated: images.length >= maxVisionPages(),
+      markdown: viaSidecar.markdown,
+      pagesRead: viaSidecar.pagesRead,
+      truncated: pageTruncated,
+      engine: viaSidecar.model,
     };
-  } catch (err) {
-    logger.error('Vision transcription failed', err as Error);
+  }
+
+  return transcribeWithGeneralModel(images, filename, pageTruncated);
+}
+
+/**
+ * Fallback: the general multimodal deployment, one call per small batch of
+ * pages so the per-call output ceiling cannot silently swallow a long document.
+ */
+async function transcribeWithGeneralModel(
+  images: string[],
+  filename: string,
+  pageTruncated: boolean,
+): Promise<VisionExtractionResult | null> {
+  if (!process.env.AZURE_OPENAI_ENDPOINT || !process.env.AZURE_OPENAI_API_KEY) return null;
+
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT.replace(/\/+$/, '');
+  const apiKey = process.env.AZURE_OPENAI_API_KEY;
+  const deployment = process.env.AZURE_MODEL_DEPLOYMENT ?? process.env.AZURE_OPENAI_DEPLOYMENT ?? 'gpt-4o';
+  const apiVersion = process.env.AZURE_OPENAI_API_VERSION ?? '2024-08-01-preview';
+  const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
+
+  const batchSize = pagesPerVisionCall();
+  const sections: string[] = [];
+  let outputTruncated = false;
+  let pagesRead = 0;
+
+  for (let start = 0; start < images.length; start += batchSize) {
+    const batch = images.slice(start, start + batchSize);
+    const firstPage = start + 1;
+    const lastPage = start + batch.length;
+
+    const content: Array<Record<string, unknown>> = [
+      {
+        type: 'text',
+        text: `Transcribe page${batch.length > 1 ? 's' : ''} ${firstPage}${lastPage > firstPage ? `-${lastPage}` : ''} of ${images.length}: ${filename}`,
+      },
+      ...batch.map((base64) => ({
+        type: 'image_url',
+        image_url: { url: `data:image/png;base64,${base64}`, detail: 'high' },
+      })),
+    ];
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content },
+          ],
+          // Deterministic: the same scan must transcribe the same way twice, or a
+          // score could move between runs on identical evidence.
+          temperature: 0,
+          max_tokens: 4096,
+        }),
+      });
+
+      if (!response.ok) {
+        logger.warn('Vision transcription rejected for a page batch', {
+          filename,
+          pages: `${firstPage}-${lastPage}`,
+          status: response.status,
+          detail: (await response.text().catch(() => '')).slice(0, 200),
+        });
+        continue;
+      }
+
+      const body = await response.json() as {
+        choices?: Array<{ message?: { content?: string }; finish_reason?: string }>;
+      };
+      const choice = body.choices?.[0];
+      const markdown = choice?.message?.content?.trim() ?? '';
+      if (!markdown) continue;
+
+      // A batch that hit the output ceiling lost text. Report it — a scanned
+      // page silently half-read is indistinguishable from a page that is short.
+      if (choice?.finish_reason === 'length') {
+        outputTruncated = true;
+        logger.warn('Vision transcription hit the output ceiling for a page batch', {
+          filename,
+          pages: `${firstPage}-${lastPage}`,
+        });
+      }
+
+      sections.push(markdown);
+      pagesRead += batch.length;
+    } catch (err) {
+      logger.error('Vision transcription failed for a page batch', err as Error);
+    }
+  }
+
+  if (sections.length === 0) {
+    logger.warn('Vision transcription returned no content', { filename });
     return null;
   }
+
+  logger.info('Scanned document transcribed with vision', {
+    filename,
+    pages: pagesRead,
+    batches: Math.ceil(images.length / batchSize),
+    characters: sections.join('').length,
+    model: deployment,
+    outputTruncated,
+  });
+
+  return {
+    markdown: sections.join('\n\n'),
+    pagesRead,
+    truncated: pageTruncated || outputTruncated,
+    engine: deployment,
+  };
 }

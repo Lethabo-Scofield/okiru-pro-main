@@ -42,12 +42,14 @@ function mockPages(pages: number): void {
   });
 }
 
-function mockModel(content: string | null, ok = true): void {
+function mockModel(content: string | null, ok = true, finishReason?: string): void {
   globalThis.fetch = vi.fn(async () => ({
     ok,
     status: ok ? 200 : 429,
     text: async () => 'rate limited',
-    json: async () => ({ choices: content === null ? [] : [{ message: { content } }] }),
+    json: async () => ({
+      choices: content === null ? [] : [{ message: { content }, finish_reason: finishReason }],
+    }),
   })) as never;
 }
 
@@ -131,6 +133,117 @@ describe('transcribing a scan', () => {
     const result = await extractScannedPdfWithVision(Buffer.from('small'), 'small.pdf');
     expect(result!.pagesRead).toBe(3);
     expect(result!.truncated).toBe(false);
+  });
+});
+
+describe('the general-model fallback is batched, not one giant call', () => {
+  it('splits pages into batches so the per-call output ceiling cannot swallow a document', async () => {
+    // The old code showed up to 60 pages to one call with a few-thousand-token
+    // output ceiling: the transcription stopped mid-document and reported
+    // success. Batching bounds the ceiling per batch.
+    process.env.PARSER_VISION_PAGES_PER_CALL = '2';
+    try {
+      mockPages(5);
+      mockModel('page text');
+
+      const result = await extractScannedPdfWithVision(Buffer.from('scan'), 'long.pdf');
+      const calls = (globalThis.fetch as never as { mock: { calls: unknown[] } }).mock.calls;
+      expect(calls).toHaveLength(3); // 2 + 2 + 1
+      expect(result!.pagesRead).toBe(5);
+      expect(result!.markdown.split('page text').length - 1).toBe(3);
+    } finally {
+      delete process.env.PARSER_VISION_PAGES_PER_CALL;
+    }
+  });
+
+  it('REPORTS truncation when a batch hits the output ceiling', async () => {
+    // A page silently half-read is indistinguishable from a page that is short.
+    mockPages(2);
+    mockModel('cut off here', true, 'length');
+
+    const result = await extractScannedPdfWithVision(Buffer.from('scan'), 'dense.pdf');
+    expect(result!.truncated).toBe(true);
+  });
+
+  it('keeps the pages that did transcribe when one batch fails', async () => {
+    process.env.PARSER_VISION_PAGES_PER_CALL = '1';
+    try {
+      mockPages(3);
+      let call = 0;
+      globalThis.fetch = vi.fn(async () => {
+        call += 1;
+        const ok = call !== 2; // middle page fails
+        return {
+          ok,
+          status: ok ? 200 : 500,
+          text: async () => 'server error',
+          json: async () => ({ choices: [{ message: { content: `page ${call}` } }] }),
+        };
+      }) as never;
+
+      const result = await extractScannedPdfWithVision(Buffer.from('scan'), 'partial.pdf');
+      expect(result).not.toBeNull();
+      expect(result!.pagesRead).toBe(2);
+    } finally {
+      delete process.env.PARSER_VISION_PAGES_PER_CALL;
+    }
+  });
+});
+
+describe('the OCR sidecar takes precedence when configured', () => {
+  afterEach(() => { delete process.env.PARSER_OCR_ENDPOINT; });
+
+  it('uses the sidecar and never calls the general model', async () => {
+    process.env.PARSER_OCR_ENDPOINT = 'http://ocr:8000/v1';
+    mockPages(2);
+    globalThis.fetch = vi.fn(async (url: string) => {
+      expect(String(url)).toContain('ocr:8000');
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ choices: [{ message: { content: '<|ref|>Register<|/ref|><|det|>[[1,2,3,4]]<|/det|>' } }] }),
+      };
+    }) as never;
+
+    const result = await extractScannedPdfWithVision(Buffer.from('scan'), 'r.pdf');
+    expect(result!.markdown).toBe('Register');
+    expect(result!.engine).toBe('baidu/Unlimited-OCR');
+    expect((globalThis.fetch as never as { mock: { calls: unknown[] } }).mock.calls).toHaveLength(1);
+  });
+
+  it('falls back to the general model when the sidecar is down', async () => {
+    process.env.PARSER_OCR_ENDPOINT = 'http://ocr:8000/v1';
+    mockPages(2);
+    globalThis.fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('ocr:8000')) throw new Error('ECONNREFUSED');
+      return {
+        ok: true,
+        status: 200,
+        text: async () => '',
+        json: async () => ({ choices: [{ message: { content: 'transcribed by the general model' } }] }),
+      };
+    }) as never;
+
+    const result = await extractScannedPdfWithVision(Buffer.from('scan'), 'r.pdf');
+    expect(result!.markdown).toContain('transcribed by the general model');
+    expect(result!.engine).toBe('gpt-4o');
+  });
+
+  it('works with the sidecar alone, with no Azure credentials at all', async () => {
+    unconfigure();
+    process.env.PARSER_OCR_ENDPOINT = 'http://ocr:8000/v1';
+    expect(visionExtractionConfigured()).toBe(true);
+    mockPages(1);
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => '',
+      json: async () => ({ choices: [{ message: { content: 'sidecar only' } }] }),
+    })) as never;
+
+    const result = await extractScannedPdfWithVision(Buffer.from('scan'), 'r.pdf');
+    expect(result!.markdown).toBe('sidecar only');
   });
 });
 
