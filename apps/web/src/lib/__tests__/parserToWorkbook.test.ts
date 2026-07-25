@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  entityMatchKey,
   linkWorkbookRows,
   mergeWorkbookSections,
   normaliseEntityName,
@@ -232,8 +233,11 @@ describe("shaping for the workbook", () => {
 });
 
 describe("cross-document row linking", () => {
-  const row = (cells: Record<string, unknown>, sources: string[] = []): WorkbookRow =>
-    ({ _id: Math.random().toString(36), ...cells, _sourceFiles: sources });
+  let seq = 0;
+  /** Rows default to the SAME source file — the common case within one sheet. */
+  const row = (cells: Record<string, unknown>, sources: string[] = ["wb.xlsm › Procurement"]): WorkbookRow =>
+    ({ _id: `r${(seq += 1)}`, ...cells, _sourceFiles: sources });
+  const link = (input: Parameters<typeof linkWorkbookRows>[0]) => linkWorkbookRows(input);
 
   it("normalises legal suffixes, case and ampersands — never fuzzily", () => {
     expect(normaliseEntityName("Thandanani Packers & Hauliers cc"))
@@ -245,85 +249,127 @@ describe("cross-document row linking", () => {
   });
 
   it("links a supplier's certificate to their schedule row — one complete row", () => {
-    const linked = linkWorkbookRows({
+    const linked = link({
       procurement: [
         row({ supplierName: "Dynamic Maintenance (Pty) Ltd", spend: 4876 }, ["workbook.xlsm › Procurement"]),
         row({ supplierName: "DYNAMIC MAINTENANCE", bbbeeLevel: "4", empoweringSupplier: "Yes" }, ["dynamic-cert.pdf"]),
       ],
     });
 
-    expect(linked.procurement).toHaveLength(1);
-    const merged = linked.procurement![0];
+    expect(linked.rows.procurement).toHaveLength(1);
+    const merged = linked.rows.procurement![0];
     expect(merged.spend).toBe(4876);
     expect(merged.bbbeeLevel).toBe("4");
     expect(merged.empoweringSupplier).toBe("Yes");
     expect(merged._sourceFiles).toEqual(["workbook.xlsm › Procurement", "dynamic-cert.pdf"]);
   });
 
-  it("keeps two spend lines for the same supplier separate — EVEN when equal", () => {
-    // Two invoices are two pieces of evidence; thirteen monthly R500 donations
-    // are thirteen contributions. "Deduplicating" equal figures deletes money.
-    const linked = linkWorkbookRows({
+  it("keeps two spend lines from the SAME document separate — even when equal", () => {
+    // Within one document, two lines are two transactions; thirteen monthly
+    // R500 donations are thirteen contributions. Deduplicating equal figures
+    // deletes money.
+    const linked = link({
       procurement: [
         row({ supplierName: "Alpha", spend: 1000 }),
         row({ supplierName: "Alpha", spend: 2500 }),
         row({ supplierName: "Alpha", spend: 1000 }),
       ],
     });
-    expect(linked.procurement).toHaveLength(3);
-    const linkedSed = linkWorkbookRows({
+    expect(linked.rows.procurement).toHaveLength(3);
+    const linkedSed = link({
       sed: Array.from({ length: 13 }, () => row({ beneficiaryName: "Essentially Edenvale", amount: 500 })),
     });
-    expect(linkedSed.sed).toHaveLength(13);
+    expect(linkedSed.rows.sed).toHaveLength(13);
+  });
+
+  it("matches a ledger's spelling of a supplier to the schedule's", () => {
+    // Real filings: the schedule says "BP Edenvale" and "Subbiah Enterprises";
+    // the ledgers are filed as "B P EDENVALE" and "SUBBIAH ENTERPRISE".
+    expect(entityMatchKey("B P EDENVALE")).toBe(entityMatchKey("BP Edenvale"));
+    expect(entityMatchKey("SUBBIAH ENTERPRISE")).toBe(entityMatchKey("Subbiah Enterprises"));
+    // Still not fuzzy: initials are not expanded into names.
+    expect(entityMatchKey("S. Nhlanhla")).not.toBe(entityMatchKey("Sandile Nhlanhla"));
+    expect(entityMatchKey("TST Truck")).not.toBe(entityMatchKey("TST Truc Chassis"));
+  });
+
+  it("a supplier's ledger corroborates the schedule instead of doubling it", () => {
+    // Different DOCUMENTS reporting the same supplier's spend are the same fact
+    // stated twice. Counting both would report R2.04m for a supplier the client
+    // claimed R412,797 for.
+    const linked = link({
+      procurement: [
+        row({ supplierName: "BP Edenvale", spend: 412797.4 }, ["wb.xlsm › Procurement"]),
+        row({ supplierName: "B P EDENVALE", spend: 1628821.85 }, ["B P EDENVALE LEDGER.xlsx"]),
+      ],
+    });
+
+    expect(linked.rows.procurement).toHaveLength(1);
+    // The LOWER figure is scored: never inflate a claim on our own judgement.
+    expect(linked.rows.procurement![0].spend).toBeCloseTo(412797.4, 2);
+    // …and the gap is reported, because the client is under-claiming.
+    expect(linked.reconciliation).toHaveLength(1);
+    expect(linked.reconciliation[0].message).toContain("B P EDENVALE LEDGER.xlsx");
+    expect(linked.reconciliation[0].message).toContain("1,628,821.85");
+  });
+
+  it("says nothing when two documents agree", () => {
+    const linked = link({
+      procurement: [
+        row({ supplierName: "Alpha", spend: 1000 }, ["wb.xlsm › Procurement"]),
+        row({ supplierName: "Alpha", spend: "R 1,000.00" }, ["ALPHA LEDGER.xlsx"]),
+      ],
+    });
+    expect(linked.rows.procurement).toHaveLength(1);
+    expect(linked.reconciliation).toEqual([]);
   });
 
   it("a certificate qualifies EVERY spend line of its supplier", () => {
     // The certificate merges into one row; its level and empowering status are
     // the supplier's identity, so they propagate to the other spend lines too.
-    const linked = linkWorkbookRows({
+    const linked = link({
       procurement: [
         row({ supplierName: "Alpha", spend: 1000 }),
         row({ supplierName: "Alpha", spend: 1000 }),
         row({ supplierName: "ALPHA (Pty) Ltd", bbbeeLevel: "2", empoweringSupplier: "Yes" }),
       ],
     });
-    expect(linked.procurement).toHaveLength(2);
-    expect(linked.procurement![0].bbbeeLevel).toBe("2");
-    expect(linked.procurement![1].bbbeeLevel).toBe("2");
-    expect(linked.procurement![1].empoweringSupplier).toBe("Yes");
+    expect(linked.rows.procurement).toHaveLength(2);
+    expect(linked.rows.procurement![0].bbbeeLevel).toBe("2");
+    expect(linked.rows.procurement![1].bbbeeLevel).toBe("2");
+    expect(linked.rows.procurement![1].empoweringSupplier).toBe("Yes");
     // Per-line evidence never propagates: both rows keep their own spend.
-    expect(linked.procurement!.map((r) => r.spend)).toEqual([1000, 1000]);
+    expect(linked.rows.procurement!.map((r) => r.spend)).toEqual([1000, 1000]);
   });
 
   it("never overwrites an existing value when filling blanks", () => {
-    const linked = linkWorkbookRows({
+    const linked = link({
       procurement: [
         row({ supplierName: "Alpha", bbbeeLevel: "2" }),
         row({ supplierName: "Alpha", bbbeeLevel: "5", spend: 700 }),
       ],
     });
-    expect(linked.procurement).toHaveLength(1);
-    expect(linked.procurement![0].bbbeeLevel).toBe("2");
-    expect(linked.procurement![0].spend).toBe(700);
+    expect(linked.rows.procurement).toHaveLength(1);
+    expect(linked.rows.procurement![0].bbbeeLevel).toBe("2");
+    expect(linked.rows.procurement![0].spend).toBe(700);
   });
 
   it("keys employees on name AND surname", () => {
-    const linked = linkWorkbookRows({
+    const linked = link({
       "management-control": [
         row({ name: "V", surname: "Naidoo", race: "Indian" }),
         row({ name: "V", surname: "Naidoo", gender: "Male" }),
         row({ name: "V", surname: "Lutchman" }),
       ],
     });
-    expect(linked["management-control"]).toHaveLength(2);
-    expect(linked["management-control"]![0].gender).toBe("Male");
+    expect(linked.rows["management-control"]).toHaveLength(2);
+    expect(linked.rows["management-control"]![0].gender).toBe("Male");
   });
 
   it("leaves nameless rows and single-row sections untouched", () => {
     const nameless = [row({ spend: 500 }), row({ spend: 700 })];
-    const linked = linkWorkbookRows({ procurement: nameless, sed: [row({ beneficiaryName: "OUTA" })] });
-    expect(linked.procurement).toHaveLength(2);
-    expect(linked.sed).toHaveLength(1);
+    const linked = link({ procurement: nameless, sed: [row({ beneficiaryName: "OUTA" })] });
+    expect(linked.rows.procurement).toHaveLength(2);
+    expect(linked.rows.sed).toHaveLength(1);
   });
 
   it("links end-to-end through parserExtractionsToWorkbook", () => {
