@@ -147,6 +147,18 @@ describe('TMPS exclusions', () => {
     const reading = readLedgerSheet(twoSidedLedger(), 'B P EDENVALE LEDGER.xlsx')!;
     expect(reading.possibleTmpsExclusion).toBe(false);
   });
+
+  it('reports an excluded account but does NOT hand its spend over as procurement', () => {
+    // Counting a municipal account toward TMPS inflates a claim on our own
+    // judgement. The finding still reaches the user, who can enter it
+    // deliberately if the agency rules it includable.
+    const rows = [
+      { DATE: '27/03/2024', DESCRIPTION: "INV'S FOR RATES ETC", DEBIT: 32901, 'O/S BALANCE': 32901 },
+    ];
+    const extraction = extractLedgerTable(rows, 'EKJURHULENI LEDGER.xlsx')!;
+    expect(extraction.values).toHaveLength(0);
+    expect(extraction.exceptions.join(' ')).toContain('EXCLUDE');
+  });
 });
 
 describe('as an extraction', () => {
