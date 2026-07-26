@@ -98,7 +98,7 @@ describe('ICT Generic — CalculatorConfig completeness', () => {
   });
 
   it('ownership targets correct', () => {
-    expect(CONFIG.ownership.votingRightsTarget).toBe(0.25);
+    expect(CONFIG.ownership.votingRightsTarget).toBe(0.30); // AICT101: ICT ownership target is 30% (audit item 3)
     expect(CONFIG.ownership.votingRightsMax).toBe(4);
     expect(CONFIG.ownership.economicInterestMax).toBe(4);
     expect(CONFIG.ownership.netValueMax).toBe(8);
@@ -311,7 +311,9 @@ describe('ICT Generic golden — Skills Development', () => {
       CONFIG,
     );
     expect(r.rawStats.absorptionRate).toBeCloseTo(0.5, 5); // was 0.25 under all-learners basis
-    expect(r.absorption).toBeCloseTo(5, 1);
+    // 50% absorption against the AICT300 100% target = half the 5 points.
+    // (The old 2.5% target maxed this at any rate >= 2.5% — audit item 2.)
+    expect(r.absorption).toBeCloseTo(2.5, 1);
   });
 });
 

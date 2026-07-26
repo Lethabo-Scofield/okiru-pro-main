@@ -328,7 +328,11 @@ export function calculateSkillsScore(
   const { overallTargetPct, bursaryTargetPct, disabledTargetPct } = resolveSkillsSpendTargets(sc);
   const fgCap = (sc as any).categoryFGCap ?? sc.categoryECap ?? CATEGORY_FG_CAP;
   const adminCap = (sc as any).adminCostCap ?? sc.categoryFCap ?? ADMIN_COST_CAP;
-  const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? SKILLS_DEFAULTS.subMinThreshold;
+  // No configured sub-minimum means NO sub-minimum — not the generic 40%.
+  // Legacy-code sectors (Transport) set 0 or omit it; defaulting to 40 made
+  // them dischargeable against a rule their code does not contain.
+  // (Audit 2026-07-26 item 15.)
+  const subMinThreshold = config?.pillarConfigs?.skillsDevelopment?.subMinimumPercent ?? 0;
   const maxPoints = config?.pillarConfigs?.skillsDevelopment?.maxPoints ?? 25;
 
   const learningMaxPts = sc.learningProgrammesMaxPts ?? sc.generalMax ?? SKILLS_DEFAULTS.generalMax;
@@ -427,8 +431,11 @@ export function calculateSkillsScore(
     learnerships: round2(learnershipScore),
     absorption: round2(absorptionScore),
     total: skillsTotal,
+    // A sector with no sub-minimum has nothing to fail: `true`, never `false`
+    // (the old `false` marked every no-sub-minimum sector as failing, which the
+    // store then discounted).
     subMinimumMet:
-      subMinThreshold > 0 ? baseScore >= subMinThresholdPoints : false,
+      subMinThreshold > 0 ? baseScore >= subMinThresholdPoints : true,
     categoryBreakdown: breakdown,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     eapBreakdowns,

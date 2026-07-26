@@ -54,7 +54,7 @@ const ltiAfsDataPartial: AfsData = {
 describe('FSC LTI — CalculatorConfig completeness', () => {
   it('loads 142 total points (incl. EF 15; template: core F12=121, C104=140)', () => {
     // 25+21+23+24+7(SD)+7(ED incl stockbroker)+15(EF)+12(AFS)+8 = 142
-    expect(CONFIG.totalMaxPoints).toBe(142);
+    expect(CONFIG.totalMaxPoints).toBe(134); // gazette shapes (audit items 7-10)
   });
 
   it('sector identity is FSC / Generic', () => {
@@ -68,10 +68,10 @@ describe('FSC LTI — CalculatorConfig completeness', () => {
 
   it('pillar maxima match LTI sub-sector spec', () => {
     const pc = CONFIG.pillarConfigs;
-    expect(pc?.ownership?.maxPoints).toBe(25);
-    expect(pc?.managementControl?.maxPoints).toBe(21);
+    expect(pc?.ownership?.maxPoints).toBe(23); // gazette shapes (audit items 7-10)
+    expect(pc?.managementControl?.maxPoints).toBe(20); // gazette shapes (audit items 7-10)
     expect(pc?.skillsDevelopment?.maxPoints).toBe(23);
-    expect(pc?.preferentialProcurement?.maxPoints).toBe(24);
+    expect(pc?.preferentialProcurement?.maxPoints).toBe(19); // gazette shapes (audit items 7-10)
     // EF & ESD Scorecard - Long Term: SD C16 = 7; ED C18 = 3 base (+1 grad
     // +1 jobs +2 stockbroker = 7). The old 10/9 were the Others ESD maxima.
     expect(pc?.supplierDevelopment?.maxPoints).toBe(7);
@@ -113,7 +113,7 @@ describe('FSC LTI — CalculatorConfig completeness', () => {
     expect(ef.edTarget).toBeCloseTo(0.002, 4);
   });
 
-  it('LTI total pillar sum = 142', () => {
+  it('LTI total pillar sum = 134 (gazette shapes)', () => {
     const pc = CONFIG.pillarConfigs!;
     const sum = (pc.ownership?.maxPoints ?? 0) + (pc.managementControl?.maxPoints ?? 0) +
       (pc.skillsDevelopment?.maxPoints ?? 0) + (pc.preferentialProcurement?.maxPoints ?? 0) +
@@ -122,7 +122,7 @@ describe('FSC LTI — CalculatorConfig completeness', () => {
       (CONFIG.accessToFinancialServices?.maxPoints ?? 0) +
       ((pc as any).empowermentFinancing?.maxPoints ?? 0);
     // 25+21+23+24+7+7+8+12+15(EF) = 142
-    expect(sum).toBe(142);
+    expect(sum).toBe(134); // gazette shapes (audit items 7-10)
   });
 });
 

@@ -36,14 +36,14 @@ const EAP_PROVINCE = 'Gauteng';
  * CEE norms) is 10.38. Formula fidelity is proven in management.eapWorkbook.test.ts.
  */
 const EXCEL = {
-  ownership: 25,
+  ownership: 22, // Excel 25.00 relied on the full-award-at-25%-voting convention; per-indicator (Annexe 100, audit item 12a) scores the evidenced lines = 22
   managementControl: 10.38, // per-demographic (was 11.765 under the aggregate engine)
   skillsDevelopment: 0,
   procurement: 20.333988202597936,
   supplierDevelopment: 3.6913447533499544,
   enterpriseDevelopment: 2.3624606421439704,
   socioEconomicDevelopment: 0.40604792286849495,
-  grandTotal: 62.17, // 63.559 − 11.765 (old MC) + 10.38 (per-demographic MC)
+  grandTotal: 59.17, // 62.17 − 3 ownership: per-indicator scoring (audit item 12a) stops gifting the un-evidenced DG/NE lines
 };
 
 const lakeOwnership = {
@@ -140,7 +140,7 @@ describe('RCOGP Generic — CalculatorConfig completeness', () => {
 });
 
 describe('RCOGP Generic golden — Lake Trading pillar scores', () => {
-  it('Ownership = 25/25', () => {
+  it('Ownership = 22/25 — per-indicator, no full-award shortcut', () => {
     const r = calculateOwnershipScore(lakeOwnership, CONFIG);
     expect(r.total).toBeCloseTo(EXCEL.ownership, 1);
   });

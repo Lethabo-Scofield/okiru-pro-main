@@ -76,17 +76,21 @@ describe('calculateOwnershipScore', () => {
       expect(result.total).toBeLessThanOrEqual(25);
     });
 
-    it('should award full ownership when black voting >= 25%', () => {
+    it('scores each indicator on its own measure — no full-award shortcut at 25% voting', () => {
+      // Annexe 100 (audit 2026-07-26 item 12a): crossing the 25%+1 voting
+      // target maxes the VOTING line, not every line. The old shortcut gifted
+      // the black-women/DG/net-value maxima with no evidence behind them.
       const result = calculateOwnershipScore(makeOwnershipData({
         shareholders: [
           makeShareholder({ blackOwnership: 1.0, blackWomenOwnership: 0.5, shares: 100, shareValue: 5_000_000 }),
         ],
       }));
 
-      expect(result.fullOwnershipAwarded).toBe(true);
+      expect(result.fullOwnershipAwarded).toBe(false);
       expect(result.votingRightsBlack).toBe(4);
       expect(result.economicInterestBlack).toBe(4);
-      expect(result.netValue).toBe(8);
+      // 50% black women >= the 10% target → that line still maxes on its own.
+      expect(result.votingRightsBWO).toBeGreaterThan(0);
     });
 
     it('should calculate proportional voting rights for 10% black ownership', () => {

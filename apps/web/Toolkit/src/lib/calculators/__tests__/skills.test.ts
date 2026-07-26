@@ -59,7 +59,10 @@ describe('calculateSkillsScore', () => {
       expect(result.total).toBe(0);
       expect(result.learningProgrammes).toBe(0);
       expect(result.bursaries).toBe(0);
-      expect(result.subMinimumMet).toBe(false);
+      // No CalculatorConfig here → no configured sub-minimum → nothing to
+      // fail (audit 2026-07-26 item 15; `false` used to discount legacy-code
+      // sectors against a rule their codes never carried).
+      expect(result.subMinimumMet).toBe(true);
     });
 
     it('should handle null training programs gracefully', () => {

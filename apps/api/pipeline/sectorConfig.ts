@@ -294,12 +294,24 @@ const ICT_LEVELS = [
   { level: 8, minPoints: 55, recognition: 10 },
 ];
 
-// Transport Sector Large — max 108 → scale default Generic thresholds (docs/Transport Codes.xlsx sheet1)
-const TRANSPORT_LARGE_LEVELS = STANDARD_LEVELS.map(({ level, minPoints, recognition }) => ({
-  level,
-  minPoints: Math.round((minPoints * 108) / 120 * 100) / 100,
-  recognition,
-}));
+/**
+ * Transport Sector Large — the LEGACY (2007-framework) level table, same bands
+ * as Transport QSE below. The Transport Sector Code was never re-gazetted onto
+ * the amended-codes ladder, and real Road Freight Large certificates confirm
+ * it: Super Group (TLVT, 2025) scores 93.88 and is certified LEVEL 2 — the
+ * previous scaled amended-codes ladder here (L1 from 90/108) would have called
+ * that Level 1. Audit 2026-07-26 item 1; gazette GG 32511.
+ */
+const TRANSPORT_LARGE_LEVELS = [
+  { level: 1, minPoints: 100, recognition: 135 },
+  { level: 2, minPoints: 85, recognition: 125 },
+  { level: 3, minPoints: 75, recognition: 110 },
+  { level: 4, minPoints: 65, recognition: 100 },
+  { level: 5, minPoints: 55, recognition: 80 },
+  { level: 6, minPoints: 45, recognition: 60 },
+  { level: 7, minPoints: 40, recognition: 50 },
+  { level: 8, minPoints: 30, recognition: 10 },
+];
 
 /**
  * Transport Sector QSE — the legacy (2007-framework) level table, on a base of
@@ -331,48 +343,31 @@ const TRANSPORT_QSE_LEVELS = [
   { level: 8, minPoints: 30, recognition: 10 },
 ];
 
-// FSC level thresholds vary by sub-sector (Scoring Scale sheet — FSC-FULL-ANALYSIS §3)
-const FSC_LEVELS_OTHERS = [
-  { level: 1, minPoints: 92.79, recognition: 135 },
-  { level: 2, minPoints: 88.15, recognition: 125 },
-  { level: 3, minPoints: 83.51, recognition: 110 },
-  { level: 4, minPoints: 74.23, recognition: 100 },
-  { level: 5, minPoints: 69.59, recognition: 80 },
-  { level: 6, minPoints: 64.95, recognition: 60 },
-  { level: 7, minPoints: 51.04, recognition: 50 },
-  { level: 8, minPoints: 37.12, recognition: 10 },
-];
-
 /**
- * Banks and LTI share identical thresholds.
- * Template formula: Yn = Wn/111 × F12, W = 100/95/90/80/75/70/55/40, with the
- * core denominator F12 = 121 (23 own + 21 MC + 20 skills + 15 PP + 15 EF +
- * 7 SD + 3 ED + 5 SED&CE + 12 AFS — Scorecard Calculations F3:F12,
- * FSC_Generic.md L17421–17496). The previous values (108.11…43.24) were
- * W/111 × 120 — computed with EF excluded from the core; now that EF is
- * scored, F12 = 121 per the template.
+ * FSC level thresholds — the GAZETTE formula (GG 41287 §8.2.1):
+ *   threshold(level) = generic-points(level) / 109 × sector total
+ * with sector totals Banks & Life 120, STI 115, Others 105 (§8.1), and the
+ * generic ladder W = 100/95/90/80/75/70/55/40.
+ *
+ * The previous ladders came from the Excel template's "Scoring Scale" sheet
+ * (denominator 111 with a template-derived core), which ran ~1-3.5 points more
+ * lenient at Level 1 than the gazette. Audit 2026-07-26 item 10; the gazette
+ * formula is unambiguous.
  */
-const FSC_LEVELS_BANKS_LTI = [
-  { level: 1, minPoints: 109.01, recognition: 135 }, // 100/111 × 121 = 109.009…
-  { level: 2, minPoints: 103.56, recognition: 125 }, // 95/111 × 121
-  { level: 3, minPoints: 98.11, recognition: 110 },  // 90/111 × 121
-  { level: 4, minPoints: 87.21, recognition: 100 },  // 80/111 × 121
-  { level: 5, minPoints: 81.76, recognition: 80 },   // 75/111 × 121
-  { level: 6, minPoints: 76.31, recognition: 60 },   // 70/111 × 121
-  { level: 7, minPoints: 59.95, recognition: 50 },   // 55/111 × 121
-  { level: 8, minPoints: 43.60, recognition: 10 },   // 40/111 × 121
-];
+const FSC_GENERIC_LADDER = [100, 95, 90, 80, 75, 70, 55, 40];
+const FSC_RECOGNITION = [135, 125, 110, 100, 80, 60, 50, 10];
 
-const FSC_LEVELS_STI = [
-  { level: 1, minPoints: 103.60, recognition: 135 },
-  { level: 2, minPoints: 98.42, recognition: 125 },
-  { level: 3, minPoints: 93.24, recognition: 110 },
-  { level: 4, minPoints: 82.88, recognition: 100 },
-  { level: 5, minPoints: 77.70, recognition: 80 },
-  { level: 6, minPoints: 72.52, recognition: 60 },
-  { level: 7, minPoints: 56.98, recognition: 50 },
-  { level: 8, minPoints: 41.44, recognition: 10 },
-];
+function fscLevels(sectorTotal: number) {
+  return FSC_GENERIC_LADDER.map((points, i) => ({
+    level: i + 1,
+    minPoints: Math.round((points / 109) * sectorTotal * 100) / 100,
+    recognition: FSC_RECOGNITION[i],
+  }));
+}
+
+const FSC_LEVELS_OTHERS = fscLevels(105);     // L1 = 96.33
+const FSC_LEVELS_BANKS_LTI = fscLevels(120);  // L1 = 110.09
+const FSC_LEVELS_STI = fscLevels(115);        // L1 = 105.50
 
 // ---------------------------------------------------------------------------
 // BEE Recognition Table — multiplies supplier spend for procurement scoring
@@ -528,7 +523,7 @@ export const RCOGP_GENERIC: SectorConfig = {
       bursarySpendPercent: 2.5,
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 5.0,
-      absorptionTargetPercent: 2.5,
+      absorptionTargetPercent: 100,  // Statement 300 / AICT300: 100% of unemployed LAI absorbed (audit item 2; was 2.5 = x40 over-award)
     },
     procurement: {
       allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
@@ -590,10 +585,14 @@ export const ICT_GENERIC: SectorConfig = {
   },
   targets: {
     ownership: {
-      // Verified from Summary Scorecard rows 20–26: 25%+1 vote = 4 pts, 10% women = 2 pts
-      votingRightsTarget: 0.25, votingRightsMaxPts: 4,
+      // ICT gazette AICT101 (GG 40407): the ICT sector code sets a 30% black
+      // ownership target for voting rights and economic interest — NOT the
+      // generic 25%+1. The Excel summary carried the generic figure; the
+      // gazette is unambiguous and ICT_QSE below already uses 0.30.
+      // (Audit 2026-07-26 item 3.)
+      votingRightsTarget: 0.30, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      economicInterestTarget: 0.30, economicInterestMaxPts: 4,
       womenEITarget: 0.10, womenEIMaxPts: 2,
       netValueMaxPts: 8,
       newEntrantsMaxPts: 2,
@@ -644,7 +643,7 @@ export const ICT_GENERIC: SectorConfig = {
       bursarySpendPercent: 2.5, // 2.1.2.2 unemployed-LAI headcount target
       disabledSpendPercent: 0.3,
       learnershipTargetPercent: 2.5,
-      absorptionTargetPercent: 2.5,
+      absorptionTargetPercent: 100,  // Statement 300 / AICT300: 100% of unemployed LAI absorbed (audit item 2; was 2.5 = x40 over-award)
     },
     procurement: {
       // Verified from Procurement Scorecard: total 27 (25 base + 2 DG bonus)
@@ -688,10 +687,10 @@ export const FSC_GENERIC: SectorConfig = {
   sectorCode: 'FSC',
   sectorName: 'Financial Sector Code (Generic)',
   scorecardType: 'Generic',
-  totalMaxPoints: 120, // Verified from Excel: 25+21+23+24+10+9+8 = 120 (Others sub-sector)
+  totalMaxPoints: 119, // FSC Others: 25+20+23+24+10+9+8 = 119 (MC 20 per FS200 — audit item 9)
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined (Others: 2+1+2+1+10+4+1=21)
+    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined (Others: 2+1+2+1+10+4+1=21)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 }, // 2+2+3+4+4+1+4+3 = 23
     preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 }, // 5+3+2+7+3+2+2 = 24 (Others, no EF)
@@ -710,7 +709,8 @@ export const FSC_GENERIC: SectorConfig = {
     },
     managementControl: {
       // GROUND TRUTH Section 5: FSC MC breakdown: board 2+1, exec 2+1, other exec 10+4 = 20; + disabled 1 = 21
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,  // board: 2 pts black
+      // FS200: board black voting = 1 point, not 2 (audit 2026-07-26 item 9).
+      boardBlackTarget: 0.50, boardBlackMaxPts: 1,  // board: 2 pts black
       boardBWTarget: 0.25, boardBWMaxPts: 1,         // board: 1 pt women
       execBlackTarget: 0.50, execBlackMaxPts: 2,     // exec: 2 pts black
       execBWTarget: 0.25, execBWMaxPts: 1,           // exec: 1 pt women
@@ -782,14 +782,14 @@ export const FSC_BANKS: SectorConfig = {
   sectorCode: 'FSC',
   sectorName: 'Financial Sector Code (Banks — FS701)',
   scorecardType: 'Generic',
-  // 25+21+23+24+7(SD)+5(ED no stockbroker)+15(EF)+12(AFS)+8 = 140
-  totalMaxPoints: 140,
+  // Banks gazette shapes: 23+20+23+19+7(SD)+5(ED)+15(EF)+12(AFS)+8 = 132 (audit items 7-9)
+  totalMaxPoints: 132,
   pillarConfigs: {
-    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
     // Banks SD row on the EF & ESD scorecard = 7 pts (C17 =IF(D7="Banks",7,0),
     // FSC_Generic.md L15913) — the previous 10 was the Others ESD-scorecard value.
     supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -807,14 +807,21 @@ export const FSC_BANKS: SectorConfig = {
   },
   targets: {
     ownership: {
+      // FSC gazette FS100 Table 2a (GG 41287 pp.203-204): Banks/LTI/STI
+      // ownership is 23 points — EI 3 (not 4), New Entrants 3 (not 2), Net
+      // Value 6 (not 8), plus the DG/ESOP/BBOS/co-op 3@3% line the generic
+      // shape carries. Sub-minimum = 40% of the SIX net-value points.
+      // (Audit 2026-07-26 item 7.)
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 3,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.03, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 6, newEntrantsMaxPts: 3,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      // FS200: board black voting = 1 point, not 2 (audit 2026-07-26 item 9).
+      boardBlackTarget: 0.50, boardBlackMaxPts: 1,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
       execBWTarget: 0.25, execBWMaxPts: 1,
@@ -841,11 +848,14 @@ export const FSC_BANKS: SectorConfig = {
       absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
-      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
-      qseTarget: 0.18, qseMaxPts: 3,
+      // FSC gazette pp.245-246: the Banks/LTI PP rows are 4/2/2/5/2 = 15
+      // base (the 5/3/2/7/3 = 20 shape belongs to Others). +4 bonus stays.
+      // (Audit 2026-07-26 item 8.)
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 4,
+      qseTarget: 0.18, qseMaxPts: 2,
       emeTarget: 0.12, emeMaxPts: 2,
-      bo51Target: 0.30, bo51MaxPts: 7,
-      bwo30Target: 0.10, bwo30MaxPts: 3,
+      bo51Target: 0.30, bo51MaxPts: 5,
+      bwo30Target: 0.10, bwo30MaxPts: 2,
       dgTarget: 0.02, dgMaxPts: 4,
     },
     // Banks SD: 1.8% NPAT @ 7 pts; ED: 0.2% NPAT @ 3 pts base (EF & ESD Scorecard -
@@ -881,13 +891,13 @@ export const FSC_LTI: SectorConfig = {
   sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
   scorecardType: 'Generic',
   // 25+21+23+24+7(SD)+7(ED with stockbroker)+15(EF)+12(AFS)+8 = 142
-  totalMaxPoints: 142,
+  totalMaxPoints: 134, // LTI: 23+20+23+19+7+7+15(EF)+12(AFS)+8 = 134 (gazette shapes — audit items 7-9)
   pillarConfigs: {
-    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
     // LTI SD row on the EF & ESD scorecard = 7 pts (C16 =IF(LTI,7,0),
     // FSC_Generic.md L16040) — the previous 10 was the Others ESD-scorecard value.
     supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -903,14 +913,21 @@ export const FSC_LTI: SectorConfig = {
   },
   targets: {
     ownership: {
+      // FSC gazette FS100 Table 2a (GG 41287 pp.203-204): Banks/LTI/STI
+      // ownership is 23 points — EI 3 (not 4), New Entrants 3 (not 2), Net
+      // Value 6 (not 8), plus the DG/ESOP/BBOS/co-op 3@3% line the generic
+      // shape carries. Sub-minimum = 40% of the SIX net-value points.
+      // (Audit 2026-07-26 item 7.)
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 3,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.03, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 6, newEntrantsMaxPts: 3,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      // FS200: board black voting = 1 point, not 2 (audit 2026-07-26 item 9).
+      boardBlackTarget: 0.50, boardBlackMaxPts: 1,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
       execBWTarget: 0.25, execBWMaxPts: 1,
@@ -937,11 +954,14 @@ export const FSC_LTI: SectorConfig = {
       absorptionTargetPercent: 100,  // R7: 100% of unemployed LAI (was 1.0 + 2nd /100 in mapper)
     },
     procurement: {
-      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
-      qseTarget: 0.18, qseMaxPts: 3,
+      // FSC gazette pp.245-246: the Banks/LTI PP rows are 4/2/2/5/2 = 15
+      // base (the 5/3/2/7/3 = 20 shape belongs to Others). +4 bonus stays.
+      // (Audit 2026-07-26 item 8.)
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 4,
+      qseTarget: 0.18, qseMaxPts: 2,
       emeTarget: 0.12, emeMaxPts: 2,
-      bo51Target: 0.30, bo51MaxPts: 7,
-      bwo30Target: 0.10, bwo30MaxPts: 3,
+      bo51Target: 0.30, bo51MaxPts: 5,
+      bwo30Target: 0.10, bwo30MaxPts: 2,
       dgTarget: 0.02, dgMaxPts: 4,
     },
     // LTI SD: 1.8% NPAT @ 7 pts; ED: 0.2% NPAT @ 3 pts base (EF & ESD Scorecard -
@@ -975,10 +995,10 @@ export const FSC_STI: SectorConfig = {
   sectorName: 'Financial Sector Code (Short-Term Insurers — FS703)',
   scorecardType: 'Generic',
   // 25+21+23+24+10+9+12+8 = 132 (same as LTI, EF=N/A for STI)
-  totalMaxPoints: 132,
+  totalMaxPoints: 129, // STI: 23+20+... (own 23 + MC 20 per gazette — audit items 7,9)
   pillarConfigs: {
-    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 21, hasSubMinimum: false, subMinimumPercent: 0 },
+    ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -991,14 +1011,21 @@ export const FSC_STI: SectorConfig = {
   },
   targets: {
     ownership: {
+      // FSC gazette FS100 Table 2a (GG 41287 pp.203-204): Banks/LTI/STI
+      // ownership is 23 points — EI 3 (not 4), New Entrants 3 (not 2), Net
+      // Value 6 (not 8), plus the DG/ESOP/BBOS/co-op 3@3% line the generic
+      // shape carries. Sub-minimum = 40% of the SIX net-value points.
+      // (Audit 2026-07-26 item 7.)
       votingRightsTarget: 0.25, votingRightsMaxPts: 4,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,
-      economicInterestTarget: 0.25, economicInterestMaxPts: 4,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 3,
       womenEITarget: 0.10, womenEIMaxPts: 2,
-      netValueMaxPts: 8, newEntrantsMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.03, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 6, newEntrantsMaxPts: 3,
     },
     managementControl: {
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      // FS200: board black voting = 1 point, not 2 (audit 2026-07-26 item 9).
+      boardBlackTarget: 0.50, boardBlackMaxPts: 1,
       boardBWTarget: 0.25, boardBWMaxPts: 1,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
       execBWTarget: 0.25, execBWMaxPts: 1,
@@ -1068,10 +1095,10 @@ export const AGRI_GENERIC: SectorConfig = {
   sectorCode: 'AGRI',
   sectorName: 'AgriBEE Sector Code (Generic)',
   scorecardType: 'Generic',
-  totalMaxPoints: 132, // Verified: 25+23+25+27+10+7+15 = 132
+  totalMaxPoints: 128, // AgriBEE gazette: 25+19+25+27+10+7+15 = 128 (MC 19 per GG 41306 — audit item 11)
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined, 23 pts
+    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined, 19 pts (GG 41306 — audit item 11)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // EE folded into MC
     skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -1096,18 +1123,20 @@ export const AGRI_GENERIC: SectorConfig = {
       netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      // AGRI MC: verified against MC Scorecard rows 18–72 — 23-pt combined total
-      // Exco sub-total: 13 — Board Black 3@50%, Board BW 2@25%, Exec Black 2@50%,
-      //   Exec BW 1@25%, Other Exec Black 3@60%, Other Exec BW 2@30%
+      // AGRI MC: AgriBEE gazette (GG 41306) Statement — 19-pt combined total.
+      // Exco sub-total: 9 — Board Black 2@50%, Board BW 1@25%, Exec Black 2@50%,
+      //   Exec BW 1@25%, Other Exec Black 2@60%, Other Exec BW 1@30%.
+      // The Agri Excel template carried 3+2 / 3+2 (= 23 total, +4 phantom
+      // points) — the gazette is unambiguous. (Audit 2026-07-26 item 11.)
       // EE bands sub-total: 10 — Senior Black 2@60%, Senior BW 1@30%,
       //   Middle Black 2@75%, Middle BW 1@38%, Junior Black 1@88%, Junior BW 1@44%,
       //   Disabled 2@2%
-      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
-      boardBWTarget: 0.25, boardBWMaxPts: 2,
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
       execBWTarget: 0.25, execBWMaxPts: 1,   // 25% (NOT 30% — exec directors only)
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
       seniorMaxPts: 2, seniorBWMaxPts: 1,    // EAP-based (60%/30%)
       middleMaxPts: 2, middleBWMaxPts: 1,    // EAP-based (75%/38%)
       juniorMaxPts: 1, juniorBWMaxPts: 1,    // EAP-based (88%/44%)
@@ -1346,7 +1375,10 @@ export const ICT_QSE: SectorConfig = {
       dgTarget: 0.01, dgMaxPts: 1,
     },
     // SD: 1% NPAT / 5 pts; ED: 1% NPAT / 5 base + tiered jobs bonus (1 or 2 pts, not yet modelled in calculator)
-    esd: { sdPercent: 1.0, sdMaxPts: 5, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 2 },
+    // ICT gazette AICT604 §7.1.1.4-7.1.1.5: QSE SD and ED are each 2% of NPAT,
+    // not the generic 1% — the 1% figure halved every target and doubled the
+    // score at a given spend. (Audit 2026-07-26 item 4.)
+    esd: { sdPercent: 2.0, sdMaxPts: 5, edPercent: 2.0, edMaxPts: 5, edGraduationBonus: 1, edJobsBonus: 2 },
     sed: { spendPercent: 1.0, maxPts: 12 }, // ICT QSE: 12 pts (not 5)
   },
   // ICT QSE uses standard RCOGP 8-band thresholds (100/95/90/80/75/70/55/40),
@@ -1446,6 +1478,10 @@ export const TRANSPORT_GENERIC: SectorConfig = {
       bursarySpendPercent: 1.5,
       disabledSpendPercent: 0.45,
       learnershipTargetPercent: 5.0,
+      // NOT the Statement-300 absorption indicator: Transport Large (legacy
+      // framework) reuses this slot for "black women in B/C/D programmes" at a
+      // genuine 2.5% target (calcTransportLargeSkills). Audit item 2's 100%
+      // fix applies to RCOGP/ICT Generic only.
       absorptionTargetPercent: 2.5,
     },
     procurement: {
@@ -1669,11 +1705,10 @@ const ZERO_ESD_TARGETS: EsdTargets = {
   edGraduationBonus: 0, edJobsBonus: 0,
 };
 
-// TODO(verify): Construction-specific level thresholds were not present in the
-// supplied source documents (Construction QSE Scorecard + Construction Sector
-// Codes docx). Using STANDARD_LEVELS as a placeholder; the Construction engine
-// returns total points and lets the caller translate to a B-BBEE level.
-const CONSTRUCTION_LEVELS_PLACEHOLDER = STANDARD_LEVELS;
+// Gazette-exact: CSC000 uses the amended-codes standard ladder unchanged
+// (verified first-hand against GG 41287 in the 2026-07-26 audit — the old
+// _PLACEHOLDER name and TODO suggested it was unconfirmed; it is confirmed).
+const CONSTRUCTION_LEVELS = STANDARD_LEVELS;
 
 export const CONSTRUCTION_QSE: SectorConfig = {
   sectorCode: 'CONSTRUCTION',
@@ -1697,7 +1732,7 @@ export const CONSTRUCTION_QSE: SectorConfig = {
     procurement: ZERO_PROC_TARGETS, esd: ZERO_ESD_TARGETS,
     sed: { spendPercent: 0, maxPts: 5 },
   },
-  levelThresholds: CONSTRUCTION_LEVELS_PLACEHOLDER,
+  levelThresholds: CONSTRUCTION_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
@@ -1726,7 +1761,7 @@ export const CONSTRUCTION_CONTRACTOR: SectorConfig = {
     procurement: ZERO_PROC_TARGETS, esd: ZERO_ESD_TARGETS,
     sed: { spendPercent: 0, maxPts: 6 },
   },
-  levelThresholds: CONSTRUCTION_LEVELS_PLACEHOLDER,
+  levelThresholds: CONSTRUCTION_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
@@ -1755,7 +1790,7 @@ export const CONSTRUCTION_BEP: SectorConfig = {
     procurement: ZERO_PROC_TARGETS, esd: ZERO_ESD_TARGETS,
     sed: { spendPercent: 0, maxPts: 6 },
   },
-  levelThresholds: CONSTRUCTION_LEVELS_PLACEHOLDER,
+  levelThresholds: CONSTRUCTION_LEVELS,
   recognitionTable: STANDARD_RECOGNITION_TABLE,
   benefitFactors: STANDARD_BENEFIT_FACTORS,
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,

@@ -30,7 +30,7 @@ describe('Transport QSE scoring', () => {
     }
   });
 
-  it('scores 100% black ownership at 28/28 even with companyValue=0', () => {
+  it('scores 100% black ownership at 27/28 with companyValue=0 — indicators score on their own measure', () => {
     const own = calculateOwnershipScore({
       id: '1', clientId: 'c',
       shareholders: [{
@@ -43,7 +43,9 @@ describe('Transport QSE scoring', () => {
       outstandingDebt: 0,
       yearsHeld: 5,
     }, cfg);
-    expect(own.total).toBe(28);
+    // 27 not 28 since audit item 12a: the shortcut no longer gifts the one
+    // point this fixture never evidences (no DG / new-entrant participation).
+    expect(own.total).toBe(27);
   });
 
   it('scores transport MC and EE with non-zero max', () => {

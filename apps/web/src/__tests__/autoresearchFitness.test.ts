@@ -28,7 +28,20 @@ import { calculateEsdScore, calculateSedScore } from '@toolkit/lib/calculators/e
 import type { CalculatorConfig } from '../../shared/schema';
 
 const SHEET = resolve(process.cwd(), '../../autoresearch/fitness/lake-trading-info-sheet.xlsx');
-const TARGET = 63.56;
+/**
+ * RE-ANCHORED 2026-07-26 (user directive: gazette truth over template baselines).
+ *
+ * The Excel toolkit's 63.56 includes Ownership 25.00 awarded by the template's
+ * "25%+1 voting → every line at maximum" convention: the Lake Family Trust got
+ * the black-WOMEN voting/EI points (2+2) and designated-group/new-entrant
+ * points (3+2) with none of those recorded. Annexe 100 scores each indicator
+ * on its own measure, so the gazette-true engine awards Ownership 18.00
+ * (voting 4 + EI 4 + DG… as evidenced + net value 8) and the grand total is
+ * 56.53. The full delta vs 63.56 is that ownership line — every other pillar
+ * is unchanged (MC 11.74, PP 20.33, SD 3.69, ED 2.36, SED 0.41).
+ * See docs/calculator-audit-2026-07-26.md item 12a.
+ */
+const TARGET = 56.53;
 
 // RCOGP Generic config (mirrors apps/web/server/__tests__/workbookProjection.test.ts).
 const CONFIG: CalculatorConfig = {
