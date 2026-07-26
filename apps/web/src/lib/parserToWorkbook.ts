@@ -201,6 +201,11 @@ interface MergeDecision {
   finding?: string;
 }
 
+/** Does this row's evidence come from an accounting SOURCE document? */
+function fromAccountingRecord(row: WorkbookRow): boolean {
+  return (row._sourceFiles ?? []).some((file) => /ledger|statement|accounts?\s*payable/i.test(file));
+}
+
 /**
  * Should these two rows for the same entity become one?
  *
@@ -213,10 +218,14 @@ interface MergeDecision {
  *   the client's schedule both reporting that supplier's spend. Merged, so a
  *   ledger corroborates a schedule row instead of doubling it.
  *
- * When two documents disagree on a figure the LOWER one is kept and the gap is
- * reported. Never inflating a claim on our own judgement is the whole point:
- * over-claiming is what gets a certificate revoked, and a client under-claiming
- * against their own ledger is something to TELL them, not to silently correct.
+ * When two documents disagree on a figure, precedence follows the EVIDENCE
+ * CLASS, not the direction of the difference: verification methodology ranks
+ * accounting records (creditors/supplier ledgers, reconciled to the AFS) above
+ * client-prepared schedules, so a ledger figure wins whether it is higher or
+ * lower. Between two documents of the same class the LOWER figure is kept —
+ * never inflate a claim on our own judgement. Every disagreement is reported
+ * either way: a client whose schedule under-claims against their own ledger is
+ * told so in Rands.
  */
 function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow, entity: string): MergeDecision {
   let finding: string | undefined;
@@ -229,12 +238,15 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
     const left = Number(String(a[column]).replace(/[R\s,]/g, ""));
     const right = Number(String(b[column]).replace(/[R\s,]/g, ""));
     if (Number.isFinite(left) && Number.isFinite(right)) {
-      const lower = Math.min(left, right);
-      const higher = Math.max(left, right);
-      const lowerFile = (left <= right ? a : b)._sourceFiles?.[0] ?? "one document";
-      const higherFile = (left <= right ? b : a)._sourceFiles?.[0] ?? "another document";
-      finding = `${entity}: ${higherFile} supports ${column} of ${higher.toLocaleString()} but ${lowerFile} claims ${lower.toLocaleString()} — a difference of ${(higher - lower).toLocaleString()}. The lower figure is being used; confirm which is in scope.`;
-      a[column] = lower;
+      const aLedger = fromAccountingRecord(a);
+      const bLedger = fromAccountingRecord(b);
+      const useLedger = aLedger !== bLedger;
+      const keep = useLedger ? (aLedger ? left : right) : Math.min(left, right);
+      const keptFile = (useLedger ? (aLedger ? a : b) : (left <= right ? a : b))._sourceFiles?.[0] ?? "one document";
+      const otherFile = (useLedger ? (aLedger ? b : a) : (left <= right ? b : a))._sourceFiles?.[0] ?? "another document";
+      const other = keep === left ? right : left;
+      finding = `${entity}: ${keptFile} states ${column} of ${keep.toLocaleString()} but ${otherFile} says ${other.toLocaleString()} — a difference of ${Math.abs(other - keep).toLocaleString()}. ${useLedger ? "The accounting record's figure is being used" : "The lower figure is being used"}; confirm which is in scope.`;
+      a[column] = keep;
     } else {
       finding = `${entity}: documents disagree on ${column} (${String(a[column])} vs ${String(b[column])}).`;
     }

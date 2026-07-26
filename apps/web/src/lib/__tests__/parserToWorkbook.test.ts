@@ -341,7 +341,9 @@ describe("cross-document row linking", () => {
   it("a supplier's ledger corroborates the schedule instead of doubling it", () => {
     // Different DOCUMENTS reporting the same supplier's spend are the same fact
     // stated twice. Counting both would report R2.04m for a supplier the client
-    // claimed R412,797 for.
+    // claimed R412,797 for. Precedence follows the EVIDENCE CLASS: verification
+    // methodology ranks the accounting record above a client-prepared schedule,
+    // so the ledger's figure is scored — and the gap is still reported.
     const linked = link({
       procurement: [
         row({ supplierName: "BP Edenvale", spend: 412797.4 }, ["wb.xlsm › Procurement"]),
@@ -350,12 +352,32 @@ describe("cross-document row linking", () => {
     });
 
     expect(linked.rows.procurement).toHaveLength(1);
-    // The LOWER figure is scored: never inflate a claim on our own judgement.
-    expect(linked.rows.procurement![0].spend).toBeCloseTo(412797.4, 2);
-    // …and the gap is reported, because the client is under-claiming.
+    expect(linked.rows.procurement![0].spend).toBeCloseTo(1628821.85, 2);
     expect(linked.reconciliation).toHaveLength(1);
     expect(linked.reconciliation[0].message).toContain("B P EDENVALE LEDGER.xlsx");
-    expect(linked.reconciliation[0].message).toContain("1,628,821.85");
+    expect(linked.reconciliation[0].message).toContain("accounting record");
+  });
+
+  it("the ledger wins even when it is LOWER — precedence is the source, not the direction", () => {
+    // A schedule over-claiming against its own ledger is exactly the case that
+    // gets a certificate revoked.
+    const linked = link({
+      procurement: [
+        row({ supplierName: "Alpha", spend: 900000 }, ["wb.xlsm › Procurement"]),
+        row({ supplierName: "Alpha", spend: 250000 }, ["ALPHA LEDGER.xlsx"]),
+      ],
+    });
+    expect(linked.rows.procurement![0].spend).toBe(250000);
+  });
+
+  it("between two documents of the same class, the LOWER figure is kept", () => {
+    const linked = link({
+      procurement: [
+        row({ supplierName: "Alpha", spend: 500 }, ["a.xlsm › Procurement"]),
+        row({ supplierName: "Alpha", spend: 700 }, ["b.xlsm › Procurement"]),
+      ],
+    });
+    expect(linked.rows.procurement![0].spend).toBe(500);
   });
 
   it("warns when a ledger matched nothing — the double-count risk", () => {
