@@ -1,6 +1,7 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Switch, Route, useLocation, useParams } from "wouter";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@toolkit/lib/queryClient";
 import { ThemeProvider } from "@toolkit/components/theme-provider";
@@ -40,6 +41,8 @@ import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { usePageViewTracking } from "@/lib/gaTracker";
+import { ScorecardAdviceChat } from "@toolkit/components/scorecard/ScorecardAdviceChat";
+import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
 const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
@@ -137,6 +140,18 @@ function EsgHubRedirect() {
   );
 }
 
+function ToolkitAuthRedirect() {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    navigate("/auth?redirect=/toolkit", { replace: true });
+  }, [navigate]);
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
+    </div>
+  );
+}
+
 function AppRouter() {
   usePageViewTracking();
   return (
@@ -222,6 +237,9 @@ function AppRouter() {
       <Route path="/admin/analytics">
         <ProtectedRoute><AdminAnalytics /></ProtectedRoute>
       </Route>
+      <Route path="/toolkit/auth">
+        <ToolkitAuthRedirect />
+      </Route>
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
       </Route>
@@ -262,6 +280,82 @@ function GlobalFeedbackWidget() {
   return <FeedbackWidget />;
 }
 
+function GlobalScorecardAdvisor() {
+  const [location] = useLocation();
+  const [open, setOpen] = useState(false);
+
+  if (!location.startsWith("/toolkit")) return null;
+
+  return (
+    <>
+      <motion.button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Open scorecard advisor"
+        data-testid="button-scorecard-advisor-open"
+        initial={{ opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        whileHover={{ y: -1 }}
+        whileTap={{ scale: 0.98 }}
+        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        className="fixed bottom-[4.75rem] right-5 z-[9998] flex items-center gap-2 rounded-full bg-zinc-950 py-1.5 pl-1.5 pr-3.5 text-[13px] font-medium text-white shadow-[0_14px_36px_-18px_rgba(0,0,0,0.9)] ring-1 ring-white/15 transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-black"
+      >
+        <span className="relative h-8 w-8 shrink-0">
+          <motion.span
+            className="absolute inset-0 rounded-full bg-white/10"
+            animate={{ scale: [1, 1.14, 1], opacity: [0.35, 0.08, 0.35] }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <img
+            src={logoCircle}
+            alt=""
+            className="relative h-8 w-8 rounded-full object-contain ring-1 ring-white/15"
+          />
+          <span className="pointer-events-none absolute left-[8px] top-[10px] h-[3px] w-[3px] rounded-full bg-white/85 shadow-[10px_0_0_rgba(255,255,255,0.85)]" />
+          <span className="pointer-events-none absolute left-[10px] top-[18px] h-[5px] w-[12px] rounded-b-full border-b-2 border-white/85" />
+        </span>
+        <span className="hidden sm:inline">Ask Okiru</span>
+      </motion.button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            className="fixed inset-0 z-[9999] bg-black/45 p-3 backdrop-blur-[2px] sm:p-5"
+            role="presentation"
+            onClick={() => setOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+          >
+            <motion.div
+              className="absolute bottom-24 right-3 w-[calc(100vw-1.5rem)] max-w-[860px] overflow-hidden rounded-[24px] bg-[#101012] shadow-[0_30px_100px_-45px_rgba(0,0,0,1)] ring-1 ring-white/10 sm:right-5"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Scorecard advisor"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 18, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 12, scale: 0.98 }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close scorecard advisor"
+                className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-white/45 transition hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <ScorecardAdviceChat compact />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme">
@@ -270,6 +364,7 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <AppRouter />
+            <GlobalScorecardAdvisor />
             <GlobalFeedbackWidget />
           </TooltipProvider>
         </AuthProvider>

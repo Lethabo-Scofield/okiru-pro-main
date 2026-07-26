@@ -239,6 +239,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const quoteSeqRef = useRef(0);
   /** Aborts any in-flight quote when a newer one starts, so requests never pile up. */
   const quoteAbortRef = useRef<AbortController | null>(null);
+  /**
+   * Bumped outside runQuote (file-cap error, file removal) to invalidate an
+   * in-flight quote whose result must no longer be applied.
+   */
+  const quoteRequestRef = useRef(0);
+  const MAX_UPLOAD_FILES = 25;
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.
@@ -379,8 +385,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     // Only the most recent quote request is allowed to write state. Without
     // this, two overlapping requests can race and leave `quoting` stuck true
     // (the earlier one resolves last), which hides the payment panel forever.
+    // `quoteRequestRef` is also bumped externally (file cap, file removal), so
+    // staleness means EITHER counter has moved on.
     const seq = ++quoteSeqRef.current;
-    const isLatest = () => quoteSeqRef.current === seq;
+    const requestId = ++quoteRequestRef.current;
+    const isLatest = () =>
+      quoteSeqRef.current === seq && quoteRequestRef.current === requestId;
     // Cancel any quote still in flight so two rapid uploads can't both run — a
     // stranded second request would leave `quoting` stuck true and hide the
     // payment panel forever.
@@ -391,7 +401,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     setParseError(null);
     try {
       const form = new FormData();
-      for (const f of list.slice(0, 25)) form.append("files", f, f.name);
+      for (const f of list) form.append("files", f, f.name);
       const res = await fetch("/api/parser/quote-files", {
         method: "POST",
         credentials: "include",
@@ -423,7 +433,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     setParseError(null);
     try {
       const form = new FormData();
-      for (const f of list.slice(0, 25)) form.append("files", f, f.name);
+      for (const f of list) form.append("files", f, f.name);
       form.append("case_id", `create_scorecard_${Date.now()}`);
       form.append("quote_id", quoteId);
       const res = await fetch("/api/parser/resolve-case-files", {
@@ -526,6 +536,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     for (const f of incoming) {
       if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f);
     }
+    if (next.length > MAX_UPLOAD_FILES) {
+      quoteRequestRef.current += 1;
+      setParseError(`You can upload up to ${MAX_UPLOAD_FILES} documents at once. Remove ${next.length - MAX_UPLOAD_FILES} and try again.`);
+      setQuote(null);
+      setQuoting(false);
+      return;
+    }
     setFiles(next);
     void runQuote(next);
   };
@@ -533,6 +550,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const removeFile = (name: string) => {
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
+    quoteRequestRef.current += 1;
     setQuote(null);
     if (next.length === 0) setParserCase(keptCase);
     else void runQuote(next);

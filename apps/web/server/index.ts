@@ -57,6 +57,10 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
+app.get('/toolkit/auth', (_req: Request, res: Response) => {
+  res.redirect(302, '/auth?redirect=/toolkit');
+});
+
 const requestLogger = createLogger("HttpRequest");
 
 app.use((req, res, next) => {

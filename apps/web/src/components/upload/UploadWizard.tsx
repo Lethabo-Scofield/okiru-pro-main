@@ -940,26 +940,33 @@ export interface ToolkitExcelDropZoneProps {
   /** Invoked immediately after `/api/import/excel` returns structured JSON */
   onExtractionPayload: (data: ExtractionApiResult, fileMeta: File) => void;
   className?: string;
+  quoteBeforeExtraction?: boolean;
 }
-
-const PARSER_SERVICE_URL = String((import.meta as any).env?.VITE_PARSER_SERVICE_URL || 'http://127.0.0.1:3200').replace(/\/+$/, '');
 
 interface ParserQuoteFile {
   fileId: string;
   filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
   detectedDocumentType: string;
+  kind: string;
   processingEffort: 'standard' | 'high';
+  requiresOcr: boolean;
+  tokens: {
+    basis: string;
+    input: number;
+    expectedOutput: number;
+    band: { lowerTokens: number; upperTokens: number } | null;
+  };
   structure: {
-    format: string;
     pages: number | null;
     sheets: number | null;
     rows: number | null;
-    estimatedUnits: number;
   };
   pricing: {
     currency: string;
-    unitPriceCents: number;
-    subtotalCents: number;
+    extractionCents: number;
+    isUpperBound: boolean;
   };
   reasons: string[];
   warnings: string[];
@@ -969,10 +976,27 @@ interface ParserQuote {
   quoteId: string;
   status: 'quoted';
   currency: string;
+  model: string;
   files: ParserQuoteFile[];
-  subtotalCents: number;
-  totalProcessingUnits: number;
+  lineItems: Array<{ key: string; label: string; detail: string; cents: number }>;
+  totals: {
+    predictedInputTokens: number;
+    predictedOutputTokens: number;
+    azureCents: number;
+    totalCents: number;
+    isUpperBound: boolean;
+  };
+  azureBreakdown: {
+    model: string;
+    inputTokens: number;
+    inputCents: number;
+    outputTokens: number;
+    outputCents: number;
+    ocrPages: number;
+    ocrCents: number;
+  };
   expiresAt: string;
+  paymentRequired: true;
   paymentStatus: 'not_started';
   nextAction: 'proceed_to_payment';
   notes: string[];
@@ -1001,7 +1025,7 @@ function formatQuoteStructure(file: ParserQuoteFile) {
   if (file.structure.pages != null) parts.push(`${file.structure.pages} page${file.structure.pages === 1 ? '' : 's'}`);
   if (file.structure.sheets != null) parts.push(`${file.structure.sheets} sheet${file.structure.sheets === 1 ? '' : 's'}`);
   if (file.structure.rows != null) parts.push(`${file.structure.rows} row${file.structure.rows === 1 ? '' : 's'}`);
-  parts.push(`${file.structure.estimatedUnits} unit${file.structure.estimatedUnits === 1 ? '' : 's'}`);
+  if (parts.length === 0) parts.push('Structure scan');
   return parts.join(' / ');
 }
 
@@ -1031,8 +1055,9 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
     try {
       const formData = new FormData();
       formData.append('files', f);
-      const res = await fetch(`${PARSER_SERVICE_URL}/api/parser/quote-files`, {
+      const res = await fetch('/api/parser/quote-files', {
         method: 'POST',
+        credentials: 'include',
         body: formData,
       });
       const raw = await res.json().catch(() => null);
@@ -1214,8 +1239,8 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
             </div>
             {quote && (
               <div className="text-right shrink-0">
-                <p className="text-base font-semibold text-white">{formatQuoteMoney(quote.subtotalCents, quote.currency)}</p>
-                <p className="text-[11px]" style={{ color: '#636366' }}>{quote.totalProcessingUnits} unit{quote.totalProcessingUnits === 1 ? '' : 's'}</p>
+                <p className="text-base font-semibold text-white">{formatQuoteMoney(quote.totals.totalCents, quote.currency)}</p>
+                <p className="text-[11px]" style={{ color: '#636366' }}>{quote.files.length} file{quote.files.length === 1 ? '' : 's'}</p>
               </div>
             )}
           </div>
@@ -1246,16 +1271,18 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
                       <p className="text-sm font-medium text-white truncate">{quotedFile.filename}</p>
                       <p className="text-xs mt-0.5" style={{ color: '#636366' }}>{quotedFile.detectedDocumentType}</p>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase" style={{ background: '#1c1c1e', color: quotedFile.processingEffort === 'high' ? '#f59e0b' : '#8e8e93' }}>
-                      {quotedFile.processingEffort}
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase" style={{ background: '#1c1c1e', color: quotedFile.requiresOcr ? '#f59e0b' : '#8e8e93' }}>
+                      {quotedFile.requiresOcr ? 'high' : 'standard'}
                     </span>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-2 text-[11px]" style={{ color: '#8e8e93' }}>
-                    <span>{quotedFile.structure.format.toUpperCase()}</span>
+                    <span>{quotedFile.kind.toUpperCase()}</span>
                     <span style={{ color: '#3a3a3c' }}>/</span>
                     <span>{formatQuoteStructure(quotedFile)}</span>
                     <span style={{ color: '#3a3a3c' }}>/</span>
-                    <span>{formatQuoteMoney(quotedFile.pricing.subtotalCents, quotedFile.pricing.currency)}</span>
+                    <span>{quotedFile.tokens.input.toLocaleString()} tokens</span>
+                    <span style={{ color: '#3a3a3c' }}>/</span>
+                    <span>{formatQuoteMoney(quotedFile.pricing.extractionCents, quotedFile.pricing.currency)}</span>
                   </div>
                 </div>
               ))}
