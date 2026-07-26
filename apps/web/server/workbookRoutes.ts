@@ -7,6 +7,12 @@ import { hasAnyRole } from "./roles";
 import { seedLakeTradingDemo } from "./lakeTradingDemoSeed";
 import { LAKE_TRADING_DEMO_CLIENT_ID } from "../src/lib/lakeTradingWorkbookFixture";
 import { WorkbookModel, ClientModel, ProcessorSessionModel, WorkspaceMemberModel } from "../shared/schema";
+import {
+  canSyncScorecard,
+  canWriteSection,
+  filterReadableSections,
+  resolveWorkbookPillarAccess,
+} from "./pillarAccess";
 import { handleBackSync, rebuildWorkbookFromEntities } from "./workbookBackSync";
 import {
   validateWorkbook,
@@ -1401,6 +1407,14 @@ export function registerWorkbookRoutes(app: Express): void {
         logger.warn('workbook rebuild failed (returning stored doc)', { err: err instanceof Error ? err.message : String(err) });
       }
     }
+    // Pillar-scope filter (audit B15, workbook half): the workbook carries
+    // EVERY pillar, and until now a pillar-scoped collaborator whose client
+    // read was stripped could open the workbook and see it all anyway.
+    const userId: string = (req as any).user?.id || (req.session as any)?.userId;
+    const access = await resolveWorkbookPillarAccess(String(req.params.companyId), userId);
+    if (access && access.mode === "scoped") {
+      return res.json({ ...wb, sections: filterReadableSections(access, wb.sections ?? {}) });
+    }
     res.json(wb);
   });
 
@@ -1414,6 +1428,14 @@ export function registerWorkbookRoutes(app: Express): void {
       }
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
+      // Per-section write gate: viewers write nothing; pillar-scoped members
+      // write only their pillar's section; the meta sections (financials,
+      // company info) are cross-pillar and need full access.
+      const writerId: string = (req as any).user?.id || (req.session as any)?.userId;
+      const writeAccess = await resolveWorkbookPillarAccess(String(req.params.companyId), writerId);
+      if (!canWriteSection(writeAccess, sectionKey)) {
+        return res.status(403).json({ error: `Access denied (section '${sectionKey}' is outside your workspace scope)` });
+      }
       const rows = sanitizeRows((req.body as any)?.rows);
       const meta =
         (req.body as any)?.meta && typeof (req.body as any).meta === "object"
@@ -1440,10 +1462,19 @@ export function registerWorkbookRoutes(app: Express): void {
       if (!incoming || typeof incoming !== "object") {
         return res.status(400).json({ error: "Missing sections payload." });
       }
+      // Bulk import applies only the sections this caller may write; the rest
+      // are REPORTED as blocked, never silently dropped.
+      const importerId: string = (req as any).user?.id || (req.session as any)?.userId;
+      const importAccess = await resolveWorkbookPillarAccess(String(req.params.companyId), importerId);
+      const blockedSections: string[] = [];
       try {
         let next = wb;
         for (const key of Object.keys(incoming)) {
           if (!SECTION_KEYS.includes(key as (typeof SECTION_KEYS)[number])) continue;
+          if (!canWriteSection(importAccess, key)) {
+            blockedSections.push(key);
+            continue;
+          }
           const sec = incoming[key];
           const rows = sanitizeRows(sec?.rows);
           const meta =
@@ -1460,6 +1491,7 @@ export function registerWorkbookRoutes(app: Express): void {
           ok: true,
           updatedAt: next.updatedAt,
           validationIssues,
+          ...(blockedSections.length ? { blockedSections } : {}),
           summary: validationIssues.length
             ? formatWorkbookValidationSummary(validationIssues)
             : null,
@@ -1478,7 +1510,15 @@ export function registerWorkbookRoutes(app: Express): void {
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
       try {
-        const buf = buildXlsx(wb);
+        // An export is a read: a pillar-scoped member downloads only the
+        // sections they can see on screen.
+        const exporterId: string = (req as any).user?.id || (req.session as any)?.userId;
+        const exportAccess = await resolveWorkbookPillarAccess(String(req.params.companyId), exporterId);
+        const buf = buildXlsx(
+          exportAccess && exportAccess.mode === "scoped"
+            ? { ...wb, sections: filterReadableSections(exportAccess, wb.sections ?? {}) }
+            : wb,
+        );
         res.setHeader(
           "Content-Type",
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1501,13 +1541,13 @@ export function registerWorkbookRoutes(app: Express): void {
       const wb = await authorizeWorkbookAccess(req, res);
       if (!wb) return;
 
-      console.log(`[SCORING-TRACE] Submit workbook for ${wb.companyId}`);
-      console.log(`[SCORING-TRACE] Workbook sections: ${Object.keys(wb.sections).join(", ")}`);
-      for (const [id, sec] of Object.entries(wb.sections)) {
-        const rows = (sec as any)?.rows ?? [];
-        if (rows.length > 0) {
-          console.log(`[SCORING-TRACE] Section ${id} has ${rows.length} rows, sample:`, JSON.stringify(rows.slice(0, 2)));
-        }
+      // Submitting the workbook rewrites the client's records across EVERY
+      // pillar — the most cross-pillar write on this router. Pillar-scoped and
+      // read-only members cannot.
+      const syncerId: string = (req as any).user?.id || (req.session as any)?.userId;
+      const syncAccess = await resolveWorkbookPillarAccess(String(wb.companyId), syncerId);
+      if (!canSyncScorecard(syncAccess)) {
+        return res.status(403).json({ error: "Access denied (submitting the workbook requires full scorecard access)" });
       }
 
       if (!mongoReady() && !canUseMemoryFallback()) {

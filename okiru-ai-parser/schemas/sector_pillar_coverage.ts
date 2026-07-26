@@ -282,9 +282,9 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     sectorCode: 'FSC',
     scorecardType: 'Generic',
     sectorName: 'Financial Sector Code (Generic)',
-    totalMaxPoints: 120,
+    totalMaxPoints: 119, // gazette shapes (audit 2026-07-26, docs/calculator-audit-2026-07-26.md items 7-11)
     pillarPoints: {
-      ownership: 25, managementControl: 21, employmentEquity: 0, skillsDevelopment: 23,
+      ownership: 25, managementControl: 20, employmentEquity: 0, skillsDevelopment: 23,
       preferentialProcurement: 24, supplierDevelopment: 10, enterpriseDevelopment: 9,
       socioEconomicDevelopment: 8, yesInitiative: 0,
     },
@@ -302,10 +302,10 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     // Synced to sectorConfig FSC_BANKS: Empowerment Financing (15) applies to
     // Banks (FS701)/LTI (FS702) only, and SD/ED are the template's EF & ESD
     // scorecard rows (7/5) — the previous 10/7 were the "Others" ESD maxima.
-    totalMaxPoints: 140,
+    totalMaxPoints: 132, // gazette shapes (audit 2026-07-26, docs/calculator-audit-2026-07-26.md items 7-11)
     pillarPoints: {
-      ownership: 25, managementControl: 21, employmentEquity: 0, skillsDevelopment: 23,
-      preferentialProcurement: 24, supplierDevelopment: 7, enterpriseDevelopment: 5,
+      ownership: 23, managementControl: 20, employmentEquity: 0, skillsDevelopment: 23,
+      preferentialProcurement: 19, supplierDevelopment: 7, enterpriseDevelopment: 5,
       socioEconomicDevelopment: 8, yesInitiative: 0, empowermentFinancing: 15, accessToFinancialServices: 12,
     },
     readiness: 'shadow_mode',
@@ -321,10 +321,10 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     scorecardType: 'Generic',
     sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
     // Synced to sectorConfig FSC_LTI — see the FSC_BANKS note above.
-    totalMaxPoints: 142,
+    totalMaxPoints: 134, // gazette shapes (audit 2026-07-26, docs/calculator-audit-2026-07-26.md items 7-11)
     pillarPoints: {
-      ownership: 25, managementControl: 21, employmentEquity: 0, skillsDevelopment: 23,
-      preferentialProcurement: 24, supplierDevelopment: 7, enterpriseDevelopment: 7,
+      ownership: 23, managementControl: 20, employmentEquity: 0, skillsDevelopment: 23,
+      preferentialProcurement: 19, supplierDevelopment: 7, enterpriseDevelopment: 7,
       socioEconomicDevelopment: 8, yesInitiative: 0, empowermentFinancing: 15, accessToFinancialServices: 12,
     },
     readiness: 'shadow_mode',
@@ -339,9 +339,9 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     sectorCode: 'FSC',
     scorecardType: 'Generic',
     sectorName: 'Financial Sector Code (Short-Term Insurers — FS703)',
-    totalMaxPoints: 132,
+    totalMaxPoints: 129, // gazette shapes (audit 2026-07-26, docs/calculator-audit-2026-07-26.md items 7-11)
     pillarPoints: {
-      ownership: 25, managementControl: 21, employmentEquity: 0, skillsDevelopment: 23,
+      ownership: 23, managementControl: 20, employmentEquity: 0, skillsDevelopment: 23,
       preferentialProcurement: 24, supplierDevelopment: 10, enterpriseDevelopment: 9,
       socioEconomicDevelopment: 8, yesInitiative: 0, accessToFinancialServices: 12,
     },
@@ -352,13 +352,33 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     ],
   },
   {
+    configId: 'FSC_QSE',
+    sectorCode: 'FSC',
+    scorecardType: 'QSE',
+    sectorName: 'Financial Sector Code (QSFI)',
+    // GG 41287 §8.2: Own 25 + MC 15 + Skills 25 + P&ESD 30 (PP 20 / SD 5 / ED 5)
+    // + SED&CE 5 = 100. Shipped 2026-07-26 — an FSC QSE previously fell through
+    // to the 105-pt Others scorecard.
+    totalMaxPoints: 100,
+    pillarPoints: {
+      ownership: 25, managementControl: 15, employmentEquity: 0, skillsDevelopment: 25,
+      preferentialProcurement: 20, supplierDevelopment: 5, enterpriseDevelopment: 5,
+      socioEconomicDevelopment: 5, yesInitiative: 0,
+    },
+    readiness: 'review_assisted',
+    readinessReasons: [
+      ADVISORY_ONLY_REASON,
+      'QSFI inner indicator splits are derived from the amended QSE statements (weights gazette-fixed).',
+    ],
+  },
+  {
     configId: 'AGRI_GENERIC',
     sectorCode: 'AGRI',
     scorecardType: 'Generic',
     sectorName: 'AgriBEE Sector Code (Generic)',
-    totalMaxPoints: 132,
+    totalMaxPoints: 128, // gazette shapes (audit 2026-07-26, docs/calculator-audit-2026-07-26.md items 7-11)
     pillarPoints: {
-      ownership: 25, managementControl: 23, employmentEquity: 0, skillsDevelopment: 25,
+      ownership: 25, managementControl: 19, employmentEquity: 0, skillsDevelopment: 25,
       preferentialProcurement: 27, supplierDevelopment: 10, enterpriseDevelopment: 7,
       socioEconomicDevelopment: 15, yesInitiative: 0,
     },

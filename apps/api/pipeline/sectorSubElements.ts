@@ -215,7 +215,8 @@ export const SECTOR_PILLAR_SUB_ELEMENTS: Record<string, SectorPillarMap> = {
       { criteria: 'Designated groups / schemes', points: 3, target: '3%', formula: PROP },
     ],
     managementControl: [
-      { criteria: 'Black board members', points: 2, target: '50%', formula: PROP },
+      // FS200: board black voting = 1 point (audit 2026-07-26 item 9).
+      { criteria: 'Black board members', points: 1, target: '50%', formula: PROP },
       { criteria: 'Black women board members', points: 1, target: '25%', formula: PROP },
       { criteria: 'Black executive directors', points: 2, target: '50%', formula: PROP },
       { criteria: 'Black female executive directors', points: 1, target: '25%', formula: PROP },
@@ -265,12 +266,12 @@ export const SECTOR_PILLAR_SUB_ELEMENTS: Record<string, SectorPillarMap> = {
       { criteria: 'Black new entrants / designated groups', points: 3, target: '2%', formula: PROP, isBonus: true },
     ],
     managementControl: [
-      { criteria: 'Black board members', points: 3, target: '50%', formula: PROP },
-      { criteria: 'Black women board members', points: 2, target: '25%', formula: PROP },
+      { criteria: 'Black board members', points: 2, /* GG 41306 (audit item 11) */ target: '50%', formula: PROP },
+      { criteria: 'Black women board members', points: 1, target: '25%', formula: PROP },
       { criteria: 'Black executive directors', points: 2, target: '50%', formula: PROP },
       { criteria: 'Black female executive directors', points: 1, target: '25%', formula: PROP },
-      { criteria: 'Black other executive management', points: 3, target: '60%', formula: PROP },
-      { criteria: 'Black female other executive management', points: 2, target: '30%', formula: PROP },
+      { criteria: 'Black other executive management', points: 2, target: '60%', formula: PROP },
+      { criteria: 'Black female other executive management', points: 1, target: '30%', formula: PROP },
       { criteria: 'EAP-banded staff + disabled', points: 10, target: 'EAP-based', formula: PROP },
     ],
     skillsDevelopment: [
@@ -417,8 +418,12 @@ export const LEDGER_GRAND_TOTALS: Record<string, number> = {
   'RCOGP:QSE': 108,
   'ICT:Generic': 140,
   'ICT:QSE': 116,
-  'FSC:Generic': 120,
-  'AGRI:Generic': 132,
+  // Gazette values (audit 2026-07-26, docs/calculator-audit-2026-07-26.md):
+  // FSC Others MC is 20 per FS200 (item 9) → 119; AgriBEE MC is 19 per
+  // GG 41306 (item 11) → 128; FSC QSFI (GG 41287 §8.2) = 100.
+  'FSC:Generic': 119,
+  'FSC:QSE': 100,
+  'AGRI:Generic': 128,
   'TRANSPORT:Generic': 108,
   // Any four of the seven elements × 25. Was 107, carried over from a
   // "82 compulsory + one elective" reading that the sector code does not state

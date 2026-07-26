@@ -96,7 +96,15 @@ async function verifyPillarAccessInner(
   // looks up the entity first and passes the clientId in; for create routes
   // mounted under /:clientId/... we read it from params.
   const clientId = explicitClientId ?? String(req.params.clientId ?? req.params.id ?? '');
-  if (!clientId) return true;
+  // FAIL CLOSED on a missing/degenerate client id. Before mergeParams was set
+  // on the nested routers, req.params.clientId was undefined here and this
+  // guard PASSED OPEN — no tenancy or scope check at all, and creates wrote
+  // clientId:"undefined" orphans (proven live, 2026-07-26 probe). A request
+  // with no client context has nothing to authorise against.
+  if (!clientId || clientId === 'undefined' || clientId === 'null') {
+    res.status(400).json({ message: "Client context required" });
+    return false;
+  }
 
   try {
     const session = await ProcessorSessionModel.findOne({
@@ -143,7 +151,12 @@ async function verifyPillarAccessInner(
 
 export async function verifyClientAccess(req: Request, res: Response): Promise<boolean> {
   const clientId = String(req.params.id ?? req.params.clientId ?? '');
-  if (!clientId) return true;
+  // FAIL CLOSED — see verifyPillarAccessInner for why an empty id must never
+  // pass: it silently disabled tenancy on every nested create until 2026-07-26.
+  if (!clientId || clientId === 'undefined' || clientId === 'null') {
+    res.status(400).json({ message: "Client context required" });
+    return false;
+  }
 
   const sessionUserId = req.session.userId!;
   const sessionOrgId = req.session.organizationId ?? null;
