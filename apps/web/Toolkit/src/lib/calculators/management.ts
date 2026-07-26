@@ -186,11 +186,6 @@ export function calculateManagementScore(
     scorecardType,
   ) as Partial<NonNullable<CalculatorConfig['managementControl']>>;
   const employees = data.employees || [];
-  console.log('[SCORING-TRACE] calculateManagementScore received:', {
-    employeeCount: employees.length,
-    eapProvince,
-    designations: [...new Set(employees.map(e => e.designation))].slice(0, 8),
-  });
   const grouped = groupByDesignation(employees);
   const combineExcoSenior = data.combineExcoSenior === true;
   const useRcogp = allowsRcogpDefaults(sectorCode, scorecardType);
@@ -449,7 +444,6 @@ export function calculateManagementScore(
   ];
 
   const finalTotal = round2(clampScore(totalPoints, maxTotal));
-  console.log(`[SCORING-TRACE] calculateManagementScore result: ${finalTotal} / ${maxTotal}`);
 
   return {
     boardVotingBlack: round2(boardVotingBlack),

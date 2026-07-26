@@ -144,7 +144,6 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   // ── Procurement / ESD ──
   { field: 'claimed_spend_ex_vat', calculatorKey: 'procurement.supplier_spend', elements: ['ESD'], coerce: 'money' },
   { field: 'amount_ex_vat', calculatorKey: 'procurement.supplier_spend', elements: ['ESD'], coerce: 'money' },
-  { field: 'certificate_expiry_date', calculatorKey: 'supplier.certificate_expiry', elements: ['ESD'], coerce: 'iso_date' },
   { field: 'contribution_value', calculatorKey: 'esd.contribution', elements: ['ESD'], coerce: 'money' },
   { field: 'contribution_type', calculatorKey: 'esd.contribution_type', elements: ['ESD'], coerce: 'text' },
 ];

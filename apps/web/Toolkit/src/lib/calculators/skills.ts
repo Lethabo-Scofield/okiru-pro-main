@@ -304,14 +304,6 @@ export function calculateSkillsScore(
   eapProvince?: string,
   eapYear?: number,
 ): SkillsResult {
-  console.log('[SCORING-TRACE] calculateSkillsScore received:', {
-    leviableAmount: data.leviableAmount,
-    groupLeviableAmount: data.groupLeviableAmount,
-    headcount: data.headcount,
-    programCount: data.trainingPrograms?.length ?? 0,
-    trainingManagerSalary: data.trainingManagerSalary,
-    trainingOverheadCost: data.trainingOverheadCost,
-  });
   const leviableAmount =
     (data.groupLeviableAmount != null && data.groupLeviableAmount > 0)
       ? data.groupLeviableAmount
@@ -416,7 +408,6 @@ export function calculateSkillsScore(
   ];
 
   const skillsTotal = round2(totalScore);
-  console.log(`[SCORING-TRACE] calculateSkillsScore result: ${skillsTotal} / ${maxPoints}`);
 
   const province = normalizeProvince(eapProvince || 'National') as Province;
   const isQse = String(scorecardType ?? '').toUpperCase() === 'QSE';

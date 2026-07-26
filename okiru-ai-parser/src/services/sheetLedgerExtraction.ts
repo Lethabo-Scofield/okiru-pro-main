@@ -23,6 +23,7 @@
  * that, rather than scoring the smaller number in silence.
  */
 import { createLogger } from '../logger.js';
+import { parseMoney } from './moneyParsing.js';
 import type { DocumentExtraction } from './aiExtraction.js';
 
 const logger = createLogger('SheetLedgerExtraction');
@@ -75,17 +76,6 @@ export function isLedgerSheet(headers: string[]): boolean {
     || findHeader(headers, GENERIC_AMOUNT_HEADER),
   );
   return hasDate && hasMoney;
-}
-
-function toNumber(value: unknown): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string') return null;
-  const negative = /^\(.*\)$/.test(value.trim());
-  const cleaned = value.replace(/[()]/g, '').replace(/[R$€£\s,%]/g, '');
-  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
-  const parsed = Number(cleaned);
-  if (!Number.isFinite(parsed)) return null;
-  return negative ? -Math.abs(parsed) : parsed;
 }
 
 function isLabelledTotalRow(row: Record<string, unknown>): boolean {
@@ -157,7 +147,7 @@ export function readLedgerSheet(
   let labelledTotal: number | undefined;
 
   for (const row of rows) {
-    const value = toNumber(row[spendColumn]);
+    const value = parseMoney(row[spendColumn]);
     if (value === null || value === 0) continue;
 
     if (isLabelledTotalRow(row)) {

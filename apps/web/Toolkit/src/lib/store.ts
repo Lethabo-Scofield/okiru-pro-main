@@ -273,8 +273,6 @@ function resolveChooseOneElectives(
     const elected = [...keys].sort((a, b) => (rawScores[b] ?? 0) - (rawScores[a] ?? 0)).slice(0, size);
     for (const key of elected) activeKeys.add(key);
     chosenKey = elected[0] ?? null;
-    console.log('[SCORING-TRACE] elective group resolved:', group, `best ${size} of`, keys.join(', '),
-      '→', elected.map((k) => `${k} (${rawScores[k] ?? 0})`).join(', '));
   }
   return { chosenKey, activeKeys };
 }
@@ -672,90 +670,49 @@ function calculateScorecard(
   const transportLarge = !transportQse && isTransportLargeSector(state.client.sectorCode, state.client.scorecardType);
   const eeMax = cfg.pillarConfigs?.employmentEquity?.maxPoints ?? 0;
 
-  console.log('[SCORING-TRACE] Calculator input for ownership:', {
-    shareholders: state.ownership.shareholders?.length ?? 0,
-    sample: state.ownership.shareholders?.slice(0, 2),
-  });
   const ownScore = calculateOwnershipScore(state.ownership, cfg);
-  console.log('[SCORING-TRACE] Calculator output for ownership:', { score: ownScore.total, subMin: ownScore.subMinimumMet });
 
   let mgtScoreTotal: number;
   let eeScoreTotal = 0;
   if (transportQse) {
-    console.log('[SCORING-TRACE] Calculator input for managementControl (Transport QSE):', {
-      employees: state.management.employees?.length ?? 0,
-    });
     const tqMc = calculateTransportQseManagement(state.management, cfg);
     mgtScoreTotal = tqMc.score;
-    console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: tqMc.score, subMin: true });
 
-    console.log('[SCORING-TRACE] Calculator input for employmentEquity (Transport QSE):', {
-      employees: state.management.employees?.length ?? 0,
-      eapProvince: state.client.eapProvince,
-    });
     const tqEe = calculateTransportQseEmploymentEquity(state.management, cfg, state.client.eapProvince);
     eeScoreTotal = tqEe.score;
-    console.log('[SCORING-TRACE] Calculator output for employmentEquity:', { score: tqEe.score, subMin: true });
   } else if (transportLarge) {
     // Transport Large: MC 11 + EE 18 are SEPARATE pillars (Transport Codes
     // "Road Freight Large" rows 23-31 / 33-43). Previously this branch fell
     // through to the generic MC calculator and EE stayed 0 — the 18 EE points
     // were counted in the target but never scored.
-    console.log('[SCORING-TRACE] Calculator input for managementControl (Transport Large):', {
-      employees: state.management.employees?.length ?? 0,
-    });
     const tlMc = calculateTransportLargeManagementControl(state.management, cfg);
     mgtScoreTotal = tlMc.score;
-    console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: tlMc.score, subMin: true });
 
     const tlEe = calculateTransportLargeEmploymentEquity(state.management, cfg);
     eeScoreTotal = tlEe.score;
-    console.log('[SCORING-TRACE] Calculator output for employmentEquity:', { score: tlEe.score, subMin: true });
   } else {
-    console.log('[SCORING-TRACE] Calculator input for managementControl:', {
-      employees: state.management.employees?.length ?? 0,
-    });
     const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince, state.client.eapYear);
     mgtScoreTotal = mgtScore.total;
-    console.log('[SCORING-TRACE] Calculator output for managementControl:', { score: mgtScore.total, subMin: mgtScore.subMinimumMet });
   }
 
-  console.log('[SCORING-TRACE] Calculator input for skillsDevelopment:', {
-    leviableAmount: state.skills.leviableAmount,
-    programs: state.skills.trainingPrograms?.length ?? 0,
-  });
   // Transport Large Skills is structurally different (5th indicator = black
   // women in B/C/D programmes, not absorption) — use the mirrored calculator.
   const skillScore = transportLarge
     ? calculateTransportLargeSkills(state.skills, cfg)
     : calculateSkillsScore(state.skills, cfg, state.client.eapProvince, state.client.eapYear);
-  console.log('[SCORING-TRACE] Calculator output for skillsDevelopment:', { score: skillScore.total, subMin: skillScore.subMinimumMet });
 
-  console.log('[SCORING-TRACE] Calculator input for procurement:', {
-    tmps: state.procurement.tmps,
-    suppliers: state.procurement.suppliers?.length ?? 0,
-  });
   const procScore = calculateProcurementScore(state.procurement, cfg);
-  console.log('[SCORING-TRACE] Calculator output for procurement:', { score: procScore.total, subMin: procScore.subMinimumMet });
 
-  console.log('[SCORING-TRACE] Calculator input for esd/sed:', {
-    esdContributions: state.esd.contributions?.length ?? 0,
-    sedContributions: state.sed.contributions?.length ?? 0,
-    npat: state.client.npat,
-  });
   const esdScore = calculateEsdScore(state.esd, state.client.npat, cfg);
   const sedScore = calculateSedScore(state.sed, state.client.npat, cfg, {
     isReinsurer: Boolean(state.client.fscReinsurer),
   });
-  console.log('[SCORING-TRACE] Calculator output for esd:', { sd: esdScore.sdTotal, ed: esdScore.edTotal });
-  console.log('[SCORING-TRACE] Calculator output for sed:', { score: sedScore.total });
 
   // FSC sub-sector AFS scoring (Banks/LTI/STI only)
   const afsScore = cfg.accessToFinancialServices
     ? calculateAfsScore(state.afs, cfg)
     : null;
   if (afsScore) {
-    console.log('[SCORING-TRACE] Calculator output for AFS:', { score: afsScore.total, subSector: afsScore.subSector });
   }
 
   // FSC Banks/LTI Empowerment Financing — EF-proper only (Targeted Investments
@@ -765,7 +722,6 @@ function calculateScorecard(
     ? calculateEmpowermentFinancingScore(state.empowermentFinancing, cfg)
     : null;
   if (efScore) {
-    console.log('[SCORING-TRACE] Calculator output for Empowerment Financing:', { score: efScore.total, max: efScore.maxPoints });
   }
   // CRITICAL: Wire YES calculator - construct YESData from skills and management state
   // Training programs with isYesEmployee=true are treated as YES candidates
@@ -914,11 +870,6 @@ function calculateScorecard(
     sdTarget + yesTarget
   );
 
-  console.log('[SCORING-TRACE] Final recalculated:', `${round2(totalPoints)} / ${totalTarget} = Level ${pointsToLevel(totalPoints, cfg)}`, {
-    chosenElective: chosenElectiveKey,
-    compulsory: round2(compulsoryTotal),
-    elective: round2(electiveTotal),
-  });
 
   const level = pointsToLevel(totalPoints, cfg);
 
@@ -1146,7 +1097,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
 
   loadClientData: async (clientId: string) => {
     try {
-      console.log(`[SCORING-TRACE] loadClientData(${clientId}) — fetching`);
       const data = await api.getClientData(clientId);
       
       const finExtras = (data.client.financials ?? {}) as Record<string, unknown>;
@@ -1213,14 +1163,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // ownership calculator reads — yearsHeld, isDesignatedGroup, blackNewEntrant,
       // votingRightsPercent, economicInterestPercent. Without these the
       // calculator can't award Designated Groups / New Entrants / graduation.
-      console.log('[SCORING-TRACE] Client data received:', {
-        sector: clientData.sectorCode,
-        scorecardType: clientData.scorecardType,
-        revenue: clientData.revenue,
-        shareholders: data.ownership?.shareholders?.length ?? 0,
-        employees: data.management?.employees?.length ?? 0,
-        suppliers: data.procurement?.suppliers?.length ?? 0,
-      });
 
       const ownershipState: OwnershipData = {
         id: data.ownership?.id || '',
@@ -1424,9 +1366,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       await get().loadCalculatorConfig(clientId);
       const cfg = get().calculatorConfig;
       if (cfg?.pillarConfigs) {
-        console.log('[SCORING-TRACE] Pillar configs:', Object.fromEntries(
-          Object.entries(cfg.pillarConfigs).map(([k, v]) => [k, { maxPoints: v?.maxPoints, chooseOneGroup: v?.chooseOneGroup }]),
-        ));
       }
       set({ isLoaded: true });
       get()._recalculateAll();
@@ -1581,27 +1520,22 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     };
 
     if (isRcogpGenericSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled RCOGP Generic calculator config');
       ready(RCOGP_GENERIC_CALCULATOR_CONFIG);
       return;
     }
     if (isRcogpQseSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled RCOGP QSE calculator config');
       ready(RCOGP_QSE_CALCULATOR_CONFIG);
       return;
     }
     if (isIctGenericSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled ICT Generic calculator config');
       ready(ICT_GENERIC_CALCULATOR_CONFIG);
       return;
     }
     if (isIctQseSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled ICT QSE calculator config');
       ready(ICT_QSE_CALCULATOR_CONFIG);
       return;
     }
     if (isAgriGenericSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled AGRI Generic calculator config');
       ready(AGRI_GENERIC_CALCULATOR_CONFIG);
       return;
     }
@@ -1611,12 +1545,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     // score Transport clients when the API config wasn't reachable, and the
     // Large EE pillar (18 pts) was never computed at all.
     if (isTransportQseSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled Transport QSE calculator config');
       ready(TRANSPORT_QSE_CALCULATOR_CONFIG);
       return;
     }
     if (isTransportLargeSector(sectorCode, scorecardType)) {
-      console.log('[SCORING-TRACE] Using bundled Transport Large calculator config');
       ready(TRANSPORT_GENERIC_CALCULATOR_CONFIG);
       return;
     }
@@ -1638,7 +1570,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
 
     if (isConstructionSector(sectorCode)) {
       const entityType = resolveConstructionScorecardKey(scorecardType, (client as { constructionSubSector?: string }).constructionSubSector);
-      console.log('[SCORING-TRACE] Using bundled Construction calculator config:', entityType);
       ready(buildConstructionCalculatorConfig(entityType));
       return;
     }
@@ -1646,12 +1577,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const { config: sectorConfig, failure: fetchFailure } = await fetchSectorCalculatorConfig(sectorCode, scorecardType);
 
     if (sectorConfig && hasValidPillarConfigs(sectorConfig)) {
-      console.log('[SCORING-TRACE] Pillar configs loaded from sector:', sectorCode, scorecardType, {
-        totalMaxPoints: sectorConfig.totalMaxPoints,
-        ownership: sectorConfig.pillarConfigs?.ownership?.maxPoints,
-        managementControl: sectorConfig.pillarConfigs?.managementControl?.maxPoints,
-        employmentEquity: sectorConfig.pillarConfigs?.employmentEquity?.maxPoints,
-      });
       ready({
         ...sectorConfig,
         sectorCode: sectorConfig.sectorCode ?? sectorCode,
@@ -1712,7 +1637,6 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     try {
       const result = calculateScorecard(state, state.pipelineOverrides);
       set({ scorecard: result });
-      console.log('[SCORING-TRACE] Final recalculated:', `${result.total.score} / ${result.total.weighting} = Level ${result.achievedLevel}`);
     } catch (error) {
       if (import.meta.env?.DEV && error instanceof SectorConfigError) {
         throw error;

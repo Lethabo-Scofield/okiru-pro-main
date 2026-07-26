@@ -74,10 +74,6 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     config?.procurement as Record<string, unknown> | undefined,
     scorecardType,
   ) as NonNullable<CalculatorConfig['procurement']>;
-  console.log('[SCORING-TRACE] calculateProcurementScore received:', {
-    tmps: data.tmps,
-    supplierCount: data.suppliers?.length ?? 0,
-  });
   const { tmps } = data;
   const suppliers = data.suppliers || [];
 
@@ -198,7 +194,6 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   ];
 
   const procTotal = round2(totalScore);
-  console.log(`[SCORING-TRACE] calculateProcurementScore result: ${procTotal} / ${config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29}`);
 
   return {
     base: round2(baseTotal),
