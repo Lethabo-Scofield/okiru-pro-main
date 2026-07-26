@@ -6,9 +6,17 @@ import { EntityTemplateModel } from '../../models.js';
 const logger = createLogger("EntityTemplates");
 import { getAllManifests } from '../../pipeline/extraction/entityManifest.js';
 import { GraphRepository } from '../../arango/repositories/graphRepository.js';
+import { requireAuth } from '../middleware/requireAuth.js';
+import { requireSuperAdmin } from '../middleware/requireRole.js';
 
 const router = Router();
 const graphRepo = new GraphRepository();
+
+// Entity-template CRUD is a super-admin builder concern (the /builder and
+// /processor pages are SuperAdminOnly). These routes had no server-side guard,
+// so the create/update/delete were anonymously callable. Baseline: any logged-in
+// user for the read; mutations require super-admin (applied per-route below).
+router.use(requireAuth);
 
 // GET /api/entity-templates — list all (MongoDB + new ontology)
 router.get('/', async (_req: Request, res: Response) => {
@@ -106,7 +114,7 @@ router.get('/', async (_req: Request, res: Response) => {
 });
 
 // POST /api/entity-templates — create
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     const { name, description, version, entities } = req.body as {
       name: string; description?: string; version?: string; entities?: unknown[];
@@ -124,7 +132,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // PUT /api/entity-templates/:id — update
-router.put('/:id', async (req: Request, res: Response) => {
+router.put('/:id', requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     const { name, description, version, entities } = req.body as {
       name?: string; description?: string; version?: string; entities?: unknown[];
@@ -144,7 +152,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/entity-templates/:id — delete
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     const deleted = await EntityTemplateModel.findOneAndDelete({ id: req.params.id });
     if (!deleted) return res.status(404).json({ message: 'Template not found' });

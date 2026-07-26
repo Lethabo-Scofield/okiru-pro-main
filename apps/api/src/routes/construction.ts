@@ -12,6 +12,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 import {
   getConstructionScorecard,
   listConstructionEntityTypes,
@@ -24,6 +25,11 @@ import {
 
 const logger = createLogger('Construction');
 const router = Router();
+
+// Every construction endpoint (template lookup + scorecard evaluation) is only
+// ever reached from authenticated build flows. These routes carried no guard,
+// so they were anonymously callable via the /api catch-all ingress rule.
+router.use(requireAuth);
 
 // ---------------------------------------------------------------------------
 // GET /api/construction/entity-types ΓÇö list supported Construction entities

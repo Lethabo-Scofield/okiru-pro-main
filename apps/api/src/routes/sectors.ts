@@ -18,8 +18,16 @@ import {
   listSectorConfigsFull,
 } from '../../pipeline/sectorConfig.js';
 import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
+import { requireAuth } from '../middleware/requireAuth.js';
+import { requireSuperAdmin } from '../middleware/requireRole.js';
 
 const router = Router();
+
+// Sector config (weights, thresholds, options) is read by authenticated build
+// and toolkit flows only — never a public/marketing page. These reads had no
+// guard and were anonymously reachable via the /api catch-all. Baseline: any
+// logged-in user; POST /seed is elevated to super-admin below.
+router.use(requireAuth);
 
 // ---------------------------------------------------------------------------
 // GET /api/sectors - List all available sectors from ArangoDB
@@ -240,9 +248,12 @@ router.get('/:sectorCode/manifest', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/sectors/seed - Seed sectors from hardcoded configs (admin only)
+// POST /api/sectors/seed - Seed sectors from hardcoded configs (super-admin only)
 // ---------------------------------------------------------------------------
-router.post('/seed', async (_req: Request, res: Response) => {
+// Destructive: force-reseeds the entire sector ontology, overwriting live
+// configs. The comment always said "admin only" but nothing enforced it — it
+// was anonymously callable. Only the SuperAdmin console triggers this.
+router.post('/seed', requireSuperAdmin, async (_req: Request, res: Response) => {
   try {
     const { seedOntology } = await import('../../pipeline/seedOntology.js');
     const result = await seedOntology({ force: true });
