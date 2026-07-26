@@ -21,17 +21,17 @@ import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 
-// Mounted at /api, so these are /api/manifest, /api/calculate,
-// /api/calculate-from-extraction and /api/assessments. The last two write
-// assessments and run the calculation engine; all were anonymously callable.
-// Only authenticated builder/toolkit flows use them.
-router.use(requireAuth);
+// This router is mounted at the BARE '/api' path (app.use('/api', ...)), so a
+// router-level `router.use(requireAuth)` would run for EVERY /api/* request that
+// reaches it in the middleware chain and 401 public routes mounted after it
+// (e.g. the certificate directory). The guard is therefore attached per-route
+// (/manifest, /calculate, /calculate-from-extraction, /assessments) below.
 
 // ============================================================================
 // GET /api/manifest
 // ============================================================================
 
-router.get('/manifest', async (req, res) => {
+router.get('/manifest', requireAuth, async (req, res) => {
   try {
     const sectorCode = String(req.query.sector || 'RCOGP');
     const scorecardType = String(req.query.type || 'Generic');
@@ -194,7 +194,7 @@ function extractFromPillarData(body: CalculateRequest): {
   return { employees, shareholders, suppliers, contributions, financials, entityValues, crossPillarValues };
 }
 
-router.post('/calculate', async (req, res) => {
+router.post('/calculate', requireAuth, async (req, res) => {
   const start = Date.now();
   try {
     const body = (req.body || {}) as CalculateRequest;
@@ -395,7 +395,7 @@ router.post('/calculate', async (req, res) => {
 // Frontend sends raw extraction output, backend handles all normalization.
 // ============================================================================
 
-router.post('/calculate-from-extraction', async (req, res) => {
+router.post('/calculate-from-extraction', requireAuth, async (req, res) => {
   try {
     const body = req.body || {};
     const { sectorCode, scorecardType, sessionId, entities, tables } = body;
@@ -481,7 +481,7 @@ router.post('/calculate-from-extraction', async (req, res) => {
 // POST /api/assessments
 // ============================================================================
 
-router.post('/assessments', async (req, res) => {
+router.post('/assessments', requireAuth, async (req, res) => {
   try {
     const body = req.body || {};
     const assessmentId = body.assessmentId || body.sessionId || `assessment-${Date.now()}`;

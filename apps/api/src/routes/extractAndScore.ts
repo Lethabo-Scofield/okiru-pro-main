@@ -29,11 +29,11 @@ import { isTrustedParserSector, mapParserCaseToSectorInput } from '../services/p
 
 const router = Router();
 
-// /api/extract-and-score fans out to the LLM extractor and the parser service —
-// an expensive, cost-amplifying operation. It was anonymously callable (no
-// guard, reached via the /api catch-all), a denial-of-wallet vector. Require a
-// logged-in caller; the only legitimate callers are authenticated upload flows.
-router.use(requireAuth);
+// NOTE: this router is mounted at the BARE '/api' path (app.use('/api', ...)),
+// so a router-level `router.use(requireAuth)` would run for EVERY /api/* request
+// that reaches it in the middleware chain — including public routes mounted
+// after it (e.g. the certificate directory). The guard MUST be attached
+// per-route instead. See the requireAuth on POST /extract-and-score below.
 
 /**
  * Deterministic supplier-evidence extraction via the okiru-ai-parser service.
@@ -116,7 +116,10 @@ interface ExtractAndScoreBody {
   clientName?: string;
 }
 
-router.post('/extract-and-score', async (req, res) => {
+// Fans out to the LLM extractor + parser service (expensive, cost-amplifying),
+// so it must not be anonymously callable. requireAuth is per-route here because
+// the router is mounted at the bare '/api' path (see note above).
+router.post('/extract-and-score', requireAuth, async (req, res) => {
   const body = req.body as ExtractAndScoreBody;
   const { documentTexts, sectorCode, scorecardType, clientName } = body;
 
