@@ -42,3 +42,16 @@ temp-secret-patch.json
 # graphify tool output (generated cache/graph artifacts)
 graphify-out/
 apps/graphify-out/
+
+# Local credentials / cluster access — must never be committed (untracked 2026-07-26;
+# note: still present in git HISTORY, so the exposed creds must be rotated).
+kubeconfig*.yaml
+az_accounts.json
+app-secrets*.yaml
+*-credentials-*.yaml
+*.pem
+*.key
+
+# Build/tool logs and scratch artifacts
+acr-*.txt
+acr-*.log
