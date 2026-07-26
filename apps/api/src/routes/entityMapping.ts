@@ -23,8 +23,16 @@ import {
 import { buildManifest, getAllEntities } from '../../pipeline/extraction/entityManifest.js';
 import { getArangoDB } from '../../arango/connection.js';
 import { COLLECTIONS } from '../../arango/collections.js';
+import { requireAuth } from '../middleware/requireAuth.js';
+import { requireSuperAdmin } from '../middleware/requireRole.js';
 
 const router = Router();
+
+// Entity→cell mappings are read/built by authenticated toolkit + builder flows.
+// Baseline: any logged-in user (needed for GET + build/:sector/:type used by the
+// coverage panel). build-all and apply are destructive bulk operations only the
+// SuperAdmin builder triggers — elevated below.
+router.use(requireAuth);
 
 function routeParam(v: string | string[] | undefined): string {
   if (v == null) return '';
@@ -112,7 +120,7 @@ router.post('/build/:sectorCode/:scorecardType', async (req: Request, res: Respo
  *
  * Build mappings for all 6 scorecard templates.
  */
-router.post('/build-all', async (_req: Request, res: Response) => {
+router.post('/build-all', requireSuperAdmin, async (_req: Request, res: Response) => {
   try {
     // Build manifests for all 6 templates
     const manifests = await Promise.all([

@@ -17,8 +17,15 @@ import type { EntityValue, EmployeeInput, ShareholderInput, SupplierInput, Contr
 import { ScoreResultRepository } from '../../arango/repositories/scoreResultRepository.js';
 import { EvidenceRepository } from '../../arango/repositories/evidenceRepository.js';
 import { mapToUCSPayload } from '../../pipeline/extraction/aiEntityMapper.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
+
+// Mounted at /api, so these are /api/manifest, /api/calculate,
+// /api/calculate-from-extraction and /api/assessments. The last two write
+// assessments and run the calculation engine; all were anonymously callable.
+// Only authenticated builder/toolkit flows use them.
+router.use(requireAuth);
 
 // ============================================================================
 // GET /api/manifest

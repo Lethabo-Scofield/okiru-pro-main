@@ -9,6 +9,7 @@
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger.js';
 import { aql } from 'arangojs';
+import { requireAuth } from '../middleware/requireAuth.js';
 import { getComputeClient } from '../../pipeline/computeClient.js';
 
 const logger = createLogger("Scorecard");
@@ -27,6 +28,12 @@ import { getSectorConfig, type SectorConfig } from '../../pipeline/sectorConfig.
 
 const router = Router();
 const computeClient = getComputeClient();
+
+// The scorecard engine (compile / evaluate / generate-summary / sector-config)
+// is consumed only by authenticated toolkit + build flows. generate-summary in
+// particular fans out to the LLM, so leaving it open was a denial-of-wallet
+// hole. These routes had no guard and were reachable via the /api catch-all.
+router.use(requireAuth);
 
 // ---------------------------------------------------------------------------
 // GET /api/scorecard/models - List all compiled models

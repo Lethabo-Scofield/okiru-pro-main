@@ -12,6 +12,7 @@
 
 import { Router } from 'express';
 import { createLogger } from '../logger.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 import { buildManifest, getAllEntities, toExtractionRequest } from '../../pipeline/extraction/entityManifest.js';
 
 const logger = createLogger("ExtractAndScore");
@@ -27,6 +28,12 @@ import { resolveCaseWithParser, type ParserRawExtractionInput } from '../service
 import { isTrustedParserSector, mapParserCaseToSectorInput } from '../services/parserSectorAdapter.js';
 
 const router = Router();
+
+// /api/extract-and-score fans out to the LLM extractor and the parser service —
+// an expensive, cost-amplifying operation. It was anonymously callable (no
+// guard, reached via the /api catch-all), a denial-of-wallet vector. Require a
+// logged-in caller; the only legitimate callers are authenticated upload flows.
+router.use(requireAuth);
 
 /**
  * Deterministic supplier-evidence extraction via the okiru-ai-parser service.

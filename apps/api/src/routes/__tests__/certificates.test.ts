@@ -847,19 +847,19 @@ describe('GET /stats and GET /seo/list', () => {
 
 describe('Internal extraction coverage/retry endpoints', () => {
   it('rejects extraction coverage without a valid API key', async () => {
-    const r = await call('GET', '/api/certificates/extraction-coverage');
+    const r = await call('GET', '/api/certificates/extraction-coverage', { auth: 'admin-1|admin' });
 
     expect(r.status).toBe(401);
   });
 
   it('rejects retry extraction without a valid API key', async () => {
-    const r = await call('POST', '/api/certificates/retry-extraction', { body: { limit: 20 } });
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin', body: { limit: 20 } });
 
     expect(r.status).toBe(401);
   });
 
   it('defaults retry extraction to dryRun=true', async () => {
-    const r = await call('POST', '/api/certificates/retry-extraction', {
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: { limit: 20 },
     });
@@ -873,7 +873,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('passes safe retry filters and controls to the extraction job', async () => {
-    const r = await call('POST', '/api/certificates/retry-extraction', {
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 999,
@@ -906,7 +906,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   it('manual retry endpoint still works when startup extraction is disabled', async () => {
     process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION = 'true';
 
-    const r = await call('POST', '/api/certificates/retry-extraction', {
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 10,
@@ -930,7 +930,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('rejects usable-text enrichment without a valid API key', async () => {
-    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|admin',
       body: { limit: 100, dryRun: true },
     });
 
@@ -939,7 +939,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('runs enrichment only for usable-text records without triggering text extraction', async () => {
-    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 100,
@@ -968,7 +968,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('defaults usable-text enrichment to production-critical fields only', async () => {
-    const r = await call('POST', '/api/certificates/enrich-usable-text', {
+    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: {
         dryRun: true,
@@ -998,7 +998,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('returns focused production coverage for the seven MVP fields', async () => {
-    const r = await call('GET', '/api/certificates/production-coverage', {
+    const r = await call('GET', '/api/certificates/production-coverage', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1021,7 +1021,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('runs VAT recovery as a dry run by default', async () => {
-    const r = await call('POST', '/api/certificates/recover-vat', {
+    const r = await call('POST', '/api/certificates/recover-vat', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: { limit: 25 },
     });
@@ -1077,7 +1077,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
     certificateFindMock.mockReturnValue(chain);
     certificateCountDocumentsMock.mockResolvedValue(1);
 
-    const r = await call('GET', '/api/certificates/vat-review-queue?limit=5', {
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=5', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1125,7 +1125,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
       })),
     });
 
-    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: '412 345 6789', note: 'Checked against certificate preview' },
     });
@@ -1169,7 +1169,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   it('rejects invalid manual VAT confirmation values', async () => {
     mongoConnectedMock.mockReturnValue(true);
 
-    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: 'registration 2019/123456/07' },
     });
@@ -1181,7 +1181,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   it('rejects manual VAT confirmation for numbers that do not start with 4', async () => {
     mongoConnectedMock.mockReturnValue(true);
 
-    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', {
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: '5123456789' },
     });
@@ -1204,7 +1204,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
       })),
     });
 
-    const r = await call('POST', '/api/certificates/cert-vat-2/confirm-vat', {
+    const r = await call('POST', '/api/certificates/cert-vat-2/confirm-vat', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: '412-345-6789', source: 'manual_review' },
     });
@@ -1252,7 +1252,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
     certificateFindMock.mockReturnValue(chain);
     certificateCountDocumentsMock.mockResolvedValue(7);
 
-    const r = await call('GET', '/api/certificates/vat-review-queue?limit=2&offset=4', {
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=2&offset=4', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1311,7 +1311,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
       .mockResolvedValueOnce(1)
       .mockResolvedValue(0);
 
-    const r = await call('GET', '/api/certificates/review-queue?limit=5', {
+    const r = await call('GET', '/api/certificates/review-queue?limit=5', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1331,7 +1331,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('passes usable-text mode through enrich-missing when requested', async () => {
-    const r = await call('POST', '/api/certificates/enrich-missing', {
+    const r = await call('POST', '/api/certificates/enrich-missing', { auth: 'admin-1|admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 25,

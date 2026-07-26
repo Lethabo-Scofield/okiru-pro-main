@@ -1066,7 +1066,7 @@ router.get('/by-slug/:slug', async (req: Request, res: Response) => {
 //     --header="x-api-key: $API_INTERNAL_KEY" \
 //     http://127.0.0.1:5000/api/certificates/process
 // ============================================================================
-router.post('/process', async (req: Request, res: Response) => {
+router.post('/process', requireAuth, async (req: Request, res: Response) => {
   const providedKey = req.headers['x-api-key'] as string | undefined;
   const expectedKey = process.env.API_INTERNAL_KEY;
   if (!expectedKey || !providedKey || providedKey !== expectedKey) {
@@ -1185,15 +1185,15 @@ async function runCertificateEnrichmentEndpoint(
   }
 }
 
-router.post('/enrich-missing', async (req: Request, res: Response) => {
+router.post('/enrich-missing', requireAuth, async (req: Request, res: Response) => {
   return runCertificateEnrichmentEndpoint(req, res);
 });
 
-router.post('/enrich-usable-text', async (req: Request, res: Response) => {
+router.post('/enrich-usable-text', requireAuth, async (req: Request, res: Response) => {
   return runCertificateEnrichmentEndpoint(req, res, { onlyUsableText: true, forceText: false });
 });
 
-router.post('/recover-vat', async (req: Request, res: Response) => {
+router.post('/recover-vat', requireAuth, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   try {
@@ -1230,7 +1230,7 @@ function vatPreviewUrls(blobName: string) {
   };
 }
 
-router.get('/vat-review-queue', async (req: Request, res: Response) => {
+router.get('/vat-review-queue', requireAuth, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   try {
@@ -1341,7 +1341,7 @@ router.get('/vat-review-queue', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/confirm-vat', async (req: Request, res: Response) => {
+router.post('/:id/confirm-vat', requireAuth, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   try {
@@ -1420,7 +1420,7 @@ router.post('/:id/confirm-vat', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/production-coverage', async (req: Request, res: Response) => {
+router.get('/production-coverage', requireAuth, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   try {
@@ -1431,7 +1431,7 @@ router.get('/production-coverage', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/extraction-coverage', async (req: Request, res: Response) => {
+router.get('/extraction-coverage', requireAuth, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   try {
@@ -1454,7 +1454,7 @@ const REVIEW_QUEUE_FIELDS = [
   'expiryDate',
 ] as const;
 
-router.get('/review-queue', async (req: Request, res: Response) => {
+router.get('/review-queue', requireAuth, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   try {
@@ -1572,7 +1572,7 @@ router.get('/review-queue', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/retry-extraction', async (req: Request, res: Response) => {
+router.post('/retry-extraction', requireAuth, async (req: Request, res: Response) => {
   if (!requireInternalApiKey(req, res)) return;
 
   const blobServiceClient = getBlobServiceClient();

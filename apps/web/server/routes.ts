@@ -3795,7 +3795,7 @@ Respond ONLY with a valid JSON array.`;
 
   registerWorkbookRoutes(app);
   registerEsgWorkbookRoutes(app);
-  registerExcelImportRoutes(app);
+  registerExcelImportRoutes(app, requireAuth);
   registerAiMappingRoutes(app, requireAuth);
   registerFeedbackRoutes(app, requireAuth);
   registerAdminRollbackRoutes(app, requireAuth);

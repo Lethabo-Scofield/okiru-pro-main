@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import OpenAI, { AzureOpenAI } from "openai";
 import { createLogger } from "./logger";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
@@ -262,8 +262,14 @@ async function normalizeWithOpenAI(input: {
   }
 }
 
-export function registerExcelImportRoutes(app: Express) {
-  app.post("/api/excel-import/normalize", async (req: Request, res: Response) => {
+export function registerExcelImportRoutes(
+  app: Express,
+  requireAuth: (req: Request, res: Response, next: NextFunction) => void | Promise<void>,
+) {
+  // The normalize route falls back to Azure OpenAI when the deterministic
+  // matcher can't classify the sector/scorecard, so an anonymous caller could
+  // drive LLM spend. Only the authenticated upload flow calls it; gate it.
+  app.post("/api/excel-import/normalize", requireAuth, async (req: Request, res: Response) => {
     try {
       const body = req.body ?? {};
       const rawSector = typeof body.sector === "string" ? body.sector : undefined;

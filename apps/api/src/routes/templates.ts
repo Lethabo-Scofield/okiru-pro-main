@@ -12,6 +12,8 @@
 
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger.js';
+import { requireAuth } from '../middleware/requireAuth.js';
+import { requireSuperAdmin } from '../middleware/requireRole.js';
 import multer from 'multer';
 import { aql } from 'arangojs';
 
@@ -32,6 +34,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const router = Router();
+
+// Template inspection (structure/evaluate/graph) is used by the authenticated
+// toolkit; ingestion/deletion/blob-store are super-admin builder operations.
+// None of these had a server-side guard — they were anonymously reachable via
+// the /api catch-all, including a 150 MB file-upload sink. Baseline: logged-in
+// user; the destructive ops are elevated to super-admin per-route below.
+router.use(requireAuth);
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 150 * 1024 * 1024 } });
 const graphRepo = new GraphRepository();
 const toolkitFilesRepo = new ToolkitFileRepository();
@@ -43,7 +53,7 @@ function p(req: Request, key: string): string {
 // ---------------------------------------------------------------------------
 // POST /api/templates/ingest - Upload toolkit, extract everything, store in ArangoDB
 // ---------------------------------------------------------------------------
-router.post('/ingest', upload.single('file'), async (req: Request, res: Response) => {
+router.post('/ingest', requireSuperAdmin, upload.single('file'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ message: 'Excel file is required (multipart field: file)' });
@@ -262,7 +272,7 @@ router.post('/:id/evaluate', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /api/templates/:id/compare - Compare ArangoDB eval vs toolkit ground truth
 // ---------------------------------------------------------------------------
-router.post('/:id/compare', upload.single('truthFile'), async (req: Request, res: Response) => {
+router.post('/:id/compare', requireSuperAdmin, upload.single('truthFile'), async (req: Request, res: Response) => {
   try {
     const graph = await graphRepo.getFormulaGraph(p(req, 'id'));
     if (!graph) return res.status(404).json({ message: 'Graph not found' });
@@ -383,7 +393,7 @@ router.get('/:id/pillar/:pillarCode', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // DELETE /api/templates/:id - Remove a formula graph + all linked data
 // ---------------------------------------------------------------------------
-router.delete('/:id', async (req: Request, res: Response) => {
+router.delete('/:id', requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     const id = p(req, 'id');
     const graph = await graphRepo.getFormulaGraph(id);
@@ -407,7 +417,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /api/templates/ingest-all - Bulk ingest all 6 toolkit Excel files
 // ---------------------------------------------------------------------------
-router.post('/ingest-all', async (req: Request, res: Response) => {
+router.post('/ingest-all', requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     const basePath = (req.body?.basePath || req.query?.basePath) as string | undefined;
     if (!basePath) {
@@ -429,7 +439,7 @@ router.post('/ingest-all', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // POST /api/templates/store-files - Store all 6 toolkit Excel files in ArangoDB
 // ---------------------------------------------------------------------------
-router.post('/store-files', async (req: Request, res: Response) => {
+router.post('/store-files', requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     const rawQueryBasePath = req.query?.basePath;
     const rawBasePath = req.body?.basePath || (Array.isArray(rawQueryBasePath) ? rawQueryBasePath[0] : rawQueryBasePath);
@@ -483,7 +493,7 @@ router.post('/store-files', async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/templates/files - List stored toolkit files
 // ---------------------------------------------------------------------------
-router.get('/files', async (_req: Request, res: Response) => {
+router.get('/files', requireSuperAdmin, async (_req: Request, res: Response) => {
   try {
     const files = await toolkitFilesRepo.getAllToolkitFilesMetadata();
     return res.json({ success: true, files });
@@ -498,7 +508,7 @@ router.get('/files', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // GET /api/templates/files/:key - Download a stored toolkit file
 // ---------------------------------------------------------------------------
-router.get('/files/:key', async (req: Request, res: Response) => {
+router.get('/files/:key', requireSuperAdmin, async (req: Request, res: Response) => {
   try {
     const keyParam = req.params.key;
     const key = Array.isArray(keyParam) ? keyParam[0] : keyParam;
