@@ -65,6 +65,12 @@ function validateClientPayload(
     if (typeof name !== 'string' || name.trim() === '') {
       errors.push('name is required');
     }
+    // The Client schema requires financialYear; without this check a create
+    // missing it passed validation here and 500'd on the Mongoose save — an
+    // unexplained failure instead of a clear 400.
+    if (body.financialYear === undefined || body.financialYear === null || String(body.financialYear).trim() === '') {
+      errors.push('financialYear is required');
+    }
   } else if ('name' in body && (typeof body.name !== 'string' || body.name.trim() === '')) {
     errors.push('name must be a non-empty string');
   }
