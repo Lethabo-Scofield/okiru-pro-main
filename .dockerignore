@@ -39,3 +39,7 @@ kubeconfig*.yaml
 *.log
 *.txt
 .claude
+
+# graphify tool output (generated cache/graph artifacts — never needed in an image)
+graphify-out
+**/graphify-out
