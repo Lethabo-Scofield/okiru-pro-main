@@ -57,6 +57,16 @@ function filledCount(row: unknown[]): number {
 }
 
 /**
+ * Column labels that identify a REAL register header row across the client
+ * workbooks. Deliberately narrow: generic words ("date", "amount", "total")
+ * appear in banners and instruction blocks too — "Date & Initial: ____" on the
+ * Finance sheet hijacked a looser version of this list. A row only earns the
+ * vocabulary bonus when at least TWO of these labels appear together, which
+ * banners and dropdown legends never manage.
+ */
+const HEADER_VOCABULARY = /name\s*&?\s*surname|\bid\s*number\b|supplier\s*name|beneficiar|learner|\brace\b|\bgender\b|occupational\s*level|designation|job\s*title|expenditure|salary/i;
+
+/**
  * Find the header row in a sheet's array-of-arrays.
  *
  * Client workbooks open with a banner ("Measured Entity: …"), a legend ("Use
@@ -65,21 +75,31 @@ function filledCount(row: unknown[]): number {
  * whole sheet into garbage the model cannot read, which is why the Procurement,
  * Ownership and SED sheets extracted nothing while Finance (no banner) did.
  *
- * The header row is the widest row in the opening block: a banner spans 1-3
- * cells, the real header spans every column. Pick the row with the most filled
- * cells in the first 15, breaking ties toward the later (lower) row, since the
- * header sits below the banner.
+ * Width alone is NOT enough. The Employment Equity sheet hides wide dropdown-
+ * LEGEND rows above the real header ("PROP_CON_TRANS_FOR_LSC", "LSC", "CONR"…)
+ * that out-fill it, so the widest-row rule crowned a legend and every employee
+ * landed under a column keyed "Employees with Disabilities". So each candidate
+ * row is scored by fill PLUS a strong bonus per known header label ("Name &
+ * Surname", "ID Number", "Race"…) — vocabulary a legend row never carries.
  */
 function findHeaderRow(matrix: unknown[][]): number {
   let bestIdx = 0;
-  let bestFill = 0;
-  for (let i = 0; i < Math.min(matrix.length, 15); i += 1) {
-    const fill = filledCount(matrix[i] ?? []);
+  let bestScore = 0;
+  // 25 rows: the EE sheet stacks a summary MATRIX above the per-employee
+  // register, pushing the register's header past row 15.
+  for (let i = 0; i < Math.min(matrix.length, 25); i += 1) {
+    const cells = matrix[i] ?? [];
+    const fill = filledCount(cells);
+    const vocabulary = cells.filter((c) => typeof c === 'string' && HEADER_VOCABULARY.test(c)).length;
+    // Two or more recognised labels together mark a register header; each then
+    // outweighs several filled legend cells. A single incidental match earns
+    // nothing, so banner rows cannot hijack the pick.
+    const score = fill + (vocabulary >= 2 ? vocabulary * 5 : 0);
     // Strictly greater, so a tie keeps the EARLIER row — in a clean sheet the
     // header row and its data rows are equally wide and the header comes first.
     // A banner is narrower than the header, so it loses on fill regardless.
-    if (fill > bestFill) {
-      bestFill = fill;
+    if (score > bestScore) {
+      bestScore = score;
       bestIdx = i;
     }
   }

@@ -115,6 +115,11 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   //    rows were extracted: Thandanani held all 23 supplier rows and scored 0
   //    for Procurement because TMPS was missing.
   { field: 'total_pre_exclusions_tmps', calculatorKey: 'procurement.tmps', elements: ['ESD'], coerce: 'money' },
+  // The Finance sheet's own stated post-exclusion TMPS — the labelled figure,
+  // read deterministically. Listed BEFORE nothing in particular: resolution
+  // between this and the model-computed field happens downstream, where the
+  // labelled source is preferred.
+  { field: 'total_measured_procurement_spend', calculatorKey: 'procurement.tmps', elements: ['ESD'], coerce: 'money' },
   { field: 'sum_of_leviable_amount', calculatorKey: 'skills.leviable_amount', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
   { field: 'total_entity_value', calculatorKey: 'ownership.company_value', elements: ['OWNERSHIP'], coerce: 'money' },
   { field: 'current_year_revenue', calculatorKey: 'entity.revenue', coerce: 'money' },

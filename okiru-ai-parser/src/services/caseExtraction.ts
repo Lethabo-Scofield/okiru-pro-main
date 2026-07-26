@@ -144,6 +144,9 @@ export async function extractCaseEntities(
           filename: input.filename,
           markdown: input.markdown,
           raw_text: input.raw_text,
+          // Parsed rows let the labelled TMPS be read deterministically — the
+          // sheet's own stated total, never a computed sum.
+          rows: structuredRows(input.tables),
         });
       })(),
     ]);
