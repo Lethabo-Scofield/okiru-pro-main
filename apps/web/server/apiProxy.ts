@@ -107,7 +107,9 @@ function proxyRequest(req: Request, res: Response): void {
   }
 
   const isHybridExtract = req.path.startsWith("/api/extract-entities-hybrid");
-  const isLongRunning = isHybridExtract || req.path.startsWith("/api/import");
+  const isParserExtraction = req.path.startsWith("/api/parser/resolve-case-files")
+    || req.path.startsWith("/api/parser/resolve-file");
+  const isLongRunning = isHybridExtract || isParserExtraction || req.path.startsWith("/api/import");
   const options: http.RequestOptions = {
     hostname: url.hostname,
     port: url.port,

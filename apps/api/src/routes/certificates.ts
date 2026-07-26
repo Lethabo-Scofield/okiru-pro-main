@@ -96,7 +96,7 @@ function singleRouteParam(value: string | string[] | undefined): string {
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024, files: 100 },
   fileFilter: (_req, file, cb) => {
     const allowed = [
       'application/pdf',
@@ -113,6 +113,11 @@ const upload = multer({
     }
   },
 });
+const MAX_CERTIFICATE_UPLOAD_BATCH_BYTES = 500 * 1024 * 1024;
+
+function isCertificateUploadBatchTooLarge(files: Express.Multer.File[]): boolean {
+  return files.reduce((sum, file) => sum + file.size, 0) > MAX_CERTIFICATE_UPLOAD_BATCH_BYTES;
+}
 
 /** @deprecated Alias — use CertificateListRow from certificateNormalize. */
 type CertificateRow = CertificateListRow;
@@ -1760,6 +1765,9 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
       return res.status(400).json({ message: 'No files provided' });
+    }
+    if (isCertificateUploadBatchTooLarge(files)) {
+      return res.status(413).json({ message: 'Upload batch too large. Maximum combined size is 500MB.' });
     }
 
     const body = (req.body || {}) as Record<string, string>;

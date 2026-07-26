@@ -37,7 +37,7 @@ function extractionRequiresPayment(): boolean {
 }
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024, files: 25 },
   fileFilter: (_req, file, cb) => {
     // Judge on type OR extension: a correct .xlsm arrives as
     // application/octet-stream often enough that MIME alone rejected real
@@ -46,6 +46,11 @@ const upload = multer({
     else cb(new Error(`Unsupported file type ${file.mimetype} (${file.originalname})`));
   },
 });
+const MAX_UPLOAD_BATCH_BYTES = 250 * 1024 * 1024;
+
+function batchTooLarge(files: Express.Multer.File[]): boolean {
+  return files.reduce((sum, file) => sum + file.size, 0) > MAX_UPLOAD_BATCH_BYTES;
+}
 
 let fallbackRepositoryPromise: Promise<OntologyRepository> | null = null;
 
@@ -238,6 +243,9 @@ router.post('/resolve-case-files', upload.array('files', 25), async (req: Reques
   if (files.length === 0) {
     return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
   }
+  if (batchTooLarge(files)) {
+    return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 250MB.', 'BATCH_TOO_LARGE'));
+  }
 
   if (extractionRequiresPayment()) {
     const quoteId = typeof req.body?.quote_id === 'string' ? req.body.quote_id : undefined;
@@ -289,6 +297,9 @@ router.post('/quote-files', upload.array('files', 25), async (req: Request, res:
     const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
     if (files.length === 0) {
       return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+    }
+    if (batchTooLarge(files)) {
+      return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 250MB.', 'BATCH_TOO_LARGE'));
     }
 
     const quote = await quoteUploadedFiles(files);
