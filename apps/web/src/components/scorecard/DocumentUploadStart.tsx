@@ -244,7 +244,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    * in-flight quote whose result must no longer be applied.
    */
   const quoteRequestRef = useRef(0);
-  const MAX_UPLOAD_FILES = 25;
+  const MAX_UPLOAD_FILES = 100; // a full verification evidence pack is ~70 files
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.

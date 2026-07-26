@@ -3069,7 +3069,7 @@ export default function DocumentProcessor() {
     setParserCaseStatus('running');
     try {
       const form = new FormData();
-      for (const f of files.slice(0, 25)) form.append('files', f.file, f.name);
+      for (const f of files.slice(0, 100)) form.append('files', f.file, f.name); // parser cap raised to 100 — a full evidence pack is ~70 files
       form.append('case_id', `processor_${sessionId || Date.now()}`);
       const res = await fetch(`/api/parser/resolve-case-files`, {
         method: 'POST',

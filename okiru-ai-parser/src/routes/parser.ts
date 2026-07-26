@@ -37,7 +37,7 @@ function extractionRequiresPayment(): boolean {
 }
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 25 },
+  limits: { fileSize: 50 * 1024 * 1024, files: 100 }, // a full verification evidence pack is ~70 files; 25 rejected real client folders with a 413
   fileFilter: (_req, file, cb) => {
     // Judge on type OR extension: a correct .xlsm arrives as
     // application/octet-stream often enough that MIME alone rejected real
@@ -46,7 +46,7 @@ const upload = multer({
     else cb(new Error(`Unsupported file type ${file.mimetype} (${file.originalname})`));
   },
 });
-const MAX_UPLOAD_BATCH_BYTES = 250 * 1024 * 1024;
+const MAX_UPLOAD_BATCH_BYTES = 500 * 1024 * 1024; // matches the certificates route; a real evidence pack of scans runs to hundreds of MB
 
 function batchTooLarge(files: Express.Multer.File[]): boolean {
   return files.reduce((sum, file) => sum + file.size, 0) > MAX_UPLOAD_BATCH_BYTES;
@@ -238,13 +238,13 @@ router.post('/resolve-case', async (req: Request, res: Response) => {
  * files against the paid quote, so a cheap quote can't be used to extract
  * expensive documents.
  */
-router.post('/resolve-case-files', upload.array('files', 25), async (req: Request, res: Response) => {
+router.post('/resolve-case-files', upload.array('files', 100), async (req: Request, res: Response) => {
   const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
   if (files.length === 0) {
     return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
   }
   if (batchTooLarge(files)) {
-    return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 250MB.', 'BATCH_TOO_LARGE'));
+    return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
   }
 
   if (extractionRequiresPayment()) {
@@ -292,14 +292,14 @@ router.post('/resolve-case-files', upload.array('files', 25), async (req: Reques
  * Quote (flow step 5) — free and deterministic. Records the quote against a
  * content fingerprint of these exact files so payment can be bound to them.
  */
-router.post('/quote-files', upload.array('files', 25), async (req: Request, res: Response) => {
+router.post('/quote-files', upload.array('files', 100), async (req: Request, res: Response) => {
   try {
     const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
     if (files.length === 0) {
       return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
     }
     if (batchTooLarge(files)) {
-      return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 250MB.', 'BATCH_TOO_LARGE'));
+      return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
     }
 
     const quote = await quoteUploadedFiles(files);
