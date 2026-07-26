@@ -55,3 +55,7 @@ app-secrets*.yaml
 # Build/tool logs and scratch artifacts
 acr-*.txt
 acr-*.log
+
+# Real k8s Secret manifests (kept on disk, applied by hand — never commit).
+# The placeholder templates (kubernetes/templates/*, external-secrets/*) stay tracked.
+kubernetes/infrastructure/overlays/*/secrets/secrets.yaml
