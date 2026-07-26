@@ -64,7 +64,6 @@ export function calculateTransportQseManagement(
   score += clampScore(safeRatio(bwPct, 0.25, 2), 2);
 
   const result = { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal };
-  console.log('[SCORING-TRACE] calculateTransportQseManagement result:', `${result.score} / ${result.maxPoints}`);
   return result;
 }
 
@@ -115,7 +114,6 @@ export function calculateTransportQseEmploymentEquity(
   score += bonus;
 
   const result = { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal };
-  console.log('[SCORING-TRACE] calculateTransportQseEmploymentEquity result:', `${result.score} / ${result.maxPoints}`);
   return result;
 }
 
@@ -163,7 +161,6 @@ export function calculateTransportLargeManagementControl(
   mc += clampScore(safeRatio(pctOf(board, countBlack), 0.4, 1), 1); // Bonus Independent NEDs
 
   const result = { score: round2(clampScore(mc, maxTotal)), maxPoints: maxTotal };
-  console.log('[SCORING-TRACE] calculateTransportLargeManagementControl result:', `${result.score} / ${result.maxPoints}`);
   return result;
 }
 
@@ -226,7 +223,6 @@ export function calculateTransportLargeEmploymentEquity(
   ee += bonusEE;
 
   const result = { score: round2(clampScore(ee, maxTotal)), maxPoints: maxTotal };
-  console.log('[SCORING-TRACE] calculateTransportLargeEmploymentEquity result:', `${result.score} / ${result.maxPoints}`);
   return result;
 }
 
@@ -312,7 +308,6 @@ export function calculateTransportLargeSkills(
   const womenProgScore = clampScore(safeRatio(bcWomen / hc, progWomenTarget, womenProgMax), womenProgMax);
 
   const total = round2(clampScore(learningScore + bursaryScore + disabledScore + learnershipScore + womenProgScore, maxPoints));
-  console.log('[SCORING-TRACE] calculateTransportLargeSkills result:', `${total} / ${maxPoints}`);
 
   const subLines: SkillsSubLine[] = [
     { name: 'Expenditure on learning programmes for Black people', target: `${((sk.overallSpendPercent ?? 0.03) * 100).toFixed(1)}% of payroll`, weighting: learningMax, score: round2(learningScore) },

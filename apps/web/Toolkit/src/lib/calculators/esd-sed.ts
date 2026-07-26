@@ -162,10 +162,6 @@ const SED_DEFAULTS = {
 } as const;
 
 export function calculateEsdScore(data: ESDData, npat: number, config?: CalculatorConfig): EsdResult {
-  console.log('[SCORING-TRACE] calculateEsdScore received:', {
-    npat,
-    contributionCount: data.contributions?.length ?? 0,
-  });
   const contributions = data.contributions || [];
   const { sectorCode, scorecardType } = resolveSectorContext(config);
   const ec = requireSectorConfig(
@@ -301,7 +297,6 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     edSubLines: edSubLines.map(l => ({ ...l, score: round2(l.score) })),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
   };
-  console.log(`[SCORING-TRACE] calculateEsdScore result: sd ${result.sdTotal} + ed ${result.edTotal}`);
   return result;
 }
 
@@ -311,13 +306,6 @@ export function calculateSedScore(
   config?: CalculatorConfig,
   opts?: { isReinsurer?: boolean },
 ): SedResult {
-  console.log('[SCORING-TRACE] calculateSedScore received:', {
-    npat,
-    contributionCount: data.contributions?.length ?? 0,
-    ceSpend: data.ceSpend,
-    ceBonusSpend: data.ceBonusSpend,
-    fundisaSpend: data.fundisaSpend,
-  });
   const contributions = data.contributions || [];
   const { sectorCode, scorecardType } = resolveSectorContext(config);
   const sc = requireSectorConfig(
@@ -374,7 +362,6 @@ export function calculateSedScore(
 
   const totalSpend = rowSpend + (data.ceSpend ?? 0) + (data.ceBonusSpend ?? 0) + (data.fundisaSpend ?? 0);
   const total = round2(clampScore(score, maxPoints));
-  console.log(`[SCORING-TRACE] calculateSedScore result: ${total} / ${maxPoints}`);
 
   return {
     total,

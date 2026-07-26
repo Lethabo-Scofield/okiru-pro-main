@@ -95,16 +95,6 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
   const shareholders = data.shareholders || [];
   const ot = resolveOwnershipTargets(config);
 
-  console.log('[SCORING-TRACE] calculateOwnershipScore received:', {
-    shareholderCount: shareholders.length,
-    companyValue: data.companyValue,
-    maxPoints: ot.maxPts,
-    sample: shareholders.slice(0, 2).map(s => ({
-      name: s.name,
-      blackOwnership: s.blackOwnership,
-      shares: s.shares,
-    })),
-  });
 
   const { companyValue, outstandingDebt, yearsHeld } = data;
 
@@ -220,7 +210,6 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
   ];
 
   const total = round2(clampScore(totalPoints, ot.maxPts));
-  console.log(`[SCORING-TRACE] calculateOwnershipScore result: ${total} / ${ot.maxPts}`);
 
   return {
     votingRightsBlack: round2(votingRightsBlack),

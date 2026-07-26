@@ -23,6 +23,7 @@
  * toolkit) can see exactly what did not reconcile.
  */
 import { createLogger } from '../logger.js';
+import { parseMoney } from './moneyParsing.js';
 import type { ExtractionModel } from './aiExtraction.js';
 
 const logger = createLogger('SheetColumnMapping');
@@ -170,18 +171,6 @@ function parseMappingReply(reply: string): Record<string, unknown> | null {
   return candidate as Record<string, unknown>;
 }
 
-/** "R 1 030 806.68", "(4 157)", 1200 → number. Null when not numeric. */
-function toNumber(value: unknown): number | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value !== 'string') return null;
-  const negative = /^\(.*\)$/.test(value.trim());
-  const cleaned = value.replace(/[()]/g, '').replace(/[R$€£\s,%]/g, '');
-  if (!/^-?\d+(\.\d+)?$/.test(cleaned)) return null;
-  const parsed = Number(cleaned);
-  if (!Number.isFinite(parsed)) return null;
-  return negative ? -Math.abs(parsed) : parsed;
-}
-
 /** Does any cell label this row as a total line? */
 function isTotalRow(row: Record<string, unknown>): boolean {
   return Object.values(row).some((value) =>
@@ -228,7 +217,7 @@ export function applyColumnMapping(
       lastKey = '';
       for (const [field, value] of Object.entries(out)) {
         if (field === keyField) continue;
-        const numeric = toNumber(value);
+        const numeric = parseMoney(value);
         if (numeric !== null && labelledTotals[field] === undefined) labelledTotals[field] = numeric;
       }
       continue;
@@ -258,7 +247,7 @@ export function applyColumnMapping(
     let sum = 0;
     let counted = 0;
     for (const row of mapped) {
-      const numeric = toNumber(row[field]);
+      const numeric = parseMoney(row[field]);
       if (numeric !== null) {
         sum += numeric;
         counted += 1;
