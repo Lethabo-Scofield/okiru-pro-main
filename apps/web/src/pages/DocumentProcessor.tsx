@@ -55,8 +55,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-const PARSER_SERVICE_URL = String((import.meta as any).env?.VITE_PARSER_SERVICE_URL || 'http://127.0.0.1:3200').replace(/\/+$/, '');
-
 interface StoredTemplate {
   id: number;
   name: string;
@@ -85,19 +83,27 @@ interface UploadedFile {
 interface ParserQuoteFile {
   fileId: string;
   filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
   detectedDocumentType: string;
+  kind: string;
   processingEffort: 'standard' | 'high';
+  requiresOcr: boolean;
+  tokens: {
+    basis: string;
+    input: number;
+    expectedOutput: number;
+    band: { lowerTokens: number; upperTokens: number } | null;
+  };
   structure: {
-    format: string;
     pages: number | null;
     sheets: number | null;
     rows: number | null;
-    estimatedUnits: number;
   };
   pricing: {
     currency: string;
-    unitPriceCents: number;
-    subtotalCents: number;
+    extractionCents: number;
+    isUpperBound: boolean;
   };
   reasons: string[];
   warnings: string[];
@@ -107,10 +113,27 @@ interface ParserQuote {
   quoteId: string;
   status: 'quoted';
   currency: string;
+  model: string;
   files: ParserQuoteFile[];
-  subtotalCents: number;
-  totalProcessingUnits: number;
+  lineItems: Array<{ key: string; label: string; detail: string; cents: number }>;
+  totals: {
+    predictedInputTokens: number;
+    predictedOutputTokens: number;
+    azureCents: number;
+    totalCents: number;
+    isUpperBound: boolean;
+  };
+  azureBreakdown: {
+    model: string;
+    inputTokens: number;
+    inputCents: number;
+    outputTokens: number;
+    outputCents: number;
+    ocrPages: number;
+    ocrCents: number;
+  };
   expiresAt: string;
+  paymentRequired: true;
   paymentStatus: 'not_started';
   nextAction: 'proceed_to_payment';
   notes: string[];
@@ -640,7 +663,7 @@ function formatQuoteStructure(file: ParserQuoteFile) {
   if (file.structure.pages != null) parts.push(`${file.structure.pages} page${file.structure.pages === 1 ? '' : 's'}`);
   if (file.structure.sheets != null) parts.push(`${file.structure.sheets} sheet${file.structure.sheets === 1 ? '' : 's'}`);
   if (file.structure.rows != null) parts.push(`${file.structure.rows} row${file.structure.rows === 1 ? '' : 's'}`);
-  parts.push(`${file.structure.estimatedUnits} unit${file.structure.estimatedUnits === 1 ? '' : 's'}`);
+  if (parts.length === 0) parts.push('Structure scan');
   return parts.join(' / ');
 }
 
@@ -2853,8 +2876,9 @@ export default function DocumentProcessor() {
     try {
       const fd = new FormData();
       files.forEach((file) => fd.append('files', file));
-      const res = await fetch(`${PARSER_SERVICE_URL}/api/parser/quote-files`, {
+      const res = await fetch('/api/parser/quote-files', {
         method: 'POST',
+        credentials: 'include',
         body: fd,
       });
       const raw = await res.json().catch(() => null);
@@ -3064,11 +3088,15 @@ export default function DocumentProcessor() {
     }
   };
 
-  // Auto-run the parser case whenever the upload set settles (all files ready).
+  // The paid parser must not run during the quote-only phase. Keep this flow
+  // structure-only until payment is wired; otherwise the parser correctly
+  // rejects `/resolve-case-files` with PAYMENT_REQUIRED and the UI looks broken.
   useEffect(() => {
     if (flowMode !== 'upload' || integratedToolkitUpload) return;
-    const ready = uploadedFiles.length > 0 && uploadedFiles.every((f) => f.status === 'ready');
-    if (ready) void runParserCase(uploadedFiles);
+    if (uploadedFiles.length > 0 && uploadedFiles.every((f) => f.status === 'ready')) {
+      setParserCase(null);
+      setParserCaseStatus('idle');
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uploadedFiles, flowMode]);
 
@@ -4302,7 +4330,7 @@ export default function DocumentProcessor() {
                 <ToolkitIntegratedRequirementsSummary
                   sectorCode={toolkitSectorCode || companyInfo.sector}
                   sectorLabel={availableSectors.find((s) => s.code === (toolkitSectorCode || companyInfo.sector))?.label}
-                  fscSubSector={foundationData.clientInfo?.fscSubSector as string | undefined}
+                  fscSubSector={(foundationData.clientInfo as { fscSubSector?: string } | undefined)?.fscSubSector}
                   pillarScopes={buildCollaboration?.pillarScopes ?? null}
                 />
               </div>
@@ -4643,8 +4671,8 @@ export default function DocumentProcessor() {
                       </div>
                       {parserQuote && (
                         <div className="text-right">
-                          <p className="text-[16px] font-semibold text-white">{formatQuoteMoney(parserQuote.subtotalCents, parserQuote.currency)}</p>
-                          <p className="text-[11px] text-[#636366]">{parserQuote.totalProcessingUnits} unit{parserQuote.totalProcessingUnits === 1 ? '' : 's'}</p>
+                          <p className="text-[16px] font-semibold text-white">{formatQuoteMoney(parserQuote.totals.totalCents, parserQuote.currency)}</p>
+                          <p className="text-[11px] text-[#636366]">{parserQuote.files.length} file{parserQuote.files.length === 1 ? '' : 's'}</p>
                         </div>
                       )}
                     </div>
@@ -4677,16 +4705,18 @@ export default function DocumentProcessor() {
                                   <p className="text-[11px] text-[#636366] mt-0.5">{file.detectedDocumentType}</p>
                                 </div>
                                 <div className="text-right shrink-0">
-                                  <p className="text-[13px] font-semibold text-white">{formatQuoteMoney(file.pricing.subtotalCents, file.pricing.currency)}</p>
-                                  <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${file.processingEffort === 'high' ? 'text-[#ffb340]' : 'text-[#8e8e93]'}`} style={{ background: '#1c1c1e' }}>
-                                    {file.processingEffort}
+                                  <p className="text-[13px] font-semibold text-white">{formatQuoteMoney(file.pricing.extractionCents, file.pricing.currency)}</p>
+                                  <span className={`inline-flex mt-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${file.requiresOcr ? 'text-[#ffb340]' : 'text-[#8e8e93]'}`} style={{ background: '#1c1c1e' }}>
+                                    {file.requiresOcr ? 'high' : 'standard'}
                                   </span>
                                 </div>
                               </div>
                               <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[#8e8e93]">
-                                <span>{file.structure.format.toUpperCase()}</span>
+                                <span>{file.kind.toUpperCase()}</span>
                                 <span className="text-[#3a3a3c]">/</span>
                                 <span>{formatQuoteStructure(file)}</span>
+                                <span className="text-[#3a3a3c]">/</span>
+                                <span>{file.tokens.input.toLocaleString()} tokens</span>
                               </div>
                               {file.reasons.length > 0 && (
                                 <p className="text-[11px] text-[#636366] mt-2">{file.reasons[0]}</p>
