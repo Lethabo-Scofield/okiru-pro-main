@@ -159,6 +159,17 @@ describe("injecting a row", () => {
     expect(result.cells.empoweringSupplier === "Yes" || result.cells.empoweringSupplier === true).toBe(true);
   });
 
+  it("normalises 'Other Executive Management' into the top band", () => {
+    // The Codes split top management into Executive directors and Other
+    // Executive Management — both are the top band. The real register's Admin
+    // Manager carried exactly this label and was rejected at the dropdown,
+    // costing the MC black-women bonus.
+    const result = injectIntoSection("management-control", [
+      { field: "occupationalLevel", value: "Other Executive Management" },
+    ]);
+    expect(result.cells.occupationalLevel).toBe("Top Management");
+  });
+
   it("normalises an occupational level to the workbook's dropdown, not the scoring band", () => {
     // "Executive Management" is the EEA occupational level on the register. The
     // Occupational-Level dropdown says "Top Management" — the scoring engine's

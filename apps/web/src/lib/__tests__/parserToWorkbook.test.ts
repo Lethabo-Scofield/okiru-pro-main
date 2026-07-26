@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import {
   entityMatchKey,
+  entityMatchKeySorted,
   linkWorkbookRows,
   mergeWorkbookSections,
   normaliseEntityName,
@@ -171,6 +172,47 @@ describe("entity-level values go to meta, not a row", () => {
 
     expect(result.meta["financial-information"]?.revenue).toBe(10826271);
   });
+
+  it("lets a LABELLED reading replace a model-computed one, whatever the order", () => {
+    // The model-computed TMPS summed the exclusions back in (8,100,064); the
+    // Finance sheet's own stated total is 4,674,994.56. A stated total beats a
+    // computed one even when it arrives second.
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        documentId: "esd__audited_financial_statements_or_signed_management_accounts_w",
+        sourceFile: "wb.xlsm › Finance",
+        element: "ESD",
+        values: [{ field: "total_pre_exclusions_tmps", value: 8100064 }],
+      }),
+      extraction({
+        documentId: "sheet_financials",
+        sourceFile: "wb.xlsm › Finance",
+        element: "ESD",
+        values: [{ field: "total_measured_procurement_spend", value: 4674994.56 }],
+      }),
+    ]);
+
+    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(4674994.56, 2);
+  });
+
+  it("never lets a computed value overwrite a labelled one", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        documentId: "sheet_financials",
+        sourceFile: "wb.xlsm › Finance",
+        element: "ESD",
+        values: [{ field: "total_measured_procurement_spend", value: 4674994.56 }],
+      }),
+      extraction({
+        documentId: "esd__audited_financial_statements_or_signed_management_accounts_w",
+        sourceFile: "other.xlsm › Finance",
+        element: "ESD",
+        values: [{ field: "total_pre_exclusions_tmps", value: 8100064 }],
+      }),
+    ]);
+
+    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(4674994.56, 2);
+  });
 });
 
 describe("nothing is forced", () => {
@@ -287,8 +329,12 @@ describe("cross-document row linking", () => {
     // the ledgers are filed as "B P EDENVALE" and "SUBBIAH ENTERPRISE".
     expect(entityMatchKey("B P EDENVALE")).toBe(entityMatchKey("BP Edenvale"));
     expect(entityMatchKey("SUBBIAH ENTERPRISE")).toBe(entityMatchKey("Subbiah Enterprises"));
-    // Still not fuzzy: initials are not expanded into names.
+    // Word order is not identity — the SORTED twin handles surname-first.
+    expect(entityMatchKeySorted("Chiyangwa, Jeffrey")).toBe(entityMatchKeySorted("Jeffrey Chiyangwa"));
+    expect(entityMatchKeySorted("Venugopal Lutchman, Naidoo")).toBe(entityMatchKeySorted("Naidoo Venugopal Lutchman"));
+    // Still not fuzzy: initials are not expanded into names, on either form.
     expect(entityMatchKey("S. Nhlanhla")).not.toBe(entityMatchKey("Sandile Nhlanhla"));
+    expect(entityMatchKeySorted("S. Nhlanhla")).not.toBe(entityMatchKeySorted("Sandile Nhlanhla"));
     expect(entityMatchKey("TST Truck")).not.toBe(entityMatchKey("TST Truc Chassis"));
   });
 

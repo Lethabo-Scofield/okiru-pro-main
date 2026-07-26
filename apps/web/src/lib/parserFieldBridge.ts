@@ -67,6 +67,10 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   full_name: { section: "management-control", column: "name" },
   surname: { section: "management-control", column: "surname" },
   occupational_level: { section: "management-control", column: "occupationalLevel" },
+  // The Foreign-national flag: EE targets measure the SA workforce, so the
+  // calculators exclude foreigners — losing this flag counts them.
+  foreign: { section: "management-control", column: "isForeign" },
+  is_foreign: { section: "management-control", column: "isForeign" },
   designation: { section: "management-control", column: "designation" },
   job_title: { section: "management-control", column: "designation" },
   salary: { section: "management-control", column: "salary" },
@@ -114,6 +118,8 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
 
   // ── Entity-level META fields (not grid rows) ──
   total_pre_exclusions_tmps: { section: "financial-information", column: "tmps", meta: true },
+  // The Finance sheet's own labelled post-exclusion TMPS (deterministic read).
+  total_measured_procurement_spend: { section: "financial-information", column: "tmps", meta: true },
   sum_of_leviable_amount: { section: "financial-information", column: "payroll", meta: true },
   current_year_revenue: { section: "financial-information", column: "revenue", meta: true },
   current_year_npat: { section: "financial-information", column: "npat", meta: true },

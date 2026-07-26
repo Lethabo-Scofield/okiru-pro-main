@@ -133,23 +133,41 @@ export function normaliseEntityName(value: unknown): string {
 }
 
 /**
- * The key two rows are considered the same entity by.
+ * The keys two rows are considered the same entity by.
  *
- * One step looser than the display name, in two ways the real evidence forces —
- * and neither of them fuzzy:
+ * One step looser than the display name, in three ways the real evidence
+ * forces — and none of them fuzzy. Each is an EXACT transformation:
  *
  *  - SPACING is not identity. The client's schedule says "BP Edenvale"; the
- *    ledger for that same account is filed as "B P EDENVALE".
+ *    ledger for that same account is filed as "B P EDENVALE". (squashed key)
  *  - A TRAILING PLURAL is not identity. The schedule says "Subbiah
- *    Enterprises", its ledger "SUBBIAH ENTERPRISE".
+ *    Enterprises", its ledger "SUBBIAH ENTERPRISE". (per-token de-plural)
+ *  - WORD ORDER is not identity. The EE register writes "Chiyangwa, Jeffrey";
+ *    the Management Control sheet writes "Jeffrey Chiyangwa". (sorted key)
  *
- * Both are exact transformations, so they cannot drift the way edit-distance
- * matching does: "S. Nhlanhla" and "Sandile Nhlanhla" still key apart, because
- * guessing that two names are one person is how someone else's certificate
- * lands on the wrong supplier.
+ * Spacing and word order cannot share one canonical form ("B P EDENVALE"
+ * token-sorted is not "BP Edenvale" token-sorted), so a row carries BOTH keys
+ * and two rows match when EITHER agrees. Still nothing fuzzy: "S. Nhlanhla"
+ * and "Sandile Nhlanhla" key apart on both forms, because guessing that two
+ * names are one person is how someone else's certificate lands on the wrong
+ * supplier.
  */
 export function entityMatchKey(value: unknown): string {
-  return normaliseEntityName(value).replace(/\s+/g, "").replace(/s$/, "");
+  return normaliseEntityName(value)
+    .split(" ")
+    .filter(Boolean)
+    .map((token) => token.replace(/s$/, ""))
+    .join("");
+}
+
+/** The order-insensitive twin of entityMatchKey. */
+export function entityMatchKeySorted(value: unknown): string {
+  return normaliseEntityName(value)
+    .split(" ")
+    .filter(Boolean)
+    .map((token) => token.replace(/s$/, ""))
+    .sort()
+    .join("");
 }
 
 function cellBlank(value: unknown): boolean {
@@ -258,13 +276,18 @@ export function linkWorkbookRows(
     const byName = new Map<string, WorkbookRow[]>();
 
     for (const row of sectionRows) {
-      const key = keyColumns.map((column) => entityMatchKey(row[column])).join("|").replace(/^\|+|\|+$/g, "");
-      if (key === "") {
+      const joinKeys = (fn: (v: unknown) => string) =>
+        keyColumns.map((column) => fn(row[column])).join("|").replace(/^\|+|\|+$/g, "");
+      const squashed = joinKeys(entityMatchKey);
+      const sorted = joinKeys(entityMatchKeySorted);
+      if (squashed === "") {
         kept.push(row);
         continue;
       }
       const display = keyColumns.map((column) => String(row[column] ?? "").trim()).filter(Boolean).join(" ");
-      const candidates = byName.get(key) ?? [];
+      // Either key form finds the group; both forms register it, so a later
+      // spelling under the OTHER form still lands in the same group.
+      const candidates = byName.get(squashed) ?? byName.get(sorted) ?? [];
 
       let merged = false;
       for (const candidate of candidates) {
@@ -277,11 +300,12 @@ export function linkWorkbookRows(
         merged = true;
         break;
       }
-      if (merged) continue;
-
-      candidates.push(row);
-      byName.set(key, candidates);
-      kept.push(row);
+      if (!merged) {
+        candidates.push(row);
+        kept.push(row);
+      }
+      byName.set(squashed, candidates);
+      byName.set(sorted, candidates);
     }
 
     // A ledger row that never linked to anything is either a supplier the
@@ -350,6 +374,14 @@ export function parserExtractionsToWorkbook(
     (rows[section] ??= []).push(row);
   };
 
+  // Meta keys whose value came from a LABELLED, deterministically-read source.
+  // "First value wins" is right between two model readings, but a stated total
+  // must beat a computed one whatever order the extractions arrived in: the
+  // model-computed TMPS summed the exclusions back in and overstated the
+  // denominator by millions on the real pack.
+  const AUTHORITATIVE_DOCS = new Set(["sheet_financials"]);
+  const metaFromAuthoritative = new Set<string>();
+
   for (const extraction of extractions) {
     // Values for THIS document, split into the scalar ones (which together make
     // one row per section) and the tabular ones (which make many).
@@ -383,9 +415,18 @@ export function parserExtractionsToWorkbook(
         const bucket = (meta[target.section] ??= {});
         const injected = injectMetaValue(target.section, target.column, value, options);
         if (injected.ok) {
-          // First value wins — a later document may FILL a meta field but must
-          // not overwrite one already established.
-          if (bucket[target.column] === undefined) bucket[target.column] = injected.value;
+          const metaKey = `${target.section}.${target.column}`;
+          const authoritative = AUTHORITATIVE_DOCS.has(extraction.documentId);
+          // First value wins between peers, but a labelled (deterministic)
+          // reading replaces a model-computed one, and once a labelled value is
+          // in, nothing overwrites it.
+          if (
+            bucket[target.column] === undefined
+            || (authoritative && !metaFromAuthoritative.has(metaKey))
+          ) {
+            bucket[target.column] = injected.value;
+            if (authoritative) metaFromAuthoritative.add(metaKey);
+          }
         } else {
           rejected.push({ ...injected.rejection, sourceFile: extraction.sourceFile });
         }
