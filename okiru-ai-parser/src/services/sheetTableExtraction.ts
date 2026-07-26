@@ -40,8 +40,8 @@ const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; column
   },
   MANAGEMENT_CONTROL: {
     field: 'employee_rows',
-    columns: ['employee_name', 'race', 'gender', 'occupational_level', 'id_number'],
-    what: 'each director and employee (occupational_level is their management band, e.g. Executive Management, Senior, Middle)',
+    columns: ['employee_name', 'race', 'gender', 'occupational_level', 'id_number', 'foreign'],
+    what: 'each director and employee (occupational_level is their management band, e.g. Executive Management, Senior, Middle; foreign is the Foreign-national Yes/No flag)',
   },
   SKILLS_DEVELOPMENT: {
     field: 'learner_rows',
