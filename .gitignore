@@ -38,3 +38,7 @@ acr_logs.txt
 *-credentials*.yaml
 *-api-keys*.yaml
 temp-secret-patch.json
+
+# graphify tool output (generated cache/graph artifacts)
+graphify-out/
+apps/graphify-out/
