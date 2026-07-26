@@ -212,6 +212,13 @@ export const OCC_LEVEL_MAP: Record<string, string> = {
   topmgmt: "Top Management",
   top: "Top Management",
   executivemanagement: "Top Management",
+  // The Codes' MC scorecard splits top management into "Executive directors"
+  // and "Other Executive Management" — BOTH are the top band. Without this
+  // synonym an Admin Manager listed as Other Executive Management was rejected
+  // at the dropdown, vanished from top management, and the entity lost the MC
+  // black-women bonus its own register earned.
+  otherexecutivemanagement: "Top Management",
+  otherexecmgmt: "Top Management",
   exec: "Top Management",
   seniormanagement: "Senior Management",
   seniormgmt: "Senior Management",
