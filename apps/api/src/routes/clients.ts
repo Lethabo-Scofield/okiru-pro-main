@@ -6,7 +6,7 @@ import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger("Clients");
-import { requireAuth, verifyClientAccess, verifyPillarAccess } from '../middleware/auth.js';
+import { requireAuth, verifyClientAccess, verifyPillarAccess, verifyFullScorecardAccess } from '../middleware/auth.js';
 import { PERMISSIONS, requirePermission, recordAudit } from '../security/index.js';
 import { ClientModel } from '../../models.js';
 import { fanOutClientMetaBackSync } from '../services/workbookBackSyncFanout.js';
@@ -174,6 +174,12 @@ router.get('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_READ), asyn
 
 router.patch('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
+  // updateClient is CROSS-PILLAR: it carries revenue/NPAT/TMPS/leviable, AFS
+  // and the ESD bonuses — the denominators every pillar scores from. A
+  // pillar-scoped collaborator (say skills-only) must not be able to rewrite
+  // them; this was the one write on this router with no workspace-scope gate.
+  // (Audit B15-srv completion, 2026-07-26.)
+  if (!(await verifyFullScorecardAccess(req, res))) return;
   const clientId = String(req.params.id);
   // verifyClientAccess gates WHICH client may be edited; this gates WHICH FIELDS.
   // Without it a caller could reassign organizationId and move the record into
@@ -250,6 +256,9 @@ router.patch('/:id/procurement', requireAuth, async (req: Request, res: Response
 
 router.delete('/:id', requireAuth, requirePermission(PERMISSIONS.CLIENT_DELETE), async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
+  // Deleting the client destroys every pillar's records at once — the most
+  // cross-pillar action there is. Workspace members below full access cannot.
+  if (!(await verifyFullScorecardAccess(req, res))) return;
   const clientId = String(req.params.id);
   await Promise.all([
     ShareholderModel.deleteMany({ clientId }),

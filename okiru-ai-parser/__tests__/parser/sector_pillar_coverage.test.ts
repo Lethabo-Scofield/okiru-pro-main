@@ -189,8 +189,8 @@ describe('readiness rules', () => {
 });
 
 describe('matrix shape', () => {
-  it('has 14 configs with unique configIds and positive totals', () => {
-    expect(SECTOR_PILLAR_COVERAGE).toHaveLength(14);
+  it('has 15 configs with unique configIds and positive totals', () => {
+    expect(SECTOR_PILLAR_COVERAGE).toHaveLength(15) // +FSC QSFI (shipped 2026-07-26);
     const ids = SECTOR_PILLAR_COVERAGE.map((e) => e.configId);
     expect(new Set(ids).size).toBe(ids.length);
     for (const entry of SECTOR_PILLAR_COVERAGE) {

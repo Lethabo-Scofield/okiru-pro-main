@@ -5,7 +5,12 @@ import { storage } from '../../storage.js';
 import { requireAuth, verifyClientAccess, verifyResourceOwnership, verifyFullScorecardAccess } from '../middleware/auth.js';
 import { ScenarioModel } from '../../models.js';
 
-const router = Router();
+// mergeParams is LOAD-BEARING: these routers mount under
+// /api/clients/:clientId/... — without it req.params.clientId is undefined
+// inside the router, verifyClientAccess/verifyPillarAccess PASS OPEN on the
+// empty id, and creates write clientId:"undefined" orphans. Proven live by
+// the 2026-07-26 round-trip probe.
+const router = Router({ mergeParams: true });
 
 router.post('/', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;

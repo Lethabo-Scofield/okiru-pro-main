@@ -244,7 +244,7 @@ function sanitizeTables(raw: unknown): ScorecardAdviceTable[] {
     const rows = Array.isArray((table as any).rows)
       ? (table as any).rows.map((row: unknown) => {
         const cells = Array.isArray(row) ? row : [];
-        return columns.map((_, index) => cleanText(cells[index], 80));
+        return columns.map((_: unknown, index: number) => cleanText(cells[index], 80));
       }).filter((row: string[]) => row.some(Boolean)).slice(0, 8)
       : [];
     if (columns.length === 0 || rows.length === 0) return [];

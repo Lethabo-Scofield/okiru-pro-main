@@ -6,7 +6,7 @@ import { FSC_GENERIC, getSectorConfig } from '../pipeline/sectorConfig';
 import { SECTOR_PILLAR_SUB_ELEMENTS } from '../pipeline/sectorSubElements';
 
 describe('FSC_GENERIC — Others sub-sector pillar weights', () => {
-  it('sums to 120 (25+21+23+24+10+9+8)', () => {
+  it('sums to 119 (25+20+23+24+10+9+8)', () => {
     const p = FSC_GENERIC.pillarConfigs;
     const total =
       p.ownership.maxPoints +
@@ -17,14 +17,14 @@ describe('FSC_GENERIC — Others sub-sector pillar weights', () => {
       p.supplierDevelopment.maxPoints +
       p.enterpriseDevelopment.maxPoints +
       p.socioEconomicDevelopment.maxPoints;
-    expect(total).toBe(120);
-    expect(FSC_GENERIC.totalMaxPoints).toBe(120);
+    expect(total).toBe(119); // FS200 MC 20 → total 119 (gazette, audit 2026-07-26 item 9)
+    expect(FSC_GENERIC.totalMaxPoints).toBe(119); // FS200 MC 20 → total 119 (gazette, audit 2026-07-26 item 9)
   });
 
   it('matches the per-pillar caps documented in sectorConfig.ts', () => {
     const p = FSC_GENERIC.pillarConfigs;
     expect(p.ownership.maxPoints).toBe(25);
-    expect(p.managementControl.maxPoints).toBe(21);
+    expect(p.managementControl.maxPoints).toBe(20); // FS200 MC 20 → total 119 (gazette, audit 2026-07-26 item 9)
     expect(p.employmentEquity.maxPoints).toBe(0);
     expect(p.skillsDevelopment.maxPoints).toBe(23);
     expect(p.preferentialProcurement.maxPoints).toBe(24);
@@ -47,8 +47,8 @@ describe("SECTOR_PILLAR_SUB_ELEMENTS['FSC:Generic'] row totals", () => {
     const total = fsc.ownership.reduce((a, r) => a + r.points, 0);
     expect(total).toBe(25);
   });
-  it('Management Control rows sum to 21', () => {
-    expect(sumNonBonus(fsc.managementControl)).toBe(21);
+  it('Management Control rows sum to 20', () => {
+    expect(sumNonBonus(fsc.managementControl)).toBe(20); // FS200 MC 20 → total 119 (gazette, audit 2026-07-26 item 9)
   });
   it('Skills Development rows sum to 23', () => {
     expect(sumNonBonus(fsc.skillsDevelopment)).toBe(23);
@@ -79,7 +79,7 @@ describe('FSC sub-sector variants — current state', () => {
   it('exposes the Generic sub-sector via getSectorConfig', () => {
     const cfg = getSectorConfig('FSC', 'Generic');
     expect(cfg.sectorCode).toBe('FSC');
-    expect(cfg.totalMaxPoints).toBe(120);
+    expect(cfg.totalMaxPoints).toBe(119); // FS200 MC 20 → total 119 (gazette, audit 2026-07-26 item 9)
   });
 
   // TODO (follow-up Task #10): implement Banks / Long-Term Insurers /
@@ -122,14 +122,14 @@ function sumPillarMaxPoints(config: typeof FSC_GENERIC): number {
 }
 
 describe('Negative — re-running the FSC arithmetic validator on a broken config', () => {
-  it('FSC_GENERIC as-shipped passes the integrity validator (sum == totalMaxPoints == 120)', () => {
+  it('FSC_GENERIC as-shipped passes the integrity validator (sum == totalMaxPoints == 119)', () => {
     // Re-run the same validator the integrity suite uses on the shipped
     // FSC_GENERIC config — must reconcile.
     expect(sumPillarMaxPoints(FSC_GENERIC)).toBe(FSC_GENERIC.totalMaxPoints);
-    expect(sumPillarMaxPoints(FSC_GENERIC)).toBe(120);
+    expect(sumPillarMaxPoints(FSC_GENERIC)).toBe(119); // FS200 MC 20 → total 119 (gazette, audit 2026-07-26 item 9)
   });
 
-  it('detects a dropped pillar (SED zeroed) — sum 112, declared total 120, mismatch surfaced', () => {
+  it('detects a dropped pillar (SED zeroed) — sum 111, declared total 119, mismatch surfaced', () => {
     // Deep-clone so we don't pollute the singleton, then zero SED.
     const broken: typeof FSC_GENERIC = {
       ...FSC_GENERIC,
@@ -142,12 +142,12 @@ describe('Negative — re-running the FSC arithmetic validator on a broken confi
       },
     };
     const sum = sumPillarMaxPoints(broken);
-    expect(sum).toBe(112);
+    expect(sum).toBe(111);
     // The arithmetic-identity validator must reject: sum != declared total.
     expect(sum).not.toBe(broken.totalMaxPoints);
   });
 
-  it('detects a wrong pillar cap (Ownership inflated to 30) — sum 125, mismatch surfaced', () => {
+  it('detects a wrong pillar cap (Ownership inflated to 30) — sum 124, mismatch surfaced', () => {
     const broken: typeof FSC_GENERIC = {
       ...FSC_GENERIC,
       pillarConfigs: {
@@ -156,7 +156,7 @@ describe('Negative — re-running the FSC arithmetic validator on a broken confi
       },
     };
     const sum = sumPillarMaxPoints(broken);
-    expect(sum).toBe(125);
+    expect(sum).toBe(124);
     expect(sum).not.toBe(broken.totalMaxPoints);
   });
 });
