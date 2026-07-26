@@ -1393,6 +1393,103 @@ export const ICT_QSE: SectorConfig = {
 // ICT QSE uses STANDARD level thresholds (not ICT_LEVELS which is for Generic/140-pt scale)
 
 // ---------------------------------------------------------------------------
+// FSC QSFI — Qualifying Small Financial Institution (annual revenue R10-50m).
+//
+// ELEMENT WEIGHTS are gazette-verified (GG 41287 §8.2, read first-hand in the
+// 2026-07-26 audit): Ownership 25 + Management Control 15 + Skills 25 +
+// Procurement & ESD 30 + SED & Consumer Education 5 = 100. Before this config
+// existed an FSC QSE fell through to the 105-pt Others scorecard — a wrong
+// answer rather than a refusal.
+//
+// INNER INDICATOR SPLITS are DERIVED, pending extraction of the QSFI
+// statements themselves: ownership/MC mirror the amended-codes QSE statements
+// (same shapes the gazette's QSFI chapters are built on), P&ESD 30 splits
+// PP 20 / SD 5 / ED 5 (the FSC pattern at QSE scale), and SED&CE 5 splits
+// SED 3 @ 0.6% + CE 2 @ 0.4% (the FSC Others split, FS500). Deemed levels
+// (≥51% black → L2, 100% → L1 via annual sworn affidavit) are handled by the
+// deemed-level pipeline, not this scorecard.
+// ---------------------------------------------------------------------------
+
+export const FSC_QSE: SectorConfig = {
+  sectorCode: 'FSC',
+  sectorName: 'Financial Sector Code (QSFI)',
+  scorecardType: 'QSE',
+  // GG 41287 §8.2: 25 + 15 + 25 + 30 + 5 = 100
+  totalMaxPoints: 100,
+  pillarConfigs: {
+    // Ownership is a QSFI PRIORITY element (FSC §3.3.2(b)).
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      // Amended QSE ownership shape: voting 5, BW voting 2, EI 5, BW EI 2,
+      // combined NE/DG 3, net value 8 = 25.
+      votingRightsTarget: 0.25, votingRightsMaxPts: 5,
+      womenVotingTarget: 0.10, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 5,
+      womenEITarget: 0.10, womenEIMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.02, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 0, // combined into designatedGroup above
+    },
+    managementControl: {
+      // QSE MC: executive 5+2, senior/middle/junior combined 6+2 = 15.
+      boardBlackTarget: 0, boardBlackMaxPts: 0,
+      boardBWTarget: 0, boardBWMaxPts: 0,
+      execBlackTarget: 0.50, execBlackMaxPts: 5,
+      execBWTarget: 0.25, execBWMaxPts: 2,
+      otherExecBlackTarget: 0, otherExecBlackMaxPts: 0,
+      otherExecBWTarget: 0, otherExecBWMaxPts: 0,
+      seniorMaxPts: 6, seniorBWMaxPts: 2,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 0, disabledTarget: 0,
+    },
+    skills: {
+      // QSFI Skills 25: black spend 3%/12, black female 1%/5, disabled 0.15%/3,
+      // absorption 100%/5.
+      learningProgrammesMaxPts: 12,
+      bursaryMaxPts: 5,
+      disabledLearningMaxPts: 3,
+      learnershipsMaxPts: 0,
+      absorptionMaxPts: 5,
+      overallSpendPercent: 3.0,
+      bursarySpendPercent: 1.0,
+      disabledSpendPercent: 0.15,
+      learnershipTargetPercent: 0,
+      absorptionTargetPercent: 100,
+    },
+    procurement: {
+      // QSFI PP 20: all suppliers 60%/12, >=51% black-owned 15%/7, DG bonus 1%/1.
+      allSuppliersTarget: 0.60, allSuppliersMaxPts: 12,
+      qseTarget: 0, qseMaxPts: 0,
+      emeTarget: 0, emeMaxPts: 0,
+      bo51Target: 0.15, bo51MaxPts: 7,
+      bwo30Target: 0, bwo30MaxPts: 0,
+      dgTarget: 0.01, dgMaxPts: 1,
+    },
+    esd: { sdPercent: 1.0, sdMaxPts: 5, edPercent: 1.0, edMaxPts: 5, edGraduationBonus: 0, edJobsBonus: 0 },
+    // SED & CE 5 = SED 3 @ 0.6% NPAT + Consumer Education 2 @ 0.4% (FS500 split).
+    sed: { spendPercent: 1.0, maxPts: 5 },
+  },
+  levelThresholds: STANDARD_LEVELS,
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+
+// ---------------------------------------------------------------------------
 // Transport Sector — Large Enterprise (docs/Transport Codes.xlsx sheet1)
 // Grand Total 108: 24+29+15+20+15+5 (+ merged MC 11 + EE 18 in management pillar)
 // Preferential procurement rows omit DG bonus row; supplier development is 3% NPAT → 15 pts (named Enterprise Dev in toolkit).
@@ -1836,7 +1933,7 @@ function getEnrichedConfig(sectorCode: string, scorecardType: string = 'Generic'
 
 const ALL_CONFIGS: SectorConfig[] = [
   RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, FSC_BANKS, FSC_LTI, FSC_STI,
-  AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
+  FSC_QSE, AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
   CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
 ].map(attachSubElements);
 

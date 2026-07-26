@@ -34,6 +34,11 @@ import {
   isFscBanksSector,
 } from './sectors/fsc-banks';
 import {
+  FSC_QSE_CALCULATOR_CONFIG,
+  isFscQseSector,
+} from './sectors/fsc-qse';
+import { applyDeemedLevel, resolveDeemedLevel } from './calculators/deemedLevel';
+import {
   FSC_LTI_CALCULATOR_CONFIG,
   isFscLtiSector,
 } from './sectors/fsc-lti';
@@ -606,11 +611,70 @@ function assertSectorConfigLoaded(cfg: CalculatorConfig, client: Client): void {
   requireSectorConfig(sectorCode, 'sed', cfg.sed as Record<string, unknown>, scorecardType);
 }
 
+/**
+ * Flow-through black ownership from the entered shareholders — the measure the
+ * Amended Codes deem EME/QSE levels on (share-weighted, voting and economic
+ * interest from the same beneficial-ownership data the ownership calculator
+ * uses).
+ */
+function flowThroughBlackOwnership(state: PillarState): { voting: number; ei: number } {
+  const shareholders = state.ownership?.shareholders ?? [];
+  const totalShares = shareholders.reduce((acc, sh) => acc + (sh.shares || 0), 0);
+  let voting = 0;
+  for (const sh of shareholders) {
+    const pct = totalShares > 0
+      ? (sh.shares || 0) / totalShares
+      : shareholders.length > 0 ? 1 / shareholders.length : 0;
+    voting += pct * (sh.blackOwnership || 0);
+  }
+  return { voting, ei: voting };
+}
+
+function deemedFor(state: PillarState): ReturnType<typeof resolveDeemedLevel> {
+  const { voting, ei } = flowThroughBlackOwnership(state);
+  return resolveDeemedLevel({
+    sectorCode: String(state.client.sectorCode ?? ''),
+    scorecardType: String(state.client.scorecardType ?? ''),
+    blackVotingPct: voting,
+    blackEconomicInterestPct: ei,
+  });
+}
+
 function calculateScorecard(
   state: PillarState & { calculatorConfig?: CalculatorConfig | null; ignoreSubMinimum?: boolean },
   overrides?: PipelineOverrides | null,
 ): ScorecardResult {
   const cfg = state.calculatorConfig;
+
+  // An EME is not scorecard-measured at all: the Codes deem its level (L4,
+  // enhanced to L2/L1 by black ownership) on an annual sworn affidavit. No
+  // sector config is needed — and demanding one turned every EME into an
+  // error instead of its lawful level. (Transport EMEs are excluded by
+  // resolveDeemedLevel — legacy code, different regime.)
+  if (String(state.client.scorecardType ?? '').trim().toUpperCase() === 'EME') {
+    const deemed = deemedFor(state);
+    if (deemed) {
+      const zero = { score: 0, target: 0, weighting: 0 };
+      return {
+        ownership: { ...zero, subMinimumMet: true },
+        managementControl: zero,
+        skillsDevelopment: { ...zero, subMinimumMet: true },
+        procurement: { ...zero, subMinimumMet: true },
+        supplierDevelopment: { ...zero, subMinimumMet: true },
+        enterpriseDevelopment: { ...zero, subMinimumMet: true },
+        socioEconomicDevelopment: zero,
+        yesInitiative: zero,
+        total: zero,
+        achievedLevel: deemed.level,
+        discountedLevel: deemed.level,
+        isDiscounted: false,
+        recognitionLevel: levelToRecognition(deemed.level, cfg),
+        deemedLevel: deemed.level,
+        deemedLevelReason: deemed.reason,
+      };
+    }
+  }
+
   if (!cfg) throw new Error('calculatorConfig must be loaded before calculating scorecard. Please select a sector first.');
 
   // Construction scores via the expert-verified indicator-matrix evaluator, not the
@@ -645,6 +709,13 @@ function calculateScorecard(
       : (!ownPriorityMet || !skillsPriorityMet || !esdPriorityMet);
     const discounted = !state.ignoreSubMinimum && lvl < 9 && priorityFailed;
 
+    // Construction is an ALIGNED sector code: the deemed-level floor applies
+    // to its QSEs the same as the generic codes.
+    const constructionDeemed = deemedFor(state);
+    const cAchieved = applyDeemedLevel(lvl, constructionDeemed);
+    const cDiscounted = applyDeemedLevel(discounted ? Math.min(lvl + 1, 8) : lvl, constructionDeemed);
+    const cDeemedApplied = cAchieved.deemedApplied || cDiscounted.deemedApplied;
+
     const result: ScorecardResult = {
       ownership: { ...mkPillar(el.ownership), subMinimumMet: ownPriorityMet },
       managementControl: mkPillar(el.managementControl),
@@ -655,10 +726,14 @@ function calculateScorecard(
       socioEconomicDevelopment: mkPillar(el.socioEconomicDevelopment),
       yesInitiative: { score: 0, target: 0, weighting: 0 },
       total: { score: round2(out.totalScore), target: out.totalAvailable, weighting: out.totalAvailable },
-      achievedLevel: lvl,
-      discountedLevel: discounted ? Math.min(lvl + 1, 8) : lvl,
-      isDiscounted: discounted,
-      recognitionLevel: levelToRecognition(discounted ? Math.min(lvl + 1, 8) : lvl, cfg),
+      achievedLevel: cAchieved.level,
+      discountedLevel: cDiscounted.level,
+      isDiscounted: discounted && !cDeemedApplied,
+      recognitionLevel: levelToRecognition(cDiscounted.level, cfg),
+      ...(cDeemedApplied && constructionDeemed ? {
+        deemedLevel: constructionDeemed.level,
+        deemedLevelReason: constructionDeemed.reason,
+      } : {}),
     };
     // Attach the raw construction output (per-indicator detail) for the results view.
     (result as unknown as { construction?: unknown }).construction = out;
@@ -912,6 +987,18 @@ function calculateScorecard(
     discountedLevel = Math.max(1, discountedLevel - yesScore.yesBeeLevelIncrease);
   }
 
+  // Deemed-level FLOOR (Amended Codes Statement 000 §4): a ≥51%/100%
+  // black-owned QSE holds Level 2/1 via annual sworn affidavit regardless of
+  // scorecard points, and discounting cannot drag below it — the affidavit
+  // route does not pass through the scorecard at all. The better level wins,
+  // so an entity that out-scores its deemed floor keeps the scored level.
+  const deemedEntitlement = deemedFor(state);
+  const achievedWithDeemed = applyDeemedLevel(level, deemedEntitlement);
+  const discountedWithDeemed = applyDeemedLevel(discountedLevel, deemedEntitlement);
+  const deemedApplied = achievedWithDeemed.deemedApplied || discountedWithDeemed.deemedApplied;
+  const finalAchievedLevel = achievedWithDeemed.level;
+  const finalDiscountedLevel = discountedWithDeemed.level;
+
   const mkElectiveMeta = (key: PillarConfigKey) => ({
     isChosenElective: hasChooseOne && activeElectiveKeys.has(key),
     isElectiveNotChosen: hasChooseOne && !activeElectiveKeys.has(key),
@@ -990,10 +1077,15 @@ function calculateScorecard(
       },
     } : {}),
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
-    achievedLevel: level,
-    discountedLevel,
-    isDiscounted,
-    recognitionLevel: levelToRecognition(discountedLevel),
+    achievedLevel: finalAchievedLevel,
+    discountedLevel: finalDiscountedLevel,
+    // A deemed level is not "discounted" even when the points level was.
+    isDiscounted: isDiscounted && !deemedApplied,
+    recognitionLevel: levelToRecognition(finalDiscountedLevel),
+    ...(deemedApplied && deemedEntitlement ? {
+      deemedLevel: deemedEntitlement.level,
+      deemedLevelReason: deemedEntitlement.reason,
+    } : {}),
     chosenElectivePillar: chosenElectiveKey ? ELECTIVE_CONFIG_TO_SCORECARD[chosenElectiveKey] : null,
   };
 }
@@ -1554,6 +1646,10 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
 
     if (sectorCode.toUpperCase() === 'FSC') {
+      // A QSFI (FSC QSE, R10-50m) is measured on the 100-pt QSFI scorecard —
+      // it is not sub-sector split. Before this check it fell through to the
+      // 105-pt Others scorecard: a wrong answer rather than a refusal.
+      if (isFscQseSector(sectorCode, scorecardType)) { ready(FSC_QSE_CALCULATOR_CONFIG); return; }
       const fscSub = get().client.fscSubSector || 'Others';
       if (isFscBanksSector(sectorCode, fscSub)) { ready(FSC_BANKS_CALCULATOR_CONFIG); return; }
       if (isFscLtiSector(sectorCode, fscSub))   { ready(FSC_LTI_CALCULATOR_CONFIG);   return; }

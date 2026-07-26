@@ -27,6 +27,8 @@ import { ICT_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/ict-generic'
 import { ICT_QSE_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/ict-qse';
 import { AGRI_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/agri-generic';
 import { FSC_GENERIC_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-generic';
+import { FSC_QSE_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-qse';
+import { applyDeemedLevel, resolveDeemedLevel } from '@toolkit/lib/calculators/deemedLevel';
 import { FSC_BANKS_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-banks';
 import { FSC_LTI_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-lti';
 import { FSC_STI_CALCULATOR_CONFIG } from '@toolkit/lib/sectors/fsc-sti';
@@ -64,6 +66,9 @@ function configFor(sector: string, type: string, subSector: string): CalculatorC
   if (s === 'ICT') return qse ? ICT_QSE_CALCULATOR_CONFIG : ICT_GENERIC_CALCULATOR_CONFIG;
   if (s === 'AGRI') return AGRI_GENERIC_CALCULATOR_CONFIG;
   if (s === 'FSC') {
+    // A QSFI (FSC QSE) is measured on the 100-pt QSFI scorecard regardless of
+    // sub-sector (GG 41287 §8.2) — mirrors the live store's routing.
+    if (qse) return FSC_QSE_CALCULATOR_CONFIG;
     if (/bank/i.test(subSector)) return FSC_BANKS_CALCULATOR_CONFIG;
     if (/long/i.test(subSector)) return FSC_LTI_CALCULATOR_CONFIG;
     if (/short/i.test(subSector)) return FSC_STI_CALCULATOR_CONFIG;
@@ -196,7 +201,16 @@ suite('Toolkit Testing Data — SCORE fitness (expert says all Level 1)', () => 
           total = own + mgmt + skills + proc + esd.sdTotal + esd.edTotal + sed + afs + ef;
           brk = ` | own${own.toFixed(0)} mc${mgmt.toFixed(0)} sk${skills.toFixed(0)} pp${proc.toFixed(0)} sd${esd.sdTotal.toFixed(0)} ed${esd.edTotal.toFixed(0)} sed${sed.toFixed(0)} afs${afs.toFixed(0)} ef${ef.toFixed(0)} | npat${(npat/1e6).toFixed(0)}M tmps${(tmps/1e6).toFixed(0)}M lev${(leviable/1e6).toFixed(0)}M emp${p.employees.length} sup${p.suppliers.length}`;
         }
-        const lvl = levelFromConfig(total, cfg);
+        // Deemed-level floor (Statement 000 §4), mirroring the live store: a
+        // >=51%/100% black-owned QSE holds Level 2/1 via sworn affidavit
+        // whatever the points say. Transport is excluded inside the helper.
+        const totalShares = p.shareholders.reduce((a: number, sh: any) => a + (sh.shares || 0), 0);
+        const flowThrough = p.shareholders.reduce((a: number, sh: any) => {
+          const pctSh = totalShares > 0 ? (sh.shares || 0) / totalShares : (p.shareholders.length ? 1 / p.shareholders.length : 0);
+          return a + pctSh * (sh.blackOwnership || 0);
+        }, 0);
+        const deemed = resolveDeemedLevel({ sectorCode: sector, scorecardType: type, blackVotingPct: flowThrough, blackEconomicInterestPct: flowThrough });
+        const lvl = applyDeemedLevel(levelFromConfig(total, cfg), deemed).level;
         scored++;
         if (lvl === 1) level1++;
 
