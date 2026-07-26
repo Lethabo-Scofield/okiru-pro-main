@@ -229,15 +229,25 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     enterpriseDevMax + edBonusMax,
   );
 
-  const sdSubMinPct = config?.pillarConfigs?.esd?.sdSubMinimumPercent ?? 40;
-  const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent ?? 40;
+  // The sub-minimum comes from the sector's OWN pillar config
+  // (supplierDevelopment / enterpriseDevelopment.subMinimumPercent — the keys
+  // the bundled sector configs actually populate; `esd.sdSubMinimumPercent`
+  // was a phantom key no sector sets, so EVERY sector silently fell to a 40%
+  // default). No configured sub-minimum means none, and an element the sector
+  // does not carry (0 max points) has nothing to fail — the old `max > 0 &&`
+  // marked it FAILING, which discounted whole legacy scorecards.
+  // (Audit 2026-07-26 item 15.)
+  const sdSubMinPct = config?.pillarConfigs?.esd?.sdSubMinimumPercent
+    ?? config?.pillarConfigs?.supplierDevelopment?.subMinimumPercent
+    ?? 0;
+  const edSubMinPct = config?.pillarConfigs?.esd?.edSubMinimumPercent
+    ?? config?.pillarConfigs?.enterpriseDevelopment?.subMinimumPercent
+    ?? 0;
   const sdSubMinimumMet =
-    supplierDevMax > 0 &&
-    sdSubMinPct > 0 &&
+    supplierDevMax <= 0 || sdSubMinPct <= 0 ||
     sdTotal >= (supplierDevMax * sdSubMinPct / 100);
   const edSubMinimumMet =
-    enterpriseDevMax > 0 &&
-    edSubMinPct > 0 &&
+    enterpriseDevMax <= 0 || edSubMinPct <= 0 ||
     edTotal >= (enterpriseDevMax * edSubMinPct / 100);
 
   const sdSubLines: EsdSubLine[] = [

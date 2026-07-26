@@ -627,20 +627,40 @@ function calculateScorecard(
     const mkPillar = (e: { achievedPoints: number; availablePoints: number }) => ({
       score: round2(e.achievedPoints), target: e.availablePoints, weighting: e.availablePoints,
     });
+
+    // CSC000 §5 priority-element sub-minimums, previously not applied at all
+    // (audit 2026-07-26 item 5): 40% of the ownership NET VALUE indicator, 40%
+    // of Skills, 40% of the combined PP&SD element; Generic-class entities
+    // (Contractor / BEP) need all three, QSEs need Ownership plus either.
+    // Failing discounts one level.
+    const fortyPct = (achieved: number, available: number) =>
+      available <= 0 || achieved >= available * 0.4;
+    const netValueIndicator = el.ownership.indicators.find((ind) => /net\s*value/i.test(ind.name));
+    const ownPriorityMet = netValueIndicator
+      ? fortyPct(netValueIndicator.achievedPoints, netValueIndicator.availablePoints)
+      : fortyPct(el.ownership.achievedPoints, el.ownership.availablePoints);
+    const skillsPriorityMet = fortyPct(el.skillsDevelopment.achievedPoints, el.skillsDevelopment.availablePoints);
+    const esdPriorityMet = fortyPct(el.enterpriseSupplierDevelopment.achievedPoints, el.enterpriseSupplierDevelopment.availablePoints);
+    const constructionQse = /qse/i.test(String(out.scorecardType ?? entityType));
+    const priorityFailed = constructionQse
+      ? (!ownPriorityMet || !(skillsPriorityMet || esdPriorityMet))
+      : (!ownPriorityMet || !skillsPriorityMet || !esdPriorityMet);
+    const discounted = !state.ignoreSubMinimum && lvl < 9 && priorityFailed;
+
     const result: ScorecardResult = {
-      ownership: { ...mkPillar(el.ownership), subMinimumMet: true },
+      ownership: { ...mkPillar(el.ownership), subMinimumMet: ownPriorityMet },
       managementControl: mkPillar(el.managementControl),
-      skillsDevelopment: { ...mkPillar(el.skillsDevelopment), subMinimumMet: true },
-      procurement: { ...mkPillar(el.enterpriseSupplierDevelopment), subMinimumMet: true },
+      skillsDevelopment: { ...mkPillar(el.skillsDevelopment), subMinimumMet: skillsPriorityMet },
+      procurement: { ...mkPillar(el.enterpriseSupplierDevelopment), subMinimumMet: esdPriorityMet },
       supplierDevelopment: { score: 0, target: 0, weighting: 0, subMinimumMet: true },
       enterpriseDevelopment: { score: 0, target: 0, weighting: 0, subMinimumMet: true },
       socioEconomicDevelopment: mkPillar(el.socioEconomicDevelopment),
       yesInitiative: { score: 0, target: 0, weighting: 0 },
       total: { score: round2(out.totalScore), target: out.totalAvailable, weighting: out.totalAvailable },
       achievedLevel: lvl,
-      discountedLevel: lvl,
-      isDiscounted: false,
-      recognitionLevel: levelToRecognition(lvl, cfg),
+      discountedLevel: discounted ? Math.min(lvl + 1, 8) : lvl,
+      isDiscounted: discounted,
+      recognitionLevel: levelToRecognition(discounted ? Math.min(lvl + 1, 8) : lvl, cfg),
     };
     // Attach the raw construction output (per-indicator detail) for the results view.
     (result as unknown as { construction?: unknown }).construction = out;
@@ -902,7 +922,12 @@ function calculateScorecard(
 
   const level = pointsToLevel(totalPoints, cfg);
 
-  const ownSubMinMet = ownScore.total >= (ownTarget * 0.4) || ownScore.subMinimumMet;
+  // The ownership sub-minimum is 40% of NET VALUE points specifically
+  // (Statement 000 §3.3.3) — the calculator's own subMinimumMet measures that.
+  // The old `total >= ownTarget*0.4` OR-branch let 40% of TOTAL ownership
+  // points stand in for it, waving through entities whose net-value line
+  // failed. (Audit 2026-07-26 item 12c.)
+  const ownSubMinMet = ownScore.subMinimumMet;
   const skSubMinMet = skillScore.subMinimumMet;
   const prSubMinMet = procScore.subMinimumMet;
   const sdSubMinMet = esdScore.sdSubMinimumMet;
@@ -917,7 +942,18 @@ function calculateScorecard(
     if ('maxPoints' in p && (p as { maxPoints?: number }).maxPoints === 0) return false;
     return pct == null || pct > 0;
   };
-  const anySubMinFailed = !ownSubMinMet || !skSubMinMet || !prSubMinMet || !sdSubMinMet || !edSubMinMet;
+  // Discounting follows the PRIORITY ELEMENTS, per entity size (Statement 000
+  // §3.3, FSC §3.3.2, AgriBEE §5.2.2 — audit 2026-07-26 item 6):
+  //  - Generic: Ownership (net value) AND Skills AND ESD (whose sub-minimum is
+  //    40% on each of PP / SD / ED).
+  //  - QSE: Ownership AND (Skills OR ESD) — one of the two suffices.
+  // The old rule demanded all five for everyone, discounting QSEs the codes
+  // say are compliant.
+  const esdElementSubMinMet = prSubMinMet && sdSubMinMet && edSubMinMet;
+  const isQseScorecard = /qse/i.test(String(state.client.scorecardType ?? ""));
+  const anySubMinFailed = isQseScorecard
+    ? (!ownSubMinMet || !(skSubMinMet || esdElementSubMinMet))
+    : (!ownSubMinMet || !skSubMinMet || !esdElementSubMinMet);
   const isDiscounted = !state.ignoreSubMinimum && level < 9 && anySubMinFailed;
   let discountedLevel = isDiscounted ? Math.min(level + 1, 8) : level;
 

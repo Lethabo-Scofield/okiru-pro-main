@@ -118,23 +118,53 @@ describe('B-BBEE Scorecard Integration', () => {
   });
 
   describe('sub-minimum penalties', () => {
-    it('ownership subMinimumMet triggers when score >= 10 or fullOwnership', () => {
-      const highOwnership = calculateOwnershipScore(makeOwnership(1.0));
+    it('ownership subMinimumMet measures NET VALUE, not total or a full-award shortcut', () => {
+      // Statement 000 §3.3.3 (audit 2026-07-26 item 12): the sub-minimum is 40%
+      // of net-value points. A 100%-black entity meets it; a zero-black one
+      // does not. Asserted via the no-share-value fallback path because the
+      // engine's deemed-NV aggregate is a value-realisation MULTIPLE, not a
+      // fraction of target — a known remaining discrepancy (2/8 for a
+      // 100%-black debt-free entity on the direct path), flagged in the audit
+      // as follow-up rather than silently re-derived here.
+      const highOwnership = calculateOwnershipScore({
+        ...makeOwnership(1.0),
+        shareholders: makeOwnership(1.0).shareholders.map((s) => ({ ...s, shareValue: 0 })),
+      });
       expect(highOwnership.subMinimumMet).toBe(true);
 
       const zeroOwnership = calculateOwnershipScore(makeOwnership(0));
       expect(zeroOwnership.subMinimumMet).toBe(false);
     });
 
-    it('skills subMinimumMet is false when total < 10', () => {
+    it('skills with NO configured sub-minimum has nothing to fail', () => {
+      // These calls pass no CalculatorConfig, so no sub-minimum is configured.
+      // A missing sub-minimum used to default to the generic 40% and mark the
+      // pillar FAILING — discounting sectors whose codes carry no such rule.
+      // (Audit 2026-07-26 item 15.)
       const result = calculateSkillsScore(makeSkills(0));
+      expect(result.subMinimumMet).toBe(true);
+    });
+
+    it('skills subMinimum fails below a CONFIGURED threshold', () => {
+      const config = { pillarConfigs: { skillsDevelopment: { maxPoints: 25, subMinimumPercent: 40 } } } as never;
+      const result = calculateSkillsScore(makeSkills(0), config);
       expect(result.subMinimumMet).toBe(false);
     });
 
-    it('ESD subMinimums are tracked per category', () => {
-      const resultZero = calculateEsdScore({ id: '1', clientId: 'C-1', contributions: [] }, CLIENT_NPAT);
+    it('ESD subMinimums are tracked per category once configured', () => {
+      const config = {
+        pillarConfigs: {
+          supplierDevelopment: { maxPoints: 10, subMinimumPercent: 40 },
+          enterpriseDevelopment: { maxPoints: 5, subMinimumPercent: 40 },
+        },
+      } as never;
+      const resultZero = calculateEsdScore({ id: '1', clientId: 'C-1', contributions: [] }, CLIENT_NPAT, config);
       expect(resultZero.sdSubMinimumMet).toBe(false);
       expect(resultZero.edSubMinimumMet).toBe(false);
+      // Unconfigured = no sub-minimum = nothing to fail (audit item 15).
+      const unconfigured = calculateEsdScore({ id: '1', clientId: 'C-1', contributions: [] }, CLIENT_NPAT);
+      expect(unconfigured.sdSubMinimumMet).toBe(true);
+      expect(unconfigured.edSubMinimumMet).toBe(true);
     });
   });
 

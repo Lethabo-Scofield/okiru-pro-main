@@ -161,59 +161,51 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     }
   }
 
-  const fullOwnershipAwarded = totalBlackVoting >= ot.votingRightsTarget && hasShares;
+  // EVERY indicator scores on its own measure (Annexe 100). The old fast path
+  // awarded FULL points for EI, black-women EI, designated groups and net value
+  // the moment black voting crossed 25% — inventing points for indicators the
+  // entity never evidenced (a 25%-voting entity got the black-women EI maximum
+  // with zero black women). Removed per audit 2026-07-26 item 12a.
+  const votingRightsBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
+  const votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
 
-  let votingRightsBlack: number;
-  let votingRightsBWO: number;
-  let economicInterestBlack: number;
-  let economicInterestBWO: number;
-  let designatedGroups: number;
-  let newEntrants: number;
+  // Economic interest is a PLAIN ratio to target. The time-graduation factor
+  // used to sit here inside a min() that could never select it (factor <= 1
+  // makes the graduated formula the LARGER one) — dead code that belonged on
+  // Net Value anyway: Annexe 100(E) grows the NET VALUE target over the first
+  // ten years (target = EI target x factor), it does not touch EI.
+  // (Audit 2026-07-26 item 12b.)
+  const economicInterestBlack = clampScore(
+    safeRatio(totalEconomicInterest, ot.economicInterestTarget, ot.economicInterestMaxPts),
+    ot.economicInterestMaxPts,
+  );
+
+  const economicInterestBWO = clampScore(safeRatio(totalEconomicInterestBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
+  const designatedGroups = clampScore(safeRatio(totalDesignatedGroup, ot.designatedGroupsTarget, ot.designatedGroupsMax), ot.designatedGroupsMax);
+  // Scale new-entrant points by new entrants' black economic interest vs the 2%
+  // target (toolkit Ownership Scorecard H12), not all-or-nothing. QSE folds new
+  // entrants into the combined designated-group line. (ledger D-04/D-06/D-07)
+  const newEntrants = ot.combinedNewEntrantsDesignated
+    ? 0
+    : clampScore(safeRatio(totalNewEntrantEI, ot.newEntrantsTarget, ot.newEntrantsMaxPts), ot.newEntrantsMaxPts);
+
   let netValuePoints: number;
-
-  if (fullOwnershipAwarded) {
-    votingRightsBlack = ot.votingRightsMaxPts;
-    votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
-    economicInterestBlack = ot.economicInterestMaxPts;
-    economicInterestBWO = ot.womenEIMaxPts;
-    designatedGroups = ot.designatedGroupsMax;
-    newEntrants = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
-    netValuePoints = ot.netValueMaxPts;
-  } else {
-    votingRightsBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
-    votingRightsBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
-
+  const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
+  if (hasNetValue) {
+    // Annexe 100(E): the net-value target phases in over ten years — in year t
+    // the entity must show EI-target x graduation-factor(t) of net value, so a
+    // young deal's achieved value is measured against the SMALLER target.
     const gradFactor = getGraduationFactor(yearsHeld);
-    const formulaA = gradFactor > 0
-      ? totalEconomicInterest * (1 / (ot.economicInterestTarget * gradFactor)) * ot.economicInterestMaxPts
-      : 0;
-    const formulaB = (totalEconomicInterest / ot.economicInterestTarget) * ot.economicInterestMaxPts;
-    economicInterestBlack = clampScore(
-      gradFactor > 0 ? Math.min(formulaA, formulaB) : formulaB,
-      ot.economicInterestMaxPts,
-    );
-
-    economicInterestBWO = clampScore(safeRatio(totalEconomicInterestBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
-    designatedGroups = clampScore(safeRatio(totalDesignatedGroup, ot.designatedGroupsTarget, ot.designatedGroupsMax), ot.designatedGroupsMax);
-    // Scale new-entrant points by new entrants' black economic interest vs the 2%
-    // target (toolkit Ownership Scorecard H12), not all-or-nothing. QSE folds new
-    // entrants into the combined designated-group line. (ledger D-04/D-06/D-07)
-    newEntrants = ot.combinedNewEntrantsDesignated
-      ? 0
-      : clampScore(safeRatio(totalNewEntrantEI, ot.newEntrantsTarget, ot.newEntrantsMaxPts), ot.newEntrantsMaxPts);
-
-    const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
-    if (hasNetValue) {
-      netValuePoints = clampScore(netValuePointsAgg, ot.netValueMaxPts);
-    } else {
-      // QSE fallback: when company value unknown, award net value from black ownership %
-      netValuePoints = totalBlackVoting >= 1.0
-        ? ot.netValueMaxPts
-        : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
-    }
+    const graduated = gradFactor > 0 ? netValuePointsAgg / gradFactor : netValuePointsAgg;
+    netValuePoints = clampScore(graduated, ot.netValueMaxPts);
+  } else {
+    // QSE fallback: when company value unknown, award net value from black ownership %
+    netValuePoints = totalBlackVoting >= 1.0
+      ? ot.netValueMaxPts
+      : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
   }
 
-  const subMinimumMet = fullOwnershipAwarded || netValuePoints >= ot.subMinNetValue;
+  const subMinimumMet = netValuePoints >= ot.subMinNetValue;
   const totalPoints = votingRightsBlack + votingRightsBWO + economicInterestBlack + economicInterestBWO
     + designatedGroups + newEntrants + netValuePoints;
 
@@ -240,7 +232,9 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     netValue: round2(netValuePoints),
     total,
     subMinimumMet,
-    fullOwnershipAwarded,
+    // Retained in the result shape for UI compatibility; permanently false now
+    // that every indicator scores on its own measure (audit item 12a).
+    fullOwnershipAwarded: false,
     subLines: subLines.map(l => ({ ...l, score: round2(l.score) })),
     rawStats: {
       blackVotingPercentage: round2(totalBlackVoting),
@@ -248,7 +242,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       economicInterestPercentage: round2(totalEconomicInterest),
       economicInterestBWOPercentage: round2(totalEconomicInterestBWO),
       designatedGroupPercentage: round2(totalDesignatedGroup),
-      netValuePercentage: round2(fullOwnershipAwarded ? 1.0 : (netValuePointsAgg / ot.netValueMaxPts)),
+      netValuePercentage: round2(netValuePointsAgg / ot.netValueMaxPts),
       newEntrantEIPercentage: round2(totalNewEntrantEI),
     },
   };

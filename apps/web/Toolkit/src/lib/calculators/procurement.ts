@@ -95,7 +95,8 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const dgMaxPts = pc.dgMaxPts ?? 2;
   
   const blackWomenThreshold = pc.blackWomenThreshold ?? 0.30;
-  const subMinThreshold = config?.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 40;
+  // No configured sub-minimum means NO sub-minimum (audit 2026-07-26 item 15).
+  const subMinThreshold = config?.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 0;
   const maxPoints = config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
 
   const TARGET_ALL = tmps * allSuppliersTarget;
@@ -209,7 +210,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     designatedGroup: round2(designatedGroupScore),
     total: procTotal,
     subMinimumMet:
-      alwaysPassSubMin || (subMinThreshold > 0 ? baseTotal >= subMinThresholdPoints : false),
+      alwaysPassSubMin || (subMinThreshold > 0 ? baseTotal >= subMinThresholdPoints : true),
     recognisedSpend: round2(recognisedSpend),
     target: round2(TARGET_ALL),
     subLines: subLines.map(l => ({ ...l, score: round2(l.score), spend: round2(l.spend) })),

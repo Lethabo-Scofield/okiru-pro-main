@@ -108,10 +108,10 @@ describe('ICT QSE — CalculatorConfig completeness', () => {
     expect(CONFIG.procurement.subMinThreshold).toBeCloseTo(8, 1);
   });
 
-  it('has QSE-specific ESD targets (1% NPAT for SD and ED base)', () => {
-    expect(CONFIG.esd.supplierDevTarget).toBeCloseTo(0.01, 4);
+  it('has QSE-specific ESD targets (2% NPAT for SD and ED base — AICT604, audit item 4)', () => {
+    expect(CONFIG.esd.supplierDevTarget).toBeCloseTo(0.02, 4);
     expect(CONFIG.esd.supplierDevMax).toBe(5);
-    expect(CONFIG.esd.enterpriseDevTarget).toBeCloseTo(0.01, 4);
+    expect(CONFIG.esd.enterpriseDevTarget).toBeCloseTo(0.02, 4);
     expect(CONFIG.esd.enterpriseDevMax).toBe(5); // base; total 8 with bonuses (7 via calculator)
   });
 
@@ -602,7 +602,7 @@ describe('ICT QSE — Preferential Procurement pillar', () => {
 });
 
 // ---------------------------------------------------------------------------
-// §6 — Supplier Development pillar (1% NPAT / 5 pts)
+// §6 — Supplier Development pillar (2% NPAT / 5 pts — AICT604)
 // ---------------------------------------------------------------------------
 
 describe('ICT QSE — Supplier Development pillar', () => {
@@ -615,8 +615,8 @@ describe('ICT QSE — Supplier Development pillar', () => {
     expect(r.supplierDev).toBe(0);
   });
 
-  it('exactly 1% NPAT in SD → 5/5 (full score)', () => {
-    const sdAmount = NPAT * 0.01;
+  it('exactly 2% NPAT in SD → 5/5 (full score)', () => {
+    const sdAmount = NPAT * 0.02; // 2% NPAT = the AICT604 target (audit item 4)
     const r = calculateEsdScore(
       {
         id: '1',
@@ -659,13 +659,13 @@ describe('ICT QSE — Enterprise Development pillar (tiered jobs bonus)', () => 
     beneficiary: 'ICT Startup',
     description: 'ED mentorship',
     type: 'direct_cost' as const,
-    amount: NPAT * 0.01,
+    amount: NPAT * 0.02, // 2% NPAT = the AICT604 target (audit item 4)
     category: 'enterprise_development' as const,
     blackBenefitPercent: 100,
     transactionDate: '2025-08-01',
   };
 
-  it('1% NPAT + graduation + jobs ≤10% → 7/8 (lower jobs tier = 1 pt)', () => {
+  it('2% NPAT + graduation + jobs ≤10% → 7/8 (lower jobs tier = 1 pt)', () => {
     const r = calculateEsdScore(
       {
         id: '1', clientId: 'ict-qse', contributions: [edContribution],
@@ -680,7 +680,7 @@ describe('ICT QSE — Enterprise Development pillar (tiered jobs bonus)', () => 
     expect(r.edTotal).toBeCloseTo(7, 1);
   });
 
-  it('1% NPAT + graduation + jobs ≥11% → 8/8 (upper jobs tier = 2 pts)', () => {
+  it('2% NPAT + graduation + jobs ≥11% → 8/8 (upper jobs tier = 2 pts)', () => {
     const r = calculateEsdScore(
       {
         id: '1', clientId: 'ict-qse', contributions: [edContribution],

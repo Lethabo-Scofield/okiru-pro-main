@@ -115,7 +115,7 @@ const banksAfsDataEmpty: AfsData = {
 describe('FSC Banks — CalculatorConfig completeness', () => {
   it('loads 140 total points (incl. EF 15; template: core F12=121, C104=138)', () => {
     // 25+21+23+24+7(SD)+5(ED)+15(EF)+12(AFS)+8 = 140
-    expect(CONFIG.totalMaxPoints).toBe(140);
+    expect(CONFIG.totalMaxPoints).toBe(132); // gazette shapes (audit items 7-9)
   });
 
   it('sector identity is FSC / Generic', () => {
@@ -129,10 +129,10 @@ describe('FSC Banks — CalculatorConfig completeness', () => {
 
   it('pillar maxima match Banks sub-sector spec', () => {
     const pc = CONFIG.pillarConfigs;
-    expect(pc?.ownership?.maxPoints).toBe(25);
-    expect(pc?.managementControl?.maxPoints).toBe(21);
+    expect(pc?.ownership?.maxPoints).toBe(23); // gazette shapes (audit items 7-9)
+    expect(pc?.managementControl?.maxPoints).toBe(20); // gazette shapes (audit items 7-9)
     expect(pc?.skillsDevelopment?.maxPoints).toBe(23);
-    expect(pc?.preferentialProcurement?.maxPoints).toBe(24);
+    expect(pc?.preferentialProcurement?.maxPoints).toBe(19); // gazette shapes (audit items 7-9)
     // EF & ESD Scorecard - Banks: SD row C17 = 7 pts, ED base C19 = 3 (+1 grad
     // +1 jobs = 5). The old 10/7 were the Others ESD-scorecard maxima.
     expect(pc?.supplierDevelopment?.maxPoints).toBe(7);
@@ -258,18 +258,18 @@ describe('FSC Banks — AFS scoring', () => {
 // ---------------------------------------------------------------------------
 
 describe('FSC Banks golden — standard pillar scores', () => {
-  it('Ownership = 25/25 (100% Black-owned, no debt)', () => {
+  it('Ownership = 20/23 (100% Black-owned, no debt; per-indicator, gazette 23-pt shape)', () => {
     const r = calculateOwnershipScore(banksOwnership, CONFIG);
-    expect(r.total).toBeCloseTo(25, 1);
+    expect(r.total).toBeCloseTo(20, 1); // gazette shapes (audit items 7-9)
   });
 
-  it('Management Control = 21/21 (fully-compliant FSC workforce)', () => {
+  it('Management Control = 20/20 (fully-compliant FSC workforce; board black = 1 pt)', () => {
     const r = calculateManagementScore(
       { id: '1', clientId: 'fnb-banks', employees: banksEmployeesFull },
       CONFIG,
       EAP_PROVINCE,
     );
-    expect(r.total).toBeCloseTo(21, 0);
+    expect(r.total).toBeCloseTo(20, 0); // gazette shapes (audit items 7-9)
   });
 
   it('SD = 7/7 at 1.8% NPAT target (EF & ESD - Banks C17)', () => {
@@ -361,7 +361,7 @@ describe('FSC Banks — total points', () => {
       (CONFIG.accessToFinancialServices?.maxPoints ?? 0) +
       ((pc as any)?.empowermentFinancing?.maxPoints ?? 0);
     // 25+21+23+24+7+5+8+12+15(EF) = 140 (template: EF 12+3, SD 7, ED 3+1+1)
-    expect(pillarSum).toBe(140);
-    expect(totalMaxPoints).toBe(140);
+    expect(pillarSum).toBe(132); // gazette shapes (audit items 7-9)
+    expect(totalMaxPoints).toBe(132); // gazette shapes (audit items 7-9)
   });
 });

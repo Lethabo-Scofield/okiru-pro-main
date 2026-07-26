@@ -68,7 +68,7 @@ const stiAfsDataEmpty: AfsData = { id: '1', clientId: 'om-sti' };
 
 describe('FSC STI — CalculatorConfig completeness', () => {
   it('loads 132 total points', () => {
-    expect(CONFIG.totalMaxPoints).toBe(132);
+    expect(CONFIG.totalMaxPoints).toBe(129); // gazette shapes (audit items 7-10)
   });
 
   it('sector identity is FSC / Generic', () => {
@@ -82,8 +82,8 @@ describe('FSC STI — CalculatorConfig completeness', () => {
 
   it('pillar maxima match STI sub-sector spec', () => {
     const pc = CONFIG.pillarConfigs;
-    expect(pc?.ownership?.maxPoints).toBe(25);
-    expect(pc?.managementControl?.maxPoints).toBe(21);
+    expect(pc?.ownership?.maxPoints).toBe(23); // gazette shapes (audit items 7-10)
+    expect(pc?.managementControl?.maxPoints).toBe(20); // gazette shapes (audit items 7-10)
     expect(pc?.skillsDevelopment?.maxPoints).toBe(23);
     expect(pc?.preferentialProcurement?.maxPoints).toBe(24);
     expect(pc?.supplierDevelopment?.maxPoints).toBe(10);
@@ -117,15 +117,15 @@ describe('FSC STI — CalculatorConfig completeness', () => {
     expect(CONFIG.esd.edStockbrokerTarget).toBeCloseTo(0.005, 4);
   });
 
-  it('STI total pillar sum = 132', () => {
+  it('STI total pillar sum = 129 (gazette shapes)', () => {
     const pc = CONFIG.pillarConfigs!;
     const sum = (pc.ownership?.maxPoints ?? 0) + (pc.managementControl?.maxPoints ?? 0) +
       (pc.skillsDevelopment?.maxPoints ?? 0) + (pc.preferentialProcurement?.maxPoints ?? 0) +
       (pc.supplierDevelopment?.maxPoints ?? 0) + (pc.enterpriseDevelopment?.maxPoints ?? 0) +
       (pc.socioEconomicDevelopment?.maxPoints ?? 0) +
       (CONFIG.accessToFinancialServices?.maxPoints ?? 0);
-    expect(sum).toBe(132);
-    expect(CONFIG.totalMaxPoints).toBe(132);
+    expect(sum).toBe(129); // gazette shapes (audit items 7-10)
+    expect(CONFIG.totalMaxPoints).toBe(129); // gazette shapes (audit items 7-10)
   });
 });
 
