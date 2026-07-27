@@ -8,7 +8,10 @@ metadata:
     cert-manager.io/cluster-issuer: "letsencrypt-production"
     nginx.ingress.kubernetes.io/limit-rps: "50"
     nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io"
-    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    # Evidence packs (multi-file ledger/PDF batches for the parser quote-files
+    # upload) routinely exceed 100m; nginx 413'd them before reaching the app.
+    # Parser multer allows 50MB x 100 files, so 500m gives real headroom.
+    nginx.ingress.kubernetes.io/proxy-body-size: "500m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
