@@ -289,6 +289,85 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
 });
 
 /**
+ * Streaming variant of resolve-case-files. Same result, but emits Server-Sent
+ * Events so the UI can fill up file-by-file instead of showing one frozen
+ * spinner for minutes on a large evidence pack:
+ *   event: doc-start   {index, fileName}   — before a file is parsed
+ *   event: doc-done    {index, fileName}   — after that file is parsed
+ *   event: resolving   {total}             — parsing done, cross-case work begins
+ *   event: result      {<full case result>, ai_entities}
+ *   event: complete    {}
+ *   event: error       {message}
+ * The parse phase (OCR/vision per file) is the slow part on scanned packs, so
+ * per-file events give real progress; the cross-case resolve/AI step is one
+ * final "resolving" phase because evidence for a fact spans several files.
+ */
+router.post('/resolve-case-files-stream', upload.array('files', 100), async (req: Request, res: Response) => {
+  const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
+  if (files.length === 0) {
+    return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+  }
+  if (batchTooLarge(files)) {
+    return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
+  }
+  if (extractionRequiresPayment()) {
+    const quoteId = typeof req.body?.quote_id === 'string' ? req.body.quote_id : undefined;
+    const gate = await authoriseExtraction(quoteId, files);
+    if (!gate.ok) {
+      logger.warn('Extraction refused by payment gate', { code: gate.code, quoteId });
+      return res.status(gate.status).json(fail(gate.message, gate.code));
+    }
+    await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
+  }
+
+  // SSE headers. X-Accel-Buffering:no stops nginx (ingress + the web proxy)
+  // from buffering the stream, so events reach the browser as they happen.
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  const send = (event: string, data: unknown) => {
+    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+  };
+  // Heartbeat so intermediaries don't drop a long-idle connection during the
+  // cross-case AI step.
+  const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
+
+  const repository = await getParserRepository();
+  try {
+    const rawInputs: Awaited<ReturnType<typeof extractionInputsFromUpload>> = [];
+    for (let i = 0; i < files.length; i++) {
+      send('doc-start', { index: i, fileName: files[i].originalname });
+      try {
+        const inputs = await extractionInputsFromUpload(files[i]);
+        rawInputs.push(...inputs);
+        send('doc-done', { index: i, fileName: files[i].originalname });
+      } catch (err) {
+        send('doc-error', { index: i, fileName: files[i].originalname, message: (err as Error).message });
+      }
+    }
+
+    send('resolving', { total: files.length });
+    const service = new CaseParserService(repository);
+    const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
+    const result = await service.resolveCase(rawInputs, caseId);
+    const entities = await extractCaseEntities(rawInputs);
+
+    send('result', { ...result, ai_entities: entities });
+    send('complete', {});
+  } catch (err) {
+    logger.error('Parser case file resolve (stream) failed', err as Error);
+    send('error', { message: (err as Error).message || 'CASE_FILE_PARSE_FAILED' });
+  } finally {
+    clearInterval(heartbeat);
+    await repository.close?.();
+    res.end();
+  }
+});
+
+/**
  * Quote (flow step 5) — free and deterministic. Records the quote against a
  * content fingerprint of these exact files so payment can be bound to them.
  */
