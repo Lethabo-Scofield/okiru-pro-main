@@ -156,7 +156,63 @@ function round2(n: number): number {
  * Quote a set of uploaded files. Free + deterministic: reads text layers and
  * structure only. Nothing here touches Azure.
  */
+/** Reject if `p` hasn't settled within `ms` — a corrupt/huge PDF must never
+ *  hang the whole pricing scan (the create-scorecard flow froze on this). */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('prediction timed out')), ms);
+    p.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
+
+/** Run `fn` over `items` with at most `limit` in flight — bounds memory when a
+ *  big evidence pack would otherwise load dozens of PDFs into pdfjs at once. */
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) || 1 }, worker));
+  return results;
+}
+
+const PREDICT_TIMEOUT_MS = 20_000;
+
+/** Minimal prediction used when a file can't be (or needn't be) scanned for
+ *  pricing — costs nothing, so the quote stays fast and never hangs. */
+function fallbackPrediction(): TokenPrediction {
+  return {
+    kind: 'pdf-digital',
+    requiresOcr: false,
+    basis: 'exact-text',
+    inputTokens: 0,
+    expectedOutputTokens: 0,
+    band: null,
+    pages: null,
+    sheets: null,
+    rows: null,
+    reasons: ['Priced without a full scan — the document is read in full during extraction.'],
+  };
+}
+
 export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<PricingQuote> {
+  // Predict per file in parallel (bounded), each guarded by a timeout + fallback
+  // so one slow/corrupt/unsupported file can't stall or fail the whole quote.
+  const predictions = await mapWithConcurrency(files, 6, async (file) => {
+    if (!SUPPORTED_UPLOAD_MIME_TYPES.has(file.mimetype)) return fallbackPrediction();
+    try {
+      return await withTimeout(predictTokensForFile(file), PREDICT_TIMEOUT_MS);
+    } catch {
+      return fallbackPrediction();
+    }
+  });
   const quotedFiles: PricingQuoteFile[] = [];
   let extractionCents = 0;
   let azureCents = 0;
@@ -170,11 +226,7 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
   let ocrPages = 0;
 
   for (const [index, file] of files.entries()) {
-    if (!SUPPORTED_UPLOAD_MIME_TYPES.has(file.mimetype)) {
-      throw new Error(`Unsupported file type ${file.mimetype}`);
-    }
-
-    const prediction = await predictTokensForFile(file);
+    const prediction = predictions[index];
     const cost = azureCostFor(prediction);
 
     extractionCents += cost.totalCents;

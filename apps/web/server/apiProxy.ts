@@ -109,7 +109,10 @@ function proxyRequest(req: Request, res: Response): void {
   const isHybridExtract = req.path.startsWith("/api/extract-entities-hybrid");
   const isParserExtraction = req.path.startsWith("/api/parser/resolve-case-files")
     || req.path.startsWith("/api/parser/resolve-file");
-  const isLongRunning = isHybridExtract || isParserExtraction || req.path.startsWith("/api/import");
+  // Pricing a big evidence pack inspects every file; give it the long budget too
+  // so it can't be cut off at the 120s default mid-scan.
+  const isParserQuote = req.path.startsWith("/api/parser/quote-files");
+  const isLongRunning = isHybridExtract || isParserExtraction || isParserQuote || req.path.startsWith("/api/import");
   const options: http.RequestOptions = {
     hostname: url.hostname,
     port: url.port,
