@@ -216,6 +216,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
+  // Per-file extraction progress, keyed by the file's name (the streaming parser
+  // reports fileName, and the create-scorecard list is de-duped by name).
+  const [docProgress, setDocProgress] = useState<Record<string, 'parsing' | 'done' | 'error'>>({});
+  // True once every file is parsed and the parser is doing the cross-document
+  // resolve + AI step (which is one phase, not per-file).
+  const [resolving, setResolving] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [dragActive, setDragActive] = useState(false);
   const [sector, setSector] = useState("Generic");
@@ -430,13 +436,17 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const runExtraction = async (list: File[], quoteId: string) => {
     setParsing(true);
+    setResolving(false);
     setParseError(null);
+    setDocProgress({});
     try {
       const form = new FormData();
       for (const f of list) form.append("files", f, f.name);
       form.append("case_id", `create_scorecard_${Date.now()}`);
       form.append("quote_id", quoteId);
-      const res = await fetch("/api/parser/resolve-case-files", {
+      // Streaming endpoint: emits per-file doc-start/doc-done SSE events so the
+      // list fills up as each document is read, then a single result event.
+      const res = await fetch("/api/parser/resolve-case-files-stream", {
         method: "POST",
         credentials: "include",
         body: form,
@@ -445,17 +455,69 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         const body = await res.json().catch(() => ({}));
         throw new Error(body?.error?.message ?? "Payment could not be verified for these documents");
       }
-      if (!res.ok && res.status !== 422) throw new Error(`Parser returned ${res.status}`);
-      const data = (await res.json()) as ParserCaseLike & { calculator_payload?: Record<string, unknown> };
+      if (!res.ok || !res.body) throw new Error(`Parser returned ${res.status}`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let data: (ParserCaseLike & { calculator_payload?: Record<string, unknown> }) | null = null;
+      let streamError: string | null = null;
+
+      const handle = (event: string, payload: any) => {
+        switch (event) {
+          case "doc-start":
+            if (payload?.fileName) setDocProgress((p) => ({ ...p, [payload.fileName]: "parsing" }));
+            break;
+          case "doc-done":
+            if (payload?.fileName) setDocProgress((p) => ({ ...p, [payload.fileName]: "done" }));
+            break;
+          case "doc-error":
+            if (payload?.fileName) setDocProgress((p) => ({ ...p, [payload.fileName]: "error" }));
+            break;
+          case "resolving":
+            setResolving(true);
+            break;
+          case "result":
+            data = payload;
+            break;
+          case "error":
+            streamError = payload?.message ?? "Could not read the documents";
+            break;
+        }
+      };
+
+      // Parse the SSE stream block by block (blocks are separated by a blank line).
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop() ?? "";
+        for (const block of blocks) {
+          let eventType = "";
+          const dataLines: string[] = [];
+          for (const line of block.split(/\r?\n/)) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+          }
+          if (eventType && dataLines.length) {
+            try { handle(eventType, JSON.parse(dataLines.join("\n"))); } catch { /* ignore keep-alive/comment */ }
+          }
+        }
+      }
+
+      if (streamError) throw new Error(streamError);
+      if (!data) throw new Error("The parser did not return a result.");
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
       setParserCase(mergeCases(keptCase, data));
-      const entity = String(data.calculator_payload?.["ownership.entity_name"] ?? "").trim();
+      const entity = String((data as any).calculator_payload?.["ownership.entity_name"] ?? "").trim();
       if (entity) setCompanyName((prev) => prev || entity);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not read the documents");
     } finally {
       setParsing(false);
+      setResolving(false);
     }
   };
 
@@ -733,7 +795,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </h3>
         <p className="mx-auto mt-2 max-w-md text-[15px] leading-6 text-[#a1a1a6]">
           {quote && !parserCase
-            ? "This is what it costs to process your documents. Nothing is read until you pay."
+            ? quote.paymentRequired === false
+              ? "Processing is free. Review the documents below, then continue to read them."
+              : "This is what it costs to process your documents. Nothing is read until you pay."
             : "Upload what you have. We will identify what is present, missing or needs review."}
         </p>
       </div>
@@ -1322,8 +1386,20 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             const hasGaps = missing.fields.length > 0 || missing.notes.length > 0;
             const quotedFile = quoted(f.name);
             const fileType = quotedFile?.requiresOcr ? "Scan" : quotedFile ? "Digital" : f.name.split(".").pop()?.toUpperCase() ?? "File";
+            // Per-file progress from the streaming parser: this file's own state,
+            // not a single spinner across the whole batch.
+            const perFile = docProgress[f.name];
+            const isReadingThis = perFile === "parsing";
             const statusLabel = parsing
-              ? "Reading"
+              ? perFile === "done"
+                ? "Read"
+                : perFile === "error"
+                  ? "Error"
+                  : isReadingThis
+                    ? "Reading"
+                    : resolving
+                      ? "Read"
+                      : "Queued"
               : detected
                 ? detected.status === "passed" && !hasGaps
                   ? "Ready"
@@ -1342,8 +1418,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 style={{ animationDelay: `${i * 70}ms` }}
               >
                 <div className="grid gap-2 sm:grid-cols-[minmax(0,1.5fr)_110px_120px_36px] sm:items-center sm:gap-3">
-                  {/* shimmer sweep while parsing */}
-                  {parsing && (
+                  {/* shimmer sweep while THIS file is being read */}
+                  {isReadingThis && (
                     <div className="absolute inset-y-0 left-0 w-1/3 pointer-events-none" style={{
                       background: "linear-gradient(100deg, transparent, rgba(167,139,250,0.09), transparent)",
                       animation: "dusShimmer 1.4s ease-in-out infinite",
@@ -1361,7 +1437,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     </div>
                   </div>
                   <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1 text-[11px] text-[#d1d1d6]">
-                    {parsing && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {isReadingThis && <Loader2 className="h-3 w-3 animate-spin" />}
+                    {perFile === "done" && parsing && <Check className="h-3 w-3 text-emerald-400" />}
                     {statusLabel}
                   </span>
                   <span className="text-[12px] text-[#8e8e93]">{fileType}</span>
