@@ -142,9 +142,14 @@ const MANAGEMENT_RCOGP_DEFAULTS = {
   maxPoints: 19,
 } as const;
 
-function mgmtFallback<T>(value: T | undefined, rcogpDefault: T, useRcogp: boolean): T {
+function mgmtFallback<T>(value: T | undefined, rcogpDefault: T, _useRcogp: boolean): T {
   if (value !== undefined && value !== null) return value;
-  return useRcogp ? rcogpDefault : (value as T);
+  // A missing config value must never propagate as `undefined` — that flows into
+  // a sub-line weighting / target and crashes `.toFixed()` on the pillar page
+  // (live "Cannot read properties of undefined (reading 'toFixed')" on Transport
+  // Management Control). Fall back to the RCOGP default (always a number) for
+  // every sector; a complete sector config never reaches this line.
+  return rcogpDefault;
 }
 
 const countBlack = (emps: Employee[]): number =>
