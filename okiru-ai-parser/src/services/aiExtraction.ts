@@ -29,6 +29,7 @@
  *    carries the file it came from.
  */
 import { createLogger } from '../logger.js';
+import { fetchAzureWithRetry } from './azureRetry.js';
 import { chunkDocument, mergeChunkResults } from './documentChunking.js';
 import { rankSpecsForDocument, elementFromHint } from './specRetrieval.js';
 import { groundValues } from './extractionGrounding.js';
@@ -113,7 +114,7 @@ export function createAzureExtractionModel(): ExtractionModel | null {
   return {
     name: deployment,
     async complete(system: string, user: string): Promise<string> {
-      const response = await fetch(url, {
+      const response = await fetchAzureWithRetry(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
         body: JSON.stringify({

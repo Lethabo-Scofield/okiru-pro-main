@@ -21,6 +21,7 @@
  *    tables (share registers, spend schedules) must keep their grid.
  */
 import { createLogger } from '../logger.js';
+import { fetchAzureWithRetry } from './azureRetry.js';
 import { isOcrSidecarEnabled, transcribeWithOcrSidecar } from './ocrClient.js';
 
 const logger = createLogger('VisionExtraction');
@@ -228,7 +229,7 @@ async function transcribeWithGeneralModel(
     ];
 
     try {
-      const response = await fetch(url, {
+      const response = await fetchAzureWithRetry(url, {
         method: 'POST',
         headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -99,6 +99,10 @@ spec:
             # the api already uses.
             - name: AZURE_MODEL_DEPLOYMENT
               value: "gpt-4o"
+            # 10 lanes × parallel chunks tripped the deployment's TPM limit on
+            # big packs (429 storm); 6 keeps throughput without the wall.
+            - name: PARSER_DOCUMENT_CONCURRENCY
+              value: "6"
             - name: AZURE_OPENAI_ENDPOINT
               valueFrom:
                 secretKeyRef:
