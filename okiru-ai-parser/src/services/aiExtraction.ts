@@ -121,9 +121,9 @@ export function createAzureExtractionModel(): ExtractionModel | null {
             { role: 'system', content: system },
             { role: 'user', content: user },
           ],
-          // Deterministic: the same document must extract the same values on a
-          // re-run, otherwise a score changes without the evidence changing.
-          temperature: 0,
+          // gpt-5-family deployments reject non-default `temperature`, so
+          // determinism is best-effort: same document, same prompt, default
+          // sampling. Re-run drift is bounded by the json_object format.
           response_format: { type: 'json_object' },
         }),
       });

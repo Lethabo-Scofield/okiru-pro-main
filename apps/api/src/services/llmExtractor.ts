@@ -144,8 +144,9 @@ async function callLLM(text: string, fileName: string): Promise<LLMExtractionOut
       },
     ],
     response_format: { type: 'json_object' },
-    temperature: 0,
-    max_tokens: 1024,
+    // gpt-5-family deployments reject `max_tokens`/custom `temperature`; the
+    // budget also covers hidden reasoning tokens, hence the larger ceiling.
+    max_completion_tokens: 4096,
   });
 
   const raw = response.choices[0]?.message?.content ?? '{}';
