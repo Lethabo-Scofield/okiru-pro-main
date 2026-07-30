@@ -100,12 +100,17 @@ describe('transcribing a scan', () => {
     expect(await extractScannedPdfWithVision(Buffer.from('x'), 'a.pdf')).toBeNull();
   });
 
-  it('is deterministic — the same scan must not score differently between runs', async () => {
+  it('sends gpt-5-compatible params — max_completion_tokens, no temperature', async () => {
+    // gpt-5-family deployments reject `max_tokens` and any non-default
+    // `temperature`, so the request must carry neither; determinism is now
+    // best-effort (same document, same prompt, default sampling).
     mockModel('text');
     await extractScannedPdfWithVision(Buffer.from('scan'), 'r.pdf');
 
     const body = JSON.parse(((globalThis.fetch as never as { mock: { calls: Array<[string, { body: string }]> } }).mock.calls[0][1]).body);
-    expect(body.temperature).toBe(0);
+    expect(body.temperature).toBeUndefined();
+    expect(body.max_tokens).toBeUndefined();
+    expect(body.max_completion_tokens).toBeGreaterThan(0);
   });
 
   it('caps the page count and REPORTS it, rather than reading a 500-page pack unbounded', async () => {
