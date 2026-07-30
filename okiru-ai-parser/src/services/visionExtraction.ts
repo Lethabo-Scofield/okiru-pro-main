@@ -236,10 +236,10 @@ async function transcribeWithGeneralModel(
             { role: 'system', content: SYSTEM_PROMPT },
             { role: 'user', content },
           ],
-          // Deterministic: the same scan must transcribe the same way twice, or a
-          // score could move between runs on identical evidence.
-          temperature: 0,
-          max_tokens: 4096,
+          // gpt-5-family deployments reject `max_tokens` and any non-default
+          // `temperature` (so determinism is best-effort now); the budget also
+          // covers hidden reasoning tokens, hence the larger ceiling.
+          max_completion_tokens: 8192,
         }),
       });
 

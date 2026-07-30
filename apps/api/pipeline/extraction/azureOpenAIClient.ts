@@ -164,8 +164,10 @@ export async function chatCompletion(
     const response = await client.chat.completions.create({
       model: AZURE_OPENAI_DEPLOYMENT,
       messages: messages as any,
-      temperature: options?.temperature ?? 0,
-      max_tokens: options?.maxTokens ?? 1000,
+      // gpt-5-family deployments reject `max_tokens` and any non-default
+      // `temperature`; they also spend hidden reasoning tokens from the same
+      // budget, so the ceiling is higher than the old visible-output budgets.
+      max_completion_tokens: (options?.maxTokens ?? 1000) * 4,
       response_format: options?.responseFormat as any,
     });
 
@@ -196,8 +198,9 @@ export async function fastChatCompletion(
     const response = await client.chat.completions.create({
       model: AZURE_OPENAI_FAST_DEPLOYMENT,
       messages: messages as any,
-      temperature: options?.temperature ?? 0,
-      max_tokens: options?.maxTokens ?? 1000,
+      // gpt-5-family deployments reject `max_tokens`/custom `temperature` and
+      // spend hidden reasoning tokens from the same budget — see chatCompletion.
+      max_completion_tokens: (options?.maxTokens ?? 1000) * 4,
       response_format: options?.responseFormat as any,
     });
 

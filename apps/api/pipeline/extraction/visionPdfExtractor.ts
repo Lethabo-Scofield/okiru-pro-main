@@ -276,8 +276,9 @@ RULES:
           ]
         }
       ],
-      temperature: 0,
-      max_tokens: 4000,
+      // gpt-5-family: no `max_tokens`/custom `temperature`; budget includes
+      // hidden reasoning tokens.
+      max_completion_tokens: 8000,
       response_format: { type: 'json_object' }
     });
 
@@ -454,8 +455,9 @@ RULES:
           ]
         }
       ],
-      temperature: 0,
-      max_tokens: 8000,
+      // gpt-5-family: no `max_tokens`/custom `temperature`; budget includes
+      // hidden reasoning tokens.
+      max_completion_tokens: 16000,
       response_format: { type: 'json_object' }
     });
 
