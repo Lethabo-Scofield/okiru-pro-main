@@ -111,6 +111,27 @@ spec:
                   name: external-api-keys
                   key: AZURE_OPENAI_API_KEY
                   optional: true
+            # api-version must come from the secret, not the code default: the
+            # default predates max_completion_tokens, which gpt-5-family
+            # deployments require.
+            - name: AZURE_OPENAI_API_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_API_VERSION
+                  optional: true
+            - name: AZURE_OPENAI_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_DEPLOYMENT
+                  optional: true
+            - name: AZURE_OPENAI_FAST_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_FAST_DEPLOYMENT
+                  optional: true
             # Neo4j is optional — the parser falls back to its in-memory
             # ontology (the canonical document types + verification matrix) when
             # no Neo4j URI is configured. These are wired only if the secret
