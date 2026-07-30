@@ -11,6 +11,10 @@ export default defineConfig({
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
   },
+  // Match the app build (@vitejs/plugin-react = automatic JSX runtime) so
+  // component modules without a React import compile in tests exactly as they
+  // do in the app.
+  esbuild: { jsx: "automatic" },
   test: {
     globals: true,
     environment: "node",

@@ -224,9 +224,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [resolving, setResolving] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [dragActive, setDragActive] = useState(false);
-  const [sector, setSector] = useState("Generic");
+  // Deliberately UNSET: the sector/size choice decides which scorecard rules
+  // apply, and a silent Generic default once scored a real Transport QSE
+  // dozens of points too low. Create stays disabled until both are chosen.
+  const [sector, setSector] = useState("");
   const [subSector, setSubSector] = useState("");
-  const [size, setSize] = useState("Generic"); // Generic | QSE | EME
+  const [size, setSize] = useState(""); // Generic | QSE | EME
   const [setupStep, setSetupStep] = useState<"profile" | "upload">("profile");
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
@@ -257,7 +260,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   useEffect(() => {
     void (async () => {
       try {
-        const params = new URLSearchParams({ sector, size });
+        // Fallback keeps the checklist useful before the user has chosen; the
+        // CREATE stamp never uses this fallback (create requires the choice).
+        const params = new URLSearchParams({ sector: sector || "Generic", size: size || "Generic" });
         if (subSector) params.set("subSector", subSector);
         const res = await fetch(`/api/parser/document-types?${params.toString()}`, { credentials: "include" });
         if (res.ok) setCatalog(await res.json());
@@ -295,7 +300,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         element: e.element,
         values: e.values ?? [],
       })),
-      { sectorCode: sector, scorecardType: size },
+      { sectorCode: sector || "Generic", scorecardType: size || "Generic" },
     );
   }, [parserCase, sector, size]);
 
@@ -641,7 +646,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const quoteReady = Boolean(quote && !parserCase && !quoting);
   // Missing documents never block: the user can always proceed and the workbook
   // scores on whatever was extracted (even nothing — they complete it manually).
-  const canCreate = Boolean(companyName.trim()) && !parsing && !creating;
+  // Sector + size are REQUIRED: they pick the scorecard the company is judged
+  // against, so creating without them is never a safe default.
+  const canCreate = Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && !parsing && !creating;
 
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
@@ -917,6 +924,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#141416] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
                   data-testid="sector-select-side"
                 >
+                  <option value="">Select sector…</option>
                   {sectorOptions.map((s) => (
                     <option key={s.code} value={s.code}>{s.label}</option>
                   ))}
@@ -1658,6 +1666,22 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               processed, even with partial or zero extraction. Missing docs or
               missing content never block: the workbook scores on what we have. */}
           <div className="dus-fade-up" style={{ animationDelay: "760ms" }}>
+            {/* The scorecard the company will be judged against — explicit,
+                never a silent default. Amber until sector + size are chosen. */}
+            {sector && size ? (
+              <p className="mb-2 text-[12px] text-[#8e8e93]" data-testid="scoring-as-line">
+                Scoring as:{" "}
+                <span className="text-emerald-300/90 font-medium">
+                  {sectorOptions.find((s) => s.code === sector)?.label ?? sector}
+                  {subSector ? ` · ${subSector}` : ""} · {sizeOptions.find((o) => o.value === size)?.label ?? size}
+                </span>
+              </p>
+            ) : (
+              <p className="mb-2 text-[12px] text-amber-300/90" data-testid="scoring-as-line">
+                Choose your sector and organisation size in the Company profile panel — they decide
+                which scorecard rules your documents are scored against.
+              </p>
+            )}
             <input
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
