@@ -161,9 +161,13 @@ describe('pricing quote — shape & guarantees', () => {
     expect(scan.totals.azureCents).toBeGreaterThan(digital.totals.azureCents);
   });
 
-  it('rejects unsupported file types rather than quoting them', async () => {
-    await expect(
-      quoteUploadedFiles([upload('malware.exe', 'application/x-msdownload', 'MZ')]),
-    ).rejects.toThrow(/Unsupported file type/);
+  it('quotes unsupported file types at zero cost instead of failing the batch', async () => {
+    // One odd file must never sink a whole evidence pack's quote (the
+    // create-scorecard flow froze on exactly this). Unsupported types get the
+    // zero-cost fallback prediction; extraction later flags them per-file.
+    const quote = await quoteUploadedFiles([upload('malware.exe', 'application/x-msdownload', 'MZ')]);
+    expect(quote.files).toHaveLength(1);
+    expect(quote.files[0].tokens.input).toBe(0);
+    expect(quote.files[0].pricing.extractionCents).toBe(0);
   });
 });

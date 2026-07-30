@@ -264,7 +264,31 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     // is classified and extracted against the ownership prompts and the
     // Procurement sheet against the procurement prompts — instead of one prompt
     // drowning in a 17-sheet blob (Phase 4 finding).
-    const rawInputs = (await Promise.all(files.map((file) => extractionInputsFromUpload(file)))).flat();
+    //
+    // Per-file isolation, like the stream route: one unreadable file (a legacy
+    // .doc, a scan with no text layer) must FLAG, never sink the batch — a
+    // 64-file pack once returned 400 for all 64 because Promise.all rejected
+    // on the single bad file.
+    const settled = await Promise.all(
+      files.map(async (file) => {
+        try {
+          return { ok: true as const, inputs: await extractionInputsFromUpload(file) };
+        } catch (err) {
+          logger.warn('File skipped — could not be read', { filename: file.originalname, error: (err as Error).message });
+          return { ok: false as const, fileName: file.originalname, message: (err as Error).message };
+        }
+      }),
+    );
+    const rawInputs = settled.filter((s) => s.ok).flatMap((s) => (s as { inputs: Awaited<ReturnType<typeof extractionInputsFromUpload>> }).inputs);
+    const unreadableFiles = settled
+      .filter((s) => !s.ok)
+      .map((s) => ({ file_name: (s as { fileName: string }).fileName, reason: (s as { message: string }).message }));
+    if (rawInputs.length === 0) {
+      return res.status(400).json(fail(
+        `None of the uploaded files could be read (${unreadableFiles.map((u) => u.file_name).join(', ')})`,
+        'CASE_FILE_PARSE_FAILED',
+      ));
+    }
     const service = new CaseParserService(repository);
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
@@ -279,6 +303,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     return res.status(result.status === 'failed' && !entities ? 422 : 200).json({
       ...result,
       ai_entities: entities,
+      unreadable_files: unreadableFiles,
     });
   } catch (err) {
     logger.error('Parser case file resolve failed', err as Error);
