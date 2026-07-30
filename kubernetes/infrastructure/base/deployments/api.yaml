@@ -152,6 +152,33 @@ spec:
                   name: external-api-keys
                   key: AZURE_OPENAI_API_KEY
                   optional: true
+            # Deployment names + api-version must come from the secret, not code
+            # defaults: the code default api-version predates
+            # max_completion_tokens, which the gpt-5-family deployments require.
+            - name: AZURE_OPENAI_API_VERSION
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_API_VERSION
+                  optional: true
+            - name: AZURE_OPENAI_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_DEPLOYMENT
+                  optional: true
+            - name: AZURE_OPENAI_FAST_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_FAST_DEPLOYMENT
+                  optional: true
+            - name: AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_EMBEDDING_DEPLOYMENT
+                  optional: true
             - name: GROQ_API_KEY
               valueFrom:
                 secretKeyRef:
