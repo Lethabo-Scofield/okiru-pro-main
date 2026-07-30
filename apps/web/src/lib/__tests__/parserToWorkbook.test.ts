@@ -95,7 +95,10 @@ describe("a table becomes many rows", () => {
     ]);
 
     const row = result.rows["management-control"]![0];
-    expect(row.name).toBe("V Lutchman");
+    // The completion pass applies the W3 name/surname split (same rule as the
+    // excel importer): last whitespace token is the surname.
+    expect(row.name).toBe("V");
+    expect(row.surname).toBe("Lutchman");
     expect(row.race).toBe("Indian");
     expect(row.occupationalLevel).toBe("Top Management");
     // The scoring band is NOT forced into the cell — that is the projection's job.
@@ -540,5 +543,63 @@ describe("merging the legacy and AI-entity section shapes", () => {
 
     const merged = mergeWorkbookSections(legacy, injected);
     expect(merged["financial-information"].meta?.tmps).toBeCloseTo(1030806.68, 2);
+  });
+});
+
+describe("completion pass — derivable required fields are filled, never fabricated", () => {
+  // The 64-file Thandanani pack produced 339 "Required" validation issues,
+  // most of them derivable from values already on the row.
+  it("splits a full name into name + surname on management rows (comma form honoured)", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "MANAGEMENT_CONTROL",
+        values: [
+          { field: "employee_name", value: "Venugopal Lutchman, Naidoo" },
+          { field: "occupational_level", value: "Top Management" },
+        ],
+      }),
+    ]);
+    const row = result.rows["management-control"]![0];
+    expect(row.name).toBe("Venugopal Lutchman");
+    expect(row.surname).toBe("Naidoo");
+  });
+
+  it("defaults procurement supplier size to Generic — what scoring already assumes for unknown", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({ values: [{ field: "supplier_name", value: "Alpha" }, { field: "bee_level", value: "2" }] }),
+    ]);
+    expect(result.rows.procurement![0].currentSize).toBe("Generic");
+  });
+
+  it("composes sed descriptionOfSpend from the row's own type + beneficiary", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "SED",
+        values: [
+          { field: "beneficiary_name", value: "OUTA" },
+          { field: "contribution_type", value: "Grant Contribution" },
+          { field: "contribution_amount", value: "400" },
+        ],
+      }),
+    ]);
+    const row = result.rows.sed![0];
+    expect(row.descriptionOfSpend).toBe("Grant Contribution — OUTA");
+  });
+
+  it("drops identity-less ownership fragments (a totals line is not a shareholder)", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "OWNERSHIP",
+        values: [{
+          field: "share_register",
+          value: [
+            { shareholder_name: "V Naidoo", shares_held: 100 },
+            { shares_held: 100 }, // register totals line — no identity
+          ],
+        }],
+      }),
+    ]);
+    expect(result.rows.ownership).toHaveLength(1);
+    expect(result.rows.ownership![0].shareholderName).toBe("V Naidoo");
   });
 });

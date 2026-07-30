@@ -241,6 +241,12 @@ async function transcribeWithGeneralModel(
           // `temperature` (so determinism is best-effort now); the budget also
           // covers hidden reasoning tokens, hence the larger ceiling.
           max_completion_tokens: 8192,
+          // Transcription needs no chain-of-thought — minimal reasoning is the
+          // single biggest wall-time lever on a 24-scan pack. Same env gate as
+          // aiExtraction: PARSER_REASONING_EFFORT=off for non-reasoning models.
+          ...((process.env.PARSER_REASONING_EFFORT ?? 'minimal') !== 'off'
+            ? { reasoning_effort: process.env.PARSER_REASONING_EFFORT ?? 'minimal' }
+            : {}),
         }),
       });
 

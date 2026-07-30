@@ -490,8 +490,80 @@ export function parserExtractionsToWorkbook(
   // spend is complete; counted separately both halves would report gaps.
   const linked = linkWorkbookRows(rows);
 
+  // Completion pass: derive required fields from values ALREADY in the row and
+  // drop identity-less fragments. The 64-file Thandanani pack produced 339
+  // "Required" validation issues, most of them derivable — never fabricated.
+  completeWorkbookRows(linked.rows);
+
   const coverage = huntRequiredFields(linked.rows, Array.from(unmapped), options);
   return { rows: linked.rows, meta, rejected, coverage, reconciliation: linked.reconciliation };
+}
+
+/**
+ * Fill required fields that are DERIVABLE from the row's own extracted values,
+ * and drop rows with no identity at all (a share-register totals line arrives
+ * as a bare `numberOfShares` fragment). Each rule is evidence-faithful:
+ *
+ * - name → surname split (last whitespace token; "Given Names, Surname" comma
+ *   form honoured) — mirrors the excel importer's W3 rule.
+ * - management `designation` ← `occupationalLevel`: the projection treats them
+ *   as the same dimension, so an absent designation adds no information.
+ * - sed `descriptionOfSpend` ← composed from the row's own type + beneficiary —
+ *   a description of extracted values, not new evidence.
+ * - procurement `currentSize` ← "Generic": scoring already treats an unknown
+ *   supplier size as generic (no EME/QSE recognition), so the default states
+ *   the existing behaviour instead of leaving a Required error. Conservative:
+ *   generic earns the FEWEST procurement points.
+ */
+function completeWorkbookRows(rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>): void {
+  const splitName = (full: string): { name: string; surname: string } | null => {
+    const trimmed = full.trim();
+    if (!trimmed) return null;
+    // "Given Names, Surname" — the comma states the boundary explicitly.
+    const comma = trimmed.match(/^(.+),\s*(\S.*)$/);
+    if (comma) return { name: comma[1].trim(), surname: comma[2].trim() };
+    if (!/\s/.test(trimmed)) return null;
+    const parts = trimmed.split(/\s+/);
+    const surname = parts.pop() as string;
+    return { name: parts.join(" "), surname };
+  };
+
+  for (const row of rows["management-control"] ?? []) {
+    const nm = String(row.name ?? "").trim();
+    if (nm && !String(row.surname ?? "").trim()) {
+      const split = splitName(nm);
+      if (split) { row.name = split.name; row.surname = split.surname; }
+    }
+    if (!String(row.designation ?? "").trim() && String(row.occupationalLevel ?? "").trim()) {
+      row.designation = row.occupationalLevel;
+    }
+  }
+
+  for (const row of rows.sed ?? []) {
+    if (!String(row.descriptionOfSpend ?? "").trim()) {
+      const type = String(row.contributionType ?? "").trim();
+      const beneficiary = String(row.beneficiaryName ?? "").trim();
+      if (beneficiary) row.descriptionOfSpend = type ? `${type} — ${beneficiary}` : `Contribution — ${beneficiary}`;
+    }
+  }
+
+  for (const row of rows.procurement ?? []) {
+    if (!String(row.currentSize ?? "").trim() && String(row.supplierName ?? "").trim()) {
+      row.currentSize = "Generic";
+    }
+  }
+
+  // Identity-less fragments carry nothing a person could complete — drop them.
+  if (rows.ownership) {
+    rows.ownership = rows.ownership.filter(
+      (r) => String(r.shareholderName ?? "").trim() || String(r.idNumber ?? "").trim(),
+    );
+  }
+  if (rows["management-control"]) {
+    rows["management-control"] = rows["management-control"].filter(
+      (r) => String(r.name ?? "").trim() || String(r.idNumber ?? "").trim(),
+    );
+  }
 }
 
 /**
