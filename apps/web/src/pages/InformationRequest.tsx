@@ -277,6 +277,68 @@ function ExcelLogoMark({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
+/**
+ * Shell around the create-scorecard setup steps.
+ *
+ * MUST live at module scope: defined inside CompanyPicker it gets a new
+ * function identity on every render, so React remounts the entire subtree on
+ * each keystroke — the manual company-name input lost focus after every
+ * character (and the upload flow's state was one re-render away from a reset).
+ */
+function SetupShell({
+  step,
+  title,
+  description,
+  children,
+  showBack,
+  onBack,
+}: {
+  step: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+  showBack: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <div className="mx-auto max-w-[980px] px-4 py-8 sm:py-12">
+      <style>{`
+        @keyframes setupReveal {
+          from { opacity: 0; transform: translateY(-6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .setup-reveal { animation: setupReveal 220ms ease-out both; }
+      `}</style>
+      <div className="rounded-[28px] border border-white/[0.08] bg-[#141416] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
+          <div className="mb-8 flex items-center justify-between">
+            <span className="text-[12px] font-medium text-[#8e8e93]">{step}</span>
+            {showBack && (
+              <button
+                type="button"
+                onClick={onBack}
+                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.06] hover:text-white"
+              >
+                Back
+              </button>
+            )}
+          </div>
+          {title && (
+            <div className="mb-8 text-center">
+              <h2
+                className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white sm:text-[44px]"
+                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
+              >
+                {title}
+              </h2>
+              {description && <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#a1a1a6]">{description}</p>}
+            </div>
+          )}
+          {children}
+      </div>
+    </div>
+  );
+}
+
 function CompanyPicker({
   onPick,
   onLandEstimate,
@@ -509,54 +571,6 @@ function CompanyPicker({
   );
 
   if (mode === "create") {
-    const SetupShell = ({
-      step,
-      title,
-      description,
-      children,
-    }: {
-      step: string;
-      title: string;
-      description: string;
-      children: ReactNode;
-    }) => (
-      <div className="mx-auto max-w-[980px] px-4 py-8 sm:py-12">
-        <style>{`
-          @keyframes setupReveal {
-            from { opacity: 0; transform: translateY(-6px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-          .setup-reveal { animation: setupReveal 220ms ease-out both; }
-        `}</style>
-        <div className="rounded-[28px] border border-white/[0.08] bg-[#141416] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
-            <div className="mb-8 flex items-center justify-between">
-              <span className="text-[12px] font-medium text-[#8e8e93]">{step}</span>
-              {setupMethod !== "choose" && (
-                <button
-                  type="button"
-                  onClick={() => setSetupMethod("choose")}
-                  className="rounded-full px-3 py-1.5 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.06] hover:text-white"
-                >
-                  Back
-                </button>
-              )}
-            </div>
-            {title && (
-              <div className="mb-8 text-center">
-                <h2
-                  className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white sm:text-[44px]"
-                  style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-                >
-                  {title}
-                </h2>
-                {description && <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#a1a1a6]">{description}</p>}
-              </div>
-            )}
-            {children}
-        </div>
-      </div>
-    );
-
     if (setupMethod === "choose" || setupMethod === "manual" || setupMethod === "excel") {
       const options = [
         {
@@ -589,6 +603,8 @@ function CompanyPicker({
           step={setupMethod === "choose" ? "Step 1 of 3" : "Step 2 of 3"}
           title="Create a scorecard"
           description="Choose how you would like to begin."
+          showBack={setupMethod !== "choose"}
+          onBack={() => setSetupMethod("choose")}
         >
           <div className="space-y-2.5">
             {options.map(({ key, title, description, icon: Icon, badge, badgeClass }) => {
@@ -703,7 +719,7 @@ function CompanyPicker({
 
     if (setupMethod === "upload") {
       return (
-        <SetupShell step="Step 2 of 3" title="" description="">
+        <SetupShell step="Step 2 of 3" title="" description="" showBack onBack={() => setSetupMethod("choose")}>
           <DocumentUploadStart
             onCreate={async (companyName, sections, extras) => {
               await createFromSections(companyName, sections as WorkbookSectionsInput, {
