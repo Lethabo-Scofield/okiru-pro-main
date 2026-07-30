@@ -111,6 +111,13 @@ export function createAzureExtractionModel(): ExtractionModel | null {
 
   const url = `${endpoint.replace(/\/+$/, '')}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
 
+  // gpt-5-family models spend hidden reasoning tokens on EVERY call; for
+  // structured field extraction that reasoning adds latency and burns the
+  // TPM quota without extracting better. `minimal` cut a large pack's wall
+  // time several-fold. Env-tunable: set PARSER_REASONING_EFFORT=off when the
+  // deployment is not a reasoning model.
+  const reasoningEffort = process.env.PARSER_REASONING_EFFORT ?? 'minimal';
+
   return {
     name: deployment,
     async complete(system: string, user: string): Promise<string> {
@@ -126,6 +133,7 @@ export function createAzureExtractionModel(): ExtractionModel | null {
           // determinism is best-effort: same document, same prompt, default
           // sampling. Re-run drift is bounded by the json_object format.
           response_format: { type: 'json_object' },
+          ...(reasoningEffort && reasoningEffort !== 'off' ? { reasoning_effort: reasoningEffort } : {}),
         }),
       });
 
