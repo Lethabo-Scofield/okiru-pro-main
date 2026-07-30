@@ -161,10 +161,13 @@ spec:
               mountPath: /tmp
           resources:
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "100m"
             limits:
-              memory: "1Gi"
+              # 1Gi OOM-killed the pod (exit 137) while pricing a ~12-file
+              # evidence pack: quote-files loads up to 6 PDFs through pdfjs
+              # concurrently. 3Gi gives that path real headroom.
+              memory: "3Gi"
               cpu: "750m"
           livenessProbe:
             httpGet:
