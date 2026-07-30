@@ -17,15 +17,21 @@ patchesStrategicMerge:
 - patches/security-context.yaml
 
 # Images - updated during deployment
+# 2026-07-30: migrated to okiruproacr2026 (new news@okiru.biz subscription a566a919;
+# old ACR okiruproacrde4d539b is locked inside the disabled cfc3d77c subscription).
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-  newTag: "60a0e704-202607070935"
+  newName: okiruproacr2026.azurecr.io/okiru-pro/api
+  newTag: "029dacb7-20260730"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-  newTag: "5418f511-202606151030"
+  newName: okiruproacr2026.azurecr.io/okiru-pro/compute
+  newTag: "029dacb7-20260730"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-  newTag: "511b4b07-20260713-092346"
+  newName: okiruproacr2026.azurecr.io/okiru-pro/web
+  newTag: "029dacb7-20260730"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/parser
-  newTag: "4c8399ee-20260711-140538"
+  newName: okiruproacr2026.azurecr.io/okiru-pro/parser
+  newTag: "029dacb7-20260730"
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
