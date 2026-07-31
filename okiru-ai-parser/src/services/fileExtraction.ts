@@ -10,6 +10,7 @@ import {
   reconstructPdfLines,
   worksheetToMarkdown,
 } from './markdownConversion.js';
+import { sheetGridToMarkdown } from './sheetRegions.js';
 import { convertWithDocling, doclingHandlesExtension, isDoclingEnabled } from './doclingClient.js';
 import { preprocessForOcr } from './imagePreprocessing.js';
 import { analyseWithDocumentIntelligence, documentIntelligenceConfigured } from './documentIntelligence.js';
@@ -160,10 +161,11 @@ export async function extractDocxMarkdown(buffer: Buffer): Promise<string> {
   return htmlToMarkdown(result.value);
 }
 
-export function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[] } {
+export function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[]; markdown: string } {
   const workbook = XLSX.read(buffer, { type: 'buffer' });
   const tables: unknown[] = [];
   const parts: string[] = [];
+  const markdownParts: string[] = [];
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
@@ -172,9 +174,16 @@ export function extractWorkbookText(buffer: Buffer): { text: string; tables: unk
     tables.push({ sheetName, rows });
     parts.push(`Sheet: ${sheetName}`);
     parts.push(rowsToReadableText(rows));
+
+    // LLM-facing rendering is REGION-AWARE (sheetRegions.ts): the data table
+    // gets its real header + ditto forward-fill; side dropdown/reference
+    // lists are labelled so the extractor doesn't invent rows from them. The
+    // structured `tables` array above stays raw for deterministic readers.
+    const grid = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
+    markdownParts.push(sheetGridToMarkdown(sheetName, (grid as unknown as string[][]).slice(0, MAX_SHEET_ROWS)));
   }
 
-  return { text: parts.join('\n'), tables };
+  return { text: parts.join('\n'), tables, markdown: markdownParts.join('\n\n') };
 }
 
 /**
@@ -328,7 +337,7 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
     const extracted = extractWorkbookText(file.buffer);
     rawText = extracted.text;
     tables = extracted.tables;
-    markdown = tablesToMarkdown(extracted.tables);
+    markdown = extracted.markdown || tablesToMarkdown(extracted.tables);
   } else if (file.mimetype === 'text/csv' || ext === '.csv') {
     const extracted = extractCsvText(file.buffer.toString('utf8'));
     rawText = extracted.text;
