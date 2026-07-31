@@ -539,6 +539,30 @@ function completeWorkbookRows(rows: Partial<Record<WorkbookSectionKey, WorkbookR
     }
   }
 
+  // Ledger continuation rows: the sheet states type / % black once on the
+  // block's header row; the model often emits it only there. Inherit those
+  // attributes to rows of the SAME beneficiary — evidence from the same block,
+  // never invented across beneficiaries.
+  for (const contribSection of ["sed", "esd"] as const) {
+    const stated = new Map<string, { type?: unknown; pct?: unknown }>();
+    for (const row of rows[contribSection] ?? []) {
+      const key = String(row.beneficiaryName ?? "").trim().toLowerCase();
+      if (!key) continue;
+      const entry = stated.get(key) ?? {};
+      if (String(row.contributionType ?? "").trim() && entry.type === undefined) entry.type = row.contributionType;
+      if (row.percentBenefitingBlack !== undefined && row.percentBenefitingBlack !== null && entry.pct === undefined) entry.pct = row.percentBenefitingBlack;
+      stated.set(key, entry);
+    }
+    for (const row of rows[contribSection] ?? []) {
+      const entry = stated.get(String(row.beneficiaryName ?? "").trim().toLowerCase());
+      if (!entry) continue;
+      if (!String(row.contributionType ?? "").trim() && entry.type !== undefined) row.contributionType = entry.type;
+      if ((row.percentBenefitingBlack === undefined || row.percentBenefitingBlack === null) && entry.pct !== undefined) {
+        row.percentBenefitingBlack = entry.pct;
+      }
+    }
+  }
+
   for (const row of rows.sed ?? []) {
     if (!String(row.descriptionOfSpend ?? "").trim()) {
       const type = String(row.contributionType ?? "").trim();
