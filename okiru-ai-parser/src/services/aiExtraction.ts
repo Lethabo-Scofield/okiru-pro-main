@@ -154,6 +154,12 @@ const SYSTEM_PROMPT = [
   '- Copy values as they appear; do not convert currencies, dates or percentages.',
   '- If the document is not the type described, return {"not_this_document": true}.',
   '- Add an "exceptions" array describing anything that fails the analyst checks.',
+  '- NEVER extract rows from sections labelled "Reference options", dropdown/option',
+  '  lists, legends, or category catalogues — those are template vocabulary, not data.',
+  '- Ledger-style tables use blank-means-ditto: a continuation row carrying only a',
+  '  date/amount belongs to the last row above it that stated the name/type. Apply',
+  '  that stated context to each continuation row; never emit a data row whose only',
+  '  content is template vocabulary.',
 ].join('\n');
 
 /**
