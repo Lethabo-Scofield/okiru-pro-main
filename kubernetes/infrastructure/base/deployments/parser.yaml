@@ -103,6 +103,15 @@ spec:
             # big packs (429 storm); 6 keeps throughput without the wall.
             - name: PARSER_DOCUMENT_CONCURRENCY
               value: "6"
+            # Durable copy of every uploaded evidence file (case-documents
+            # container on the SAME backup storage account — no new
+            # infrastructure). Optional: extraction proceeds unchanged if unset.
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: azure-backup-credentials
+                  key: AZURE_STORAGE_CONNECTION_STRING
+                  optional: true
             - name: AZURE_OPENAI_ENDPOINT
               valueFrom:
                 secretKeyRef:

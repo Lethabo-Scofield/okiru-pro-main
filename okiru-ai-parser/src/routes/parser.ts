@@ -23,6 +23,7 @@ import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_d
 import { ParserService } from '../../parser/parser_service.js';
 import { documentsByElement } from '../../schemas/verification_document_matrix.js';
 import { extractCaseEntities } from '../services/caseExtraction.js';
+import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 
 const logger = createLogger('ParserRoutes');
 const router = Router();
@@ -258,6 +259,14 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
   }
 
+  // Fire-and-forget: persist the ORIGINAL uploaded files to durable blob
+  // storage in parallel with extraction. Never awaited, never lets a storage
+  // hiccup slow or fail the response the client is waiting on.
+  void persistCaseFiles(
+    typeof req.body?.case_id === 'string' ? req.body.case_id : undefined,
+    files,
+  ).catch(() => { /* persistCaseFile already logs; this just stops an unhandled rejection */ });
+
   const repository = await getParserRepository();
   try {
     // A multi-sheet workbook becomes one input PER SHEET, so the Ownership sheet
@@ -344,6 +353,14 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     }
     await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
   }
+
+  // Fire-and-forget: persist the ORIGINAL uploaded files to durable blob
+  // storage in parallel with the stream below — never awaited, never lets a
+  // storage hiccup slow or fail the extraction the client is watching.
+  void persistCaseFiles(
+    typeof req.body?.case_id === 'string' ? req.body.case_id : undefined,
+    files,
+  ).catch(() => { /* persistCaseFile already logs; this just stops an unhandled rejection */ });
 
   // SSE headers. X-Accel-Buffering:no stops nginx (ingress + the web proxy)
   // from buffering the stream, so events reach the browser as they happen.
