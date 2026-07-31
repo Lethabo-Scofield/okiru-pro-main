@@ -603,3 +603,27 @@ describe("completion pass — derivable required fields are filled, never fabric
     expect(result.rows.ownership![0].shareholderName).toBe("V Naidoo");
   });
 });
+
+describe("ledger-block attribute inheritance (same beneficiary only)", () => {
+  it("inherits contributionType + % black to continuation rows of the same beneficiary", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "SED",
+        values: [{
+          field: "contribution_register",
+          value: [
+            { beneficiary_name: "Essentially Edenvale", contribution_type: "Grant Contribution", percent_black_beneficiaries: "100%", contribution_amount: "500" },
+            { beneficiary_name: "Essentially Edenvale", contribution_amount: "500" },
+            { beneficiary_name: "Other Org", contribution_amount: "900" },
+          ],
+        }],
+      }),
+    ]);
+    const rows = result.rows.sed!;
+    const continuation = rows.find((r) => r.beneficiaryName === "Essentially Edenvale" && r !== rows[0]);
+    expect(continuation?.contributionType).toBe("Grant Contribution");
+    // A DIFFERENT beneficiary must not inherit anything.
+    const other = rows.find((r) => r.beneficiaryName === "Other Org");
+    expect(other?.contributionType).toBeUndefined();
+  });
+});
