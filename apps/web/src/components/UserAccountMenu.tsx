@@ -101,19 +101,12 @@ export function UserAccountMenu({ variant = "hub", className, trigger }: UserAcc
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
-            navigate("/team");
+            navigate("/workspace");
           }}
           data-testid="menu-team"
         >
           <Users />
-          Team &amp; members
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => {
-            navigate("/workspace");
-          }}
-        >
-          Workspace
+          Team &amp; workspace
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

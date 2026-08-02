@@ -495,7 +495,7 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="measurementPeriodStart">Period Start</Label>
+              <Label htmlFor="measurementPeriodStart">Financial Period Start</Label>
               <NumericDateInput
                 id="measurementPeriodStart"
                 value={data.measurementPeriodStart || ''}
@@ -505,7 +505,7 @@ export function ClientInformationForm({ data, onChange, className, readOnly }: C
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="measurementPeriodEnd">Period End</Label>
+              <Label htmlFor="measurementPeriodEnd">Financial Period End</Label>
               <NumericDateInput
                 id="measurementPeriodEnd"
                 value={data.measurementPeriodEnd || ''}

@@ -1643,8 +1643,10 @@ export default function DocumentProcessor() {
         }
       }
 
-      // FIXED: Added 'choose-mode' to validSteps so mode selection is preserved on resume
-      const validSteps = ['choose-mode', 'company-info', 'upload', 'classify', 'extract', 'review', 'summary', 'scorecard', 'build-foundation', 'build-pillars', 'upload-requirements', 'upload-kit-file', 'upload-kit-review'];
+      // Every member of the currentPage union belongs here — omissions
+      // silently kicked resumed sessions parked on 'processing',
+      // 'score-preview' or 'populating' back to an earlier step.
+      const validSteps = ['choose-mode', 'company-info', 'upload', 'classify', 'extract', 'processing', 'score-preview', 'review', 'summary', 'populating', 'scorecard', 'build-foundation', 'build-pillars', 'upload-requirements', 'upload-kit-file', 'upload-kit-review'];
       let rawStep = sess.currentStep as string | undefined;
       if (rawStep === 'upload-sector-template') rawStep = 'upload-requirements';
       const step =

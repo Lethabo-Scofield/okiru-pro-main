@@ -8,7 +8,10 @@
 
 import { Building2, Files, ArrowRight } from 'lucide-react';
 
-export type ProcessorMode = 'upload' | 'documents' | 'build';
+// 'upload' removed from the offered modes: the chooser never rendered a
+// button for it, so the type advertised a flow no user could reach. Legacy
+// sessions that saved flowMode='upload' still resume through DocumentProcessor.
+export type ProcessorMode = 'documents' | 'build';
 
 interface ModeChooserProps {
   onSelectMode: (mode: ProcessorMode) => void;

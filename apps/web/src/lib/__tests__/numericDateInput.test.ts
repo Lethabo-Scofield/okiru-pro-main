@@ -5,9 +5,9 @@ import {
 } from "../numericDateInput";
 
 describe("numericDateInput", () => {
-  it("displays ISO dates with numeric month", () => {
-    expect(isoToNumericDateDisplay("2026-01-28")).toBe("28/1/2026");
-    expect(isoToNumericDateDisplay("2026-02-28")).toBe("28/2/2026");
+  it("displays ISO dates as zero-padded dd/mm/yyyy — the convention every workbook placeholder states", () => {
+    expect(isoToNumericDateDisplay("2026-01-28")).toBe("28/01/2026");
+    expect(isoToNumericDateDisplay("2026-02-28")).toBe("28/02/2026");
   });
 
   it("parses dd/m/yyyy to ISO", () => {

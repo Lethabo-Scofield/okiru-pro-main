@@ -19,8 +19,10 @@ import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
 import Dashboard from "@/pages/Dashboard";
-import EntityBuilder from "@/pages/EntityBuilder";
-import DocumentProcessor from "@/pages/DocumentProcessor";
+// Super-admin-only giants (7k + 1.7k lines) — lazy so every ordinary user
+// stops downloading flows they can never open.
+const EntityBuilder = lazy(() => import("@/pages/EntityBuilder"));
+const DocumentProcessor = lazy(() => import("@/pages/DocumentProcessor"));
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
 import AdminAnalytics from "@/pages/AdminAnalytics";
@@ -29,7 +31,6 @@ import CertificateDetail from "@/pages/CertificateDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
 import Workspace from "@/pages/Workspace";
-import Team from "@/pages/Team";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
@@ -82,6 +83,14 @@ function LegacyOnboardingRedirect() {
 }
 
 /** Legacy `/information-request` URLs → canonical create-scorecard flow. */
+function TeamRedirect() {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    navigate("/workspace", { replace: true });
+  }, [navigate]);
+  return null;
+}
+
 function InformationRequestRedirect() {
   const params = useParams<{ companyId?: string }>();
   const [, navigate] = useLocation();
@@ -186,8 +195,10 @@ function AppRouter() {
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
       </Route>
+      {/* /team retired: two member/invite screens with different role models
+          confused the permissions story — /workspace is the one surface. */}
       <Route path="/team">
-        <ProtectedRoute><Team /></ProtectedRoute>
+        <TeamRedirect />
       </Route>
       <Route path="/company-profile">
         <ProtectedRoute><CompanyProfilePage /></ProtectedRoute>
@@ -217,10 +228,10 @@ function AppRouter() {
         <ProtectedRoute><InformationRequestRedirect /></ProtectedRoute>
       </Route>
       <Route path="/builder">
-        <ProtectedRoute><SuperAdminOnlyRoute><EntityBuilder /></SuperAdminOnlyRoute></ProtectedRoute>
+        <ProtectedRoute><SuperAdminOnlyRoute><Suspense fallback={null}><EntityBuilder /></Suspense></SuperAdminOnlyRoute></ProtectedRoute>
       </Route>
       <Route path="/processor">
-        <ProtectedRoute><SuperAdminOnlyRoute><DocumentProcessor /></SuperAdminOnlyRoute></ProtectedRoute>
+        <ProtectedRoute><SuperAdminOnlyRoute><Suspense fallback={null}><DocumentProcessor /></Suspense></SuperAdminOnlyRoute></ProtectedRoute>
       </Route>
       <Route path="/certificates">
         <CertificateHub />
