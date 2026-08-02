@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.12"
 dependencies = [
+    # Layout-aware document -> markdown conversion for the extraction sidecar
+    # (services/docling/app.py). Recovers real table structure from PDF/DOCX/PPTX.
+    "docling>=2.0.0",
     "fastapi==0.111.1",
     "networkx==3.2",
     "openai>=1.40.0",
