@@ -45,7 +45,7 @@ configMapGenerator:
   literals:
   - NODE_ENV=production
   - LOG_LEVEL=warn
-  - CORS_ORIGIN=https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io
+  - CORS_ORIGIN=https://okiru.pro,https://www.okiru.pro,https://okiru.102-133-130-99.nip.io
   - ESG_PREVIEW_ALLOWLIST=
   name: app-config
 
