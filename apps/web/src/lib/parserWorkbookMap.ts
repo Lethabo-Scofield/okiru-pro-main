@@ -178,7 +178,11 @@ export function mapParserCaseToWorkbookSections(parserCase: ParserCaseLike): Par
   const ownBlack = num(payload['ownership.black_ownership']);
   const ownBlackWomen = num(payload['ownership.black_women_ownership']);
   const ownEntity = str(payload['ownership.entity_name']);
-  if (ownBlack !== undefined) {
+  // The aggregate row is a FALLBACK encoding, never a replacement: if
+  // per-shareholder rows exist (here or via the AI extraction merge, whose
+  // rows are authoritative where present), people evidence wins and the
+  // aggregate is not written at all.
+  if (ownBlack !== undefined && !(sections.ownership?.rows?.length)) {
     const row: Record<string, unknown> = {
       shareholderName: `${ownEntity || 'Measured entity'} — aggregate black shareholding (per Ownership Confirmation)`,
       ownershipType: 'shareholder',

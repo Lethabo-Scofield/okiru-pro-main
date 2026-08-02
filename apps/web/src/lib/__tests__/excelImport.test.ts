@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  applyExtractedOwnershipToRows,
   extractBeeGatheringBuffer,
   isBeeGatheringWorkbook,
   mapExtractedToWorkbookSections,
@@ -214,7 +215,12 @@ describe("excelImport — Thandanani Transport fixture", () => {
     expect(sections.employees?.rows?.length).toBeGreaterThan(0);
 
     const firstSh = sections.ownership?.rows?.[0] as Record<string, unknown> | undefined;
-    expect(Number(firstSh?.blackOwnership)).toBeGreaterThan(0);
+    // Row 0 STATES its identity (a real person), so document-level aggregates
+    // are no longer stamped onto it — that stamp once scored black-women
+    // ownership points for a company whose only shareholder is an Indian man.
+    // The projection derives black % from the stated race instead.
+    expect(String(firstSh?.race ?? "")).not.toBe("");
+    expect(firstSh?.blackOwnership).toBeUndefined();
   });
 
   it("scores Thandanani Transport QSE ownership+MC+EE after import (denominator 100)", () => {
@@ -270,7 +276,11 @@ describe("excelImport — Thandanani Transport fixture", () => {
       total: `${total} / ${cfg.totalMaxPoints}`,
     });
 
-    expect(own.total).toBeCloseTo(28, 0);
+    // 24, not 28: the four black-women voting/EI points the old pin locked in
+    // were PHANTOM — this company's sole shareholder is an Indian man, and the
+    // aggregate black-women % that used to be stamped onto his row is now
+    // (correctly) refused because the row states its identity.
+    expect(own.total).toBeCloseTo(24, 0);
     expect(mc.maxPoints).toBe(27);
     expect(ee.maxPoints).toBe(27);
     expect(ee.score).toBeGreaterThan(0);
@@ -366,7 +376,11 @@ describe("excelImport — Thandanani Transport fixture", () => {
       RCOGP_GENERIC_CONFIG,
     );
     const total = own.total + mc.total + proc.total + esd.sdTotal + esd.edTotal + sed.total;
-    expect(total).toBeCloseTo(62.17, 1); // per-demographic MC (was 63.56 under aggregate MC)
+    // 59.16, not 62.17: this legacy import fixture's row 0 states identity, so
+    // document aggregates no longer stamp over person evidence (the phantom
+    // black-women mechanism). The CANONICAL import path is unaffected — the
+    // toolkitTestData fitness harness still holds Lake at its ground truth.
+    expect(total).toBeCloseTo(59.16, 1);
   });
 
   it("normalizes sector labels deterministically", () => {
@@ -376,5 +390,23 @@ describe("excelImport — Thandanani Transport fixture", () => {
     expect(normalizeSectorDeterministic("retail")).toBe("RCOGP");
     expect(normalizeSectorDeterministic("Information and Communication Technology")).toBe("ICT");
     expect(normalizeSectorDeterministic("Unknown Sector XYZ")).toBeUndefined();
+  });
+});
+
+describe("applyExtractedOwnershipToRows — identity guard", () => {
+  const data = { blackOwnership: 0.51, blackWomenOwnership: 0.3 } as any;
+
+  it("still stamps an identity-less trust row (the designed trust encoding)", () => {
+    const rows = [{ _id: "t1", shareholderName: "Family Trust", race: "", gender: "" }] as any[];
+    const out = applyExtractedOwnershipToRows(data, [], rows);
+    expect(Number(out[0].blackOwnership)).toBeGreaterThan(0);
+    expect(Number(out[0].blackWomenOwnership)).toBeGreaterThan(0);
+  });
+
+  it("refuses to stamp a row that states its identity — no phantom black-women points", () => {
+    const rows = [{ _id: "p1", shareholderName: "V Naidoo", race: "Indian", gender: "Male" }] as any[];
+    const out = applyExtractedOwnershipToRows(data, [], rows);
+    expect(out[0].blackOwnership).toBeUndefined();
+    expect(out[0].blackWomenOwnership).toBeUndefined();
   });
 });

@@ -1613,7 +1613,7 @@ function pctForWorkbook(value: number | undefined): number | "" {
 }
 
 /** Stamp extracted ownership totals onto sheet rows (trusts / corps often have blank race). */
-function applyExtractedOwnershipToRows(
+export function applyExtractedOwnershipToRows(
   data: ExtractedCompanyData,
   tiers: OwnershipChainTier[],
   rows: WorkbookRow[],
@@ -1627,6 +1627,22 @@ function applyExtractedOwnershipToRows(
     return explicit != null && Number(explicit) > 0;
   });
   if (hasExplicitBlack) return rows;
+
+  // Aggregates exist to fill trust/corporate rows that carry NO demographics
+  // (this function's whole purpose, per its doc). The stamp lands on ROW 0 —
+  // so it is row 0's stated identity that matters: a row that states race or
+  // gender is PERSON evidence, and the projection already derives black /
+  // black-women fractions from it. Stamping a document-level black-women %
+  // onto such a row scored black-women ownership points for a company whose
+  // only shareholder is an Indian man — stated identity wins, and the
+  // aggregate is left to the extraction-review layer to reconcile openly.
+  // (An identity-less trust at row 0 still accepts the stamp even when other
+  // rows are people — that is the designed trust encoding.)
+  const rowZero = rows[0] as Record<string, unknown> | undefined;
+  const rowZeroStatesIdentity =
+    rowZero != null &&
+    (String(rowZero.race ?? "").trim() !== "" || String(rowZero.gender ?? "").trim() !== "");
+  if (rowZeroStatesIdentity) return rows;
 
   const tier0 = tiers[0];
   const blackPct = pctForWorkbook(tier0?.blackVotingRights ?? blackOwn);

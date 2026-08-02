@@ -805,10 +805,14 @@ function calculateScorecard(
     ?.map(p => ({
       id: p.id,
       name: p.learnerName || 'YES Candidate',
-      race: p.race || 'African',
-      gender: p.gender || 'Male',
+      // No demographic defaults: a blank race must never score as a black
+      // youth. isBlack requires a STATED black race — `race !== 'White'`
+      // counted undefined as black and produced YES/absorption points with
+      // no demographic evidence.
+      race: p.race || '',
+      gender: p.gender || '',
       isDisabled: p.isDisabled || false,
-      isBlack: p.race !== 'White', // Computed: African/Coloured/Indian = Black
+      isBlack: ['African', 'Coloured', 'Indian', 'Chinese'].includes(String(p.race ?? '').trim()),
       startDate: p.startDate || new Date().toISOString(),
       isAbsorbed: p.isAbsorbed || false,
       cost: (p as any).totalCost || ((p as any).cost || 0),
@@ -821,8 +825,8 @@ function calculateScorecard(
     yesHeadcountTarget: Math.max(Math.ceil((state.management.employees?.length || 0) * 0.025), 1),
     candidates: yesCandidates,
     yesYouthEnrolled: yesCandidates.length,
-    yesBlackYouthCount: yesCandidates.filter(c => c.race !== 'White').length,
-    yesBlackYouthPercentage: yesCandidates.length > 0 ? (yesCandidates.filter(c => c.race !== 'White').length / yesCandidates.length) * 100 : 0,
+    yesBlackYouthCount: yesCandidates.filter(c => c.isBlack).length,
+    yesBlackYouthPercentage: yesCandidates.length > 0 ? (yesCandidates.filter(c => c.isBlack).length / yesCandidates.length) * 100 : 0,
     yesAbsorbedCount: yesCandidates.filter(c => c.isAbsorbed).length,
     yesAbsorptionRate: yesCandidates.length > 0 ? (yesCandidates.filter(c => c.isAbsorbed).length / yesCandidates.length) * 100 : 0,
     totalYesCost: yesCandidates.reduce((sum, c) => sum + c.cost, 0),
@@ -1388,12 +1392,14 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const esdState: ESDData = {
         id: '',
         clientId,
+        // Carry the FULL projected contribution shape. Cherry-picking five
+        // fields here dropped isBlackWomenOwnedBeneficiary / isStructuredProject /
+        // isLimitedServicesCommunity (read by the construction calculator) and
+        // primeRate/actualRate/currentSize — construction ESD scores were right
+        // until a page reload, then silently lost their flag-based points.
         contributions: (data.esd?.contributions || []).map((c: any) => ({
-          id: c.id,
-          beneficiary: c.beneficiary,
-          type: c.type,
+          ...c,
           amount: c.amount || 0,
-          category: c.category,
         })),
         graduationBonus: data.esd?.graduationBonus || false,
         graduationEvidence: data.esd?.graduationEvidence || '',
@@ -1410,12 +1416,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         ceSpend: (data.sed?.ceSpend as number | undefined) ?? (finExtras.ceSpend as number | undefined),
         ceBonusSpend: (data.sed?.ceBonusSpend as number | undefined) ?? (finExtras.ceBonusSpend as number | undefined),
         fundisaSpend: (data.sed?.fundisaSpend as number | undefined) ?? (finExtras.fundisaSpend as number | undefined),
+        // Full projected shape for the same reason as ESD above (construction
+        // reads per-contribution flags; percentBenefitingBlack is preserved for
+        // the day SED scoring recognises it).
         contributions: (data.sed?.contributions || []).map((c: any) => ({
-          id: c.id,
-          beneficiary: c.beneficiary,
-          type: c.type,
+          ...c,
           amount: c.amount || 0,
-          category: c.category,
         })),
       };
 
