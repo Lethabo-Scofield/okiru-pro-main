@@ -6,8 +6,8 @@ export type EsgAccessUser = {
   fullName?: string | null;
 };
 
-/** Chengetai Myezwa — committed admin contact in apps/web/server/email.ts */
-export const ESG_DEFAULT_ALLOWLIST = ["cmyezwa@okiru.co.za"] as const;
+/** No hardcoded default — see client esgAccess.ts: env var IS the gate. */
+export const ESG_DEFAULT_ALLOWLIST = [] as const;
 
 function parseAllowlistEnv(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
@@ -28,8 +28,16 @@ function normalizeEmail(user: EsgAccessUser | null | undefined): string {
   return email;
 }
 
-/** All authenticated users with an email or username may access the ESG toolkit. */
+/**
+ * ESG access: open to every authenticated user UNLESS ESG_PREVIEW_ALLOWLIST
+ * is set — then only listed emails pass. The allowlist previously had zero
+ * callers (fail-open pretense; dead-code audit item 6).
+ */
 export function canAccessEsgToolkit(user: EsgAccessUser | null | undefined): boolean {
   if (!user) return false;
-  return Boolean(normalizeEmail(user));
+  const email = normalizeEmail(user);
+  if (!email) return false;
+  const allowlist = getEsgPreviewAllowlist();
+  if (allowlist.length === 0) return true;
+  return allowlist.includes(email);
 }

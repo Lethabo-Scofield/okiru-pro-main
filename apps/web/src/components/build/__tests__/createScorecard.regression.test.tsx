@@ -110,7 +110,16 @@ describe('create-scorecard field model regressions', () => {
       .columns?.find((column) => column.key === 'municipality');
 
     expect(ownershipType?.type).toBe('select');
-    expect(ownershipType?.options).toEqual(['Shareholder', 'Sale of Assets', 'Equity Equivalent']);
+    // Scheme entries added for the Transport ESOP/BBOS bonus — the calculator
+    // detects scheme evidence from this cell's text.
+    expect(ownershipType?.options).toEqual([
+      'Shareholder',
+      'Sale of Assets',
+      'Equity Equivalent',
+      'ESOP / Employee Share Scheme',
+      'Broad-Based Ownership Scheme (BBOS)',
+      'Trust',
+    ]);
     expect(municipality?.options).toContain('City of Johannesburg');
     expect(municipality?.options).toContain('Other');
   });

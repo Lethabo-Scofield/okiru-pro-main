@@ -6,7 +6,12 @@ export type EsgAccessUser = {
   fullName?: string | null;
 };
 
-export const ESG_DEFAULT_ALLOWLIST = ["cmyezwa@okiru.co.za"] as const;
+/**
+ * No hardcoded default: a baked-in address made the allowlist permanently
+ * non-empty, so "empty = open to all" could never hold and enforcement would
+ * have locked ESG to one person. The env var is the whole gate.
+ */
+export const ESG_DEFAULT_ALLOWLIST = [] as const;
 
 function parseAllowlistEnv(raw: string | undefined): string[] {
   if (!raw?.trim()) return [];
@@ -31,8 +36,17 @@ function normalizeEmail(user: EsgAccessUser | null | undefined): string {
   return (user?.email || user?.username || "").trim().toLowerCase();
 }
 
-/** All authenticated users with an email or username may access the ESG toolkit. */
+/**
+ * ESG access: open to every authenticated user UNLESS an allowlist is
+ * configured — then only listed emails pass. The allowlist plumbing existed
+ * but had ZERO callers, so `VITE_ESG_PREVIEW_ALLOWLIST` silently did nothing
+ * while the code implied a gate (fail-open pretense; dead-code audit item 6).
+ */
 export function canAccessEsgToolkit(user: EsgAccessUser | null | undefined): boolean {
   if (!user) return false;
-  return Boolean(normalizeEmail(user));
+  const email = normalizeEmail(user);
+  if (!email) return false;
+  const allowlist = getEsgPreviewAllowlist();
+  if (allowlist.length === 0) return true;
+  return allowlist.includes(email);
 }

@@ -803,9 +803,20 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
   {
     key: "ownershipType",
     label: "Ownership Type",
-    type: "text",
-    width: 140,
-    aliases: ["Ownership Type"],
+    type: "select",
+    // Scheme options must keep matching the ownership calculator's esopEvidence
+    // regex (/esop|bbos|employee share|broad.?based (ownership|scheme)/) — the
+    // Transport scheme bonus is detected from this cell's text.
+    options: [
+      "Shareholder",
+      "Sale of Assets",
+      "Equity Equivalent",
+      "ESOP / Employee Share Scheme",
+      "Broad-Based Ownership Scheme (BBOS)",
+      "Trust",
+    ],
+    width: 200,
+    aliases: ["Ownership Type", "Type of Ownership", "Shareholder Type"],
   },
   yesNoColumn("soaBuyer", "Sale of Assets (SOA) Buyer", {
     width: 150,
@@ -1090,9 +1101,9 @@ export const SKILLS_META: ColumnDef[] = [
   },
   {
     key: "dataDate",
-    label: "Data Date (dd/mm/yyyy)",
+    label: "Training Data Reference Date (dd/mm/yyyy)",
     type: "date",
-    required: false,
+    required: true,
     validate: dateValidator,
     validationMessage: "Enter date as dd/mm/yyyy",
     guidance: "Reference date for this training dataset. Skills scorecard flags 'Data with no data date' when missing.",
@@ -1105,7 +1116,23 @@ export const SKILLS_COLUMNS: ColumnDef[] = [
   { key: "categoryCode", label: "Category (A–G)", type: "select", options: SKILLS_CATEGORY_OPTIONS, required: true, width: 130, aliases: ["Category", "Skills Category", "Cat", "Category Code"] },
   { key: "trainingProvider", label: "Training Provider", type: "text", width: 180, aliases: ["Provider", "Service Provider", "Institution"] },
   { key: "province", label: "Province", type: "select", options: PROVINCE_OPTIONS, width: 150, validationMessage: "Select a South African province from the dropdown" },
-  { key: "municipality", label: "Municipality", type: "text", width: 160 },
+  {
+    key: "municipality",
+    label: "Municipality",
+    type: "select",
+    options: [
+      "City of Johannesburg",
+      "City of Cape Town",
+      "City of Tshwane",
+      "City of Ekurhuleni",
+      "eThekwini",
+      "Nelson Mandela Bay",
+      "Buffalo City",
+      "Mangaung",
+      "Other",
+    ],
+    width: 180,
+  },
   { key: "learnerName", label: "Learner Name", type: "text", required: true, width: 180, aliases: ["Learner", "Trainee", "Employee Name", "Beneficiary"] },
   { key: "idNumber", label: "ID Number", type: "id", width: 150, validate: idValidator, aliases: ["ID", "ID No", "Identity Number"] },
   { key: "race", label: "Race", type: "select", options: RACE_OPTIONS, required: true, width: 130, aliases: ["Population Group", "Ethnicity"] },
@@ -1157,7 +1184,7 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
   // Polo feedback #8: not all suppliers are VAT-registered — capture a company
   // registration number so unregistered-for-VAT suppliers can still be identified.
-  { key: "registrationNumber", label: "Supplier Reg Number", type: "text", width: 180, aliases: ["Reg Number", "Reg No", "Registration Number", "Company Registration", "Supplier Registration"] },
+  { key: "registrationNumber", label: "Supplier Registration Number", type: "text", width: 190, aliases: ["Reg Number", "Reg No", "Registration Number", "Company Registration", "Supplier Registration", "Supplier Reg Number"] },
   {
     key: "currentSize",
     label: "Current Size",
