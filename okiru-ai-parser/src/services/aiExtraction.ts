@@ -86,6 +86,12 @@ export interface DocumentExtraction {
 export interface ExtractionModel {
   name: string;
   complete(system: string, user: string): Promise<string>;
+  /**
+   * Same call at ESCALATED reasoning effort — used by the sweep, where the
+   * question is "look harder for these specific missing values". Optional:
+   * absent (tests, non-reasoning deployments) the sweep uses `complete`.
+   */
+  completeHard?(system: string, user: string): Promise<string>;
 }
 
 // NOTE: the old AI_EXTRACTION_MAX_CHARS truncation is gone — long documents are
@@ -117,32 +123,40 @@ export function createAzureExtractionModel(): ExtractionModel | null {
   // time several-fold. Env-tunable: set PARSER_REASONING_EFFORT=off when the
   // deployment is not a reasoning model.
   const reasoningEffort = process.env.PARSER_REASONING_EFFORT ?? 'minimal';
+  // The SWEEP is the opposite trade: a short, specific "find these missing
+  // values" question where thinking harder genuinely finds more. Runs on the
+  // few documents with gaps, not the whole pack, so the extra latency is paid
+  // exactly where it buys extraction.
+  const sweepEffort = process.env.PARSER_SWEEP_REASONING_EFFORT ?? 'medium';
+
+  const callAt = (effort: string) => async (system: string, user: string): Promise<string> => {
+    const response = await fetchAzureWithRetry(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
+      body: JSON.stringify({
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        // gpt-5-family deployments reject non-default `temperature`, so
+        // determinism is best-effort: same document, same prompt, default
+        // sampling. Re-run drift is bounded by the json_object format.
+        response_format: { type: 'json_object' },
+        ...(effort && effort !== 'off' ? { reasoning_effort: effort } : {}),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Azure extraction failed: ${response.status} ${await response.text().catch(() => '')}`.trim());
+    }
+    const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+    return body.choices?.[0]?.message?.content ?? '';
+  };
 
   return {
     name: deployment,
-    async complete(system: string, user: string): Promise<string> {
-      const response = await fetchAzureWithRetry(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
-        body: JSON.stringify({
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-          // gpt-5-family deployments reject non-default `temperature`, so
-          // determinism is best-effort: same document, same prompt, default
-          // sampling. Re-run drift is bounded by the json_object format.
-          response_format: { type: 'json_object' },
-          ...(reasoningEffort && reasoningEffort !== 'off' ? { reasoning_effort: reasoningEffort } : {}),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Azure extraction failed: ${response.status} ${await response.text().catch(() => '')}`.trim());
-      }
-      const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-      return body.choices?.[0]?.message?.content ?? '';
-    },
+    complete: callAt(reasoningEffort),
+    completeHard: callAt(sweepEffort),
   };
 }
 
@@ -256,6 +270,8 @@ function sweepEnabled(): boolean {
 const SWEEP_SYSTEM_PROMPT = [
   'You are re-reading a document to find SPECIFIC values a first pass missed.',
   'You are given the exact field names still needed. Look for those and nothing else.',
+  'Before answering, reason carefully about WHERE each value could live: synonym',
+  'wordings, table columns, totals rows, stamps, letterheads and annexures.',
   'Rules:',
   '- Return ONLY a JSON object keyed by the requested field names.',
   '- A field genuinely absent from the document must be null. Never infer or estimate it.',
@@ -281,6 +297,9 @@ async function sweepForMissingFields(
   chunks: Array<{ text: string; index: number }>,
   missing: string[],
 ): Promise<Record<string, unknown>> {
+  // The sweep thinks harder than the first pass: escalated reasoning effort
+  // where the model supports it (completeHard), the plain call where not.
+  const completeSweep = model.completeHard?.bind(model) ?? model.complete.bind(model);
   const ask = async (chunk: { text: string; index: number }): Promise<Record<string, unknown> | null> => {
     const user = [
       `DOCUMENT TYPE: ${spec.name}`,
@@ -290,7 +309,7 @@ async function sweepForMissingFields(
     ].join('\n');
 
     try {
-      return parseModelJson(await model.complete(SWEEP_SYSTEM_PROMPT, user));
+      return parseModelJson(await completeSweep(SWEEP_SYSTEM_PROMPT, user));
     } catch (err) {
       logger.warn('Sweep pass failed — leaving fields missing', {
         document: spec.id, file: filename, chunk: chunk.index, reason: (err as Error).message,
@@ -333,7 +352,9 @@ export async function extractWithSpec(
     documentId: spec.id,
     extractionPrompt: spec.extractionPrompt,
     expectedFields: spec.expectedFields,
-    model: model.name,
+    // Logic-version salt: the escalated multi-round sweep changes what a given
+    // document yields, so pre-sweep cache entries must not serve for it.
+    model: `${model.name}#sweep2`,
   });
   if (cachingEnabled()) {
     const hit = getExtractionCache().get(cacheKey);
@@ -436,19 +457,33 @@ export async function extractWithSpec(
   //
   // Bounded to one extra round trip per document, and skipped entirely when the
   // first pass found everything (the common case for clean documents).
-  const stillMissing = spec.expectedFields.filter((field) => isEmptyValue(parsed[field]));
   const foundSomething = spec.expectedFields.some((field) => !isEmptyValue(parsed[field]));
   // Only sweep a spec the first pass got SOMETHING from. Zero fields found means
   // this is almost certainly the wrong spec for this document (retrieval offers
   // candidates; most are wrong), not a right document with hidden values — so a
   // second look is a wasted model call. This is the single biggest latency cut
   // once retrieval widened the candidate set.
-  if (stillMissing.length > 0 && foundSomething && sweepEnabled()) {
-    const swept = await sweepForMissingFields(model, spec, input.filename, chunks, stillMissing);
-    for (const [field, value] of Object.entries(swept)) {
-      // The sweep may only FILL a gap. It can never overwrite a value the first
-      // pass found — a second opinion must not silently replace a first answer.
-      if (isEmptyValue(parsed[field]) && !isEmptyValue(value)) parsed[field] = value;
+  //
+  // BOUNDED LOOP, progress-gated: a round that recovered nothing proves the
+  // remaining fields are not in the document (the prompt forbids inventing
+  // them), so looping further would only spend money re-proving absence. A
+  // round that DID recover something earns one more look at what remains.
+  if (foundSomething && sweepEnabled()) {
+    const maxRounds = Math.max(1, Number(process.env.PARSER_SWEEP_ROUNDS) || 2);
+    for (let round = 0; round < maxRounds; round++) {
+      const stillMissing = spec.expectedFields.filter((field) => isEmptyValue(parsed[field]));
+      if (stillMissing.length === 0) break;
+      const swept = await sweepForMissingFields(model, spec, input.filename, chunks, stillMissing);
+      let recovered = 0;
+      for (const [field, value] of Object.entries(swept)) {
+        // The sweep may only FILL a gap. It can never overwrite a value the first
+        // pass found — a second opinion must not silently replace a first answer.
+        if (isEmptyValue(parsed[field]) && !isEmptyValue(value)) {
+          parsed[field] = value;
+          recovered += 1;
+        }
+      }
+      if (recovered === 0) break;
     }
   }
 
