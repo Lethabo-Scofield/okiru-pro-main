@@ -230,7 +230,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [sector, setSector] = useState("");
   const [subSector, setSubSector] = useState("");
   const [size, setSize] = useState(""); // Generic | QSE | EME
-  const [setupStep, setSetupStep] = useState<"profile" | "upload">("profile");
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -694,88 +693,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     { value: "EME", label: "EME", detail: "Annual turnover below R10m" },
   ];
 
-  if (false && setupStep === "profile") {
-    return (
-      <div className="mx-auto max-w-md" data-testid="document-profile-step">
-        <div className="space-y-6">
-          {sectorOptions.length > 0 && (
-            <div>
-              <p className="mb-2 text-[12px] font-medium text-[#8e8e93]">Sector</p>
-              <div className="space-y-2">
-                {sectorOptions.map((s) => (
-                  <button
-                    key={s.code}
-                    type="button"
-                    onClick={() => {
-                      setSector(s.code);
-                      setSubSector("");
-                    }}
-                    className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition-colors ${
-                      sector === s.code
-                        ? "border-white/[0.18] bg-white/[0.06]"
-                        : "border-white/[0.08] bg-[#1c1c1e] hover:bg-[#222225]"
-                    }`}
-                    data-testid={`sector-option-${s.code}`}
-                  >
-                    <span className="text-[14px] font-medium text-white">{s.label}</span>
-                    {sector === s.code && <Check className="h-4 w-4 text-white" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {activeSector?.subSectors && (
-            <div>
-              <label className="mb-2 block text-[12px] font-medium text-[#8e8e93]">Sub-sector</label>
-              <select
-                value={subSector}
-                onChange={(e) => setSubSector(e.target.value)}
-                className="h-12 w-full rounded-2xl border border-white/[0.10] bg-[#0e0e10] px-4 text-[14px] text-white outline-none focus:border-white/30 focus:ring-4 focus:ring-white/[0.06]"
-                data-testid="subsector-select"
-              >
-                <option value="">Select</option>
-                {activeSector?.subSectors?.map((ss) => (
-                  <option key={ss.value} value={ss.value}>{ss.label}</option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div>
-            <p className="mb-2 text-[12px] font-medium text-[#8e8e93]">Organisation size</p>
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0e0e10] p-1">
-              {sizeOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setSize(option.value)}
-                  className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left transition-colors ${
-                    size === option.value ? "bg-[#1c1c1e] shadow-sm" : "hover:bg-white/[0.04]"
-                  }`}
-                  data-testid={`size-option-${option.value}`}
-                >
-                  <span>
-                    <span className="block text-[14px] font-semibold text-white">{option.label}</span>
-                    <span className="block text-[12px] text-[#8e8e93]">{option.detail}</span>
-                  </span>
-                  {size === option.value && <Check className="h-4 w-4 text-white" />}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setSetupStep("upload")}
-            className="h-12 w-full rounded-full bg-white text-[15px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-          >
-            Continue
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div data-testid="document-upload-start">
@@ -811,45 +728,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
       {/* Sector selector — drives the sector-aware document checklist and the
           scorecard's calculator. B-BBEE evidence differs by sector + size. */}
-      {false && sectorOptions.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 mb-3" data-testid="sector-selector">
-          <span className="text-[11px] text-[#8e8e93] uppercase tracking-wider">Sector</span>
-          <select
-            value={sector}
-            onChange={(e) => { setSector(e.target.value); setSubSector(""); }}
-            className="bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-2.5 py-1.5 text-[13px] text-[#e5e5ea] outline-none focus:border-violet-500/50"
-            data-testid="sector-select"
-          >
-            {sectorOptions.map((s) => (
-              <option key={s.code} value={s.code}>{s.label}</option>
-            ))}
-          </select>
-          {activeSector?.subSectors && (
-            <select
-              value={subSector}
-              onChange={(e) => setSubSector(e.target.value)}
-              className="bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-2.5 py-1.5 text-[13px] text-[#e5e5ea] outline-none focus:border-violet-500/50"
-              data-testid="subsector-select"
-            >
-              <option value="">Select…</option>
-              {activeSector?.subSectors?.map((ss) => (
-                <option key={ss.value} value={ss.value}>{ss.label}</option>
-              ))}
-            </select>
-          )}
-          <select
-            value={size}
-            onChange={(e) => setSize(e.target.value)}
-            className="bg-[#0e0e10] border border-[#2c2c2e] rounded-lg px-2.5 py-1.5 text-[13px] text-[#e5e5ea] outline-none focus:border-violet-500/50"
-            data-testid="size-select"
-            title="Entity size by turnover"
-          >
-            <option value="Generic">Large (Generic)</option>
-            <option value="QSE">QSE (R10m–R50m)</option>
-            <option value="EME">EME (&lt; R10m)</option>
-          </select>
-        </div>
-      )}
 
       {/* ACT 1 — the stage */}
       <motion.div
@@ -1328,56 +1206,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       )}
 
       {/* Expected documents — sector-aware checklist (below the stage) */}
-      {false && catalog && files.length === 0 && (
-        <div className="mt-3 rounded-[18px] border border-white/[0.07] bg-[#111113] p-3.5">
-          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[13px] font-semibold text-[#f2f2f7]">What to upload</p>
-              <p className="mt-0.5 text-[11px] text-[#8e8e93]">
-                Start with these documents. We read what we can and keep the rest ready for verification.
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[10.5px] font-medium text-[#d1d1d6]">
-                {activeSector?.label ?? sector}
-              </span>
-              {size !== "Generic" && (
-                <span className="rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[10.5px] font-medium text-[#d1d1d6]">
-                  {size}
-                </span>
-              )}
-            </div>
-          </div>
-          <p className="hidden">
-            Documents for <span className="text-[#8e8e93]">{activeSector?.label ?? sector}</span>
-            {size !== "Generic" ? ` · ${size}` : ""} — <span className="text-emerald-400/70">◆ we auto-extract</span>,{" "}
-            <span className="text-[#8e8e93]">◇ attach for your verifier</span>
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {catalog?.required_groups.map((g) => (
-              <div
-                key={g.key}
-                className="flex min-h-[44px] items-center gap-2.5 rounded-xl border border-white/[0.06] bg-white/[0.025] px-3 py-2 text-[12px] text-[#d1d1d6]"
-                data-testid={`docslot-${g.key}`}
-                title={g.note ?? ""}
-              >
-                <span className="hidden">
-                  {g.autoExtract ? "◆" : "◇"}
-                </span>
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#1c1c1e] text-[#a1a1a6]">
-                  {g.autoExtract ? <Check className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
-                </span>
-                <span className="min-w-0 flex-1 leading-4">{g.label}</span>
-                {g.required !== false && (
-                  <span className="shrink-0 rounded-full bg-[#2c2c2e] px-2 py-0.5 text-[10px] font-medium text-[#d1d1d6]">
-                    Required
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ACT 2 — scanning theatre */}
       {files.length > 0 && (!quote || parserCase || quoting) && (
