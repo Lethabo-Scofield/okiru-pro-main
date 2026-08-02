@@ -23,6 +23,7 @@ import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_d
 import { ParserService } from '../../parser/parser_service.js';
 import { documentsByElement } from '../../schemas/verification_document_matrix.js';
 import { extractCaseEntities } from '../services/caseExtraction.js';
+import { concurrentMap } from '../services/concurrentMap.js';
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 
 const logger = createLogger('ParserRoutes');
@@ -379,17 +380,30 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
 
   const repository = await getParserRepository();
   try {
-    const rawInputs: Awaited<ReturnType<typeof extractionInputsFromUpload>> = [];
-    for (let i = 0; i < files.length; i++) {
-      send('doc-start', { index: i, fileName: files[i].originalname });
+    // Files parse with BOUNDED CONCURRENCY, not one at a time — a 17-file pack
+    // was as slow as the sum of its parts because each scan's OCR/vision wait
+    // blocked every file behind it. Events still fire per file as each worker
+    // picks it up / finishes, so the progress UI is unchanged; results are
+    // flattened in INPUT ORDER (concurrentMap preserves it) so the
+    // first-document-wins reconciliation stays deterministic.
+    const fileLanes = (() => {
+      const configured = Number(process.env.PARSER_FILE_CONCURRENCY);
+      return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 3;
+    })();
+    const settled = await concurrentMap(files, fileLanes, async (file, i) => {
+      send('doc-start', { index: i, fileName: file.originalname });
       try {
-        const inputs = await extractionInputsFromUpload(files[i]);
-        rawInputs.push(...inputs);
-        send('doc-done', { index: i, fileName: files[i].originalname });
+        const inputs = await extractionInputsFromUpload(file);
+        send('doc-done', { index: i, fileName: file.originalname });
+        return inputs;
       } catch (err) {
-        send('doc-error', { index: i, fileName: files[i].originalname, message: (err as Error).message });
+        send('doc-error', { index: i, fileName: file.originalname, message: (err as Error).message });
+        return [];
       }
-    }
+    });
+    const rawInputs: Awaited<ReturnType<typeof extractionInputsFromUpload>> = settled
+      .filter((r) => r.status === 'fulfilled' && Array.isArray(r.value))
+      .flatMap((r) => r.value as Awaited<ReturnType<typeof extractionInputsFromUpload>>);
 
     send('resolving', { total: files.length });
     const service = new CaseParserService(repository);
