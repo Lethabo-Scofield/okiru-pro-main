@@ -34,6 +34,7 @@ import {
 import { lookupIndustryNormPercent } from "@/lib/industryNormLookup";
 import { SectionWorkbookEditor } from "@/components/workbook/SectionWorkbookEditor";
 import { WorkbookValidationPanel } from "@/components/workbook/WorkbookValidationPanel";
+import { ExtractionReviewModal, type CellUpdate } from "@/components/workbook/ExtractionReviewModal";
 import { CellValidationPopup, FIELD_LEARN_MORE } from "@/components/workbook/CellValidationPopup";
 import { NumericDateInput } from "@/components/ui/NumericDateInput";
 import { normalizeCellForColumn } from "@/lib/tabularNormalize";
@@ -2171,6 +2172,33 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           )}
         </div>
       </div>
+
+      {/* The AI reasoning surface: what was read, grounded fills to confirm,
+          conflicts to decide, missing fields grouped into single decisions.
+          Renders only on document-built workbooks (rows carrying provenance). */}
+      {workbook && (
+        <ExtractionReviewModal
+          sections={workbook.sections}
+          onNavigateToSection={selectSection}
+          onApplyCellUpdates={(sectionKey: string, updates: CellUpdate[]) => {
+            const current = (workbookRef.current?.sections[sectionKey]?.rows ?? []) as Row[];
+            const byRow = new Map<string, CellUpdate[]>();
+            for (const u of updates) {
+              const list = byRow.get(u.rowId) ?? [];
+              list.push(u);
+              byRow.set(u.rowId, list);
+            }
+            const nextRows = current.map((row) => {
+              const rowUpdates = byRow.get(String((row as Record<string, unknown>)._id ?? ""));
+              if (!rowUpdates) return row;
+              const next = { ...row } as Row;
+              for (const u of rowUpdates) (next as Record<string, unknown>)[u.column] = u.value;
+              return next;
+            });
+            handleRowsChange(sectionKey, nextRows);
+          }}
+        />
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         <div className="lg:hidden w-full space-y-3">
