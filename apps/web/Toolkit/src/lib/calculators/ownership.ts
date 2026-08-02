@@ -84,6 +84,7 @@ function resolveOwnershipTargets(config: CalculatorConfig) {
     designatedGroupsMax: oc?.designatedGroupsMax ?? 3,
     designatedGroupsTarget: oc?.designatedGroupsTarget ?? DEFAULT_DG_TARGET,
     subMinNetValue: oc?.subMinNetValue ?? 3.2,
+    esopBonusMaxPts: oc?.esopBonusMaxPts ?? 0,
     // QSE: single combined "Black New Entrants or Designated Groups" indicator —
     // a shareholder qualifies on EITHER criterion. (TOOLKIT-RESOLVED.md Q8.)
     combinedNewEntrantsDesignated: oc?.combinedNewEntrantsDesignated === true,
@@ -130,6 +131,13 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     // before making it live. Flagged in autoresearch/log/RISKS.md.
     // QSE combined indicator: a shareholder counts toward the designated-group
     // economic-interest indicator if it is a designated group OR a new entrant.
+    // NOTE: Annexe 100(D) 2.2.3 also recognises black participants in
+    // collective vehicles (ESOP/BBOS/co-ops/qualifying trusts) on this line,
+    // but qualification depends on the vehicle's DEED meeting Annexe 100(E) —
+    // not on its name. Name-based inference was tried and broke the
+    // certificate-verified Sandile QSE pin (own 27 → 28 vs BE13609), so scheme
+    // recognition stays an attested input: the practitioner marks the row
+    // isDesignatedGroup when the deed qualifies.
     const countsTowardDesignated = ot.combinedNewEntrantsDesignated
       ? (sh.isDesignatedGroup || !!sh.blackNewEntrant)
       : sh.isDesignatedGroup;
@@ -188,25 +196,53 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     const gradFactor = getGraduationFactor(yearsHeld);
     const graduated = gradFactor > 0 ? netValuePointsAgg / gradFactor : netValuePointsAgg;
     netValuePoints = clampScore(graduated, ot.netValueMaxPts);
+  } else if (outstandingDebt > 0) {
+    // Recorded acquisition debt with NO valuation cannot be netted — Annexe
+    // 100(C) needs the equity value to weigh the debt against. No number is
+    // invented: the points wait for a valuation.
+    netValuePoints = 0;
   } else {
-    // QSE fallback: when company value unknown, award net value from black ownership %
-    netValuePoints = totalBlackVoting >= 1.0
-      ? ot.netValueMaxPts
-      : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
+    // No valuation AND no recorded acquisition debt: Annexe 100(C) reduces
+    // exactly to black ECONOMIC INTEREST — net value % = blackEI × (1 − debt/V),
+    // and debt = 0 cancels the valuation out of the formula entirely. Scored
+    // against the time-graduated target (Annexe 100(E)), same as the valued
+    // path. This is why a verifier awards a debt-free 100% black owner full
+    // net value with no valuation on file. The old fallback scored from
+    // VOTING (the wrong measure) and ignored recorded debt.
+    const gradFactor = getGraduationFactor(yearsHeld);
+    const graduatedTarget = ot.economicInterestTarget * (gradFactor > 0 ? gradFactor : 1);
+    netValuePoints = clampScore(
+      safeRatio(totalEconomicInterest, graduatedTarget, ot.netValueMaxPts),
+      ot.netValueMaxPts,
+    );
   }
+
+  // ESOP/BBOS scheme bonus (Transport): points only when an employee-ownership
+  // scheme actually appears among the shareholders — detected from the row's
+  // own ownershipType/name, never assumed. This was previously conflated into
+  // the women-voting line, which awarded the scheme bonus to any entity with
+  // 10% black-women voting and no scheme at all.
+  const esopEvidence = shareholders.some((sh) => {
+    const t = `${String((sh as { ownershipType?: unknown }).ownershipType ?? "")} ${String(sh.name ?? "")}`.toLowerCase();
+    return /esop|bbos|employee share|broad.?based (ownership|scheme)/.test(t);
+  });
+  const esopBonus = ot.esopBonusMaxPts > 0 && esopEvidence ? ot.esopBonusMaxPts : 0;
 
   const subMinimumMet = netValuePoints >= ot.subMinNetValue;
   const totalPoints = votingRightsBlack + votingRightsBWO + economicInterestBlack + economicInterestBWO
-    + designatedGroups + newEntrants + netValuePoints;
+    + designatedGroups + newEntrants + netValuePoints + esopBonus;
 
   const subLines: OwnershipSubLine[] = [
     { name: 'Exercisable voting rights of black individuals', target: `${(ot.votingRightsTarget * 100).toFixed(0)}% + 1 vote`, weighting: ot.votingRightsMaxPts, score: votingRightsBlack },
     { name: 'Exercisable voting rights of black females', target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`, weighting: ot.womenVotingMaxPts, score: votingRightsBWO },
     { name: 'Economic interest of black individuals', target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`, weighting: ot.economicInterestMaxPts, score: economicInterestBlack },
-    { name: 'Economic interest of black females / ESOP bonus', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO },
+    { name: 'Economic interest of black females', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO },
     { name: ot.combinedNewEntrantsDesignated ? 'Economic interest of black new entrants or designated groups' : 'Economic interest of black designated groups or participants in ownership schemes', target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`, weighting: ot.designatedGroupsMax, score: designatedGroups },
     { name: 'Economic interest of black new entrants', target: `${(ot.newEntrantsTarget * 100).toFixed(0)}%`, weighting: ot.newEntrantsMaxPts, score: newEntrants },
     { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
+    ...(ot.esopBonusMaxPts > 0
+      ? [{ name: 'ESOP / broad-based scheme participation (bonus)', target: 'scheme in share register', weighting: ot.esopBonusMaxPts, score: esopBonus }]
+      : []),
   ];
 
   const total = round2(clampScore(totalPoints, ot.maxPts));

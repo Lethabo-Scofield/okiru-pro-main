@@ -136,7 +136,15 @@ function accumulateSpend(programs: TrainingProgram[]): SpendAccumulator {
     if (!isBlack) continue;
 
     const catCode = prog.categoryCode || mapLegacyCategory(prog.category);
-    const cost = prog.cost ?? prog.totalCost ?? 0;
+    // Itemized components must count when no explicit total exists — direct
+    // callers (workbook injection, tests) don't pass through
+    // hydrateTrainingProgramFromApi, which was the only place this sum lived.
+    const componentSum =
+      (prog.courseCost || 0) + (prog.travelCost || 0) + (prog.accommodationCost || 0) +
+      (prog.cateringCost || 0) + (prog.stationeryCost || 0) + (prog.facilityCost || 0) +
+      (prog.salaryCost || 0) + (prog.otherCosts || 0);
+    const explicit = prog.totalCost ?? prog.cost;
+    const cost = explicit != null && explicit > 0 ? explicit : componentSum;
     acc.byCategory[catCode] += cost;
     acc.blackPeople += cost;
     acc.totalBlackLearners++;
