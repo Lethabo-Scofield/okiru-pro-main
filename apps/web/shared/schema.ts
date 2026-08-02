@@ -25,6 +25,8 @@ export interface CalculatorConfig {
   ownership: {
     votingRightsMax: number;
     womenBonusMax: number;
+    /** ESOP/BBOS scheme bonus points — awarded only when scheme rows exist (Transport). */
+    esopBonusMaxPts?: number;
     economicInterestMax: number;
     netValueMax: number;
     targetEconomicInterest: number;

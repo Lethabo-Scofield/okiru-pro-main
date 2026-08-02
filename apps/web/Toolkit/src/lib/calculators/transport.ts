@@ -14,6 +14,13 @@ import { CATEGORY_LABELS, mapLegacyCategory, type SkillsResult, type SkillsSubLi
 export interface TransportPillarResult {
   score: number;
   maxPoints: number;
+  /**
+   * Per-indicator rows in the SAME shape the RCOGP breakdown renders — so the
+   * pillar page can show Transport clients the exact lines their score is made
+   * of. Before this, the breakdown page ran the RCOGP calculator and displayed
+   * sub-lines the Transport score never evaluates ("breakdowns don't link").
+   */
+  subLines?: Array<{ name: string; target: string; weighting: number; score: number }>;
 }
 
 const countBlack = (emps: Employee[]): number =>
@@ -60,10 +67,13 @@ export function calculateTransportQseManagement(
 
   const blackPct = pctOf(topMgmt, countBlack);
   const bwPct = pctOf(topMgmt, countBlackWomen);
-  let score = clampScore(safeRatio(blackPct, 0.501, 25), 25);
-  score += clampScore(safeRatio(bwPct, 0.25, 2), 2);
+  const subLines = [
+    { name: 'Black people in top management', target: '50.1%', weighting: 25, score: round2(clampScore(safeRatio(blackPct, 0.501, 25), 25)) },
+    { name: 'Black women in top management (bonus)', target: '25%', weighting: 2, score: round2(clampScore(safeRatio(bwPct, 0.25, 2), 2)) },
+  ];
+  const score = subLines.reduce((s, l) => s + l.score, 0);
 
-  const result = { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal };
+  const result = { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal, subLines };
   return result;
 }
 
@@ -149,18 +159,20 @@ export function calculateTransportLargeManagementControl(
   const senior = grouped['Senior'] || [];
   const middle = grouped['Middle'] || [];
 
-  let mc = 0;
-  mc += clampScore(safeRatio(pctOf(board, countBlack), 0.5, 1.5), 1.5);
-  mc += clampScore(safeRatio(pctOf(board, countBlackWomen), 0.25, 1.5), 1.5);
-  mc += clampScore(safeRatio(pctOf(exec, countBlack), 0.5, 1), 1);
-  mc += clampScore(safeRatio(pctOf(exec, countBlackWomen), 0.25, 1), 1);
-  mc += clampScore(safeRatio(pctOf(senior, countBlack), 0.4, 1.5), 1.5);
-  mc += clampScore(safeRatio(pctOf(senior, countBlackWomen), 0.2, 1.5), 1.5);
-  mc += clampScore(safeRatio(pctOf(middle, countBlack), 0.4, 1), 1);
-  mc += clampScore(safeRatio(pctOf(middle, countBlackWomen), 0.2, 1), 1);
-  mc += clampScore(safeRatio(pctOf(board, countBlack), 0.4, 1), 1); // Bonus Independent NEDs
+  const subLines = [
+    { name: 'Black board members (voting)', target: '50%', weighting: 1.5, score: round2(clampScore(safeRatio(pctOf(board, countBlack), 0.5, 1.5), 1.5)) },
+    { name: 'Black women board members', target: '25%', weighting: 1.5, score: round2(clampScore(safeRatio(pctOf(board, countBlackWomen), 0.25, 1.5), 1.5)) },
+    { name: 'Black executive directors', target: '50%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(exec, countBlack), 0.5, 1), 1)) },
+    { name: 'Black women executive directors', target: '25%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(exec, countBlackWomen), 0.25, 1), 1)) },
+    { name: 'Black senior top management', target: '40%', weighting: 1.5, score: round2(clampScore(safeRatio(pctOf(senior, countBlack), 0.4, 1.5), 1.5)) },
+    { name: 'Black women senior top management', target: '20%', weighting: 1.5, score: round2(clampScore(safeRatio(pctOf(senior, countBlackWomen), 0.2, 1.5), 1.5)) },
+    { name: 'Black other top management', target: '40%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(middle, countBlack), 0.4, 1), 1)) },
+    { name: 'Black women other top management', target: '20%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(middle, countBlackWomen), 0.2, 1), 1)) },
+    { name: 'Independent non-executive directors (bonus)', target: '40%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(board, countBlack), 0.4, 1), 1)) },
+  ];
+  const mc = subLines.reduce((s, l) => s + l.score, 0);
 
-  const result = { score: round2(clampScore(mc, maxTotal)), maxPoints: maxTotal };
+  const result = { score: round2(clampScore(mc, maxTotal)), maxPoints: maxTotal, subLines };
   return result;
 }
 

@@ -42,7 +42,10 @@ export function sectorConfigToTransportGenericCalculatorConfig(sc: SectorConfig)
     totalMaxPoints: sc.totalMaxPoints, // 108
     ownership: {
       votingRightsMax: own.votingRightsMaxPts,             // 3
-      womenBonusMax: own.womenVotingMaxPts,                // 4 (2 women-voting + 2 bonus ESOP/BBOS)
+      // Split from the old conflated 4: the 2 ESOP/BBOS bonus points require
+      // an employee-ownership scheme and must never ride on women-voting alone.
+      womenBonusMax: 2,                                    // women voting @10%
+      esopBonusMaxPts: 2,                                  // ESOP/BBOS scheme bonus — needs scheme rows
       economicInterestMax: own.economicInterestMaxPts,     // 4
       netValueMax: own.netValueMaxPts,                     // 7
       targetEconomicInterest: own.economicInterestTarget,  // 0.25

@@ -129,7 +129,12 @@ export function buildLakeTradingWorkbookSections(): Record<string, WorkbookSecti
       // projectWorkbookToClient (see Lake Trading Fix Plan §1 Bug 1).
       blackOwnership: sh.blackOwnership ?? 1,
       blackWomenOwnership: sh.blackWomenOwnership ?? 0.5,
-      isDesignatedGroup: Boolean(sh.isDesignatedGroup),
+      // The real filled Lake toolkit scores Ownership 25/25, which requires the
+      // "designated groups / participants in ownership schemes" line in full —
+      // the practitioner attested the Family Trust qualifies (Annexe 100(E)).
+      // Scheme qualification is an attested input, never name-inferred (see
+      // ownership.ts countsTowardDesignated note).
+      isDesignatedGroup: true,
       isNewEntrant: Boolean(sh.blackNewEntrant),
       yearsHeld: lakeTradingOwnership.yearsHeld ?? 0,
     },

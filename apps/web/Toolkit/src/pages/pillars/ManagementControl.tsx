@@ -1,6 +1,10 @@
 import React, { useState, useRef, useCallback, useMemo } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
+import {
+  calculateTransportLargeManagementControl,
+  calculateTransportQseManagement,
+} from "@toolkit/lib/calculators/transport";
 import type { EAPGroupBreakdown } from "@toolkit/lib/calculators/management";
 import { getProvinces } from "@toolkit/lib/calculators/eapTargets";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@toolkit/components/ui/card";
@@ -485,10 +489,25 @@ export default function ManagementControl() {
     (mcCfg?.middleMaxPts ?? 0) === 0 &&
     (mcCfg?.juniorMaxPts ?? 0) === 0;
   const mcScore = calculateManagementScore(management, calculatorConfig, client.eapProvince);
-  const mcTotalWeighting = mcScore.subLines.reduce((sum, sl) => sum + sl.weighting, 0);
+
+  // Transport clients are SCORED by the Transport calculators (store routing),
+  // so the breakdown must come from the SAME calculators — this page used to
+  // show RCOGP-shaped sub-lines and a 19-pt weighting for a client whose real
+  // MC score is the 27-pt (QSE) / 11-pt (Large) Transport scorecard
+  // ("breakdowns don't link to the system").
+  const isTransportClient = String(client.sectorCode ?? '').toUpperCase().includes('TRANSPORT');
+  const transportMc = isTransportClient
+    ? (isQse
+        ? calculateTransportQseManagement(management, calculatorConfig)
+        : calculateTransportLargeManagementControl(management, calculatorConfig))
+    : null;
+  const displaySubLines = transportMc?.subLines ?? mcScore.subLines;
+  const displayTotal = transportMc ? transportMc.score : mcScore.total;
+  const displayMax = transportMc ? transportMc.maxPoints : mcMax;
+  const mcTotalWeighting = displaySubLines.reduce((sum, sl) => sum + sl.weighting, 0);
 
   const eapLevelMap: Record<number, string> = {};
-  if (!smjNotAvailable) {
+  if (!smjNotAvailable && !transportMc) {
     mcScore.subLines.forEach((sl, idx) => {
       if (sl.weighting <= 0 || !sl.target.includes('(EAP)')) return;
       const name = sl.name.toLowerCase();
@@ -809,8 +828,8 @@ export default function ManagementControl() {
         <Card className="bg-primary text-primary-foreground shadow-md">
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <p className="text-xs font-medium uppercase tracking-wider mb-1 opacity-80">Total MC Score</p>
-            <p className="text-2xl font-bold font-mono">{mcScore.total.toFixed(2)}</p>
-            <p className="text-[10px] mt-0.5 opacity-70">of {mcMax}</p>
+            <p className="text-2xl font-bold font-mono">{displayTotal.toFixed(2)}</p>
+            <p className="text-[10px] mt-0.5 opacity-70">of {displayMax}</p>
           </CardContent>
         </Card>
         <Card className="bg-primary/5 border-primary/20" data-testid="card-total-annual-salary">
@@ -824,21 +843,21 @@ export default function ManagementControl() {
             <p className="text-[10px] text-muted-foreground mt-0.5">across {totalCount} employees</p>
           </CardContent>
         </Card>
-        <Card className="bg-primary/5 border-primary/20">
+        {!transportMc && (<Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Board</p>
             <p className="text-2xl font-bold font-mono text-primary">{(mcScore.boardVotingBlack + mcScore.boardVotingBWO).toFixed(2)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">of {boardMaxPts}</p>
           </CardContent>
-        </Card>
-        <Card className="bg-primary/5 border-primary/20">
+        </Card>)}
+        {!transportMc && (<Card className="bg-primary/5 border-primary/20">
           <CardContent className="p-4 flex flex-col items-center justify-center text-center">
             <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mb-1">Exec Mgmt</p>
             <p className="text-2xl font-bold font-mono text-primary">{(mcScore.execDirectorsBlack + mcScore.execDirectorsBWO + mcScore.otherExecBlack + mcScore.otherExecBWO).toFixed(2)}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">of {execMgmtMaxPts}</p>
           </CardContent>
-        </Card>
-        <Card className="border-border/50">
+        </Card>)}
+        {!transportMc && (<Card className="border-border/50">
           <CardContent className="p-4 grid grid-cols-2 gap-2 text-center">
             {smjNotAvailable ? (
               <>
@@ -880,7 +899,7 @@ export default function ManagementControl() {
               </>
             )}
           </CardContent>
-        </Card>
+        </Card>)}
       </div>
 
       <Card className="glass-panel">
@@ -890,17 +909,17 @@ export default function ManagementControl() {
               <CardTitle>Detailed Scorecard Breakdown</CardTitle>
               <CardDescription>
                 {pillarBreakdownSubtitle(
-                  mcScore.subLines,
+                  displaySubLines,
                   client,
                   calculatorConfig,
-                  'click EAP rows to see per-demographic breakdown',
+                  transportMc ? 'Transport sector scorecard — same calculator as the score' : 'click EAP rows to see per-demographic breakdown',
                 )}
               </CardDescription>
             </div>
-            <Badge variant="outline" className="text-xs">
+            {!transportMc && (<Badge variant="outline" className="text-xs">
               <Globe className="h-3 w-3 mr-1" />
               EAP: {mcScore.eapProvince || 'National'}
-            </Badge>
+            </Badge>)}
           </div>
         </CardHeader>
         <CardContent>
@@ -916,7 +935,7 @@ export default function ManagementControl() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {mcScore.subLines.map((sl, idx) => {
+                {displaySubLines.map((sl, idx) => {
                   const isNotAvailable = sl.weighting === 0 && sl.name.includes('NOT AVAILABLE');
                   const statsKeyByName: Record<string, keyof typeof mcScore.rawStats> = {
                     'Exercisable voting rights of black board members': 'boardBlackPct',

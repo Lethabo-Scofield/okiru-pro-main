@@ -76,7 +76,10 @@ export interface Shareholder {
   id: string;
   name: string;
   shareholderId?: string;              // ID/Registration Number
-  ownershipType: 'shareholder' | 'sale_of_assets' | 'equity_equivalent';
+  // Widened from the closed union: the workbook grid carries free-text types
+  // (ESOP / BBOS / trust …) that the ownership calculator reads for the
+  // scheme-bonus evidence check.
+  ownershipType: 'shareholder' | 'sale_of_assets' | 'equity_equivalent' | (string & {});
   
   // Ownership percentages (can be different from voting/economic)
   blackOwnership: number;

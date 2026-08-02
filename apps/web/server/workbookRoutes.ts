@@ -1041,7 +1041,10 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       blackNewEntrant: isNewEntrant,
       votingRightsPercent: votingPct,
       economicInterestPercent: eiPct,
-      ownershipType: "shareholder" as const,
+      // Pass the workbook's stated type through — the ownership calculator
+      // detects ESOP/BBOS scheme rows from it (the scheme bonus must never be
+      // awarded without a scheme actually appearing in the register).
+      ownershipType: s((r as any).ownershipType) || "shareholder",
     };
   }).filter((sh) => {
     // Drop summary / total / note rows the grid parser ingests below the shareholder
