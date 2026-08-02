@@ -282,6 +282,67 @@ const SED_CONTRIBUTION_TYPES = [
 ];
 
 /**
+ * Synonyms for contribution type (AI extraction / batch upload / paste) →
+ * the Codes' recognition-category vocabulary. Keys are synonymKey form
+ * (lower-case, alphanumeric only). Deliberately conservative: only wordings
+ * whose recognition category is unambiguous under Statement 400/500 Annexe C —
+ * an unmapped wording is rejected into review, never guessed.
+ */
+export const CONTRIBUTION_TYPE_MAP: Record<string, string> = {
+  // Grants, donations, sponsorships — the 100% benefit-factor grant class.
+  donation: "Grant Contribution",
+  donations: "Grant Contribution",
+  cashdonation: "Grant Contribution",
+  monetarydonation: "Grant Contribution",
+  grant: "Grant Contribution",
+  grants: "Grant Contribution",
+  grantfunding: "Grant Contribution",
+  sponsorship: "Grant Contribution",
+  sponsorships: "Grant Contribution",
+  bursary: "Grant Contribution",
+  bursaries: "Grant Contribution",
+  scholarship: "Grant Contribution",
+  scholarships: "Grant Contribution",
+  seedfunding: "Grant Contribution",
+  seedcapital: "Grant Contribution",
+  // Monetary support that is not stated to be a grant.
+  cash: "Other Monetary",
+  cashcontribution: "Other Monetary",
+  monetary: "Other Monetary",
+  monetarycontribution: "Other Monetary",
+  // Goods / in-kind.
+  inkind: "Other Non-Monetary",
+  inkinddonation: "Other Non-Monetary",
+  inkindcontribution: "Other Non-Monetary",
+  donationinkind: "Other Non-Monetary",
+  goodsdonated: "Other Non-Monetary",
+  goodsdonation: "Other Non-Monetary",
+  // Services and people time.
+  probono: "Professional Services",
+  probonoservices: "Professional Services",
+  freeservices: "Professional Services",
+  consultingservices: "Professional Services",
+  mentorship: "Human Resource Capacity",
+  mentoring: "Human Resource Capacity",
+  secondment: "Human Resource Capacity",
+  stafftime: "Human Resource Capacity",
+  volunteertime: "Human Resource Capacity",
+  // ESD-only instruments (SED lacks these options, so a SED row carrying one
+  // is still rejected into review — correctly).
+  loan: "Loan",
+  loans: "Loan",
+  softloan: "Loan",
+  interestfreeloan: "Loan",
+  guarantee: "Guarantee",
+  guarantees: "Guarantee",
+  earlypayment: "Payment Period Reduction",
+  promptpayment: "Payment Period Reduction",
+  shorterpaymentterms: "Payment Period Reduction",
+  paymenttermsreduction: "Payment Period Reduction",
+  paymentperiodreduction: "Payment Period Reduction",
+};
+
+/**
  * Short, plain-language guidance per SED contribution type, sourced from the
  * Amended Generic Codes (Statement 500) – Socio-Economic Development. Used in
  * the SED column tooltip and in the exported Excel "Instructions" sheet so

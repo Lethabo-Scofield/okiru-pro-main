@@ -119,3 +119,65 @@ describe('assessDocuments', () => {
     expect(r.anyUsable).toBe(false);
   });
 });
+
+/**
+ * The 87.93-vs-"0 found" bug: the AI-entity path attributes its yield as
+ * workbook rows carrying `_sourceFiles`, not as fields_extracted — so documents
+ * whose data was busy scoring on the next page showed as "nothing". Verdicts
+ * are now assessed against the merged sections.
+ */
+describe('assessDocuments — merged section-row attribution', () => {
+  const SECTIONS = {
+    ownership: {
+      rows: [
+        { _id: 'r1', shareholderName: 'N Dlamini', _sourceFiles: ['share_register.pdf'] },
+        { _id: 'r2', shareholderName: 'P Naidoo', _sourceFiles: ['share_register.pdf'] },
+        { _id: 'r3', shareholderName: 'T Molefe', _sourceFiles: ['share_register.pdf', 'ids.pdf'] },
+      ],
+    },
+    'skills-development': {
+      rows: [{ _id: 's1', learnerName: 'A Learner', _sourceFiles: ['training_report.xlsx'] }],
+    },
+    'company-information': { meta: { companyName: 'X' } },
+  };
+
+  it('a detected doc whose only yield is section rows is "found", summarised by its rows', () => {
+    const parserCase: any = {
+      documents_detected: [
+        { filename: 'share_register.pdf', document_type: 'Share Register' },
+      ],
+      fields_extracted: { 'share_register.pdf': {} },
+    };
+    const v = assessDocuments(parserCase, SECTIONS as any).verdicts.find(
+      (x) => x.filename === 'share_register.pdf',
+    )!;
+    expect(v.verdict).toBe('found');
+    expect(v.summary).toContain('3 shareholders');
+  });
+
+  it('a file only the AI path saw gets a synthesized verdict instead of vanishing', () => {
+    const r = assessDocuments({} as any, SECTIONS as any);
+    const training = r.verdicts.find((x) => x.filename === 'training_report.xlsx')!;
+    expect(training.verdict).toBe('found');
+    expect(training.summary).toContain('1 learner');
+    expect(r.anyUsable).toBe(true);
+  });
+
+  it('rows never outrank flags: a review-flagged doc with rows stays "confused"', () => {
+    const parserCase: any = {
+      documents_detected: [
+        {
+          filename: 'share_register.pdf',
+          document_type: 'Share Register',
+          status: 'review_required',
+          validation: { missing_fields: ['shareholding_percent'] },
+        },
+      ],
+    };
+    const v = assessDocuments(parserCase, SECTIONS as any).verdicts.find(
+      (x) => x.filename === 'share_register.pdf',
+    )!;
+    expect(v.verdict).toBe('confused');
+    expect(v.gaps.join(' ')).toMatch(/Shareholding Percent/i);
+  });
+});

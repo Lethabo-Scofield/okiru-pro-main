@@ -604,6 +604,93 @@ describe("completion pass — derivable required fields are filled, never fabric
   });
 });
 
+describe("no nameless people on the grid", () => {
+  it("adopts the name from an exact 13-digit ID match elsewhere in the pack", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        sourceFile: "share_certs.pdf",
+        element: "OWNERSHIP",
+        values: [{
+          field: "share_register",
+          value: [{ id_number: "9001010001087", shares_held: 40 }],
+        }],
+      }),
+      extraction({
+        sourceFile: "id_register.xlsx",
+        element: "MANAGEMENT_CONTROL",
+        values: [{
+          field: "employee_register",
+          value: [{ employee_name: "Nomvula Dlamini", id_number: "9001010001087", occupational_level: "Top Management" }],
+        }],
+      }),
+    ]);
+    expect(result.rows.ownership).toHaveLength(1);
+    expect(result.rows.ownership![0].shareholderName).toBe("Nomvula Dlamini");
+  });
+
+  it("parks an unresolvable nameless owner for review instead of creating it", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        sourceFile: "share_certs.pdf",
+        element: "OWNERSHIP",
+        values: [{
+          field: "share_register",
+          value: [
+            { shareholder_name: "V Naidoo", shares_held: 60 },
+            { id_number: "9001015001087", shares_held: 40 }, // ID never named anywhere
+          ],
+        }],
+      }),
+    ]);
+    expect(result.rows.ownership).toHaveLength(1);
+    expect(result.rows.ownership![0].shareholderName).toBe("V Naidoo");
+    const parked = result.rejected.find((r) => r.field === "shareholderName");
+    expect(parked).toBeDefined();
+    expect(parked!.detail).toContain("9001015001087");
+    expect(parked!.detail).toMatch(/parked for review/i);
+  });
+});
+
+describe("same-document exact duplicates collapse to one", () => {
+  it("collapses a verbatim duplicate emission and reports the collapse", () => {
+    const entry = {
+      beneficiary_name: "Essentially Edenvale",
+      contribution_type: "Grant Contribution",
+      percent_black_beneficiaries: "100%",
+      contribution_amount: "500",
+    };
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        sourceFile: "sed_register.xlsx",
+        element: "SED",
+        values: [
+          { field: "contribution_register", value: [entry, { ...entry }] },
+        ],
+      }),
+    ]);
+    expect(result.rows.sed).toHaveLength(1);
+    const finding = result.reconciliation.find((f) => f.section === "sed");
+    expect(finding?.message).toMatch(/collapsed to one/i);
+  });
+
+  it("keeps same-document rows that differ in any cell (real repeated donations)", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        sourceFile: "sed_register.xlsx",
+        element: "SED",
+        values: [{
+          field: "contribution_register",
+          value: [
+            { beneficiary_name: "OUTA", contribution_amount: "500", transaction_date: "2026-01-31" },
+            { beneficiary_name: "OUTA", contribution_amount: "500", transaction_date: "2026-02-28" },
+          ],
+        }],
+      }),
+    ]);
+    expect(result.rows.sed).toHaveLength(2);
+  });
+});
+
 describe("ledger-block attribute inheritance (same beneficiary only)", () => {
   it("inherits contributionType + % black to continuation rows of the same beneficiary", () => {
     const result = parserExtractionsToWorkbook([

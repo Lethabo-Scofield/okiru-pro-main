@@ -166,6 +166,21 @@ const ELEMENT_SCOPED: Record<string, Partial<Record<"ESD" | "SED", FieldTarget>>
   organisation: {
     SED: { section: "sed", column: "beneficiaryName" },
   },
+  // Transaction dates were unmapped, which dropped the one cell that tells two
+  // repeated donations to the same beneficiary apart (and that the exact-
+  // duplicate collapse relies on).
+  transaction_date: {
+    ESD: { section: "esd", column: "dateOfTransaction" },
+    SED: { section: "sed", column: "dateOfTransaction" },
+  },
+  date_of_transaction: {
+    ESD: { section: "esd", column: "dateOfTransaction" },
+    SED: { section: "sed", column: "dateOfTransaction" },
+  },
+  contribution_date: {
+    ESD: { section: "esd", column: "dateOfTransaction" },
+    SED: { section: "sed", column: "dateOfTransaction" },
+  },
 };
 
 /** Element name (matrix vocabulary) → the workbook section that element's grid rows belong in. */
