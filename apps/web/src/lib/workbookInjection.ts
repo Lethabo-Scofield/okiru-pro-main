@@ -26,6 +26,8 @@ import {
   DESIGNATION_MAP,
   OCC_LEVEL_MAP,
   BBBEE_LEVEL_MAP,
+  CONTRIBUTION_TYPE_MAP,
+  ESD_CATEGORY_MAP,
   type ColumnDef,
   type SectionDef,
 } from "@/components/workbook/sections";
@@ -96,6 +98,25 @@ function normaliseForColumn(columnKey: string, value: unknown): unknown {
   // Supplier size: "Exempted Micro Enterprise" → "EME", legacy "Large" → "Generic".
   if (columnKey === "currentSize") {
     if (SUPPLIER_SIZE_MAP[key]) return SUPPLIER_SIZE_MAP[key];
+  }
+
+  // Contribution type: "Donation" / "Sponsorship" / "In-kind" → the Codes'
+  // recognition categories (Statement 400/500). Unmapped wordings fall through
+  // to matchOption and reject into review — never guessed.
+  if (columnKey === "contributionType") {
+    if (CONTRIBUTION_TYPE_MAP[key]) return CONTRIBUTION_TYPE_MAP[key];
+    if (/in.?kind/i.test(text)) return "Other Non-Monetary";
+  }
+
+  // ESD category: "SD" / "ED" are too short for containment matching.
+  if (columnKey === "esdCategory") {
+    if (ESD_CATEGORY_MAP[key]) return ESD_CATEGORY_MAP[key];
+  }
+
+  // Gender: single-letter register shorthand.
+  if (columnKey === "gender") {
+    if (key === "m") return "Male";
+    if (key === "f") return "Female";
   }
 
   return value;

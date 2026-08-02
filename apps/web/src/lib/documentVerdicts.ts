@@ -115,11 +115,79 @@ function gapsFor(parserCase: ParserCaseLike, filename: string): string[] {
   return Array.from(out);
 }
 
+/** Minimal shape of the merged workbook section patches (rows carry provenance). */
+export interface SectionPatchLike {
+  rows?: unknown[];
+}
+
+const SECTION_NOUN: Record<string, [string, string]> = {
+  ownership: ['shareholder', 'shareholders'],
+  'management-control': ['manager', 'managers'],
+  'skills-development': ['learner', 'learners'],
+  procurement: ['supplier', 'suppliers'],
+  esd: ['ESD contribution', 'ESD contributions'],
+  sed: ['SED beneficiary', 'SED beneficiaries'],
+  'employment-equity': ['employee', 'employees'],
+};
+
+/** filename → section → row count, read from each row's own `_sourceFiles` provenance. */
+function sectionRowsByFile(
+  sections?: Record<string, SectionPatchLike>,
+): Map<string, Map<string, number>> {
+  const byFile = new Map<string, Map<string, number>>();
+  if (!sections) return byFile;
+  for (const [key, patch] of Object.entries(sections)) {
+    for (const row of patch?.rows ?? []) {
+      const src = (row as { _sourceFiles?: unknown } | null)?._sourceFiles;
+      if (!Array.isArray(src)) continue;
+      for (const f of src) {
+        const name = str(f);
+        if (!name) continue;
+        let m = byFile.get(name);
+        if (!m) {
+          m = new Map();
+          byFile.set(name, m);
+        }
+        m.set(key, (m.get(key) ?? 0) + 1);
+      }
+    }
+  }
+  return byFile;
+}
+
+function sectionBitsFor(counts: Map<string, number> | undefined): string[] {
+  if (!counts) return [];
+  const bits: string[] = [];
+  for (const [section, n] of counts) {
+    if (n <= 0) continue;
+    const noun = SECTION_NOUN[section];
+    if (noun) bits.push(`${n} ${n === 1 ? noun[0] : noun[1]}`);
+    else if (section !== 'company-information' && section !== 'financial-information') bits.push(`${n} row${n === 1 ? '' : 's'}`);
+  }
+  return bits;
+}
+
 /**
  * Assess every document in a resolved case.
+ *
+ * `sections` is the MERGED workbook patch (legacy mapper + AI-entity rows).
+ * The AI path attributes its rows via `_sourceFiles` on the row itself — a
+ * document whose only yield is section rows used to show as "nothing" here
+ * while its data was busy scoring 87 points on the next page.
  */
-export function assessDocuments(parserCase: ParserCaseLike): VerdictReport {
-  const detected = parserCase.documents_detected ?? [];
+export function assessDocuments(
+  parserCase: ParserCaseLike,
+  sections?: Record<string, SectionPatchLike>,
+): VerdictReport {
+  const detected = [...(parserCase.documents_detected ?? [])];
+  const rowsByFile = sectionRowsByFile(sections);
+
+  // Files the AI-entity path read that the deterministic case never detected
+  // still deserve a verdict — synthesize an entry for them.
+  const known = new Set(detected.map((d) => str(d.filename)));
+  for (const filename of rowsByFile.keys()) {
+    if (!known.has(filename)) detected.push({ filename, document_type: 'Extracted schedule' });
+  }
 
   const verdicts: DocumentVerdict[] = detected.map((doc) => {
     const filename = str(doc.filename);
@@ -127,26 +195,44 @@ export function assessDocuments(parserCase: ParserCaseLike): VerdictReport {
     const fields = parserCase.fields_extracted?.[filename] ?? {};
     const extractedCount = Object.keys(fields).length;
     const suppliedRows = (parserCase.supplier_rows ?? []).filter((r) => r.source_file === filename).length;
+    const sectionCounts = rowsByFile.get(filename);
+    const sectionRowCount = sectionCounts
+      ? Array.from(sectionCounts.values()).reduce((a, b) => a + b, 0)
+      : 0;
     const gaps = gapsFor(parserCase, filename);
-    const yieldedSomething = extractedCount > 0 || suppliedRows > 0;
+    const yieldedSomething = extractedCount > 0 || suppliedRows > 0 || sectionRowCount > 0;
 
     let verdict: EntityVerdict;
     if (doc.status === 'failed' || !yieldedSomething) {
       // Nothing usable came out — either it failed classification or it simply
       // carried no values we could take.
       verdict = 'none';
-    } else if (doc.status === 'passed' && gaps.length === 0) {
+    } else if (gaps.length === 0 && doc.status !== 'needs_review') {
+      // Clean yield: mapped values or workbook rows, nothing flagged. (The old
+      // rule additionally demanded status === 'passed', which no AI-path
+      // document carries — so nothing ever counted as found.)
       verdict = 'found';
     } else {
       // Read something, but the parser flagged it. Never claim 'found' here.
       verdict = 'confused';
     }
 
+    const baseSummary = summarise(parserCase, filename, documentType);
+    const rowBits = sectionBitsFor(sectionCounts);
+    const summary =
+      verdict === 'none'
+        ? 'nothing readable in this document'
+        : rowBits.length
+          ? (baseSummary === documentType || baseSummary === 'no readable values'
+              ? rowBits.join(' · ')
+              : `${baseSummary} · ${rowBits.join(' · ')}`)
+          : baseSummary;
+
     return {
       filename,
       documentType,
       verdict,
-      summary: verdict === 'none' ? 'nothing readable in this document' : summarise(parserCase, filename, documentType),
+      summary,
       gaps,
       confidence: typeof doc.overall_confidence === 'number' ? doc.overall_confidence : null,
     };

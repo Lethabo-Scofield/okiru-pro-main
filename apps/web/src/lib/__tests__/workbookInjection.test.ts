@@ -236,3 +236,41 @@ describe("required columns", () => {
     expect(Array.isArray(missing)).toBe(true);
   });
 });
+
+describe("contribution-type vocabulary — AI wordings land in the Codes' dropdown", () => {
+  // "the AI doesnt send the proper info to the dropdown expecting cells" — a
+  // donation is a Grant Contribution under Statement 500; rejecting it left the
+  // required cell empty and disconnected.
+  it("maps donation/sponsorship wordings to Grant Contribution on SED rows", () => {
+    for (const wording of ["Donation", "Cash donation", "Sponsorship", "Bursary"]) {
+      const result = injectIntoSection("sed", [{ field: "contributionType", value: wording }]);
+      expect(result.cells.contributionType, wording).toBe("Grant Contribution");
+    }
+  });
+
+  it("maps in-kind wordings to Other Non-Monetary", () => {
+    const result = injectIntoSection("sed", [{ field: "contributionType", value: "In-kind donation of goods" }]);
+    expect(result.cells.contributionType).toBe("Other Non-Monetary");
+  });
+
+  it("maps ESD instrument wordings (soft loan, early payment) to their options", () => {
+    expect(injectIntoSection("esd", [{ field: "contributionType", value: "Interest-free loan" }]).cells.contributionType).toBe("Loan");
+    expect(injectIntoSection("esd", [{ field: "contributionType", value: "Early payment" }]).cells.contributionType).toBe("Payment Period Reduction");
+  });
+
+  it("still rejects a wording with no unambiguous recognition category", () => {
+    const result = injectIntoSection("sed", [{ field: "contributionType", value: "Community upliftment" }]);
+    expect(result.cells.contributionType).toBeUndefined();
+    expect(result.rejected.some((r) => r.field === "contributionType")).toBe(true);
+  });
+
+  it("maps SD / ED shorthand into the esdCategory dropdown", () => {
+    expect(injectIntoSection("esd", [{ field: "esdCategory", value: "SD" }]).cells.esdCategory).toBe("Supplier Development");
+    expect(injectIntoSection("esd", [{ field: "esdCategory", value: "ED" }]).cells.esdCategory).toBe("Enterprise Development");
+  });
+
+  it("maps single-letter gender shorthand", () => {
+    const result = injectIntoSection("management-control", [{ field: "gender", value: "F" }]);
+    expect(result.cells.gender).toBe("Female");
+  });
+});

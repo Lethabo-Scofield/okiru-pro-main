@@ -677,8 +677,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       ...(sections["company-information"] ?? {}),
       meta: { ...(sections["company-information"]?.meta ?? {}), ...companyMeta },
     };
-    // Carry the per-document verdicts to the provisional score page.
-    const verdicts = parserCase ? assessDocuments(parserCase) : undefined;
+    // Carry the per-document verdicts to the provisional score page — assessed
+    // against the MERGED sections so rows the AI path attributed via
+    // _sourceFiles credit their source document.
+    const verdicts =
+      parserCase || Object.values(sections).some((s) => (s.rows?.length ?? 0) > 0)
+        ? assessDocuments(parserCase ?? {}, sections as Record<string, { rows?: unknown[] }>)
+        : undefined;
     void onCreate(companyName.trim(), sections, { verdicts });
   };
 

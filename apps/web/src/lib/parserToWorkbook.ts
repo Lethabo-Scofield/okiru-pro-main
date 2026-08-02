@@ -486,6 +486,10 @@ export function parserExtractionsToWorkbook(
     }
   }
 
+  // Collapse exact same-document duplicates BEFORE linking: a model emission
+  // repeated verbatim is the same evidence twice, not two transactions.
+  const duplicateFindings = dedupeExactDuplicateRows(rows);
+
   // Link before coverage: a certificate row enriched with its schedule row's
   // spend is complete; counted separately both halves would report gaps.
   const linked = linkWorkbookRows(rows);
@@ -493,10 +497,68 @@ export function parserExtractionsToWorkbook(
   // Completion pass: derive required fields from values ALREADY in the row and
   // drop identity-less fragments. The 64-file Thandanani pack produced 339
   // "Required" validation issues, most of them derivable — never fabricated.
-  completeWorkbookRows(linked.rows);
+  completeWorkbookRows(linked.rows, rejected);
 
   const coverage = huntRequiredFields(linked.rows, Array.from(unmapped), options);
-  return { rows: linked.rows, meta, rejected, coverage, reconciliation: linked.reconciliation };
+  return {
+    rows: linked.rows,
+    meta,
+    rejected,
+    coverage,
+    reconciliation: [...duplicateFindings, ...linked.reconciliation],
+  };
+}
+
+/**
+ * Collapse EXACT duplicate rows emitted from the same document. The model
+ * sometimes returns the same schedule twice (a region rendered twice, or the
+ * same table under two field names), and a verbatim duplicate from one file is
+ * the same evidence stated twice. Only collapses when EVERY non-blank cell
+ * agrees AND the provenance is identical — a genuine repeated line item almost
+ * always differs somewhere (date, reference, description); when it truly does
+ * not, the mergeDecision precedent applies: never inflate on our own judgement.
+ * Every collapse is reported so the user can restore a real repeat.
+ */
+function dedupeExactDuplicateRows(
+  rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
+): ReconciliationFinding[] {
+  const findings: ReconciliationFinding[] = [];
+  for (const [sectionKey, sectionRows] of Object.entries(rows)) {
+    const section = sectionKey as WorkbookSectionKey;
+    if (!sectionRows || sectionRows.length < 2) continue;
+    const seen = new Map<string, { row: WorkbookRow; dropped: number }>();
+    const kept: WorkbookRow[] = [];
+    for (const row of sectionRows) {
+      const signature = JSON.stringify([
+        (row._sourceFiles ?? []).slice().sort(),
+        Object.entries(row)
+          .filter(([key, value]) => !key.startsWith("_") && !cellBlank(value))
+          .map(([key, value]) => [key, String(value).trim().toLowerCase()])
+          .sort((a, b) => (a[0] < b[0] ? -1 : 1)),
+      ]);
+      const existing = seen.get(signature);
+      if (existing) {
+        existing.dropped += 1;
+        continue;
+      }
+      seen.set(signature, { row, dropped: 0 });
+      kept.push(row);
+    }
+    if (kept.length === sectionRows.length) continue;
+    rows[section] = kept;
+    for (const { row, dropped } of seen.values()) {
+      if (!dropped) continue;
+      const nameColumn = (LINK_KEY_COLUMNS[section] ?? [])[0];
+      const entity = String((nameColumn && row[nameColumn]) ?? "").trim() || "unnamed row";
+      findings.push({
+        section,
+        entity,
+        column: nameColumn ?? "",
+        message: `${entity}: ${dropped + 1} identical ${section} rows came out of ${row._sourceFiles?.[0] ?? "the same document"} — collapsed to one so the same evidence is not counted twice. If these are genuinely separate transactions, add a date or description to tell them apart.`,
+      });
+    }
+  }
+  return findings;
 }
 
 /**
@@ -515,7 +577,10 @@ export function parserExtractionsToWorkbook(
  *   the existing behaviour instead of leaving a Required error. Conservative:
  *   generic earns the FEWEST procurement points.
  */
-function completeWorkbookRows(rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>): void {
+function completeWorkbookRows(
+  rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
+  rejected: ParserToWorkbookResult["rejected"],
+): void {
   const splitName = (full: string): { name: string; surname: string } | null => {
     const trimmed = full.trim();
     if (!trimmed) return null;
@@ -577,17 +642,75 @@ function completeWorkbookRows(rows: Partial<Record<WorkbookSectionKey, WorkbookR
     }
   }
 
-  // Identity-less fragments carry nothing a person could complete — drop them.
-  if (rows.ownership) {
-    rows.ownership = rows.ownership.filter(
-      (r) => String(r.shareholderName ?? "").trim() || String(r.idNumber ?? "").trim(),
-    );
-  }
-  if (rows["management-control"]) {
-    rows["management-control"] = rows["management-control"].filter(
-      (r) => String(r.name ?? "").trim() || String(r.idNumber ?? "").trim(),
-    );
-  }
+  // Cross-section identity adoption: the SAME 13-digit ID on a NAMED row
+  // elsewhere in this pack names an ID-only row — exact ID equality, never a
+  // name guess. (An ID register names people the share certificate only IDs.)
+  const nameById = new Map<string, string>();
+  const idKey = (id: unknown): string => String(id ?? "").replace(/\s+/g, "");
+  const recordName = (id: unknown, name: string) => {
+    const key = idKey(id);
+    if (!/^\d{13}$/.test(key)) return;
+    const trimmed = name.replace(/\s+/g, " ").trim();
+    if (trimmed && !nameById.has(key)) nameById.set(key, trimmed);
+  };
+  for (const row of rows.ownership ?? []) recordName(row.idNumber, String(row.shareholderName ?? ""));
+  for (const row of rows["management-control"] ?? []) recordName(row.idNumber, `${String(row.name ?? "")} ${String(row.surname ?? "")}`);
+  for (const row of rows["skills-development"] ?? []) recordName(row.idNumber, String(row.learnerName ?? ""));
+
+  // A person-grid row with no NAME is not something anyone can complete or
+  // score — "2 owners without a name" is worse than an open item. Adopt the
+  // name from an exact ID match if the pack has one; otherwise PARK the row
+  // for review instead of rendering a nameless person. Nothing is silently
+  // dropped: every parked row is reported with the cells it carried.
+  const parkNameless = (
+    section: WorkbookSectionKey,
+    nameField: string,
+    hasName: (r: WorkbookRow) => boolean,
+    adoptName: (r: WorkbookRow, adopted: string) => void,
+  ) => {
+    const sectionRows = rows[section];
+    if (!sectionRows) return;
+    for (const row of sectionRows) {
+      if (hasName(row)) continue;
+      const adopted = nameById.get(idKey(row.idNumber));
+      if (adopted) adoptName(row, adopted);
+    }
+    const kept: WorkbookRow[] = [];
+    for (const row of sectionRows) {
+      if (hasName(row)) {
+        kept.push(row);
+        continue;
+      }
+      const carried = Object.keys(row).filter((k) => !k.startsWith("_") && !cellBlank(row[k]));
+      if (carried.length === 0) continue; // pure fragment — nothing to report
+      const id = String(row.idNumber ?? "").trim();
+      rejected.push({
+        field: nameField,
+        value: id || "(no identity)",
+        reason: "failed_validation",
+        detail: `${section} row with no name${id ? ` (ID ${id})` : ""} — parked for review rather than created nameless. It carried: ${carried.join(", ")}.`,
+        sourceFile: row._sourceFiles?.[0] ?? "",
+      });
+    }
+    rows[section] = kept;
+  };
+
+  parkNameless(
+    "ownership",
+    "shareholderName",
+    (r) => Boolean(String(r.shareholderName ?? "").trim()),
+    (r, adopted) => { r.shareholderName = adopted; },
+  );
+  parkNameless(
+    "management-control",
+    "name",
+    (r) => Boolean(String(r.name ?? "").trim()),
+    (r, adopted) => {
+      const split = splitName(adopted);
+      if (split) { r.name = split.name; r.surname = r.surname || split.surname; }
+      else r.name = adopted;
+    },
+  );
 }
 
 /**
