@@ -99,6 +99,11 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   bee_status_level: { section: "procurement", column: "bbbeeLevel" },
   bee_level: { section: "procurement", column: "bbbeeLevel" },
   certificate_recognition_level: { section: "procurement", column: "bbbeeLevel" },
+  // Supplier size (EME / QSE / Generic) — the schedule's own "Supplier
+  // Classification" column, needed for the EME/QSE procurement lines.
+  supplier_classification: { section: "procurement", column: "currentSize" },
+  supplier_size: { section: "procurement", column: "currentSize" },
+  current_size: { section: "procurement", column: "currentSize" },
   empowering_supplier: { section: "procurement", column: "empoweringSupplier" },
   empowering_supplier_confirmed: { section: "procurement", column: "empoweringSupplier" },
   claimed_spend_ex_vat: { section: "procurement", column: "spend" },
@@ -180,6 +185,16 @@ const ELEMENT_SCOPED: Record<string, Partial<Record<"ESD" | "SED", FieldTarget>>
   contribution_date: {
     ESD: { section: "esd", column: "dateOfTransaction" },
     SED: { section: "sed", column: "dateOfTransaction" },
+  },
+  date_of_contribution: {
+    ESD: { section: "esd", column: "dateOfTransaction" },
+    SED: { section: "sed", column: "dateOfTransaction" },
+  },
+  // The per-line description (bursaries, HIV, poverty alleviation …) — this is
+  // what distinguishes one monthly contribution to a beneficiary from the next.
+  description_of_contribution: {
+    ESD: { section: "esd", column: "contributionDescription" },
+    SED: { section: "sed", column: "descriptionOfSpend" },
   },
 };
 

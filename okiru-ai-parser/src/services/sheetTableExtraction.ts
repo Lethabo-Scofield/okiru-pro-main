@@ -50,13 +50,20 @@ const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; column
   },
   ESD: {
     field: 'supplier_rows',
-    columns: ['supplier_name', 'claimed_spend_ex_vat', 'bee_level', 'certificate_expiry_date'],
-    what: 'each supplier with the spend against them (a preferential-procurement spend schedule)',
+    // supplier_classification is the EME / QSE / Generic size — present in the
+    // client schedule and needed for the EME/QSE procurement lines.
+    columns: ['supplier_name', 'claimed_spend_ex_vat', 'bee_level', 'supplier_classification', 'certificate_expiry_date'],
+    what: 'each supplier with the spend against them (a preferential-procurement spend schedule); supplier_classification is the EME / QSE / Generic size',
   },
   SED: {
     field: 'beneficiary_rows',
-    columns: ['beneficiary_name', 'contribution_value', 'contribution_type', 'black_beneficiary_percentage_declared'],
-    what: 'each socio-economic development beneficiary and the contribution made to them',
+    // date_of_contribution + description distinguish the individual monthly
+    // contributions to one beneficiary. WITHOUT them, thirteen R400 grants to
+    // OUTA read as one identical row and collapse to a single R400 line — the
+    // schedule's whole value is its rows, so the fields that make each row
+    // distinct are required, not optional.
+    columns: ['beneficiary_name', 'contribution_value', 'contribution_type', 'black_beneficiary_percentage_declared', 'date_of_contribution', 'description_of_contribution'],
+    what: 'each socio-economic development contribution — one row per contribution line, so the SAME beneficiary appears once per dated contribution',
   },
 };
 
