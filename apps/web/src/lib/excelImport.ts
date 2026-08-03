@@ -1756,7 +1756,11 @@ function parseSupplierGridRows(matrix: SheetMatrix): WorkbookRow[] {
         : sizeNorm.includes("qse") ? "QSE"
         : sizeNorm.includes("large") || sizeNorm.includes("generic") ? "Generic"
         : sizeRaw || "Generic";
-    const blackPct = blackOwnIdx !== undefined ? parsePercent(row[blackOwnIdx]) ?? 100 : 100;
+    // PURITY RULE: black ownership that the schedule did not state is NOT assumed
+    // to be 100% — that inflated the procurement score with ownership the
+    // evidence never established. Unknown = 0 (non-inflating); the practitioner
+    // supplies the real figure.
+    const blackPct = blackOwnIdx !== undefined ? parsePercent(row[blackOwnIdx]) ?? 0 : 0;
     const womenPct = blackWomenIdx !== undefined ? parsePercent(row[blackWomenIdx]) ?? 0 : 0;
     out.push({
       _id: uuidv4(),

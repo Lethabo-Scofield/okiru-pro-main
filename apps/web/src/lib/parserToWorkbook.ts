@@ -643,11 +643,11 @@ function completeWorkbookRows(
     }
   }
 
-  for (const row of rows.procurement ?? []) {
-    if (!String(row.currentSize ?? "").trim() && String(row.supplierName ?? "").trim()) {
-      row.currentSize = "Generic";
-    }
-  }
+  // PURITY RULE: a supplier's size is NOT entailed by anything on the row, so it
+  // is never guessed. Defaulting unknown size to "Generic" wrote a value the
+  // evidence did not contain and quietly moved the procurement score. An unknown
+  // size stays blank and is surfaced as a coverage gap by reconcileEntity — the
+  // score reflects only what the documents actually established.
 
   // Cross-section identity adoption: the SAME 13-digit ID on a NAMED row
   // elsewhere in this pack names an ID-only row — exact ID equality, never a
