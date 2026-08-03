@@ -41,6 +41,46 @@ import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
 import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
+
+/** A value that is real text, not an HTML artifact or an empty placeholder. */
+function cleanText(v: unknown): string {
+  const s = String(v ?? "").trim();
+  return /<\/?[a-z]/i.test(s) || s.length < 2 ? "" : s;
+}
+
+/** The measured entity's name, from the richest source available. */
+function pickEntityName(data: any): string {
+  const ai = data?.ai_entities;
+  const resolved = cleanText(ai?.fields?.entity_name?.value ?? ai?.fields?.company_name?.value);
+  if (resolved) return resolved;
+  for (const e of ai?.extractions ?? []) {
+    for (const v of e?.values ?? []) {
+      if (/^(entity_name|company_name|measured_entity)$/i.test(String(v?.field ?? ""))) {
+        const c = cleanText(v?.value);
+        if (c) return c;
+      }
+    }
+  }
+  return cleanText(data?.calculator_payload?.["ownership.entity_name"]);
+}
+
+/** Every name/number the measured entity is known by — for the self-shareholder check. */
+function collectEntityAliases(data: any): string[] {
+  const out = new Set<string>();
+  const add = (v: unknown) => { const c = cleanText(v); if (c) out.add(c); };
+  const ai = data?.ai_entities;
+  add(ai?.fields?.entity_name?.value);
+  add(ai?.fields?.company_name?.value);
+  add(ai?.fields?.registration_number?.value);
+  add(data?.calculator_payload?.["ownership.entity_name"]);
+  add(data?.calculator_payload?.["company.registration_number"]);
+  for (const e of ai?.extractions ?? []) {
+    for (const v of e?.values ?? []) {
+      if (/^(entity_name|company_name|registration_number|registration|company_registration)$/i.test(String(v?.field ?? ""))) add(v?.value);
+    }
+  }
+  return Array.from(out);
+}
 import ExtractionConfidence from "./ExtractionConfidence";
 
 interface RequiredGroup {
@@ -525,9 +565,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       if (!data) throw new Error("The parser did not return a result.");
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
-      setParserCase(mergeCases(keptCase, data));
-      const entity = String((data as any).calculator_payload?.["ownership.entity_name"] ?? "").trim();
-      if (entity) setCompanyName((prev) => prev || entity);
+      const mergedCase = mergeCases(keptCase, data);
+      setParserCase(mergedCase);
+      // Auto-fill the company name from the extracted entity name — the
+      // resolved ai_entities field first (clean), then the raw extractions,
+      // then the legacy payload key. This both saves the user typing it and,
+      // crucially, gives reconciliation the registered name it needs.
+      const entity = pickEntityName(mergedCase);
+      if (entity) setCompanyName((prev) => prev.trim() || entity);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not read the documents");
     } finally {
@@ -695,7 +740,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     // person; a share carries its economic interest by flow-through; dates are
     // dates). Scoring only ever runs on the reconciled sections. The issue list
     // is the honest, plain-language explanation the review page renders.
-    const reconciled = reconcileEntity(sections as any, { sectorCode: sector, scorecardType: size });
+    const reconciled = reconcileEntity(sections as any, {
+      sectorCode: sector,
+      scorecardType: size,
+      // All the entity's names/numbers from the documents, so the self-
+      // shareholder check matches the registered name even when the user's
+      // display name differs.
+      entityAliases: [companyName.trim(), ...(parserCase ? collectEntityAliases(parserCase) : [])].filter(Boolean),
+    });
     const finalSections = reconciled.sections as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>;
 
     // Verdicts assessed against the RECONCILED sections so the ledger reflects

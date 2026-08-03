@@ -60,6 +60,9 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
   // this page (same sessionStorage convention as the Excel import marker).
   const [verdictReport, setVerdictReport] = useState<VerdictReport | null>(null);
   const [reconcile, setReconcile] = useState<ReconcileResult | null>(null);
+  // The per-document ledger is long; collapsed by default so it can't bury the
+  // Continue action. The reconciliation summary above already carries the gist.
+  const [showVerdicts, setShowVerdicts] = useState(false);
 
   useEffect(() => {
     if (!provisional || !companyId) return;
@@ -164,7 +167,9 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
 
   return (
     <div className="max-w-4xl mx-auto py-4 space-y-6" data-testid="workbook-score-summary">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      {/* Sticky action bar: the primary Continue is ALWAYS reachable, so the
+          review panels below can never hide it however far the user scrolls. */}
+      <div className="flex items-start justify-between gap-4 flex-wrap sticky top-0 z-20 -mx-4 px-4 py-3 border-b border-[#1e1e1e] bg-[#0a0a0a]/85 backdrop-blur-md">
         <div>
           <h2 className="text-[24px] font-bold text-white tracking-tight">
             {provisional ? "Your indicative B-BBEE score" : "Scorecard Summary"}
@@ -266,15 +271,24 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
               hiding them. Colour + shape, so the state survives greyscale. */}
           {provisional && verdictReport && verdictReport.verdicts.length > 0 && (
             <div className="rounded-2xl overflow-hidden" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }} data-testid="document-verdicts">
-              <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderBottom: "1px solid #1e1e1e" }}>
-                <p className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">What each document gave us</p>
+              <button
+                type="button"
+                onClick={() => setShowVerdicts((s) => !s)}
+                className="w-full px-5 py-4 flex items-center justify-between gap-3 flex-wrap text-left"
+                style={{ borderBottom: showVerdicts ? "1px solid #1e1e1e" : "none" }}
+                data-testid="toggle-document-verdicts"
+              >
+                <p className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest flex items-center gap-2">
+                  <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showVerdicts ? "rotate-90" : ""}`} />
+                  What each document gave us
+                </p>
                 <div className="flex items-center gap-3 text-[11px]">
                   <span className="text-[#30d158]">◼ {verdictReport.counts.found} found</span>
                   {verdictReport.counts.confused > 0 && <span className="text-[#ffd60a]">◆ {verdictReport.counts.confused} needs a look</span>}
                   {verdictReport.counts.none > 0 && <span className="text-[#ff453a]">● {verdictReport.counts.none} nothing</span>}
                 </div>
-              </div>
-              <div className="divide-y" style={{ borderColor: "#1e1e1e" }}>
+              </button>
+              {showVerdicts && <div className="divide-y" style={{ borderColor: "#1e1e1e" }}>
                 {verdictReport.verdicts.map((v) => (
                   <div key={v.filename} className="px-5 py-3 flex items-start gap-3" style={{ borderTop: "1px solid #141414" }}>
                     <span className="mt-1 shrink-0" style={{ color: VERDICT_COLOR[v.verdict], fontSize: 10 }}>
@@ -295,7 +309,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
                     </div>
                   </div>
                 ))}
-              </div>
+              </div>}
               {/* Requote — argued from the gaps above, priced only on new files. */}
               <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderTop: "1px solid #1e1e1e", background: "rgba(167,139,250,.05)" }}>
                 <p className="text-[12px] text-[#a1a1a6] max-w-[46ch]">

@@ -253,27 +253,46 @@ function sectionLabel(key: string): string {
 // ── Pass 3: WELL-FORMEDNESS ───────────────────────────────────────────────
 const CATEGORY_LABEL = /\b(hiv|aids|poverty|awareness|education|bursar|housing|community|initiative|alleviation|development)\b/i;
 
-function enforceWellFormedness(sections: WorkbookSections, summary: EntitySummary, issues: ReconciliationIssue[]): void {
-  // The measured entity is not a member of its own shareholder set.
+function enforceWellFormedness(
+  sections: WorkbookSections,
+  summary: EntitySummary,
+  issues: ReconciliationIssue[],
+  entityAliases: string[] = [],
+): void {
+  // The measured entity is not a member of its own shareholder set. Match a
+  // shareholder against EVERY name the entity is known by — the display name
+  // plus the registered names/numbers from the documents — because the register
+  // lists the entity under its registered name ("… Packers and Hauliers cc"),
+  // not the display name the user typed ("Thandanani Transport").
+  const nameKeys = new Set<string>();
+  const numberKeys = new Set<string>();
+  for (const alias of [summary.companyName, ...entityAliases]) {
+    const s = str(alias);
+    if (!s) continue;
+    if (/^\d[\d/\s-]{4,}$/.test(s)) numberKeys.add(s.replace(/[\s/-]/g, "")); // a registration number
+    else {
+      const k = normaliseEntityName(s);
+      if (k) nameKeys.add(k);
+    }
+  }
   const own = sections.ownership?.rows;
-  if (own && summary.companyName) {
-    const companyKey = normaliseEntityName(summary.companyName);
-    const before = own.length;
-    const removed: WorkbookRow[] = [];
-    sections.ownership!.rows = own.filter((r) => {
-      const isSelf = companyKey && normaliseEntityName(r.shareholderName) === companyKey;
-      if (isSelf) removed.push(r);
-      return !isSelf;
-    });
+  if (own && (nameKeys.size > 0 || numberKeys.size > 0)) {
+    const isSelf = (r: WorkbookRow): boolean => {
+      if (nameKeys.has(normaliseEntityName(r.shareholderName))) return true;
+      const reg = str(r.registrationNumber ?? r.idNumber).replace(/[\s/-]/g, "");
+      return reg.length > 4 && numberKeys.has(reg);
+    };
+    const removed = own.filter(isSelf);
     if (removed.length > 0) {
+      sections.ownership!.rows = own.filter((r) => !isSelf(r));
       const shares = removed.map((r) => str(r.numberOfShares ?? r.shares ?? r.shareholding)).filter(Boolean).join(", ");
+      const label = str(removed[0].shareholderName) || summary.companyName;
       issues.push({
         id: nextId(), invariant: "well-formedness", severity: "resolved", section: "ownership",
-        entity: summary.companyName,
-        statement: `Removed "${summary.companyName}" from its own shareholder list${shares ? ` (it was listed holding ${shares})` : ""} — a company cannot own itself.`,
+        entity: label,
+        statement: `Removed "${label}" from its own shareholder list${shares ? ` (it was listed holding ${shares})` : ""} — a company cannot own itself.`,
       });
     }
-    void before;
   }
 
   // A row with no ownership signal at all (no %, no shares) is not a shareholder
@@ -424,7 +443,7 @@ export function reconcileEntity(input: WorkbookSections, opts: ReconcileOptions 
 
   normaliseRepresentation(sections, issues);
   reconcileIdentity(sections, issues);
-  enforceWellFormedness(sections, summary, issues);
+  enforceWellFormedness(sections, summary, issues, opts.entityAliases ?? []);
   reconcileOwnership(sections, summary, issues);
 
   summary.employeeCount = (sections["management-control"]?.rows ?? sections.employees?.rows ?? []).length;
