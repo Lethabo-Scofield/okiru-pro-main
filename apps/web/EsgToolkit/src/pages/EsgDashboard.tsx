@@ -5,6 +5,12 @@ import { toolkitPillarHref } from "@/lib/esg/esgToolkitNav";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { formatEsgPercent } from "@/lib/esgCalculators";
 import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
+import {
+  ESG_SELECTED_TOPICS_CELL,
+  computeScopedSummary,
+  parseSelectedTopics,
+} from "@/lib/esg/esgTopicScope";
+import { EsgReportScopePanel } from "../components/EsgReportScopePanel";
 import { EsgToolkitValidationStrip } from "../components/EsgToolkitValidationStrip";
 import { useEsgStore } from "../lib/esgStore";
 import { computeEsgDashboard } from "../lib/calculators/dashboard";
@@ -41,8 +47,17 @@ function PillarTable({ rows }: { rows: EsgPillarRow[] }) {
 
 export default function EsgDashboard() {
   const { companyId, workbook, scorecard, submittedAt, seedDemo, load } = useEsgStore();
+  const reportMode = useEsgStore((s) => s.getReportMode());
+  const topicsCsv = useEsgStore(
+    (s) => s.workbook?.sections?.assumptions?.cells?.[ESG_SELECTED_TOPICS_CELL],
+  );
+  const selectedTopics = useMemo(() => parseSelectedTopics(topicsCsv), [topicsCsv]);
   const [submitting, setSubmitting] = useState(false);
   const dash = useMemo(() => (workbook ? computeEsgDashboard(workbook) : null), [workbook]);
+  const scoped = useMemo(
+    () => (reportMode === "topic" ? computeScopedSummary(scorecard, selectedTopics) : null),
+    [reportMode, scorecard, selectedTopics],
+  );
 
   const loadGolden = async () => {
     if (!companyId) return;
@@ -80,15 +95,23 @@ export default function EsgDashboard() {
         </p>
       </header>
 
+      <EsgReportScopePanel />
+
       <div className="esg-glass p-5 flex flex-wrap items-center gap-6">
         <div>
           <div
             className="text-[52px] font-bold tracking-tight leading-none text-[var(--esg-acc-e)]"
             data-testid="esg-overall-score"
           >
-            {scorecard ? formatEsgPercent(scorecard.overallPercent) : "—"}
+            {scoped
+              ? formatEsgPercent(scoped.overallPercent)
+              : scorecard
+                ? formatEsgPercent(scorecard.overallPercent)
+                : "—"}
           </div>
-          <div className="text-[11px] text-[var(--esg-text3)] mt-1">Overall ESG (D9)</div>
+          <div className="text-[11px] text-[var(--esg-text3)] mt-1">
+            {scoped ? "Overall — selected topics" : "Overall ESG (D9)"}
+          </div>
         </div>
         <div className="flex-1 min-w-[200px] grid grid-cols-3 gap-3">
           {(
@@ -98,14 +121,17 @@ export default function EsgDashboard() {
               { key: "governance" as const, label: "Governance", color: "var(--esg-acc-g)" },
             ] as const
           ).map((p) => {
-            const pts = scorecard?.[p.key]?.score;
-            const max = ESG_PILLAR_MAX[p.key];
+            const pts = scoped ? scoped.pillars[p.key].score : scorecard?.[p.key]?.score;
+            const max = scoped ? scoped.pillars[p.key].max : ESG_PILLAR_MAX[p.key];
             const href = toolkitPillarHref(p.key);
+            const outOfScope = Boolean(scoped && scoped.pillars[p.key].max === 0);
             return (
               <Link
                 key={p.key}
                 href={href}
-                className="esg-glass-sm p-3 block hover:bg-white/[0.04] transition-colors cursor-pointer"
+                className={`esg-glass-sm p-3 block hover:bg-white/[0.04] transition-colors cursor-pointer ${
+                  outOfScope ? "opacity-40" : ""
+                }`}
                 data-testid={`esg-pillar-${p.key}`}
                 data-esg-pillar-href={href}
               >
@@ -113,13 +139,27 @@ export default function EsgDashboard() {
                   {p.label}
                 </div>
                 <div className="text-[20px] font-bold mt-1" style={{ color: p.color }}>
-                  {pts != null ? pts.toFixed(1) : "—"}
-                  <span className="text-[12px] text-[var(--esg-text3)] font-normal"> / {max}</span>
+                  {outOfScope ? (
+                    <span className="text-[12px] text-[var(--esg-text3)] font-normal">
+                      Not in scope
+                    </span>
+                  ) : (
+                    <>
+                      {pts != null ? pts.toFixed(1) : "—"}
+                      <span className="text-[12px] text-[var(--esg-text3)] font-normal"> / {max}</span>
+                    </>
+                  )}
                 </div>
               </Link>
             );
           })}
         </div>
+        {scoped ? (
+          <p className="w-full text-[10px] text-[var(--esg-text3)] -mt-2" data-testid="esg-scoped-note">
+            Scores above reflect only your selected topics. The full framework-parity scorecard
+            still powers the workbook and its export.
+          </p>
+        ) : null}
       </div>
 
       {dash?.kpis?.length ? (

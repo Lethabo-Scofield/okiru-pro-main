@@ -1,4 +1,5 @@
 import type React from "react";
+import { useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { cn } from "@toolkit/lib/utils";
 import {
@@ -13,6 +14,12 @@ import {
   type EsgToolkitNavSubItem,
   type EsgToolkitPillar,
 } from "@/lib/esg/esgToolkitNav";
+import {
+  ESG_SELECTED_TOPICS_CELL,
+  computeScopedSummary,
+  parseSelectedTopics,
+  topicNavVisibility,
+} from "@/lib/esg/esgTopicScope";
 import { useEsgStore } from "../../lib/esgStore";
 
 function isActivePath(location: string, href: string): boolean {
@@ -206,6 +213,19 @@ const PILLAR_SECTION_TITLES: Record<EsgToolkitPillar, string> = {
 export function EsgSidebar() {
   const [location] = useLocation();
   const scorecard = useEsgStore((s) => s.scorecard);
+  const reportMode = useEsgStore((s) => s.getReportMode());
+  // Select the raw CSV cell (a stable primitive) — getSelectedTopics() builds a
+  // fresh array per call, which as a zustand selector re-renders forever.
+  const topicsCsv = useEsgStore(
+    (s) => s.workbook?.sections?.assumptions?.cells?.[ESG_SELECTED_TOPICS_CELL],
+  );
+  const selectedTopics = useMemo(() => parseSelectedTopics(topicsCsv), [topicsCsv]);
+
+  const inScope = (id: string) => topicNavVisibility(id, reportMode, selectedTopics);
+  const scoped = useMemo(
+    () => (reportMode === "topic" ? computeScopedSummary(scorecard, selectedTopics) : null),
+    [reportMode, scorecard, selectedTopics],
+  );
 
   return (
     <nav
@@ -213,32 +233,38 @@ export function EsgSidebar() {
       data-testid="esg-sidebar"
     >
       <NavSectionHeader title="Overview" />
-      {ESG_TOOLKIT_OVERVIEW_NAV.map((item) => (
+      {ESG_TOOLKIT_OVERVIEW_NAV.filter((item) => inScope(item.id)).map((item) => (
         <NavOverviewLink key={item.id} item={item} location={location} />
       ))}
 
-      {ESG_TOOLKIT_PILLAR_NAV.map((pillar, idx) => (
-        <div key={pillar.id}>
-          <NavDivider />
-          <NavSectionHeader
-            title={PILLAR_SECTION_TITLES[pillar.pillar]}
-            href={
-              pillar.pillar === "e"
-                ? ESG_TOOLKIT_PILLAR_HREFS.environmental
-                : pillar.pillar === "s"
-                  ? ESG_TOOLKIT_PILLAR_HREFS.social
-                  : pillar.pillar === "g"
-                    ? ESG_TOOLKIT_PILLAR_HREFS.governance
-                    : undefined
-            }
-          />
-          <NavPillarButton item={pillar} location={location} />
-        </div>
-      ))}
+      {ESG_TOOLKIT_PILLAR_NAV.filter((pillar) => inScope(pillar.id)).map((pillar) => {
+        const visiblePillar: EsgToolkitNavItem = {
+          ...pillar,
+          children: pillar.children?.filter((c) => inScope(c.id)),
+        };
+        return (
+          <div key={pillar.id}>
+            <NavDivider />
+            <NavSectionHeader
+              title={PILLAR_SECTION_TITLES[pillar.pillar]}
+              href={
+                pillar.pillar === "e"
+                  ? ESG_TOOLKIT_PILLAR_HREFS.environmental
+                  : pillar.pillar === "s"
+                    ? ESG_TOOLKIT_PILLAR_HREFS.social
+                    : pillar.pillar === "g"
+                      ? ESG_TOOLKIT_PILLAR_HREFS.governance
+                      : undefined
+              }
+            />
+            <NavPillarButton item={visiblePillar} location={location} />
+          </div>
+        );
+      })}
 
       <NavDivider />
       <NavSectionHeader title="Data" />
-      {ESG_TOOLKIT_DATA_NAV.map((item) => (
+      {ESG_TOOLKIT_DATA_NAV.filter((item) => inScope(item.id)).map((item) => (
         <NavPillarButton key={item.id} item={item} location={location} />
       ))}
 
@@ -248,8 +274,18 @@ export function EsgSidebar() {
             Live totals
           </div>
           <div className="text-[11px] text-[var(--esg-text2)] tabular-nums">
-            Overall {scorecard.overallPercent.toFixed(0)}%
+            {scoped
+              ? `In scope ${scoped.overallPercent.toFixed(0)}%`
+              : `Overall ${scorecard.overallPercent.toFixed(0)}%`}
           </div>
+          {scoped ? (
+            <div
+              className="text-[10px] text-[var(--esg-text3)] mt-1 tabular-nums"
+              data-testid="esg-sidebar-topic-count"
+            >
+              {scoped.selectedCount} of {scoped.totalCount} topics selected
+            </div>
+          ) : null}
         </div>
       ) : null}
     </nav>

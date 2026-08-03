@@ -6,8 +6,14 @@ import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { API_BASE } from "@toolkit/lib/config";
 import { computeEsgScores, formatEsgPercent, ESG_PILLAR_MAX } from "@/lib/esgCalculators";
+import {
+  ESG_TOPIC_PILLARS,
+  computeScopedSummary,
+  readReportScopeFromCells,
+} from "@/lib/esg/esgTopicScope";
 import { esgCreateHref, esgToolkitHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import { fetchEsgWorkbook, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { computeEsgScorecard } from "../../EsgToolkit/src/lib/calculators";
 import "@/styles/esg-glass.css";
 
 export default function EsgScoreSummary() {
@@ -51,6 +57,17 @@ export default function EsgScoreSummary() {
   }, [companyId, navigate]);
 
   const scores = useMemo(() => computeEsgScores(workbook), [workbook]);
+  const scope = useMemo(
+    () => readReportScopeFromCells(workbook?.sections?.assumptions?.cells),
+    [workbook],
+  );
+  const scoped = useMemo(
+    () =>
+      scope.mode === "topic" && workbook
+        ? computeScopedSummary(computeEsgScorecard(workbook), scope.selectedTopics)
+        : null,
+    [scope, workbook],
+  );
 
   const openToolkit = () => {
     navigate(esgToolkitHref(companyId));
@@ -120,16 +137,24 @@ export default function EsgScoreSummary() {
                 <div className="flex items-center gap-2 mb-2">
                   <Award className="h-5 w-5 text-[var(--esg-acc-e)]" />
                   <span className="text-[11px] uppercase tracking-wider text-[var(--esg-text3)]">
-                    Overall
+                    {scoped ? "Overall — selected topics" : "Overall"}
                   </span>
                 </div>
                 <div
                   className="text-[48px] font-bold text-[var(--esg-acc-e)] leading-none"
                   data-testid="esg-summary-overall"
                 >
-                  {scores ? formatEsgPercent(scores.overallPercent) : "—%"}
+                  {scoped
+                    ? formatEsgPercent(scoped.overallPercent)
+                    : scores
+                      ? formatEsgPercent(scores.overallPercent)
+                      : "—%"}
                 </div>
-                <div className="text-[11px] text-[var(--esg-text3)] mt-2">Overall ESG score</div>
+                <div className="text-[11px] text-[var(--esg-text3)] mt-2">
+                  {scoped
+                    ? `Overall ESG score across ${scoped.selectedCount} selected topic${scoped.selectedCount === 1 ? "" : "s"}`
+                    : "Overall ESG score"}
+                </div>
               </div>
 
               <div className="grid sm:grid-cols-3 gap-3">
@@ -137,34 +162,79 @@ export default function EsgScoreSummary() {
                   [
                     {
                       key: "E",
+                      pillar: "environmental" as const,
                       points: scores?.environmental,
                       max: ESG_PILLAR_MAX.environmental,
                       color: "var(--esg-acc-e)",
                     },
                     {
                       key: "S",
+                      pillar: "social" as const,
                       points: scores?.social,
                       max: ESG_PILLAR_MAX.social,
                       color: "var(--esg-acc-s)",
                     },
                     {
                       key: "G",
+                      pillar: "governance" as const,
                       points: scores?.governance,
                       max: ESG_PILLAR_MAX.governance,
                       color: "var(--esg-acc-g)",
                     },
                   ] as const
-                ).map((p) => (
-                  <div key={p.key} className="esg-glass-sm p-4" data-testid={`esg-summary-pillar-${p.key}`}>
-                    <div className="text-[10px] uppercase tracking-wider text-[var(--esg-text3)]">
-                      {p.key} pillar
+                ).map((p) => {
+                  const points = scoped ? scoped.pillars[p.pillar].score : p.points;
+                  const max = scoped ? scoped.pillars[p.pillar].max : p.max;
+                  const outOfScope = Boolean(scoped && max === 0);
+                  return (
+                    <div key={p.key} className="esg-glass-sm p-4" data-testid={`esg-summary-pillar-${p.key}`}>
+                      <div className="text-[10px] uppercase tracking-wider text-[var(--esg-text3)]">
+                        {p.key} pillar
+                      </div>
+                      <div className="text-[22px] font-bold mt-1" style={{ color: p.color }}>
+                        {outOfScope
+                          ? "Not in scope"
+                          : points != null
+                            ? `${points.toFixed(1)} / ${max}`
+                            : `— / ${max}`}
+                      </div>
                     </div>
-                    <div className="text-[22px] font-bold mt-1" style={{ color: p.color }}>
-                      {p.points != null ? `${p.points.toFixed(1)} / ${p.max}` : `— / ${p.max}`}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {scoped ? (
+                <div className="esg-glass p-5" data-testid="esg-summary-topics-covered">
+                  <div className="text-[11px] uppercase tracking-wider text-[var(--esg-text3)] mb-3">
+                    Topics covered in this report
+                  </div>
+                  <div className="space-y-3">
+                    {ESG_TOPIC_PILLARS.map((group) => {
+                      const covered = group.topics.filter((t) =>
+                        scope.selectedTopics.includes(t.id),
+                      );
+                      if (!covered.length) return null;
+                      return (
+                        <div key={group.pillar} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                          <span
+                            className="text-[11px] font-semibold shrink-0"
+                            style={{ color: `var(${group.accentVar})` }}
+                          >
+                            {group.label}:
+                          </span>
+                          <span className="text-[12px] text-[var(--esg-text2)]">
+                            {covered.map((t) => t.label).join(" · ")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-[var(--esg-text3)] mt-4">
+                    This summary is organised by sustainability topic and reported voluntarily — it
+                    does not claim alignment with any named standard.
+                  </p>
+                </div>
+              ) : null}
 
               <div className="flex flex-wrap gap-3 pt-2">
                 <button
