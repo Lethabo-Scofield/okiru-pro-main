@@ -101,9 +101,20 @@ function summarise(
  * both wrong and alarming: the values were read fine; the parser was only unsure
  * what to *call* the document. These are filtered out of the read-gap list.
  */
-function isClassificationNote(t: string): boolean {
+export function isClassificationNote(t: string): boolean {
   return /\b(document.?type|classification|candidates are too close|confidence (is )?(below|requires))\b/i.test(t)
     || /below (the )?review threshold|requires human review/i.test(t);
+}
+
+/**
+ * Internal plumbing terms that must never surface to a user as a "gap". These
+ * are workbook-internal section/validation names (Reconcile, Underlying, the
+ * Ownership-chain sheets, dropdown/schema checks) — "Couldn't read Reconcile,
+ * Underlying" is meaningless to a client and reads as a broken product.
+ */
+export function isInternalJargon(t: string): boolean {
+  return /\b(reconcile|underlying|worksheet|dropdown|schema|ownership.chain|not found in the source)\b/i.test(t)
+    && !/\b(certificate|shareholder|supplier|manager|employee|spend|level|ownership %|black)\b/i.test(t);
 }
 
 /** Everything the parser could not READ out of this document (not how it was classified). */
@@ -112,16 +123,18 @@ function gapsFor(parserCase: ParserCaseLike, filename: string): string[] {
   const review = (parserCase.documents_needing_review ?? []).find((r) => r.filename === filename);
 
   const out = new Set<string>();
-  for (const f of detected?.validation?.missing_fields ?? []) out.add(humanizeField(f));
+  for (const f of detected?.validation?.missing_fields ?? []) {
+    if (!isInternalJargon(f)) out.add(humanizeField(f));
+  }
   for (const raw of [
     ...(detected?.validation?.errors ?? []),
     ...(detected?.validation?.warnings ?? []),
     ...(review?.reasons ?? []),
   ]) {
     const t = str(raw);
-    if (!t || isClassificationNote(t)) continue;
+    if (!t || isClassificationNote(t) || isInternalJargon(t)) continue;
     const m = /^(.*)\smissing$/i.exec(t);
-    if (m) out.add(humanizeField(m[1]));
+    if (m) { if (!isInternalJargon(m[1])) out.add(humanizeField(m[1])); }
     else out.add(t);
   }
   return Array.from(out);
