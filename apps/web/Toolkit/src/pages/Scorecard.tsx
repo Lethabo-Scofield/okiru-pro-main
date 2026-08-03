@@ -7,11 +7,7 @@ import { useBbeeStore } from "@toolkit/lib/store";
 import { CalculatorConfigBanner } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useAuth } from "@toolkit/lib/auth";
 import { useActiveClient } from "@toolkit/lib/client-context";
-import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
-import { calculateManagementScore } from "@toolkit/lib/calculators/management";
-import { calculateSkillsScore } from "@toolkit/lib/calculators/skills";
-import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
-import { calculateEsdScore, calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
+import type { BreakdownLine, PillarScore } from "@toolkit/lib/types";
 import { cn } from "@toolkit/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -39,47 +35,35 @@ interface ScorecardElement {
 
 const EMPTY_PILLAR = { score: 0, target: 0, weighting: 0, subMinimumMet: false };
 
-const GROUP_LABEL: Record<string, string> = {
-  AM: "African Male", CM: "Coloured Male", IM: "Indian Male", WM: "White Male",
-  AF: "African Female", CF: "Coloured Female", IF: "Indian Female", WF: "White Female",
-};
-
-interface EapCell { group: string; eapTarget: number; actual: number; count: number; totalInLevel: number; }
-
 /**
- * Flatten per-level EAP demographic breakdowns into sub-indicator rows so the
- * detailed per-demographic view (province-specific effective EAP) is visible on
- * the Scorecard tab, not only on the pillar pages.
+ * The breakdown for a pillar comes STRAIGHT from the calculator that scored it
+ * (calculateScorecard attaches PillarScore.subLines + coverageNotes). The page
+ * never re-runs a calculator — that is what let a Transport score be shown
+ * against generic lines. Sub-lines already reconcile to the pillar score.
  */
-function eapRows(breakdowns: Record<string, EapCell[]> | undefined, province?: string): SubIndicator[] {
-  if (!breakdowns) return [];
-  const rows: SubIndicator[] = [];
-  for (const level of Object.keys(breakdowns)) {
-    const cells = breakdowns[level] || [];
-    if (!cells.some(c => c.totalInLevel > 0)) continue;
-    const levelLabel = level.charAt(0).toUpperCase() + level.slice(1);
-    for (const c of cells) {
-      if (c.eapTarget <= 0 && c.actual <= 0) continue;
-      rows.push({
-        name: `  EAP · ${levelLabel} · ${GROUP_LABEL[c.group] ?? c.group}`,
-        target: `${(c.eapTarget * 100).toFixed(1)}%${province ? ` (${province})` : " EAP"}`,
-        weighting: 0,
-        score: 0,
-        formula: `Actual ${(c.actual * 100).toFixed(1)}% (${c.count}/${c.totalInLevel})`,
-      });
-    }
-  }
-  return rows;
+function pillarSubIndicators(pillar?: (PillarScore & { coverageNotes?: string[] }) | null): SubIndicator[] {
+  if (!pillar) return [];
+  const lines: SubIndicator[] = (pillar.subLines ?? []).map((sl: BreakdownLine) => ({
+    name: sl.isBonus ? `★ ${sl.name}` : sl.name,
+    target: sl.target,
+    weighting: sl.weighting,
+    score: sl.score,
+    formula: sl.note ?? `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
+    isBonus: sl.isBonus,
+  }));
+  const notes: SubIndicator[] = (pillar.coverageNotes ?? []).map((note) => ({
+    name: "  ⓘ Coverage note",
+    target: "",
+    weighting: 0,
+    score: 0,
+    formula: note,
+  }));
+  return [...lines, ...notes];
 }
 
 function fmt(value: number, full: boolean): string {
   if (value === null || value === undefined || isNaN(value)) return full ? "0.0000" : "0.00";
   return full ? value.toFixed(4) : value.toFixed(2);
-}
-
-function pct(value: number): string {
-  if (value === null || value === undefined || isNaN(value)) return "0.0%";
-  return `${(value * 100).toFixed(1)}%`;
 }
 
 function achievementPct(score: number, target: number): number {
@@ -93,7 +77,7 @@ function statusIcon(pctAchieved: number): { icon: typeof CheckCircle2; label: st
 }
 
 export default function Scorecard() {
-  const { scorecard, ownership, management, skills, procurement, esd, sed, client, calculatorConfig } = useBbeeStore();
+  const { scorecard, client } = useBbeeStore();
   const { user } = useAuth();
   const { activeClientId } = useActiveClient();
   const [wrapMode, setWrapMode] = useState(true);
@@ -103,7 +87,6 @@ export default function Scorecard() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  const hasConfig = !!calculatorConfig?.pillarConfigs;
 
   const handleDelete = async () => {
     if (!activeClientId) return;
@@ -130,184 +113,89 @@ export default function Scorecard() {
     });
   };
 
-  const cfg = calculatorConfig;
-  const ownResult = useMemo(() => {
-    try { return hasConfig ? calculateOwnershipScore(ownership, cfg!) : null; } catch { return null; }
-  }, [ownership, cfg, hasConfig]);
-  const mgtResult = useMemo(() => {
-    try { return hasConfig ? calculateManagementScore(management, cfg!, client.eapProvince) : null; } catch { return null; }
-  }, [management, cfg, hasConfig, client.eapProvince]);
-  const skillResult = useMemo(() => {
-    try { return hasConfig ? calculateSkillsScore(skills, cfg!, client.eapProvince) : null; } catch { return null; }
-  }, [skills, cfg, hasConfig, client.eapProvince]);
-  const procResult = useMemo(() => {
-    try { return hasConfig ? calculateProcurementScore(procurement, cfg!) : null; } catch { return null; }
-  }, [procurement, cfg, hasConfig]);
-  const esdResult = useMemo(() => {
-    try { return hasConfig ? calculateEsdScore(esd, client.npat, cfg!) : null; } catch { return null; }
-  }, [esd, client.npat, cfg, hasConfig]);
-  const sedResult = useMemo(() => {
-    try { return hasConfig ? calculateSedScore(sed, client.npat, cfg!) : null; } catch { return null; }
-  }, [sed, client.npat, cfg, hasConfig]);
-
-  const tmps = procurement.tmps || 1;
-
-  const elements: ScorecardElement[] = useMemo(() => [
-    {
-      key: "ownership",
-      name: "Ownership",
-      ...(scorecard.ownership || EMPTY_PILLAR),
-      accentColor: "text-violet-500 dark:text-violet-400",
-      barColor: "bg-violet-500",
-      subMinLabel: ownResult
-        ? (ownResult.fullOwnershipAwarded
-          ? `Black Voting ${pct(ownResult.rawStats.blackVotingPercentage)} ≥ 25%: Full 25 pts awarded`
-          : `Net Value ≥ 3.2 or Black Voting ≥ 25%: ${ownResult.subMinimumMet ? 'Met' : 'Not met'}`)
-        : undefined,
-      subIndicators: ownResult?.subLines.map(sl => ({
-        name: sl.name,
-        target: sl.target,
-        weighting: sl.weighting,
-        score: sl.score,
-        formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
-      })) || [],
-    },
-    {
-      key: "managementControl",
-      name: "Management Control & Employment Equity",
-      ...(scorecard.managementControl || EMPTY_PILLAR),
-      accentColor: "text-blue-500 dark:text-blue-400",
-      barColor: "bg-blue-500",
-      // Prefer the breakdown emitted by the calculator that SCORED this pillar
-      // (Transport uses its own calculator, so the generic mgtResult lines would
-      // not reconcile to the score). Fall back to the generic lines + EAP detail
-      // for sectors that score via the generic calculator.
-      subIndicators: scorecard.managementControl?.subLines
-        ? [
-            ...scorecard.managementControl.subLines.map(sl => ({
-              name: sl.isBonus ? `★ ${sl.name}` : sl.name,
-              target: sl.target,
-              weighting: sl.weighting,
-              score: sl.score,
-              formula: sl.note ?? `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
-            })),
-            ...(scorecard.managementControl.coverageNotes ?? []).map(note => ({
-              name: "  ⓘ Coverage note",
-              target: "",
-              weighting: 0,
-              score: 0,
-              formula: note,
-            })),
-          ]
-        : mgtResult ? [
-        ...mgtResult.subLines.map(sl => ({
-          name: sl.name,
-          target: sl.target,
-          weighting: sl.weighting,
-          score: sl.score,
-          formula: `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
-        })),
-        // Per-demographic effective-EAP detail (Senior/Middle/Junior), matching the pillar page.
-        ...eapRows(mgtResult.eapBreakdowns as Record<string, EapCell[]>, mgtResult.eapProvince),
-      ] : [],
-    },
-    {
-      key: "skillsDevelopment",
-      name: "Skills Development",
-      ...(scorecard.skillsDevelopment || EMPTY_PILLAR),
-      accentColor: "text-emerald-500 dark:text-emerald-400",
-      barColor: "bg-emerald-500",
-      subMinLabel: skillResult ? `Skills base ≥ 8 pts (40% of 20 base, excl. bonus): ${skillResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
-      subIndicators: skillResult ? [
-        ...skillResult.subLines.map(sl => ({
-          name: sl.isBonus ? `★ ${sl.name}` : sl.name,
-          target: sl.target,
-          weighting: sl.weighting,
-          score: sl.score,
-          formula: sl.isBonus ? `Bonus: ${sl.score.toFixed(2)} / ${sl.weighting} pts` : `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
-          isBonus: sl.isBonus,
-        })),
-        ...skillResult.categoryBreakdown.filter(cb => cb.spend > 0).map(cb => ({
-          name: `  Cat ${cb.code}: ${cb.label}`,
-          target: cb.cap ? `<=${(cb.cap * 100).toFixed(0)}% cap` : "No cap",
-          weighting: 0,
-          score: 0,
-          formula: `${cb.label} spend R${cb.spend.toLocaleString()}${cb.capApplied ? ` -> capped to R${cb.recognisedSpend.toLocaleString()} (${(cb.cap! * 100).toFixed(0)}% limit)` : ` -> R${cb.recognisedSpend.toLocaleString()} recognised`}`,
-        })),
-      ] : [],
-    },
-    {
-      key: "procurement",
-      name: "Preferential Procurement",
-      ...(scorecard.procurement || EMPTY_PILLAR),
-      accentColor: "text-amber-500 dark:text-amber-400",
-      barColor: "bg-amber-500",
-      subMinLabel: procResult ? `Procurement base ≥ 10.8 pts (40% of 27 base, excl. bonus): ${procResult.subMinimumMet ? 'Met' : 'Not met'}` : undefined,
-      subIndicators: procResult?.subLines.map(sl => ({
-        name: sl.isBonus ? `★ ${sl.name}` : sl.name,
-        target: sl.target,
-        weighting: sl.weighting,
-        score: sl.score,
-        formula: sl.isBonus
-          ? `Bonus: ${sl.score.toFixed(2)} / ${sl.weighting} pts`
-          : `Spend R${sl.spend.toLocaleString()} / ${sl.target} of TMPS R${tmps.toLocaleString()} x ${sl.weighting} pts`,
-        isBonus: sl.isBonus,
-      })) || [],
-    },
-    {
-      key: "supplierDevelopment",
-      name: "Supplier Development",
-      ...(scorecard.supplierDevelopment || EMPTY_PILLAR),
-      accentColor: "text-rose-500 dark:text-rose-400",
-      barColor: "bg-rose-500",
-      subMinLabel: esdResult ? `SD >= 4 pts (40% of 10): ${esdResult.sdSubMinimumMet ? 'Met' : 'Not met'}` : undefined,
-      subIndicators: esdResult?.sdSubLines.map(sl => ({
-        name: sl.name,
-        target: sl.target,
-        weighting: sl.weighting,
-        score: sl.score,
-        formula: `SD spend R${esdResult.sdSpend.toLocaleString()} / target R${esdResult.sdTarget.toLocaleString()} x ${sl.weighting} pts`,
-      })) || [],
-    },
-    {
-      key: "enterpriseDevelopment",
-      name: "Enterprise Development",
-      ...(scorecard.enterpriseDevelopment || EMPTY_PILLAR),
-      accentColor: "text-orange-500 dark:text-orange-400",
-      barColor: "bg-orange-500",
-      subMinLabel: esdResult ? `ED base >= 2 pts (40% of 5): ${esdResult.edSubMinimumMet ? 'Met' : 'Not met'}` : undefined,
-      subIndicators: esdResult?.edSubLines.map(sl => ({
-        name: sl.isBonus ? `* ${sl.name}` : sl.name,
-        target: sl.target,
-        weighting: sl.weighting,
-        score: sl.score,
-        formula: sl.isBonus
-          ? `${sl.score > 0 ? 'Awarded' : 'Not claimed'} - tick-box + evidence`
-          : `ED spend R${esdResult.edSpend.toLocaleString()} / target R${esdResult.edTarget.toLocaleString()} x ${sl.weighting} pts`,
-      })) || [],
-    },
-    {
-      key: "socioEconomicDevelopment",
-      name: "Socio-Economic Development",
-      ...(scorecard.socioEconomicDevelopment || EMPTY_PILLAR),
-      accentColor: "text-sky-500 dark:text-sky-400",
-      barColor: "bg-sky-500",
-      subMinLabel: "Grass-roots only (health, safety). Education = Skills Development.",
-      subIndicators: sedResult ? [
-        { name: "Annual value of all SED contributions", target: "1% of NPAT", weighting: 5, score: sedResult.total, formula: `SED spend R${sedResult.actualSpend.toLocaleString()} / target R${sedResult.target.toLocaleString()} x 5 pts` },
-      ] : [],
-    },
-    {
-      key: "yesInitiative",
-      name: "YES Initiative",
-      ...(scorecard.yesInitiative || EMPTY_PILLAR),
-      accentColor: "text-purple-500 dark:text-[#d1d1d6]",
-      barColor: "bg-purple-500",
-      subIndicators: [
-        { name: "Youth Employment Service Programme", target: "Jobs absorbed", weighting: 3, score: (scorecard.yesInitiative || EMPTY_PILLAR).score, formula: `Bonus points for YES programme participation` },
-      ],
-    },
-  ], [scorecard, ownResult, mgtResult, skillResult, procResult, esdResult, sedResult, tmps]);
+  // Every row's breakdown is whatever calculateScorecard attached — the exact
+  // lines the score was built from. No calculator runs on this page.
+  const elements: ScorecardElement[] = useMemo(() => {
+    const ee = scorecard.employmentEquity;
+    const rows: ScorecardElement[] = [
+      {
+        key: "ownership",
+        name: "Ownership",
+        ...(scorecard.ownership || EMPTY_PILLAR),
+        accentColor: "text-violet-500 dark:text-violet-400",
+        barColor: "bg-violet-500",
+        subIndicators: pillarSubIndicators(scorecard.ownership),
+      },
+      {
+        key: "managementControl",
+        // When EE is its own pillar (Transport), this row is Management Control
+        // only; otherwise the generic calculator folds EE into it.
+        name: ee ? "Management Control" : "Management Control & Employment Equity",
+        ...(scorecard.managementControl || EMPTY_PILLAR),
+        accentColor: "text-blue-500 dark:text-blue-400",
+        barColor: "bg-blue-500",
+        subIndicators: pillarSubIndicators(scorecard.managementControl),
+      },
+      ...(ee ? [{
+        key: "employmentEquity",
+        name: "Employment Equity",
+        ...(ee || EMPTY_PILLAR),
+        accentColor: "text-cyan-500 dark:text-cyan-400",
+        barColor: "bg-cyan-500",
+        subIndicators: pillarSubIndicators(ee),
+      }] : []),
+      {
+        key: "skillsDevelopment",
+        name: "Skills Development",
+        ...(scorecard.skillsDevelopment || EMPTY_PILLAR),
+        accentColor: "text-emerald-500 dark:text-emerald-400",
+        barColor: "bg-emerald-500",
+        subIndicators: pillarSubIndicators(scorecard.skillsDevelopment),
+      },
+      {
+        key: "procurement",
+        name: "Preferential Procurement",
+        ...(scorecard.procurement || EMPTY_PILLAR),
+        accentColor: "text-amber-500 dark:text-amber-400",
+        barColor: "bg-amber-500",
+        subIndicators: pillarSubIndicators(scorecard.procurement),
+      },
+      {
+        key: "supplierDevelopment",
+        name: "Supplier Development",
+        ...(scorecard.supplierDevelopment || EMPTY_PILLAR),
+        accentColor: "text-rose-500 dark:text-rose-400",
+        barColor: "bg-rose-500",
+        subIndicators: pillarSubIndicators(scorecard.supplierDevelopment),
+      },
+      {
+        key: "enterpriseDevelopment",
+        name: "Enterprise Development",
+        ...(scorecard.enterpriseDevelopment || EMPTY_PILLAR),
+        accentColor: "text-orange-500 dark:text-orange-400",
+        barColor: "bg-orange-500",
+        subIndicators: pillarSubIndicators(scorecard.enterpriseDevelopment),
+      },
+      {
+        key: "socioEconomicDevelopment",
+        name: "Socio-Economic Development",
+        ...(scorecard.socioEconomicDevelopment || EMPTY_PILLAR),
+        accentColor: "text-sky-500 dark:text-sky-400",
+        barColor: "bg-sky-500",
+        subMinLabel: "Grass-roots only (health, safety). Education = Skills Development.",
+        subIndicators: pillarSubIndicators(scorecard.socioEconomicDevelopment),
+      },
+      {
+        key: "yesInitiative",
+        name: "YES Initiative",
+        ...(scorecard.yesInitiative || EMPTY_PILLAR),
+        accentColor: "text-purple-500 dark:text-[#d1d1d6]",
+        barColor: "bg-purple-500",
+        subIndicators: pillarSubIndicators(scorecard.yesInitiative),
+      },
+    ];
+    return rows;
+  }, [scorecard]);
 
   const expandAll = () => {
     if (expandedRows.size === elements.length) {

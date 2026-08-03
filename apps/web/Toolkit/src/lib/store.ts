@@ -5,6 +5,7 @@ import {
   Shareholder, Employee, TrainingProgram, Supplier, Contribution, FinancialYear,
   TrainingCategoryCode, AfsData, EmpowermentFinancingData, BreakdownLine,
 } from './types';
+import { toBreakdownLines, eapDetailRows, skillsCategoryRows, type EapDetailCell } from './calculators/breakdown';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
 import { API_BASE } from './config';
@@ -781,6 +782,13 @@ function calculateScorecard(
   } else {
     const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince, state.client.eapYear);
     mgtScoreTotal = mgtScore.total;
+    // Generic sectors: the breakdown is this SAME calculator's own lines, plus
+    // its per-demographic effective-EAP detail rows — carried on the scorecard
+    // so the page renders the scored lines, never a re-run.
+    mcSubLines = [
+      ...toBreakdownLines(mgtScore.subLines),
+      ...eapDetailRows(mgtScore.eapBreakdowns as Record<string, EapDetailCell[]>, mgtScore.eapProvince),
+    ];
   }
 
   // Transport Large Skills is structurally different (5th indicator = black
@@ -1034,12 +1042,23 @@ function calculateScorecard(
     ? (activeElectiveKeys.has('socioEconomicDevelopment') ? sedTarget : 0)
     : sedTarget;
 
+  // Every pillar carries the breakdown from the calculator that SCORED it — the
+  // page renders these, never a re-run. SED is a single-line pillar.
+  const sedBreakdown: BreakdownLine[] = [{
+    name: 'Annual value of all SED contributions',
+    target: `${((cfg.sed?.npatTarget ?? 0.01) * 100).toFixed(0)}% of NPAT`,
+    weighting: sedTarget,
+    score: round2(sedScore.total),
+    note: `SED spend R${round2(sedScore.actualSpend).toLocaleString()} / target R${round2(sedScore.target).toLocaleString()}`,
+  }];
+
   return {
     ownership: {
       score: round2(ownScore.total),
       target: ownTarget,
       weighting: ownTarget,
       subMinimumMet: showSubMin('ownership') ? ownSubMinMet : undefined,
+      subLines: toBreakdownLines(ownScore.subLines),
     },
     managementControl: { score: round2(mgtScoreTotal), target: mcTarget, weighting: mcTarget, subLines: mcSubLines, coverageNotes: mcCoverageNotes },
     ...(eeTarget > 0 ? {
@@ -1051,6 +1070,7 @@ function calculateScorecard(
       weighting: skillsWeight,
       subMinimumMet: showSubMin('skillsDevelopment') ? skSubMinMet : undefined,
       ...mkElectiveMeta('skillsDevelopment'),
+      subLines: [...toBreakdownLines(skillScore.subLines), ...skillsCategoryRows(skillScore.categoryBreakdown)],
     },
     procurement: {
       score: round2(procScore.total),
@@ -1058,12 +1078,14 @@ function calculateScorecard(
       weighting: procWeight,
       subMinimumMet: showSubMin('preferentialProcurement') ? prSubMinMet : undefined,
       ...mkElectiveMeta('preferentialProcurement'),
+      subLines: toBreakdownLines(procScore.subLines),
     },
     supplierDevelopment: {
       score: round2(esdScore.sdTotal),
       target: sdTarget,
       weighting: sdTarget,
       subMinimumMet: showSubMin('supplierDevelopment') ? sdSubMinMet : undefined,
+      subLines: toBreakdownLines(esdScore.sdSubLines),
     },
     enterpriseDevelopment: {
       score: round2(esdScore.edTotal),
@@ -1071,12 +1093,14 @@ function calculateScorecard(
       weighting: edWeight,
       subMinimumMet: showSubMin('enterpriseDevelopment') ? edSubMinMet : undefined,
       ...mkElectiveMeta('enterpriseDevelopment'),
+      subLines: toBreakdownLines(esdScore.edSubLines),
     },
     socioEconomicDevelopment: {
       score: round2(sedScore.total),
       target: sedWeight,
       weighting: sedWeight,
       ...mkElectiveMeta('socioEconomicDevelopment'),
+      subLines: sedBreakdown,
     },
     yesInitiative: { score: round2(yesScore.score + yesScore.yesBonusPoints), target: yesTarget, weighting: yesTarget },
     ...(afsScore ? {
