@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@toolkit/lib/auth";
 import { API_BASE } from "@toolkit/lib/config";
-import { canAccessEsgToolkit } from "@/lib/esgAccess";
 
 /** Resolves ESG toolkit access — server /api/esg/access with client fallback. */
 export function useEsgAccess(): { allowed: boolean; loading: boolean } {
@@ -24,10 +23,13 @@ export function useEsgAccess(): { allowed: boolean; loading: boolean } {
           const data = (await res.json()) as { allowed?: boolean };
           if (!cancelled) setAllowed(Boolean(data.allowed));
         } else if (!cancelled) {
-          setAllowed(canAccessEsgToolkit(user));
+          // Fail CLOSED: the server is the authority on access, so an error
+          // response must not fall through to the permissive client check
+          // (an empty allowlist there means "open to all").
+          setAllowed(false);
         }
       } catch {
-        if (!cancelled) setAllowed(canAccessEsgToolkit(user));
+        if (!cancelled) setAllowed(false);
       } finally {
         if (!cancelled) setLoading(false);
       }

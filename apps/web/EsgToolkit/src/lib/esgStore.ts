@@ -222,10 +222,16 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
   },
 
   async seedDemo(companyId) {
+    // confirm:true is required server-side — seeding replaces every section.
     const res = await fetch(`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/seed-demo`, {
       method: "POST",
       credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true }),
     });
-    if (!res.ok) throw new Error("seed-demo failed");
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
+      throw new Error(detail?.error || "Could not load sample data");
+    }
   },
 }));

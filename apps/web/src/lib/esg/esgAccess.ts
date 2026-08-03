@@ -4,7 +4,16 @@ export type EsgAccessUser = {
   email?: string | null;
   username?: string | null;
   fullName?: string | null;
+  role?: string | null;
 };
+
+/**
+ * Sample-data seeding replaces an entire workbook, so the affordance is
+ * admin-only in the UI — mirrored by the server gate on /seed-demo.
+ */
+export function canSeedEsgSampleData(user: EsgAccessUser | null | undefined): boolean {
+  return user?.role === "admin" || user?.role === "super_admin";
+}
 
 /**
  * No hardcoded default: a baked-in address made the allowlist permanently
