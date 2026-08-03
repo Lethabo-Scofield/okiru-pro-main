@@ -24,6 +24,32 @@ const makeProcurementData = (overrides: Partial<ProcurementData> = {}): Procurem
   ...overrides,
 });
 
+describe('TMPS exclusions — Codes-excluded line items earn no B-BBEE recognition', () => {
+  const excluded = [
+    'Nedbank Vehicle Loan', 'Provident Fund (FUTURASA)', 'Momentum Pension Fund',
+    'National Bargaining Council', 'SARS PAYE', 'UIF', 'SDL Levy', 'Bank Charges', 'Salaries',
+  ];
+  it.each(excluded)('excludes "%s" from recognised spend even at Level 1', (name) => {
+    const data = makeProcurementData({
+      suppliers: [makeSupplier({ name, beeLevel: 1, spend: 5_000_000, blackOwnership: 1 })],
+    });
+    const result = calculateProcurementScore(data);
+    // The single "supplier" is an exclusion → nothing recognised → 0 points.
+    expect(result.total).toBe(0);
+    expect(result.coverageNotes?.length).toBeGreaterThan(0);
+  });
+
+  it('keeps a genuine trading supplier that merely has a similar word', () => {
+    // "Loanmore Trading" is a real name but contains "loan" as a substring —
+    // the \bloan\b word boundary must NOT match it.
+    const data = makeProcurementData({
+      suppliers: [makeSupplier({ name: 'Loanmore Trading', beeLevel: 1, spend: 5_000_000, blackOwnership: 1 })],
+    });
+    const result = calculateProcurementScore(data);
+    expect(result.total).toBeGreaterThan(0);
+  });
+});
+
 describe('calculateProcurementScore', () => {
   describe('return type shape', () => {
     it('should return all required fields', () => {
