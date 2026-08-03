@@ -232,13 +232,28 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
   const totalPoints = votingRightsBlack + votingRightsBWO + economicInterestBlack + economicInterestBWO
     + designatedGroups + newEntrants + netValuePoints + esopBonus;
 
+  // Each line is emitted only when the sector actually allocates points to it.
+  // A sector that folds new entrants into the combined designated line (QSE), or
+  // that has no designated-group line at all (Transport QSE), must not show a
+  // phantom always-zero row — that made the breakdown's weightings sum to more
+  // than the pillar cap and read as nonsense. INVARIANT: the surviving lines'
+  // weightings sum to pillarConfigs.ownership.maxPoints. (Enforced by
+  // ownershipBreakdown.reconciliation.test.ts.)
   const subLines: OwnershipSubLine[] = [
     { name: 'Exercisable voting rights of black individuals', target: `${(ot.votingRightsTarget * 100).toFixed(0)}% + 1 vote`, weighting: ot.votingRightsMaxPts, score: votingRightsBlack },
     { name: 'Exercisable voting rights of black females', target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`, weighting: ot.womenVotingMaxPts, score: votingRightsBWO },
     { name: 'Economic interest of black individuals', target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`, weighting: ot.economicInterestMaxPts, score: economicInterestBlack },
     { name: 'Economic interest of black females', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO },
-    { name: ot.combinedNewEntrantsDesignated ? 'Economic interest of black new entrants or designated groups' : 'Economic interest of black designated groups or participants in ownership schemes', target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`, weighting: ot.designatedGroupsMax, score: designatedGroups },
-    { name: 'Economic interest of black new entrants', target: `${(ot.newEntrantsTarget * 100).toFixed(0)}%`, weighting: ot.newEntrantsMaxPts, score: newEntrants },
+    // Designated-groups line: shown when the sector allocates points to it, or
+    // when it is the combined "new entrants OR designated groups" QSE indicator.
+    ...(ot.designatedGroupsMax > 0 || ot.combinedNewEntrantsDesignated
+      ? [{ name: ot.combinedNewEntrantsDesignated ? 'Economic interest of black new entrants or designated groups' : 'Economic interest of black designated groups or participants in ownership schemes', target: `${(ot.designatedGroupsTarget * 100).toFixed(0)}%`, weighting: ot.designatedGroupsMax, score: designatedGroups }]
+      : []),
+    // Separate new-entrants line: only when it carries its own points and is not
+    // already folded into the combined indicator above.
+    ...(ot.newEntrantsMaxPts > 0 && !ot.combinedNewEntrantsDesignated
+      ? [{ name: 'Economic interest of black new entrants', target: `${(ot.newEntrantsTarget * 100).toFixed(0)}%`, weighting: ot.newEntrantsMaxPts, score: newEntrants }]
+      : []),
     { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
     ...(ot.esopBonusMaxPts > 0
       ? [{ name: 'ESOP / broad-based scheme participation (bonus)', target: 'scheme in share register', weighting: ot.esopBonusMaxPts, score: esopBonus }]

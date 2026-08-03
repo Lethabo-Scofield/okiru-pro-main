@@ -49,6 +49,13 @@ export function sectorConfigToTransportQseCalculatorConfig(sc: SectorConfig): Ca
       womenEIMax: own.womenEIMaxPts,                       // 1 (bonus: ESOP/BBOS/co-ops)
       womenEITarget: own.womenEITarget,                    // 0.10
       newEntrantsMax: own.newEntrantsMaxPts,               // 1 (ownership fulfilment)
+      // Transport QSE ownership is exactly six indicators summing to the 28-pt
+      // cap (voting 6 + women-voting 2 + EI 9 + womenEI 1 + newEntrants 1 +
+      // netValue 9). It has NO separate "designated groups" line — pin it to 0
+      // so the calculator does not fall back to its generic default of 3, which
+      // put a phantom 7th line into the breakdown (Σ 31 > 28 cap).
+      designatedGroupsMax: 0,
+      designatedGroupsTarget: 0,
     },
     management: {
       boardBlackTarget: mc.boardBlackTarget,               // 0
