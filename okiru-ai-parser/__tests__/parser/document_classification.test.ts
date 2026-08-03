@@ -164,3 +164,43 @@ describe('document type classification', () => {
     expect(result.confidence).toBeLessThan(0.6);
   });
 });
+
+describe('workbook sheet name is authoritative for the element', () => {
+  it('classifies a "Procurement" sheet to the ESD pillar, not an affidavit', async () => {
+    // A supplier-schedule sheet's CONTENT (supplier names, spend, BEE levels)
+    // matched the generic B-BBEE vocabulary and scored as a Sworn Affidavit,
+    // so a "Procurement" sheet failed classification. The sheet NAME fixes it.
+    const input = {
+      file_id: 'sheet_proc',
+      filename: 'BEE Information Gathering File - Thandanani Transport.xlsx › Procurement',
+      mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      raw_text: [
+        'Supplier Name  B-BBEE Level  Spend (excl VAT)  Empowering Supplier',
+        'BP Edenvale  Level 1  1454114  Yes',
+        'Safety Brake & Clutch  Level 2  14033  Yes',
+        'Eden Machined Hydraulics  Level 4  88200  No',
+      ].join('\n'),
+      tables: [],
+      metadata: { sheet_name: 'Procurement' },
+    };
+    const result = await classifyDocument(input, new InMemoryOntologyRepository());
+    expect(result.pillar).toBe('ESD');
+    expect(/affidavit/i.test(result.document_type)).toBe(false);
+    // Sheet-name authority lifts it out of the "unreadable" band.
+    expect(result.status).not.toBe('failed');
+    expect(result.status).not.toBe('low_confidence');
+  });
+
+  it('classifies an "Ownership" sheet to the OWN pillar', async () => {
+    const input = {
+      file_id: 'sheet_own',
+      filename: 'BEE Information Gathering File.xlsx › Ownership',
+      mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      raw_text: 'Shareholder  ID Number  Voting %  Economic Interest %\nV L Naidoo  5608305112083  100  100',
+      tables: [],
+      metadata: { sheet_name: 'Ownership' },
+    };
+    const result = await classifyDocument(input, new InMemoryOntologyRepository());
+    expect(result.pillar).toBe('OWN');
+  });
+});

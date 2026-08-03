@@ -2,6 +2,36 @@ import type { DocumentClassification, DocumentClassificationCandidate } from '..
 import type { RawExtractionInput } from '../schemas/parser_output.js';
 import type { DocumentKnowledge, DocumentTypeNode, FieldKnowledge, OntologyRepository } from '../graph/ontology_models.js';
 import { defaultDocumentKnowledge } from '../graph/ontology_queries.js';
+import { elementFromHint } from '../src/services/specRetrieval.js';
+
+/**
+ * A workbook sheet states its own element in its NAME. A sheet titled
+ * "Procurement" IS preferential-procurement evidence, "Ownership" IS ownership
+ * — that is not a guess, it is what the tab says it is. The content-matching
+ * classifier below is blind to this: fed the sheet's data (supplier rows, ID
+ * numbers) it matched the generic B-BBEE vocabulary to affidavit specs and
+ * scored a "Procurement" sheet as a "Sworn Affidavit" — 0 of 53 sheets passed
+ * on the real Thandanani pack. So when a document is a named workbook sheet, its
+ * element is authoritative and the specs of that element's pillar are lifted to
+ * a passing confidence. elementFromHint owns the sheet-name → element mapping
+ * (shared with extraction retrieval, so the two never diverge).
+ */
+const ELEMENT_TO_PILLAR: Record<string, string> = {
+  OWNERSHIP: 'OWN',
+  MANAGEMENT_CONTROL: 'MAC',
+  SKILLS_DEVELOPMENT: 'SKL',
+  ESD: 'ESD',
+  SED: 'SED',
+};
+
+/** The sheet name from a split-workbook filename ("File.xlsx › Procurement"). */
+function sheetNameOf(input: RawExtractionInput): string {
+  const meta = (input.metadata ?? {}) as { sheet_name?: unknown };
+  if (typeof meta.sheet_name === 'string' && meta.sheet_name.trim()) return meta.sheet_name.trim();
+  const f = input.filename ?? '';
+  const marker = f.indexOf('›');
+  return marker >= 0 ? f.slice(marker + 1).trim() : '';
+}
 
 const PASS_CONFIDENCE = 0.85;
 const REVIEW_CONFIDENCE = 0.6;
@@ -329,6 +359,22 @@ export async function classifyDocument(
   for (const doc of documentTypes) {
     const knowledge = await repository.getDocumentKnowledge(doc.name) ?? fallbackByName.get(doc.name.toLowerCase()) ?? null;
     candidates.push(scoreCandidate(text, input.filename ?? '', doc, knowledge, aliasFrequency));
+  }
+
+  // SHEET-NAME AUTHORITY: a named workbook sheet states its own element. Lift the
+  // specs of that element's pillar so the sheet classifies as what it plainly is
+  // — not as whatever affidavit its generic B-BBEE content happens to match.
+  // Additive (not a flat floor) so the best-scoring spec of the right pillar
+  // still wins; content stays the tiebreak, the sheet name only fixes the pillar.
+  const hintElement = elementFromHint(sheetNameOf(input));
+  const hintPillar = hintElement ? ELEMENT_TO_PILLAR[hintElement] : null;
+  if (hintPillar) {
+    for (const candidate of candidates) {
+      if (candidate.pillar === hintPillar) {
+        candidate.confidence = Math.min(0.99, candidate.confidence + 0.5);
+        candidate.reasons = [`sheet name states this is ${hintElement} evidence`, ...candidate.reasons].slice(0, 12);
+      }
+    }
   }
 
   candidates.sort((a, b) => b.confidence - a.confidence);

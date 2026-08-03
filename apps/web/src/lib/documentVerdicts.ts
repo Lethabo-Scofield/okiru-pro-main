@@ -94,7 +94,19 @@ function summarise(
   return bits.join(' · ');
 }
 
-/** Everything the parser could not read out of this document. */
+/**
+ * A note about the parser's own CLASSIFICATION confidence — not something it
+ * failed to READ out of the document. Showing "Couldn't read: Best document-type
+ * confidence is below review threshold" on a sheet that extracted 13 managers is
+ * both wrong and alarming: the values were read fine; the parser was only unsure
+ * what to *call* the document. These are filtered out of the read-gap list.
+ */
+function isClassificationNote(t: string): boolean {
+  return /\b(document.?type|classification|candidates are too close|confidence (is )?(below|requires))\b/i.test(t)
+    || /below (the )?review threshold|requires human review/i.test(t);
+}
+
+/** Everything the parser could not READ out of this document (not how it was classified). */
 function gapsFor(parserCase: ParserCaseLike, filename: string): string[] {
   const detected = (parserCase.documents_detected ?? []).find((d) => d.filename === filename);
   const review = (parserCase.documents_needing_review ?? []).find((r) => r.filename === filename);
@@ -107,7 +119,7 @@ function gapsFor(parserCase: ParserCaseLike, filename: string): string[] {
     ...(review?.reasons ?? []),
   ]) {
     const t = str(raw);
-    if (!t) continue;
+    if (!t || isClassificationNote(t)) continue;
     const m = /^(.*)\smissing$/i.exec(t);
     if (m) out.add(humanizeField(m[1]));
     else out.add(t);
