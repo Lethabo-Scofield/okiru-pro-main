@@ -178,7 +178,28 @@ export default function Scorecard() {
       ...(scorecard.managementControl || EMPTY_PILLAR),
       accentColor: "text-blue-500 dark:text-blue-400",
       barColor: "bg-blue-500",
-      subIndicators: mgtResult ? [
+      // Prefer the breakdown emitted by the calculator that SCORED this pillar
+      // (Transport uses its own calculator, so the generic mgtResult lines would
+      // not reconcile to the score). Fall back to the generic lines + EAP detail
+      // for sectors that score via the generic calculator.
+      subIndicators: scorecard.managementControl?.subLines
+        ? [
+            ...scorecard.managementControl.subLines.map(sl => ({
+              name: sl.isBonus ? `★ ${sl.name}` : sl.name,
+              target: sl.target,
+              weighting: sl.weighting,
+              score: sl.score,
+              formula: sl.note ?? `Score: ${sl.score.toFixed(2)} / ${sl.weighting} pts`,
+            })),
+            ...(scorecard.managementControl.coverageNotes ?? []).map(note => ({
+              name: "  ⓘ Coverage note",
+              target: "",
+              weighting: 0,
+              score: 0,
+              formula: note,
+            })),
+          ]
+        : mgtResult ? [
         ...mgtResult.subLines.map(sl => ({
           name: sl.name,
           target: sl.target,

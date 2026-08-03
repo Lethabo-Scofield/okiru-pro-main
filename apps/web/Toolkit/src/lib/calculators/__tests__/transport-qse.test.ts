@@ -48,6 +48,38 @@ describe('Transport QSE scoring', () => {
     expect(own.total).toBe(27);
   });
 
+  it('MC breakdown reconciles to the score and Senior black women do NOT earn the Top-Management bonus', () => {
+    // Thandanani: sole executive is a black MAN; a black WOMAN sits at Senior
+    // (Admin Manager). The Top-Management black-women bonus must be 0 (EEA9
+    // measures Senior separately), the breakdown must reconcile to the score,
+    // and a coverage note must SAY why — rather than silently awarding +2.
+    const employees = [
+      { id: '1', name: 'Director', gender: 'Male' as const, race: 'African' as const, designation: 'Executive Director', isDisabled: false },
+      { id: '2', name: 'Admin Manager', gender: 'Female' as const, race: 'Indian' as const, designation: 'Senior', isDisabled: false },
+      { id: '3', name: 'Clerk', gender: 'Male' as const, race: 'African' as const, designation: 'Junior', isDisabled: false },
+    ];
+    const mc = calculateTransportQseManagement({ id: '1', clientId: 'c', employees }, cfg);
+    const bonusLine = mc.subLines!.find(l => /bonus/i.test(l.name))!;
+    expect(bonusLine.score).toBe(0);
+    expect(mc.score).toBe(25); // black rep 25 (sole exec is black) + bonus 0
+    // Breakdown reconciles to the total.
+    expect(mc.subLines!.reduce((s, l) => s + l.score, 0)).toBeCloseTo(mc.score, 2);
+    // Coverage note surfaced, and pinned to the bonus line.
+    expect(mc.coverageNotes?.length).toBeGreaterThan(0);
+    expect(bonusLine.note).toBeTruthy();
+  });
+
+  it('EE breakdown reconciles to the score', () => {
+    const employees = Array.from({ length: 14 }, (_, i) => ({
+      id: String(i), name: `E${i}`, gender: (i % 2 ? 'Female' : 'Male') as const,
+      race: 'African' as const,
+      designation: i < 2 ? 'Executive Director' : i < 5 ? 'Senior' : i < 8 ? 'Middle' : 'Junior',
+      isDisabled: false,
+    }));
+    const ee = calculateTransportQseEmploymentEquity({ id: '1', clientId: 'c', employees }, cfg, 'Gauteng');
+    expect(ee.subLines!.reduce((s, l) => s + l.score, 0)).toBeCloseTo(ee.score, 1);
+  });
+
   it('scores transport MC and EE with non-zero max', () => {
     const employees = Array.from({ length: 14 }, (_, i) => ({
       id: String(i), name: `E${i}`, gender: (i % 2 ? 'Female' : 'Male') as const,
