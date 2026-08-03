@@ -687,8 +687,21 @@ function calculateScorecard(
     const out = calculateConstructionScorecard(entityType, input);
     const el = out.elementScores;
     const lvl = pointsToLevel(out.totalScore, cfg);
-    const mkPillar = (e: { achievedPoints: number; availablePoints: number }) => ({
+    // Attach the construction evaluator's own per-indicator rows as the pillar
+    // breakdown, so the page renders the lines the CONSTRUCTION matrix scored —
+    // never the generic calculator's lines.
+    const mkPillar = (e: {
+      achievedPoints: number;
+      availablePoints: number;
+      indicators?: Array<{ name: string; achievedPoints: number; availablePoints: number }>;
+    }) => ({
       score: round2(e.achievedPoints), target: e.availablePoints, weighting: e.availablePoints,
+      subLines: (e.indicators ?? []).map((ind): BreakdownLine => ({
+        name: ind.name,
+        target: `${ind.availablePoints} pts`,
+        weighting: ind.availablePoints,
+        score: round2(ind.achievedPoints),
+      })),
     });
 
     // CSC000 §5 priority-element sub-minimums, previously not applied at all
