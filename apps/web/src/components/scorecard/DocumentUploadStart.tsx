@@ -39,7 +39,7 @@ import {
 } from "@/lib/parserWorkbookMap";
 import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
 import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
-import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
+import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
 
@@ -418,7 +418,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     const review = (parserCase?.documents_needing_review ?? []).find((r) => r.filename === filename);
     const fields = new Set<string>();
     const notes = new Set<string>();
-    for (const f of detected?.validation?.missing_fields ?? []) fields.add(humanizeField(f));
+    for (const f of detected?.validation?.missing_fields ?? []) {
+      if (isInternalJargon(f)) continue; // never surface internal section names
+      fields.add(humanizeField(f));
+    }
     const rawNotes = [
       ...(detected?.validation?.errors ?? []),
       ...(detected?.validation?.warnings ?? []),
@@ -427,8 +430,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     for (const n of rawNotes) {
       const trimmed = (n ?? "").trim();
       if (!trimmed) continue;
+      // A low classification-confidence note is NOT a read gap (the values were
+      // read fine; the parser was only unsure what to call the document), and
+      // internal plumbing names ("reconcile not found") mean nothing to a user.
+      if (isClassificationNote(trimmed) || isInternalJargon(trimmed)) continue;
       const m = /^(.*)\smissing$/i.exec(trimmed);
-      if (m) fields.add(humanizeField(m[1]));
+      if (m) { if (!isInternalJargon(m[1])) fields.add(humanizeField(m[1])); }
       else notes.add(trimmed);
     }
     return { fields: Array.from(fields), notes: Array.from(notes) };
@@ -1427,28 +1434,33 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   </button>
                 </div>
 
-                {/* Missing content WITHIN this document — flagged during the flow
-                    so the user knows exactly what to complete in the workbook. */}
+                {/* Gaps WITHIN this document — one compact line, no per-row
+                    reassurance (that's said once below), no internal jargon. */}
                 {hasGaps && (
                   <div
-                    className="mt-2 ml-7 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5"
-                    style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.15)" }}
+                    className="mt-1 ml-6 flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-200/70"
                     data-testid={`missing-content-${f.name}`}
                   >
-                    <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0 mt-0.5" />
-                    <span className="text-[11px] text-amber-200/80 leading-relaxed">
+                    <AlertTriangle className="w-3 h-3 text-amber-400/80 shrink-0 mt-0.5" />
+                    <span>
                       {missing.fields.length > 0 && (
-                        <>Couldn&apos;t read {missing.fields.slice(0, 4).join(", ")}
-                          {missing.fields.length > 4 ? ` +${missing.fields.length - 4} more` : ""}. </>
+                        <>Not read: {missing.fields.slice(0, 4).join(", ")}
+                          {missing.fields.length > 4 ? ` +${missing.fields.length - 4}` : ""}</>
                       )}
-                      {missing.notes.length > 0 && <>{missing.notes.slice(0, 2).join("; ")}. </>}
-                      You can still continue and fill the gaps in the workbook.
+                      {missing.fields.length > 0 && missing.notes.length > 0 && " · "}
+                      {missing.notes.length > 0 && <>{missing.notes.slice(0, 1).join("; ")}</>}
                     </span>
                   </div>
                 )}
               </div>
             );
           })}
+          {!parsing && files.some((f) => { const m = docMissingContent(f.name); return m.fields.length > 0 || m.notes.length > 0; }) && (
+            <div className="px-3.5 py-2.5 text-[11px] text-[#8e8e93] flex items-center gap-1.5 border-t border-white/[0.05]">
+              <AlertTriangle className="w-3 h-3 text-amber-400/70 shrink-0" />
+              Anything not read, you can fill in on the workbook after — it won&apos;t block you from continuing.
+            </div>
+          )}
         </div>
       )}
 
