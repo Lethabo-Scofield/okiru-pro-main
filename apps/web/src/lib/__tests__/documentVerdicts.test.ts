@@ -60,7 +60,9 @@ const CASE: any = {
     'lunch_menu.pdf': {},
   },
   documents_needing_review: [
-    { filename: 'thebe_affidavit.jpg', reasons: ['signed_date missing'] },
+    // Genuine trouble (expired) keeps this 'confused' under the yield-driven
+    // rule; the missing signed_date is still surfaced as a gap.
+    { filename: 'thebe_affidavit.jpg', reasons: ['signed_date missing', 'Certificate is expired'] },
   ],
 };
 
@@ -81,12 +83,32 @@ describe('assessDocuments', () => {
     expect(v.summary).toContain('R2.0M');
   });
 
-  it('a review-flagged document is "confused" — never "found" — and names the gap', () => {
+  it('a genuinely-troubled document (expired) is "confused" — never "found" — and still names the gap', () => {
     const v = assessDocuments(CASE).verdicts.find((x) => x.filename === 'thebe_affidavit.jpg')!;
     expect(v.verdict).toBe('confused');
     expect(v.gaps.join(' ')).toMatch(/Signed Date/i);
     // It still reports what it DID get, so the user can judge.
     expect(v.summary).toContain('Level 1');
+  });
+
+  it('a document that yielded data but only lacks an OPTIONAL field is "found", with the gap listed', () => {
+    // The yield-driven rule: a missing optional field is a gap we show, not a
+    // reason to tell the user the document did not work. (This is what fixed the
+    // "0 found while the score is 87" contradiction.)
+    const withOptionalGap: any = {
+      documents_detected: [{
+        filename: 'partial_cert.pdf',
+        document_type: 'B-BBEE Certificate',
+        status: 'review_required',
+        overall_confidence: 0.8,
+        validation: { warnings: [], errors: [], missing_fields: ['signed_date'] },
+      }],
+      fields_extracted: { 'partial_cert.pdf': { bee_level: { normalized_value: 2 }, black_ownership: { normalized_value: 60 } } },
+      documents_needing_review: [{ filename: 'partial_cert.pdf', reasons: ['signed_date missing'] }],
+    };
+    const v = assessDocuments(withOptionalGap).verdicts[0];
+    expect(v.verdict).toBe('found');
+    expect(v.gaps.join(' ')).toMatch(/Signed Date/i);
   });
 
   it('a failed / irrelevant document is "none" and says so plainly', () => {
@@ -163,14 +185,14 @@ describe('assessDocuments — merged section-row attribution', () => {
     expect(r.anyUsable).toBe(true);
   });
 
-  it('rows never outrank flags: a review-flagged doc with rows stays "confused"', () => {
+  it('genuine trouble outranks rows: a doc with rows but a real conflict stays "confused"', () => {
     const parserCase: any = {
       documents_detected: [
         {
           filename: 'share_register.pdf',
           document_type: 'Share Register',
           status: 'review_required',
-          validation: { missing_fields: ['shareholding_percent'] },
+          validation: { errors: ['Black ownership conflicts with the certificate'], missing_fields: ['shareholding_percent'] },
         },
       ],
     };
