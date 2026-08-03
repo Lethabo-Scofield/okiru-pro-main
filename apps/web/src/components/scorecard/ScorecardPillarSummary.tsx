@@ -17,6 +17,8 @@ export interface PillarSummaryRow {
   maxPoints: number;
   color?: string;
   subMinimumMet?: boolean;
+  /** Honest methodology notes shown under the bar (e.g. a bonus that scored 0). */
+  coverageNotes?: string[];
   /** If true, render full breakdown (bar + sub-min badge). If false, summary only. */
   isVisible: boolean;
 }
@@ -96,6 +98,17 @@ export function ScorecardPillarSummary({ pillar, className }: ScorecardPillarSum
             style={{ width: `${pct}%`, background: pillar.color || '#5e9bff' }}
           />
         </div>
+        {(pillar.coverageNotes ?? []).map((note, i) => (
+          <div
+            key={i}
+            className="mt-2 text-[11px] leading-snug flex items-start gap-1.5"
+            style={{ color: '#8e8e93' }}
+            data-testid={`pillar-coverage-note-${pillar.code}`}
+          >
+            <span className="shrink-0" style={{ color: '#ffd60a' }}>ⓘ</span>
+            <span>{note}</span>
+          </div>
+        ))}
       </div>
     </div>
   );
