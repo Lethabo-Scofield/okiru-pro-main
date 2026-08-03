@@ -160,7 +160,9 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
     const header = (
       <header className={ESG_PANEL_HEADER}>
         <h2 className="text-[16px] font-bold text-[var(--esg-text)]">{title ?? section.title}</h2>
-        <p className="text-[12px] text-[var(--esg-text2)]">{section.sheet}</p>
+        {section.note ? (
+          <p className="text-[12px] text-[var(--esg-text2)]">{section.note}</p>
+        ) : null}
       </header>
     );
 
@@ -415,7 +417,8 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
     } else {
       body = (
         <p className="p-5 text-[13px] text-[var(--esg-text2)]">
-          Configure fields for {section.sheet} in esgSectionConfigs.
+          There are no capture fields for {section.title} yet. Use Import / bulk upload to bring this
+          data in, or contact Okiru support if you expect fields here.
         </p>
       );
     }

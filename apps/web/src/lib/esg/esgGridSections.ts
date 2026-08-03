@@ -85,7 +85,7 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
   waste: {
     sectionId: "waste",
     sheet: "Waste_Register",
-    description: "Monthly waste streams (summary cells B16–B18 preserved on save)",
+    description: "Monthly waste streams by type and disposal route",
     startRow: 5,
     columns: [
       { key: "month", label: "Month", type: "text", width: 90 },
@@ -212,7 +212,7 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
   "s-data-ofo": {
     sectionId: "s-data-ofo",
     sheet: "S_Data",
-    description: "OFO codes — training interventions (S_Data rows 57–68)",
+    description: "Training interventions by OFO occupation code",
     startRow: 59,
     columns: [
       { key: "ofoCode",    label: "OFO Code",       type: "text",   required: true, width: 90 },
@@ -228,7 +228,7 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
   "s-data-csi": {
     sectionId: "s-data-csi",
     sheet: "S_Data",
-    description: "Community & Social Investment register (S_Data rows 70–82)",
+    description: "Community and social investment initiatives",
     startRow: 72,
     columns: [
       { key: "initiative",  label: "Initiative",      type: "text",   required: true, width: 200 },
