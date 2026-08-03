@@ -4,6 +4,8 @@ import { Award, ChevronRight, FileText, Loader2, ScanLine, Sparkles } from "luci
 import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
+import { ReconciliationReview } from "@/components/scorecard/ReconciliationReview";
+import type { ReconcileResult } from "@/lib/reconciliation/types";
 import type { VerdictReport, EntityVerdict } from "@/lib/documentVerdicts";
 import { fscSubSectorDisplayLabel, normalizeFscSubSector } from "@toolkit/lib/sectors/fsc-utils";
 
@@ -57,6 +59,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
   // The document flow stashes its per-document verdicts here before landing on
   // this page (same sessionStorage convention as the Excel import marker).
   const [verdictReport, setVerdictReport] = useState<VerdictReport | null>(null);
+  const [reconcile, setReconcile] = useState<ReconcileResult | null>(null);
 
   useEffect(() => {
     if (!provisional || !companyId) return;
@@ -65,6 +68,12 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
       if (raw) setVerdictReport(JSON.parse(raw) as VerdictReport);
     } catch {
       // The ledger is additive — the score still stands without it.
+    }
+    try {
+      const rec = sessionStorage.getItem(`okiru-reconcile-${companyId}`);
+      if (rec) setReconcile(JSON.parse(rec) as ReconcileResult);
+    } catch {
+      // Reconciliation review is additive too.
     }
   }, [provisional, companyId]);
   const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId } = useBbeeStore();
@@ -246,6 +255,11 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
             </div>
             <ScorecardPillarList pillars={pillarRows} />
           </div>
+
+          {/* Reconciliation review — what we did with the documents, triaged by
+              severity (handled / needs you / missing). The output face of the
+              entity model; keeps the page short by summarising the handled. */}
+          {provisional && <ReconciliationReview reconcile={reconcile} />}
 
           {/* The honest ledger — what each document actually gave us. This is
               what a requote is argued from, so it names gaps rather than
