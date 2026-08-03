@@ -224,6 +224,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // True once every file is parsed and the parser is doing the cross-document
   // resolve + AI step (which is one phase, not per-file).
   const [resolving, setResolving] = useState(false);
+  // Sub-progress through the rate-limited AI resolve phase ({done,total}).
+  const [resolveProgress, setResolveProgress] = useState<{ done: number; total: number } | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [dragActive, setDragActive] = useState(false);
   // Deliberately UNSET: the sector/size choice decides which scorecard rules
@@ -443,6 +445,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const runExtraction = async (list: File[], quoteId: string) => {
     setParsing(true);
     setResolving(false);
+    setResolveProgress(null);
     setParseError(null);
     setDocProgress({});
     try {
@@ -482,6 +485,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             break;
           case "resolving":
             setResolving(true);
+            if (typeof payload?.total === "number") setResolveProgress({ done: 0, total: payload.total });
+            break;
+          case "resolve-progress":
+            if (typeof payload?.done === "number" && typeof payload?.total === "number") {
+              setResolveProgress({ done: payload.done, total: payload.total });
+            }
             break;
           case "result":
             data = payload;
@@ -1222,6 +1231,31 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       )}
 
       {/* Expected documents — sector-aware checklist (below the stage) */}
+
+      {/* Phase banner — names where we are (Reading → Reconciling → Scoring) so
+          the multi-minute paid wait shows movement, not a frozen spinner. */}
+      {parsing && (
+        <div className="mt-3 flex items-center gap-3 rounded-xl border border-violet-300/20 bg-[#17151d] px-4 py-3" data-testid="extraction-phase">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-300" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-semibold text-violet-100">
+              {resolving ? "Reconciling into your company profile" : "Reading your documents"}
+            </div>
+            <div className="text-[12px] text-[#8e8e93]">
+              {resolving
+                ? resolveProgress
+                  ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking names, IDs and figures across every file`
+                  : "Cross-checking names, IDs and figures across every file"
+                : `${Object.values(docProgress).filter((s) => s === "done").length} of ${files.length} read`}
+            </div>
+          </div>
+          {resolving && resolveProgress && resolveProgress.total > 0 && (
+            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10 shrink-0">
+              <div className="h-full rounded-full bg-violet-400 transition-all" style={{ width: `${Math.round((resolveProgress.done / resolveProgress.total) * 100)}%` }} />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ACT 2 — scanning theatre */}
       {files.length > 0 && (!quote || parserCase || quoting) && (

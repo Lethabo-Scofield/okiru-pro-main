@@ -81,11 +81,23 @@ export interface CaseExtractionResult extends CaseEntities {
   validation: CaseValidation;
 }
 
+export interface ResolveProgress {
+  /** Documents whose AI read has completed. */
+  done: number;
+  /** Total documents being read. */
+  total: number;
+  /** The document that just completed, when known. */
+  fileName?: string;
+}
+
 export async function extractCaseEntities(
   inputs: RawExtractionInput[],
   model: ExtractionModel | null = getExtractionModel(),
+  onProgress?: (p: ResolveProgress) => void,
 ): Promise<CaseExtractionResult | null> {
   if (!model || inputs.length === 0) return null;
+  let done = 0;
+  const total = inputs.length;
 
   // Documents are read in PARALLEL, bounded. Each already fans its chunks out
   // internally; this fans the documents out too, so a 26-file pack is not as
@@ -154,6 +166,11 @@ export async function extractCaseEntities(
     const results = [...specResults];
     if (tableResult) results.push(tableResult);
     if (financialsResult) results.push(financialsResult);
+    // Sub-progress: the resolve phase is the multi-minute, rate-limited part of
+    // a paid run. Reporting each document as its AI read lands keeps the user on
+    // the page (and makes the "reconciling your company profile" step visible).
+    done += 1;
+    onProgress?.({ done, total, fileName: input.filename });
     return results;
   });
 

@@ -329,13 +329,14 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
  * spinner for minutes on a large evidence pack:
  *   event: doc-start   {index, fileName}   — before a file is parsed
  *   event: doc-done    {index, fileName}   — after that file is parsed
- *   event: resolving   {total}             — parsing done, cross-case work begins
- *   event: result      {<full case result>, ai_entities}
- *   event: complete    {}
- *   event: error       {message}
- * The parse phase (OCR/vision per file) is the slow part on scanned packs, so
- * per-file events give real progress; the cross-case resolve/AI step is one
- * final "resolving" phase because evidence for a fact spans several files.
+ *   event: resolving        {total}          — parsing done, reconcile/AI begins
+ *   event: resolve-progress {done,total,fileName} — each doc's AI read completes
+ *   event: result           {<full case result>, ai_entities}
+ *   event: complete         {}
+ *   event: error            {message}
+ * The parse phase (OCR/vision per file) is the slow part on scanned packs; the
+ * cross-case resolve/AI step is rate-limited and multi-minute, so it now reports
+ * sub-progress per document rather than freezing on one "resolving" spinner.
  */
 router.post('/resolve-case-files-stream', upload.array('files', 100), async (req: Request, res: Response) => {
   const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
@@ -405,11 +406,14 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       .filter((r) => r.status === 'fulfilled' && Array.isArray(r.value))
       .flatMap((r) => r.value as Awaited<ReturnType<typeof extractionInputsFromUpload>>);
 
-    send('resolving', { total: files.length });
+    send('resolving', { total: rawInputs.length });
     const service = new CaseParserService(repository);
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
-    const entities = await extractCaseEntities(rawInputs);
+    // Sub-progress through the slow, rate-limited AI resolve phase, so the wait
+    // after payment shows movement instead of a silent multi-minute gap.
+    const entities = await extractCaseEntities(rawInputs, undefined, (p) =>
+      send('resolve-progress', p));
 
     send('result', { ...result, ai_entities: entities });
     send('complete', {});
