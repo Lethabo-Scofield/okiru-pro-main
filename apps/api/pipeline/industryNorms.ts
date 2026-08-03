@@ -1,5 +1,7 @@
 const INDUSTRY_NORMS: Array<{ patterns: string[]; norm: number }> = [
-  { patterns: ['transport', 'road', 'freight', 'hauler', 'haulage', 'logistics', 'packers'], norm: 2.69 },
+  // Transport: Stats SA P0044 (March 2026) trailing 4-quarter NPAT/turnover margin
+  // for Transport Storage & Communication = 5.98% (was 2.69%, Q3 2023 — stale).
+  { patterns: ['transport', 'road', 'freight', 'hauler', 'haulage', 'logistics', 'packers'], norm: 5.98 },
   { patterns: ['mining', 'quarry', 'quarrying', 'mineral'], norm: 5.76 },
   { patterns: ['construction', 'building', 'civil'], norm: 3.47 },
   { patterns: ['manufactur', 'factory', 'production'], norm: 4.12 },
