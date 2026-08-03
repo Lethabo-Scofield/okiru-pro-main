@@ -22,6 +22,7 @@ import {
   FolderOpen,
   ArrowRight,
   Check,
+  ChevronDown,
   CloudUpload,
   CreditCard,
   FileText,
@@ -266,6 +267,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [resolving, setResolving] = useState(false);
   // Sub-progress through the rate-limited AI resolve phase ({done,total}).
   const [resolveProgress, setResolveProgress] = useState<{ done: number; total: number } | null>(null);
+  // The "what we read / still needed / didn't reconcile" detail is long; keep it
+  // collapsed so it never pushes the Build button off-screen. The pillar rack
+  // above it is the at-a-glance summary.
+  const [showReadDetails, setShowReadDetails] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [dragActive, setDragActive] = useState(false);
   // Deliberately UNSET: the sector/size choice decides which scorecard rules
@@ -1492,34 +1497,47 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
       {/* ACT 3 — the reveal */}
       {/* Confidence + gaps: what we read, what could not be placed, what is
-          still needed. Shown before the build button so a low score reads as a
-          to-do list, not a mystery. */}
-      {revealed && injected && (
+          still needed — COLLAPSED by default so it never pushes the Build
+          button off-screen. The pillar rack below is the at-a-glance summary;
+          this is the detail for anyone who wants it. */}
+      {revealed && (injected || reconciliationFlags.length > 0) && (
         <div className="mt-4">
-          <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
-        </div>
-      )}
-
-      {/* Reconciliation flags — a labelled sheet total the extracted rows do
-          not sum to. Advisory: the workbook still builds; this says exactly
-          which evidence to double-check. */}
-      {revealed && reconciliationFlags.length > 0 && (
-        <div
-          className="dus-fade-up mt-3 rounded-lg px-3 py-2.5"
-          style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.25)" }}
-          data-testid="reconciliation-flags"
-        >
-          <div className="flex items-center gap-1.5 mb-1">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-[11px] font-medium text-amber-200/90 uppercase tracking-wider">
-              Evidence that didn&apos;t reconcile
+          <button
+            type="button"
+            onClick={() => setShowReadDetails((s) => !s)}
+            className="w-full flex items-center gap-2 rounded-xl px-4 py-3 text-left border border-white/[0.07] bg-[#0e0e10]"
+            data-testid="toggle-read-details"
+          >
+            <ChevronDown className={`h-4 w-4 shrink-0 text-[#636366] transition-transform ${showReadDetails ? "rotate-180" : ""}`} />
+            <span className="text-[13px] font-medium text-[#e5e5ea]">What we read from your documents</span>
+            <span className="ml-auto text-[12px] text-[#8e8e93]">
+              {totalMappedRows} placed{reconciliationFlags.length > 0 ? ` · ${reconciliationFlags.length} to check` : ""}
             </span>
-          </div>
-          {reconciliationFlags.map((flag, i) => (
-            <p key={i} className="text-[11px] text-[#8e8e93] text-left">
-              <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
-            </p>
-          ))}
+          </button>
+          {showReadDetails && (
+            <div className="mt-3">
+              {injected && <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />}
+              {reconciliationFlags.length > 0 && (
+                <div
+                  className="dus-fade-up mt-3 rounded-lg px-3 py-2.5"
+                  style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.25)" }}
+                  data-testid="reconciliation-flags"
+                >
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="text-[11px] font-medium text-amber-200/90 uppercase tracking-wider">
+                      Evidence that didn&apos;t reconcile
+                    </span>
+                  </div>
+                  {reconciliationFlags.map((flag, i) => (
+                    <p key={i} className="text-[11px] text-[#8e8e93] text-left">
+                      <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
