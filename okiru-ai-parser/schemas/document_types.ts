@@ -34,9 +34,12 @@ export const SUPPORTED_DOCUMENT_EXTENSIONS = new Set([
 /** True when either the declared type or the filename's extension is readable. */
 export function isReadableDocument(mimeType: string, filename: string): boolean {
   if (SUPPORTED_DOCUMENT_MIME_TYPES.has(mimeType)) return true;
-  const dot = filename.lastIndexOf('.');
+  // Split-sheet provenance names ("File.xlsx › Finance") carry the extension
+  // before the marker, not at the end — judge the base name.
+  const base = filename.split(' › ')[0];
+  const dot = base.lastIndexOf('.');
   if (dot === -1) return false;
-  return SUPPORTED_DOCUMENT_EXTENSIONS.has(filename.slice(dot).toLowerCase());
+  return SUPPORTED_DOCUMENT_EXTENSIONS.has(base.slice(dot).toLowerCase());
 }
 
 export type ParserStatus = 'passed' | 'review_required' | 'failed';
