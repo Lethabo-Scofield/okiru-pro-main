@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Switch, Route, Link } from "wouter";
 import { Leaf } from "lucide-react";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
@@ -7,6 +8,11 @@ import { esgClientsHref, esgCreateHref, esgSummaryHref } from "@/lib/esgRoutes";
 import { toolkitPillarHref } from "@/lib/esg/esgToolkitNav";
 import { formatEsgPercent } from "@/lib/esgCalculators";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
+import {
+  ESG_SELECTED_TOPICS_CELL,
+  computeScopedSummary,
+  parseSelectedTopics,
+} from "@/lib/esg/esgTopicScope";
 import { EsgSidebar } from "./components/layout/EsgSidebar";
 import EsgDashboard from "./pages/EsgDashboard";
 import EsgCarbonTax from "./pages/EsgCarbonTax";
@@ -45,6 +51,16 @@ function EsgToolkitHeader() {
   const scorecard = useEsgStore((s) => s.scorecard);
   const stance = useEsgStore((s) => s.getStance());
   const setStance = useEsgStore((s) => s.setStance);
+  const reportMode = useEsgStore((s) => s.getReportMode());
+  const setReportMode = useEsgStore((s) => s.setReportMode);
+  const topicsCsv = useEsgStore(
+    (s) => s.workbook?.sections?.assumptions?.cells?.[ESG_SELECTED_TOPICS_CELL],
+  );
+  const selectedTopics = useMemo(() => parseSelectedTopics(topicsCsv), [topicsCsv]);
+  const scoped = useMemo(
+    () => (reportMode === "topic" ? computeScopedSummary(scorecard, selectedTopics) : null),
+    [reportMode, scorecard, selectedTopics],
+  );
 
   return (
     <header
@@ -77,8 +93,13 @@ function EsgToolkitHeader() {
         <div
           className="text-[22px] font-bold tracking-tight text-[var(--esg-acc-e)] tabular-nums"
           data-testid="esg-hdr-overall"
+          title={scoped ? "Scoped to your selected topics" : undefined}
         >
-          {scorecard ? formatEsgPercent(scorecard.overallPercent) : "—"}
+          {scoped
+            ? formatEsgPercent(scoped.overallPercent)
+            : scorecard
+              ? formatEsgPercent(scorecard.overallPercent)
+              : "—"}
         </div>
         {(
           [
@@ -86,18 +107,44 @@ function EsgToolkitHeader() {
             { key: "social" as const, color: "var(--esg-acc-s)" },
             { key: "governance" as const, color: "var(--esg-acc-g)" },
           ] as const
-        ).map((p) => (
-          <Link
-            key={p.key}
-            href={toolkitPillarHref(p.key)}
-            className="text-[10px] font-semibold tabular-nums px-2 py-0.5 rounded-full border border-[var(--esg-glass-border)] hover:bg-white/[0.06] transition-colors"
-            style={{ color: p.color }}
-            data-testid={`esg-hdr-${p.key}`}
-            data-esg-pillar-href={toolkitPillarHref(p.key)}
+        )
+          .filter((p) => !scoped || scoped.pillars[p.key].max > 0)
+          .map((p) => (
+            <Link
+              key={p.key}
+              href={toolkitPillarHref(p.key)}
+              className="text-[10px] font-semibold tabular-nums px-2 py-0.5 rounded-full border border-[var(--esg-glass-border)] hover:bg-white/[0.06] transition-colors"
+              style={{ color: p.color }}
+              data-testid={`esg-hdr-${p.key}`}
+              data-esg-pillar-href={toolkitPillarHref(p.key)}
+            >
+              {scoped
+                ? `${scoped.pillars[p.key].score.toFixed(0)}/${scoped.pillars[p.key].max}`
+                : `${scorecard ? scorecard[p.key].score.toFixed(0) : "—"}/${ESG_PILLAR_MAX[p.key]}`}
+            </Link>
+          ))}
+      </div>
+      <div className="flex gap-1 mr-2" data-testid="esg-scope-row">
+        {(
+          [
+            { mode: "framework" as const, label: "Frameworks", title: "Report against named standards — the full framework-aligned workbook" },
+            { mode: "topic" as const, label: "Topics", title: "Report on selected sustainability topics — no named standard implied" },
+          ] as const
+        ).map((m) => (
+          <button
+            key={m.mode}
+            type="button"
+            title={m.title}
+            onClick={() => void setReportMode(m.mode)}
+            className={`text-[10px] font-medium px-2.5 py-1 rounded-full border transition-colors ${
+              reportMode === m.mode
+                ? "bg-white/10 border-white/20 text-[var(--esg-text)] font-semibold"
+                : "border-[var(--esg-glass-border)] text-[var(--esg-text3)] hover:text-[var(--esg-text2)]"
+            }`}
+            data-testid={`esg-scope-${m.mode}`}
           >
-            {scorecard ? scorecard[p.key].score.toFixed(0) : "—"}/
-            {ESG_PILLAR_MAX[p.key]}
-          </Link>
+            {m.label}
+          </button>
         ))}
       </div>
       <div className="flex gap-1 mr-2" data-testid="esg-stance-row">

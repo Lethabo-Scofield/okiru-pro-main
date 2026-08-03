@@ -6,6 +6,14 @@ import {
 } from "@/lib/esgWorkbookStorage";
 import { computeEsgScorecard, type EsgScorecardResult } from "./calculators";
 import type { EsgTouchedState } from "@/lib/esg/esgValidationRules";
+import {
+  ESG_REPORT_MODE_CELL,
+  ESG_SELECTED_TOPICS_CELL,
+  parseReportMode,
+  parseSelectedTopics,
+  serializeSelectedTopics,
+  type EsgReportMode,
+} from "@/lib/esg/esgTopicScope";
 import { API_BASE } from "@toolkit/lib/config";
 
 type LoadOptions = { force?: boolean };
@@ -33,6 +41,10 @@ type EsgStoreState = {
   recalculate: () => void;
   getStance: () => EsgStanceLabel;
   setStance: (stance: EsgStanceLabel) => Promise<void>;
+  getReportMode: () => EsgReportMode;
+  setReportMode: (mode: EsgReportMode) => Promise<void>;
+  getSelectedTopics: () => string[];
+  toggleTopic: (topicId: string) => Promise<void>;
   setSubmittedAt: (iso: string | null) => void;
   markTouched: (sectionId: string, fieldRef: string) => void;
   resetTouched: (sectionId?: string) => void;
@@ -134,6 +146,42 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
     const cells = { ...(workbook.sections?.assumptions?.cells ?? {}), B6: stance };
     await get().updateSectionCells("assumptions", cells);
     get().recalculate();
+  },
+
+  /* Part 4 — report-by-topic scope. Persisted in assumptions cells like stance,
+     so it round-trips through the server per company. */
+  getReportMode() {
+    return parseReportMode(get().workbook?.sections?.assumptions?.cells?.[ESG_REPORT_MODE_CELL]);
+  },
+
+  async setReportMode(mode) {
+    const { workbook, companyId } = get();
+    if (!workbook || !companyId) return;
+    const cells = {
+      ...(workbook.sections?.assumptions?.cells ?? {}),
+      [ESG_REPORT_MODE_CELL]: mode,
+    };
+    await get().updateSectionCells("assumptions", cells);
+  },
+
+  getSelectedTopics() {
+    return parseSelectedTopics(
+      get().workbook?.sections?.assumptions?.cells?.[ESG_SELECTED_TOPICS_CELL],
+    );
+  },
+
+  async toggleTopic(topicId) {
+    const { workbook, companyId } = get();
+    if (!workbook || !companyId) return;
+    const current = get().getSelectedTopics();
+    const next = current.includes(topicId)
+      ? current.filter((id) => id !== topicId)
+      : [...current, topicId];
+    const cells = {
+      ...(workbook.sections?.assumptions?.cells ?? {}),
+      [ESG_SELECTED_TOPICS_CELL]: serializeSelectedTopics(next),
+    };
+    await get().updateSectionCells("assumptions", cells);
   },
 
   setSubmittedAt(iso) {
