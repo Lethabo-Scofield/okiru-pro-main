@@ -118,7 +118,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
 
     return PILLAR_META.map((meta) => {
       const pillar = scorecard[meta.key as keyof typeof scorecard] as
-        | { score?: number; weighting?: number; subMinimumMet?: boolean; isElectiveNotChosen?: boolean; isChosenElective?: boolean }
+        | { score?: number; weighting?: number; subMinimumMet?: boolean; isElectiveNotChosen?: boolean; isChosenElective?: boolean; coverageNotes?: string[] }
         | undefined;
       const score = typeof pillar?.score === "number" ? pillar.score : 0;
       let maxPoints = typeof pillar?.weighting === "number" ? pillar.weighting : 0;
@@ -134,6 +134,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
         maxPoints,
         color: meta.color,
         subMinimumMet: pillar?.subMinimumMet,
+        coverageNotes: pillar?.coverageNotes ?? [],
       };
     }).filter(Boolean) as Array<{
       code: string;
@@ -142,6 +143,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
       maxPoints: number;
       color: string;
       subMinimumMet?: boolean;
+      coverageNotes: string[];
     }>;
   }, [scorecard, client.sectorCode, client.scorecardType]);
 
