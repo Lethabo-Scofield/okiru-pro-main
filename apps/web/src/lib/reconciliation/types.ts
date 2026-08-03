@@ -98,4 +98,12 @@ export interface ReconcileResult {
 export interface ReconcileOptions {
   sectorCode?: string;
   scorecardType?: string;
+  /**
+   * Every name the MEASURED ENTITY is known by — the display name PLUS the
+   * registered names and registration numbers pulled from the documents. The
+   * self-shareholder check matches against all of them, because the registered
+   * entity ("Thandanani Packers and Hauliers cc") is usually NOT the display
+   * name the user typed ("Thandanani Transport").
+   */
+  entityAliases?: string[];
 }

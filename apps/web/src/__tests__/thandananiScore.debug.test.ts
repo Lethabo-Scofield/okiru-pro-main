@@ -43,11 +43,20 @@ describe.skipIf(!JSON_PATH)("Thandanani Transport QSE — extracted score vs 102
     ) as Record<string, { rows?: Array<Record<string, unknown>>; meta?: Record<string, unknown> }>;
     sections["company-information"] = {
       ...(sections["company-information"] ?? {}),
-      meta: { ...(sections["company-information"]?.meta ?? {}), companyName: "Thandanani Packers and Hauliers cc", industrySector: "Transport", scorecardType: "QSE" },
+      // Display name deliberately DIFFERENT from the registered entity name, as
+      // in the live run ("Thandanani Transport" vs "…Packers and Hauliers cc").
+      meta: { ...(sections["company-information"]?.meta ?? {}), companyName: "Thandanani Transport", industrySector: "Transport", scorecardType: "QSE" },
     };
 
+    // Entity aliases from the extraction (registered names), as handleCreate builds.
+    const ai = (parserCase as any).ai_entities;
+    const aliases: string[] = [];
+    const add = (v: unknown) => { const s = String(v ?? "").trim(); if (s && !/<\/?[a-z]/i.test(s)) aliases.push(s); };
+    add(ai?.fields?.entity_name?.value);
+    for (const e of ai?.extractions ?? []) for (const v of e?.values ?? []) if (/entity_name|company_name/i.test(String(v?.field ?? ""))) add(v?.value);
+
     // RECONCILE before scoring — the whole point.
-    const reconciled = reconcileEntity(sections as any, { sectorCode: "TRANSPORT", scorecardType: "QSE" });
+    const reconciled = reconcileEntity(sections as any, { sectorCode: "TRANSPORT", scorecardType: "QSE", entityAliases: ["Thandanani Transport", ...aliases] });
     // eslint-disable-next-line no-console
     console.log("RECONCILE SUMMARY " + JSON.stringify({ summary: reconciled.summary, counts: reconciled.counts, blocking: reconciled.issues.filter((i) => i.severity === "blocking").map((i) => i.statement) }, null, 2));
 
