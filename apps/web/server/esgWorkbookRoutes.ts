@@ -268,6 +268,17 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     if (wb.submittedAt) {
       return res.status(423).json({ error: "Workbook is submitted and locked" });
     }
+    // Sample seeding REPLACES every section, so it is admin-only and needs an
+    // explicit confirm — a stray click must never wipe a client's entered data.
+    const role = (req as any).user?.role;
+    if (role !== "admin" && role !== "super_admin") {
+      return res.status(403).json({ error: "Sample data can only be loaded by an administrator" });
+    }
+    if ((req.body as { confirm?: boolean } | undefined)?.confirm !== true) {
+      return res.status(400).json({
+        error: "Loading sample data replaces every section of this workbook. Resend with confirm: true.",
+      });
+    }
     try {
       wb.sections = buildGoldenSections();
       await persistEsgWorkbook(wb);

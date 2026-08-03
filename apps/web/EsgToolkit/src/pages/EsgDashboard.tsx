@@ -4,7 +4,9 @@ import { API_BASE } from "@toolkit/lib/config";
 import { toolkitPillarHref } from "@/lib/esg/esgToolkitNav";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { formatEsgPercent } from "@/lib/esgCalculators";
+import { useAuth } from "@toolkit/lib/auth";
 import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
+import { canSeedEsgSampleData } from "@/lib/esg/esgAccess";
 import {
   ESG_SELECTED_TOPICS_CELL,
   computeScopedSummary,
@@ -47,6 +49,8 @@ function PillarTable({ rows }: { rows: EsgPillarRow[] }) {
 
 export default function EsgDashboard() {
   const { companyId, workbook, scorecard, submittedAt, seedDemo, load } = useEsgStore();
+  const { user } = useAuth();
+  const isEsgAdmin = canSeedEsgSampleData(user);
   const reportMode = useEsgStore((s) => s.getReportMode());
   const topicsCsv = useEsgStore(
     (s) => s.workbook?.sections?.assumptions?.cells?.[ESG_SELECTED_TOPICS_CELL],
@@ -61,12 +65,25 @@ export default function EsgDashboard() {
 
   const loadGolden = async () => {
     if (!companyId) return;
-    await seedDemo(companyId);
-    await load(companyId, undefined, { force: true });
+    const ok = window.confirm(
+      "Load sample data?\n\nThis REPLACES every section of this workbook with sample figures. Anything already captured for this company will be lost.",
+    );
+    if (!ok) return;
+    try {
+      await seedDemo(companyId);
+      await load(companyId, undefined, { force: true });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not load sample data");
+    }
   };
 
   const submit = async () => {
     if (!companyId) return;
+    // One-way door: there is no self-service unlock, so make that explicit.
+    const ok = window.confirm(
+      "Submit and lock this workbook?\n\nInputs become read-only and cannot be edited afterwards. Reopening requires Okiru support.",
+    );
+    if (!ok) return;
     setSubmitting(true);
     try {
       const res = await fetch(
@@ -91,7 +108,7 @@ export default function EsgDashboard() {
           ESG Dashboard
         </h1>
         <p className="text-[12px] text-[var(--esg-text2)] mt-1">
-          Live scores from workbook calculators (ESG_Dashboard parity).
+          Live E, S and G scores, updated as you capture data.
         </p>
       </header>
 
@@ -110,7 +127,7 @@ export default function EsgDashboard() {
                 : "—"}
           </div>
           <div className="text-[11px] text-[var(--esg-text3)] mt-1">
-            {scoped ? "Overall — selected topics" : "Overall ESG (D9)"}
+            {scoped ? "Overall — selected topics" : "Overall ESG score"}
           </div>
         </div>
         <div className="flex-1 min-w-[200px] grid grid-cols-3 gap-3">
@@ -230,15 +247,18 @@ export default function EsgDashboard() {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => void loadGolden()}
-          disabled={Boolean(submittedAt)}
-          className="text-[12px] px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
-          data-testid="esg-load-golden-demo"
-        >
-          Load SG Consumer demo data
-        </button>
+        {isEsgAdmin ? (
+          <button
+            type="button"
+            onClick={() => void loadGolden()}
+            disabled={Boolean(submittedAt)}
+            title="Replaces every section with sample figures"
+            className="text-[12px] px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
+            data-testid="esg-load-golden-demo"
+          >
+            Load sample data
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => void submit()}

@@ -58,7 +58,7 @@ export default function EsgToolkitSectionPage() {
     <div className="space-y-5" data-testid={`esg-toolkit-page-${page.id}`}>
       <header className="page-hdr">
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text3)] mb-2">
-          {page.eyebrow} · {page.sheet}
+          {page.eyebrow}
         </p>
         <h1 className="text-[26px] font-semibold tracking-tight text-[var(--esg-text)]">
           {page.label}

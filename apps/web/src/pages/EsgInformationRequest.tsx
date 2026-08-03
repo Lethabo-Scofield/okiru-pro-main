@@ -20,6 +20,8 @@ import {
   EsgWorkbookSectionEditor,
   type EsgWorkbookSectionEditorHandle,
 } from "@/components/esg-workbook/EsgWorkbookSectionEditor";
+import { useAuth } from "@toolkit/lib/auth";
+import { canSeedEsgSampleData } from "@/lib/esg/esgAccess";
 import { useEsgStore } from "../../EsgToolkit/src/lib/esgStore";
 import { EsgReportScopePanel } from "../../EsgToolkit/src/components/EsgReportScopePanel";
 import { API_BASE } from "@toolkit/lib/config";
@@ -43,6 +45,8 @@ export default function EsgInformationRequest() {
   const companyId = params.companyId ?? "";
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEsgAdmin = canSeedEsgSampleData(user);
   const load = useEsgStore((s) => s.load);
   const setCompanyName = useEsgStore((s) => s.setCompanyName);
   const companyName = useEsgStore((s) => s.companyName);
@@ -141,13 +145,21 @@ export default function EsgInformationRequest() {
 
   const sectionStatus = (sectionId: string) => (cellCount(sectionId) > 0 ? "filled" : "empty");
 
-  const loadGoldenDemo = async () => {
+  const loadSampleData = async () => {
+    const ok = window.confirm(
+      "Load sample data?\n\nThis REPLACES every section of this workbook with sample figures. Anything already captured for this company will be lost.",
+    );
+    if (!ok) return;
     try {
       await seedDemo(companyId);
       await load(companyId, companyName, { force: true });
-      toast({ title: "Demo loaded", description: "All sections seeded from golden fixture." });
-    } catch {
-      toast({ title: "Demo load failed", variant: "destructive" });
+      toast({ title: "Sample data loaded", description: "Every section was replaced with sample figures." });
+    } catch (err) {
+      toast({
+        title: "Could not load sample data",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     }
   };
 
@@ -305,15 +317,18 @@ export default function EsgInformationRequest() {
             >
               <Save className="h-3.5 w-3.5" /> Save
             </button>
-            <button
-              type="button"
-              onClick={() => void loadGoldenDemo()}
-              disabled={Boolean(submittedAt) || loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
-              data-testid="button-esg-load-demo"
-            >
-              Load demo data
-            </button>
+            {isEsgAdmin ? (
+              <button
+                type="button"
+                onClick={() => void loadSampleData()}
+                disabled={Boolean(submittedAt) || loading}
+                title="Replaces every section with sample figures"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+                data-testid="button-esg-load-demo"
+              >
+                Load sample data
+              </button>
+            ) : null}
             <input
               ref={fileInputRef}
               type="file"
@@ -362,8 +377,8 @@ export default function EsgInformationRequest() {
         </div>
 
         <p className="text-[13px] text-[var(--esg-text2)] mb-6 -mt-2">
-          Complete each section — scores update as you save. Open the toolkit from Summary when validation passes.
-          See <span className="text-[#8e8e93]">docs/esg/ESG_FLOW_ONTOLOGY.md</span> in the repo for the full consultant flow.
+          Complete each section — scores update as you save. Once the required fields pass validation, continue to
+          Summary and open the toolkit from there.
         </p>
 
         <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -487,9 +502,7 @@ export default function EsgInformationRequest() {
                   </div>
                 ) : null}
                 {activeSection.note ? (
-                  <p className="text-[12px] text-[var(--esg-text3)] mb-4" title={`See ESG_FLOW_ONTOLOGY.md § section-${activeSection.id}`}>
-                    {activeSection.note}
-                  </p>
+                  <p className="text-[12px] text-[var(--esg-text3)] mb-4">{activeSection.note}</p>
                 ) : null}
                 <EsgWorkbookSectionEditor
                   key={activeSection.id}
@@ -499,7 +512,8 @@ export default function EsgInformationRequest() {
                 />
                 {submittedAt ? (
                   <p className="mt-4 text-[12px] text-[var(--esg-acc-s)]">
-                    Workbook submitted — inputs are locked. Unlock via admin if needed.
+                    Workbook submitted on {new Date(submittedAt).toLocaleDateString()} — inputs are locked and can no
+                    longer be edited. Contact Okiru support if this workbook needs to be reopened.
                   </p>
                 ) : null}
               </div>
