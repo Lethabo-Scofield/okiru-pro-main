@@ -440,7 +440,7 @@ const STANDARD_INDUSTRY_NORMS: IndustryNorm[] = [
   { industry: 'Electricity, gas and water supply', normPercent: -4.64, quarterThresholdPercent: 0 },
   { industry: 'Construction', normPercent: 5.22, quarterThresholdPercent: 1.31 },
   { industry: 'Trade (Retail/Wholesale)', normPercent: 4.29, quarterThresholdPercent: 1.07 },
-  { industry: 'Transport, storage and communication', normPercent: 2.69, quarterThresholdPercent: 0.67 },
+  { industry: 'Transport, storage and communication', normPercent: 5.98, quarterThresholdPercent: 1.50 },
   { industry: 'Real estate and business services', normPercent: 8.24, quarterThresholdPercent: 2.06 },
   { industry: 'Community, social and personal services', normPercent: 7.90, quarterThresholdPercent: 1.98 },
   { industry: 'Agriculture, forestry and fishing', normPercent: 8.0, quarterThresholdPercent: 2.0 },

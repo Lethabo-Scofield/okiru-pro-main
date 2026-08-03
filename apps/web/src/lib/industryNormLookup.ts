@@ -6,13 +6,21 @@
 /**
  * Build / Toolkit industry dropdown → norm %.
  *
- * ONE source: the dated SARS/Stats-SA quarterly industry norms table
- * (sectorConfig.ts STANDARD_INDUSTRY_NORMS, Q3 2023). This table previously
- * carried round-number estimates that DISAGREED with it (Transport 5 vs 2.69,
- * Construction 4 vs 5.22, Mining 12 vs 16.25…), so the deemed-NPAT outcome
- * depended on which code path resolved the norm. (Audit 2026-07-26 item 13.)
+ * ONE source: the dated SARS/Stats-SA quarterly industry norms table.
+ * This table previously carried round-number estimates that DISAGREED with it
+ * (Transport 5 vs 2.69, Construction 4 vs 5.22, Mining 12 vs 16.25…), so the
+ * deemed-NPAT outcome depended on which code path resolved the norm.
+ * (Audit 2026-07-26 item 13.)
  * Energy is genuinely negative in the source quarter; resolveNpatForTargets
  * treats a non-positive norm as "no deeming applies".
+ *
+ * TRANSPORT UPDATED 2026-08-03 to 5.98% — the trailing-four-quarter NPAT/turnover
+ * margin for "Transport Storage and Communication Industry" from Stats SA P0044
+ * Quarterly Financial Statistics (March 2026): NPAT 69,597 ÷ turnover 1,163,164.
+ * The old 2.69% (Q3 2023) understated deemed NPAT, which inflated SED/ED scores
+ * (a lower norm = smaller 1%-NPAT target). See docs/NPAT industries norms.xlsx.
+ * The OTHER industries here are still on the older quarter — refresh them from the
+ * same P0044 release when revisited.
  */
 const BUILD_INDUSTRY_NORMS: Record<string, number> = {
   Retail: 4.29,
@@ -22,7 +30,7 @@ const BUILD_INDUSTRY_NORMS: Record<string, number> = {
   Construction: 5.22,
   Agriculture: 8,
   Mining: 16.25,
-  Transport: 2.69,
+  Transport: 5.98,
   Hospitality: 5,
   Healthcare: 8,
   Education: 10,
@@ -39,7 +47,7 @@ const SECTOR_INDUSTRY_NORMS: Record<string, number> = {
   ICT: 10,
   FSC: 15,
   AGRI: 8,
-  TRANSPORT: 2.69,
+  TRANSPORT: 5.98,
   CONSTRUCTION: 5.22,
 };
 
