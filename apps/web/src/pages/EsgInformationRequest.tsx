@@ -55,10 +55,12 @@ export default function EsgInformationRequest() {
   const saving = useEsgStore((s) => s.saving);
   const submittedAt = useEsgStore((s) => s.submittedAt);
   const seedDemo = useEsgStore((s) => s.seedDemo);
+  const unlockWorkbook = useEsgStore((s) => s.unlockWorkbook);
   const setSubmitAttempted = useEsgStore((s) => s.setSubmitAttempted);
   const touched = useEsgStore((s) => s.touched);
 
   const [activeSectionId, setActiveSectionId] = useState(DEFAULT_SECTION);
+  const [reopening, setReopening] = useState(false);
   const [importPreview, setImportPreview] = useState<EsgImportPreview | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -205,6 +207,27 @@ export default function EsgInformationRequest() {
       toast({ title: "Import failed", variant: "destructive" });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const reopenWorkbook = async () => {
+    const ok = window.confirm(
+      "Reopen this workbook for editing?\n\nInputs become editable again and scores can change. The reopen is recorded against this workbook.",
+    );
+    if (!ok) return;
+    setReopening(true);
+    try {
+      await unlockWorkbook(companyId);
+      await load(companyId, companyName, { force: true });
+      toast({ title: "Workbook reopened", description: "Inputs can be edited again." });
+    } catch (err) {
+      toast({
+        title: "Could not reopen workbook",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -511,10 +534,24 @@ export default function EsgInformationRequest() {
                   title={activeSection.title}
                 />
                 {submittedAt ? (
-                  <p className="mt-4 text-[12px] text-[var(--esg-acc-s)]">
-                    Workbook submitted on {new Date(submittedAt).toLocaleDateString()} — inputs are locked and can no
-                    longer be edited. Contact Okiru support if this workbook needs to be reopened.
-                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <p className="text-[12px] text-[var(--esg-acc-s)]">
+                      Workbook submitted on {new Date(submittedAt).toLocaleDateString()} — inputs are locked and can
+                      no longer be edited.
+                      {isEsgAdmin ? "" : " Ask an administrator if this workbook needs to be reopened."}
+                    </p>
+                    {isEsgAdmin ? (
+                      <button
+                        type="button"
+                        onClick={() => void reopenWorkbook()}
+                        disabled={reopening}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+                        data-testid="button-esg-reopen-workbook"
+                      >
+                        {reopening ? "Reopening…" : "Reopen for editing"}
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             ) : null}

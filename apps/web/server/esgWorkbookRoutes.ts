@@ -11,6 +11,11 @@ import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
 import { buildEsgWorkbookTemplateXlsx } from "../src/lib/esg/esgWorkbookTemplate";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
 import { buildGoldenSections } from "./esgGoldenFixture";
+import {
+  applyEsgWorkbookReopen,
+  applyEsgWorkbookSubmit,
+  canReopenEsgWorkbook,
+} from "./esgWorkbookLock";
 import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
 
 const logger = createLogger("EsgWorkbook");
@@ -233,11 +238,39 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       });
     }
     const iso = new Date().toISOString();
-    wb.submittedAt = iso;
-    wb.sections.assumptions = wb.sections.assumptions ?? { cells: {} };
-    (wb.sections.assumptions.cells as Record<string, unknown>)["_submittedAt"] = iso;
+    applyEsgWorkbookSubmit(wb, iso);
     await persistEsgWorkbook(wb);
     res.json({ ok: true, submittedAt: iso });
+  });
+
+  /**
+   * Reopen a submitted workbook. Submission is otherwise a one-way door, and
+   * the UI used to promise an "unlock via admin" that did not exist — this is
+   * that path, restricted to administrators and recorded on the workbook so a
+   * reopen is always traceable.
+   */
+  app.post("/api/esg/workbook/:companyId/unlock", requireAuth, async (req, res) => {
+    const wb = await authorizeEsgWorkbook(req, res);
+    if (!wb) return;
+    const user = (req as any).user;
+    if (!canReopenEsgWorkbook(user?.role)) {
+      return res
+        .status(403)
+        .json({ error: "Only an administrator can reopen a submitted workbook" });
+    }
+    const reopenedBy = user?.email || user?.username || user?.id || "administrator";
+    const reopenedAt = new Date().toISOString();
+    const previouslySubmittedAt = applyEsgWorkbookReopen(wb, reopenedBy, reopenedAt);
+    if (!previouslySubmittedAt) {
+      return res.json({ ok: true, submittedAt: null });
+    }
+    await persistEsgWorkbook(wb);
+    logger.info("ESG workbook reopened for editing", {
+      companyId: wb.companyId,
+      previouslySubmittedAt,
+      reopenedBy,
+    });
+    res.json({ ok: true, submittedAt: null, reopenedAt, reopenedBy });
   });
 
   app.get("/api/esg/workbook/:companyId/scores", requireAuth, async (req, res) => {

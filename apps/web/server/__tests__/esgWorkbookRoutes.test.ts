@@ -14,6 +14,7 @@ export const ESG_API_ROUTE_PATHS = [
   "PUT /api/esg/workbook/:companyId/section/:sectionKey",
   "POST /api/esg/workbook/:companyId/validate",
   "POST /api/esg/workbook/:companyId/submit",
+  "POST /api/esg/workbook/:companyId/unlock",
   "POST /api/esg/workbook/:companyId/seed-demo",
   "POST /api/esg/workbook/:companyId/import",
   "GET /api/esg/workbook/:companyId/scores",
@@ -22,7 +23,7 @@ export const ESG_API_ROUTE_PATHS = [
 
 describe("esgWorkbookRoutes section keys", () => {
   it("documents canonical API paths", () => {
-    expect(ESG_API_ROUTE_PATHS.length).toBe(10);
+    expect(ESG_API_ROUTE_PATHS.length).toBe(11);
     expect(ESG_API_ROUTE_PATHS.join(" ")).toContain("/api/esg/");
   });
   it("includes all Phase 1 section ids", () => {
