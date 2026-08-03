@@ -79,7 +79,24 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
       // Reconciliation review is additive too.
     }
   }, [provisional, companyId]);
-  const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId } = useBbeeStore();
+  const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId, procurement, skills, esd, sed } = useBbeeStore();
+
+  // Total Rand value the extraction read from the uploaded documents, summed
+  // across every pillar's line items (procurement spend + skills spend + SED +
+  // ED contributions). A sanity total: "this is the money we pulled off your
+  // documents", independent of how it scores.
+  const extractedSpend = useMemo(() => {
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+    const proc = (procurement?.suppliers ?? []).reduce((t, s) => t + num((s as { spend?: number }).spend), 0);
+    const skl = (skills?.trainingPrograms ?? []).reduce((t, p) => {
+      const parts = num(p.courseCost) + num(p.travelCost) + num(p.accommodationCost) + num(p.cateringCost)
+        + num(p.stationeryCost) + num(p.facilityCost) + num(p.salaryCost) + num(p.otherCosts);
+      return t + (num(p.totalCost) || parts || num(p.cost));
+    }, 0);
+    const sedSpend = (sed?.contributions ?? []).reduce((t, c) => t + num(c.amount), 0);
+    const edSpend = (esd?.contributions ?? []).reduce((t, c) => t + num(c.amount), 0);
+    return { proc, skl, sedSpend, edSpend, total: proc + skl + sedSpend + edSpend };
+  }, [procurement, skills, esd, sed]);
   const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
@@ -232,13 +249,20 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
         </div>
       ) : (
         <>
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
               <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">Total Score</span>
               <span className="text-[28px] font-bold text-white leading-none tabular-nums">
                 {scorecard.total.score.toFixed(2)}
               </span>
               <span className="text-[12px] text-[#636366]">of {scorecard.total.weighting} pts</span>
+            </div>
+            <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }} data-testid="stat-extracted-spend">
+              <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">Total Spend Read</span>
+              <span className="text-[28px] font-bold text-white leading-none tabular-nums">
+                R{Math.round(extractedSpend.total).toLocaleString("en-ZA")}
+              </span>
+              <span className="text-[12px] text-[#636366]">procurement + skills + SED + ED</span>
             </div>
             <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
               <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">B-BBEE Level</span>
