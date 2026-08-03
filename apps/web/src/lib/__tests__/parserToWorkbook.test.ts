@@ -564,11 +564,14 @@ describe("completion pass — derivable required fields are filled, never fabric
     expect(row.surname).toBe("Naidoo");
   });
 
-  it("defaults procurement supplier size to Generic — what scoring already assumes for unknown", () => {
+  it("does NOT guess a supplier's size — an unknown size stays blank (purity rule)", () => {
+    // Defaulting to "Generic" wrote a value the evidence did not contain and
+    // moved the procurement score. Unknown stays unknown; reconcileEntity flags
+    // it as a coverage gap instead.
     const result = parserExtractionsToWorkbook([
       extraction({ values: [{ field: "supplier_name", value: "Alpha" }, { field: "bee_level", value: "2" }] }),
     ]);
-    expect(result.rows.procurement![0].currentSize).toBe("Generic");
+    expect(String(result.rows.procurement![0].currentSize ?? "")).toBe("");
   });
 
   it("composes sed descriptionOfSpend from the row's own type + beneficiary", () => {

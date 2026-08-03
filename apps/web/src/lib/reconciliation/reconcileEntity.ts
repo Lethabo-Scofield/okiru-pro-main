@@ -429,6 +429,34 @@ function reconcileOwnership(sections: WorkbookSections, summary: EntitySummary, 
 }
 
 /**
+ * PURITY: a scoring input that the evidence did not establish is NEVER guessed
+ * or defaulted — it stays blank, lowers the score honestly, and is reported here
+ * as a coverage gap. This is the honest counterpart to the deleted "assume
+ * Generic" / "assume 100%" fallbacks: the score reflects only what the documents
+ * proved, and the practitioner is told exactly what to supply.
+ */
+const REQUIRED_SCORING_INPUTS: Array<{ section: string; column: string; label: string; noun: string }> = [
+  { section: "procurement", column: "currentSize", label: "supplier size (EME / QSE / Generic)", noun: "supplier" },
+  { section: "procurement", column: "bbbeeLevel", label: "B-BBEE level", noun: "supplier" },
+  { section: "sed", column: "percentBenefitingBlack", label: "% benefiting black people", noun: "SED contribution" },
+];
+
+function flagMissingScoringInputs(sections: WorkbookSections, issues: ReconciliationIssue[]): void {
+  for (const { section, column, label, noun } of REQUIRED_SCORING_INPUTS) {
+    const rows = sections[section]?.rows;
+    if (!rows || rows.length === 0) continue;
+    const missing = rows.filter((r) => blank(r[column]));
+    if (missing.length === 0) continue;
+    issues.push({
+      id: nextId(), invariant: "well-formedness", severity: "coverage", section,
+      statement: `${missing.length} of ${rows.length} ${noun}${rows.length === 1 ? "" : "s"} ${missing.length === 1 ? "has" : "have"} no ${label} — left unscored rather than assumed.`,
+      action: `Add the ${label} for these to score them fully.`,
+      rowIds: missing.map((r) => str(r._id)).filter(Boolean),
+    });
+  }
+}
+
+/**
  * Reconcile a merged, extracted workbook into a coherent entity.
  */
 export function reconcileEntity(input: WorkbookSections, opts: ReconcileOptions = {}): ReconcileResult {
@@ -445,6 +473,7 @@ export function reconcileEntity(input: WorkbookSections, opts: ReconcileOptions 
   reconcileIdentity(sections, issues);
   enforceWellFormedness(sections, summary, issues, opts.entityAliases ?? []);
   reconcileOwnership(sections, summary, issues);
+  flagMissingScoringInputs(sections, issues);
 
   summary.employeeCount = (sections["management-control"]?.rows ?? sections.employees?.rows ?? []).length;
   summary.supplierCount = (sections.procurement?.rows ?? []).length;

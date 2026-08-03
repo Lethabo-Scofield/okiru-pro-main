@@ -44,6 +44,33 @@ notion of what a coherent entity *is*.
 
 ---
 
+## 1a. The purity rule (governs every fix)
+
+> **Only two operations may write a value that SCORES: enforcing an invariant, or
+> computing a value that is *entailed* by evidence already present. Every other
+> way of filling a cell — a default, an "assume Generic", a conservative guess, a
+> synthesized description, any fallback — is forbidden. Missing evidence stays
+> missing, lowers the score honestly, and is surfaced as a coverage gap.**
+
+Classify any candidate change by asking *"where does this value come from?"*:
+
+| Bucket | Definition | Verdict |
+|---|---|---|
+| **Law** (invariant) | must hold of any real company | heal — it generalises |
+| **Entailment** (derivation) | value B is *determined* by present value A | compute — e.g. 100% shares ⇒ 100% economic interest; Excel serial 46066 *is* that date |
+| **Guess** (fallback / default / hallucination) | value not determined by the evidence | **delete** — re-surface as a coverage gap |
+
+A guess that "conservatively under-states" is still impure: it fills a cell the
+evidence did not, and hides a gap the practitioner should see. The purest score is
+the one where **only laws and entailments feed scoring**, and every unknown is an
+honest, visible gap.
+
+Fallbacks removed under this rule (2026-08-03): `currentSize = "Generic"` default
+(parserToWorkbook), `blackPct ?? 100` inflation (excelImport), and any unknown
+scoring input now flows through `flagMissingScoringInputs()` as coverage instead
+of being assumed. `descriptionOfSpend` is retained only because it is a
+non-scoring label composed from present cells, not an invented fact.
+
 ## 2. The fix: a reconciliation layer as the single choke point
 
 Insert one deterministic layer between extraction and scoring so the flow becomes:
