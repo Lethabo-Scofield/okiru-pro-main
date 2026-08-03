@@ -1092,6 +1092,7 @@ function calculateScorecard(
       subMinimumMet: showSubMin('preferentialProcurement') ? prSubMinMet : undefined,
       ...mkElectiveMeta('preferentialProcurement'),
       subLines: toBreakdownLines(procScore.subLines),
+      coverageNotes: procScore.coverageNotes,
     },
     supplierDevelopment: {
       score: round2(esdScore.sdTotal),

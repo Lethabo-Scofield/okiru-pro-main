@@ -12,6 +12,34 @@ const STANDARD_RECOGNITION_TABLE: Readonly<Record<number, number>> = {
   5: 0.80, 6: 0.60, 7: 0.50, 8: 0.10, 0: 0,
 };
 
+/**
+ * Line items the Codes EXCLUDE from Total Measured Procurement Spend (Statement
+ * 000 §9 / Schedule 1): salaries & employee costs, pension/provident funds,
+ * taxes and statutory levies, and pure financial arrangements (loans, interest,
+ * bank charges, dividends). A B-BBEE gathering workbook often lists these in the
+ * creditors schedule, but they are NOT procurement of goods/services and must
+ * not earn B-BBEE recognition. Keywords are deliberately unambiguous — a real
+ * trading supplier is not called "PAYE" or "Provident Fund".
+ */
+const TMPS_EXCLUSION_PATTERNS: ReadonlyArray<RegExp> = [
+  /\b(provident|pension|retirement)\s+fund\b/i,
+  /\bbargaining\s+council\b/i,
+  /\b(paye|uif|sdl|vat)\b/i,
+  /\b(income\s+tax|sars)\b/i,
+  /\bbank\s+charges\b/i,
+  /\bfinance\s+charges\b/i,
+  /\bloan\b/i,
+  /\bdividend/i,
+  /\b(salaries|salary|wages|payroll|remuneration)\b/i,
+];
+
+/** True when a supplier line is a Codes-excluded item, not procurement spend. */
+export function isTmpsExclusion(name: string | undefined | null): boolean {
+  const n = String(name ?? '').trim();
+  if (!n) return false;
+  return TMPS_EXCLUSION_PATTERNS.some((re) => re.test(n));
+}
+
 export interface ProcurementSubLine {
   name: string;
   target: string;
@@ -35,6 +63,8 @@ export interface ProcurementResult {
   recognisedSpend: number;
   target: number;
   subLines: ProcurementSubLine[];
+  /** Honest notes — e.g. Codes-excluded spend (loans, funds, levies) removed from recognition. */
+  coverageNotes?: string[];
   rawStats: {
     spendAllBlackOwned: number;
     spendBlackWomenOwned: number;
@@ -112,11 +142,21 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   let blackWomen51Spend = 0;
   let designatedGroupSpend = 0;
   let foreignSupplierSpend = 0;
+  let excludedSpend = 0;
+  const excludedNames: string[] = [];
 
   for (const sup of suppliers) {
     const enterpriseType = String(sup.enterpriseType || '').toLowerCase() === 'large'
       ? 'generic'
       : sup.enterpriseType;
+
+    // Codes-excluded line (loan, provident fund, statutory levy, tax): never
+    // earns B-BBEE recognition, even if the schedule tagged it with a level.
+    if (isTmpsExclusion(sup.name)) {
+      excludedSpend += sup.spend;
+      if (excludedNames.length < 8) excludedNames.push(`${sup.name} (R${Math.round(sup.spend).toLocaleString()})`);
+      continue;
+    }
 
     if (sup.isForeignSupplier) {
       foreignSupplierSpend += sup.spend;
@@ -195,8 +235,16 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
 
   const procTotal = round2(totalScore);
 
+  const coverageNotes: string[] = [];
+  if (excludedSpend > 0) {
+    coverageNotes.push(
+      `Excluded R${Math.round(excludedSpend).toLocaleString()} of Codes-excluded spend from B-BBEE recognition (loans, provident/pension funds, taxes, statutory levies): ${excludedNames.join(', ')}${excludedNames.length >= 8 ? ' …' : ''}. These are not procurement of goods/services.`,
+    );
+  }
+
   return {
     base: round2(baseTotal),
+    coverageNotes,
     empoweringSuppliers: round2(empoweringScore),
     qseSuppliers: round2(qseScore),
     emeSuppliers: round2(emeScore),
