@@ -1,7 +1,7 @@
 import type { OntologyRepository } from '../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../graph/ontology_queries.js';
 import type { ParserCaseOutput, ParserOutput, RawExtractionInput } from '../schemas/parser_output.js';
-import { parserCaseOutputSchema } from '../schemas/parser_output.js';
+import { parserCaseOutputSchema, parserOutputSchema } from '../schemas/parser_output.js';
 import { ParserService } from './parser_service.js';
 
 export interface RequiredDocumentGroup {
@@ -139,7 +139,45 @@ export class CaseParserService {
   }
 
   async resolveCase(rawInputs: RawExtractionInput[], caseId = caseIdFromInputs(rawInputs)): Promise<ParserCaseOutput> {
-    const documents = await Promise.all(rawInputs.map((input) => this.parser.resolve(input)));
+    // Per-input failure isolation: one unreadable input becomes a FAILED
+    // document entry the user can see — it must never kill a paid case whose
+    // other 16 files just extracted. (A generic-mime workbook's split sheet did
+    // exactly that: the whole stream ended with a zod error and no result.)
+    const documents = await Promise.all(rawInputs.map(async (input) => {
+      try {
+        return await this.parser.resolve(input);
+      } catch (error) {
+        const filename = typeof (input as { filename?: unknown })?.filename === 'string' && (input as { filename: string }).filename
+          ? (input as { filename: string }).filename
+          : 'unknown file';
+        const fileId = typeof (input as { file_id?: unknown })?.file_id === 'string' && (input as { file_id: string }).file_id
+          ? (input as { file_id: string }).file_id
+          : `unreadable_${filename.replace(/\W+/g, '_')}`;
+        return parserOutputSchema.parse({
+          file_id: fileId,
+          filename,
+          document_type: 'Unreadable document',
+          pillar: 'UNKNOWN',
+          overall_confidence: 0,
+          status: 'failed',
+          extracted_fields: {},
+          calculator_payload: {},
+          validation: {
+            passed: false,
+            warnings: [],
+            errors: [error instanceof Error ? error.message : String(error)],
+            missing_fields: [],
+          },
+          audit_trail: {
+            source_file: filename,
+            matched_patterns: [],
+            rules_applied: [],
+            graph_version: 'v1',
+            requires_human_review: true,
+          },
+        });
+      }
+    }));
     const missingDocuments = missingRequiredDocuments(documents);
     const { payload: mergedPayload, conflicts } = mergeCalculatorPayload(documents);
     const documentsNeedingReview = documents

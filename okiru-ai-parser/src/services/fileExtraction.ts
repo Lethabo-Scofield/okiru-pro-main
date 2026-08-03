@@ -506,11 +506,24 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
         filename: file.originalname,
         sheets: sheets.length,
       });
+      // Browsers routinely upload a real workbook as application/octet-stream.
+      // The PARENT survives that (extension fallback), but a split child's
+      // derived name ("File.xlsx › Finance") has no extension, so the child
+      // failed schema validation and one generic-mime workbook killed the
+      // whole paid case at resolve. The child's rows came out of a workbook we
+      // just parsed — declare the type we KNOW it is.
+      const childMime = SUPPORTED_UPLOAD_MIME_TYPES.has(file.mimetype)
+        ? file.mimetype
+        : ext === '.xlsm'
+          ? 'application/vnd.ms-excel.sheet.macroEnabled.12'
+          : ext === '.xls'
+            ? 'application/vnd.ms-excel'
+            : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
       return sheets.map((sheet) => ({
         // Provenance names the sheet, so a value traces back to "File › Sheet".
         file_id: `upload_${Date.now()}_${sheet.sheetName.replace(/\W+/g, '_')}`,
         filename: `${file.originalname} › ${sheet.sheetName}`,
-        mime_type: file.mimetype,
+        mime_type: childMime,
         raw_text: sheet.text,
         markdown: sheet.markdown,
         tables: [{ sheetName: sheet.sheetName, rows: sheet.rows }],
