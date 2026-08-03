@@ -46,6 +46,7 @@ type EsgStoreState = {
   getSelectedTopics: () => string[];
   toggleTopic: (topicId: string) => Promise<void>;
   setSubmittedAt: (iso: string | null) => void;
+  unlockWorkbook: (companyId: string) => Promise<void>;
   markTouched: (sectionId: string, fieldRef: string) => void;
   resetTouched: (sectionId?: string) => void;
   isTouched: (sectionId: string, fieldRef: string) => boolean;
@@ -186,6 +187,21 @@ export const useEsgStore = create<EsgStoreState>((set, get) => ({
 
   setSubmittedAt(iso) {
     set({ submittedAt: iso });
+  },
+
+  /** Admin-only reopen of a submitted workbook (server enforces the role). */
+  async unlockWorkbook(companyId) {
+    const res = await fetch(`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/unlock`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ confirm: true }),
+    });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => null);
+      throw new Error(detail?.error || "Could not reopen this workbook");
+    }
+    set({ submittedAt: null });
   },
 
   markTouched(sectionId, fieldRef) {

@@ -142,10 +142,44 @@ describe("no repo-internal or spreadsheet jargon in user-facing copy", () => {
 });
 
 describe("irreversible actions are honest", () => {
-  it("does not promise an admin unlock that has no implementation", () => {
-    expect(read("src/pages/EsgInformationRequest.tsx")).not.toMatch(/Unlock via admin/);
+  /**
+   * The original defect was UI promising an "unlock via admin" with no route
+   * behind it. The invariant is the pairing, not the absence — so assert that
+   * whenever the UI offers a reopen, the server actually implements it.
+   */
+  it("only offers a reopen because the server implements one", () => {
+    const inputs = read("src/pages/EsgInformationRequest.tsx");
+    const dashboard = read("EsgToolkit/src/pages/EsgDashboard.tsx");
     const server = read("server/esgWorkbookRoutes.ts");
-    expect(server).not.toMatch(/\/unlock/);
+
+    expect(inputs).not.toMatch(/Unlock via admin/);
+
+    const uiOffersReopen = /Reopen for editing/.test(inputs) || /Reopen for editing/.test(dashboard);
+    const serverHasRoute = /workbook\/:companyId\/unlock/.test(server);
+    expect(uiOffersReopen).toBe(serverHasRoute);
+  });
+
+  it("gates the reopen route to admins", () => {
+    const server = read("server/esgWorkbookRoutes.ts");
+    const idx = server.indexOf('/unlock"');
+    expect(idx).toBeGreaterThan(-1);
+    // Semantics (unlock, audit trail) are covered behaviourally in
+    // server/__tests__/esgWorkbookLock.test.ts — here we only pin the gate.
+    const block = server.slice(idx, idx + 1600);
+    expect(block).toMatch(/canReopenEsgWorkbook\(user\?\.role\)/);
+    expect(block).toMatch(/403/);
+    expect(block).toMatch(/applyEsgWorkbookReopen/);
+  });
+
+  it("confirms before reopening a locked workbook", () => {
+    for (const rel of [
+      "src/pages/EsgInformationRequest.tsx",
+      "EsgToolkit/src/pages/EsgDashboard.tsx",
+    ]) {
+      const src = read(rel);
+      const idx = src.indexOf("Reopen this workbook for editing?");
+      expect(idx, rel).toBeGreaterThan(-1);
+    }
   });
 
   it("confirms before submitting and locking", () => {

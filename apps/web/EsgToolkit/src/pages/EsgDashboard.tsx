@@ -57,6 +57,25 @@ export default function EsgDashboard() {
   );
   const selectedTopics = useMemo(() => parseSelectedTopics(topicsCsv), [topicsCsv]);
   const [submitting, setSubmitting] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const unlockWorkbook = useEsgStore((s) => s.unlockWorkbook);
+
+  const reopen = async () => {
+    if (!companyId) return;
+    const ok = window.confirm(
+      "Reopen this workbook for editing?\n\nInputs become editable again and scores can change. The reopen is recorded against this workbook.",
+    );
+    if (!ok) return;
+    setReopening(true);
+    try {
+      await unlockWorkbook(companyId);
+      await load(companyId, undefined, { force: true });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Could not reopen this workbook");
+    } finally {
+      setReopening(false);
+    }
+  };
   const dash = useMemo(() => (workbook ? computeEsgDashboard(workbook) : null), [workbook]);
   const scoped = useMemo(
     () => (reportMode === "topic" ? computeScopedSummary(scorecard, selectedTopics) : null),
@@ -268,6 +287,18 @@ export default function EsgDashboard() {
         >
           {submitting ? "Submitting…" : submittedAt ? "Submitted" : "Submit & lock"}
         </button>
+        {submittedAt && isEsgAdmin ? (
+          <button
+            type="button"
+            onClick={() => void reopen()}
+            disabled={reopening}
+            title="Makes the workbook editable again — recorded against the workbook"
+            className="text-[12px] px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+            data-testid="esg-reopen-workbook"
+          >
+            {reopening ? "Reopening…" : "Reopen for editing"}
+          </button>
+        ) : null}
         {companyId ? (
           <a
             href={`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/export`}
