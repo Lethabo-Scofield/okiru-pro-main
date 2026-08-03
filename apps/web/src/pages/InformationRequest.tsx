@@ -483,6 +483,8 @@ function CompanyPicker({
       landOn?: "workbook" | "estimate";
       /** Per-document verdicts from the document flow, shown on the estimate page. */
       verdicts?: unknown;
+      /** Reconciliation result (issues + entity summary) for the review page. */
+      reconcile?: unknown;
     },
   ): Promise<boolean> => {
     setCreating(true);
@@ -514,6 +516,11 @@ function CompanyPicker({
         // Hand the document-flow verdicts to the provisional score page (same
         // sessionStorage convention the Excel import marker uses).
         sessionStorage.setItem(`okiru-doc-verdicts-${clientId}`, JSON.stringify(opts.verdicts));
+      }
+      if (opts?.reconcile !== undefined) {
+        // The reconciliation issues + entity summary — the review page renders
+        // these triaged by severity (what we fixed / what needs you / what's missing).
+        sessionStorage.setItem(`okiru-reconcile-${clientId}`, JSON.stringify(opts.reconcile));
       }
       const importRes = await fetch(
         `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
@@ -726,6 +733,7 @@ function CompanyPicker({
               await createFromSections(companyName, sections as WorkbookSectionsInput, {
                 landOn: "estimate",
                 verdicts: extras?.verdicts,
+                reconcile: extras?.reconcile,
               });
             }}
             creating={creating}

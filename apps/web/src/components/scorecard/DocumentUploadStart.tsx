@@ -39,6 +39,8 @@ import {
 import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
 import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
 import { assessDocuments, type VerdictReport } from "@/lib/documentVerdicts";
+import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
+import type { ReconcileResult } from "@/lib/reconciliation/types";
 import ExtractionConfidence from "./ExtractionConfidence";
 
 interface RequiredGroup {
@@ -205,7 +207,7 @@ export interface DocumentUploadStartProps {
   onCreate: (
     companyName: string,
     sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>,
-    extras?: { verdicts?: VerdictReport },
+    extras?: { verdicts?: VerdictReport; reconcile?: ReconcileResult },
   ) => Promise<void>;
   creating: boolean;
 }
@@ -677,14 +679,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       ...(sections["company-information"] ?? {}),
       meta: { ...(sections["company-information"]?.meta ?? {}), ...companyMeta },
     };
-    // Carry the per-document verdicts to the provisional score page — assessed
-    // against the MERGED sections so rows the AI path attributed via
-    // _sourceFiles credit their source document.
+
+    // RECONCILE before anything is saved or scored: assemble the extracted facts
+    // into one coherent entity that satisfies the domain invariants (a company
+    // is not its own shareholder; ownership closes to 100%; one ID is one
+    // person; a share carries its economic interest by flow-through; dates are
+    // dates). Scoring only ever runs on the reconciled sections. The issue list
+    // is the honest, plain-language explanation the review page renders.
+    const reconciled = reconcileEntity(sections as any, { sectorCode: sector, scorecardType: size });
+    const finalSections = reconciled.sections as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>;
+
+    // Verdicts assessed against the RECONCILED sections so the ledger reflects
+    // the cleaned entity, not the raw extraction.
     const verdicts =
-      parserCase || Object.values(sections).some((s) => (s.rows?.length ?? 0) > 0)
-        ? assessDocuments(parserCase ?? {}, sections as Record<string, { rows?: unknown[] }>)
+      parserCase || Object.values(finalSections).some((s) => (s.rows?.length ?? 0) > 0)
+        ? assessDocuments(parserCase ?? {}, finalSections as Record<string, { rows?: unknown[] }>)
         : undefined;
-    void onCreate(companyName.trim(), sections, { verdicts });
+    void onCreate(companyName.trim(), finalSections, { verdicts, reconcile: reconciled });
   };
 
   const coverageByPillar = useMemo(
