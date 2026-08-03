@@ -57,13 +57,21 @@ export function calculateTransportQseManagement(
   const employees = data.employees || [];
   const grouped = groupByDesignation(employees);
 
-  const topMgmt = [
+  // "Top Management" is the entity's top band — board / executives / directors.
+  // The Transport Codes keep Senior Management as its OWN category and let it be
+  // folded into Top Management ONLY when the two cannot be distinguished (and
+  // then at RAISED targets, 43%/22%). So Senior is included ONLY as a fallback,
+  // when the entity has no executive/director row to measure. Folding it in
+  // unconditionally handed a black woman at senior level the top-management
+  // black-women bonus that a verification agent scores 0 (Thandanani: sole
+  // director is a Black man → bonus 0.00, MC 25 not 27).
+  const executives = [
     ...(grouped['Board'] || []),
     ...(grouped['Executive'] || []),
     ...(grouped['Executive Director'] || []),
     ...(grouped['Other Executive Management'] || []),
-    ...(grouped['Senior'] || []),
   ];
+  const topMgmt = executives.length > 0 ? executives : [...(grouped['Senior'] || [])];
 
   const blackPct = pctOf(topMgmt, countBlack);
   const bwPct = pctOf(topMgmt, countBlackWomen);
