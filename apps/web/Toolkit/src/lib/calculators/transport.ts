@@ -20,7 +20,10 @@ export interface TransportPillarResult {
    * of. Before this, the breakdown page ran the RCOGP calculator and displayed
    * sub-lines the Transport score never evaluates ("breakdowns don't link").
    */
-  subLines?: Array<{ name: string; target: string; weighting: number; score: number }>;
+  subLines?: Array<{ name: string; target: string; weighting: number; score: number; note?: string }>;
+  /** Honest methodology notes (e.g. a bonus that scored 0 because a black woman
+   *  sits at Senior, which the Codes measure separately from Top Management). */
+  coverageNotes?: string[];
 }
 
 const countBlack = (emps: Employee[]): number =>
@@ -75,14 +78,35 @@ export function calculateTransportQseManagement(
 
   const blackPct = pctOf(topMgmt, countBlack);
   const bwPct = pctOf(topMgmt, countBlackWomen);
+  const bwBonus = round2(clampScore(safeRatio(bwPct, 0.25, 2), 2));
+
+  // Honest coverage note: a black woman below Top Management (e.g. an Admin
+  // Manager at Senior) does NOT earn the Top-Management black-women bonus — the
+  // Codes measure Senior separately (EEA9 occupational levels). A verification
+  // agency may reclassify her as Other Executive Management to award +2; we
+  // score by the definition and SAY so, rather than silently inflating.
+  const coverageNotes: string[] = [];
+  if (bwBonus < 2) {
+    const belowTop = [
+      ...(grouped['Senior'] || []),
+      ...(grouped['Middle'] || []),
+      ...(grouped['Junior'] || []),
+    ];
+    const blackWomenBelowTop = belowTop.filter((e) => isBlackRace(e.race) && e.gender === 'Female').length;
+    if (blackWomenBelowTop > 0 && executives.length > 0) {
+      coverageNotes.push(
+        `Top-Management black-women bonus scored ${bwBonus}/2: ${blackWomenBelowTop} black woman/women sit at Senior or below, which the Codes measure separately from Top Management (EEA9). A verification agency may award +2 by classifying such a role as Other Executive Management.`,
+      );
+    }
+  }
+
   const subLines = [
     { name: 'Black people in top management', target: '50.1%', weighting: 25, score: round2(clampScore(safeRatio(blackPct, 0.501, 25), 25)) },
-    { name: 'Black women in top management (bonus)', target: '25%', weighting: 2, score: round2(clampScore(safeRatio(bwPct, 0.25, 2), 2)) },
+    { name: 'Black women in top management (bonus)', target: '25%', weighting: 2, score: bwBonus, note: coverageNotes[0] },
   ];
   const score = subLines.reduce((s, l) => s + l.score, 0);
 
-  const result = { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal, subLines };
-  return result;
+  return { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal, subLines, coverageNotes };
 }
 
 /** EE pillar: black mgmt 7.5 + black women mgmt 7.5 + black employees 5 + black women employees 5 + EAP bonus 2 (max 27). */
@@ -113,12 +137,6 @@ export function calculateTransportQseEmploymentEquity(
   const middleEAP = getEAPTargets(province, 'Middle');
   const juniorEAP = getEAPTargets(province, 'Junior');
 
-  let score = 0;
-  score += clampScore(safeRatio(pctOf(mgmt, countBlack), 0.4, 7.5), 7.5);
-  score += clampScore(safeRatio(pctOf(mgmt, countBlackWomen), 0.2, 7.5), 7.5);
-  score += clampScore(safeRatio(pctOf(employees, countBlack), 0.6, 5), 5);
-  score += clampScore(safeRatio(pctOf(employees, countBlackWomen), 0.3, 5), 5);
-
   const bonus =
     pctOf(senior, countBlack) >= seniorEAP.blackTarget &&
     pctOf(senior, countBlackWomen) >= seniorEAP.blackWomenTarget &&
@@ -129,10 +147,26 @@ export function calculateTransportQseEmploymentEquity(
         pctOf(juniorAll, countBlackWomen) >= juniorEAP.blackWomenTarget))
       ? 2
       : 0;
-  score += bonus;
 
-  const result = { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal };
-  return result;
+  // Raw (unrounded) line scores — the total sums these so it is byte-identical
+  // to the previous accumulator; the displayed subLine.score is rounded.
+  const raw = [
+    clampScore(safeRatio(pctOf(mgmt, countBlack), 0.4, 7.5), 7.5),
+    clampScore(safeRatio(pctOf(mgmt, countBlackWomen), 0.2, 7.5), 7.5),
+    clampScore(safeRatio(pctOf(employees, countBlack), 0.6, 5), 5),
+    clampScore(safeRatio(pctOf(employees, countBlackWomen), 0.3, 5), 5),
+    bonus,
+  ];
+  const score = raw.reduce((s, v) => s + v, 0);
+  const subLines = [
+    { name: 'Black people in management', target: '40%', weighting: 7.5, score: round2(raw[0]) },
+    { name: 'Black women in management', target: '20%', weighting: 7.5, score: round2(raw[1]) },
+    { name: 'Black employees (all staff)', target: '60%', weighting: 5, score: round2(raw[2]) },
+    { name: 'Black women employees (all staff)', target: '30%', weighting: 5, score: round2(raw[3]) },
+    { name: 'EAP bonus (meets provincial EAP in every band)', target: 'EAP', weighting: 2, score: bonus, note: bonus === 0 ? 'Bonus 0/2: at least one occupational band is below its provincial EAP target.' : undefined },
+  ];
+
+  return { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal, subLines };
 }
 
 // ---------------------------------------------------------------------------

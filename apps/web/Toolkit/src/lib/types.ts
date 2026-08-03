@@ -536,11 +536,30 @@ export interface EmpowermentFinancingData {
   facilities?: EfFacility[];
 }
 
+/** One line of a pillar's scored breakdown, emitted by the calculator that
+ *  produced the pillar score (so the breakdown always reconciles to the total,
+ *  even for sectors whose scoring calculator differs from the generic one). */
+export interface BreakdownLine {
+  name: string;
+  target: string;
+  weighting: number;
+  score: number;
+  isBonus?: boolean;
+  /** Methodology note attached to this line (e.g. why a bonus scored 0). */
+  note?: string;
+}
+
 export interface PillarScore {
   score: number;
   target: number;
   weighting: number;
   subMinimumMet?: boolean;
+  /** The scored breakdown, straight from the calculator that scored this pillar.
+   *  When present the UI renders these verbatim instead of re-deriving lines
+   *  from a (possibly different) generic calculator. */
+  subLines?: BreakdownLine[];
+  /** Coverage / methodology notes shown under the pillar (honest gaps, not scores). */
+  coverageNotes?: string[];
 }
 
 export interface ScorecardResult {

@@ -3,7 +3,7 @@ import {
   Client, OwnershipData, ManagementData, SkillsData,
   ProcurementData, ESDData, SEDData, ScorecardResult,
   Shareholder, Employee, TrainingProgram, Supplier, Contribution, FinancialYear,
-  TrainingCategoryCode, AfsData, EmpowermentFinancingData,
+  TrainingCategoryCode, AfsData, EmpowermentFinancingData, BreakdownLine,
 } from './types';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
@@ -749,12 +749,23 @@ function calculateScorecard(
 
   let mgtScoreTotal: number;
   let eeScoreTotal = 0;
+  // Breakdown emitted by the calculator that actually SCORED the pillar, so the
+  // UI can render lines that reconcile to the total (Transport uses a different
+  // calculator than the generic breakdown — showing generic lines against a
+  // Transport score is why "breakdowns don't link"). Undefined ⇒ UI falls back
+  // to re-deriving from the generic calculator (correct for RCOGP/ICT/FSC/AGRI).
+  let mcSubLines: BreakdownLine[] | undefined;
+  let mcCoverageNotes: string[] | undefined;
+  let eeSubLines: BreakdownLine[] | undefined;
   if (transportQse) {
     const tqMc = calculateTransportQseManagement(state.management, cfg);
     mgtScoreTotal = tqMc.score;
+    mcSubLines = tqMc.subLines;
+    mcCoverageNotes = tqMc.coverageNotes;
 
     const tqEe = calculateTransportQseEmploymentEquity(state.management, cfg, state.client.eapProvince);
     eeScoreTotal = tqEe.score;
+    eeSubLines = tqEe.subLines;
   } else if (transportLarge) {
     // Transport Large: MC 11 + EE 18 are SEPARATE pillars (Transport Codes
     // "Road Freight Large" rows 23-31 / 33-43). Previously this branch fell
@@ -762,9 +773,11 @@ function calculateScorecard(
     // were counted in the target but never scored.
     const tlMc = calculateTransportLargeManagementControl(state.management, cfg);
     mgtScoreTotal = tlMc.score;
+    mcSubLines = tlMc.subLines;
 
     const tlEe = calculateTransportLargeEmploymentEquity(state.management, cfg);
     eeScoreTotal = tlEe.score;
+    eeSubLines = tlEe.subLines;
   } else {
     const mgtScore = calculateManagementScore(state.management, cfg, state.client.eapProvince, state.client.eapYear);
     mgtScoreTotal = mgtScore.total;
@@ -1028,9 +1041,9 @@ function calculateScorecard(
       weighting: ownTarget,
       subMinimumMet: showSubMin('ownership') ? ownSubMinMet : undefined,
     },
-    managementControl: { score: round2(mgtScoreTotal), target: mcTarget, weighting: mcTarget },
+    managementControl: { score: round2(mgtScoreTotal), target: mcTarget, weighting: mcTarget, subLines: mcSubLines, coverageNotes: mcCoverageNotes },
     ...(eeTarget > 0 ? {
-      employmentEquity: { score: round2(eeScoreTotal), target: eeTarget, weighting: eeTarget },
+      employmentEquity: { score: round2(eeScoreTotal), target: eeTarget, weighting: eeTarget, subLines: eeSubLines },
     } : {}),
     skillsDevelopment: {
       score: round2(skillScore.total),
