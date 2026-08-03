@@ -486,10 +486,6 @@ export function parserExtractionsToWorkbook(
     }
   }
 
-  // Collapse exact same-document duplicates BEFORE linking: a model emission
-  // repeated verbatim is the same evidence twice, not two transactions.
-  const duplicateFindings = dedupeExactDuplicateRows(rows);
-
   // Link before coverage: a certificate row enriched with its schedule row's
   // spend is complete; counted separately both halves would report gaps.
   const linked = linkWorkbookRows(rows);
@@ -499,13 +495,21 @@ export function parserExtractionsToWorkbook(
   // "Required" validation issues, most of them derivable — never fabricated.
   completeWorkbookRows(linked.rows, rejected);
 
+  // Collapse exact same-document duplicates AFTER completion: ledger-block
+  // inheritance fills a continuation row's blank type/%-black to match its
+  // header row, so two "same beneficiary, same amount" rows that DIFFERED
+  // before the completion pass become identical after it. Deduping earlier
+  // missed exactly this (real SED case: two "Essentially Edenvale · R500" rows
+  // from one sheet, distinguished only once inheritance had run).
+  const duplicateFindings = dedupeExactDuplicateRows(linked.rows);
+
   const coverage = huntRequiredFields(linked.rows, Array.from(unmapped), options);
   return {
     rows: linked.rows,
     meta,
     rejected,
     coverage,
-    reconciliation: [...duplicateFindings, ...linked.reconciliation],
+    reconciliation: [...linked.reconciliation, ...duplicateFindings],
   };
 }
 
@@ -599,9 +603,12 @@ function completeWorkbookRows(
       const split = splitName(nm);
       if (split) { row.name = split.name; row.surname = split.surname; }
     }
-    if (!String(row.designation ?? "").trim() && String(row.occupationalLevel ?? "").trim()) {
-      row.designation = row.occupationalLevel;
-    }
+    // NOTE: designation is NOT back-filled from occupationalLevel. They are
+    // different dropdowns ("Top Management" is an Occupational Level, never a
+    // Designation), so copying across put an out-of-vocab value in the cell —
+    // the exact silent-zero / disconnected-dropdown failure we are ending.
+    // Scoring reads occupationalLevel; an absent designation is left blank and
+    // surfaced as a review item rather than filled with a wrong option.
   }
 
   // Ledger continuation rows: the sheet states type / % black once on the

@@ -699,8 +699,11 @@ describe("ledger-block attribute inheritance (same beneficiary only)", () => {
         values: [{
           field: "contribution_register",
           value: [
-            { beneficiary_name: "Essentially Edenvale", contribution_type: "Grant Contribution", percent_black_beneficiaries: "100%", contribution_amount: "500" },
-            { beneficiary_name: "Essentially Edenvale", contribution_amount: "500" },
+            // Two GENUINE contributions to the same beneficiary — distinct dates
+            // keep them from being exact-duplicates (the continuation still
+            // inherits the header's type/%-black).
+            { beneficiary_name: "Essentially Edenvale", contribution_type: "Grant Contribution", percent_black_beneficiaries: "100%", contribution_amount: "500", transaction_date: "2026-01-31" },
+            { beneficiary_name: "Essentially Edenvale", contribution_amount: "500", transaction_date: "2026-02-28" },
             { beneficiary_name: "Other Org", contribution_amount: "900" },
           ],
         }],

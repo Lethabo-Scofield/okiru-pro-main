@@ -120,6 +120,41 @@ export interface SectionPatchLike {
   rows?: unknown[];
 }
 
+/**
+ * A document is "confused" (rather than "found") only on GENUINE trouble — a
+ * conflict, an expired certificate, a misread identifier, a hallucinated value,
+ * or an outright extraction error. A merely-missing OPTIONAL field is a gap we
+ * list, not a reason to tell the user the document didn't work.
+ *
+ * The distinction matters because the deterministic parser flags almost every
+ * document `review_required` (its classifier is conservative), so gating
+ * "found" on "nothing flagged" made EVERY document confused/none even as their
+ * data scored real points — the "0 found / 87 score" contradiction the user hit.
+ */
+const HARD_TROUBLE = /\b(expired|conflict|conflicting|misread|checksum|not found in the source document|failed (its|validation)|unsupported|could not|unreadable|hallucinat)/i;
+
+function hasHardTrouble(parserCase: ParserCaseLike, filename: string): boolean {
+  const detected = (parserCase.documents_detected ?? []).find((d) => d.filename === filename);
+  const review = (parserCase.documents_needing_review ?? []).find((r) => r.filename === filename);
+  const texts = [
+    ...(detected?.validation?.errors ?? []),
+    ...(review?.reasons ?? []),
+  ];
+  return texts.some((t) => HARD_TROUBLE.test(str(t)));
+}
+
+/** Files the AI-entity path pulled ANY value from — credits meta-only docs (CIPC, AFS). */
+function aiValueFiles(parserCase: ParserCaseLike): Set<string> {
+  const out = new Set<string>();
+  const extractions = (parserCase as { ai_entities?: { extractions?: Array<{ sourceFile?: unknown; values?: unknown[] }> } })
+    .ai_entities?.extractions ?? [];
+  for (const e of extractions) {
+    const name = str(e.sourceFile);
+    if (name && Array.isArray(e.values) && e.values.length > 0) out.add(name);
+  }
+  return out;
+}
+
 const SECTION_NOUN: Record<string, [string, string]> = {
   ownership: ['shareholder', 'shareholders'],
   'management-control': ['manager', 'managers'],
@@ -181,11 +216,12 @@ export function assessDocuments(
 ): VerdictReport {
   const detected = [...(parserCase.documents_detected ?? [])];
   const rowsByFile = sectionRowsByFile(sections);
+  const aiFiles = aiValueFiles(parserCase);
 
   // Files the AI-entity path read that the deterministic case never detected
   // still deserve a verdict — synthesize an entry for them.
   const known = new Set(detected.map((d) => str(d.filename)));
-  for (const filename of rowsByFile.keys()) {
+  for (const filename of new Set([...rowsByFile.keys(), ...aiFiles])) {
     if (!known.has(filename)) detected.push({ filename, document_type: 'Extracted schedule' });
   }
 
@@ -200,21 +236,25 @@ export function assessDocuments(
       ? Array.from(sectionCounts.values()).reduce((a, b) => a + b, 0)
       : 0;
     const gaps = gapsFor(parserCase, filename);
-    const yieldedSomething = extractedCount > 0 || suppliedRows > 0 || sectionRowCount > 0;
+    // Yield = anything that reached the workbook: deterministic fields, supplier
+    // rows, section rows, OR AI-entity values (which carry meta like company
+    // name / NPAT that never becomes a grid row but is real, scored data).
+    const yieldedSomething =
+      extractedCount > 0 || suppliedRows > 0 || sectionRowCount > 0 || aiFiles.has(filename);
 
     let verdict: EntityVerdict;
-    if (doc.status === 'failed' || !yieldedSomething) {
-      // Nothing usable came out — either it failed classification or it simply
-      // carried no values we could take.
+    if (!yieldedSomething) {
+      // Nothing usable reached the workbook.
       verdict = 'none';
-    } else if (gaps.length === 0 && doc.status !== 'needs_review') {
-      // Clean yield: mapped values or workbook rows, nothing flagged. (The old
-      // rule additionally demanded status === 'passed', which no AI-path
-      // document carries — so nothing ever counted as found.)
-      verdict = 'found';
-    } else {
-      // Read something, but the parser flagged it. Never claim 'found' here.
+    } else if (hasHardTrouble(parserCase, filename)) {
+      // We got data, but something needs a human: a conflict, an expired
+      // certificate, a misread ID, a value we could not ground. Never "found".
       verdict = 'confused';
+    } else {
+      // Usable data reached the workbook and nothing is genuinely wrong with it.
+      // Missing optional fields are listed as gaps, not a downgrade — a document
+      // that produced twenty rows "worked", even if it lacks a signed date.
+      verdict = 'found';
     }
 
     const baseSummary = summarise(parserCase, filename, documentType);
