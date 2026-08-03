@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import * as path from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { EsgSidebar } from "../components/layout/EsgSidebar";
@@ -113,5 +115,17 @@ describe("report scope panel (Part 4)", () => {
     expect(useEsgStore.getState().getReportMode()).toBe("framework");
     const cells = useEsgStore.getState().workbook?.sections?.assumptions?.cells;
     expect(cells?.B6).toBe("Standard");
+  });
+});
+
+describe("setup-flow placement", () => {
+  it("EsgInformationRequest surfaces the scope panel on the first Inputs section", () => {
+    const src = readFileSync(
+      path.resolve(__dirname, "../../../src/pages/EsgInformationRequest.tsx"),
+      "utf8",
+    );
+    expect(src).toMatch(/EsgReportScopePanel/);
+    expect(src).toMatch(/company-reporting-setup"\s*\?\s*\(/);
+    expect(src).toMatch(/esg-setup-scope-slot/);
   });
 });
