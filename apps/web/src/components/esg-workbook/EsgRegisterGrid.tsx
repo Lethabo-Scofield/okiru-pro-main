@@ -13,6 +13,7 @@ import {
   esgGridSectionDef,
   type EsgGridSectionId,
 } from "@/lib/esgGridSections";
+import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import { mergeEsgSectionCells, readEsgGridRows, type EsgGridRow } from "@/lib/esgGridRows";
 import { useEsgStore } from "../../../EsgToolkit/src/lib/esgStore";
 import { ESG_PANEL, ESG_PANEL_HEADER, ESG_SAVE_BTN } from "./esgEditorChrome";
@@ -35,6 +36,9 @@ export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function
   ref,
 ) {
   const def = esgGridSectionDef(sectionId)!;
+  // Users see a section name, never the underlying workbook sheet id.
+  const humanLabel =
+    ESG_INPUT_SECTIONS.find((s) => s.id === sectionId)?.title ?? def.description;
   const { workbook, submittedAt, saving, updateSectionCells, recalculate, markTouched } =
     useEsgStore();
   const [rows, setRows] = useState<EsgGridRow[]>([]);
@@ -100,7 +104,7 @@ export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function
     >
       {!toolkitMode ? (
         <header className={ESG_PANEL_HEADER}>
-          <h2 className="text-[16px] font-bold text-[var(--esg-text)]">{title ?? def.sheet}</h2>
+          <h2 className="text-[16px] font-bold text-[var(--esg-text)]">{title ?? humanLabel}</h2>
           <p className="text-[12px] text-[var(--esg-text2)] mt-0.5">{def.description}</p>
         </header>
       ) : null}
@@ -109,7 +113,7 @@ export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function
           columns={columns}
           rows={rows}
           onChange={handleRowsChange}
-          sectionLabel={def.sheet}
+          sectionLabel={humanLabel}
           sectionDescription={def.description}
           readOnly={locked}
           canAddRows={!locked && addRows}

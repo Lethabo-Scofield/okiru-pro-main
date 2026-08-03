@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { buildGoldenSections } from "../../../../server/esgGoldenFixture";
 import { canSeedEsgSampleData } from "../esgAccess";
 import { ESG_INPUT_SECTIONS } from "../esgSections";
+import { ESG_GRID_SECTIONS } from "../esgGridSections";
 
 const WEB_SRC = path.resolve(__dirname, "../../..");
 const APP_ROOT = path.resolve(__dirname, "../../../..");
@@ -19,6 +20,19 @@ const USER_FACING_FILES = [
   "EsgToolkit/src/pages/EsgDashboard.tsx",
   "EsgToolkit/src/pages/EsgToolkitSectionPage.tsx",
   "EsgToolkit/src/components/EsgReportScopePanel.tsx",
+  "src/components/esg-workbook/EsgWorkbookSectionEditor.tsx",
+  "src/components/esg-workbook/EsgRegisterGrid.tsx",
+];
+
+/** Every user-visible label/description string that ships with the ESG flow. */
+const ALL_RENDERED_COPY: Array<{ where: string; text: string }> = [
+  ...ESG_INPUT_SECTIONS.flatMap((s) =>
+    [s.title, s.note].filter(Boolean).map((text) => ({ where: `input:${s.id}`, text: text as string })),
+  ),
+  ...Object.values(ESG_GRID_SECTIONS).map((g) => ({
+    where: `grid:${g.sectionId}`,
+    text: g.description,
+  })),
 ];
 
 describe("sample data never carries client identity", () => {
@@ -99,11 +113,31 @@ describe("no repo-internal or spreadsheet jargon in user-facing copy", () => {
     expect(read("EsgToolkit/src/pages/EsgDashboard.tsx")).not.toMatch(/\(D9\)|ESG_Dashboard parity/);
   });
 
-  it("keeps section notes free of workbook coordinates", () => {
-    for (const section of ESG_INPUT_SECTIONS) {
-      if (!section.note) continue;
-      expect(section.note, section.id).not.toMatch(/THR_\*|rows \d+–\d+|Column [A-Z]:|_Data\b/);
+  /**
+   * Covers BOTH copy sources: section notes and register-grid descriptions.
+   * The grid descriptions render as on-screen subtitles too — they were missed
+   * on the first pass because only ESG_INPUT_SECTIONS was checked.
+   */
+  it("keeps every rendered label free of workbook coordinates and sheet ids", () => {
+    for (const { where, text } of ALL_RENDERED_COPY) {
+      expect(text, where).not.toMatch(
+        /THR_\*|rows? \d+[–-]\d+|Column [A-Z]:|cells? [A-Z]\d+|[A-Z]_Data\b|_Register\b|_Scorecard\b|King5_|GARP_GRAP|IFRS_S1_S2/,
+      );
     }
+  });
+
+  it("never renders a raw sheet id as a heading or grid label", () => {
+    const registerGrid = read("src/components/esg-workbook/EsgRegisterGrid.tsx");
+    expect(registerGrid).not.toMatch(/def\.sheet/);
+    const sectionEditor = read("src/components/esg-workbook/EsgWorkbookSectionEditor.tsx");
+    expect(sectionEditor).not.toMatch(/\{section\.sheet\}/);
+  });
+
+  it("shows no developer instructions in the empty-fields fallback", () => {
+    const sectionEditor = read("src/components/esg-workbook/EsgWorkbookSectionEditor.tsx");
+    // The module import of esgSectionConfigs is fine; naming it AT the user is not.
+    expect(sectionEditor).not.toMatch(/Configure fields for/);
+    expect(sectionEditor).not.toMatch(/in esgSectionConfigs\./);
   });
 });
 
