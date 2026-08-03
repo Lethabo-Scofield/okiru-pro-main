@@ -208,8 +208,22 @@ const MONTHS: Record<string, string> = {
   jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
 };
 
-/** "14 March 2027", "14/03/2027", "2027-03-14" → ISO. Day-first, as SA writes. */
+/** "14 March 2027", "14/03/2027", "2027-03-14", Excel serial 45397 → ISO. Day-first, as SA writes. */
 export function toIsoDate(value: unknown): string | null {
+  // Excel exports dates as serial numbers (days since 1899-12-30). Recognise a
+  // bare number in the plausible range as the date it is — otherwise a whole
+  // schedule of dated rows loses its dates at the door, and rows that differ
+  // only by date collapse into one.
+  const serial = typeof value === "number"
+    ? value
+    : (typeof value === "string" && /^\d{5}(\.\d+)?$/.test(value.trim()) ? Number(value.trim()) : NaN);
+  if (Number.isFinite(serial) && serial >= 20000 && serial <= 60000) {
+    const d = new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86_400_000);
+    if (!Number.isNaN(d.getTime())) {
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    }
+  }
+
   if (typeof value !== "string") return null;
   const text = value.trim();
 

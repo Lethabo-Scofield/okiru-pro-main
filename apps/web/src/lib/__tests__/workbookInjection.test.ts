@@ -274,3 +274,17 @@ describe("contribution-type vocabulary — AI wordings land in the Codes' dropdo
     expect(result.cells.gender).toBe("Female");
   });
 });
+
+describe("Excel serial dates are recognised (schedules keep their dates)", () => {
+  it("converts a bare Excel serial number to an ISO date", () => {
+    // 45397 = 2024-04-15. Without this, dated schedule rows lose their dates and
+    // rows that differ only by date collapse into one (SED lost 24 of 26 rows).
+    expect(toIsoDate(45397)).toBe("2024-04-15");
+    expect(toIsoDate("45397")).toBe("2024-04-15");
+  });
+  it("leaves non-serial numbers and normal dates alone", () => {
+    expect(toIsoDate(400)).toBeNull();          // a Rand amount, not a date
+    expect(toIsoDate("14 March 2027")).toBe("2027-03-14");
+    expect(toIsoDate("2027-03-14")).toBe("2027-03-14");
+  });
+});
