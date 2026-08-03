@@ -21,6 +21,7 @@ import {
   type EsgWorkbookSectionEditorHandle,
 } from "@/components/esg-workbook/EsgWorkbookSectionEditor";
 import { useEsgStore } from "../../EsgToolkit/src/lib/esgStore";
+import { EsgReportScopePanel } from "../../EsgToolkit/src/components/EsgReportScopePanel";
 import { API_BASE } from "@toolkit/lib/config";
 import { useToast } from "@/hooks/use-toast";
 import { esgSummaryHref, setEsgActiveCompany } from "@/lib/esgRoutes";
@@ -480,6 +481,11 @@ export default function EsgInformationRequest() {
               </div>
             ) : activeSection ? (
               <div className="p-5 sm:p-6">
+                {activeSection.id === "company-reporting-setup" ? (
+                  <div className="mb-6" data-testid="esg-setup-scope-slot">
+                    <EsgReportScopePanel />
+                  </div>
+                ) : null}
                 {activeSection.note ? (
                   <p className="text-[12px] text-[var(--esg-text3)] mb-4" title={`See ESG_FLOW_ONTOLOGY.md § section-${activeSection.id}`}>
                     {activeSection.note}
