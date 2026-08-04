@@ -41,8 +41,11 @@ add("Ownership", [
 ]);
 
 // --- Management Control (also feeds Employment Equity) ----------------------
+// "Designation" is the column the scorecard actually scores; give it the
+// management level directly (Executive Director, Senior Management, …) so it
+// maps without needing the Occupational-Level fallback.
 add("Management Control", [
-  ["Employee Name", "Race", "Gender", "Occupational Level", "ID Number", "Foreign"],
+  ["Employee Name", "Race", "Gender", "Designation", "ID Number", "Foreign"],
   ["Thabo Molefe", "African", "Male", "Executive Director", "8203155012088", "No"],
   ["Naledi Khumalo", "African", "Female", "Executive Director", "8807120145087", "No"],
   ["Sipho Dlamini", "African", "Male", "Senior Management", "8501015800086", "No"],
@@ -59,17 +62,17 @@ add("Management Control", [
 
 // --- Skills Development -----------------------------------------------------
 add("Skills Development", [
-  ["Learner Name", "Race", "Gender", "Category Code", "Total Cost", "Programme"],
-  ["Lindiwe Mahlangu", "African", "Female", "C", 42000, "Supervisory learnership"],
-  ["Bongani Zulu", "African", "Male", "C", 42000, "Supervisory learnership"],
-  ["Precious Sithole", "African", "Female", "D", 18000, "Health & Safety short course"],
-  ["Kagiso Moloi", "African", "Male", "B", 55000, "NQF4 Business Admin"],
-  ["Amahle Ndlovu", "African", "Female", "E", 12000, "Adult basic education"],
+  ["Learner Name", "Race", "Gender", "Category (A-G)", "Training Program", "Total Cost (R)"],
+  ["Lindiwe Mahlangu", "African", "Female", "C", "Supervisory learnership", 42000],
+  ["Bongani Zulu", "African", "Male", "C", "Supervisory learnership", 42000],
+  ["Precious Sithole", "African", "Female", "D", "Health & Safety short course", 18000],
+  ["Kagiso Moloi", "African", "Male", "B", "NQF4 Business Admin", 55000],
+  ["Amahle Ndlovu", "African", "Female", "E", "Adult basic education", 12000],
 ]);
 
 // --- Procurement (Preferential Procurement suppliers) ----------------------
 add("Procurement", [
-  ["Supplier Name", "Claimed Spend Ex VAT", "BEE Level", "Supplier Classification", "Certificate Expiry Date"],
+  ["Supplier Name", "Spend (R)", "B-BBEE Level", "Current Size", "Certificate Expiry Date"],
   ["Sizwe Cleaning Supplies", 3200000, 1, "QSE", "2025-11-30"],
   ["Ubuntu Security Services", 2800000, 1, "Generic", "2026-01-31"],
   ["Motheo Uniforms & PPE", 1900000, 2, "QSE", "2025-09-30"],
