@@ -731,8 +731,24 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   };
 
   const addFiles = (incoming: File[]) => {
+    // Skip OS / Office junk that is never a real document: Excel/Word lock files
+    // (~$name.xlsx, created while the file is open in the app), macOS resource
+    // forks (._name), and Thumbs.db / .DS_Store. These are unreadable and used to
+    // fail the whole quote with "Failed to fetch".
+    const isJunk = (name: string) => {
+      const base = name.split(/[\\/]/).pop() ?? name;
+      return /^~\$/.test(base) || /^\._/.test(base) || /^\.(ds_store)$/i.test(base) || /^thumbs\.db$/i.test(base);
+    };
+    const skipped = incoming.filter((f) => isJunk(f.name)).map((f) => f.name.split(/[\\/]/).pop() ?? f.name);
+    const usable = incoming.filter((f) => !isJunk(f.name));
+    if (skipped.length > 0) {
+      setParseError(
+        `Skipped ${skipped.length} temporary file${skipped.length === 1 ? "" : "s"} (${skipped.slice(0, 2).join(", ")}${skipped.length > 2 ? "…" : ""}) — these are Excel/Office lock files, not documents. Close the workbook in Excel and upload the real file.`,
+      );
+    }
+    if (usable.length === 0) return;
     const next = [...files];
-    for (const f of incoming) {
+    for (const f of usable) {
       if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f);
     }
     if (next.length > MAX_UPLOAD_FILES) {
