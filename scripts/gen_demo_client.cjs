@@ -14,20 +14,27 @@ const wb = XLSX.utils.book_new();
 const add = (name, rows) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), name);
 
 // --- Finance ---------------------------------------------------------------
+// Labels match the B-BBEE gathering template EXACTLY — the parser's financial
+// extractor keys on these exact phrases. Generic labels ("Revenue / Turnover")
+// are NOT recognised, which zeroes the payroll / TMPS / NPAT denominators and
+// silently drops Skills, Procurement and ED to 0.
 add("Finance", [
-  ["Measured Entity:", "Kagiso Facilities Services (Pty) Ltd"],
+  ["Measured Entity: Kagiso Facilities Services (Pty) Ltd", "", "", "Finance", "", "Date & Initial:_________________"],
   ["Registration Number:", "2019/456789/07"],
   ["Financial Year End:", "28 February 2025"],
   [],
-  ["Item", "Amount (ZAR)"],
-  ["Revenue / Turnover", 24000000],
-  ["Net Profit After Tax (NPAT)", 1850000],
-  ["Leviable Amount (payroll)", 6200000],
-  ["Total Measured Procurement Spend (TMPS)", 15400000],
+  ["Turnover /Revenue/ Allocated Budget", 24000000, 21500000, 18800000],
+  ["NPBT (Nett Profit Before Tax)", 2400000],
+  ["NPAT / Loss (Nett Profit After Tax)", 1850000, 1620000, 1310000],
+  ["Annual Payroll", 6200000],
+  ["Total Leviable Amount", 6200000],
+  ["Total Measured Procurement Spend", "", 15400000],
 ]);
 
 // --- Ownership -------------------------------------------------------------
 add("Ownership", [
+  ["Measured Entity: Kagiso Facilities Services (Pty) Ltd", "", "", "Ownership Equity", "", "Date & Initial:_________________"],
+  [],
   ["Shareholder Name", "Race", "Gender", "ID Number", "Voting Rights %", "Economic Interest %", "Number of Shares"],
   ["Thabo Molefe", "African", "Male", "8203155012088", 60, 60, 600],
   ["Naledi Khumalo", "African", "Female", "8807120145087", 40, 40, 400],

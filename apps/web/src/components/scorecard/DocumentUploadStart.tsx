@@ -190,7 +190,13 @@ function mergeCases(kept: ParserCaseLike | null, fresh: ParserCaseLike): ParserC
 
 /** workbook company-information meta value for each parser sector code. */
 const SECTOR_TO_WORKBOOK: Record<string, string> = {
-  Generic: "Generic",
+  // The parser's generic option is coded "Generic", but every Toolkit sector
+  // config (and okiruHubSectors) keys the generic Codes as "RCOGP". Mapping
+  // "Generic" → "Generic" produced an industrySector no config matched, so the
+  // workbook silently fell back and the chosen sector "didn't reflect". Both
+  // "Generic" and "RCOGP" now resolve to the RCOGP config.
+  Generic: "RCOGP",
+  RCOGP: "RCOGP",
   CONSTRUCTION: "CONSTRUCTION",
   FSC: "FSC",
   TRANSPORT: "TRANSPORT",
@@ -320,7 +326,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     })();
   }, [sector, subSector, size]);
 
-  const sectorOptions = catalog?.sector_options ?? [];
+  // Show and pass "RCOGP" for the generic Codes so the chosen sector connects to
+  // the RCOGP Toolkit config (the parser codes it "Generic", which matches no
+  // config). Label made explicit for the user.
+  const sectorOptions = (catalog?.sector_options ?? []).map((s) =>
+    s.code === "Generic" ? { ...s, code: "RCOGP", label: "RCOGP — Generic Codes (all industries)" } : s,
+  );
   const activeSector = sectorOptions.find((s) => s.code === sector);
 
   const mapped: ParserWorkbookMapResult | null = useMemo(
@@ -1080,6 +1091,17 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     </div>
                   );
                 })}
+                <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_92px_92px_104px_92px] md:items-center md:gap-3">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8e8e93]">
+                    {charging ? "Total charge" : "Total est. cost"}
+                  </span>
+                  <span className="hidden md:block" />
+                  <span className="hidden md:block" />
+                  <span className="hidden md:block" />
+                  <span className="text-[14px] font-bold text-white md:text-right" data-testid="quote-total-cost">
+                    {money(quote.files.reduce((sum, f) => sum + (f.pricing?.extractionCents ?? 0), 0), quote.currency)}
+                  </span>
+                </div>
               </div>
 
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
