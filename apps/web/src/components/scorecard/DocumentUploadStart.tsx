@@ -253,6 +253,12 @@ const SECTOR_TO_WORKBOOK: Record<string, string> = {
   AGRI: "AGRI",
 };
 
+// The figure shown on the review page is the PRICE, not our cost. The parser's
+// extractionCents is the true internal run cost (Azure OCR + AI tokens); we mark
+// it up by this multiplier for display and never surface the underlying cost.
+const PRICE_MULTIPLIER = 100;
+const sellCents = (costCents: number) => (costCents || 0) * PRICE_MULTIPLIER;
+
 const CANONICAL_PILLARS: Record<string, string> = {
   ESD: "Enterprise & Supplier Development",
   OWN: "Ownership",
@@ -1106,7 +1112,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   <span>Effort</span>
                   <span>Units</span>
                   <span>Tokens</span>
-                  <span className="text-right">{charging ? "Charge" : "Est. cost"}</span>
+                  <span className="text-right">{charging ? "Charge" : "Est. price"}</span>
                 </div>
                 {quote.files.map((file) => {
                   const units = file.structure.pages
@@ -1135,42 +1141,29 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                         {file.tokens.band ? "~" : ""}{file.tokens.input.toLocaleString()}
                       </span>
                       <span className="text-[13px] font-semibold text-white md:text-right">
-                        {money(file.pricing.extractionCents, quote.currency)}
+                        {money(sellCents(file.pricing.extractionCents), quote.currency)}
                       </span>
                     </div>
                   );
                 })}
                 <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_92px_92px_104px_92px] md:items-center md:gap-3">
                   <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8e8e93]">
-                    {charging ? "Total charge" : "Total est. cost"}
+                    {charging ? "Total charge" : "Total est. price"}
                   </span>
                   <span className="hidden md:block" />
                   <span className="hidden md:block" />
                   <span className="hidden md:block" />
                   <span className="text-[14px] font-bold text-white md:text-right" data-testid="quote-total-cost">
-                    {money(quote.files.reduce((sum, f) => sum + (f.pricing?.extractionCents ?? 0), 0), quote.currency)}
+                    {money(sellCents(quote.files.reduce((sum, f) => sum + (f.pricing?.extractionCents ?? 0), 0)), quote.currency)}
                   </span>
                 </div>
               </div>
 
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl bg-white/[0.035] px-3 py-3">
-                  <p className="text-[11px] text-[#636366]">Input tokens</p>
-                  <p className="mt-1 font-mono text-[13px] text-[#d1d1d6]">{totalInputTokens.toLocaleString()}</p>
-                </div>
-                <div className="rounded-2xl bg-white/[0.035] px-3 py-3">
-                  <p className="text-[11px] text-[#636366]">OCR pages</p>
-                  <p className="mt-1 font-mono text-[13px] text-[#d1d1d6]">{quote.azureBreakdown.ocrPages.toLocaleString()}</p>
-                </div>
-                <div className="rounded-2xl bg-white/[0.035] px-3 py-3">
-                  <p className="text-[11px] text-[#636366]">Model estimate</p>
-                  <p className="mt-1 truncate text-[13px] text-[#d1d1d6]">{quote.azureBreakdown.model}</p>
-                </div>
-              </div>
-
+              {/* Cost internals (per-model token/OCR usage) are deliberately not
+                  shown — the figure above is the price, not our run cost. */}
               {!charging && (
                 <p className="mt-3 text-[11px] text-[#636366]">
-                  This is what the run costs us to process. You are not charged for it.
+                  Estimated price for reading this document set. You confirm before anything is charged.
                 </p>
               )}
 
@@ -1182,7 +1175,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                       <span className="block text-[#d1d1d6]">{item.label}</span>
                       <span className="block truncate text-[11px] text-[#636366]">{item.detail}</span>
                     </span>
-                    <span className="shrink-0 font-mono text-[#f2f2f7]">{money(item.cents, quote.currency)}</span>
+                    <span className="shrink-0 font-mono text-[#f2f2f7]">{money(sellCents(item.cents), quote.currency)}</span>
                   </div>
                 ))}
               </div>
