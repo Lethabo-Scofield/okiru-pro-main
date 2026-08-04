@@ -17,6 +17,7 @@ import {
   type ExtractionModel,
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
+import { extractEntityNameFallback } from './entityNameExtraction.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
@@ -192,6 +193,28 @@ export async function extractCaseEntities(
   const resolved = resolveCaseEntities(extractions, {
     allFiles: inputs.map((input) => input.filename),
   });
+
+  // Fallback name: only when no document authoritatively named the measured
+  // entity (no CIPC / share register / affidavit). Reads it off a profile,
+  // letterhead or workbook header instead of leaving it blank. Never overrides a
+  // resolved name — pure gap-fill, so it cannot pollute a good registration name.
+  const resolvedName = String(resolved.fields.entity_name?.value ?? '').trim();
+  if (!resolvedName) {
+    const fallback = await extractEntityNameFallback(
+      model,
+      inputs.map((input) => ({ filename: input.filename, markdown: input.markdown, raw_text: input.raw_text })),
+    );
+    if (fallback) {
+      resolved.fields.entity_name = {
+        field: 'entity_name',
+        value: fallback.name,
+        sources: [fallback.sourceFile],
+        agreementCount: 1,
+        conflicted: false,
+        alternatives: [],
+      };
+    }
+  }
 
   const calculator = mapEntitiesToCalculator(resolved, fieldElementIndex(extractions));
 

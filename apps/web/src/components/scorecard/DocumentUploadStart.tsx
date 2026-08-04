@@ -253,11 +253,10 @@ const SECTOR_TO_WORKBOOK: Record<string, string> = {
   AGRI: "AGRI",
 };
 
-// The figure shown on the review page is the PRICE, not our cost. The parser's
-// extractionCents is the true internal run cost (Azure OCR + AI tokens); we mark
-// it up by this multiplier for display and never surface the underlying cost.
-const PRICE_MULTIPLIER = 100;
-const sellCents = (costCents: number) => (costCents || 0) * PRICE_MULTIPLIER;
+// The parser now returns the marked-up PRICE in extractionCents (cost ×
+// PARSER_SELL_MULTIPLIER) and never exposes the underlying cost, so the web just
+// displays what the quote gives it — no client-side markup (that would double it).
+const sellCents = (priceCents: number) => priceCents || 0;
 
 const CANONICAL_PILLARS: Record<string, string> = {
   ESD: "Enterprise & Supplier Development",

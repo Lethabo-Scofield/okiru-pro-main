@@ -127,6 +127,13 @@ const MAPPING_FEE_CENTS = numEnv('PARSER_MAPPING_FEE_CENTS', 0);
  */
 const MINIMUM_CHARGE_CENTS = numEnv('PARSER_MINIMUM_CHARGE_CENTS', 200);
 
+// Sell markup. The Azure cost (OCR + AI tokens) is what a run costs us; the
+// customer price is that cost × this multiplier. Applied here so the SHOWN
+// price and the ACTUAL charge are the same number (the checkout reads totalCents
+// from this quote). Tune with PARSER_SELL_MULTIPLIER without a code change.
+const SELL_MULTIPLIER = numEnv('PARSER_SELL_MULTIPLIER', 100);
+const sell = (costCents: number) => round2(costCents * SELL_MULTIPLIER);
+
 function numEnv(name: string, fallback: number): number {
   const raw = Number(process.env[name]);
   return Number.isFinite(raw) && raw >= 0 ? raw : fallback;
@@ -255,7 +262,7 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
         band: prediction.band,
       },
       structure: { pages: prediction.pages, sheets: prediction.sheets, rows: prediction.rows },
-      pricing: { currency: CURRENCY, extractionCents: cost.totalCents, isUpperBound: cost.isUpperBound },
+      pricing: { currency: CURRENCY, extractionCents: sell(cost.totalCents), isUpperBound: cost.isUpperBound },
       reasons: prediction.reasons,
       warnings: [],
     });
@@ -275,46 +282,43 @@ export async function quoteUploadedFiles(files: UploadedFileLike[]): Promise<Pri
     {
       key: 'extraction',
       label: 'Document processing',
-      detail: `${docCount} document${docCount === 1 ? '' : 's'}${scanCount ? ` · ${scanCount} scanned` : ''} · ~${inputTokens.toLocaleString()} tokens`,
-      cents: round2(extractionCents + normalisationCents + mappingCents),
+      detail: `${docCount} document${docCount === 1 ? '' : 's'}${scanCount ? ` · ${scanCount} scanned` : ''}`,
+      cents: sell(extractionCents + normalisationCents + mappingCents),
     },
   ];
   if (normalisationCents > 0) {
-    lineItems.push({ key: 'normalisation', label: 'Normalisation', detail: 'units, dates, percentages, B-BBEE levels', cents: normalisationCents });
-    lineItems[0].cents = round2(lineItems[0].cents - normalisationCents);
+    lineItems.push({ key: 'normalisation', label: 'Normalisation', detail: 'units, dates, percentages, B-BBEE levels', cents: sell(normalisationCents) });
+    lineItems[0].cents = round2(lineItems[0].cents - sell(normalisationCents));
   }
   if (mappingCents > 0) {
-    lineItems.push({ key: 'entity_mapping', label: 'Entity mapping', detail: 'suppliers, shareholders, contributions → workbook', cents: mappingCents });
-    lineItems[0].cents = round2(lineItems[0].cents - mappingCents);
+    lineItems.push({ key: 'entity_mapping', label: 'Entity mapping', detail: 'suppliers, shareholders, contributions → workbook', cents: sell(mappingCents) });
+    lineItems[0].cents = round2(lineItems[0].cents - sell(mappingCents));
   }
 
   const derivedCents = round2(lineItems.reduce((sum, li) => sum + li.cents, 0));
 
-  // Apply the card-payment floor, visibly. The user sees the true Azure cost
-  // AND the amount that will actually be charged — we never dress the Azure
-  // figure up to reach the minimum.
+  // Card-payment floor on the PRICE (derivedCents is already the sell price).
   const minimumApplies = MINIMUM_CHARGE_CENTS > 0 && derivedCents < MINIMUM_CHARGE_CENTS;
   if (minimumApplies) {
     lineItems.push({
       key: 'minimum_charge',
       label: 'Minimum charge',
-      detail: `this job costs ${CURRENCY} ${(derivedCents / 100).toFixed(4)} to run — card payments can’t settle below ${CURRENCY} ${(MINIMUM_CHARGE_CENTS / 100).toFixed(2)}`,
+      detail: `card payments can’t settle below ${CURRENCY} ${(MINIMUM_CHARGE_CENTS / 100).toFixed(2)}`,
       cents: round2(MINIMUM_CHARGE_CENTS - derivedCents),
     });
   }
   const totalCents = minimumApplies ? round2(MINIMUM_CHARGE_CENTS) : derivedCents;
 
   const notes = [
-    'Quote is derived from each document’s text layer and structure only.',
-    'No Azure call, OCR, vision, extraction or scoring has been run yet.',
-    `This price is the predicted Azure cost for ${TOKEN_PREDICTION_CONFIG.model} — tokens plus OCR pages — worked out before the model is called.`,
+    'Price is estimated from each document’s size and structure before processing.',
+    'Nothing has been read, extracted or scored yet — you confirm before anything runs.',
   ];
   if (anyUpperBound) {
-    notes.push('Scanned documents are estimated from page count and quoted at the upper bound — you are never charged more than this.');
+    notes.push('Scanned documents are estimated from page count at the upper bound — you are never charged more than this.');
   }
   if (minimumApplies) {
     notes.push(
-      `The Azure cost of this job is ${CURRENCY} ${(derivedCents / 100).toFixed(4)}, which is below what a card payment can settle, so the ${CURRENCY} ${(MINIMUM_CHARGE_CENTS / 100).toFixed(2)} minimum applies.`,
+      `This job prices below the ${CURRENCY} ${(MINIMUM_CHARGE_CENTS / 100).toFixed(2)} card-payment minimum, so the minimum applies.`,
     );
   }
 
