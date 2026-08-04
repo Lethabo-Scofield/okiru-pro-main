@@ -40,20 +40,26 @@ const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; column
   },
   MANAGEMENT_CONTROL: {
     field: 'employee_rows',
-    columns: ['employee_name', 'race', 'gender', 'occupational_level', 'id_number', 'foreign'],
-    what: 'each director and employee (occupational_level is their management band, e.g. Executive Management, Senior, Middle; foreign is the Foreign-national Yes/No flag)',
+    // designation is the SCORED job/role title (Managing Director, Admin Manager);
+    // occupational_level is the EEA band. A sheet may carry either or both — give
+    // the model a slot for each so neither is dropped.
+    columns: ['employee_name', 'race', 'gender', 'designation', 'occupational_level', 'id_number', 'foreign'],
+    what: 'each director and employee. designation is their job title / role; occupational_level is their management band (Executive Management, Senior, Middle, Junior); foreign is the Foreign-national Yes/No flag. Map a "designation"/"job title"/"position" column to designation, and a "level"/"occupational level"/"management level" column to occupational_level',
   },
   SKILLS_DEVELOPMENT: {
     field: 'learner_rows',
-    columns: ['learner_name', 'race', 'gender', 'category_code', 'total_cost'],
-    what: 'each learner / training record',
+    // program_name + training_provider carry the intervention identity the
+    // scorecard's Training Program column needs; without slots for them the model
+    // dropped a "Programme"/"Course" column entirely.
+    columns: ['learner_name', 'race', 'gender', 'category_code', 'program_name', 'training_provider', 'total_cost'],
+    what: 'each learner / training record. program_name is the course/programme/learnership name; category_code is the A–G learning-programme category; total_cost is the training spend',
   },
   ESD: {
     field: 'supplier_rows',
     // supplier_classification is the EME / QSE / Generic size — present in the
     // client schedule and needed for the EME/QSE procurement lines.
-    columns: ['supplier_name', 'claimed_spend_ex_vat', 'bee_level', 'supplier_classification', 'certificate_expiry_date'],
-    what: 'each supplier with the spend against them (a preferential-procurement spend schedule); supplier_classification is the EME / QSE / Generic size',
+    columns: ['supplier_name', 'registration_number', 'claimed_spend_ex_vat', 'bee_level', 'supplier_classification', 'certificate_expiry_date'],
+    what: 'each supplier with the spend against them (a preferential-procurement spend schedule); supplier_classification is the EME / QSE / Generic size; registration_number is the supplier company registration number',
   },
   SED: {
     field: 'beneficiary_rows',
