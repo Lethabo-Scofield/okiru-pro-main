@@ -481,6 +481,31 @@ export function reconcileEntity(input: WorkbookSections, opts: ReconcileOptions 
   summary.scoredSedContributions = (sections.sed?.rows ?? []).length;
   summary.scoredEsdContributions = (sections.esd?.rows ?? []).length;
 
+  // RELATIONAL: headcount must agree with the employee register. Auto-fill it
+  // when blank; flag it when the two disagree (the classic "13 stated, 12
+  // listed"). Headcount-based targets — Skills LAI (5% × headcount) and YES —
+  // are a percentage of this number, so a wrong headcount quietly skews them.
+  {
+    const skills = sections["skills-development"];
+    const empCount = summary.employeeCount;
+    const meta = (skills?.meta ?? {}) as Record<string, unknown>;
+    const stated = Number(String(meta.headcount ?? "").replace(/[\s,]/g, ""));
+    if (empCount > 0) {
+      if (!Number.isFinite(stated) || stated <= 0) {
+        if (skills) skills.meta = { ...meta, headcount: empCount };
+        issues.push({
+          id: nextId(), invariant: "derivation", severity: "resolved", section: "skills-development",
+          statement: `Set headcount to ${empCount} from the employee register (it was blank) — the Skills LAI and YES targets are a percentage of it.`,
+        });
+      } else if (Math.round(stated) !== empCount) {
+        issues.push({
+          id: nextId(), invariant: "conservation", severity: "coverage", section: "skills-development",
+          statement: `Headcount says ${Math.round(stated)} but ${empCount} employee${empCount === 1 ? " is" : "s are"} on the register — they disagree. Add the missing people or correct the headcount; Skills LAI and YES targets scale with it.`,
+        });
+      }
+    }
+  }
+
   // Rank: blocking first (needs the user), then coverage (gaps), then resolved.
   const rank: Record<IssueSeverity, number> = { blocking: 0, coverage: 1, resolved: 2 };
   issues.sort((a, b) => rank[a.severity] - rank[b.severity]);
