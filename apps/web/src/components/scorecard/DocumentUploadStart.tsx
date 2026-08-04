@@ -49,20 +49,69 @@ function cleanText(v: unknown): string {
   return /<\/?[a-z]/i.test(s) || s.length < 2 ? "" : s;
 }
 
-/** The measured entity's name, from the richest source available. */
+/** Field keys that name the measured entity, however a document labels it. */
+const ENTITY_NAME_KEY = /^(measured_?entity(_name)?|entity_name|company_name|trading_name|legal_name|business_name|registered_name|name_of_(measured_)?entity)$/i;
+/** In-text labels that precede a company name on letterheads, profiles, headers. */
+const ENTITY_NAME_LABEL = /(?:measured\s*entity|company\s*name|registered\s*name|trading\s*(?:as|name)|name\s*of\s*(?:the\s*)?(?:measured\s*)?entity|entity\s*name)\s*[:\-]\s*(.+)/i;
+
+/** Trim a captured name to something that looks like a company, not a sentence. */
+function tidyEntityName(raw: string): string {
+  let s = cleanText(String(raw).split(/\s{2,}|\||\t|;/)[0]); // stop at column / gap
+  s = s.replace(/^(the\s+)?(measured\s+entity|company)\s*[:\-]?\s*/i, "").trim();
+  // Keep it to a plausible name length; a whole paragraph is not a name.
+  if (s.length > 90) s = s.slice(0, 90).trim();
+  return s.length >= 2 ? s : "";
+}
+
+/**
+ * The measured entity's name, from the richest source available — and then, as a
+ * low-confidence fallback, from ANY document. The system should never leave the
+ * name blank just because a registration certificate wasn't uploaded: a company
+ * profile, a letterhead, or a workbook "Measured Entity:" header all name the
+ * entity. We surface a best guess the user can correct rather than nothing.
+ */
 function pickEntityName(data: any): string {
   const ai = data?.ai_entities;
+  // 1. The clean resolved field (highest confidence).
   const resolved = cleanText(ai?.fields?.entity_name?.value ?? ai?.fields?.company_name?.value);
   if (resolved) return resolved;
+  // 2. Any ai.field whose KEY names the entity.
+  for (const [k, f] of Object.entries(ai?.fields ?? {})) {
+    if (ENTITY_NAME_KEY.test(k)) {
+      const c = cleanText((f as { value?: unknown } | null)?.value);
+      if (c) return c;
+    }
+  }
+  // 3. Named fields inside the per-document extractions.
   for (const e of ai?.extractions ?? []) {
     for (const v of e?.values ?? []) {
-      if (/^(entity_name|company_name|measured_entity)$/i.test(String(v?.field ?? ""))) {
+      if (ENTITY_NAME_KEY.test(String(v?.field ?? ""))) {
         const c = cleanText(v?.value);
         if (c) return c;
       }
     }
   }
-  return cleanText(data?.calculator_payload?.["ownership.entity_name"]);
+  // 4. Legacy calculator payload.
+  const legacy = cleanText(data?.calculator_payload?.["ownership.entity_name"]);
+  if (legacy) return legacy;
+  // 5. LOW-CONFIDENCE FALLBACK: scan every string in the case for a labelled
+  // company name ("Measured Entity: …", "Company Name: …", "Trading as …").
+  const seen = new Set<unknown>();
+  const stack: unknown[] = [data];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object" || seen.has(node)) continue;
+    seen.add(node);
+    for (const val of Object.values(node as Record<string, unknown>)) {
+      if (typeof val === "string") {
+        const m = val.match(ENTITY_NAME_LABEL);
+        if (m) { const c = tidyEntityName(m[1]); if (c) return c; }
+      } else if (val && typeof val === "object") {
+        stack.push(val);
+      }
+    }
+  }
+  return "";
 }
 
 /** Every name/number the measured entity is known by — for the self-shareholder check. */
