@@ -47,32 +47,34 @@ describe('pricing quote — shape & guarantees', () => {
     expect(quote.files[0].tokens.band).toBeNull();
     expect(quote.files[0].tokens.input).toBeGreaterThan(0);
 
-    // The quote must state plainly that nothing was spent to produce it.
-    expect(quote.notes.join(' ')).toMatch(/No Azure call, OCR, vision, extraction or scoring/i);
+    // The quote states plainly that nothing has been run yet — without revealing
+    // our internal run cost.
+    expect(quote.notes.join(' ')).toMatch(/Nothing has been read, extracted or scored/i);
   });
 
-  it('the extraction price IS the predicted Azure cost — nothing invented on top', async () => {
+  it('the extraction PRICE is the Azure cost marked up by the sell multiplier (cost never shown as the price)', async () => {
     const quote = await quoteUploadedFiles([
       upload('certificate.txt', 'text/plain', 'B-BBEE certificate for Acme, Level 2, 51% black ownership'),
       upload('scan.png', 'image/png', Buffer.from([0x89, 0x50])),
     ]);
 
-    // The whole job is priced as one line at Azure's cost. Normalisation and
-    // mapping carry no fee by default, so they fold in rather than appearing as
-    // their own confusing "$0" lines.
-    expect(quote.lineItems.find((li) => li.key === 'extraction')!.cents).toBeCloseTo(quote.totals.azureCents, 2);
+    // The shown price is the internal Azure cost × 100 (PARSER_SELL_MULTIPLIER),
+    // not the raw cost. Normalisation / mapping carry no fee by default.
+    const SELL = 100;
+    expect(quote.lineItems.find((li) => li.key === 'extraction')!.cents).toBeCloseTo(quote.totals.azureCents * SELL, 2);
     expect(quote.lineItems.some((li) => li.key === 'normalisation')).toBe(false);
     expect(quote.lineItems.some((li) => li.key === 'entity_mapping')).toBe(false);
 
-    // The Azure figure is itemised so the price can be checked against the
-    // model's own rate card: tokens + OCR pages, and it must reconcile.
+    // The raw Azure cost is still itemised internally (for our own records) and
+    // reconciles, but it is the COST, distinct from the marked-up price above.
     const b = quote.azureBreakdown;
     expect(b.model).toBeTruthy();
     expect(b.inputTokens).toBeGreaterThan(0);
     expect(b.ocrPages).toBe(1); // the scan
     expect(b.ocrCents).toBeGreaterThan(0);
     expect(quote.totals.azureCents).toBeCloseTo(b.inputCents + b.outputCents + b.ocrCents, 2);
-    expect(quote.notes.join(' ')).toMatch(/predicted Azure cost/i);
+    // The customer-facing copy must NOT describe the price as our Azure cost.
+    expect(quote.notes.join(' ')).not.toMatch(/Azure cost/i);
   });
 
   it('applies the card minimum VISIBLY when the Azure cost is unchargeable', async () => {
@@ -106,8 +108,8 @@ describe('pricing quote — shape & guarantees', () => {
     const sum = quote.lineItems.reduce((n, li) => n + li.cents, 0);
     expect(quote.totals.totalCents).toBeCloseTo(sum, 2);
     expect(quote.totals.predictedInputTokens).toBeGreaterThan(0);
-    // The processing line tracks the document (its token estimate).
-    expect(quote.lineItems[0].detail).toMatch(/tokens/);
+    // The processing line names the document count (usage internals are not shown).
+    expect(quote.lineItems[0].detail).toMatch(/document/i);
   });
 
   it('prices an image as high effort WITHOUT OCR-ing it, and bands the estimate', async () => {
