@@ -117,14 +117,110 @@ export function isInternalJargon(t: string): boolean {
     && !/\b(certificate|shareholder|supplier|manager|employee|spend|level|ownership %|black)\b/i.test(t);
 }
 
-/** Everything the parser could not READ out of this document (not how it was classified). */
-function gapsFor(parserCase: ParserCaseLike, filename: string): string[] {
+/**
+ * Verification-matrix INTERNAL field names that must never surface as a "gap" a
+ * client failed to provide. "Inspect"/"Inspection copy attached" is an auditor's
+ * sampling instruction, and "Level Claimed on Scorecard" is a DERIVED value the
+ * engine computes from a designation — neither is a column a client fills in. A
+ * client seeing "couldn't read: Inspect" reads it as a broken product, when in
+ * fact we read everything the document contained.
+ */
+export function isInternalArtifact(t: string): boolean {
+  return /\b(inspect|inspection|level claimed|claimed on (the )?scorecard)\b/i.test(t);
+}
+
+/** Word tokens of a field/column name, camelCase- and separator-aware. */
+function conceptTokens(name: string): string[] {
+  return name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
+}
+
+/**
+ * A workbook COLUMN, expanded to the concepts it stands for — so a matrix field
+ * named "percentage" is recognised as captured by a `votingRights` /
+ * `economicInterest` column, and "gender"/"race" by their own columns. This is
+ * the small, bounded synonym set the display gap-check needs; it is NOT scoring
+ * vocabulary (scoring never consults it).
+ */
+const COLUMN_CONCEPTS: Record<string, string[]> = {
+  votingrights: ['percentage', 'percent', 'voting', 'ownership'],
+  economicinterest: ['percentage', 'percent', 'economic', 'interest', 'ownership'],
+  shareholding: ['percentage', 'percent', 'ownership', 'shareholding'],
+  numberofshares: ['shares', 'ownership'],
+  occupationallevel: ['level', 'occupational', 'band'],
+  designation: ['designation', 'role', 'position', 'title'],
+  totalcost: ['cost', 'spend', 'value'],
+  spend: ['spend', 'value', 'cost'],
+};
+
+/** The concept tokens actually PRESENT across a file's captured row columns. */
+function presentConcepts(columns: Set<string>): Set<string> {
+  const out = new Set<string>();
+  for (const col of Array.from(columns)) {
+    for (const tok of conceptTokens(col)) out.add(tok);
+    for (const extra of COLUMN_CONCEPTS[col] ?? []) out.add(extra);
+  }
+  return out;
+}
+
+/**
+ * Columns that CARRY A VALUE across every row this file contributed. A field the
+ * rows demonstrably carry cannot honestly be reported as "couldn't read".
+ */
+function capturedColumnsForFile(
+  sections: Record<string, SectionPatchLike> | undefined,
+  filename: string,
+): Set<string> {
+  const cols = new Set<string>();
+  for (const patch of Object.values(sections ?? {})) {
+    for (const row of patch?.rows ?? []) {
+      const r = row as Record<string, unknown> | null;
+      const src = r?._sourceFiles;
+      if (!Array.isArray(src) || !src.some((f) => str(f) === filename)) continue;
+      for (const [key, value] of Object.entries(r ?? {})) {
+        if (key.startsWith('_')) continue;
+        if (value != null && String(value).trim() !== '') cols.add(key.toLowerCase());
+      }
+    }
+  }
+  return cols;
+}
+
+/**
+ * Everything the parser could not READ out of this document (not how it was
+ * classified).
+ *
+ * The `missing_fields` list comes from a REDUNDANT deterministic single-record
+ * validator that is blind to the AI table/entity path. Two ways it lies:
+ *   1. It reports a per-row field (Race, Gender, Percentage) missing on a sheet
+ *      whose rows plainly carry it — "12 managers found · couldn't read Race".
+ *      Suppressed when the captured rows carry that concept.
+ *   2. It reports a document type's required fields (Supplier Spend) missing on a
+ *      document it MISCLASSIFIED — an AFS read as a supplier schedule. When the
+ *      file's real yield was the AI meta path (no rows, no deterministic fields),
+ *      that type guess is untrustworthy, so its required-field list is dropped.
+ * A field the yield genuinely does NOT contain (a Signed Date the affidavit
+ * lacks, a Shareholding % the rows omit) is still listed — that is a real gap.
+ */
+function gapsFor(
+  parserCase: ParserCaseLike,
+  filename: string,
+  opts: { metaOnlyYield: boolean; capturedColumns: Set<string> },
+): string[] {
   const detected = (parserCase.documents_detected ?? []).find((d) => d.filename === filename);
   const review = (parserCase.documents_needing_review ?? []).find((r) => r.filename === filename);
 
+  const present = presentConcepts(opts.capturedColumns);
+  const captured = (field: string): boolean =>
+    opts.metaOnlyYield || conceptTokens(field).some((t) => present.has(t));
+
   const out = new Set<string>();
   for (const f of detected?.validation?.missing_fields ?? []) {
-    if (!isInternalJargon(f)) out.add(humanizeField(f));
+    if (isInternalJargon(f) || isInternalArtifact(f) || captured(f)) continue;
+    out.add(humanizeField(f));
   }
   for (const raw of [
     ...(detected?.validation?.errors ?? []),
@@ -132,10 +228,17 @@ function gapsFor(parserCase: ParserCaseLike, filename: string): string[] {
     ...(review?.reasons ?? []),
   ]) {
     const t = str(raw);
-    if (!t || isClassificationNote(t) || isInternalJargon(t)) continue;
+    if (!t || isClassificationNote(t) || isInternalJargon(t) || isInternalArtifact(t)) continue;
     const m = /^(.*)\smissing$/i.exec(t);
-    if (m) { if (!isInternalJargon(m[1])) out.add(humanizeField(m[1])); }
-    else out.add(t);
+    if (m) {
+      // "X missing" is the same claim as a missing_field — hold it to the same
+      // captured-by-yield test. Genuine trouble ("… conflicts", "… expired") is
+      // not an "X missing" line, so it falls through and is always kept.
+      if (isInternalJargon(m[1]) || isInternalArtifact(m[1]) || captured(m[1])) continue;
+      out.add(humanizeField(m[1]));
+    } else {
+      out.add(t);
+    }
   }
   return Array.from(out);
 }
@@ -176,6 +279,33 @@ function aiValueFiles(parserCase: ParserCaseLike): Set<string> {
   for (const e of extractions) {
     const name = str(e.sourceFile);
     if (name && Array.isArray(e.values) && e.values.length > 0) out.add(name);
+  }
+  return out;
+}
+
+/**
+ * Files the AI path read ENTITY FINANCIALS from (revenue / NPAT / TMPS).
+ *
+ * These carry the truth about what the document IS. The deterministic BM25
+ * classifier labels a Finance sheet or an AFS "Supplier Spend Schedule" because
+ * the document contains the words "procurement spend" — the exact string-matching
+ * failure the model does not make. So we label a document by what we ACTUALLY
+ * extracted from it: a file we read revenue and NPAT out of is a financial
+ * statement, whatever the token classifier guessed.
+ */
+function financialValueFiles(parserCase: ParserCaseLike): Set<string> {
+  const out = new Set<string>();
+  const extractions = (parserCase as {
+    ai_entities?: { extractions?: Array<{ sourceFile?: unknown; documentId?: unknown; values?: Array<{ field?: unknown }> }> };
+  }).ai_entities?.extractions ?? [];
+  for (const e of extractions) {
+    const name = str(e.sourceFile);
+    if (!name) continue;
+    const isFinancial =
+      str(e.documentId) === 'sheet_financials'
+      || (Array.isArray(e.values)
+        && e.values.some((v) => /^(current_year_)?(revenue|turnover|npat|npbt)$|procurement_spend/i.test(str(v.field))));
+    if (isFinancial) out.add(name);
   }
   return out;
 }
@@ -242,6 +372,7 @@ export function assessDocuments(
   const detected = [...(parserCase.documents_detected ?? [])];
   const rowsByFile = sectionRowsByFile(sections);
   const aiFiles = aiValueFiles(parserCase);
+  const financialFiles = financialValueFiles(parserCase);
 
   // Files the AI-entity path read that the deterministic case never detected
   // still deserve a verdict — synthesize an entry for them.
@@ -252,7 +383,12 @@ export function assessDocuments(
 
   const verdicts: DocumentVerdict[] = detected.map((doc) => {
     const filename = str(doc.filename);
-    const documentType = str(doc.document_type) || 'Unrecognised document';
+    // Label by what we READ, not what BM25 guessed: a file we pulled revenue /
+    // NPAT out of is a financial statement, never the "Supplier Spend Schedule"
+    // the token classifier picks because the sheet says "procurement spend".
+    const documentType = financialFiles.has(filename)
+      ? 'Financial statements / summary'
+      : str(doc.document_type) || 'Unrecognised document';
     const fields = parserCase.fields_extracted?.[filename] ?? {};
     const extractedCount = Object.keys(fields).length;
     const suppliedRows = (parserCase.supplier_rows ?? []).filter((r) => r.source_file === filename).length;
@@ -260,12 +396,21 @@ export function assessDocuments(
     const sectionRowCount = sectionCounts
       ? Array.from(sectionCounts.values()).reduce((a, b) => a + b, 0)
       : 0;
-    const gaps = gapsFor(parserCase, filename);
     // Yield = anything that reached the workbook: deterministic fields, supplier
     // rows, section rows, OR AI-entity values (which carry meta like company
     // name / NPAT that never becomes a grid row but is real, scored data).
     const yieldedSomething =
       extractedCount > 0 || suppliedRows > 0 || sectionRowCount > 0 || aiFiles.has(filename);
+    // Gaps are assessed AGAINST the yield: a file that landed data in the
+    // workbook does not also get told it "couldn't read" the very fields that
+    // data is made of (the redundant single-record validator's blind spot). A
+    // meta-only yield (financials read by the AI path, no rows, no deterministic
+    // fields) means the deterministic TYPE guess is untrustworthy — so its
+    // required-field list is dropped rather than shown against a misclassified doc.
+    const capturedColumns = capturedColumnsForFile(sections, filename);
+    const metaOnlyYield =
+      aiFiles.has(filename) && extractedCount === 0 && suppliedRows === 0 && sectionRowCount === 0;
+    const gaps = gapsFor(parserCase, filename, { metaOnlyYield, capturedColumns });
 
     let verdict: EntityVerdict;
     if (!yieldedSomething) {
