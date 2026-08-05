@@ -115,6 +115,16 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   // contribution_value / beneficiary_name are element-scoped (ESD vs SED share
   // them) — see ELEMENT_SCOPED.
   contribution_description: { section: "esd", column: "contributionDescription" },
+  // A DEVELOPMENT contribution is money/support given TO a beneficiary company,
+  // not spend on a supplier. Its beneficiary's black ownership / size / SD-or-ED
+  // category land on the ESD grid — NEVER on the measured entity's own Ownership
+  // (that collision is why these carry beneficiary-specific names, distinct from
+  // black_ownership_percentage which is the entity's own and stays Ownership).
+  beneficiary_black_ownership: { section: "esd", column: "currentBlackOwnership" },
+  beneficiary_black_ownership_percentage: { section: "esd", column: "currentBlackOwnership" },
+  beneficiary_size: { section: "esd", column: "currentSize" },
+  beneficiary_classification: { section: "esd", column: "currentSize" },
+  esd_category: { section: "esd", column: "esdCategory" },
 
   // ── Socio-economic development ──
   beneficiary_or_intermediary_name: { section: "sed", column: "beneficiaryName" },

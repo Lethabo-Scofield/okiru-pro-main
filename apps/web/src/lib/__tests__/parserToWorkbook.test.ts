@@ -76,6 +76,41 @@ describe("a table becomes many rows", () => {
     expect(result.rows.ownership!.map((r) => r.numberOfShares)).toEqual([60, 40]);
   });
 
+  it("lands an Enterprise Development contribution in the ESD grid, NOT as a phantom procurement supplier", () => {
+    // The dangerous bug: an ED grant routed as a supplier is counted as
+    // procurement spend (inflating TMPS + Preferential Procurement) while ESD
+    // loses the contribution. The contribution shape's first field
+    // (beneficiary_name) must route the whole table to the `esd` section.
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "ESD",
+        values: [
+          {
+            field: "esd_contribution_rows",
+            value: [
+              {
+                beneficiary_name: "Lerato Startup Cleaning Co-op",
+                contribution_value: 40000,
+                contribution_type: "Grant",
+                beneficiary_black_ownership: 100,
+                description_of_contribution: "Cash grant to black-owned EME supplier",
+              },
+            ],
+          },
+        ],
+      }),
+    ]);
+
+    expect(result.rows.esd ?? []).toHaveLength(1);
+    expect((result.rows.procurement ?? [])).toHaveLength(0);
+    const row = result.rows.esd![0];
+    expect(row.supplierName).toBe("Lerato Startup Cleaning Co-op");
+    expect(row.amount).toBe(40000);
+    expect(row.currentBlackOwnership).toBe(100);
+    // "Grant" is normalised to the ESD dropdown option "Grant Contribution".
+    expect(String(row.contributionType)).toContain("Grant");
+  });
+
   it("expands an employee register and lands the occupational level Management Control scores", () => {
     // The whole MC chain in one row: the register's occupational level must reach
     // a cell the scorecard can group by. "Executive Management" → the workbook's

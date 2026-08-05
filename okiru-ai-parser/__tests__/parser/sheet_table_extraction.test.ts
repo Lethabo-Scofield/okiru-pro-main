@@ -61,4 +61,28 @@ describe('extracting a table', () => {
   it('returns null on unparseable output', async () => {
     expect(await extractSheetTable(model('not json'), 'ESD', sheet)).toBeNull();
   });
+
+  // SCORING-SAFETY: an Enterprise/Supplier Development contribution is a grant TO
+  // a beneficiary, not a supplier you buy from. Routed as a supplier it becomes
+  // phantom procurement spend AND loses its ED points. It must use the
+  // contribution shape, whose first field routes the table to the `esd` section.
+  it('routes an Enterprise Development sheet to the CONTRIBUTION shape, not the supplier shape', async () => {
+    const ed = { filename: 'gather.xlsx › Enterprise Development', raw_text: 't', markdown: 't' };
+    const result = await extractSheetTable(model({
+      esd_contribution_rows: [
+        { beneficiary_name: 'Lerato Startup Cleaning Co-op', contribution_value: '40000', contribution_type: 'Grant', beneficiary_black_ownership: '100' },
+      ],
+    }), 'ESD', ed);
+    expect(result).not.toBeNull();
+    expect(result!.values[0].field).toBe('esd_contribution_rows');
+    const rows = result!.values[0].value as Array<Record<string, unknown>>;
+    expect(String(rows[0].beneficiary_name)).toContain('Lerato');
+  });
+
+  it('a Procurement sheet still uses the SUPPLIER shape (→ procurement)', async () => {
+    const result = await extractSheetTable(model({
+      supplier_rows: [{ supplier_name: 'Sizwe Cleaning', claimed_spend_ex_vat: '3200000', bee_level: '1' }],
+    }), 'ESD', { filename: 'gather.xlsx › Procurement', raw_text: 't', markdown: 't' });
+    expect(result!.values[0].field).toBe('supplier_rows');
+  });
 });
