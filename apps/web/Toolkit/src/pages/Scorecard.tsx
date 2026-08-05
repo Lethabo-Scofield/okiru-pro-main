@@ -81,6 +81,51 @@ function achievementPct(score: number, target: number): number {
   return target > 0 ? Math.min(100, (score / target) * 100) : 0;
 }
 
+/**
+ * Split a pillar into BASE weighting and BONUS points.
+ *
+ * The Codes state an element's weighting and its bonus points SEPARATELY, and a
+ * verification report prints them as separate columns (Target · Bonus · Actual ·
+ * Achieved). Our sector configs merge them into one `maxPoints` — Transport QSE
+ * ownership is 28 (25 base + 3 bonus), Employment Equity 27 (25 + 2). Showing the
+ * merged number as "Weight" contradicts the gazette the client is measured
+ * against, and — worse — it inflates the denominator: an entity that earns every
+ * base point but no bonus showed 25/28 = 89% "At Risk" when it had in fact
+ * achieved 100% of what the element is worth.
+ *
+ * The split is DERIVED, never hardcoded: the calculators already tag their bonus
+ * indicators `isBonus` (Skills absorption 5, Preferential Procurement designated-
+ * group 2, ED graduation 1 + jobs 1 — which reconciles 109 base + 9 bonus = 118,
+ * the published generic total). Scoring is untouched: `score` remains the full
+ * pillar total including bonus, exactly as it counts toward the grand total.
+ *
+ * `unidentifiedPoints` is the honesty valve. When a sector's sub-lines do not
+ * account for the pillar's whole weighting, the remainder is points we cannot
+ * attribute — that is reported as unknown rather than silently presented as base.
+ */
+function bonusSplit(el: ScorecardElement): {
+  baseWeight: number;
+  baseScore: number;
+  bonusAvailable: number;
+  bonusEarned: number;
+  hasBonus: boolean;
+  unidentifiedPoints: number;
+} {
+  const bonusLines = el.subIndicators.filter((s) => s.isBonus);
+  const bonusAvailable = bonusLines.reduce((n, s) => n + (s.weighting || 0), 0);
+  const bonusEarned = bonusLines.reduce((n, s) => n + (s.score || 0), 0);
+  const lineSum = el.subIndicators.reduce((n, s) => n + (s.weighting || 0), 0);
+  return {
+    baseWeight: Math.max(0, el.weighting - bonusAvailable),
+    baseScore: Math.max(0, el.score - bonusEarned),
+    bonusAvailable,
+    bonusEarned,
+    hasBonus: bonusLines.length > 0,
+    // Only meaningful when the pillar HAS sub-lines to reconcile against.
+    unidentifiedPoints: lineSum > 0 ? Math.max(0, el.weighting - lineSum) : 0,
+  };
+}
+
 function statusIcon(pctAchieved: number): { icon: typeof CheckCircle2; label: string; color: string } {
   if (pctAchieved >= 100) return { icon: CheckCircle2, label: "On Track", color: "text-emerald-500" };
   if (pctAchieved >= 70) return { icon: AlertTriangle, label: "At Risk", color: "text-amber-500" };
@@ -220,6 +265,20 @@ export default function Scorecard() {
   const levelLabel = displayLevel >= 9 ? "Non-Compliant" : `Level ${displayLevel}`;
   const totalData = scorecard.total || EMPTY_PILLAR;
   const totalPct = totalData.weighting > 0 ? Math.min(100, (totalData.score / totalData.weighting) * 100) : 0;
+
+  // Grand-total bonus, summed from the same per-element split the rows show, so
+  // the footer can state the base total and the bonus separately (the workbooks'
+  // own convention: "Grand Total (excl. Bonus Points)" + "Bonus Points").
+  const totalBonus = useMemo(
+    () => elements.reduce(
+      (acc, el) => {
+        const s = bonusSplit(el);
+        return { earned: acc.earned + s.bonusEarned, available: acc.available + s.bonusAvailable };
+      },
+      { earned: 0, available: 0 },
+    ),
+    [elements],
+  );
 
   const ownData = scorecard.ownership || EMPTY_PILLAR;
   const skillsData = scorecard.skillsDevelopment || EMPTY_PILLAR;
@@ -365,9 +424,10 @@ export default function Scorecard() {
               <thead>
                 <tr className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
                   <th className={cn("px-4 py-2.5 text-left border-b border-border/30", wrapMode ? "w-[32%]" : "min-w-[220px]")}>Element</th>
-                  <th className="px-4 py-2.5 text-right border-b border-border/30 w-[10%]">Target</th>
-                  <th className="px-4 py-2.5 text-right border-b border-border/30 w-[10%]">Weight</th>
-                  <th className="px-4 py-2.5 text-right border-b border-border/30 w-[14%]">Score</th>
+                  <th className="px-4 py-2.5 text-right border-b border-border/30 w-[9%]">Target</th>
+                  <th className="px-4 py-2.5 text-right border-b border-border/30 w-[9%]">Weight</th>
+                  <th className="px-4 py-2.5 text-right border-b border-border/30 w-[10%]">Bonus</th>
+                  <th className="px-4 py-2.5 text-right border-b border-border/30 w-[13%]">Score</th>
                   <th className="px-4 py-2.5 text-right border-b border-border/30 w-[10%]">% Achieved</th>
                   <th className="px-4 py-2.5 text-center border-b border-border/30 w-[10%]">Status</th>
                   <th className="px-4 py-2.5 text-center border-b border-border/30 w-[14%]">Sub-min</th>
@@ -393,8 +453,24 @@ export default function Scorecard() {
                       Grand Total
                     </div>
                   </td>
-                  <td className="px-4 py-3.5 text-right text-muted-foreground font-mono text-xs">{scorecard.total.target}</td>
-                  <td className="px-4 py-3.5 text-right text-muted-foreground font-mono text-xs">{scorecard.total.weighting}</td>
+                  {/* Base total — the workbooks' own "Grand Total (excl. Bonus Points)". */}
+                  <td className="px-4 py-3.5 text-right text-muted-foreground font-mono text-xs">
+                    {Math.max(0, scorecard.total.target - totalBonus.available)}
+                  </td>
+                  <td className="px-4 py-3.5 text-right text-muted-foreground font-mono text-xs">
+                    {Math.max(0, scorecard.total.weighting - totalBonus.available)}
+                  </td>
+                  <td className="px-4 py-3.5 text-right font-mono text-xs tabular-nums" data-testid="text-scorecard-bonus">
+                    {totalBonus.available > 0 ? (
+                      <span className={cn(totalBonus.earned > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground")}>
+                        {fmt(totalBonus.earned, fullFigures)} / {totalBonus.available}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground/30">—</span>
+                    )}
+                  </td>
+                  {/* Score stays the FULL total incl. bonus — this is the number
+                      that determines the level, and it is unchanged. */}
                   <td className="px-4 py-3.5 text-right">
                     <span className="font-bold font-mono text-base text-primary tabular-nums" data-testid="text-scorecard-total">
                       {fmt(scorecard.total.score, fullFigures)}
@@ -493,7 +569,11 @@ function ElementRow({ element, isExpanded, onToggle, fullFigures, wrapMode }: {
   wrapMode: boolean;
 }) {
   const el = element;
-  const achievement = achievementPct(el.score, el.weighting);
+  const split = bonusSplit(el);
+  // Achievement is measured against what the element is WORTH (its base
+  // weighting), with bonus reported separately — otherwise earning every base
+  // point still reads as a shortfall.
+  const achievement = achievementPct(split.baseScore, split.baseWeight);
   const st = statusIcon(achievement);
   const StatusIcon = st.icon;
 
@@ -515,8 +595,39 @@ function ElementRow({ element, isExpanded, onToggle, fullFigures, wrapMode }: {
             <span className={cn("font-medium text-[13px]", isExpanded && el.accentColor)}>{el.name}</span>
           </div>
         </td>
-        <td className="px-4 py-3 text-right text-muted-foreground font-mono text-xs">{el.target}</td>
-        <td className="px-4 py-3 text-right text-muted-foreground font-mono text-xs">{el.weighting}</td>
+        {/* Target/Weight show the element's BASE points — the figure the Codes
+            state for this element. Bonus is its own column below. */}
+        <td className="px-4 py-3 text-right text-muted-foreground font-mono text-xs">{split.baseWeight}</td>
+        <td className="px-4 py-3 text-right text-muted-foreground font-mono text-xs">
+          {split.baseWeight}
+          {split.unidentifiedPoints > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="ml-1 text-amber-500 cursor-help" data-testid={`unattributed-${el.key}`}>?</span>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="max-w-[260px] text-[11px]">
+                <p>
+                  {split.unidentifiedPoints} of this element&apos;s {el.weighting} points are not
+                  accounted for by its listed indicators, so we cannot yet tell you which of them are
+                  bonus points. The score is unaffected — only this base/bonus split is unverified
+                  for this sector.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </td>
+        {/* BONUS — separate from the weighting, as the Codes and a verification
+            report present it. "—" means no bonus indicator was identified for
+            this element, which is not the same claim as "zero bonus available". */}
+        <td className="px-4 py-3 text-right font-mono text-xs tabular-nums" data-testid={`bonus-${el.key}`}>
+          {split.hasBonus ? (
+            <span className={cn(split.bonusEarned > 0 ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-muted-foreground")}>
+              {fmt(split.bonusEarned, fullFigures)} / {split.bonusAvailable}
+            </span>
+          ) : (
+            <span className="text-muted-foreground/30">—</span>
+          )}
+        </td>
         <td className="px-4 py-3 text-right">
           <div className="flex items-center justify-end gap-2">
             <div className="hidden sm:block w-12 h-1 rounded-full bg-muted overflow-hidden">
@@ -562,7 +673,7 @@ function ElementRow({ element, isExpanded, onToggle, fullFigures, wrapMode }: {
       <AnimatePresence>
         {isExpanded && (
           <tr>
-            <td colSpan={7} className="p-0">
+            <td colSpan={8} className="p-0">
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: "auto", opacity: 1 }}
