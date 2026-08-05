@@ -85,4 +85,28 @@ describe('extracting a table', () => {
     }), 'ESD', { filename: 'gather.xlsx › Procurement', raw_text: 't', markdown: 't' });
     expect(result!.values[0].field).toBe('supplier_rows');
   });
+
+  // The MODEL decides procurement-vs-development by MEANING — and overrides a
+  // misleading sheet TITLE. Here the tab is named "Procurement" but the rows are
+  // grants to beneficiaries; the model says "development" and the contribution
+  // shape (→ esd) is used, which a title regex alone would get wrong.
+  it('the model overrides a misleading sheet name (rows decide the ESD destination, not the title)', async () => {
+    const smart: ExtractionModel = {
+      name: 'fake',
+      complete: async (system: string) => {
+        if (/"shape"/.test(system)) return JSON.stringify({ shape: 'development_contributions' });
+        if (/map the columns/i.test(system)) return JSON.stringify({ mapping: { Beneficiary: 'beneficiary_name', Value: 'contribution_value' } });
+        return '{}';
+      },
+    };
+    const result = await extractSheetTable(smart, 'ESD', {
+      filename: 'gather.xlsx › Procurement',
+      raw_text: 't',
+      rows: [{ Beneficiary: 'Lerato Startup Cleaning Co-op', Value: '40000' }],
+    });
+    expect(result).not.toBeNull();
+    expect(result!.values[0].field).toBe('esd_contribution_rows');
+    const rows = result!.values[0].value as Array<Record<string, unknown>>;
+    expect(String(rows[0].beneficiary_name)).toContain('Lerato');
+  });
 });
