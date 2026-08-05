@@ -44,6 +44,7 @@ import {
   aliasIndex,
   findDocumentById,
   type VerificationDocument,
+  type VerificationElement,
 } from '../../schemas/verification_document_matrix.js';
 
 const logger = createLogger('AiExtraction');
@@ -562,7 +563,7 @@ export async function extractWithSpec(
 export async function extractDocument(
   model: ExtractionModel,
   input: { filename: string; markdown?: string; raw_text: string; elementHint?: string },
-  options: { specIds?: string[]; limit?: number } = {},
+  options: { specIds?: string[]; limit?: number; elementOverride?: VerificationElement } = {},
 ): Promise<DocumentExtraction[]> {
   // Prefer markdown for RETRIEVAL too: a sheet's column headers ("Beneficiary",
   // "% Black participation") are the terms that discriminate its element, and
@@ -573,6 +574,7 @@ export async function extractDocument(
     : rankSpecsForDocument(retrievalText, input.filename, {
         limit: options.limit, // retrieval picks a smart default: 3 with a hint, 5 without
         elementHint: input.elementHint,
+        elementOverride: options.elementOverride, // Pass A classification, when confident
       }).map((c) => c.spec);
 
   if (specs.length === 0) return [];

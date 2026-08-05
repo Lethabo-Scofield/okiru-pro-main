@@ -18,6 +18,7 @@ import {
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { extractEntityNameFallback } from './entityNameExtraction.js';
+import { classifyDocument, routingElement } from './documentClassification.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
@@ -109,6 +110,17 @@ export async function extractCaseEntities(
   const settled = await concurrentMap(inputs, documentConcurrency(), async (input) => {
     const sheetName = typeof input.metadata?.sheet_name === 'string' ? input.metadata.sheet_name : undefined;
 
+    // Pass A — model classification. A named workbook sheet already states its
+    // element authoritatively and for free, so this is paid ONLY for ANONYMOUS
+    // documents (a scanned certificate, an AFS PDF, a share register with no
+    // sheet name) — exactly where keyword routing was weakest. Its element routes
+    // spec selection by MEANING, and FINANCIALS triggers the financials reader on
+    // a document no sheet name announces. Fail-safe: null → BM25 routing stands.
+    const classification = !sheetName
+      ? await classifyDocument(model, { filename: input.filename, markdown: input.markdown, raw_text: input.raw_text })
+      : null;
+    const elementOverride = routingElement(classification) ?? undefined;
+
     // Matrix-spec extraction (single evidence records) AND, for a workbook sheet
     // whose element is clear from its name, TABLE extraction (every row). The
     // matrix specs cannot emit a table of suppliers/beneficiaries; this does,
@@ -119,7 +131,7 @@ export async function extractCaseEntities(
         markdown: input.markdown,
         raw_text: input.raw_text,
         elementHint: sheetName,
-      }),
+      }, { elementOverride }),
       (async () => {
         const rows = structuredRows(input.tables);
 
@@ -151,7 +163,7 @@ export async function extractCaseEntities(
       // extracts here (the AFS spec pulls cost-of-sales components, not these).
       (async () => {
         const looksFinancial = isFinancialsSheet(sheetName)
-          || (!sheetName && isFinancialsSheet(input.filename));
+          || (!sheetName && (isFinancialsSheet(input.filename) || classification?.element === 'FINANCIALS'));
         if (!looksFinancial) return null;
         return extractSheetFinancials(model, {
           filename: input.filename,

@@ -115,7 +115,7 @@ export function elementFromHint(hint: string | undefined): VerificationElement |
   if (/(management control|employment equity|directors|ee profile|workforce|employees|board|eea\s*[124]\b|pay\s*roll|salary)/.test(h)) return 'MANAGEMENT_CONTROL';
   if (/(ownership|shareholding|share register|share certificate|securities|equity|cipc|cor\s*14|cor\s*39|\bmoi\b|bi register|beneficial interest)/.test(h)) return 'OWNERSHIP';
   if (/(skills|training|learnership|wsp|atr|leviable|bursar|emp\s*201|\bseta\b|\bsdl\b)/.test(h)) return 'SKILLS_DEVELOPMENT';
-  if (/(procurement|supplier|enterprise (&|and) supplier|esd|preferential|ledger)/.test(h)) return 'ESD';
+  if (/(procurement|supplier|enterprise (&|and) supplier|enterprise development|esd|preferential|ledger)/.test(h)) return 'ESD';
   if (/(socio.?economic|social development|\bsed\b|csi|beneficiar)/.test(h)) return 'SED';
   return null;
 }
@@ -168,11 +168,16 @@ export interface SpecCandidate {
 export function rankSpecsForDocument(
   text: string,
   filename: string,
-  options: { limit?: number; elementHint?: string } = {},
+  options: { limit?: number; elementHint?: string; elementOverride?: VerificationElement } = {},
 ): SpecCandidate[] {
   const { docs, idf, avgLength } = getIndex();
   const queryTerms = tokenize(`${filename} ${text}`);
-  const hintElement = elementFromHint(options.elementHint)
+  // A model classification (Pass A) is authoritative where present: it read the
+  // whole document and judged its element by meaning, which is strictly better
+  // than the keyword regexes below. It only arrives when confident, so it never
+  // overrides with a guess. Absent it, the keyword chain stands.
+  const hintElement = options.elementOverride
+    ?? elementFromHint(options.elementHint)
     ?? elementFromHint(filename)
     ?? elementFromContent(text);
 
@@ -184,12 +189,23 @@ export function rankSpecsForDocument(
     return { spec, score };
   });
 
+  // A confident model classification (Pass A) is AUTHORITATIVE, not advisory: the
+  // model read the whole document and decided its element, so its specs are the
+  // only candidates — misleading keywords in the body ("procurement spend" in an
+  // AFS) must not pull in another element's specs. BM25 still RANKS within the
+  // element (recall from here, precision from the model). The keyword `elementHint`
+  // stays a boost, not a filter, because a sheet name is strong but the content
+  // can still legitimately carry a second element.
+  const pool = options.elementOverride
+    ? scored.filter((c) => c.spec.element === options.elementOverride)
+    : scored;
+
   // A reliable element hint narrows hard: the top few specs of the right element
   // are almost always the answer, and every extra candidate is a wasted model
   // call. Without a hint, cast a slightly wider net.
   const limit = options.limit ?? (hintElement ? 3 : 5);
 
-  return scored
+  return pool
     .filter((c) => c.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
