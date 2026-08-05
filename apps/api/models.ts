@@ -460,6 +460,16 @@ const certificateMetadataSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
   blobName: { type: String, required: true, unique: true },
   fileName: { type: String, required: true },
+  originalFileName: { type: String, default: null },
+  contentType: { type: String, default: null, index: true },
+  fileSize: { type: Number, default: null },
+  uploadedAt: { type: Date, default: null, index: true },
+  blobETag: { type: String, default: null },
+  blobMissing: { type: Boolean, default: false, index: true },
+  storageAccount: { type: String, default: null },
+  storageContainer: { type: String, default: null },
+  storageSource: { type: String, enum: ['azure_blob', 'local', 'upload', null], default: null },
+  checksum: { type: String, default: null, index: true },
   expiryDate: { type: Date, default: null },
   issueDate: { type: Date, default: null },
   supplierName: { type: String, default: null },
@@ -499,7 +509,7 @@ const certificateMetadataSchema = new Schema({
   status: { type: String, enum: ['valid', 'expiring', 'expired', 'unknown'], default: 'unknown' },
   extractedText: { type: String, default: null },
   extractionStatus: { type: String, enum: ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'], default: 'pending' },
-  extractionMode: { type: String, enum: ['azure_document_intelligence', 'pdf_text', 'ocr', 'filename_only', 'none', 'failed'], default: 'none' },
+  extractionMode: { type: String, enum: ['azure_document_intelligence', 'pdf_text', 'ppocr', 'ocr', 'filename_only', 'none', 'failed'], default: 'none' },
   extractedTextLength: { type: Number, default: 0 },
   extractionError: { type: String, default: null },
   extractedAt: { type: Date, default: null },
@@ -521,6 +531,7 @@ const certificateMetadataSchema = new Schema({
     default: [],
   },
   uploadedByUserId: { type: String, default: null, index: true },
+  organizationId: { type: String, default: null, index: true },
   // Verification (Phase 1 — production readiness)
   verified: { type: Boolean, default: false, index: true },
   verifiedBy: { type: String, default: null },
@@ -560,6 +571,11 @@ certificateMetadataSchema.index({ updatedAt: -1 });
 certificateMetadataSchema.index({ blackOwnership: 1 });
 certificateMetadataSchema.index({ sectorCode: 1, updatedAt: -1 });
 certificateMetadataSchema.index({ companySize: 1, updatedAt: -1 });
+certificateMetadataSchema.index({ supplierName: 1, uploadedAt: -1 });
+certificateMetadataSchema.index({ certificateNumber: 1, uploadedAt: -1 });
+certificateMetadataSchema.index({ certificateType: 1, uploadedAt: -1 });
+certificateMetadataSchema.index({ blobMissing: 1, uploadedAt: -1 });
+certificateMetadataSchema.index({ status: 1, expiryDate: 1, uploadedAt: -1 });
 
 export const CertificateMetadataModel = mongoose.models.CertificateMetadata || mongoose.model("CertificateMetadata", certificateMetadataSchema);
 

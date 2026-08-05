@@ -430,6 +430,31 @@ kubectl describe pod -l app=api -n okiru-pro-prod
 - Network policies can be added for additional isolation
 - Regular base image updates recommended
 
+### Certificate Hub Blob access
+
+The API reads the private `certificates` container in storage account
+`okirubackups2026` with `DefaultAzureCredential`. Assign **Storage Blob Data
+Reader** at the storage account or container scope to the identity used by the
+API pod. For the current AKS node-managed identity deployment, that is the
+`okiru-pro-aks-agentpool` identity. If the deployment is migrated to AKS
+Workload Identity, assign the role to the service account's federated identity
+instead; no application code or storage secret is required.
+
+The API generates five-minute, read-only user-delegation SAS URLs after an
+authenticated access check. Never add account keys, connection strings, or SAS
+tokens to frontend environment variables. `AZURE_CERT_STORAGE_CONNECTION_STRING`
+is supported only as a local-development compatibility fallback.
+
+After deployment, an administrator runs the idempotent reconciliation once:
+
+```bash
+curl -X POST https://app.okiru.co.za/api/certificates/sync-storage \
+  --cookie "<authenticated-admin-session>"
+```
+
+Verify storage through `GET /ready`; the response includes only the account,
+container, and connection status.
+
 ## Support
 
 For issues or questions:

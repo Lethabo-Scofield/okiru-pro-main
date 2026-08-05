@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
@@ -41,7 +41,7 @@ interface CertificateRow {
   expiryDate: string | null;
   agency?: string | null;
   sanasAccreditationNumber?: string | null;
-  status: 'valid' | 'expiring' | 'expired' | 'unknown';
+  status: 'valid' | 'expiring' | 'expired' | 'unknown' | 'pending_verification' | 'extraction_incomplete' | 'processing' | 'failed' | 'file_missing' | 'metadata_only';
   lastModified: string | null;
   id?: string | null;
   slug?: string | null;
@@ -56,6 +56,11 @@ interface CertificateRow {
   reviewCandidates?: Record<string, { value?: unknown; confidence?: number; reason?: string; evidence?: string; needsReview?: boolean }>;
   location?: string | null;
   businessUnit?: string | null;
+  contentType?: string | null;
+  fileSize?: number | null;
+  uploadedAt?: string | null;
+  hasFile?: boolean;
+  previewSupported?: boolean;
 }
 
 function certificateHaystack(c: CertificateRow): string {
@@ -109,17 +114,61 @@ function parseCertificateListJson(json: unknown): CertificateRow[] {
   return [];
 }
 
-function parseCertificateListEnvelope(json: unknown): { items: CertificateRow[]; total: number | null } {
+function registryItemToRow(item: Record<string, unknown>): CertificateRow {
+  const status = String(item.status || 'unknown') as CertificateRow['status'];
+  return {
+    id: typeof item.id === 'string' ? item.id : null,
+    slug: typeof item.slug === 'string' ? item.slug : null,
+    name: String(item.blob_name || ''),
+    fileName: String(item.file_name || item.blob_name || 'certificate'),
+    companyName: String(item.supplier_name || 'Missing supplier name'),
+    vatNumber: typeof item.vat_number === 'string' ? item.vat_number : null,
+    companySize: typeof item.company_size === 'string' ? item.company_size : null,
+    blackOwnership: typeof item.black_ownership === 'number' ? item.black_ownership : null,
+    blackWomenOwnership: typeof item.black_women_ownership === 'number' ? item.black_women_ownership : null,
+    bbbeeLevel: typeof item.bbbee_level === 'number' ? item.bbbee_level : null,
+    certificateType: typeof item.certificate_type === 'string' ? item.certificate_type : null,
+    certificateNumber: typeof item.certificate_number === 'string' ? item.certificate_number : null,
+    issueDate: typeof item.issue_date === 'string' ? item.issue_date : null,
+    expiryDate: typeof item.expiry_date === 'string' ? item.expiry_date : null,
+    status,
+    lastModified: typeof item.uploaded_at === 'string' ? item.uploaded_at : null,
+    uploadedAt: typeof item.uploaded_at === 'string' ? item.uploaded_at : null,
+    sectorCode: typeof item.sector_code === 'string' ? item.sector_code : null,
+    sectorName: typeof item.sector_name === 'string' ? item.sector_name : null,
+    extractionStatus: typeof item.extraction_status === 'string' ? item.extraction_status : null,
+    enrichmentStatus: item.review_required === true ? 'review_required' : null,
+    reviewFields: [],
+    metadataComplete: Boolean(item.supplier_name),
+    contentType: typeof item.content_type === 'string' ? item.content_type : null,
+    fileSize: typeof item.file_size === 'number' ? item.file_size : null,
+    hasFile: item.has_file !== false,
+    previewSupported: item.preview_supported === true,
+  };
+}
+
+function parseCertificateListEnvelope(json: unknown): { items: CertificateRow[]; total: number | null; totalPages: number | null } {
+  if (json && typeof json === 'object') {
+    const root = json as Record<string, unknown>;
+    const data = root.data && typeof root.data === 'object' ? root.data as Record<string, unknown> : root;
+    if (Array.isArray(data.items)) {
+      return {
+        items: data.items.map((item) => registryItemToRow(item as Record<string, unknown>)),
+        total: typeof data.total === 'number' ? data.total : null,
+        totalPages: typeof data.total_pages === 'number' ? data.total_pages : null,
+      };
+    }
+  }
   const items = parseCertificateListJson(json);
   if (json && typeof json === 'object') {
     const o = json as Record<string, unknown>;
     const data = o.data;
     if (data && typeof data === 'object' && typeof (data as { total?: unknown }).total === 'number') {
-      return { items, total: (data as { total: number }).total };
+      return { items, total: (data as { total: number }).total, totalPages: null };
     }
-    if (typeof o.total === 'number') return { items, total: o.total };
+    if (typeof o.total === 'number') return { items, total: o.total, totalPages: null };
   }
-  return { items, total: Array.isArray(json) ? items.length : null };
+  return { items, total: Array.isArray(json) ? items.length : null, totalPages: null };
 }
 
 function parseCertStatsJson(json: unknown): CertStats | null {
@@ -268,6 +317,12 @@ function StatusBadge({ status, expiryDate }: { status: CertificateRow['status'];
     expiring: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Expiring' },
     expired:  { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'Expired' },
     unknown:  { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
+    pending_verification: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Pending review' },
+    extraction_incomplete: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Extraction incomplete' },
+    processing: { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', label: 'Processing' },
+    failed: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'Failed' },
+    file_missing: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'File missing' },
+    metadata_only: { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Metadata only' },
   } as const;
   const cfg = map[status];
   return (
@@ -410,19 +465,31 @@ export default function CertificateHub() {
   const [allCerts, setAllCerts] = useState<CertificateRow[]>([]);
   const [allCertsLoading, setAllCertsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [page, setPage] = useState(() => Math.max(1, Number(new URLSearchParams(window.location.search).get('page')) || 1));
+  const [pageSize, setPageSize] = useState(() => Math.min(100, Math.max(10, Number(new URLSearchParams(window.location.search).get('page_size')) || 50)));
+  const [totalCertificates, setTotalCertificates] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [sortBy, setSortBy] = useState(new URLSearchParams(window.location.search).get('sort_by') || 'uploaded_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(() => new URLSearchParams(window.location.search).get('sort_order') === 'asc' ? 'asc' : 'desc');
   const [stats, setStats] = useState<CertStats | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [docTab, setDocTab] = useState<'certificates' | 'affidavits'>('certificates');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [sizeFilter, setSizeFilter] = useState('');
-  const [sectorFilter, setSectorFilter] = useState('');
-  const [ownershipFilter, setOwnershipFilter] = useState('');
-  const [reviewOnly, setReviewOnly] = useState(false);
+  const initialQuery = useMemo(() => new URLSearchParams(window.location.search), []);
+  const [docTab, setDocTab] = useState<'certificates' | 'affidavits'>(() => initialQuery.get('type') === 'affidavit' ? 'affidavits' : 'certificates');
+  const [search, setSearch] = useState(() => initialQuery.get('search') || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => initialQuery.get('search') || '');
+  const [statusFilter, setStatusFilter] = useState(() => initialQuery.get('status') || '');
+  const [sizeFilter, setSizeFilter] = useState(() => initialQuery.get('size') || '');
+  const [sectorFilter, setSectorFilter] = useState(() => initialQuery.get('sector') || '');
+  const [ownershipFilter, setOwnershipFilter] = useState(() => initialQuery.get('ownership') || '');
+  const [bbbeeLevelFilter, setBbbeeLevelFilter] = useState(() => initialQuery.get('level') || '');
+  const [fileTypeFilter, setFileTypeFilter] = useState(() => initialQuery.get('file_type') || '');
+  const [reviewOnly, setReviewOnly] = useState(() => initialQuery.get('review') === '1');
 
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const [previewCert, setPreviewCert] = useState<CertificateRow | null>(null);
+  const filtersMounted = useRef(false);
 
   // Upload modal state
   const [showUpload, setShowUpload] = useState(false);
@@ -454,47 +521,76 @@ export default function CertificateHub() {
     }
   }, [user, authLoading]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    if (!filtersMounted.current) {
+      filtersMounted.current = true;
+      return;
+    }
+    setPage(1);
+  }, [debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTab]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set('page', String(page));
+    if (pageSize !== 50) params.set('page_size', String(pageSize));
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (statusFilter) params.set('status', statusFilter);
+    if (sizeFilter) params.set('size', sizeFilter);
+    if (sectorFilter) params.set('sector', sectorFilter);
+    if (ownershipFilter) params.set('ownership', ownershipFilter);
+    if (bbbeeLevelFilter) params.set('level', bbbeeLevelFilter);
+    if (fileTypeFilter) params.set('file_type', fileTypeFilter);
+    if (reviewOnly) params.set('review', '1');
+    if (docTab === 'affidavits') params.set('type', 'affidavit');
+    if (sortBy !== 'uploaded_at') params.set('sort_by', sortBy);
+    if (sortOrder !== 'desc') params.set('sort_order', sortOrder);
+    const query = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  }, [page, pageSize, debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTab, sortBy, sortOrder]);
+
   const loadAllCerts = useCallback(async () => {
     setAllCertsLoading(true);
+    setLoadError(null);
     try {
-      const pageSize = 200;
-      let offset = 0;
-      let total: number | null = null;
-      const rows: CertificateRow[] = [];
-      const seen = new Set<string>();
-
-      while (total == null || offset < total) {
-        const params = new URLSearchParams({
-          limit: String(pageSize),
-          offset: String(offset),
-          sort: 'verified',
-        });
-        const res = await fetch(`/api/certificates/list?${params.toString()}`);
-        if (!res.ok) throw new Error(`Error ${res.status}`);
-        const raw = await res.json();
-        const page = parseCertificateListEnvelope(raw);
-        total = page.total ?? rows.length + page.items.length;
-
-        for (const cert of page.items) {
-          const key = cert.id || cert.fileName || cert.name;
-          if (!key || seen.has(key)) continue;
-          seen.add(key);
-          rows.push(cert);
-        }
-
-        // Render each page as it arrives so the registry is usable
-        // immediately instead of buffering the full collection.
-        setAllCerts([...rows]);
-
-        if (page.items.length === 0) break;
-        offset += page.items.length;
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      });
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (statusFilter) params.set('status', statusFilter);
+      if (sizeFilter) params.set('size', sizeFilter);
+      if (sectorFilter) params.set('sector', sectorFilter);
+      if (bbbeeLevelFilter) params.set('bbbee_level', bbbeeLevelFilter);
+      if (fileTypeFilter) params.set('file_type', fileTypeFilter);
+      if (reviewOnly) params.set('review_required', 'true');
+      params.set('document_kind', docTab);
+      if (ownershipFilter) {
+        const [min, max] = ownershipFilter.split('-');
+        params.set('min_ownership', min);
+        params.set('max_ownership', max);
       }
+      const res = await fetch(`/api/certificates?${params.toString()}`);
+      const raw = await res.json().catch(() => null);
+      if (!res.ok) throw new Error((raw as any)?.error?.message || `Error ${res.status}`);
+      const result = parseCertificateListEnvelope(raw);
+      setAllCerts(result.items);
+      setTotalCertificates(result.total ?? result.items.length);
+      setTotalPages(result.totalPages ?? Math.max(1, Math.ceil((result.total ?? result.items.length) / pageSize)));
     } catch (err: any) {
+      setAllCerts([]);
+      setLoadError(err.message || 'Could not load certificates');
       toast({ title: 'Could not load certificates', description: err.message || 'Try refreshing', variant: 'destructive' });
     } finally {
       setAllCertsLoading(false);
     }
-  }, [toast]);
+  }, [page, pageSize, sortBy, sortOrder, debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTab, toast]);
 
   const loadStats = useCallback(async () => {
     const controller = new AbortController();
@@ -530,7 +626,7 @@ export default function CertificateHub() {
   }, [loadAllCerts, loadStats]);
 
   const reviewCount = useMemo(() => allCerts.filter(needsReview).length, [allCerts]);
-  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || reviewOnly);
+  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || bbbeeLevelFilter || fileTypeFilter || reviewOnly);
 
   const tabCounts = useMemo(() => {
     let certificates = 0;
@@ -544,33 +640,7 @@ export default function CertificateHub() {
     return { certificates, affidavits, hidden };
   }, [allCerts]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const out = allCerts.filter(c => {
-      if (!hasDataOrPotential(c)) return false;
-      if (isAffidavitRow(c) !== (docTab === 'affidavits')) return false;
-      if (q) {
-        if (!certificateHaystack(c).includes(q)) return false;
-      }
-      if (statusFilter && c.status !== statusFilter) return false;
-      if (sizeFilter && (c.companySize || '').toLowerCase() !== sizeFilter.toLowerCase()) return false;
-      if (sectorFilter && (c.sectorCode || '').toUpperCase() !== sectorFilter.toUpperCase()) return false;
-      if (reviewOnly && !needsReview(c)) return false;
-      if (ownershipFilter) {
-        const [minStr, maxStr] = ownershipFilter.split('-');
-        const min = Number(minStr), max = Number(maxStr);
-        if (c.blackOwnership == null) return false;
-        if (c.blackOwnership < min || c.blackOwnership > max) return false;
-      }
-      return true;
-    });
-    // Verified-first sort, then most-recently uploaded.
-    return out.sort((a, b) => {
-      const av = !!a.verified, bv = !!b.verified;
-      if (av !== bv) return av ? -1 : 1;
-      return (b.lastModified || '').localeCompare(a.lastModified || '');
-    });
-  }, [allCerts, docTab, search, statusFilter, sizeFilter, sectorFilter, ownershipFilter, reviewOnly]);
+  const filtered = allCerts;
 
   const clearAllFilters = () => {
     setSearch('');
@@ -578,7 +648,10 @@ export default function CertificateHub() {
     setSizeFilter('');
     setSectorFilter('');
     setOwnershipFilter('');
+    setBbbeeLevelFilter('');
+    setFileTypeFilter('');
     setReviewOnly(false);
+    setPage(1);
   };
 
   const requireLoginToUpload = useCallback(() => {
@@ -605,6 +678,7 @@ export default function CertificateHub() {
       }
       toast({ title: 'Certificate uploaded', description: `${values.supplierName} added to the public registry.` });
       setShowUpload(false);
+      setPage(1);
       await loadAllCerts();
       void loadStats();
     } catch (err: any) {
@@ -614,15 +688,21 @@ export default function CertificateHub() {
     }
   }, [toast, loadAllCerts, loadStats, navigate]);
 
-  const downloadCertificate = useCallback(async (blobName: string) => {
-    setDownloadingFile(blobName);
+  const downloadCertificate = useCallback(async (certificate: CertificateRow) => {
+    if (!certificate.id) return;
+    if (!user) {
+      navigate(gatedAuthPath({ redirect: '/certificates' }));
+      return;
+    }
+    setDownloadingFile(certificate.id);
     try {
-      const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(blobName)}`);
+      const res = await fetch(`/api/certificates/${encodeURIComponent(certificate.id)}/download`, { credentials: 'include' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ message: 'Download failed' }));
         throw new Error(body.message || `Error ${res.status}`);
       }
-      const { url } = await res.json();
+      const body = await res.json();
+      const url = body?.data?.url || body?.url;
       if (!url) throw new Error('No download URL returned');
       const a = document.createElement('a');
       a.href = url;
@@ -636,9 +716,9 @@ export default function CertificateHub() {
     } finally {
       setDownloadingFile(null);
     }
-  }, [toast]);
+  }, [toast, user, navigate]);
 
-  const headlineCount = stats?.total ?? allCerts.length;
+  const headlineCount = totalCertificates || stats?.total || 0;
   const isAuthenticated = !!user && !authLoading;
 
   return (
@@ -903,6 +983,42 @@ export default function CertificateHub() {
               options={OWNERSHIP_RANGES.filter(o => o.value).map(o => ({ value: o.value, label: o.label }))}
               onChange={setOwnershipFilter}
             />
+            <FilterPill
+              label="B-BBEE level"
+              value={bbbeeLevelFilter}
+              options={Array.from({ length: 8 }, (_, index) => ({ value: String(index + 1), label: `Level ${index + 1}` }))}
+              onChange={setBbbeeLevelFilter}
+            />
+            <FilterPill
+              label="File type"
+              value={fileTypeFilter}
+              options={[
+                { value: 'pdf', label: 'PDF' },
+                { value: 'png', label: 'PNG' },
+                { value: 'jpg', label: 'JPEG' },
+                { value: 'docx', label: 'Word' },
+              ]}
+              onChange={setFileTypeFilter}
+            />
+            <label className="inline-flex items-center gap-2 text-[12px] text-[#8e8e93]">
+              Sort
+              <select
+                value={`${sortBy}:${sortOrder}`}
+                onChange={(event) => {
+                  const [field, order] = event.target.value.split(':');
+                  setSortBy(field);
+                  setSortOrder(order as 'asc' | 'desc');
+                  setPage(1);
+                }}
+                className="rounded-lg border border-[#2c2c2e] bg-[#111114] px-2.5 py-1.5 text-[12px] text-white outline-none"
+              >
+                <option value="uploaded_at:desc">Newest uploaded</option>
+                <option value="uploaded_at:asc">Oldest uploaded</option>
+                <option value="supplier_name:asc">Supplier A-Z</option>
+                <option value="expiry_date:asc">Expiry date</option>
+                <option value="bbbee_level:asc">Best B-BBEE level</option>
+              </select>
+            </label>
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
@@ -924,7 +1040,14 @@ export default function CertificateHub() {
           </p>
         )}
 
-        {(loading || allCertsLoading) && allCerts.length === 0 ? (
+        {loadError && !loading ? (
+          <div className="rounded-xl border border-[#2c2c2e] bg-[#0d0d10] px-6 py-14 text-center">
+            <AlertCircle className="mx-auto h-6 w-6 text-[#ef4444]" />
+            <p className="mt-3 text-[14px] text-white">Could not load certificates</p>
+            <p className="mt-1 text-[12px] text-[#8e8e93]">{loadError}</p>
+            <button onClick={handleRefresh} className="mt-4 rounded-lg bg-white px-3 py-2 text-[12px] font-medium text-black">Retry</button>
+          </div>
+        ) : (loading || allCertsLoading) && allCerts.length === 0 ? (
           <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
             {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
@@ -953,11 +1076,46 @@ export default function CertificateHub() {
                 cert={cert}
                 searchQuery={search}
                 isLast={idx === filtered.length - 1}
-                isDownloading={downloadingFile === cert.name}
-                onDownload={() => downloadCertificate(cert.name)}
+                isDownloading={downloadingFile === cert.id}
+                onDownload={() => downloadCertificate(cert)}
                 onPreview={() => setPreviewCert(cert)}
               />
             ))}
+          </div>
+        )}
+
+        {!loadError && totalCertificates > 0 && (
+          <div className="mt-4 flex flex-col gap-3 border-t border-white/[0.06] pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[12px] text-[#8e8e93]">
+              Showing {((page - 1) * pageSize + 1).toLocaleString()}-{Math.min(page * pageSize, totalCertificates).toLocaleString()} of {totalCertificates.toLocaleString()}
+            </p>
+            <div className="flex items-center gap-2">
+              <label className="text-[12px] text-[#8e8e93]">
+                Rows
+                <select
+                  value={pageSize}
+                  onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}
+                  className="ml-2 rounded-lg border border-[#2c2c2e] bg-[#111114] px-2 py-1.5 text-white outline-none"
+                >
+                  {[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                </select>
+              </label>
+              <button
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={page <= 1 || allCertsLoading}
+                className="rounded-lg border border-[#2c2c2e] px-3 py-1.5 text-[12px] text-white disabled:opacity-30"
+              >
+                Previous
+              </button>
+              <span className="min-w-[88px] text-center text-[12px] text-[#8e8e93]">{page} of {totalPages}</span>
+              <button
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={page >= totalPages || allCertsLoading}
+                className="rounded-lg border border-[#2c2c2e] px-3 py-1.5 text-[12px] text-white disabled:opacity-30"
+              >
+                Next
+              </button>
+            </div>
           </div>
         )}
 
@@ -1104,15 +1262,16 @@ function CertRow({
         )}
         <button
           onClick={onPreview}
+          disabled={cert.hasFile === false}
           aria-label={`Preview ${cert.companyName}`}
-          title="Preview"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors"
+          title={cert.hasFile === false ? 'File missing from storage' : cert.previewSupported === false ? 'Preview unavailable; download instead' : 'Preview'}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors"
         >
           <Eye className="h-4 w-4" />
         </button>
         <button
           onClick={onDownload}
-          disabled={isDownloading}
+          disabled={isDownloading || cert.hasFile === false}
           aria-label={`Download ${cert.fileName}`}
           title="Download"
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors"
@@ -1164,6 +1323,7 @@ function CertRow({
         )}
         <button
           onClick={onPreview}
+          disabled={cert.hasFile === false}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-white/[0.06] hover:bg-white/[0.12] transition-colors"
         >
           <Eye className="h-3.5 w-3.5" />
@@ -1171,7 +1331,7 @@ function CertRow({
         </button>
         <button
           onClick={onDownload}
-          disabled={isDownloading}
+          disabled={isDownloading || cert.hasFile === false}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-white bg-white/[0.06] hover:bg-white/[0.12] disabled:opacity-30 transition-colors"
         >
           {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
@@ -1212,12 +1372,14 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
       try {
         // disposition=inline → the SAS URL renders in the iframe/<img> instead of
         // forcing a download. The Download button omits it and keeps `attachment`.
-        const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(cert.name)}&disposition=inline`);
+        if (!cert.id) throw new Error('Certificate record is missing an id');
+        const res = await fetch(`/api/certificates/${encodeURIComponent(cert.id)}/view`, { credentials: 'include' });
         if (!res.ok) {
           const body = await res.json().catch(() => ({ message: 'Could not load document' }));
           throw new Error(body.message || `Error ${res.status}`);
         }
-        const { url } = await res.json();
+        const body = await res.json();
+        const url = body?.data?.url || body?.url;
         if (!url) throw new Error('No preview URL returned');
         if (!cancelled) setDocUrl(url);
       } catch (err: unknown) {
@@ -1230,7 +1392,7 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
     })();
 
     return () => { cancelled = true; };
-  }, [cert.name]);
+  }, [cert.id]);
 
   useEffect(() => {
     setReviewDraft(Object.fromEntries(

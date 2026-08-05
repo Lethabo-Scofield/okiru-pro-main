@@ -236,18 +236,23 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   }, [registryActionsAvailable, data?.id, toast]);
 
   const handleDownload = useCallback(async () => {
-    if (!data?.blobName) {
+    if (!data?.blobName || !data?.id) {
       toast({ title: 'No file available', variant: 'destructive' });
+      return;
+    }
+    if (!user) {
+      navigate(`/auth?redirect=${encodeURIComponent(`/certificates/${slug}`)}`);
       return;
     }
     setDownloading(true);
     try {
-      const res = await fetch(`/api/certificates/download?file=${encodeURIComponent(data.blobName)}`);
+      const res = await fetch(`/api/certificates/${encodeURIComponent(data.id)}/download`, { credentials: 'include' });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ message: 'Download failed' }));
         throw new Error(body.message || `Error ${res.status}`);
       }
-      const { url } = await res.json();
+      const body = await res.json();
+      const url = body?.data?.url || body?.url;
       if (!url) throw new Error('No download URL returned');
       const a = document.createElement('a');
       a.href = url;
@@ -261,7 +266,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
     } finally {
       setDownloading(false);
     }
-  }, [data, toast]);
+  }, [data, toast, user, navigate, slug]);
 
   const submitReport = useCallback(async () => {
     if (!registryActionsAvailable || !data?.id) {

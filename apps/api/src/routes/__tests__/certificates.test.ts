@@ -44,6 +44,12 @@ vi.mock('../../middleware/auth.js', () => ({
   verifyResourceOwnership: async () => true,
 }));
 
+vi.mock('../../security/index.js', () => ({
+  PERMISSIONS: { DOCUMENT_READ: 'document.read', SETTINGS_MANAGE: 'settings.manage' },
+  requirePermission: () => (_req: any, _res: any, next: any) => next(),
+  recordAudit: vi.fn(async () => undefined),
+}));
+
 vi.mock('../../../db.js', () => ({ isMongoConnected: mongoConnectedMock }));
 
 vi.mock('../../../models.js', () => {
@@ -111,6 +117,16 @@ vi.mock('../../services/azureCertStorage.js', () => ({
       downloadToBuffer: vi.fn(async () => Buffer.from('')),
     })),
     listBlobsFlat: vi.fn(async function* () {}),
+  })),
+  generateCertificateViewUrl: vi.fn(async () => ({ url: 'https://example.test/view', expiresAt: new Date(Date.now() + 300_000) })),
+  generateCertificateDownloadUrl: vi.fn(async () => ({ url: 'https://example.test/download', expiresAt: new Date(Date.now() + 300_000) })),
+}));
+
+vi.mock('../../services/certificateRegistry.js', () => ({
+  listCertificateRegistry: vi.fn(async () => ({ items: [], page: 1, page_size: 50, total: 0, total_pages: 1 })),
+  syncCertificateStorage: vi.fn(async () => ({
+    scanned: 2, matched: 1, created: 1, updated: 0,
+    missing_blobs: 0, duplicates: 0, errors: [],
   })),
 }));
 
@@ -257,6 +273,7 @@ vi.mock('../../services/certificateTextExtractionJob.js', () => ({
       azureDocumentIntelligenceConfigured: false,
       tesseractJsAvailable: true,
       pdftoppmAvailable: false,
+      ppOcrEnabled: false,
     },
   })),
   runCertificateTextExtractionRetryJob,
@@ -435,6 +452,15 @@ function seedCert(overrides: Partial<{
 // ---- Public registry -------------------------------------------------------
 
 describe('Public certificates registry', () => {
+  it('GET / returns the production paginated registry envelope', async () => {
+    const r = await call('GET', '/api/certificates?page=1&page_size=5');
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      success: true,
+      data: { page: 1, page_size: 50, total: 0, total_pages: 1 },
+    });
+  });
+
   it('GET /list returns a bare array with no auth (existing MVP shape preserved)', async () => {
     seedCert({ companyName: 'Acme Industries', vatNumber: '4111111111' });
     const r = await call('GET', '/api/certificates/list');
@@ -603,6 +629,45 @@ describe('Public certificates registry', () => {
       data: null,
       error: { message: expect.any(String), code: 'NOT_FOUND' },
     });
+  });
+});
+
+describe('Secure certificate file access', () => {
+  beforeEach(() => {
+    certificateFindOneMock.mockReturnValue({
+      lean: vi.fn(async () => ({
+        id: 'cert-secure',
+        blobName: 'secure/cert.pdf',
+        fileName: 'cert.pdf',
+        contentType: 'application/pdf',
+        blobMissing: false,
+        organizationId: null,
+      })),
+    });
+  });
+
+  it('requires authentication before generating a view URL', async () => {
+    const result = await call('GET', '/api/certificates/cert-secure/view');
+    expect(result.status).toBe(401);
+  });
+
+  it('returns a short-lived view URL only after authentication', async () => {
+    const result = await call('GET', '/api/certificates/cert-secure/view', { auth: 'user-1|user' });
+    expect(result.status).toBe(200);
+    expect(result.body.data).toMatchObject({
+      url: 'https://example.test/view',
+      content_type: 'application/pdf',
+      file_name: 'cert.pdf',
+    });
+    expect(result.body.data.expires_in).toBeGreaterThan(0);
+  });
+
+  it('protects storage sync', async () => {
+    const unauthenticated = await call('POST', '/api/certificates/sync-storage');
+    expect(unauthenticated.status).toBe(401);
+    const authenticated = await call('POST', '/api/certificates/sync-storage', { auth: 'admin-1|admin' });
+    expect(authenticated.status).toBe(200);
+    expect(authenticated.body.data).toMatchObject({ scanned: 2, created: 1 });
   });
 });
 

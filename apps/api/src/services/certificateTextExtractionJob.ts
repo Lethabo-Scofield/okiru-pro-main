@@ -21,6 +21,11 @@ import {
   extractTextWithAzureDocumentIntelligenceOnly,
   isDocumentIntelligenceConfigured,
 } from './documentIntelligence.js';
+import {
+  isPpOcrEnabled,
+  ppOcrRecognizeBuffer,
+  ppOcrRecognizeFile,
+} from './certificatePpOcr.js';
 
 const logger = createLogger('CertTextExtraction');
 const TMP_DIR = join(tmpdir(), 'cert-text-extraction');
@@ -51,6 +56,7 @@ export type TextExtractionCoverageReport = {
     azureDocumentIntelligenceConfigured: boolean;
     tesseractJsAvailable: boolean;
     pdftoppmAvailable: boolean;
+    ppOcrEnabled: boolean;
   };
 };
 
@@ -210,6 +216,7 @@ export function getTextExtractionDependencies() {
     azureDocumentIntelligenceConfigured: isDocumentIntelligenceConfigured(),
     tesseractJsAvailable: isTesseractJsAvailable(),
     pdftoppmAvailable: isPdftoppmAvailable(),
+    ppOcrEnabled: isPpOcrEnabled(),
   };
 }
 
@@ -234,24 +241,34 @@ async function extractPdfText(buffer: Buffer): Promise<string> {
   }
 }
 
-async function ocrImageBuffer(buffer: Buffer): Promise<string> {
-  if (!isTesseractJsAvailable()) return '';
+/** Which engine produced OCR text, so the caller can record the extraction mode. */
+type OcrEngine = 'ppocr' | 'tesseract' | null;
+type OcrResult = { text: string; engine: OcrEngine };
+
+async function ocrImageBuffer(buffer: Buffer): Promise<OcrResult> {
+  // Preferred: PP-OCR (Baidu PaddleOCR via onnxruntime), free + offline, when opted in.
+  if (isPpOcrEnabled()) {
+    const pp = (await ppOcrRecognizeBuffer(buffer)).trim();
+    if (pp) return { text: pp, engine: 'ppocr' };
+  }
+  if (!isTesseractJsAvailable()) return { text: '', engine: null };
   try {
     const result = await Tesseract.recognize(buffer, 'eng', { logger: () => {} });
-    return result.data.text.trim();
+    return { text: result.data.text.trim(), engine: 'tesseract' };
   } catch {
-    return '';
+    return { text: '', engine: null };
   }
 }
 
-async function ocrPdfBuffer(buffer: Buffer, fileName: string, failureReasons: string[]): Promise<string> {
+async function ocrPdfBuffer(buffer: Buffer, fileName: string, failureReasons: string[]): Promise<OcrResult> {
   if (!isPdftoppmAvailable()) {
     failureReasons.push('OCR skipped: pdftoppm is not installed or not callable');
-    return '';
+    return { text: '', engine: null };
   }
-  if (!isTesseractJsAvailable()) {
+  const ppOcr = isPpOcrEnabled();
+  if (!ppOcr && !isTesseractJsAvailable()) {
     failureReasons.push('OCR skipped: tesseract.js is not available');
-    return '';
+    return { text: '', engine: null };
   }
 
   const workDir = join(TMP_DIR, createHash('sha1').update(`${fileName}:${Date.now()}`).digest('hex'));
@@ -265,7 +282,26 @@ async function ocrPdfBuffer(buffer: Buffer, fileName: string, failureReasons: st
     const imageFiles = readdirSync(workDir).filter((f) => f.startsWith('page') && f.endsWith('.png')).sort();
     if (imageFiles.length === 0) {
       failureReasons.push('OCR failed: pdftoppm produced no page images');
-      return '';
+      return { text: '', engine: null };
+    }
+
+    // Try PP-OCR across all pages first when enabled; only fall back to
+    // tesseract if PP-OCR yields nothing usable, so the recorded mode matches
+    // whichever engine actually produced the final text.
+    if (ppOcr) {
+      const pages: string[] = [];
+      for (const image of imageFiles) {
+        const t = (await ppOcrRecognizeFile(join(workDir, image))).trim();
+        if (t) pages.push(t);
+      }
+      const text = pages.join('\n');
+      if (hasUsefulExtractedText(text)) return { text, engine: 'ppocr' };
+      failureReasons.push('PP-OCR produced no usable text; falling back to tesseract');
+    }
+
+    if (!isTesseractJsAvailable()) {
+      failureReasons.push('OCR skipped: tesseract.js is not available');
+      return { text: '', engine: null };
     }
 
     const pages: string[] = [];
@@ -277,10 +313,10 @@ async function ocrPdfBuffer(buffer: Buffer, fileName: string, failureReasons: st
         failureReasons.push(`OCR page failed: ${err?.message || String(err)}`);
       }
     }
-    return pages.join('\n');
+    return { text: pages.join('\n'), engine: 'tesseract' };
   } catch (err: any) {
     failureReasons.push(`OCR failed: ${err?.message || String(err)}`);
-    return '';
+    return { text: '', engine: null };
   } finally {
     try { rmSync(workDir, { recursive: true, force: true }); } catch {}
   }
@@ -313,16 +349,13 @@ export async function extractCertificateTextFromBuffer(
     };
   }
 
-  const di = await extractTextWithAzureDocumentIntelligenceOnly(buffer, fileName);
-  if (!di.configured) {
-    failureReasons.push(di.error || 'Azure Document Intelligence is not configured');
-  } else if (hasUsefulExtractedText(di.text)) {
-    text = di.text;
-    mode = 'azure_document_intelligence';
-  } else {
-    failureReasons.push(di.error || 'Azure Document Intelligence returned unusable text');
-  }
+  // Extraction order is FREE-FIRST: the free, on-prem path handles the vast majority of
+  // certificates (born-digital text layer + local OCR), and the PAID Azure Document
+  // Intelligence is only called as a last-resort BACKUP when the free path can't read the
+  // document. This keeps Azure spend to the small fraction of hard scans that actually need
+  // it. (Azure is env-gated, so where it isn't configured the free path is the whole story.)
 
+  // 1. Free: born-digital PDF text layer (exact, instant).
   if (!hasUsefulExtractedText(text) && ext === 'pdf') {
     const pdfText = await extractPdfText(buffer);
     if (hasUsefulExtractedText(pdfText)) {
@@ -337,21 +370,37 @@ export async function extractCertificateTextFromBuffer(
     }
   }
 
+  // 2. Free: local OCR (PP-OCR when enabled, else tesseract) for scanned PDFs.
   if (!hasUsefulExtractedText(text) && ext === 'pdf') {
-    const ocrText = await ocrPdfBuffer(buffer, fileName, failureReasons);
+    const { text: ocrText, engine } = await ocrPdfBuffer(buffer, fileName, failureReasons);
     if (usefulExtractedTextLength(ocrText) > usefulExtractedTextLength(text)) {
       text = ocrText;
-      mode = 'ocr';
+      mode = engine === 'ppocr' ? 'ppocr' : 'ocr';
     }
   }
 
+  // 3. Free: local OCR for image certificates.
   if (!hasUsefulExtractedText(text) && ['png', 'jpg', 'jpeg'].includes(ext)) {
-    const ocrText = await ocrImageBuffer(buffer);
+    const { text: ocrText, engine } = await ocrImageBuffer(buffer);
     if (usefulExtractedTextLength(ocrText) > usefulExtractedTextLength(text)) {
       text = ocrText;
-      mode = 'ocr';
+      mode = engine === 'ppocr' ? 'ppocr' : 'ocr';
     } else {
       failureReasons.push('Image OCR produced no usable text');
+    }
+  }
+
+  // 4. Paid BACKUP: Azure Document Intelligence — only reached when every free path above
+  // failed to produce usable text (the ~5-8% of hard scans / image-only PDFs).
+  if (!hasUsefulExtractedText(text)) {
+    const di = await extractTextWithAzureDocumentIntelligenceOnly(buffer, fileName);
+    if (!di.configured) {
+      failureReasons.push(di.error || 'Azure Document Intelligence is not configured');
+    } else if (usefulExtractedTextLength(di.text) > usefulExtractedTextLength(text)) {
+      text = di.text;
+      mode = 'azure_document_intelligence';
+    } else {
+      failureReasons.push(di.error || 'Azure Document Intelligence returned unusable text');
     }
   }
 
