@@ -73,6 +73,75 @@ const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; column
   },
 };
 
+/**
+ * ESD has TWO different table shapes that go to TWO different workbook sections,
+ * and telling them apart is a scoring-safety matter, not a nicety:
+ *
+ *   - Preferential Procurement — SUPPLIERS you buy from, with SPEND against each.
+ *     Rows land in the `procurement` section (the ELEMENT_TABLE[ESD] shape above).
+ *   - Enterprise / Supplier DEVELOPMENT — a grant, loan or support given TO a
+ *     beneficiary company. Rows land in the `esd` section.
+ *
+ * Routed by the supplier shape, an ED grant becomes a phantom SUPPLIER: its Rand
+ * value is counted as procurement spend (inflating TMPS and Preferential
+ * Procurement) while Enterprise Development loses the contribution it should
+ * score. So a development contribution MUST use this shape, whose first field
+ * (`beneficiary_name`) routes the whole table to the `esd` section.
+ */
+const ESD_CONTRIBUTION_SHAPE = {
+  field: 'esd_contribution_rows',
+  columns: [
+    'beneficiary_name',
+    'beneficiary_black_ownership',
+    'beneficiary_size',
+    'esd_category',
+    'contribution_type',
+    'contribution_value',
+    'date_of_contribution',
+    'description_of_contribution',
+  ],
+  what: 'each Enterprise/Supplier Development contribution — a grant, loan, discount or support given TO a beneficiary company (NOT a supplier you buy from). '
+    + 'beneficiary_name is the company being helped; beneficiary_black_ownership is THAT company\'s % black ownership; beneficiary_size is its EME / QSE / Generic size; '
+    + 'esd_category is "Supplier Development" or "Enterprise Development"; contribution_value is the Rand value of the contribution',
+} as const;
+
+/** The sheet name inside a split-workbook filename ("File.xlsx › Enterprise Development"). */
+function sheetNameOf(filename: string): string {
+  const marker = filename.indexOf('›');
+  return (marker >= 0 ? filename.slice(marker + 1) : filename).trim();
+}
+
+/**
+ * Is this ESD sheet a DEVELOPMENT-contribution schedule (→ esd) rather than a
+ * preferential-procurement spend schedule (→ procurement)? The sheet name is the
+ * strongest signal; failing that, the columns decide — a contribution/beneficiary
+ * table with a black-ownership column and no spend/classification column.
+ */
+function isEsdContributionSheet(filename: string, rows?: Array<Record<string, unknown>>): boolean {
+  const name = sheetNameOf(filename).toLowerCase();
+  if (/enterprise\s*(&|and)?\s*(supplier\s*)?development|supplier development|\besd\b/.test(name)
+    && !/preferential|procurement spend/.test(name)) {
+    return true;
+  }
+  const headers = rows && rows.length > 0 ? Object.keys(rows[0]).join(' ').toLowerCase() : '';
+  if (!headers) return false;
+  const contribution = /contribution|beneficiar|grant|donation/.test(headers);
+  const blackOwnership = /black\s*ownership/.test(headers);
+  const supplierSpend = /\bspend\b|classification|supplier size|vat/.test(headers);
+  return contribution && blackOwnership && !supplierSpend;
+}
+
+/** Which table shape does this sheet use? ESD splits by sub-element (see above). */
+function shapeForSheet(
+  element: VerificationElement,
+  input: { filename: string; rows?: Array<Record<string, unknown>> },
+): { field: string; columns: string[]; what: string } | null {
+  if (element === 'ESD' && isEsdContributionSheet(input.filename, input.rows)) {
+    return { ...ESD_CONTRIBUTION_SHAPE, columns: [...ESD_CONTRIBUTION_SHAPE.columns] };
+  }
+  return ELEMENT_TABLE[element] ?? null;
+}
+
 const SYSTEM_PROMPT = [
   'You extract a TABLE from a B-BBEE workbook sheet.',
   'Return ONLY a JSON object with one key holding an ARRAY of row objects.',
@@ -100,7 +169,7 @@ export async function extractSheetTable(
   element: VerificationElement,
   input: { filename: string; markdown?: string; raw_text: string; rows?: Array<Record<string, unknown>> },
 ): Promise<DocumentExtraction | null> {
-  const shape = ELEMENT_TABLE[element];
+  const shape = shapeForSheet(element, input);
   if (!shape) return null;
 
   if (input.rows && input.rows.length > 0) {
