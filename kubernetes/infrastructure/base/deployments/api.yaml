@@ -188,6 +188,21 @@ spec:
                   name: external-api-keys
                   key: AZURE_CERT_BLOB_CONTAINER
                   optional: true
+            - name: AZURE_STORAGE_ACCOUNT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AZURE_STORAGE_ACCOUNT_URL
+            - name: AZURE_STORAGE_CONTAINER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AZURE_STORAGE_CONTAINER_NAME
+            - name: AZURE_STORAGE_SAS_EXPIRY_SECONDS
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: AZURE_STORAGE_SAS_EXPIRY_SECONDS
             - name: AZURE_DOCUMENT_INTELLIGENCE_ENDPOINT
               valueFrom:
                 secretKeyRef:

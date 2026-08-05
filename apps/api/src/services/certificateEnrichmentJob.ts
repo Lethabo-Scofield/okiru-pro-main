@@ -1631,7 +1631,7 @@ function needsEnrichment(doc: MongoDoc | null, fields: EnrichmentField[], force:
 function usableTextQuery() {
   return {
     extractionStatus: 'completed',
-    extractionMode: { $in: ['azure_document_intelligence', 'pdf_text', 'ocr'] },
+    extractionMode: { $in: ['azure_document_intelligence', 'pdf_text', 'ppocr', 'ocr'] },
     extractedTextLength: { $gte: MIN_USEFUL_EXTRACTED_TEXT_LENGTH },
     extractedText: { $type: 'string', $nin: ['', null] },
   };

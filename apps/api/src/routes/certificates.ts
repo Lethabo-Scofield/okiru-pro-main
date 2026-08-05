@@ -11,6 +11,7 @@ import {
   type SearchResult as MongoSearchResult,
 } from '../services/mongoSearch.js';
 import { requireAuth } from '../middleware/auth.js';
+import { PERMISSIONS, requirePermission, recordAudit } from '../security/index.js';
 import { processAllCertificates, processOneCertificate, getCertificateStats, extractCertificateData, extractPreviewFromBuffer, previewExtractionToFormJson } from '../services/certificateExtractor.js';
 import { CertificateMetadataModel, CertificateReportModel } from '../../models.js';
 import { isMongoConnected } from '../../db.js';
@@ -37,7 +38,10 @@ import {
   getCertBlobServiceClient,
   getCertConnectionString,
   getCertContainerClient,
+  generateCertificateDownloadUrl,
+  generateCertificateViewUrl,
 } from '../services/azureCertStorage.js';
+import { listCertificateRegistry, syncCertificateStorage } from '../services/certificateRegistry.js';
 import { ok, fail, failWith } from '../utils/apiResponse.js';
 import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
@@ -86,6 +90,46 @@ function requireInternalApiKey(req: Request, res: Response): boolean {
     return false;
   }
   return true;
+}
+
+function certificateStorageError(res: Response, error: unknown) {
+  const statusCode = error && typeof error === 'object' && 'statusCode' in error
+    ? Number((error as { statusCode?: unknown }).statusCode)
+    : null;
+  const message = error instanceof Error ? error.message : 'Certificate storage request failed';
+  if (statusCode === 404) return res.status(404).json(fail('Certificate file not found', 'BLOB_NOT_FOUND'));
+  if (statusCode === 401 || statusCode === 403) {
+    return res.status(503).json(fail('Certificate storage permission denied', 'BLOB_PERMISSION_DENIED'));
+  }
+  if (/not configured/i.test(message)) {
+    return res.status(503).json(fail('Certificate storage is not configured', 'BLOB_NOT_CONFIGURED'));
+  }
+  logger.error('Certificate storage request failed', error as Error);
+  return res.status(502).json(fail('Certificate storage is temporarily unavailable', 'BLOB_UNAVAILABLE'));
+}
+
+async function findCertificateForFileAccess(id: string) {
+  return CertificateMetadataModel.findOne({ $or: [{ id }, { slug: id }] }, {
+    _id: 0,
+    id: 1,
+    slug: 1,
+    blobName: 1,
+    fileName: 1,
+    originalFileName: 1,
+    contentType: 1,
+    uploadedByUserId: 1,
+    organizationId: 1,
+    blobMissing: 1,
+  }).lean() as Promise<Record<string, any> | null>;
+}
+
+function canAccessCertificateFile(req: Request, certificate: Record<string, any>): boolean {
+  const role = (req.session as any)?.userData?.role;
+  if (role === 'admin' || role === 'super_admin') return true;
+  const certificateOrg = typeof certificate.organizationId === 'string' ? certificate.organizationId : null;
+  if (!certificateOrg) return true;
+  return certificateOrg === req.session.organizationId
+    || certificate.uploadedByUserId === req.session.userId;
 }
 
 /** Express may surface path/query values as `string | string[]`; normalize to a single string. */
@@ -420,6 +464,147 @@ function applyFilters(rows: CertificateRow[], q: {
   }
   return out;
 }
+
+// Production registry endpoint. Mongo remains the metadata index; Blob Storage
+// is reconciled explicitly through /sync-storage and is never scanned here.
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const startedAt = Date.now();
+    const result = await listCertificateRegistry({
+      page: req.query.page,
+      pageSize: req.query.page_size,
+      search: req.query.search,
+      status: req.query.status,
+      fileType: req.query.file_type,
+      supplierName: req.query.supplier_name,
+      certificateNumber: req.query.certificate_number,
+      certificateType: req.query.certificate_type,
+      documentKind: req.query.document_kind,
+      bbbeeLevel: req.query.bbbee_level,
+      expiryStatus: req.query.expiry_status,
+      companySize: req.query.size,
+      sector: req.query.sector,
+      minOwnership: req.query.min_ownership,
+      maxOwnership: req.query.max_ownership,
+      reviewRequired: req.query.review_required,
+      sortBy: req.query.sort_by,
+      sortOrder: req.query.sort_order,
+    });
+    logger.info('Listed certificate registry page', {
+      page: result.page,
+      pageSize: result.page_size,
+      returned: result.items.length,
+      total: result.total,
+      durationMs: Date.now() - startedAt,
+    });
+    return res.json(ok(result));
+  } catch (error) {
+    logger.error('Failed to list certificate registry', error as Error);
+    return res.status(500).json(fail('Failed to list certificates', 'CERTIFICATE_LIST_FAILED'));
+  }
+});
+
+router.post(
+  '/sync-storage',
+  requireAuth,
+  requirePermission(PERMISSIONS.SETTINGS_MANAGE),
+  async (req: Request, res: Response) => {
+    try {
+      const summary = await syncCertificateStorage();
+      invalidateListAndStatsCache();
+      await recordAudit(req, {
+        action: 'certificate.storage_sync',
+        resourceType: 'certificate',
+        result: summary.errors.length ? 'failure' : 'success',
+        metadata: summary,
+      });
+      return res.json(ok(summary));
+    } catch (error) {
+      await recordAudit(req, {
+        action: 'certificate.storage_sync',
+        resourceType: 'certificate',
+        result: 'failure',
+      });
+      return certificateStorageError(res, error);
+    }
+  },
+);
+
+router.get(
+  '/:id/view',
+  requireAuth,
+  requirePermission(PERMISSIONS.DOCUMENT_READ),
+  async (req: Request, res: Response) => {
+    const id = singleRouteParam(req.params.id).trim();
+    if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_CERTIFICATE_ID'));
+    const certificate = await findCertificateForFileAccess(id);
+    if (!certificate) return res.status(404).json(fail('Certificate not found', 'CERTIFICATE_NOT_FOUND'));
+    if (!canAccessCertificateFile(req, certificate)) {
+      return res.status(403).json(fail('Not authorised to view this certificate', 'FORBIDDEN'));
+    }
+    if (!certificate.blobName || certificate.blobMissing) {
+      return res.status(404).json(fail('Certificate file is missing', 'BLOB_NOT_FOUND'));
+    }
+    try {
+      const access = await generateCertificateViewUrl(
+        certificate.blobName,
+        certificate.originalFileName || certificate.fileName,
+      );
+      await recordAudit(req, {
+        action: 'certificate.view',
+        resourceType: 'certificate',
+        resourceId: certificate.id,
+      });
+      return res.json(ok({
+        url: access.url,
+        expires_in: Math.max(0, Math.round((access.expiresAt.getTime() - Date.now()) / 1000)),
+        expires_at: access.expiresAt.toISOString(),
+        content_type: certificate.contentType || 'application/octet-stream',
+        file_name: certificate.originalFileName || certificate.fileName,
+      }));
+    } catch (error) {
+      return certificateStorageError(res, error);
+    }
+  },
+);
+
+router.get(
+  '/:id/download',
+  requireAuth,
+  requirePermission(PERMISSIONS.DOCUMENT_READ),
+  async (req: Request, res: Response) => {
+    const id = singleRouteParam(req.params.id).trim();
+    if (!id) return res.status(400).json(fail('Certificate id required', 'INVALID_CERTIFICATE_ID'));
+    const certificate = await findCertificateForFileAccess(id);
+    if (!certificate) return res.status(404).json(fail('Certificate not found', 'CERTIFICATE_NOT_FOUND'));
+    if (!canAccessCertificateFile(req, certificate)) {
+      return res.status(403).json(fail('Not authorised to download this certificate', 'FORBIDDEN'));
+    }
+    if (!certificate.blobName || certificate.blobMissing) {
+      return res.status(404).json(fail('Certificate file is missing', 'BLOB_NOT_FOUND'));
+    }
+    try {
+      const access = await generateCertificateDownloadUrl(
+        certificate.blobName,
+        certificate.originalFileName || certificate.fileName,
+      );
+      await recordAudit(req, {
+        action: 'certificate.download',
+        resourceType: 'certificate',
+        resourceId: certificate.id,
+      });
+      return res.json(ok({
+        url: access.url,
+        expires_in: Math.max(0, Math.round((access.expiresAt.getTime() - Date.now()) / 1000)),
+        expires_at: access.expiresAt.toISOString(),
+        content_type: certificate.contentType || 'application/octet-stream',
+        file_name: certificate.originalFileName || certificate.fileName,
+      }));
+    } catch (error) {
+      return certificateStorageError(res, error);
+    }
+  },
+);
 
 router.get('/download', async (req: Request, res: Response) => {
   try {
@@ -1582,7 +1767,7 @@ router.post('/retry-extraction', requireAuth, async (req: Request, res: Response
 
   try {
     const allowedStatuses: CertificateExtractionStatus[] = ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'];
-    const allowedModes: CertificateExtractionMode[] = ['azure_document_intelligence', 'pdf_text', 'ocr', 'filename_only', 'none', 'failed'];
+    const allowedModes: CertificateExtractionMode[] = ['azure_document_intelligence', 'pdf_text', 'ppocr', 'ocr', 'filename_only', 'none', 'failed'];
     const statuses = Array.isArray(req.body?.statuses)
       ? req.body.statuses.filter((status: unknown): status is CertificateExtractionStatus =>
           typeof status === 'string' && allowedStatuses.includes(status as CertificateExtractionStatus),
