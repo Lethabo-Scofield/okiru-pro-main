@@ -22,6 +22,9 @@ describe('sheet-name → element', () => {
     expect(elementFromHint('Preferential Procurement')).toBe('ESD');
     expect(elementFromHint('Social Development')).toBe('SED');
     expect(elementFromHint('Skills Development')).toBe('SKILLS_DEVELOPMENT');
+    // An "Enterprise Development" schedule is ESD evidence — it used to fall to
+    // BM25 because the hint only knew "enterprise & supplier".
+    expect(elementFromHint('Enterprise Development')).toBe('ESD');
   });
 
   it('returns null for a sheet name that names no element', () => {
@@ -108,6 +111,18 @@ describe('ranking specs for a document', () => {
       { elementHint: 'Social Development' },
     );
     expect(ranked[0].spec.element).toBe('SED');
+  });
+
+  it('a Pass-A elementOverride wins over misleading text (an AFS that says "procurement spend")', () => {
+    // The document reads like a supplier schedule to BM25, but the model
+    // classified it FINANCIALS→(not an element) / or OWNERSHIP here; the override
+    // routes it, not the keywords. Proves the override reaches ranking.
+    const ranked = rankSpecsForDocument(
+      'Statement of Comprehensive Income. Procurement spend 15 400 000. Revenue 24 000 000.',
+      'afs.pdf',
+      { elementOverride: 'OWNERSHIP' },
+    );
+    expect(ranked[0].spec.element).toBe('OWNERSHIP');
   });
 
   it('rewards a rare discriminating term over common boilerplate', () => {
