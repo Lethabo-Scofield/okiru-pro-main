@@ -185,6 +185,33 @@ describe('assessDocuments — merged section-row attribution', () => {
     expect(r.anyUsable).toBe(true);
   });
 
+  it('a financial doc misclassified as a supplier schedule is relabelled by what we read, with no false gap', () => {
+    // The BM25 classifier calls an AFS / Finance sheet "Supplier Spend Schedule"
+    // because it contains the words "procurement spend". The AI path read revenue
+    // + NPAT out of it, so it IS a financial statement — labelled as one, and its
+    // supplier-spend "gaps" (a document type it never was) are dropped.
+    const parserCase: any = {
+      documents_detected: [{
+        filename: 'AFS Extract.pdf',
+        document_type: 'Supplier Spend Schedule',
+        status: 'review_required',
+        validation: { errors: [], warnings: [], missing_fields: ['supplier_name', 'spend_amount'] },
+      }],
+      fields_extracted: { 'AFS Extract.pdf': {} },
+      ai_entities: {
+        extractions: [{
+          documentId: 'sheet_financials',
+          sourceFile: 'AFS Extract.pdf',
+          values: [{ field: 'current_year_revenue', value: 24000000 }, { field: 'current_year_npat', value: 1850000 }],
+        }],
+      },
+    };
+    const v = assessDocuments(parserCase).verdicts.find((x) => x.filename === 'AFS Extract.pdf')!;
+    expect(v.verdict).toBe('found');
+    expect(v.documentType).toBe('Financial statements / summary');
+    expect(v.gaps.join(' ')).not.toMatch(/supplier|spend/i);
+  });
+
   it('genuine trouble outranks rows: a doc with rows but a real conflict stays "confused"', () => {
     const parserCase: any = {
       documents_detected: [

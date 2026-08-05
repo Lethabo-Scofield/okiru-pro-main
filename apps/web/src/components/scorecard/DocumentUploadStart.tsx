@@ -773,17 +773,15 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
   const groupSatisfied = (g: { types: string[] }) => g.types.some((t) => docTypeSatisfied(t));
 
-  // Reveal stats
-  const supplierCount = parserCase?.supplier_rows?.length ?? 0;
-  const spendCaptured = (parserCase?.supplier_rows ?? []).reduce(
-    (s, r) => s + (Number(String(r.spend_amount ?? 0).replace(/[^0-9.]/g, "")) || 0),
-    0,
-  );
-  const valuesUp = useCountUp(mapped?.mappedRowCount ?? 0);
-  const suppliersUp = useCountUp(supplierCount);
-  const spendUp = useCountUp(spendCaptured, 1100);
-
-  const revealed = Boolean((mapped || injected) && !parsing && files.length > 0);
+  // Reveal stats.
+  //
+  // Every counter here must read the SAME source of truth the header and the
+  // Create button use — the UNION of the legacy mapper and the AI-entity path.
+  // The bug this replaces: the tiles read only `mapped` (legacy) while the
+  // header read `totalMappedRows` (both), so the panel said "45 placed" and
+  // "12 values extracted" at once, and the pillar rack lit only Procurement
+  // (the one pillar the legacy path handled) while the AI path's ownership /
+  // management / skills rows showed as "—". Same data, two counters, one lying.
 
   /** Rows the AI-entity path produced, added to the legacy mapper's count. */
   const injectedRowCount = useMemo(
@@ -791,6 +789,28 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     [injected],
   );
   const totalMappedRows = (mapped?.mappedRowCount ?? 0) + injectedRowCount;
+
+  // Suppliers + spend come from whichever path actually read the procurement
+  // schedule: the AI-entity path is authoritative where it has rows (it is what
+  // scores), the legacy supplier_rows are the fallback. Reading only the legacy
+  // shape is why "8 suppliers found" could sit next to a Procurement pillar the
+  // AI path had already filled — or show 0 when only the AI path read them.
+  const injectedProcurement = (injected?.rows?.procurement ?? []) as Array<Record<string, unknown>>;
+  const supplierCount = injectedProcurement.length > 0
+    ? injectedProcurement.length
+    : (parserCase?.supplier_rows?.length ?? 0);
+  const spendCaptured = injectedProcurement.length > 0
+    ? injectedProcurement.reduce((s, r) => s + (Number(String(r.spend ?? "").replace(/[^0-9.]/g, "")) || 0), 0)
+    : (parserCase?.supplier_rows ?? []).reduce(
+        (s, r) => s + (Number(String(r.spend_amount ?? 0).replace(/[^0-9.]/g, "")) || 0),
+        0,
+      );
+
+  const valuesUp = useCountUp(totalMappedRows);
+  const suppliersUp = useCountUp(supplierCount);
+  const spendUp = useCountUp(spendCaptured, 1100);
+
+  const revealed = Boolean((mapped || injected) && !parsing && files.length > 0);
   const quoteReady = Boolean(quote && !parserCase && !quoting);
   // Missing documents never block: the user can always proceed and the workbook
   // scores on whatever was extracted (even nothing — they complete it manually).
@@ -852,10 +872,51 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     void onCreate(companyName.trim(), finalSections, { verdicts, reconcile: reconciled });
   };
 
-  const coverageByPillar = useMemo(
-    () => Object.fromEntries((mapped?.coverage ?? []).map((c) => [c.pillar, c])),
-    [mapped],
-  );
+  /**
+   * Pillar rack coverage — merged across BOTH paths, stronger status wins.
+   *
+   * The legacy `mapped.coverage` sees only what the deterministic mapper placed
+   * (here: Procurement). The AI-entity path carries its OWN `injected.coverage`
+   * for ownership / management / skills / SED, which the rack used to ignore —
+   * so those pillars showed "—" while their rows were already in the workbook.
+   * A pillar is covered if EITHER path covers it; we keep the strongest status
+   * so "mapped" from one path is never hidden by "no-document" from the other.
+   */
+  const coverageByPillar = useMemo(() => {
+    const rank: Record<string, number> = { mapped: 3, "needs-detail": 2, "no-document": 1 };
+    const merged: Record<string, { pillar: string; status: string; detail?: string; extractedValue?: string }> =
+      Object.fromEntries((mapped?.coverage ?? []).map((c) => [c.pillar, { ...c }]));
+    // The AI-entity path reports coverage as row/meta presence, not per-pillar
+    // items, so light a pillar from its section rows. A section with rows IS
+    // mapped — that is exactly the ownership / management / skills evidence the
+    // legacy rack showed as "—".
+    const SECTION_TO_PILLAR: Record<string, string> = {
+      ownership: "Ownership",
+      "management-control": "Management Control",
+      "skills-development": "Skills Development",
+      procurement: "Preferential Procurement",
+      esd: "Preferential Procurement",
+      sed: "Socio-Economic Development",
+    };
+    const lift = (pillar: string, detail: string) => {
+      const prev = merged[pillar];
+      if (!prev || (rank[prev.status] ?? 0) < rank.mapped) {
+        merged[pillar] = { pillar, status: "mapped", detail: prev?.detail ?? detail, extractedValue: prev?.extractedValue };
+      }
+    };
+    if (injected) {
+      const injectedRows = injected.rows as Record<string, unknown[]>;
+      for (const [sectionKey, pillar] of Object.entries(SECTION_TO_PILLAR)) {
+        const rows = injectedRows?.[sectionKey] ?? [];
+        if (rows.length > 0) lift(pillar, `${rows.length} row${rows.length === 1 ? "" : "s"} extracted`);
+      }
+      // Financials land as META (revenue / NPAT / payroll / TMPS), never rows —
+      // light the pillar when that meta was captured.
+      const finMeta = injected.meta?.["financial-information"];
+      if (finMeta && Object.keys(finMeta).length > 0) lift("Financials", "financials extracted");
+    }
+    return merged;
+  }, [mapped, injected]);
 
   const sizeOptions = [
     { value: "Generic", label: "Large / Generic", detail: "Annual turnover above R50m" },
