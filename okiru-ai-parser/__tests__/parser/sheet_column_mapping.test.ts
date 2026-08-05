@@ -161,11 +161,15 @@ describe('collectHeaders', () => {
 
 describe('extractSheetTable with parsed rows', () => {
   it('reads the table deterministically — one mapping call, all 23 rows out', async () => {
-    let calls = 0;
+    // The shape-choice pass (its own small call) answers first; the point pinned
+    // here is that the TABLE itself costs exactly one mapping call — the model
+    // never re-types rows.
+    let mappingCalls = 0;
     const mappingModel: ExtractionModel = {
       name: 'map-only',
-      complete: async () => {
-        calls += 1;
+      complete: async (system: string) => {
+        if (/"shape"/.test(system)) return JSON.stringify({ shape: 'suppliers' });
+        mappingCalls += 1;
         return JSON.stringify({ mapping: SUPPLIER_MAPPING });
       },
     };
@@ -175,7 +179,7 @@ describe('extractSheetTable with parsed rows', () => {
       markdown: 'x',
       rows: supplierRows(),
     });
-    expect(calls).toBe(1);
+    expect(mappingCalls).toBe(1);
     const rows = result!.values[0].value as unknown[];
     expect(rows).toHaveLength(23);
   });
@@ -195,7 +199,8 @@ describe('extractSheetTable with parsed rows', () => {
     let calls = 0;
     const fallback: ExtractionModel = {
       name: 'fallback',
-      complete: async () => {
+      complete: async (system: string) => {
+        if (/"shape"/.test(system)) return '{}'; // no shape verdict → element default
         calls += 1;
         // First call (mapping) unusable; second call (legacy read) returns rows.
         return calls === 1
@@ -214,7 +219,8 @@ describe('extractSheetTable with parsed rows', () => {
     let calls = 0;
     const noKey: ExtractionModel = {
       name: 'nokey',
-      complete: async () => {
+      complete: async (system: string) => {
+        if (/"shape"/.test(system)) return '{}'; // no shape verdict → element default
         calls += 1;
         return calls === 1
           ? JSON.stringify({ mapping: { 'Amount (Excl VAT)': 'claimed_spend_ex_vat' } })

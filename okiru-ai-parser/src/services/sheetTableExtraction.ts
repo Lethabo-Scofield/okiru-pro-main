@@ -21,9 +21,9 @@
  * holdings_table already takes.
  */
 import { createLogger } from '../logger.js';
-import type { DocumentExtraction, ExtractionModel } from './aiExtraction.js';
+import { parseModelJson, type DocumentExtraction, type ExtractionModel } from './aiExtraction.js';
 import type { VerificationElement } from '../../schemas/verification_document_matrix.js';
-import { applyColumnMapping, mapSheetColumns } from './sheetColumnMapping.js';
+import { applyColumnMapping, collectHeaders, mapSheetColumns } from './sheetColumnMapping.js';
 
 const logger = createLogger('SheetTableExtraction');
 
@@ -131,15 +131,106 @@ function isEsdContributionSheet(filename: string, rows?: Array<Record<string, un
   return contribution && blackOwnership && !supplierSpend;
 }
 
-/** Which table shape does this sheet use? ESD splits by sub-element (see above). */
-function shapeForSheet(
+/**
+ * THE FULL SHAPE CATALOGUE — every kind of evidence table a workbook sheet can
+ * be, each routing to its own workbook destination via its key field. The model
+ * chooses from ALL of these for EVERY sheet, so no destination decision is ever
+ * a keyword special-case again. New destination = new catalogue entry, nothing
+ * else changes.
+ */
+interface TableShapeDef { field: string; columns: string[]; what: string; element: VerificationElement }
+const SHAPE_CATALOG: Record<string, TableShapeDef> = {
+  shareholders: { ...ELEMENT_TABLE.OWNERSHIP!, columns: [...ELEMENT_TABLE.OWNERSHIP!.columns], element: 'OWNERSHIP' },
+  employees: { ...ELEMENT_TABLE.MANAGEMENT_CONTROL!, columns: [...ELEMENT_TABLE.MANAGEMENT_CONTROL!.columns], element: 'MANAGEMENT_CONTROL' },
+  learners: { ...ELEMENT_TABLE.SKILLS_DEVELOPMENT!, columns: [...ELEMENT_TABLE.SKILLS_DEVELOPMENT!.columns], element: 'SKILLS_DEVELOPMENT' },
+  suppliers: { ...ELEMENT_TABLE.ESD!, columns: [...ELEMENT_TABLE.ESD!.columns], element: 'ESD' },
+  development_contributions: { ...ESD_CONTRIBUTION_SHAPE, columns: [...ESD_CONTRIBUTION_SHAPE.columns], element: 'ESD' },
+  sed_contributions: { ...ELEMENT_TABLE.SED!, columns: [...ELEMENT_TABLE.SED!.columns], element: 'SED' },
+};
+
+/** The element hint's DEFAULT shape — what the tab name suggests the rows are. */
+const ELEMENT_DEFAULT_SHAPE: Record<VerificationElement, keyof typeof SHAPE_CATALOG> = {
+  OWNERSHIP: 'shareholders',
+  MANAGEMENT_CONTROL: 'employees',
+  SKILLS_DEVELOPMENT: 'learners',
+  ESD: 'suppliers',
+  SED: 'sed_contributions',
+};
+
+const SHAPE_CHOICE_SYSTEM = [
+  'You decide WHAT KIND of evidence table a B-BBEE workbook sheet holds, by',
+  'reading its columns and sample rows. Judge by MEANING — what one row IS — and',
+  'never by the sheet title alone (titles mislead; rows do not).',
+  'Return ONLY JSON: {"shape": "<one key from the catalogue>"}.',
+  'Catalogue:',
+  ...Object.entries(SHAPE_CATALOG).map(([key, s]) => `- ${key}: one row is ${s.what}`),
+  'The critical distinction: money PAID TO a vendor for goods/services = suppliers;',
+  'money/support GIVEN TO a company or cause being developed/benefited = a contribution',
+  '(development_contributions for enterprise/supplier development, sed_contributions for socio-economic).',
+].join('\n');
+
+/**
+ * The MODEL chooses the table shape for EVERY sheet — the general mechanism,
+ * not a per-element patch. The sheet-name element is given to the model as a
+ * PRIOR (it is usually right), but the rows decide. Fail-safe by construction:
+ * a bad reply → null → the caller uses the element's default shape, and a wrong
+ * choice is caught by CODE because its mapping will not land (mapSheetColumns
+ * validates the key column) and extraction falls back. Routing can only get
+ * smarter than the hint, never dumber.
+ */
+async function chooseTableShape(
+  model: ExtractionModel,
+  sheetName: string,
+  hintElement: VerificationElement,
+  rows: Array<Record<string, unknown>>,
+): Promise<TableShapeDef | null> {
+  const headers = collectHeaders(rows);
+  if (headers.length === 0) return null;
+  const samples = rows.slice(0, 4).map((row) => {
+    const compact: Record<string, string> = {};
+    for (const h of headers) {
+      const v = String(row[h] ?? '').replace(/\s+/g, ' ').trim();
+      if (v) compact[h] = v.slice(0, 60);
+    }
+    return compact;
+  });
+  const user = [
+    `SHEET: ${sheetName}`,
+    `TAB-NAME PRIOR: the sheet name suggests "${ELEMENT_DEFAULT_SHAPE[hintElement]}", but decide from the rows.`,
+    `COLUMNS: ${JSON.stringify(headers)}`,
+    `SAMPLE ROWS: ${JSON.stringify(samples)}`,
+  ].join('\n');
+  try {
+    const key = String(parseModelJson(await model.complete(SHAPE_CHOICE_SYSTEM, user))?.shape ?? '').trim();
+    return SHAPE_CATALOG[key] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which table shape does this sheet use? The model decides from the rows for
+ * every sheet (chooseTableShape); the element default is the fail-safe. The
+ * legacy ESD keyword check remains ONLY for the no-model/no-rows path, where
+ * there is nothing smarter to consult.
+ */
+async function shapeForSheet(
+  model: ExtractionModel,
   element: VerificationElement,
   input: { filename: string; rows?: Array<Record<string, unknown>> },
-): { field: string; columns: string[]; what: string } | null {
-  if (element === 'ESD' && isEsdContributionSheet(input.filename, input.rows)) {
-    return { ...ESD_CONTRIBUTION_SHAPE, columns: [...ESD_CONTRIBUTION_SHAPE.columns] };
+): Promise<{ field: string; columns: string[]; what: string; element: VerificationElement } | null> {
+  const rows = input.rows ?? [];
+  if (rows.length > 0) {
+    const chosen = await chooseTableShape(model, sheetNameOf(input.filename), element, rows);
+    if (chosen) return chosen;
   }
-  return ELEMENT_TABLE[element] ?? null;
+  // No model verdict: the element's default shape, with the legacy keyword check
+  // as the last-resort ESD disambiguator.
+  if (element === 'ESD' && isEsdContributionSheet(input.filename, input.rows)) {
+    return { ...ESD_CONTRIBUTION_SHAPE, columns: [...ESD_CONTRIBUTION_SHAPE.columns], element: 'ESD' };
+  }
+  const fallback = ELEMENT_TABLE[element];
+  return fallback ? { ...fallback, columns: [...fallback.columns], element } : null;
 }
 
 const SYSTEM_PROMPT = [
@@ -169,8 +260,11 @@ export async function extractSheetTable(
   element: VerificationElement,
   input: { filename: string; markdown?: string; raw_text: string; rows?: Array<Record<string, unknown>> },
 ): Promise<DocumentExtraction | null> {
-  const shape = shapeForSheet(element, input);
+  const shape = await shapeForSheet(model, element, input);
   if (!shape) return null;
+  // The extraction is labelled by what the rows ARE (the chosen shape's element),
+  // which the model may have corrected away from the tab-name hint.
+  const rowElement = shape.element;
 
   if (input.rows && input.rows.length > 0) {
     const mapping = await mapSheetColumns(model, shape, input.filename, input.rows);
@@ -179,21 +273,21 @@ export async function extractSheetTable(
       if (table.rows.length > 0) {
         logger.info('Extracted sheet table deterministically', {
           file: input.filename,
-          element,
+          element: rowElement,
           field: shape.field,
           ...table.stats,
           exceptions: table.exceptions.length,
         });
         return {
-          documentId: `sheet_table__${element.toLowerCase()}`,
-          documentName: `${element} table`,
-          element,
+          documentId: `sheet_table__${rowElement.toLowerCase()}`,
+          documentName: `${rowElement} table`,
+          element: rowElement,
           sourceFile: input.filename,
           values: [{
             field: shape.field,
             value: table.rows,
             sourceFile: input.filename,
-            sourceDocumentId: `sheet_table__${element.toLowerCase()}`,
+            sourceDocumentId: `sheet_table__${rowElement.toLowerCase()}`,
           }],
           missingFields: [],
           unexpectedFields: [],
@@ -203,7 +297,7 @@ export async function extractSheetTable(
     }
     logger.warn('Deterministic table read yielded nothing — falling back to model read', {
       file: input.filename,
-      element,
+      element: rowElement,
     });
   }
 
@@ -226,18 +320,18 @@ export async function extractSheetTable(
   const rows = parseTable(reply, shape.field);
   if (rows.length === 0) return null;
 
-  logger.info('Extracted sheet table', { file: input.filename, element, field: shape.field, rows: rows.length });
+  logger.info('Extracted sheet table', { file: input.filename, element: rowElement, field: shape.field, rows: rows.length });
 
   return {
-    documentId: `sheet_table__${element.toLowerCase()}`,
-    documentName: `${element} table`,
-    element,
+    documentId: `sheet_table__${rowElement.toLowerCase()}`,
+    documentName: `${rowElement} table`,
+    element: rowElement,
     sourceFile: input.filename,
     values: [{
       field: shape.field,
       value: rows,
       sourceFile: input.filename,
-      sourceDocumentId: `sheet_table__${element.toLowerCase()}`,
+      sourceDocumentId: `sheet_table__${rowElement.toLowerCase()}`,
     }],
     missingFields: [],
     unexpectedFields: [],
