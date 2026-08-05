@@ -43,7 +43,18 @@ const EMPTY_PILLAR = { score: 0, target: 0, weighting: 0, subMinimumMet: false }
  */
 function pillarSubIndicators(pillar?: (PillarScore & { coverageNotes?: string[] }) | null): SubIndicator[] {
   if (!pillar) return [];
-  const lines: SubIndicator[] = (pillar.subLines ?? []).map((sl: BreakdownLine) => ({
+  const lines: SubIndicator[] = (pillar.subLines ?? [])
+    // An indicator this scorecard does not score — no weighting available AND
+    // nothing earned — is not an indicator, it is noise. The sector configs
+    // legitimately zero out bands that a given code does not measure (a QSE has
+    // no board-voting line; FSC has no Senior/Middle/Junior), and rendering them
+    // as "0% · 0 · 0.00" rows made a 15-point element look like a 13-row form and
+    // buried the six lines that actually add up to the score. A row that CAN
+    // never move the score cannot help the reader understand it.
+    // Kept deliberately narrow: a line with no weighting but a non-zero score is
+    // an anomaly the user must still see, so only 0/0 lines are dropped.
+    .filter((sl: BreakdownLine) => !(sl.weighting === 0 && sl.score === 0))
+    .map((sl: BreakdownLine) => ({
     name: sl.isBonus ? `★ ${sl.name}` : sl.name,
     target: sl.target,
     weighting: sl.weighting,

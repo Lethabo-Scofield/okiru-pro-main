@@ -427,7 +427,10 @@ export default function SkillsDevelopment() {
 
   if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
-  const score = calculateSkillsScore(skills, calculatorConfig, client.eapProvince);
+  // eapYear MUST match what the store passes (see ManagementControl.tsx) — EAP
+  // targets are year-dependent, so omitting it scored this page against a
+  // different year's table than the scorecard.
+  const score = calculateSkillsScore(skills, calculatorConfig, client.eapProvince, client.eapYear);
 
   const totalYesCount = trainingPrograms.filter(p => p.isYesEmployee).length;
   const completedYesCount = trainingPrograms.filter(p => p.isYesEmployee && p.isCompleted).length;

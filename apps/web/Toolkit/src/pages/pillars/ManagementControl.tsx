@@ -488,7 +488,12 @@ export default function ManagementControl() {
     (mcCfg?.seniorMaxPts ?? 0) === 0 &&
     (mcCfg?.middleMaxPts ?? 0) === 0 &&
     (mcCfg?.juniorMaxPts ?? 0) === 0;
-  const mcScore = calculateManagementScore(management, calculatorConfig, client.eapProvince);
+  // eapYear MUST be passed exactly as the store passes it (store.ts calculateScorecard).
+  // EAP targets are year-dependent, so omitting it made this page compute the
+  // management score against a DIFFERENT year's EAP table than the scorecard —
+  // the same client, two different Management Control scores depending on which
+  // screen you opened. The store is the source of truth; this page mirrors it.
+  const mcScore = calculateManagementScore(management, calculatorConfig, client.eapProvince, client.eapYear);
 
   // Transport clients are SCORED by the Transport calculators (store routing),
   // so the breakdown must come from the SAME calculators — this page used to
