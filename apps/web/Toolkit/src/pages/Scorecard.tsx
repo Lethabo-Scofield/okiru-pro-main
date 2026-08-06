@@ -241,6 +241,26 @@ export default function Scorecard() {
         subMinLabel: "Grass-roots only (health, safety). Education = Skills Development.",
         subIndicators: pillarSubIndicators(scorecard.socioEconomicDevelopment),
       },
+      // FSC-only pillars. They are SCORED and counted in the Grand Total
+      // (store.ts), but had no row here — so on an FSC scorecard those points
+      // appeared in the total out of nowhere and could not be traced. Rendered
+      // only when the sector config produced them.
+      ...(scorecard.accessToFinancialServices ? [{
+        key: "accessToFinancialServices",
+        name: "Access to Financial Services",
+        ...scorecard.accessToFinancialServices,
+        accentColor: "text-teal-500 dark:text-teal-400",
+        barColor: "bg-teal-500",
+        subIndicators: pillarSubIndicators(scorecard.accessToFinancialServices),
+      }] : []),
+      ...(scorecard.empowermentFinancing ? [{
+        key: "empowermentFinancing",
+        name: "Empowerment Financing",
+        ...scorecard.empowermentFinancing,
+        accentColor: "text-indigo-500 dark:text-indigo-400",
+        barColor: "bg-indigo-500",
+        subIndicators: pillarSubIndicators(scorecard.empowermentFinancing),
+      }] : []),
       {
         key: "yesInitiative",
         name: "YES Initiative",
@@ -280,15 +300,34 @@ export default function Scorecard() {
     [elements],
   );
 
-  const ownData = scorecard.ownership || EMPTY_PILLAR;
-  const skillsData = scorecard.skillsDevelopment || EMPTY_PILLAR;
-  const subMinimumItems = [
-    { name: "Ownership", threshold: "≥ 10 pts", detail: "40% of 25 (Net Value)", met: ownData.subMinimumMet, score: ownData.score, target: 25, color: "text-violet-500 dark:text-violet-400" },
-    { name: "Skills Dev", threshold: "≥ 8 pts", detail: "40% of 20 base (excl. bonus)", met: skillsData.subMinimumMet, score: skillsData.score, target: 25, color: "text-emerald-500 dark:text-emerald-400" },
-    { name: "Procurement", threshold: "≥ 10.8 pts", detail: "40% of 27 base (excl. bonus)", met: (scorecard.procurement || EMPTY_PILLAR).subMinimumMet, score: (scorecard.procurement || EMPTY_PILLAR).score, target: 29, color: "text-amber-500 dark:text-amber-400" },
-    { name: "Supplier Dev", threshold: "≥ 4 pts", detail: "40% of 10", met: (scorecard.supplierDevelopment || EMPTY_PILLAR).subMinimumMet, score: (scorecard.supplierDevelopment || EMPTY_PILLAR).score, target: 10, color: "text-rose-500 dark:text-rose-400" },
-    { name: "Enterprise Dev", threshold: "≥ 2 pts", detail: "40% of 5 base (excl. bonus)", met: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).subMinimumMet, score: (scorecard.enterpriseDevelopment || EMPTY_PILLAR).score, target: 7, color: "text-orange-500 dark:text-orange-400" },
-  ];
+  /**
+   * Sub-minimums, DERIVED from the pillars that actually carry one.
+   *
+   * This panel used to hardcode the GENERIC thresholds ("40% of 27 base",
+   * "≥ 10.8 pts") against a fixed list of five pillars and print them for every
+   * sector — so a Transport or FSC client read generic figures that do not apply
+   * to it, sitting next to a pass/fail that came from its own sector config. It
+   * also listed pillars a sector does not have (Transport has no Supplier
+   * Development) and divided by hardcoded targets (25/29/10/7) unrelated to the
+   * active config.
+   *
+   * Now it shows only pillars whose calculator actually computed a sub-minimum,
+   * measured against that pillar's own base weighting. The threshold TEXT is
+   * gone: the pass/fail is the calculator's, and we do not print a derivation we
+   * cannot source per sector.
+   */
+  const subMinimumItems = useMemo(
+    () => elements
+      .filter((el) => typeof el.subMinimumMet === "boolean" && el.weighting > 0)
+      .map((el) => ({
+        name: el.name,
+        met: el.subMinimumMet as boolean,
+        score: el.score,
+        base: bonusSplit(el).baseWeight,
+        color: el.accentColor,
+      })),
+    [elements],
+  );
 
   return (
     <TooltipProvider>
@@ -544,11 +583,11 @@ export default function Scorecard() {
                 <div className="flex items-end justify-between">
                   <div>
                     <div className="text-lg font-bold tabular-nums">{sm.score.toFixed(2)}</div>
-                    <div className="text-[10px] text-muted-foreground">{sm.threshold} ({sm.detail})</div>
+                    <div className="text-[10px] text-muted-foreground">of {sm.base} base points</div>
                   </div>
                   <div className="h-8 w-8 rounded-lg bg-muted/50 flex items-center justify-center">
                     <span className="text-[10px] font-bold tabular-nums text-muted-foreground">
-                      {Math.round((sm.score / sm.target) * 100)}%
+                      {sm.base > 0 ? Math.round((sm.score / sm.base) * 100) : 0}%
                     </span>
                   </div>
                 </div>
@@ -574,6 +613,8 @@ function ElementRow({ element, isExpanded, onToggle, fullFigures, wrapMode }: {
   // weighting), with bonus reported separately — otherwise earning every base
   // point still reads as a shortfall.
   const achievement = achievementPct(split.baseScore, split.baseWeight);
+  // Nothing to win here: a level-boost element (YES) or an unchosen elective.
+  const notPointScored = split.baseWeight === 0 && split.bonusAvailable === 0;
   const st = statusIcon(achievement);
   const StatusIcon = st.icon;
 
@@ -646,13 +687,22 @@ function ElementRow({ element, isExpanded, onToggle, fullFigures, wrapMode }: {
             )}
           </div>
         </td>
+        {/* An element with no points to win is not "Critical" — it is not scored
+            on points at all. YES is a LEVEL BOOST (weighting 0 by design), and an
+            unchosen elective on a best-N-of-7 scorecard likewise carries no
+            weight. Both used to render a red Critical badge and 0.0%, which reads
+            as failure where there is nothing to fail. */}
         <td className="px-4 py-3 text-right font-mono text-xs tabular-nums">
-          {achievement.toFixed(1)}%
+          {notPointScored ? <span className="text-muted-foreground/30">—</span> : `${achievement.toFixed(1)}%`}
         </td>
         <td className="px-4 py-3 text-center">
-          <span className={cn("inline-flex items-center gap-1 text-[10px] font-bold uppercase", st.color)}>
-            <StatusIcon className="h-3 w-3" />
-          </span>
+          {notPointScored ? (
+            <span className="text-muted-foreground/30 text-xs">—</span>
+          ) : (
+            <span className={cn("inline-flex items-center gap-1 text-[10px] font-bold uppercase", st.color)}>
+              <StatusIcon className="h-3 w-3" />
+            </span>
+          )}
         </td>
         <td className="px-4 py-3 text-center">
           {'subMinimumMet' in el && el.subMinimumMet === false ? (

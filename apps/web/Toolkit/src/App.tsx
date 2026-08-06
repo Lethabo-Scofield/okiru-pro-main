@@ -24,7 +24,6 @@ import IndustryNorms from "@toolkit/pages/pillars/IndustryNorms";
 import Reports from "@toolkit/pages/Reports";
 import Scenarios from "@toolkit/pages/Scenarios";
 import Scorecard from "@toolkit/pages/Scorecard";
-import ScorecardSummary from "@toolkit/pages/ScorecardSummary";
 import Settings from "@toolkit/pages/Settings";
 import Profile from "@toolkit/pages/Profile";
 import AuthPage from "@toolkit/pages/AuthPage";
@@ -38,7 +37,7 @@ import { useEffect, useState } from "react";
 function RouteAwareSkeleton() {
   const [location] = useLocation();
 
-  if (location === '/scorecard' || location === '/scorecard-summary') return <ScorecardSkeleton />;
+  if (location === '/scorecard') return <ScorecardSkeleton />;
   if (location === '/reports') return <ReportsSkeleton />;
   if (location === '/scenarios') return <ScenariosSkeleton />;
   if (location === '/settings') return <SettingsSkeleton />;
@@ -127,7 +126,6 @@ export function AppRoutes() {
         <Switch>
           <Route path="/" component={Dashboard}/>
           <Route path="/scorecard" component={Scorecard}/>
-          <Route path="/scorecard-summary" component={ScorecardSummary}/>
           <Route path="/scenarios" component={Scenarios}/>
           <Route path="/reports" component={Reports}/>
           <Route path="/settings" component={Settings}/>

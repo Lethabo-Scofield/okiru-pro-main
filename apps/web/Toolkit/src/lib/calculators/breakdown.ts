@@ -20,7 +20,7 @@ export interface CalcSubLine {
   note?: string;
 }
 
-export function toBreakdown(l: CalcSubLine): BreakdownLine {
+function toBreakdown(l: CalcSubLine): BreakdownLine {
   return { name: l.name, target: l.target, weighting: l.weighting, score: l.score, isBonus: l.isBonus, note: l.note };
 }
 
