@@ -377,9 +377,9 @@ export async function sendDemoRequestEmail(params: {
 
     // Send confirmation to the requester
     await t.sendMail({
-      from: `"Okiru Consulting" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      from: `"Okiru" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
       to: params.email,
-      subject: "We've received your demo request · Okiru Consulting",
+      subject: "We've received your demo request · Okiru",
       html: `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;">
           <div style="background:#0b0f1a;border-radius:12px;padding:32px;color:#ffffff;border:1px solid rgba(255,255,255,0.08);">
@@ -396,7 +396,7 @@ export async function sendDemoRequestEmail(params: {
               </ul>
             </div>
             <div style="margin-top:8px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
-              <p style="margin:0;font-size:12px;color:#6b7280;">Okiru Consulting · Braamfontein, Johannesburg · <a href="https://okiru.co.za" style="color:#818cf8;">okiru.co.za</a></p>
+              <p style="margin:0;font-size:12px;color:#6b7280;">Okiru · Braamfontein, Johannesburg · <a href="https://okiru.co.za" style="color:#818cf8;">okiru.co.za</a></p>
             </div>
           </div>
         </div>`,

@@ -12,7 +12,7 @@ const SECTIONS: { idx: string; title: string; body: React.ReactNode }[] = [
     body: (
       <>
         <p>
-          Okiru Consulting (“Okiru”, “we”, “us”) is a South African transformation
+          Okiru (“we”, “us”) is a South African transformation
           advisory based in Braamfontein, Johannesburg. We are the responsible party
           for the personal information processed through the Okiru platform and our
           advisory engagements, as contemplated by the Protection of Personal
