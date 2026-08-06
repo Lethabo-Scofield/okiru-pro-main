@@ -1454,13 +1454,25 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
     }
   };
 
-  const statusMap = {
-    valid:    { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', label: 'Valid' },
-    expiring: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Expiring Soon' },
-    expired:  { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'Expired' },
-    unknown:  { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
-  } as const;
-  const s = statusMap[cert.status];
+  // Every status the registry can emit needs an entry. It previously held only
+  // the four expiry states while `publicStatus()` also returns the six pipeline
+  // states below, so opening a certificate that was still processing looked up
+  // `undefined` and crashed the modal on `s.color`. That is the NORMAL state for
+  // a freshly synced certificate, not an edge case.
+  const statusMap: Record<CertificateRow['status'], { color: string; bg: string; label: string }> = {
+    valid:                 { color: '#22c55e', bg: 'rgba(34,197,94,0.12)',   label: 'Valid' },
+    expiring:              { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  label: 'Expiring Soon' },
+    expired:               { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   label: 'Expired' },
+    unknown:               { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
+    processing:            { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  label: 'Processing' },
+    pending_verification:  { color: '#a5b4fc', bg: 'rgba(165,180,252,0.12)', label: 'Pending Verification' },
+    extraction_incomplete: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  label: 'Partly Read' },
+    metadata_only:         { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Metadata Only' },
+    failed:                { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   label: 'Read Failed' },
+    file_missing:          { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   label: 'File Missing' },
+  };
+  // Belt and braces: a status added server-side before this map still renders.
+  const s = statusMap[cert.status] ?? statusMap.unknown;
 
   return (
     <div

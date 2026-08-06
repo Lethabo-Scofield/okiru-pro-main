@@ -64,30 +64,60 @@ export function getCertSasExpirySeconds(): number {
 }
 
 /**
+ * Is an AKS Workload Identity actually projected into this pod?
+ *
+ * The workload-identity mutating webhook injects both of these; without them
+ * DefaultAzureCredential has no federated token to exchange and falls through
+ * to IMDS, which returns the NODE's kubelet identity — an identity that has no
+ * data-plane role on the storage account and never will.
+ */
+function workloadIdentityAvailable(): boolean {
+  return Boolean(process.env.AZURE_CLIENT_ID?.trim() && process.env.AZURE_FEDERATED_TOKEN_FILE?.trim());
+}
+
+/**
  * Production prefers Microsoft Entra / AKS Workload Identity. A connection
- * string remains a local-development fallback so existing certificate tools
- * and recovery jobs keep working during migration.
+ * string remains the fallback so existing certificate tools and recovery jobs
+ * keep working during migration.
+ *
+ * Selection is by CAPABILITY, not by configuration. Choosing Entra merely
+ * because AZURE_STORAGE_ACCOUNT_URL is set — which the app-config ConfigMap
+ * always sets — pinned every environment to a credential most of them cannot
+ * present, and because that branch returned before ever reaching the connection
+ * string there was no fallback: the Hub listed zero certificates on a cluster
+ * holding hundreds. Workload identity is still preferred wherever it is really
+ * projected, so enabling it on the cluster upgrades this automatically with no
+ * code change.
  */
 export function getCertBlobServiceClient(): BlobServiceClient | null {
-  const explicitAccountUrl = process.env.AZURE_STORAGE_ACCOUNT_URL
-    || process.env.AZURE_CERT_STORAGE_ACCOUNT_URL;
   const connStr = getCertConnectionString();
   const accountUrl = getCertAccountUrl();
-  if (explicitAccountUrl?.trim() && accountUrl) {
+
+  const entra = () => {
+    if (!accountUrl) return null;
     if (!managedIdentityCredential) managedIdentityCredential = new DefaultAzureCredential();
     if (!managedIdentityClient || managedIdentityClient.url !== accountUrl) {
       managedIdentityClient = new BlobServiceClient(accountUrl, managedIdentityCredential);
     }
     return managedIdentityClient;
+  };
+
+  if (workloadIdentityAvailable()) {
+    const client = entra();
+    if (client) return client;
   }
 
   if (connStr) return BlobServiceClient.fromConnectionString(connStr);
-  if (!accountUrl) return null;
-  if (!managedIdentityCredential) managedIdentityCredential = new DefaultAzureCredential();
-  if (!managedIdentityClient || managedIdentityClient.url !== accountUrl) {
-    managedIdentityClient = new BlobServiceClient(accountUrl, managedIdentityCredential);
-  }
-  return managedIdentityClient;
+
+  // No workload identity and no connection string: try Entra anyway, which
+  // covers a developer's `az login` and any other DefaultAzureCredential source.
+  return entra();
+}
+
+/** Test seam: drop the memoized credential/client so env changes take effect. */
+export function resetCertBlobClientForTest(): void {
+  managedIdentityCredential = null;
+  managedIdentityClient = null;
 }
 
 export function getCertContainerClient(client: BlobServiceClient): ContainerClient {
