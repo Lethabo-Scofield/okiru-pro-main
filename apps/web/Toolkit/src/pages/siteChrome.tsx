@@ -175,13 +175,13 @@ export function SiteFooter({ onNavigateAuth }: { onNavigateAuth?: () => void }) 
           <div className="ok-foot-brand">
             <span className="ok-foot-brand-top">
               <img src={okiruLogo} alt="" />
-              Okiru Consulting
+              Okiru
             </span>
             <p className="ok-foot-brand-desc">
               ESG, B-BBEE &amp; Skills Development in one audit-grade toolkit. Compliance. Strategy. Growth — built for South African organisations.
             </p>
             <div className="ok-foot-social">
-              <a href={OKIRU_LINKEDIN_URL} target="_blank" rel="noopener noreferrer" aria-label="Okiru Consulting on LinkedIn">
+              <a href={OKIRU_LINKEDIN_URL} target="_blank" rel="noopener noreferrer" aria-label="Okiru on LinkedIn">
                 <LinkedInIcon size={16} />
               </a>
             </div>
@@ -227,9 +227,9 @@ export function SiteFooter({ onNavigateAuth }: { onNavigateAuth?: () => void }) 
         <div className="ok-foot-bottom">
           <span className="ok-foot-wm">
             <img src={okiruLogo} alt="" style={{ width: 22, height: 22, opacity: 0.85 }} />
-            Okiru Consulting
+            Okiru
           </span>
-          <span className="ok-foot-c">© {year} Okiru Consulting · All rights reserved</span>
+          <span className="ok-foot-c">© {year} Okiru · All rights reserved</span>
           <div className="ok-foot-links">
             <a href="/privacy" className="ok-foot-link" onClick={go("/privacy")}>Privacy</a>
             <a href="/terms" className="ok-foot-link" onClick={go("/terms")}>Terms</a>

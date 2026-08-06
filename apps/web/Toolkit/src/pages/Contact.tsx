@@ -70,7 +70,7 @@ export default function OkiruContact({
                     <span className="ok-social-icon"><LinkedInIcon size={18} /></span>
                     <span className="ok-social-meta">
                       <span className="ok-social-name">LinkedIn</span>
-                      <span className="ok-social-handle">Okiru Consulting</span>
+                      <span className="ok-social-handle">Okiru</span>
                     </span>
                   </a>
                   <a className="ok-social-link" href="mailto:contact@okiru.co.za">
