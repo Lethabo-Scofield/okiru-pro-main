@@ -504,7 +504,7 @@ export default function CertificateHub() {
 
   useEffect(() => {
     const previous = document.title;
-    document.title = 'B-BBEE Certificate Registry — Verify South African Certificates | Okiru';
+    document.title = 'Okiru';
     return () => { document.title = previous; };
   }, []);
 
