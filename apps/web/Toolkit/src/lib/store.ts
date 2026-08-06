@@ -88,6 +88,7 @@ import {
   allowsRcogpDefaults,
   normalizeRace,
   normalizeDesignationForScoring,
+  supplierSumTmps,
 } from './calculators/shared';
 
 export interface ScenarioSnapshot {
@@ -1122,6 +1123,7 @@ function calculateScorecard(
         score: round2(afsScore.total),
         target: afsScore.maxPoints,
         weighting: afsScore.maxPoints,
+        subLines: afsScore.lines.map(l => ({ name: l.name, target: l.target, weighting: l.maxPoints, score: l.score })),
       },
     } : {}),
     ...(efScore ? {
@@ -1129,6 +1131,13 @@ function calculateScorecard(
         score: round2(efScore.total),
         target: efScore.maxPoints,
         weighting: efScore.maxPoints,
+        subLines: efScore.lines.map(l => ({
+          name: l.name,
+          target: `100% of ${l.code === 'EF-TI' ? 'exposure' : 'TF portfolio'}`,
+          weighting: l.maxPoints,
+          score: l.score,
+          note: l.target > 0 ? `Achieved R${Math.round(l.achieved).toLocaleString()} of R${Math.round(l.target).toLocaleString()}` : undefined,
+        })),
       },
     } : {}),
     total: { score: round2(totalPoints), target: totalTarget, weighting: totalTarget },
@@ -1928,12 +1937,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   addSupplier: (supplier) => {
     set((state) => {
       const suppliers = [...state.procurement.suppliers, supplier];
-      // Keep TMPS in sync with supplier spend unless the user manually overrode
-      // it — otherwise tmps stays 0 and every procurement target (tmps × pct)
-      // is 0, so suppliers never score (Polo feedback #10).
       const tmps = state.procurement.tmpsManualOverride
         ? state.procurement.tmps
-        : suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
+        : supplierSumTmps(suppliers);
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();
@@ -1952,7 +1958,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const suppliers = state.procurement.suppliers.map(s => s.id === id ? { ...s, ...data } : s);
       const tmps = state.procurement.tmpsManualOverride
         ? state.procurement.tmps
-        : suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
+        : supplierSumTmps(suppliers);
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();
@@ -1963,7 +1969,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       const suppliers = state.procurement.suppliers.filter(s => s.id !== id);
       const tmps = state.procurement.tmpsManualOverride
         ? state.procurement.tmps
-        : suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
+        : supplierSumTmps(suppliers);
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();

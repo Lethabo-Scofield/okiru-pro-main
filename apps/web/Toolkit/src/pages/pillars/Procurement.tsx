@@ -3,7 +3,7 @@ import { useBbeeStore } from "@toolkit/lib/store";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
-import { round2 } from "@toolkit/lib/calculators/shared";
+import { round2, supplierSumTmps } from "@toolkit/lib/calculators/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -63,7 +63,7 @@ export default function Procurement() {
   const [isManualTmps, setIsManualTmps] = useState(!!procurement.tmpsManualOverride);
   const [manualTmpsValue, setManualTmpsValue] = useState(tmps);
 
-  const calculatedTmps = suppliers.reduce((acc, s) => acc + s.spend, 0);
+  const calculatedTmps = supplierSumTmps(suppliers);
 
   const handleTmpsToggle = (manual: boolean) => {
     setIsManualTmps(manual);

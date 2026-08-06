@@ -4,6 +4,8 @@ import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 import {
   calculateTransportLargeManagementControl,
   calculateTransportQseManagement,
+  isTransportQseSector,
+  isTransportLargeSector,
 } from "@toolkit/lib/calculators/transport";
 import type { EAPGroupBreakdown } from "@toolkit/lib/calculators/management";
 import { getProvinces } from "@toolkit/lib/calculators/eapTargets";
@@ -500,12 +502,11 @@ export default function ManagementControl() {
   // show RCOGP-shaped sub-lines and a 19-pt weighting for a client whose real
   // MC score is the 27-pt (QSE) / 11-pt (Large) Transport scorecard
   // ("breakdowns don't link to the system").
-  const isTransportClient = String(client.sectorCode ?? '').toUpperCase().includes('TRANSPORT');
-  const transportMc = isTransportClient
-    ? (isQse
-        ? calculateTransportQseManagement(management, calculatorConfig)
-        : calculateTransportLargeManagementControl(management, calculatorConfig))
-    : null;
+  const transportMc = isTransportQseSector(client.sectorCode, calculatorConfig?.scorecardType)
+    ? calculateTransportQseManagement(management, calculatorConfig)
+    : isTransportLargeSector(client.sectorCode, calculatorConfig?.scorecardType)
+      ? calculateTransportLargeManagementControl(management, calculatorConfig)
+      : null;
   const displaySubLines = transportMc?.subLines ?? mcScore.subLines;
   const displayTotal = transportMc ? transportMc.score : mcScore.total;
   const displayMax = transportMc ? transportMc.maxPoints : mcMax;
