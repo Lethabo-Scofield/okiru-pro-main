@@ -5,9 +5,16 @@
  * 23 suppliers and a Social Development sheet is 12 beneficiaries. This returns
  * EVERY row, which is what carries the Procurement and SED points.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { extractSheetTable } from '../../src/services/sheetTableExtraction.js';
+import { resetDecisionCacheForTest } from '../../src/services/semanticDecisionCache.js';
 import type { ExtractionModel } from '../../src/services/aiExtraction.js';
+
+// Placement decisions are remembered per template; these cases reuse sheet names
+// with different mock models, so each starts from a clean slate.
+beforeEach(() => {
+  resetDecisionCacheForTest();
+});
 
 function model(reply: unknown): ExtractionModel {
   return { name: 'fake', complete: async () => JSON.stringify(reply) };

@@ -53,6 +53,48 @@ function structuredRows(tables: unknown[] | undefined): Array<Record<string, unk
   return rows as Array<Record<string, unknown>>;
 }
 
+/**
+ * Two versions of the same gathering workbook in one pack.
+ *
+ * Uploading "Workbook.xlsx" and "Workbook v2.xlsx" together is common and looks
+ * harmless, but both are read in full and their sheets contest every field they
+ * share. Conflicts resolve first-document-wins, so which VERSION supplies a
+ * value depends on input order — and the two versions rarely agree, because the
+ * later one usually exists precisely to correct the earlier. The user sees a
+ * score that moves for reasons they cannot observe.
+ *
+ * Detected structurally: the same SHEET name arriving from more than one source
+ * workbook. Reported, never auto-resolved — which revision is authoritative is
+ * the client's call, not ours.
+ */
+function duplicateWorkbookException(inputs: RawExtractionInput[]): string | null {
+  const workbooksBySheet = new Map<string, Set<string>>();
+  for (const input of inputs) {
+    const name = input.filename ?? '';
+    const marker = name.indexOf('›');
+    if (marker < 0) continue;
+    const workbook = name.slice(0, marker).trim();
+    const sheet = name.slice(marker + 1).trim().toLowerCase();
+    if (!workbook || !sheet) continue;
+    let books = workbooksBySheet.get(sheet);
+    if (!books) {
+      books = new Set<string>();
+      workbooksBySheet.set(sheet, books);
+    }
+    books.add(workbook);
+  }
+
+  const contested = [...workbooksBySheet.entries()].filter(([, books]) => books.size > 1);
+  if (contested.length === 0) return null;
+
+  const workbooks = [...new Set(contested.flatMap(([, books]) => [...books]))].sort();
+  const sheets = contested.map(([sheet]) => sheet).sort();
+  return `${workbooks.length} versions of the same gathering workbook were uploaded and BOTH were read: `
+    + `${workbooks.join(' · ')}. ${sheets.length} sheet(s) appear in more than one of them (${sheets.join(', ')}), `
+    + 'and where the versions disagree the value is taken from whichever file is read first. '
+    + 'Remove the outdated version and re-upload so the score is stable and traceable to one source.';
+}
+
 /** Cached so a case does not rebuild the client per file. */
 let cachedModel: ExtractionModel | null | undefined;
 
@@ -198,6 +240,23 @@ export async function extractCaseEntities(
         file: inputs[result.index]?.filename,
       });
     }
+  }
+
+  // Surfaced as a values-free extraction: it cannot move a score, only explain
+  // why one moved. Added before resolution so it travels with the case.
+  const duplicateWorkbook = duplicateWorkbookException(inputs);
+  if (duplicateWorkbook) {
+    logger.warn('Multiple versions of the same workbook in one pack', { detail: duplicateWorkbook });
+    extractions.push({
+      documentId: 'case__duplicate_workbook',
+      documentName: 'Uploaded document set',
+      element: 'OWNERSHIP',
+      sourceFile: inputs[0]?.filename ?? '',
+      values: [],
+      missingFields: [],
+      unexpectedFields: [],
+      exceptions: [duplicateWorkbook],
+    });
   }
 
   if (extractions.length === 0) return null;

@@ -24,6 +24,11 @@ import { createLogger } from '../logger.js';
 import { parseModelJson, type DocumentExtraction, type ExtractionModel } from './aiExtraction.js';
 import type { VerificationElement } from '../../schemas/verification_document_matrix.js';
 import { applyColumnMapping, collectHeaders, mapSheetColumns } from './sheetColumnMapping.js';
+import {
+  decisionFingerprint,
+  rememberDecision,
+  type RememberedDecision,
+} from './semanticDecisionCache.js';
 
 const logger = createLogger('SheetTableExtraction');
 
@@ -200,12 +205,39 @@ async function chooseTableShape(
     `COLUMNS: ${JSON.stringify(headers)}`,
     `SAMPLE ROWS: ${JSON.stringify(samples)}`,
   ].join('\n');
+
+  // What a sheet's rows ARE is a property of its TEMPLATE, so the decision is
+  // fingerprinted on the sheet name + its columns and made once. Re-asking per
+  // upload let the same workbook be shaped two ways on two runs (the deployment
+  // rejects a temperature override, so every ask is sampled afresh) and a sheet
+  // shaped wrong places its rows in the wrong section — or nowhere.
+  const fingerprint = decisionFingerprint(['shape', sheetName, hintElement, ...[...headers].sort()]);
+
+  let decision: RememberedDecision<string>;
   try {
-    const key = String(parseModelJson(await model.complete(SHAPE_CHOICE_SYSTEM, user))?.shape ?? '').trim();
-    return SHAPE_CATALOG[key] ?? null;
-  } catch {
+    decision = await rememberDecision<string>('shape', fingerprint, async () => {
+      // Throws on a transient model failure, which `rememberDecision` leaves
+      // uncached; an unusable reply is a real "no decision" and IS remembered.
+      const reply = await model.complete(SHAPE_CHOICE_SYSTEM, user);
+      const key = String(parseModelJson(reply)?.shape ?? '').trim();
+      return SHAPE_CATALOG[key] ? key : null;
+    });
+  } catch (err) {
+    logger.warn('Table shape choice failed — falling back to the element default', {
+      sheet: sheetName,
+      element: hintElement,
+      reason: (err as Error).message,
+    });
     return null;
   }
+
+  if (decision.value && decision.replayed) {
+    logger.info('Table shape replayed from a prior decision', {
+      sheet: sheetName,
+      shape: decision.value,
+    });
+  }
+  return decision.value ? SHAPE_CATALOG[decision.value] : null;
 }
 
 /**
@@ -255,6 +287,35 @@ const SYSTEM_PROMPT = [
  * rows by construction. The legacy whole-table model read remains the fallback
  * for content with no parsed rows (PDF tables) or when mapping fails.
  */
+/**
+ * A sheet that HAD rows and could not be placed reports itself, rather than
+ * returning null and letting the missing points read as the client's fault.
+ * Carries no values, so it can never move a score — only explain one.
+ */
+function unplacedRows(
+  failure: string | null,
+  element: VerificationElement,
+  sourceFile: string,
+  field: string,
+): DocumentExtraction | null {
+  if (!failure) return null;
+  logger.warn('Sheet rows could not be placed — reporting instead of scoring zero', {
+    file: sourceFile,
+    element,
+    detail: failure,
+  });
+  return {
+    documentId: `sheet_table__${element.toLowerCase()}`,
+    documentName: `${element} table`,
+    element,
+    sourceFile,
+    values: [],
+    missingFields: [field],
+    unexpectedFields: [],
+    exceptions: [failure],
+  };
+}
+
 export async function extractSheetTable(
   model: ExtractionModel,
   element: VerificationElement,
@@ -265,6 +326,13 @@ export async function extractSheetTable(
   // The extraction is labelled by what the rows ARE (the chosen shape's element),
   // which the model may have corrected away from the tab-name hint.
   const rowElement = shape.element;
+
+  // Set when the sheet HAD parsed rows we could not place. Carried to the end so
+  // that if the model fallback also yields nothing we can say so out loud rather
+  // than returning null — a sheet that silently contributes nothing reads to the
+  // client as "we scored your data and you did badly", which is a lie about
+  // whose fault the gap is.
+  let placementFailure: string | null = null;
 
   if (input.rows && input.rows.length > 0) {
     const mapping = await mapSheetColumns(model, shape, input.filename, input.rows);
@@ -295,9 +363,17 @@ export async function extractSheetTable(
         };
       }
     }
+    const sheet = sheetNameOf(input.filename);
+    const seen = collectHeaders(input.rows).join(', ');
+    placementFailure = mapping
+      ? `"${sheet}" has ${input.rows.length} row(s), but no column could be read as ${shape.columns[0]}, `
+        + `so none of them could be scored. Columns found: ${seen}.`
+      : `"${sheet}" has ${input.rows.length} row(s), but its columns could not be matched to any ${rowElement} field, `
+        + `so none of them could be scored. Columns found: ${seen}.`;
     logger.warn('Deterministic table read yielded nothing — falling back to model read', {
       file: input.filename,
       element: rowElement,
+      columns: seen,
     });
   }
 
@@ -314,11 +390,11 @@ export async function extractSheetTable(
     reply = await model.complete(SYSTEM_PROMPT, user);
   } catch (err) {
     logger.warn('Sheet table extraction failed', { file: input.filename, element, reason: (err as Error).message });
-    return null;
+    return unplacedRows(placementFailure, rowElement, input.filename, shape.field);
   }
 
   const rows = parseTable(reply, shape.field);
-  if (rows.length === 0) return null;
+  if (rows.length === 0) return unplacedRows(placementFailure, rowElement, input.filename, shape.field);
 
   logger.info('Extracted sheet table', { file: input.filename, element: rowElement, field: shape.field, rows: rows.length });
 

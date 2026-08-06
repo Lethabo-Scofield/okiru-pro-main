@@ -6,14 +6,23 @@
  * and the code applies it mechanically. The 14-of-23 truncation class cannot
  * recur on this path.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
   applyColumnMapping,
   collectHeaders,
   mapSheetColumns,
 } from '../../src/services/sheetColumnMapping.js';
 import { extractSheetTable } from '../../src/services/sheetTableExtraction.js';
+import { resetDecisionCacheForTest } from '../../src/services/semanticDecisionCache.js';
 import type { ExtractionModel } from '../../src/services/aiExtraction.js';
+
+// Shape and column decisions are remembered per TEMPLATE across runs — that is
+// the determinism fix. These cases deliberately reuse one sheet name and header
+// set with different mock models, so each needs a clean slate or it would be
+// served the previous case's decision.
+beforeEach(() => {
+  resetDecisionCacheForTest();
+});
 
 function model(reply: unknown): ExtractionModel {
   return { name: 'fake', complete: async () => JSON.stringify(reply) };
@@ -215,7 +224,7 @@ describe('extractSheetTable with parsed rows', () => {
     expect((result!.values[0].value as unknown[])).toHaveLength(1);
   });
 
-  it('falls back when the mapping misses the key column', async () => {
+  it('reports rows it could not place instead of silently scoring nothing', async () => {
     let calls = 0;
     const noKey: ExtractionModel = {
       name: 'nokey',
@@ -231,6 +240,36 @@ describe('extractSheetTable with parsed rows', () => {
       filename: 'wb.xlsm › Procurement', raw_text: 'x', rows: supplierRows(),
     });
     expect(calls).toBe(2);
-    expect(result).toBeNull();
+    // 23 rows the client DID supply must never vanish into a lower score with no
+    // explanation — the sheet reports itself, carrying no values so it cannot
+    // move the score, only account for it.
+    expect(result).not.toBeNull();
+    expect(result!.values).toHaveLength(0);
+    expect(result!.exceptions[0]).toContain('23 row(s)');
+    expect(result!.exceptions[0]).toContain('supplier_name');
+  });
+
+  it('replays a column mapping for the same template instead of re-asking', async () => {
+    let mappingCalls = 0;
+    const counting: ExtractionModel = {
+      name: 'counting',
+      complete: async (system: string) => {
+        if (/"shape"/.test(system)) return '{}';
+        mappingCalls += 1;
+        return JSON.stringify({ mapping: SUPPLIER_MAPPING });
+      },
+    };
+    const read = () => extractSheetTable(counting, 'ESD', {
+      filename: 'wb.xlsm › Procurement', raw_text: 'x', rows: supplierRows(),
+    });
+
+    const first = await read();
+    const second = await read();
+
+    // The decisive property: the second upload of the same template asks the
+    // model NOTHING about placement, so it cannot be answered differently.
+    expect(mappingCalls).toBe(1);
+    expect((first!.values[0].value as unknown[])).toHaveLength(23);
+    expect(second!.values[0].value).toEqual(first!.values[0].value);
   });
 });
