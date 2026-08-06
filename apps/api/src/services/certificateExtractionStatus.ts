@@ -1,6 +1,6 @@
 export type CertificateExtractionStatus = 'pending' | 'completed' | 'text_too_short' | 'failed' | 'missing_blob' | 'unsupported' | 'skipped';
 
-export type CertificateExtractionMode = 'azure_document_intelligence' | 'pdf_text' | 'ocr' | 'filename_only' | 'none' | 'failed';
+export type CertificateExtractionMode = 'azure_document_intelligence' | 'pdf_text' | 'ppocr' | 'ocr' | 'filename_only' | 'none' | 'failed';
 
 export const MIN_USEFUL_EXTRACTED_TEXT_LENGTH = 50;
 
@@ -32,7 +32,7 @@ export function extractionModeForEmptyText(mode: CertificateExtractionMode): Cer
 export function hasUsableCertificateExtractedText(doc: CertificateExtractedTextState | null | undefined): boolean {
   if (!doc) return false;
   if (doc.extractionStatus !== 'completed') return false;
-  if (!['azure_document_intelligence', 'pdf_text', 'ocr'].includes(String(doc.extractionMode || ''))) return false;
+  if (!['azure_document_intelligence', 'pdf_text', 'ppocr', 'ocr'].includes(String(doc.extractionMode || ''))) return false;
   if (Number(doc.extractedTextLength || 0) < MIN_USEFUL_EXTRACTED_TEXT_LENGTH) return false;
   return hasUsefulExtractedText(doc.extractedText);
 }

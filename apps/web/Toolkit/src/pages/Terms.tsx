@@ -13,7 +13,7 @@ const SECTIONS: { idx: string; title: string; body: React.ReactNode }[] = [
     body: (
       <p>
         These Terms of Service govern your access to and use of the Okiru platform and
-        related advisory services provided by Okiru Consulting (“Okiru”, “we”, “us”). By
+        related advisory services provided by Okiru (“we”, “us”). By
         creating an account or using the service, you agree to these terms on behalf of
         yourself and the organisation you represent.
       </p>
@@ -64,7 +64,7 @@ const SECTIONS: { idx: string; title: string; body: React.ReactNode }[] = [
     body: (
       <p>
         The Okiru platform, its toolkits, formulas, methodology, and design are the
-        intellectual property of Okiru Consulting and are protected by law. These terms
+        intellectual property of Okiru and are protected by law. These terms
         do not transfer any ownership of our intellectual property to you.
       </p>
     ),
@@ -171,7 +171,7 @@ export default function OkiruTerms({
                 <h2 className="ok-h2">Terms of Service</h2>
                 <div className="ok-legal-meta">Last updated July 2026</div>
                 <p className="ok-legal-intro">
-                  The terms below set out the agreement between you and Okiru Consulting
+                  The terms below set out the agreement between you and Okiru
                   when you use our platform and advisory services. Please read them
                   carefully.
                 </p>

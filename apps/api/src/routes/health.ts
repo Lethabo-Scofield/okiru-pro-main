@@ -1,6 +1,7 @@
 import { Router, type Request as ExpressRequest, type Response } from 'express';
 import { checkArangoHealth } from '../../arango/connection.js';
 import { mongoose } from '../../db.js';
+import { checkCertificateBlobStorage } from '../services/azureCertStorage.js';
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
 
@@ -41,6 +42,7 @@ router.get('/ready', async (_req: Request, res: Response) => {
     }
   }
   const arangoHealth = await checkArangoHealth().catch(() => ({ status: 'error' }));
+  const blobStorage = await checkCertificateBlobStorage();
 
   const body = {
     status: mongoOk ? 'ok' : 'not_ready',
@@ -49,6 +51,7 @@ router.get('/ready', async (_req: Request, res: Response) => {
     environment: isProd ? 'production' : 'development',
     mongo: { connected: mongoOk, readyState: mongoState, pingMs: mongoPingMs },
     arangodb: arangoHealth,
+    blob_storage: blobStorage,
   };
   return res.status(mongoOk ? 200 : 503).json(body);
 });
