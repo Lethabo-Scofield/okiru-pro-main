@@ -54,8 +54,8 @@ export default function OkiruAbout({
             <div className="ok-about-grid">
               <div>
                 <Reveal>
-                  <h3 className="ok-h3">About Okiru Consulting</h3>
-                  <p className="ok-lead" style={{ marginTop:14 }}>Founded in 2023, Okiru Consulting helps organisations turn ESG, B-BBEE, and compliance obligations into measurable, board-ready performance. Headquartered in Braamfontein, Johannesburg, our practice marries technology and human expertise to remove the friction between capturing data and disclosing it.</p>
+                  <h3 className="ok-h3">About Okiru</h3>
+                  <p className="ok-lead" style={{ marginTop:14 }}>Founded in 2023, Okiru helps organisations turn ESG, B-BBEE, and compliance obligations into measurable, board-ready performance. Headquartered in Braamfontein, Johannesburg, our practice marries technology and human expertise to remove the friction between capturing data and disclosing it.</p>
                   <p style={{ marginTop:16, fontSize:14, color:"var(--muted)", lineHeight:1.7 }}><strong style={{ color:"rgba(255,255,255,.7)", fontStyle:"normal" }}>Our Mission</strong><br />To make transformation measurable, defensible and permanent for every South African organisation we serve.</p>
                 </Reveal>
                 <div className="ok-about-badges" style={{ marginTop:28 }}>
@@ -98,7 +98,7 @@ export default function OkiruAbout({
           <div className="ok-w">
             <div className="ok-ceo-grid">
               <Reveal className="ok-ceo-photo-wrap">
-                <img className="ok-ceo-photo" src={ceoPortrait} alt="Chengetai Myezwa, Chief Executive Officer of Okiru Consulting" loading="lazy" />
+                <img className="ok-ceo-photo" src={ceoPortrait} alt="Chengetai Myezwa, Chief Executive Officer of Okiru" loading="lazy" />
                 <div className="ok-ceo-photo-glow" aria-hidden />
               </Reveal>
               <Reveal className="ok-ceo-body" delay="ok-d1">
@@ -116,7 +116,7 @@ export default function OkiruAbout({
                 </blockquote>
                 <div className="ok-ceo-sign">
                   <div className="ok-ceo-name">Chengetai Myezwa</div>
-                  <div className="ok-ceo-role">Chief Executive Officer · Okiru Consulting</div>
+                  <div className="ok-ceo-role">Chief Executive Officer · Okiru</div>
                 </div>
               </Reveal>
             </div>

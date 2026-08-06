@@ -43,6 +43,12 @@ data:
   RATE_LIMIT_WINDOW_MS: "900000"
   RATE_LIMIT_MAX_REQUESTS: "100"
 
+  # Certificate Hub Blob Storage (non-secret; authentication uses Azure identity)
+  AZURE_STORAGE_ACCOUNT_NAME: "okirubackups2026"
+  AZURE_STORAGE_ACCOUNT_URL: "https://okirubackups2026.blob.core.windows.net"
+  AZURE_STORAGE_CONTAINER_NAME: "certificates"
+  AZURE_STORAGE_SAS_EXPIRY_SECONDS: "300"
+
   # Health Check Settings
   HEALTH_CHECK_ENABLED: "true"
   READINESS_CHECK_PATH: "/health"
