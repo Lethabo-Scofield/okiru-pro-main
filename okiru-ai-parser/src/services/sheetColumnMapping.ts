@@ -25,6 +25,11 @@
 import { createLogger } from '../logger.js';
 import { parseMoney } from './moneyParsing.js';
 import type { ExtractionModel } from './aiExtraction.js';
+import {
+  decisionFingerprint,
+  rememberDecision,
+  type RememberedDecision,
+} from './semanticDecisionCache.js';
 
 const logger = createLogger('SheetColumnMapping');
 
@@ -122,22 +127,63 @@ export async function mapSheetColumns(
     JSON.stringify(samples, null, 1),
   ].join('\n');
 
-  let reply: string;
+  // What a COLUMN means is a property of the template, not of the run, so the
+  // mapping is fingerprinted on the sheet + its (sorted) headers + the fields
+  // asked for, and decided once. Re-asking per upload is what let a workbook
+  // whose header row reads "… | Training Program | Total Cost (R)" map its cost
+  // column on one run and not the next — and an unmapped cost column scores
+  // zero, silently. Only the sheet NAME enters the fingerprint (not the file
+  // name), so two clients on one template share the decision.
+  const fingerprint = decisionFingerprint([
+    'cols',
+    templateSheetName(sheetName),
+    [...shape.columns].sort().join(','),
+    ...[...headers].sort(),
+  ]);
+
+  let decision: RememberedDecision<Record<string, string>>;
   try {
-    reply = await model.complete(MAPPING_SYSTEM_PROMPT, user);
+    decision = await rememberDecision<Record<string, string>>('cols', fingerprint, async () => {
+      // A throw is transient and stays uncached; a reply that maps nothing is a
+      // real decision and is remembered rather than re-rolled.
+      const reply = await model.complete(MAPPING_SYSTEM_PROMPT, user);
+      const parsed = parseMappingReply(reply);
+      if (!parsed) return null;
+      const mapping = validateMapping(parsed, headers, shape.columns);
+      return Object.keys(mapping).length > 0 ? mapping : null;
+    });
   } catch (err) {
     logger.warn('Column mapping call failed', { sheet: sheetName, reason: (err as Error).message });
     return null;
   }
 
-  const parsed = parseMappingReply(reply);
-  if (!parsed) return null;
+  if (decision.value && decision.replayed) {
+    logger.info('Column mapping replayed from a prior decision', {
+      sheet: sheetName,
+      fields: Object.values(decision.value).length,
+    });
+  }
+  return decision.value;
+}
 
-  // Validate against reality: keys must be real headers (exact, then
-  // whitespace-collapsed case-insensitive), values must be requested fields,
-  // and a target field may be claimed once only.
+/** The sheet name inside a split-workbook filename ("File.xlsx › Procurement"). */
+function templateSheetName(filename: string): string {
+  const marker = filename.indexOf('›');
+  return (marker >= 0 ? filename.slice(marker + 1) : filename).trim();
+}
+
+/**
+ * Validate a model mapping against reality: keys must be real headers (exact,
+ * then whitespace-collapsed case-insensitive), values must be requested fields,
+ * and a target field may be claimed once only.
+ */
+function validateMapping(
+  parsed: Record<string, unknown>,
+  headers: string[],
+  allowed: string[],
+): Record<string, string> {
   const headerLookup = new Map(headers.map((h) => [normHeader(h), h]));
-  const allowedFields = new Set(shape.columns);
+  const allowedFields = new Set(allowed);
   const claimed = new Set<string>();
   const mapping: Record<string, string> = {};
   for (const [rawHeader, field] of Object.entries(parsed)) {
@@ -147,7 +193,7 @@ export async function mapSheetColumns(
     claimed.add(field);
     mapping[header] = field;
   }
-  return Object.keys(mapping).length > 0 ? mapping : null;
+  return mapping;
 }
 
 function normHeader(header: string): string {
