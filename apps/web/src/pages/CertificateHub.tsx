@@ -114,14 +114,41 @@ function parseCertificateListJson(json: unknown): CertificateRow[] {
   return [];
 }
 
+/**
+ * A readable label for a certificate whose text has not been extracted yet.
+ *
+ * The registry stores storage metadata first and extracts the certificate's
+ * contents on a later job, so a freshly synced entry has no supplierName. Its
+ * FILE NAME, though, is the uploader's own label and follows the archive's
+ * convention — "2027 01 12 Vital Distribution Solutions (Pty) Ltd - QSE.pdf".
+ * Rendering "Missing supplier name" over 2,951 of those hid information we
+ * already had.
+ *
+ * This is a DISPLAY fallback only: it is never written back to the registry and
+ * never treated as a verified supplier name — the card keeps its "metadata
+ * missing" state until extraction confirms the real value.
+ */
+export function labelFromFileName(fileName: string): string {
+  const base = fileName
+    .replace(/\.[a-z0-9]+$/i, '')            // extension
+    .replace(/^[\s_-]*\d{4}[\s._-]*\d{1,2}[\s._-]*\d{1,2}[\s._-]*/, '') // leading date
+    .replace(/[\s-]+(EME|QSE|Generic|Non[\s-]?compliant(\s+Letter)?)\s*$/i, '') // trailing size/kind
+    .replace(/[_]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return base || fileName;
+}
+
 function registryItemToRow(item: Record<string, unknown>): CertificateRow {
   const status = String(item.status || 'unknown') as CertificateRow['status'];
+  const fileName = String(item.file_name || item.blob_name || 'certificate');
+  const supplierName = typeof item.supplier_name === 'string' ? item.supplier_name.trim() : '';
   return {
     id: typeof item.id === 'string' ? item.id : null,
     slug: typeof item.slug === 'string' ? item.slug : null,
     name: String(item.blob_name || ''),
-    fileName: String(item.file_name || item.blob_name || 'certificate'),
-    companyName: String(item.supplier_name || 'Missing supplier name'),
+    fileName,
+    companyName: supplierName || labelFromFileName(fileName),
     vatNumber: typeof item.vat_number === 'string' ? item.vat_number : null,
     companySize: typeof item.company_size === 'string' ? item.company_size : null,
     blackOwnership: typeof item.black_ownership === 'number' ? item.black_ownership : null,
