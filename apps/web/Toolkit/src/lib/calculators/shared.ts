@@ -229,3 +229,8 @@ export function formatPercent(value: number, decimals = 2): string {
 export function formatScore(score: number): string {
   return round2(score).toFixed(2);
 }
+
+/** TMPS derived from supplier spend — single source for store + pillar pages. */
+export function supplierSumTmps(suppliers: { spend?: number }[]): number {
+  return suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
+}
