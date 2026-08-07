@@ -29,6 +29,7 @@ import scorecardRouter from './scorecard.js';
 import scorecardAdviceRouter from './scorecardAdvice.js';
 import templatesRouter from './templates.js';
 import documentsRouter from './documents.js';
+import parserDocumentsRouter from './parserDocuments.js';
 import extractAndScoreRouter from './extractAndScore.js';
 import hybridExtractionRouter from './hybridExtraction.js';
 import entityTemplatesRouter from './entityTemplates.js';
@@ -186,6 +187,7 @@ export async function registerRoutes(
 
   // Document upload & entity extraction routes
   app.use('/api/documents', documentsRouter);
+  app.use('/api/parser-documents', parserDocumentsRouter);
 
   // Sector toolkit: extract from document texts → full B-BBEE scorecard
   app.use('/api', extractAndScoreRouter);

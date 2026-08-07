@@ -26,6 +26,8 @@ import AdminUsers from "@/pages/AdminUsers";
 import AdminAnalytics from "@/pages/AdminAnalytics";
 import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
+import ParserDocumentLibrary from "@/pages/ParserDocumentLibrary";
+import ParserDocumentDetail from "@/pages/ParserDocumentDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
 import Workspace from "@/pages/Workspace";
@@ -209,6 +211,12 @@ function AppRouter() {
       </Route>
       <Route path="/create-scorecard">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
+      <Route path="/documents/:id">
+        {(params) => <ProtectedRoute><ParserDocumentDetail id={params.id} /></ProtectedRoute>}
+      </Route>
+      <Route path="/documents">
+        <ProtectedRoute><ParserDocumentLibrary /></ProtectedRoute>
       </Route>
       <Route path="/information-request/:companyId">
         <ProtectedRoute><InformationRequestRedirect /></ProtectedRoute>

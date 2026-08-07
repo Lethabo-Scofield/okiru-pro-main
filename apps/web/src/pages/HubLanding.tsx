@@ -11,6 +11,7 @@ import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
   Sparkles, Plus, LineChart, UserCog, ChevronDown,
+  Files,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
@@ -495,6 +496,30 @@ export default function HubLanding() {
               <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#d1d1d6] group-hover:text-white transition-colors">
                 Saved companies
                 <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+              </span>
+            </div>
+          </Link>
+
+          <Link
+            href="/documents"
+            className="card-rise group relative block min-h-[200px] rounded-2xl border border-white/[0.08] bg-white/[0.03] p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.20] hover:bg-white/[0.05] sm:p-7"
+            data-testid="action-document-library"
+          >
+            <div className="flex h-full flex-col">
+              <div className="mb-5 flex items-center justify-between">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.06] text-white">
+                  <Files className="h-5 w-5" strokeWidth={2.2} />
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8e8e93]">Evidence</span>
+              </div>
+              <h3 className="text-[24px] font-semibold leading-[1.1] text-white sm:text-[26px]" style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}>
+                Document Library
+              </h3>
+              <p className="mt-2 max-w-md text-[13.5px] leading-relaxed text-[#a1a1a6]">
+                Reopen uploaded evidence, see what was extracted, and review anything the parser could not read.
+              </p>
+              <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-[13px] font-medium text-[#d1d1d6] transition-colors group-hover:text-white">
+                Browse documents <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
               </span>
             </div>
           </Link>
