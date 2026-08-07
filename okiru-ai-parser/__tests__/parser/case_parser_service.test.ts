@@ -44,6 +44,14 @@ describe('CaseParserService', () => {
     ]);
     expect(result.missing_required_documents).toEqual([]);
     expect(result.documents_needing_review).toEqual([]);
+    expect(result.documents_detected[0].parser_output).toMatchObject({
+      filename: 'certificate.txt',
+      status: 'passed',
+      audit_trail: expect.objectContaining({
+        graph_version: expect.any(String),
+        requires_human_review: false,
+      }),
+    });
     expect(result.calculator_payload).toMatchObject({
       'supplier.name': 'Case Supplier Pty Ltd',
       'supplier.bee_level': 2,

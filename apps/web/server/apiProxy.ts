@@ -28,6 +28,7 @@ const PROXIED_PREFIXES = [
   "/api/scorecard",
   "/api/accuracy",
   "/api/documents",
+  "/api/parser-documents",
   "/api/extract-and-score",
   "/api/manifest",
   "/api/calculate",
@@ -69,8 +70,10 @@ function shouldProxy(path: string): boolean {
 }
 
 /** Which upstream a path belongs to (parser service vs apps/api). */
-function proxyTargetFor(path: string): string {
-  if (path.startsWith("/api/parser")) return PARSER_BASE;
+export function proxyTargetFor(path: string): string {
+  // Keep the standalone parser namespace distinct from API routes such as
+  // /api/parser-documents. A loose prefix check sends library uploads to :3200.
+  if (path === "/api/parser" || path.startsWith("/api/parser/")) return PARSER_BASE;
   return API_BASE;
 }
 
