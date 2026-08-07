@@ -3,6 +3,7 @@ import { createLogger } from "../logger";
 import {
   getCertificateBySlug,
   listCertificates,
+  listIndexableCertificates,
   listCertificatesByLevel,
   listBlackOwnedCertificates,
 } from "./data";
@@ -46,7 +47,7 @@ export function registerSeoRoutes(app: Express): void {
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     try {
-      const certs = await listCertificates();
+      const certs = await listIndexableCertificates();
       const xml = renderSitemap(certs, getHost(req), getProto(req));
       res.set("Cache-Control", "public, max-age=3600");
       res.type("application/xml").send(xml);
