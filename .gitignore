@@ -59,3 +59,13 @@ acr-*.log
 # Real k8s Secret manifests (kept on disk, applied by hand — never commit).
 # The placeholder templates (kubernetes/templates/*, external-secrets/*) stay tracked.
 kubernetes/infrastructure/overlays/*/secrets/secrets.yaml
+
+# Local corpora of REAL client documents — never committed.
+#
+# docs/Certificates is the Drive export of clients' B-BBEE certificates (2,955
+# files, 2.6 GB) and docs/Test Data is a live client's evidence pack. The
+# existing *.pdf rule caught most of it but let ~41 scans through as .jpg/.png/
+# .zip, which would have published named companies' certificates to GitHub.
+# The authoritative copies live in the okirubackups2026 storage account.
+docs/Certificates/
+docs/Test Data/
