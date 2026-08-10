@@ -12,7 +12,7 @@ import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Switch } from "@toolkit/components/ui/switch";
-import { Plus, ShoppingCart, Trash2, Pencil } from "lucide-react";
+import { Plus, ShoppingCart, Trash2, Pencil, BadgeCheck, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +27,7 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
 import { pillarSectorSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Supplier } from "@toolkit/lib/types";
+import { fetchCertificateMatches, type CertificateMatchCandidate } from "@/lib/certificateAutofill";
 
 // Issue 3: Added isForeignSupplier field
 const emptySupplierForm = {
@@ -45,6 +46,45 @@ const emptySupplierForm = {
   isSupplierDevRecipient: false,
   hasThreeYearContract: false,
 };
+
+/**
+ * A matched certificate, translated into this form's fields.
+ *
+ * The registry speaks in workbook procurement columns (the shared vocabulary
+ * across the parser, the grid and the importer); this form speaks in the
+ * Toolkit's Supplier shape. One small translation, kept next to the only form
+ * that needs it.
+ *
+ * Units matter here: the registry and this FORM both use percentages 0–100.
+ * The store is what divides by 100 on save, so nothing is converted twice.
+ */
+function certificateToSupplierForm(
+  cert: CertificateMatchCandidate,
+): Partial<typeof emptySupplierForm> {
+  const f = cert.fields;
+  const out: Partial<typeof emptySupplierForm> = {};
+
+  if (typeof f.bbbeeLevel === 'string') {
+    out.beeLevel = f.bbbeeLevel === 'Non-compliant' ? 0 : Number(f.bbbeeLevel);
+  }
+  if (f.currentSize === 'EME') out.enterpriseType = 'eme';
+  else if (f.currentSize === 'QSE') out.enterpriseType = 'qse';
+  else if (f.currentSize === 'Generic') out.enterpriseType = 'generic';
+
+  if (typeof f.currentBlackOwnership === 'number') out.blackOwnership = f.currentBlackOwnership;
+  if (typeof f.currentBlackFemaleOwnership === 'number') {
+    out.blackWomenOwnership = f.currentBlackFemaleOwnership;
+  }
+  if (typeof f.registrationNumber === 'string') out.registrationNumber = f.registrationNumber;
+  if (typeof f.certificateExpiryDate === 'string') {
+    out.certificateExpiryDate = f.certificateExpiryDate;
+  }
+  if (f.empoweringSupplier) out.isEmpoweringSupplier = f.empoweringSupplier === 'Yes';
+  if (f.sdRecipient) out.isSupplierDevRecipient = f.sdRecipient === 'Yes';
+  if (f.threeYearContract) out.hasThreeYearContract = f.threeYearContract === 'Yes';
+
+  return out;
+}
 
 // VERIFIED AGAINST: BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx
 // Procurement: 29 points total
@@ -89,6 +129,68 @@ export default function Procurement() {
   const [editSup, setEditSup] = useState({ ...emptySupplierForm });
   const addErrs = useFieldErrors();
   const editErrs = useFieldErrors();
+  const [lookingUp, setLookingUp] = useState(false);
+
+  /**
+   * Look this supplier up in the certificate database and fill the form.
+   *
+   * Unlike the bulk paths (upload, import) which fill blanks only, an explicit
+   * lookup OVERWRITES: the user pressed a button asking for the certificate's
+   * figures, so quietly keeping a stale value they typed would be the surprising
+   * behaviour. The toast names the company matched and how, so a wrong match is
+   * obvious immediately and the dialog can simply be cancelled.
+   */
+  const handleCertificateLookup = async (
+    data: typeof emptySupplierForm,
+    setData: (d: typeof emptySupplierForm) => void,
+  ) => {
+    const name = data.name.trim();
+    if (!name && !data.registrationNumber.trim()) {
+      toast({
+        title: "Nothing to look up",
+        description: "Enter a supplier name or registration number first.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setLookingUp(true);
+    try {
+      const [result] = await fetchCertificateMatches([
+        {
+          _id: 'lookup',
+          supplierName: name,
+          registrationNumber: data.registrationNumber.trim(),
+        },
+      ]);
+
+      if (!result?.match) {
+        const reason =
+          result?.reason === 'ambiguous'
+            ? `More than one company matches (${(result.ambiguousWith ?? []).join(", ")}). Add a registration number to disambiguate.`
+            : "No certificate on file for this supplier.";
+        toast({ title: "No match", description: reason });
+        return;
+      }
+
+      const patch = certificateToSupplierForm(result.match);
+      setData({ ...data, ...patch });
+      toast({
+        title: `Matched ${result.match.companyName}`,
+        description: result.match.validAtAsOf
+          ? `Filled ${Object.keys(patch).length} field(s) from the certificate on file.`
+          : `Certificate expired ${result.match.expiryDate ?? "(date unknown)"} — filled from it anyway, but it cannot support a recognition claim until renewed.`,
+        variant: result.match.validAtAsOf ? undefined : "destructive",
+      });
+    } catch {
+      toast({
+        title: "Lookup failed",
+        description: "The certificate database could not be reached.",
+        variant: "destructive",
+      });
+    } finally {
+      setLookingUp(false);
+    }
+  };
 
   const getBeeLevelColor = (level: number) => {
     if (level === 1) return "bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300";
@@ -127,6 +229,13 @@ export default function Procurement() {
       spend: Number(newSup.spend),
       certificateExpiryDate: newSup.certificateExpiryDate || undefined,
       isForeignSupplier: newSup.isForeignSupplier,
+      // These three were collected by the form but never passed to the store, so
+      // they could never score. The certificate lookup fills them, which makes
+      // the omission load-bearing: an empowering-supplier flag read off a
+      // certificate has to survive the save to be worth reading at all.
+      isEmpoweringSupplier: newSup.isEmpoweringSupplier,
+      isSupplierDevRecipient: newSup.isSupplierDevRecipient,
+      hasThreeYearContract: newSup.hasThreeYearContract,
     });
     setNewSup({ ...emptySupplierForm });
     setIsSupOpen(false);
@@ -149,6 +258,9 @@ export default function Procurement() {
       spend: sup.spend,
       certificateExpiryDate: sup.certificateExpiryDate || '',
       isForeignSupplier: sup.isForeignSupplier || false,
+      isEmpoweringSupplier: sup.isEmpoweringSupplier || false,
+      isSupplierDevRecipient: sup.isSupplierDevRecipient || false,
+      hasThreeYearContract: sup.hasThreeYearContract || false,
     });
     setIsEditSupOpen(true);
   };
@@ -174,6 +286,9 @@ export default function Procurement() {
       spend: Number(editSup.spend),
       certificateExpiryDate: editSup.certificateExpiryDate || undefined,
       isForeignSupplier: editSup.isForeignSupplier,
+      isEmpoweringSupplier: editSup.isEmpoweringSupplier,
+      isSupplierDevRecipient: editSup.isSupplierDevRecipient,
+      hasThreeYearContract: editSup.hasThreeYearContract,
     });
     setIsEditSupOpen(false);
     setEditSupId(null);
@@ -226,6 +341,26 @@ export default function Procurement() {
           placeholder="Company registration number (optional)"
           data-testid="input-supplier-registration-number"
         />
+      </div>
+      {/* The rest of this form is exactly what a B-BBEE certificate states, and
+          we hold thousands of them. Offer the lookup before the user types it
+          all out by hand. */}
+      <div className="grid grid-cols-4 items-center gap-4">
+        <div />
+        <div className="col-span-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="gap-2"
+            disabled={lookingUp || (!data.name.trim() && !data.registrationNumber.trim())}
+            onClick={() => void handleCertificateLookup(data, setData)}
+            data-testid="btn-supplier-certificate-lookup"
+          >
+            {lookingUp ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BadgeCheck className="h-3.5 w-3.5" />}
+            Fill from certificate database
+          </Button>
+        </div>
       </div>
       <div className="grid grid-cols-4 items-start gap-4">
         <Label className="text-right pt-2">Spend (R)</Label>
@@ -316,6 +451,28 @@ export default function Procurement() {
           data-testid="input-supplier-certificate-expiry"
         />
       </div>
+      {/* Three flags the certificate states and the calculator scores. They were
+          collected in form state but had no control and were dropped on save;
+          now that the lookup fills them, they have to be visible and correctable. */}
+      {([
+        ['isEmpoweringSupplier', 'Empowering Supplier', 'Required for Generic and QSE suppliers to earn recognition.'],
+        ['isSupplierDevRecipient', 'SD Recipient', 'This supplier is also a Supplier Development beneficiary.'],
+        ['hasThreeYearContract', '3-Year Contract', 'A contract of three years or longer is in place.'],
+      ] as const).map(([key, label, hint]) => (
+        <div key={key} className="grid grid-cols-4 items-start gap-4">
+          <Label className="text-right pt-2">{label}</Label>
+          <div className="col-span-3 flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={data[key]}
+              onChange={e => setData({ ...data, [key]: e.target.checked })}
+              className="h-4 w-4 rounded border-gray-300"
+              data-testid={`input-supplier-${key}`}
+            />
+            <span className="text-sm text-muted-foreground">{hint}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 

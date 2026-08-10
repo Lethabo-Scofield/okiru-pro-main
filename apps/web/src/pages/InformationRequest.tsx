@@ -584,9 +584,9 @@ function CompanyPicker({
         {
           key: "upload" as const,
           title: "Upload documents",
-          description: "Get a quote before AI extraction begins.",
+          description: "Send them a pillar at a time. Token cost shown before anything is read.",
           icon: Upload,
-          badge: "Quote first",
+          badge: "Uses tokens",
           badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
         },
         {
@@ -1402,12 +1402,14 @@ function ActiveSectionEditor({
   onChange,
   workspaceId,
   clientCreatedByUserId,
+  measurementPeriodEnd,
 }: {
   section: NonNullable<ReturnType<typeof getSection>>;
   rows: Row[];
   onChange: (rows: Row[]) => void;
   workspaceId?: string | null;
   clientCreatedByUserId?: string | null;
+  measurementPeriodEnd?: string | null;
 }) {
   const permissions = usePillarPermission(section.key, workspaceId, clientCreatedByUserId);
 
@@ -1419,6 +1421,7 @@ function ActiveSectionEditor({
       rows={rows}
       onChange={onChange}
       permissions={permissions}
+      measurementPeriodEnd={measurementPeriodEnd}
     />
   );
 }
@@ -1940,6 +1943,19 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       ?.fscReinsurer,
   );
 
+  /**
+   * The date certificate validity is judged against. The explicit period end
+   * first, the financial year-end as the fallback — they are the same date on
+   * most engagements, and one of the two is nearly always filled.
+   */
+  const measurementPeriodEnd = (() => {
+    const meta = workbook?.sections["company-information"]?.meta as
+      | Record<string, unknown>
+      | undefined;
+    const end = meta?.measurementPeriodEnd ?? meta?.financialYearEnd;
+    return end ? String(end) : null;
+  })();
+
   const sectionGroups: SectionGroup[] = useMemo(
     () => getSectionGroupsForSector(sectorCode, fscSubSector),
     [sectorCode, fscSubSector],
@@ -2297,6 +2313,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                       rows={activeRows}
                       workspaceId={workspaceId}
                       clientCreatedByUserId={company.createdByUserId}
+                      measurementPeriodEnd={measurementPeriodEnd}
                       onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
                     />
                   </div>
@@ -2342,6 +2359,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                   rows={activeRows}
                   workspaceId={workspaceId}
                   clientCreatedByUserId={company.createdByUserId}
+                  measurementPeriodEnd={measurementPeriodEnd}
                   onChange={(nextRows) => handleRowsChange(activeSection.key, nextRows)}
                 />
               ) : (

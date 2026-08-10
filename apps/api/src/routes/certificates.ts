@@ -42,6 +42,11 @@ import {
   generateCertificateViewUrl,
 } from '../services/azureCertStorage.js';
 import { listCertificateRegistry, syncCertificateStorage } from '../services/certificateRegistry.js';
+import {
+  invalidateMatchIndex,
+  matchSuppliers,
+  type SupplierMatchQuery,
+} from '../services/certificateMatch.js';
 import { ok, fail, failWith } from '../utils/apiResponse.js';
 import { recordEvent, getAnalyticsSummary } from '../services/analytics.js';
 import { parseCertificateFormBody, parsedFormToMongoSet, parsedFormToLocalPatch } from '../services/certificateUploadFields.js';
@@ -185,12 +190,21 @@ function getCached<T>(key: string): T | null {
 function setCached(key: string, value: unknown, ttlMs = 60_000) {
   responseCache.set(key, { expiresAt: Date.now() + ttlMs, value });
 }
-function invalidateListAndStatsCache() {
+/**
+ * Drop everything derived from the registry after a write.
+ *
+ * The supplier match index belongs here too: it is a whole-registry snapshot
+ * behind a 5-minute TTL, so without this a certificate uploaded or corrected
+ * right now would keep failing to autofill for minutes after the user watched
+ * it save — the most confusing possible moment for the lookup to be stale.
+ */
+function invalidateDerivedCaches() {
   for (const k of Array.from(responseCache.keys())) {
     if (k.startsWith('list:') || k.startsWith('stats:') || k.startsWith('public:')) {
       responseCache.delete(k);
     }
   }
+  invalidateMatchIndex();
 }
 
 const LIST_SAFE_PROJECTION = {
@@ -511,7 +525,7 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const summary = await syncCertificateStorage();
-      invalidateListAndStatsCache();
+      invalidateDerivedCaches();
       await recordAudit(req, {
         action: 'certificate.storage_sync',
         resourceType: 'certificate',
@@ -943,6 +957,101 @@ router.get('/search', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/certificates/match — batch supplier → certificate lookup.
+ *
+ * The procurement autofill door. A caller sends its procurement rows (name and
+ * whatever identifiers it has, each tagged with the caller's own row key) and
+ * gets back, per row, the certificate that is that supplier's — with the values
+ * already expressed in workbook procurement columns, plus the basis and
+ * confidence so a human can audit the decision.
+ *
+ * AUTHENTICATED, unlike the browse endpoints. The registry itself is public one
+ * record at a time, but a batch name→certificate resolver is a different object:
+ * it turns the directory into a bulk enrichment API for any supplier list
+ * someone cares to paste in. Every caller of this is a signed-in user filling
+ * their own scorecard, so the guard costs nothing.
+ *
+ * Read-only. Nothing here writes to the registry.
+ */
+const MAX_MATCH_QUERIES = 500;
+
+router.post('/match', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const body = (req.body ?? {}) as {
+      suppliers?: unknown;
+      asOf?: unknown;
+      threshold?: unknown;
+      includeAlternatives?: unknown;
+    };
+
+    if (!Array.isArray(body.suppliers)) {
+      return res.status(400).json(fail('`suppliers` must be an array', 'INVALID_BODY'));
+    }
+    if (body.suppliers.length > MAX_MATCH_QUERIES) {
+      return res
+        .status(400)
+        .json(fail(`At most ${MAX_MATCH_QUERIES} suppliers per request`, 'TOO_MANY_SUPPLIERS'));
+    }
+
+    const queries: SupplierMatchQuery[] = [];
+    for (const [idx, entry] of body.suppliers.entries()) {
+      if (!entry || typeof entry !== 'object') continue;
+      const s = entry as Record<string, unknown>;
+      const key = typeof s.key === 'string' && s.key.trim() ? s.key : `row_${idx}`;
+      queries.push({
+        key,
+        name: typeof s.name === 'string' ? s.name : null,
+        registrationNumber: typeof s.registrationNumber === 'string' ? s.registrationNumber : null,
+        vatNumber: typeof s.vatNumber === 'string' ? s.vatNumber : null,
+      });
+    }
+
+    // The measurement-period end, when the caller knows it — a supplier measured
+    // for FY2025 is qualified by the certificate that was live then, not by
+    // whichever renewal happens to be current today.
+    let asOf: Date | undefined;
+    if (typeof body.asOf === 'string' && body.asOf.trim()) {
+      const parsed = new Date(body.asOf);
+      if (Number.isFinite(parsed.getTime())) asOf = parsed;
+    }
+
+    const threshold =
+      typeof body.threshold === 'number' && body.threshold > 0 && body.threshold <= 1
+        ? body.threshold
+        : undefined;
+
+    const results = await matchSuppliers(queries, {
+      asOf,
+      threshold,
+      includeAlternatives: body.includeAlternatives !== false,
+    });
+
+    const matched = results.filter((r) => r.match).length;
+    logger.info('Certificate match batch completed', {
+      requested: queries.length,
+      matched,
+      userId: req.session.userId,
+    });
+
+    return res.json(
+      ok({
+        results,
+        summary: {
+          requested: queries.length,
+          matched,
+          unmatched: results.length - matched,
+          ambiguous: results.filter((r) => r.reason === 'ambiguous').length,
+          registryUnavailable: results.some((r) => r.reason === 'registry-unavailable'),
+        },
+      }),
+    );
+  } catch (err) {
+    logger.error('Certificate match failed', err as Error);
+    return res.status(500).json(fail('Certificate match failed', 'MATCH_FAILED'));
+  }
+});
+
 router.get('/stats', async (_req: Request, res: Response) => {
   try {
     const cached = getCached<unknown>('stats:default');
@@ -1284,7 +1393,7 @@ router.post('/process', requireAuth, async (req: Request, res: Response) => {
       }
     });
     sendEvent({ type: 'complete', ...result });
-    invalidateListAndStatsCache();
+    invalidateDerivedCaches();
   } catch (err: any) {
     logger.error('Bulk certificate extraction failed', err);
     sendEvent({ type: 'error', message: err.message });
@@ -1361,7 +1470,7 @@ async function runCertificateEnrichmentEndpoint(
       fields,
     });
     if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
-      invalidateListAndStatsCache();
+      invalidateDerivedCaches();
     }
     return res.json(result);
   } catch (err: any) {
@@ -1390,7 +1499,7 @@ router.post('/recover-vat', requireAuth, async (req: Request, res: Response) => 
       includeDetails: req.body?.includeDetails === true,
     });
     if (!result.dryRun && (result.updated > 0 || result.reviewRequired > 0 || result.failed > 0)) {
-      invalidateListAndStatsCache();
+      invalidateDerivedCaches();
     }
     return res.json(result);
   } catch (err: any) {
@@ -1591,7 +1700,7 @@ router.post('/:id/confirm-vat', requireAuth, async (req: Request, res: Response)
         },
       },
     );
-    invalidateListAndStatsCache();
+    invalidateDerivedCaches();
     return res.json({
       ok: true,
       id,
@@ -1790,7 +1899,7 @@ router.post('/retry-extraction', requireAuth, async (req: Request, res: Response
       concurrency: req.body?.concurrency,
     });
     if (!result.dryRun && result.updated > 0) {
-      invalidateListAndStatsCache();
+      invalidateDerivedCaches();
     }
     return res.json(result);
   } catch (err: any) {
@@ -2120,7 +2229,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
         }
 
         const updatedId = updateExisting.source === 'mongo' ? updateExisting.doc.id : updateExisting.rec.id;
-        invalidateListAndStatsCache();
+        invalidateDerivedCaches();
         recordEvent({
           type: 'upload',
           certificateId: updatedId,
@@ -2271,7 +2380,7 @@ router.post('/upload', requireAuth, (req: Request, res: Response, next: NextFunc
     const failed = results.filter(r => r.status === 'error').length;
 
     if (uploaded > 0) {
-      invalidateListAndStatsCache();
+      invalidateDerivedCaches();
       recordEvent({
         type: 'upload',
         userId: req.session?.userId || null,
@@ -2560,7 +2669,7 @@ router.post('/:id/verify', requireAuth, async (req: Request, res: Response) => {
   } else {
     certificateStore.setVerified(id, true, userId, userName);
   }
-  invalidateListAndStatsCache();
+  invalidateDerivedCaches();
   recordEvent({
     type: 'verify',
     certificateId: id,
@@ -2596,7 +2705,7 @@ router.post('/:id/unverify', requireAuth, async (req: Request, res: Response) =>
   } else {
     certificateStore.setVerified(id, false, null, null);
   }
-  invalidateListAndStatsCache();
+  invalidateDerivedCaches();
   recordEvent({
     type: 'unverify',
     certificateId: id,
@@ -2790,7 +2899,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
           ...(Object.keys(unsetReviewCandidates).length ? { $unset: unsetReviewCandidates } : {}),
         },
       );
-      invalidateListAndStatsCache();
+      invalidateDerivedCaches();
       logger.info('Certificate patched', { id, fields: Object.keys(updates) });
       const returnedFields = confirmedFields;
       return res.json(ok({ id, updated: returnedFields }));
@@ -2845,7 +2954,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
     localPatch['firstProcurementDate'] = d instanceof Date ? d.toISOString().slice(0, 10) : null;
   }
   certificateStore.patchRecord(id, localPatch as any);
-  invalidateListAndStatsCache();
+  invalidateDerivedCaches();
   return res.json(ok({ id, updated: Object.keys(localPatch) }));
 });
 
