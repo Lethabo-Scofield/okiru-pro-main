@@ -24,6 +24,7 @@ vi.mock('../azureCertStorage.js', () => ({
 import {
   CERTIFICATE_LIST_MAX_PAGE_SIZE,
   listCertificateRegistry,
+  mapCertificateRegistryItem,
   syncCertificateStorage,
 } from '../certificateRegistry.js';
 
@@ -128,5 +129,27 @@ describe('certificate registry', () => {
 
     expect(result).toMatchObject({ scanned: 1, matched: 1, created: 0, updated: 0, missing_blobs: 0 });
     expect(bulkWriteMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('company registration number', () => {
+  it('is exposed on the registry item, so the field we paid to extract is visible', () => {
+    const item = mapCertificateRegistryItem({
+      id: 'x', supplierName: 'Ambro Steel A Div Of Hudaco',
+      companyRegistrationNumber: '1984/005432/07', blobName: 'a.pdf',
+    });
+    expect(item.company_registration_number).toBe('1984/005432/07');
+  });
+
+  it('falls back to the legacy registrationNumber field', () => {
+    const item = mapCertificateRegistryItem({
+      id: 'x', registrationNumber: '1997/001443/07', blobName: 'a.pdf',
+    });
+    expect(item.company_registration_number).toBe('1997/001443/07');
+  });
+
+  it('is null when neither is present', () => {
+    const item = mapCertificateRegistryItem({ id: 'x', blobName: 'a.pdf' });
+    expect(item.company_registration_number).toBeNull();
   });
 });

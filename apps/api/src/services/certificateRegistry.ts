@@ -88,6 +88,11 @@ export function mapCertificateRegistryItem(doc: Record<string, any>) {
     preview_supported: !doc.blobMissing && previewSupported(contentType, fileName),
     company_size: cleanString(doc.companySize) || null,
     vat_number: cleanString(doc.vatNumber || doc.taxNumber) || null,
+    // The CIPC registration number identifies the LEGAL ENTITY, where the
+    // supplier name is only a trading name. It is what shows that Hudaco's
+    // divisions, or Masstores trading as Makro and as Game, are one company
+    // legitimately sharing a VAT rather than a data error.
+    company_registration_number: cleanString(doc.companyRegistrationNumber || doc.registrationNumber) || null,
     black_ownership: typeof doc.blackOwnership === 'number' ? doc.blackOwnership : null,
     black_women_ownership: typeof doc.blackWomenOwnership === 'number' ? doc.blackWomenOwnership : null,
     sector_code: cleanString(doc.sectorCode) || null,
@@ -112,7 +117,11 @@ export async function listCertificateRegistry(query: CertificateRegistryQuery) {
     filter.$or = [
       { supplierName: regex },
       { tradingName: regex },
+      // Both spellings: registrationNumber is the legacy field, and
+      // companyRegistrationNumber is what the Document Intelligence backfill
+      // populates. Searching only the legacy one silently missed all 1,950.
       { registrationNumber: regex },
+      { companyRegistrationNumber: regex },
       { vatNumber: regex },
       { taxNumber: regex },
       { certificateNumber: regex },
@@ -214,6 +223,7 @@ export async function listCertificateRegistry(query: CertificateRegistryQuery) {
     fileSize: 1, uploadedAt: 1, createdAt: 1, updatedAt: 1, blobMissing: 1,
     companySize: 1, vatNumber: 1, taxNumber: 1, blackOwnership: 1,
     blackWomenOwnership: 1, sectorCode: 1, sectorName: 1,
+    companyRegistrationNumber: 1, registrationNumber: 1,
     extractionStatus: 1, enrichmentStatus: 1, reviewFields: 1, slug: 1,
   };
 
