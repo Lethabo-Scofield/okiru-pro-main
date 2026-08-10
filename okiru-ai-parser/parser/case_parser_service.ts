@@ -205,6 +205,7 @@ export class CaseParserService {
           errors: document.validation.errors,
           missing_fields: document.validation.missing_fields,
         },
+        parser_output: document,
       })),
       fields_extracted: Object.fromEntries(
         documents.map((document) => [document.filename, document.extracted_fields]),

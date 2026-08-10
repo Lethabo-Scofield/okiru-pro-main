@@ -287,39 +287,77 @@ export function renderNotFound(
   });
 }
 
+// lastmod for the static/marketing + directory pages. Bump this ONLY when those pages
+// actually change; never on every deploy/regeneration. A lastmod that moves to "today"
+// on every rebuild teaches crawlers to distrust and ignore the field.
+const STATIC_PAGES_LASTMOD = "2026-08-04";
+
+type SitemapEntry = { loc: string; priority: string; changefreq: string; lastmod: string | null };
+
+/** Normalise a stored timestamp to a YYYY-MM-DD lastmod, or null when there is no real date. */
+function toLastmod(value?: string | null): string | null {
+  if (!value) return null;
+  const d = value.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+  const parsed = new Date(`${d}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === d ? d : null;
+}
+
+function renderUrl(u: SitemapEntry): string {
+  const lastmod = u.lastmod ? `<lastmod>${escapeXml(u.lastmod)}</lastmod>` : "";
+  return `<url><loc>${escapeXml(u.loc)}</loc><changefreq>${u.changefreq}</changefreq><priority>${u.priority}</priority>${lastmod}</url>`;
+}
+
 export function renderSitemap(
   certs: CertificateRecord[],
   host: string | undefined,
   proto: string | undefined,
 ): string {
   const origin = siteOrigin(host, proto);
-  const today = new Date().toISOString().slice(0, 10);
 
-  const staticUrls = [
-    { loc: `${origin}/`, priority: "1.0", changefreq: "weekly" },
-    { loc: `${origin}/certificates`, priority: "0.9", changefreq: "daily" },
-    { loc: `${origin}/certificates/level-1`, priority: "0.8", changefreq: "daily" },
-    { loc: `${origin}/certificates/level-2`, priority: "0.8", changefreq: "daily" },
-    { loc: `${origin}/certificates/level-3`, priority: "0.7", changefreq: "weekly" },
-    { loc: `${origin}/certificates/level-4`, priority: "0.7", changefreq: "weekly" },
-    { loc: `${origin}/certificates/black-owned`, priority: "0.8", changefreq: "daily" },
+  // Static, canonical public pages. Stable lastmod (see STATIC_PAGES_LASTMOD).
+  const staticUrls: SitemapEntry[] = [
+    { loc: `${origin}/`, priority: "1.0", changefreq: "weekly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/products/bbbee-toolkit`, priority: "0.8", changefreq: "monthly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/products/esg-toolkit`, priority: "0.8", changefreq: "monthly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/products/bbbee-certificate`, priority: "0.8", changefreq: "monthly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/about`, priority: "0.7", changefreq: "monthly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/contact`, priority: "0.7", changefreq: "monthly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/privacy`, priority: "0.3", changefreq: "yearly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/terms`, priority: "0.3", changefreq: "yearly", lastmod: STATIC_PAGES_LASTMOD },
+    { loc: `${origin}/certificates`, priority: "0.9", changefreq: "daily", lastmod: STATIC_PAGES_LASTMOD },
   ];
 
-  const certUrls = certs.map((c) => ({
+  // Directory pages (level-N, black-owned) are listed only when indexable certs back them,
+  // so the sitemap never advertises an empty page.
+  const levelsPresent = [
+    ...new Set(certs.map((c) => c.bbbeeLevel).filter((l): l is number => l != null && l >= 1 && l <= 8)),
+  ].sort((a, b) => a - b);
+  const directoryUrls: SitemapEntry[] = levelsPresent.map((l) => ({
+    loc: `${origin}/certificates/level-${l}`,
+    priority: l <= 2 ? "0.8" : "0.6",
+    changefreq: "weekly",
+    lastmod: STATIC_PAGES_LASTMOD,
+  }));
+  if (certs.some((c) => (c.blackOwnership ?? 0) >= 51)) {
+    directoryUrls.push({
+      loc: `${origin}/certificates/black-owned`,
+      priority: "0.8",
+      changefreq: "daily",
+      lastmod: STATIC_PAGES_LASTMOD,
+    });
+  }
+
+  // Individual certificate pages. Real per-cert lastmod from updatedAt; omitted (not faked
+  // with "today") when there is no true change date.
+  const certUrls: SitemapEntry[] = certs.map((c) => ({
     loc: `${origin}/certificates/${c.slug}`,
     priority: "0.7",
     changefreq: "weekly",
-    lastmod: c.updatedAt || today,
+    lastmod: toLastmod(c.updatedAt),
   }));
 
-  const urlEntries = [
-    ...staticUrls.map(
-      (u) => `<url><loc>${escapeXml(u.loc)}</loc><changefreq>${u.changefreq}</changefreq><priority>${u.priority}</priority><lastmod>${today}</lastmod></url>`,
-    ),
-    ...certUrls.map(
-      (u) => `<url><loc>${escapeXml(u.loc)}</loc><changefreq>${u.changefreq}</changefreq><priority>${u.priority}</priority><lastmod>${escapeXml(u.lastmod)}</lastmod></url>`,
-    ),
-  ].join("\n");
+  const urlEntries = [...staticUrls, ...directoryUrls, ...certUrls].map(renderUrl).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
