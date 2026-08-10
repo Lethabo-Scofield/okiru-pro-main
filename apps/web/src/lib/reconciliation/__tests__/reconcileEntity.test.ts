@@ -134,23 +134,19 @@ describe("reconcileEntity — conservation + derivation", () => {
     expect(c?.severity).toBe("blocking");
   });
 
-  it("deems a 100% black-owned QSE Level 1 (non-transport)", () => {
+  it("measures 100% black ownership without asserting a level from it", () => {
+    // Reconciliation reports what the evidence SAYS. It used to go further and
+    // deem a 100% black-owned QSE Level 1 by affidavit — a verification
+    // outcome, now left to the auditor. The ownership fact still lands; no
+    // level is claimed from it, and no issue is raised about one.
     const sections: WorkbookSections = {
       ...company("Acme", "Generic", "QSE"),
       ownership: { rows: [{ _id: "o1", shareholderName: "N", idNumber: "5608305112083", race: "Indian", shareholding: 100 }] },
     };
     const res = reconcileEntity(sections, { sectorCode: "RCOGP", scorecardType: "QSE" });
-    expect(res.summary.deemedLevel).toBe(1);
     expect(res.summary.blackOwnershipFraction).toBeCloseTo(1, 3);
-  });
-
-  it("does NOT deem transport (excluded from the deemed regime)", () => {
-    const sections: WorkbookSections = {
-      ...company("Acme", "Transport", "QSE"),
-      ownership: { rows: [{ _id: "o1", shareholderName: "N", idNumber: "5608305112083", race: "Indian", shareholding: 100 }] },
-    };
-    const res = reconcileEntity(sections, { sectorCode: "TRANSPORT", scorecardType: "QSE" });
-    expect(res.summary.deemedLevel).toBeNull();
+    expect(res.summary).not.toHaveProperty("deemedLevel");
+    expect(res.issues.some((i) => /deemed/i.test(i.statement))).toBe(false);
   });
 });
 

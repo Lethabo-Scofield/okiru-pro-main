@@ -72,9 +72,6 @@ export interface EntitySummary {
   trainingProgrammeCount: number;
   scoredSedContributions: number;
   scoredEsdContributions: number;
-  /** True when 100% black-owned → deemed Level 1 by affidavit (QSE/EME). */
-  deemedLevel: number | null;
-  deemedLevelReason?: string;
 }
 
 export type WorkbookRow = Record<string, unknown> & {

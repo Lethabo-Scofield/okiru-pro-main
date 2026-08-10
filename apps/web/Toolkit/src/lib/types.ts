@@ -582,14 +582,6 @@ export interface ScorecardResult {
   discountedLevel: number;
   isDiscounted: boolean;
   recognitionLevel: string;
-  /**
-   * Set when the Amended Codes' deemed-level floor determined the final level
-   * (EME automatic Level 4; ≥51%/100% black-owned EME/QSE → Level 2/1 via
-   * annual sworn affidavit). The reason is display text — the level did not
-   * come from scorecard points and must never read as if it did.
-   */
-  deemedLevel?: number;
-  deemedLevelReason?: string;
   /** Transport QSE: which elective pillar was auto-selected (highest score). */
   chosenElectivePillar?: string | null;
 }

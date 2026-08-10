@@ -86,12 +86,6 @@ export function ReconciliationReview({ reconcile }: { reconcile: ReconcileResult
           {counts.blocking > 0 && <span className="text-[#ffd60a]">△ {counts.blocking} need{counts.blocking === 1 ? "s" : ""} you</span>}
           {counts.coverage > 0 && <span className="text-[#64d2ff]">○ {counts.coverage} missing</span>}
         </div>
-        {summary.deemedLevel != null && (
-          <div className="mt-3 rounded-xl px-3.5 py-2.5 text-[12.5px]" style={{ background: "rgba(48,209,88,0.08)", border: "1px solid rgba(48,209,88,0.25)" }}>
-            <span className="text-[#30d158] font-semibold">Deemed Level {summary.deemedLevel}. </span>
-            <span className="text-[#a1a1a6]">{summary.deemedLevelReason}</span>
-          </div>
-        )}
       </div>
 
       <Group severity="blocking" issues={byServerity("blocking")} />

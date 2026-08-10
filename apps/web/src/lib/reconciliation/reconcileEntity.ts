@@ -105,7 +105,6 @@ function pushSummaryDefaults(sections: WorkbookSections, opts: ReconcileOptions)
     trainingProgrammeCount: 0,
     scoredSedContributions: 0,
     scoredEsdContributions: 0,
-    deemedLevel: null,
   };
 }
 
@@ -408,24 +407,11 @@ function reconcileOwnership(sections: WorkbookSections, summary: EntitySummary, 
   summary.blackOwnershipFraction = Math.round(black * 10000) / 10000;
   summary.blackWomenOwnershipFraction = Math.round(blackWomen * 10000) / 10000;
 
-  // DERIVATION (entity-level): a ≥51%/100% black-owned QSE/EME is deemed
-  // Level 2/1 by sworn affidavit whatever the scorecard says (Statement 000 §4).
-  // Transport is excluded from the deemed regime (legacy code).
-  const isTransport = /transport/i.test(summary.sectorCode);
-  const isQseOrEme = /qse|eme/i.test(summary.scorecardType);
-  if (!isTransport && isQseOrEme) {
-    if (summary.blackOwnershipFraction >= 0.999) {
-      summary.deemedLevel = 1;
-      summary.deemedLevelReason = "100% black-owned QSE — deemed Level 1 by sworn affidavit.";
-      issues.push({
-        id: nextId(), invariant: "derivation", severity: "resolved", section: "ownership",
-        statement: `This company is ${Math.round(summary.blackOwnershipFraction * 100)}% black-owned — a 100% black-owned QSE is deemed Level 1 by affidavit, regardless of the points.`,
-      });
-    } else if (summary.blackOwnershipFraction >= 0.51) {
-      summary.deemedLevel = 2;
-      summary.deemedLevelReason = "≥51% black-owned QSE — deemed Level 2 by sworn affidavit.";
-    }
-  }
+  // A deemed-level derivation used to sit here (≥51%/100% black-owned QSE/EME →
+  // Level 2/1 by sworn affidavit). Removed with the scoring rule it mirrored:
+  // stating a level here that the scorecard does not produce puts two different
+  // answers on the same screen, and the affidavit entitlement is the
+  // verification auditor's call, not ours.
 }
 
 /**
