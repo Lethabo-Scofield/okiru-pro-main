@@ -33,6 +33,27 @@ const logger = createLogger("TokenRoutes");
 const PARSER_BASE = process.env.PARSER_SERVICE_URL || "http://127.0.0.1:3200";
 const INTERNAL_SECRET = process.env.PARSER_INTERNAL_SECRET || "";
 
+/**
+ * Is uploading actually charged for?
+ *
+ * Defaults to CHARGING; only an explicit "false" makes uploads free. Same shape
+ * as the parser's PARSER_REQUIRE_PAYMENT, and the two are a matched pair — this
+ * side decides whether a wallet debit happens, that side decides whether the
+ * extraction gate demands a settled quote. Set one without the other and you
+ * get the broken half: free here + required there means every upload is refused.
+ *
+ * Free mode exists because the wallet shipped before PayFast did. With no way
+ * to buy tokens, charging would mean nobody can upload at all — so until the
+ * merchant account is live, uploads run free and the ledger stays untouched.
+ * Flipping this back to charging is a one-variable change, no redeploy of logic.
+ *
+ * Read per call rather than captured at import so it is testable and so a
+ * restart is the only thing needed to change it.
+ */
+export function paymentRequired(): boolean {
+  return process.env.TOKENS_REQUIRE_PAYMENT !== "false";
+}
+
 interface SessionUser {
   id: string;
   organizationId?: string | null;
@@ -153,16 +174,20 @@ export function registerTokenRoutes(app: Express): void {
       if (!orgId) return;
       const quote = await readParserQuote(String(req.params.quoteId));
       if (!quote) return res.status(404).json({ message: "That quote is unknown or has expired." });
-      const tokens = centsToTokens(quote.totalCents);
+      const tokens = paymentRequired() ? centsToTokens(quote.totalCents) : 0;
       const wallet = await ensureWallet(orgId);
       res.json({
         quoteId: quote.quoteId,
         tokens,
         balance: wallet.balance,
         balanceAfter: wallet.balance - tokens,
-        sufficient: wallet.balance >= tokens,
-        shortfall: Math.max(0, tokens - wallet.balance),
+        // In free mode the price is zero, so the balance is always sufficient
+        // and the dialog never warns about a shortfall the user cannot fix —
+        // there is nowhere to buy tokens until PayFast is live.
+        sufficient: !paymentRequired() || wallet.balance >= tokens,
+        shortfall: paymentRequired() ? Math.max(0, tokens - wallet.balance) : 0,
         alreadyAuthorized: quote.paymentStatus === "paid",
+        free: !paymentRequired(),
       });
     } catch (err) {
       logger.error("GET /api/tokens/quote failed", err as Error);
@@ -194,6 +219,29 @@ export function registerTokenRoutes(app: Express): void {
 
       const tokens = centsToTokens(quote.totalCents);
       const reference = `extract:${quoteId}`;
+
+      // FREE MODE. No debit, no ledger entry, no balance check — and no settle
+      // either, because the parser's own gate is open in this configuration
+      // (PARSER_REQUIRE_PAYMENT=false) and a settle call would need a shared
+      // secret that free mode deliberately does not depend on. The response
+      // keeps the same shape so the upload UI needs no knowledge of any of this.
+      if (!paymentRequired()) {
+        await recordAudit(req, {
+          action: "tokens.authorize",
+          resourceType: "organization",
+          resourceId: orgId,
+          result: "success",
+          metadata: { quoteId, tokens: 0, free: true, wouldHaveCost: tokens },
+        });
+        return res.json({
+          authorized: true,
+          quoteId,
+          tokensCharged: 0,
+          alreadyAuthorized: false,
+          free: true,
+          balance: (await ensureWallet(orgId)).balance,
+        });
+      }
 
       const debit = await debitTokens({
         organizationId: orgId,

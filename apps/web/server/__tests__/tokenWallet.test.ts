@@ -11,7 +11,7 @@
  * path — the atomic `$gte`-guarded update there is the direct analogue of the
  * balance check here.
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   FREE_TOKEN_GRANT,
   centsToTokens,
@@ -142,5 +142,41 @@ describe("cents → tokens", () => {
   it("treats a nonsense price as free rather than throwing", () => {
     expect(centsToTokens(Number.NaN)).toBe(0);
     expect(centsToTokens(-10)).toBe(0);
+  });
+});
+
+/**
+ * The free-mode switch.
+ *
+ * The wallet shipped before PayFast, so uploads run free until the merchant
+ * account is live. Getting the DEFAULT wrong is the dangerous direction: if an
+ * unset variable meant "free", a lost env var would silently stop charging and
+ * nobody would notice for a month. So only an explicit "false" opens the gate.
+ *
+ * It is also half of a matched pair — the parser's PARSER_REQUIRE_PAYMENT is
+ * the other half, and the pairing is asserted in the deployment, not here.
+ */
+describe("free-mode switch", () => {
+  const KEY = "TOKENS_REQUIRE_PAYMENT";
+  const original = process.env[KEY];
+  afterEach(() => {
+    if (original === undefined) delete process.env[KEY];
+    else process.env[KEY] = original;
+  });
+
+  it("charges by default when the variable is unset", async () => {
+    delete process.env[KEY];
+    const { paymentRequired } = await import("../tokenRoutes");
+    expect(paymentRequired()).toBe(true);
+  });
+
+  it("only the exact string 'false' makes uploads free", async () => {
+    const { paymentRequired } = await import("../tokenRoutes");
+    process.env[KEY] = "false";
+    expect(paymentRequired()).toBe(false);
+    for (const truthy of ["true", "0", "no", "False", "", "  false  "]) {
+      process.env[KEY] = truthy;
+      expect(paymentRequired(), `${JSON.stringify(truthy)} must not disable charging`).toBe(true);
+    }
   });
 });
