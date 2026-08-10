@@ -318,7 +318,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
+  const persistedDocumentsRef = useRef<Map<string, string>>(new Map());
   // Per-file extraction progress, keyed by the file's name (the streaming parser
   // reports fileName, and the create-scorecard list is de-duped by name).
   const [docProgress, setDocProgress] = useState<Record<string, 'parsing' | 'done' | 'error'>>({});
@@ -554,6 +556,99 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     }
   };
 
+  const filePersistenceKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+
+  /** Persist the original file before any paid parser work begins. */
+  const persistDocument = async (file: File): Promise<string> => {
+    const key = filePersistenceKey(file);
+    const existing = persistedDocumentsRef.current.get(key);
+    if (existing) return existing;
+
+    const form = new FormData();
+    form.append("file", file, file.name);
+    const res = await fetch("/api/parser-documents/upload", {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.document?.id) {
+      throw new Error(body?.message ?? `Could not save ${file.name} to your document library`);
+    }
+    const id = String(body.document.id);
+    persistedDocumentsRef.current.set(key, id);
+    return id;
+  };
+
+  const persistSelectedDocuments = async (list: File[]): Promise<void> => {
+    await Promise.all(list.map((file) => persistDocument(file)));
+  };
+
+  const prepareAndQuote = async (list: File[]): Promise<void> => {
+    setLibraryWarning(null);
+    try {
+      await persistSelectedDocuments(list);
+      await runQuote(list);
+    } catch (error) {
+      setQuote(null);
+      setQuoting(false);
+      setParseError(error instanceof Error ? error.message : "Could not save these documents");
+    }
+  };
+
+  /** Save one immutable, lossless run for every document returned by the case parser. */
+  const persistParserRuns = async (data: ParserCaseLike, list: File[]): Promise<void> => {
+    const caseData = data as ParserCaseLike & { case_id?: string };
+    const reviewRows = data.documents_needing_review ?? [];
+    const tasks = (data.documents_detected ?? []).map(async (detected: any) => {
+      const file = list.find((candidate) => candidate.name === detected.filename);
+      if (!file) throw new Error(`No persisted upload found for ${detected.filename}`);
+      const documentId = await persistDocument(file);
+      const parserOutput = detected.parser_output ?? {
+        ...detected,
+        file_id: detected.file_id ?? documentId,
+        filename: detected.filename,
+        document_type: detected.document_type ?? "Unknown",
+        pillar: detected.pillar ?? "",
+        extracted_fields: detected.extracted_fields ?? {},
+        calculator_payload: detected.calculator_payload ?? {},
+        supplier_rows: (data.supplier_rows ?? []).filter((row) => row.source_file === detected.filename),
+        measured_procurement_spend: (caseData as any).measured_procurement_spend ?? null,
+        validation: {
+          passed: detected.status === "passed",
+          warnings: detected.validation?.warnings ?? [],
+          errors: detected.validation?.errors ?? [],
+          missing_fields: detected.validation?.missing_fields ?? [],
+        },
+        audit_trail: {
+          source_file: detected.filename,
+          matched_patterns: [],
+          rules_applied: [],
+          graph_version: "unknown",
+          requires_human_review: detected.status !== "passed",
+          classification_candidates: [],
+          rejected_calculator_keys: [],
+        },
+      };
+      const reviewReasons = reviewRows.find((row) => row.filename === detected.filename)?.reasons ?? [];
+      const res = await fetch(`/api/parser-documents/${encodeURIComponent(documentId)}/runs`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ parserOutput, caseId: caseData.case_id ?? null, reviewReasons }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.message ?? `Could not save parser result for ${detected.filename}`);
+      }
+    });
+    const results = await Promise.allSettled(tasks);
+    const failures = results.filter((result) => result.status === "rejected");
+    if (failures.length > 0) {
+      throw new Error(`${failures.length} parser result${failures.length === 1 ? "" : "s"} could not be saved to the document library.`);
+    }
+  };
+
   /**
    * Step 7: the paid work. Only runs once the quote is paid, and sends the
    * quote id so the server can verify payment and that these are the exact
@@ -566,6 +661,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     setParseError(null);
     setDocProgress({});
     try {
+      await persistSelectedDocuments(list);
       const form = new FormData();
       for (const f of list) form.append("files", f, f.name);
       form.append("case_id", `create_scorecard_${Date.now()}`);
@@ -640,6 +736,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
       if (streamError) throw new Error(streamError);
       if (!data) throw new Error("The parser did not return a result.");
+      try {
+        await persistParserRuns(data, list);
+        setLibraryWarning(null);
+      } catch (persistenceError) {
+        console.error("[DocumentUploadStart] Parser result persistence failed", persistenceError);
+        setLibraryWarning(persistenceError instanceof Error ? persistenceError.message : "Parser results were not saved to the document library.");
+      }
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
       const mergedCase = mergeCases(keptCase, data);
@@ -759,7 +862,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       return;
     }
     setFiles(next);
-    void runQuote(next);
+    void prepareAndQuote(next);
   };
 
   const removeFile = (name: string) => {
@@ -768,7 +871,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     quoteRequestRef.current += 1;
     setQuote(null);
     if (next.length === 0) setParserCase(keptCase);
-    else void runQuote(next);
+    else void prepareAndQuote(next);
   };
 
   const groupSatisfied = (g: { types: string[] }) => g.types.some((t) => docTypeSatisfied(t));
@@ -1605,6 +1708,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       )}
 
       {parseError && <p className="text-[12px] text-red-400 mt-3">{parseError}</p>}
+      {libraryWarning && <p className="text-[12px] text-amber-300 mt-3">{libraryWarning}</p>}
 
       {/* Pricing the documents — free, structure-only, nothing read yet. */}
       {quoting && (

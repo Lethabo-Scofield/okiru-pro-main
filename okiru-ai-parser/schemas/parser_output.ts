@@ -98,6 +98,9 @@ export const caseDocumentSummarySchema = z.object({
     errors: z.array(z.string()),
     missing_fields: z.array(z.string()),
   }),
+  // Additive lossless snapshot for persistence consumers. Existing case
+  // consumers can continue using the summary fields unchanged.
+  parser_output: parserOutputSchema,
 });
 
 export const parserCaseOutputSchema = z.object({

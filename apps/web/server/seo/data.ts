@@ -95,6 +95,47 @@ export async function getCertificateBySlug(slug: string): Promise<CertificateRec
   return null;
 }
 
+/**
+ * A certificate page is safe to advertise in the sitemap only when it is public,
+ * canonical, current, and well-extracted. Excludes expired, incomplete, and
+ * low-quality-extraction records so crawlers only index pages worth ranking.
+ */
+export function isIndexableCertificate(c: CertificateRecord, now = new Date()): boolean {
+  if (!c.slug || !c.companyName) return false; // needs a canonical URL + real content
+  if (c.status === "expired") return false; // don't index expired certificates
+  if (c.metadataComplete === false) return false; // explicitly incomplete
+  if (c.verified === false) return false; // explicitly unverified / low quality
+  if (c.bbbeeLevel == null) return false; // no parsed rating => low-quality extraction
+  // Date-only certificate expiries remain valid for the whole stated day.
+  if (c.expiryDate) {
+    const expiryDay = c.expiryDate.slice(0, 10);
+    const currentDay = now.toISOString().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(expiryDay) && expiryDay < currentDay) return false;
+  }
+  return true;
+}
+
+/**
+ * Indexable certificates for the sitemap: filtered by {@link isIndexableCertificate}
+ * and de-duplicated by certificate number (re-uploads), keeping the most recent.
+ * ({@link listCertificates} already de-dupes by slug.)
+ */
+export async function listIndexableCertificates(): Promise<CertificateRecord[]> {
+  const indexable = (await listCertificates()).filter(isIndexableCertificate);
+  const byCertNo = new Map<string, CertificateRecord>();
+  const noNumber: CertificateRecord[] = [];
+  for (const c of indexable) {
+    const key = (c.certificateNumber || "").trim().toLowerCase();
+    if (!key) {
+      noNumber.push(c);
+      continue;
+    }
+    const prev = byCertNo.get(key);
+    if (!prev || (c.updatedAt || "") > (prev.updatedAt || "")) byCertNo.set(key, c);
+  }
+  return [...byCertNo.values(), ...noNumber];
+}
+
 export async function listCertificatesByLevel(level: number): Promise<CertificateRecord[]> {
   const all = await listCertificates();
   return all.filter((c) => c.bbbeeLevel === level);

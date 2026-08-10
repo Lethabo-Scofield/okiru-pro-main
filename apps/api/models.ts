@@ -327,13 +327,30 @@ const documentSchema = new Schema({
   fileType: { type: String, required: true },
   uploadedAt: { type: Date, default: Date.now },
   userId: { type: String, default: null },
+  organizationId: { type: String, default: null, index: true },
   entityId: { type: String, default: null, index: true },
   fileHash: { type: String, required: true, unique: true },
+  contentHash: { type: String, default: null, index: true },
   fileSize: { type: Number, default: 0 },
   rawContent: { type: Buffer, default: null },
   status: { type: String, default: 'uploaded' },
   chunkCount: { type: Number, default: 0 },
+  source: { type: String, default: 'documents', index: true },
+  latestParserRunId: { type: String, default: null, index: true },
+  parserStatus: { type: String, enum: ['passed', 'review_required', 'failed', null], default: null, index: true },
+  parserDocumentType: { type: String, default: null, index: true },
+  parserOverallConfidence: { type: Number, default: null },
+  parserExtractedFieldCount: { type: Number, default: 0 },
+  parserProblemFieldCount: { type: Number, default: 0 },
+  parserReviewRequired: { type: Boolean, default: false, index: true },
+  parserMissingFields: { type: [String], default: [] },
+  parserLowConfidenceFields: { type: [String], default: [] },
+  parserLastRunAt: { type: Date, default: null, index: true },
 }, { collection: "documents" });
+
+documentSchema.index({ organizationId: 1, source: 1, parserLastRunAt: -1 });
+documentSchema.index({ userId: 1, source: 1, parserLastRunAt: -1 });
+documentSchema.index({ organizationId: 1, parserStatus: 1, parserDocumentType: 1 });
 
 const documentChunkSchema = new Schema({
   documentId: { type: Schema.Types.ObjectId, required: true, index: true, ref: 'Document' },
@@ -346,6 +363,48 @@ const documentChunkSchema = new Schema({
   metadata: { type: Schema.Types.Mixed, default: {} },
   tokenCount: { type: Number, default: 0 },
 }, { collection: "document_chunks" });
+
+const parserReviewEventSchema = new Schema({
+  reviewId: { type: String, default: uuid },
+  fieldKey: { type: String, default: null },
+  originalValue: { type: Schema.Types.Mixed, default: null },
+  correctedValue: { type: Schema.Types.Mixed, default: null },
+  reviewerUserId: { type: String, required: true },
+  organizationId: { type: String, default: null },
+  approvalState: { type: String, enum: ['pending', 'approved', 'rejected', 'corrected'], default: 'pending' },
+  note: { type: String, default: null },
+  createdAt: { type: Date, default: Date.now },
+}, { _id: false });
+
+const parserRunSchema = new Schema({
+  runId: { type: String, default: uuid, unique: true, index: true },
+  documentId: { type: Schema.Types.ObjectId, required: true, ref: 'Document', index: true },
+  userId: { type: String, required: true, index: true },
+  organizationId: { type: String, default: null, index: true },
+  caseId: { type: String, default: null, index: true },
+  parserVersion: { type: String, default: null },
+  graphVersion: { type: String, default: null },
+  status: { type: String, enum: ['passed', 'review_required', 'failed'], required: true, index: true },
+  documentType: { type: String, default: 'Unknown', index: true },
+  overallConfidence: { type: Number, default: 0 },
+  extractedFieldCount: { type: Number, default: 0 },
+  missingFieldCount: { type: Number, default: 0 },
+  problemFieldCount: { type: Number, default: 0 },
+  missingFields: { type: [String], default: [] },
+  lowConfidenceFields: { type: [String], default: [] },
+  warnings: { type: [String], default: [] },
+  errors: { type: [String], default: [] },
+  reviewReasons: { type: [String], default: [] },
+  requiresHumanReview: { type: Boolean, default: false, index: true },
+  // Lossless snapshot of the parser result. Missing expected fields, provenance,
+  // validation, calculator filtering, and audit details remain exactly as returned.
+  parserOutput: { type: Schema.Types.Mixed, required: true },
+  reviewHistory: { type: [parserReviewEventSchema], default: [] },
+  createdAt: { type: Date, default: Date.now, index: true },
+}, { collection: 'parser_runs', minimize: false });
+
+parserRunSchema.index({ documentId: 1, createdAt: -1 });
+parserRunSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
 
 const entityTemplateSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
@@ -423,6 +482,7 @@ export const ImportLogModel = mongoose.model("ImportLog", importLogSchema);
 export const ExportLogModel = mongoose.model("ExportLog", exportLogSchema);
 export const Document = mongoose.model("Document", documentSchema);
 export const DocumentChunk = mongoose.model("DocumentChunk", documentChunkSchema);
+export const ParserRunModel = mongoose.models.ParserRun || mongoose.model("ParserRun", parserRunSchema);
 export const EntityTemplateModel = mongoose.model("EntityTemplate", entityTemplateSchema);
 export const ProcessorSessionModel = mongoose.models.ProcessorSession || mongoose.model("ProcessorSession", processorSessionSchema);
 
