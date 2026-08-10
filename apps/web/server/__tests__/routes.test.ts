@@ -60,6 +60,42 @@ class TestClient {
 
 const client = new TestClient();
 
+/**
+ * This suite talks to a real server over HTTP — it does not boot one itself.
+ * Without `pnpm dev` running on port 5000 every request fails with
+ * ECONNREFUSED, which reads as 17 broken tests rather than "not run here".
+ * Probe once up front and skip the suite instead.
+ *
+ * Any HTTP response means the server is up: `/api/auth/me` answers 401 when
+ * unauthenticated, and that is still proof of life. Only a transport-level
+ * failure (connection refused, timeout) counts as "no server".
+ *
+ * The timeout is deliberately generous. This probe runs at module scope while
+ * vitest is still transforming the module graph, so the abort timer can burn
+ * through a short budget before the request is even scheduled — a 2s limit
+ * skipped the suite against a server that was demonstrably up. Nothing is lost
+ * by waiting: when no server is listening the connection is refused
+ * immediately, so the common local case still skips in milliseconds.
+ */
+async function isServerReachable(): Promise<boolean> {
+  try {
+    await fetch(`${BASE_URL}/api/auth/me`, { signal: AbortSignal.timeout(15_000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const SERVER_UP = await isServerReachable();
+
+if (!SERVER_UP) {
+  console.warn(
+    `[routes.test] Skipping: no server on ${BASE_URL}. Start one with \`pnpm dev\` to run this suite.`,
+  );
+}
+
+const describeApi = describe.skipIf(!SERVER_UP);
+
 async function getOtpFromDb(email: string): Promise<string | null> {
   if (!MONGO_URI) return null;
   const mongo = new MongoClient(MONGO_URI);
@@ -73,7 +109,7 @@ async function getOtpFromDb(email: string): Promise<string | null> {
   }
 }
 
-describe('Auth API - unauthenticated', () => {
+describeApi('Auth API - unauthenticated', () => {
   it('GET /api/auth/me - unauthenticated returns 401', async () => {
     const { status, body } = await client.withoutSession(() =>
       client.request('/api/auth/me')
@@ -84,7 +120,7 @@ describe('Auth API - unauthenticated', () => {
   });
 });
 
-describe('Auth API - registration validation', () => {
+describeApi('Auth API - registration validation', () => {
   it('rejects missing username', async () => {
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
@@ -115,7 +151,7 @@ describe('Auth API - registration validation', () => {
   });
 });
 
-describe('Auth API - registration + OTP flow', () => {
+describeApi('Auth API - registration + OTP flow', () => {
   it('creates a new user and sends OTP', async () => {
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
@@ -180,7 +216,7 @@ describe('Auth API - registration + OTP flow', () => {
   });
 });
 
-describe('Auth API - login', () => {
+describeApi('Auth API - login', () => {
   it('rejects invalid credentials', async () => {
     const { status } = await client.request('/api/auth/login', {
       method: 'POST',
@@ -201,7 +237,7 @@ describe('Auth API - login', () => {
   });
 });
 
-describe('OTP API', () => {
+describeApi('OTP API', () => {
   it('rejects verify-otp with no pending session', async () => {
     const { status } = await client.withoutSession(() =>
       client.request('/api/auth/verify-otp', {
@@ -222,7 +258,7 @@ describe('OTP API', () => {
   });
 });
 
-describe('Templates API', () => {
+describeApi('Templates API', () => {
   let templateId: number;
 
   beforeAll(async () => {
@@ -285,7 +321,7 @@ describe('Templates API', () => {
   });
 });
 
-describe('Profile API', () => {
+describeApi('Profile API', () => {
   it('rejects unauthenticated profile update', async () => {
     const { status } = await client.withoutSession(() =>
       client.request('/api/profile', {
@@ -298,7 +334,7 @@ describe('Profile API', () => {
   });
 });
 
-describe('Client Data API', () => {
+describeApi('Client Data API', () => {
   it('returns 401 for unauthenticated client data request', async () => {
     const { status } = await client.withoutSession(() =>
       client.request('/api/clients/C-10483/data')
