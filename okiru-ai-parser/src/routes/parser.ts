@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import multer from 'multer';
 import { z } from 'zod';
@@ -558,6 +559,64 @@ router.post('/webhooks/payfast', async (req: Request, res: Response) => {
   }
 
   return res.json(ok({ received: true }));
+});
+
+/**
+ * Settle a quote against the CREDIT WALLET instead of a card.
+ *
+ * The product now sells credit tokens up front rather than charging per upload,
+ * so the thing that authorises extraction is no longer a PayFast ITN — it is a
+ * successful token debit, which happens in apps/web (that is where the session,
+ * the organisation and the balance live). This endpoint is how that debit is
+ * reported back to the gate.
+ *
+ * It is strictly server-to-server. The browser must never be able to reach it,
+ * because reaching it means free extraction — so it fails CLOSED in three ways:
+ *   - no PARSER_INTERNAL_SECRET configured → 404 (the route may as well not exist)
+ *   - wrong/absent secret → 403
+ *   - constant-time compare, so the secret can't be discovered a byte at a time
+ *
+ * `authoriseExtraction` is untouched: it still demands a paid, unexpired,
+ * unconsumed quote whose fingerprint matches the uploaded files. All that has
+ * changed is who is allowed to say "paid".
+ */
+router.post('/quotes/:quoteId/settle', async (req: Request, res: Response) => {
+  const secret = process.env.PARSER_INTERNAL_SECRET || '';
+  if (!secret) {
+    logger.warn('Wallet settle attempted with no PARSER_INTERNAL_SECRET configured');
+    return res.status(404).json(fail('Not found', 'NOT_FOUND'));
+  }
+  const presented = String(req.header('x-okiru-internal-secret') ?? '');
+  const a = Buffer.from(presented);
+  const b = Buffer.from(secret);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    logger.warn('Rejected wallet settle with a bad internal secret', { quoteId: req.params.quoteId });
+    return res.status(403).json(fail('Forbidden', 'FORBIDDEN'));
+  }
+
+  const quoteId = String(req.params.quoteId);
+  const record = await getQuoteStore().get(quoteId);
+  if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
+  if (record.consumedAt) {
+    return res.status(409).json(fail('This quote has already been used for an extraction.', 'QUOTE_ALREADY_USED'));
+  }
+  if (record.paymentStatus !== 'paid' && Date.now() > record.expiresAt) {
+    return res.status(410).json(fail('That quote has expired. Request a new quote.', 'QUOTE_EXPIRED'));
+  }
+  // Idempotent: a retried settle for an already-settled quote is a success, not
+  // a double charge. The caller's own ledger is what prevents double debits.
+  if (record.paymentStatus === 'paid') {
+    return res.json(ok({ quoteId, paymentStatus: 'paid', alreadySettled: true, totalCents: record.totalCents }));
+  }
+
+  const reference = String((req.body as { reference?: unknown } | undefined)?.reference ?? '').slice(0, 120);
+  await getQuoteStore().update(quoteId, {
+    paymentStatus: 'paid',
+    paidAt: Date.now(),
+    providerRef: reference ? `wallet_${reference}` : `wallet_${quoteId}`,
+  });
+  logger.info('Quote settled from the credit wallet', { quoteId, reference: reference || null });
+  return res.json(ok({ quoteId, paymentStatus: 'paid', alreadySettled: false, totalCents: record.totalCents }));
 });
 
 /**

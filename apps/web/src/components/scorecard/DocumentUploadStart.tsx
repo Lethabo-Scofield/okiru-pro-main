@@ -38,10 +38,33 @@ import {
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
 import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
-import RequiredDocumentsChecklist from "./RequiredDocumentsChecklist";
+import PillarDocumentBatches, { batchLabel, type UploadOrigin } from "./PillarDocumentBatches";
+import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
+import {
+  autofillProcurementFromCertificates,
+  type AutofillReport,
+  type ProcurementRow,
+} from "@/lib/certificateAutofill";
+
+/**
+ * Are these the same rows the certificate lookup ran against?
+ *
+ * The lookup runs during the reveal, off the merged sections. If anything
+ * changed since (a re-parse, a new file), its enriched rows are stale and must
+ * not be created — the ids would no longer line up and a supplier could carry
+ * another supplier's certificate. Cheap identity check, fails safe to re-running.
+ */
+function certificateFillCoversRows(
+  filled: ProcurementRow[] | undefined,
+  current: ProcurementRow[],
+): boolean {
+  if (!filled || filled.length !== current.length) return false;
+  const ids = new Set(filled.map((r) => r._id));
+  return current.every((r) => ids.has(r._id));
+}
 
 /** A value that is real text, not an HTML artifact or an empty placeholder. */
 function cleanText(v: unknown): string {
@@ -197,12 +220,24 @@ interface ParserQuote {
   paymentRequired?: boolean;
 }
 
-/** Rands, shown to 2dp unless the amount is genuinely sub-cent. */
-function money(cents: number, currency = "ZAR"): string {
-  const symbol = currency === "ZAR" ? "R" : `${currency} `;
-  if (cents > 0 && cents < 1) return `${symbol}${(cents / 100).toFixed(4)}`;
-  return `${symbol}${(cents / 100).toFixed(2)}`;
+/**
+ * What a batch costs in credit tokens, and what the wallet holds.
+ *
+ * The server converts the quote's price into tokens and reports the balance in
+ * the same call, so the number shown here and the number charged are the same
+ * number — there is no client-side arithmetic to drift.
+ */
+interface TokenCost {
+  quoteId: string;
+  tokens: number;
+  balance: number;
+  balanceAfter: number;
+  sufficient: boolean;
+  shortfall: number;
+  alreadyAuthorized: boolean;
 }
+
+const tokenText = (value: number): string => value.toLocaleString("en-ZA");
 
 /**
  * Fold a newly-read case into what we already had.
@@ -253,10 +288,13 @@ const SECTOR_TO_WORKBOOK: Record<string, string> = {
   AGRI: "AGRI",
 };
 
-// The parser now returns the marked-up PRICE in extractionCents (cost ×
-// PARSER_SELL_MULTIPLIER) and never exposes the underlying cost, so the web just
-// displays what the quote gives it — no client-side markup (that would double it).
-const sellCents = (priceCents: number) => priceCents || 0;
+/** A file's size in whatever unit the structure scan actually established. */
+function fileUnits(file: ParserQuote["files"][number]): string {
+  if (file.structure.pages) return `${file.structure.pages} page${file.structure.pages === 1 ? "" : "s"}`;
+  if (file.structure.sheets) return `${file.structure.sheets} sheet${file.structure.sheets === 1 ? "" : "s"}`;
+  if (file.structure.rows) return `${file.structure.rows.toLocaleString()} rows`;
+  return "Structure scan";
+}
 
 const CANONICAL_PILLARS: Record<string, string> = {
   ESD: "Enterprise & Supplier Development",
@@ -345,6 +383,16 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [paying, setPaying] = useState(false);
+  /** The batch's cost in credit tokens, priced by the server from the quote. */
+  const [tokenCost, setTokenCost] = useState<TokenCost | null>(null);
+  /**
+   * Which batch each staged file was filed under. Presentation only — the
+   * classifier still decides what a document actually is and which pillar it
+   * scores against. This just shows the user where their own work went.
+   */
+  const [filedBatchByFile, setFiledBatchByFile] = useState<Record<string, string>>({});
+  /** Files chosen but not yet confirmed. The double-check dialog owns these. */
+  const [pendingUpload, setPendingUpload] = useState<(PendingUpload & { origin: UploadOrigin }) | null>(null);
   /**
    * Documents already extracted and paid for in a previous round. A requote
    * must never lose or re-charge these — they carry straight through.
@@ -354,6 +402,19 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   /** Files a folder upload could not read — shown as a warning, not an error. */
   const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
+  /**
+   * Procurement rows enriched from the certificate registry, plus the account of
+   * what was matched. Computed during the reveal so the user SEES the registry's
+   * contribution before creating, rather than having it happen invisibly on
+   * click. `handleCreate` reuses exactly these rows.
+   */
+  const [certificateFill, setCertificateFill] = useState<{
+    rows: ProcurementRow[];
+    report: AutofillReport;
+  } | null>(null);
+  const [certificateFillRunning, setCertificateFillRunning] = useState(false);
+  /** Monotonic id so a superseded lookup never writes over a newer one. */
+  const certificateFillSeq = useRef(0);
   /** Monotonic id so only the latest quote request writes state (race guard). */
   const quoteSeqRef = useRef(0);
   /** Aborts any in-flight quote when a newer one starts, so requests never pile up. */
@@ -418,6 +479,51 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       { sectorCode: sector || "Generic", scorecardType: size || "Generic" },
     );
   }, [parserCase, sector, size]);
+
+  /**
+   * The procurement rows as they will actually be created — the same merge
+   * `handleCreate` performs, hoisted so the certificate lookup and the create
+   * both run against one set of rows.
+   */
+  const mergedProcurementRows = useMemo(() => {
+    if (!mapped && !injected) return [] as ProcurementRow[];
+    const sections = mergeWorkbookSections(
+      mapped?.sections ?? {},
+      injected ? toWorkbookSections(injected) : {},
+    );
+    return (sections.procurement?.rows ?? []) as ProcurementRow[];
+  }, [mapped, injected]);
+
+  /**
+   * AUTO-DETECT AGAINST THE CERTIFICATE REGISTRY.
+   *
+   * The upload almost always names more suppliers than it evidences: the
+   * schedule lists forty, three certificates come with it. For the other
+   * thirty-seven we may already hold the certificate — 2,951 of them sit in the
+   * registry — so every extracted supplier is looked up and its blank scoring
+   * columns filled from what we already have.
+   *
+   * Runs here rather than on the Create click for two reasons: the user sees
+   * what the registry contributed while they can still question it, and the
+   * pillar rack and stat tiles below reflect the real, enriched state of
+   * Procurement instead of understating it.
+   */
+  useEffect(() => {
+    if (mergedProcurementRows.length === 0) {
+      certificateFillSeq.current += 1; // invalidate anything still in flight
+      setCertificateFill(null);
+      setCertificateFillRunning(false);
+      return;
+    }
+    const seq = ++certificateFillSeq.current;
+    setCertificateFillRunning(true);
+    void (async () => {
+      const result = await autofillProcurementFromCertificates(mergedProcurementRows);
+      if (seq !== certificateFillSeq.current) return; // superseded
+      setCertificateFill(result);
+      setCertificateFillRunning(false);
+    })();
+  }, [mergedProcurementRows]);
 
   /**
    * Reconciliation findings from the deterministic table read — a sheet whose
@@ -555,6 +661,36 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       if (isLatest()) setQuoting(false);
     }
   };
+
+  /**
+   * Price the quote in credit tokens as soon as we have one.
+   *
+   * Deliberately a separate call from the quote itself: the parser knows what
+   * reading these files costs, the web app knows what the organisation holds,
+   * and only the second one is allowed to answer "can you afford this". Failing
+   * to price is non-fatal — the batch panel falls back to showing the work
+   * without a token figure rather than blocking the flow.
+   */
+  useEffect(() => {
+    if (!quote?.quoteId) {
+      setTokenCost(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/tokens/quote/${encodeURIComponent(quote.quoteId)}`, {
+          credentials: "include",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const body = (await res.json()) as TokenCost;
+        if (!cancelled) setTokenCost(body);
+      } catch {
+        if (!cancelled) setTokenCost(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [quote?.quoteId]);
 
   const filePersistenceKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
@@ -761,41 +897,46 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     }
   };
 
-  /** Step 6: pay the quote, then read. */
-  const payAndExtract = async () => {
+  /**
+   * Step 6: spend tokens, then read.
+   *
+   * This used to be a card checkout in the middle of the work — quote, redirect
+   * to PayFast, come back, hope the ITN landed. Credit replaced it: the
+   * organisation has already paid, so processing is one click and the money
+   * conversation happens somewhere else entirely.
+   *
+   * The debit is server-side and idempotent, so a double-click charges once. If
+   * the balance will not cover the batch, we say so with the exact shortfall and
+   * send them to billing rather than failing vaguely.
+   */
+  const spendAndExtract = async () => {
     if (!quote) return;
     setPaying(true);
     setParseError(null);
     try {
-      const res = await fetch(`/api/parser/quotes/${encodeURIComponent(quote.quoteId)}/checkout`, {
+      const res = await fetch("/api/tokens/authorize", {
         method: "POST",
         credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quoteId: quote.quoteId }),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body?.error?.message ?? "Could not start payment");
-
-      const data = body.data ?? body;
-      if (data?.simulated) {
-        // Local development: no live Yoco keys, so settle the quote server-side
-        // and carry on. This route does not exist in production.
-        const sim = await fetch(`/api/parser/quotes/${encodeURIComponent(quote.quoteId)}/simulate-payment`, {
-          method: "POST",
-          credentials: "include",
-        });
-        if (!sim.ok) throw new Error("Simulated payment failed");
-        await runExtraction(files, quote.quoteId);
-        return;
+      if (res.status === 402) {
+        setTokenCost((prev) => (prev ? { ...prev, balance: body?.balance ?? prev.balance, sufficient: false, shortfall: body?.shortfall ?? prev.shortfall } : prev));
+        throw new Error(
+          `${body?.message ?? "You do not have enough tokens for this batch."} Add tokens in Settings → Billing.`,
+        );
       }
+      if (!res.ok) throw new Error(body?.message ?? "Could not authorise this batch");
 
-      // Live: hand off to Yoco's hosted page. We never touch card details.
-      if (data?.redirectUrl) {
-        sessionStorage.setItem("okiru-parser-quote", quote.quoteId);
-        window.location.href = data.redirectUrl;
-        return;
+      if (typeof body?.balance === "number") {
+        setTokenCost((prev) => (prev ? { ...prev, balance: body.balance, alreadyAuthorized: true } : prev));
       }
-      throw new Error("Payment provider did not return a checkout link");
+      // Every header shows the balance, so it must move the moment it changes.
+      window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+      await runExtraction(files, quote.quoteId);
     } catch (err) {
-      setParseError(err instanceof Error ? err.message : "Payment failed");
+      setParseError(err instanceof Error ? err.message : "Could not start processing");
     } finally {
       setPaying(false);
     }
@@ -816,7 +957,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    * stray file would be worse. So: take what we can read, say plainly what was
    * skipped, and let the user decide.
    */
-  const addFolder = (incoming: File[]) => {
+  const addFolder = (incoming: File[], origin?: UploadOrigin) => {
     const readable: File[] = [];
     const skipped: string[] = [];
 
@@ -830,10 +971,38 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     }
 
     setSkippedFiles(skipped);
-    if (readable.length > 0) addFiles(readable);
+    if (readable.length > 0) addFiles(readable, origin);
   };
 
-  const addFiles = (incoming: File[]) => {
+  /**
+   * A batch was picked. Nothing is staged yet — the double-check dialog gets
+   * first look, because the cheapest moment to catch the wrong financial year
+   * or another company's certificate is before we have read anything.
+   *
+   * The folder filter runs on confirmation rather than here, so the dialog
+   * shows exactly what was picked and the "some files were skipped" warning
+   * still lands afterwards.
+   */
+  const handleBatchPick = (incoming: File[], origin: UploadOrigin) => {
+    if (incoming.length === 0) return;
+    setPendingUpload({
+      files: incoming,
+      batchLabel: origin.batchLabel,
+      documentTypeName: origin.documentTypeName,
+      fromFolder: origin.fromFolder,
+      origin,
+    });
+  };
+
+  const confirmPendingUpload = () => {
+    const pending = pendingUpload;
+    setPendingUpload(null);
+    if (!pending) return;
+    if (pending.fromFolder) addFolder(pending.files, pending.origin);
+    else addFiles(pending.files, pending.origin);
+  };
+
+  const addFiles = (incoming: File[], origin?: UploadOrigin) => {
     // Skip OS / Office junk that is never a real document: Excel/Word lock files
     // (~$name.xlsx, created while the file is open in the app), macOS resource
     // forks (._name), and Thumbs.db / .DS_Store. These are unreadable and used to
@@ -862,12 +1031,27 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       return;
     }
     setFiles(next);
+    // Remember which batch each file was filed under so every card can show its
+    // own pile. Presentation only: the classifier still decides what a document
+    // is, and a misfiled one is still scored where it belongs.
+    if (origin) {
+      setFiledBatchByFile((prev) => {
+        const merged = { ...prev };
+        for (const f of usable) merged[f.name] = origin.batchId;
+        return merged;
+      });
+    }
     void prepareAndQuote(next);
   };
 
   const removeFile = (name: string) => {
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
+    setFiledBatchByFile((prev) => {
+      const merged = { ...prev };
+      delete merged[name];
+      return merged;
+    });
     quoteRequestRef.current += 1;
     setQuote(null);
     if (next.length === 0) setParserCase(keptCase);
@@ -924,7 +1108,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
   // Construction / FSC / Transport …) rather than always defaulting to Generic.
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!mapped && !injected) return;
 
     // The parser returns BOTH shapes: the deterministic case result and the
@@ -949,6 +1133,21 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       ...(sections["company-information"] ?? {}),
       meta: { ...(sections["company-information"]?.meta ?? {}), ...companyMeta },
     };
+
+    // AUTO-DETECT AGAINST THE CERTIFICATE REGISTRY.
+    //
+    // The reveal has normally already done this and the enriched rows are
+    // waiting in `certificateFill` — reuse them so what the user was shown is
+    // exactly what gets created. Only if the lookup has not finished (or the
+    // rows changed under it) is it run inline here, through the same function,
+    // so the two paths can never diverge.
+    const procurementRows = (sections.procurement?.rows ?? []) as ProcurementRow[];
+    if (procurementRows.length > 0) {
+      const enriched = certificateFillCoversRows(certificateFill?.rows, procurementRows)
+        ? certificateFill!.rows
+        : (await autofillProcurementFromCertificates(procurementRows)).rows;
+      sections.procurement = { ...(sections.procurement ?? {}), rows: enriched };
+    }
 
     // RECONCILE before anything is saved or scored: assemble the extracted facts
     // into one coherent entity that satisfies the domain invariants (a company
@@ -1221,10 +1420,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         (() => {
           const totalPages = quote.files.reduce((sum, file) => sum + (file.structure.pages ?? 0), 0);
           const spreadsheetCount = quote.files.filter((file) => (file.structure.sheets ?? 0) > 0).length;
-          const totalInputTokens = quote.files.reduce((sum, file) => sum + file.tokens.input, 0);
-          // The server decides whether money is involved. With the gate off this
-          // is a review step, not a checkout — never show a price we won't take.
-          const charging = quote.paymentRequired !== false;
+          // The server decides whether tokens are involved. With the gate off
+          // this is a review step, not a spend — never show a cost we won't take.
+          const charging = quote.paymentRequired !== false && tokenCost !== null;
+          const cannotAfford = charging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
           const expiry = new Date(quote.expiresAt);
           const expiryLabel = Number.isNaN(expiry.getTime())
             ? "Today"
@@ -1248,25 +1447,44 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">
-                    {charging ? "Processing quote" : "Ready to process"}
+                    {charging ? "This batch costs" : "Ready to process"}
                   </p>
                   <h4
                     className="mt-2 text-[30px] font-semibold leading-none text-white"
                     style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                   >
-                    {charging
-                      ? money(quote.totals.totalCents, quote.currency)
+                    {charging && tokenCost
+                      ? `${tokenText(tokenCost.tokens)} tokens`
                       : `${quote.files.length} document${quote.files.length === 1 ? "" : "s"}`}
                   </h4>
                   <p className="mt-2 max-w-sm text-[13px] leading-5 text-[#a1a1a6]">
                     {charging
-                      ? "Approve this quote before we extract and map your documents."
+                      ? "Longer documents and scans cost more to read. Nothing is spent until you start."
                       : "Check what we picked up before we extract and map your documents."}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-white/[0.07] bg-[#141416] px-4 py-3 text-right">
-                  <p className="text-[11px] text-[#636366]">Expires</p>
-                  <p className="mt-1 text-[13px] font-medium text-[#d1d1d6]">{expiryLabel}</p>
+                  {charging && tokenCost ? (
+                    <>
+                      <p className="text-[11px] text-[#636366]">Balance after</p>
+                      <p
+                        className={`mt-1 text-[13px] font-medium tabular-nums ${
+                          tokenCost.sufficient ? "text-[#d1d1d6]" : "text-red-300"
+                        }`}
+                        data-testid="balance-after"
+                      >
+                        {tokenText(Math.max(0, tokenCost.balanceAfter))}
+                      </p>
+                      <p className="mt-0.5 text-[10.5px] text-[#636366]">
+                        of {tokenText(tokenCost.balance)} now
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[11px] text-[#636366]">Expires</p>
+                      <p className="mt-1 text-[13px] font-medium text-[#d1d1d6]">{expiryLabel}</p>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -1285,79 +1503,76 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 </div>
               </div>
 
+              {/* One "tokens" in this UI, and it is the credit kind. The
+                  model's own token estimate is an internal cost input — showing
+                  it beside a credit cost invited people to read one as the
+                  other. Size is what they can actually verify. */}
               <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.07]">
-                <div className="grid grid-cols-[minmax(0,1.4fr)_92px_92px_104px_92px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#636366] max-md:hidden">
+                <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#636366] max-md:hidden">
                   <span>Document</span>
                   <span>Effort</span>
-                  <span>Units</span>
-                  <span>Tokens</span>
-                  <span className="text-right">{charging ? "Charge" : "Est. price"}</span>
+                  <span className="text-right">Size</span>
                 </div>
                 {quote.files.map((file) => {
-                  const units = file.structure.pages
-                    ? `${file.structure.pages} page${file.structure.pages === 1 ? "" : "s"}`
-                    : file.structure.sheets
-                      ? `${file.structure.sheets} sheet${file.structure.sheets === 1 ? "" : "s"}`
-                      : file.structure.rows
-                        ? `${file.structure.rows.toLocaleString()} rows`
-                        : "Structure scan";
+                  const units = fileUnits(file);
                   return (
                     <div
                       key={file.filename}
-                      className="grid gap-2 border-b border-white/[0.05] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1.4fr)_92px_92px_104px_92px] md:items-center md:gap-3"
+                      className="grid gap-2 border-b border-white/[0.05] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
                     >
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
                         <p className="mt-0.5 text-[11px] text-[#636366] md:hidden">
-                          {file.requiresOcr ? "High effort" : "Standard"} · {units} · {file.tokens.input.toLocaleString()} tokens
+                          {file.requiresOcr ? "High effort — scan" : "Standard"} · {units}
                         </p>
                       </div>
                       <span className="hidden text-[12px] text-[#a1a1a6] md:block">
                         {file.requiresOcr ? "High" : "Standard"}
                       </span>
-                      <span className="hidden text-[12px] text-[#a1a1a6] md:block">{units}</span>
-                      <span className="hidden font-mono text-[12px] text-[#a1a1a6] md:block">
-                        {file.tokens.band ? "~" : ""}{file.tokens.input.toLocaleString()}
-                      </span>
-                      <span className="text-[13px] font-semibold text-white md:text-right">
-                        {money(sellCents(file.pricing.extractionCents), quote.currency)}
-                      </span>
+                      <span className="hidden text-[12px] text-[#a1a1a6] md:block md:text-right">{units}</span>
                     </div>
                   );
                 })}
-                <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_92px_92px_104px_92px] md:items-center md:gap-3">
+                <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
                   <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8e8e93]">
-                    {charging ? "Total charge" : "Total est. price"}
+                    {charging ? "Total" : "This batch"}
                   </span>
                   <span className="hidden md:block" />
-                  <span className="hidden md:block" />
-                  <span className="hidden md:block" />
                   <span className="text-[14px] font-bold text-white md:text-right" data-testid="quote-total-cost">
-                    {money(sellCents(quote.files.reduce((sum, f) => sum + (f.pricing?.extractionCents ?? 0), 0)), quote.currency)}
+                    {charging && tokenCost
+                      ? `${tokenText(tokenCost.tokens)} tokens`
+                      : `${quote.files.length} document${quote.files.length === 1 ? "" : "s"}`}
                   </span>
                 </div>
               </div>
 
-              {/* Cost internals (per-model token/OCR usage) are deliberately not
-                  shown — the figure above is the price, not our run cost. */}
               {!charging && (
                 <p className="mt-3 text-[11px] text-[#636366]">
-                  Estimated price for reading this document set. You confirm before anything is charged.
+                  Processing is not being charged for this run.
                 </p>
               )}
 
-              {charging && (
-              <div className="mt-5 space-y-2 border-t border-white/[0.07] pt-4">
-                {quote.lineItems.map((item) => (
-                  <div key={item.key} className="flex items-baseline justify-between gap-4 text-[13px]">
-                    <span className="min-w-0">
-                      <span className="block text-[#d1d1d6]">{item.label}</span>
-                      <span className="block truncate text-[11px] text-[#636366]">{item.detail}</span>
-                    </span>
-                    <span className="shrink-0 font-mono text-[#f2f2f7]">{money(sellCents(item.cents), quote.currency)}</span>
-                  </div>
-                ))}
-              </div>
+              {cannotAfford && tokenCost && (
+                <div
+                  className="mt-4 rounded-2xl border border-red-400/25 bg-red-500/[0.06] p-4"
+                  data-testid="insufficient-tokens"
+                >
+                  <p className="flex items-center gap-2 text-[13px] font-semibold text-red-200">
+                    <AlertTriangle className="h-4 w-4" />
+                    {tokenText(tokenCost.shortfall)} tokens short
+                  </p>
+                  <p className="mt-1 text-[12px] leading-5 text-[#a1a1a6]">
+                    This batch needs {tokenText(tokenCost.tokens)} tokens and you have{" "}
+                    {tokenText(tokenCost.balance)}. Top up, or remove some documents and process the rest first.
+                  </p>
+                  <a
+                    href="/settings/billing"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-[13px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
+                  >
+                    <CreditCard className="h-3.5 w-3.5" />
+                    Add tokens
+                  </a>
+                </div>
               )}
 
               <div className="mt-5 rounded-2xl border border-white/[0.06] bg-[#111113] p-4">
@@ -1372,27 +1587,27 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
               {charging && quote.totals.isUpperBound && (
                 <p className="mt-3 text-[11px] text-[#636366]">
-                  Scanned documents are estimated conservatively. You will not be charged more than this quote.
+                  Scanned documents are estimated conservatively. You will not be charged more than this.
                 </p>
               )}
 
               <div className="mt-5 space-y-2">
                 <button
-                  onClick={() => void (charging ? payAndExtract() : runExtraction(files, quote.quoteId))}
-                  disabled={paying || parsing}
+                  onClick={() => void (charging ? spendAndExtract() : runExtraction(files, quote.quoteId))}
+                  disabled={paying || parsing || cannotAfford}
                   className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
                   style={{ background: "#0e6fff", color: "#ffffff" }}
-                  data-testid={charging ? "button-pay" : "button-process"}
+                  data-testid={charging ? "button-spend-tokens" : "button-process"}
                 >
                   {paying || parsing ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : charging ? (
-                    <CreditCard className="h-[18px] w-[18px]" />
                   ) : (
                     <ArrowRight className="h-[18px] w-[18px]" />
                   )}
-                  {charging
-                    ? `Pay ${money(quote.totals.totalCents, quote.currency)} with PayFast`
+                  {charging && tokenCost
+                    ? tokenCost.alreadyAuthorized
+                      ? "Read my documents"
+                      : `Read my documents — ${tokenText(tokenCost.tokens)} tokens`
                     : "Read my documents"}
                 </button>
                 <button
@@ -1457,7 +1672,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               We read them, extract the real values, and build your scorecard.
             </p>
             <p className="text-[13px] text-[#a1a1a6] mb-4 max-w-sm mx-auto leading-5">
-              Get a quote before AI extraction starts.
+              Anything, from anywhere — or use the pillar batches below to send them a section at a time.
             </p>
             <button
               type="button"
@@ -1484,7 +1699,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               Upload a folder
             </button>
             <p className="mt-3 text-[11px] text-[#86868b]">
-              Quote shown before processing.
+              Token cost shown before anything is read.
             </p>
             <div className="hidden">
               {["PDF", "DOCX", "XLSX", "CSV", "SCANS"].map((ext) => (
@@ -1527,15 +1742,28 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
-      {/* What a verification actually requires, in the expert's own words.
-          Shown before payment so the user can go and fetch what is missing
-          rather than paying to be told their score is low. Once documents have
-          been read it doubles as a coverage ledger. */}
+      {/* The upload surface itself, one batch per pillar plus the whole-file
+          uploads. Shown before processing so the user can go and fetch what is
+          missing rather than spending tokens to be told their score is low.
+          Once documents have been read it doubles as a coverage ledger. */}
       {!quote && (
         <div className="mt-3">
-          <RequiredDocumentsChecklist satisfiedDocumentIds={satisfiedDocumentIds} />
+          <PillarDocumentBatches
+            satisfiedDocumentIds={satisfiedDocumentIds}
+            filedBatchByFile={filedBatchByFile}
+            stagedFileNames={files.map((f) => f.name)}
+            onPick={handleBatchPick}
+            disabled={parsing || quoting}
+          />
         </div>
       )}
+
+      {/* Double-check before anything is staged. */}
+      <ConfirmUploadDialog
+        pending={pendingUpload}
+        onConfirm={confirmPendingUpload}
+        onCancel={() => setPendingUpload(null)}
+      />
 
       {/* Expected documents — sector-aware checklist (below the stage) */}
 
@@ -1622,9 +1850,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     <FileText className="w-4 h-4 text-[#636366] shrink-0" />
                     <div className="min-w-0">
                       <div className="truncate text-[13px] font-medium text-[#e5e5ea]">{f.name}</div>
-                      {quotedFile && (
-                        <div className="mt-0.5 text-[11px] font-mono text-[#636366]">
-                          {quotedFile.tokens.input.toLocaleString()} tokens
+                      {/* Where the user filed it, and how big it is. The pillar
+                          it eventually SCORES against is the classifier's call
+                          and shows in the Type column once we have read it. */}
+                      {(quotedFile || filedBatchByFile[f.name]) && (
+                        <div className="mt-0.5 truncate text-[11px] text-[#636366]">
+                          {filedBatchByFile[f.name] ? batchLabel(filedBatchByFile[f.name]) : null}
+                          {filedBatchByFile[f.name] && quotedFile ? " · " : null}
+                          {quotedFile ? fileUnits(quotedFile) : null}
                         </div>
                       )}
                     </div>
@@ -1852,6 +2085,72 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </div>
           </div>
 
+          {/* What the certificate registry added to Procurement.
+              Shown before Create so the registry's contribution is visible and
+              questionable, never a silent edit to the user's data. */}
+          {(certificateFillRunning || certificateFill) && (
+            <div
+              className="dus-fade-up mb-4 rounded-lg px-3 py-2.5 text-left"
+              style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: "660ms" }}
+              data-testid="certificate-autofill-summary"
+            >
+              {certificateFillRunning ? (
+                <p className="text-[11px] text-[#8e8e93] flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Checking suppliers against the certificate database…
+                </p>
+              ) : certificateFill && certificateFill.report.cellsFilled > 0 ? (
+                <>
+                  <p className="text-[11px] text-emerald-200/90">
+                    <Check className="inline h-3 w-3 mr-1" />
+                    Certificate database filled {certificateFill.report.cellsFilled} field
+                    {certificateFill.report.cellsFilled === 1 ? "" : "s"} across{" "}
+                    {certificateFill.report.rowsChanged} supplier
+                    {certificateFill.report.rowsChanged === 1 ? "" : "s"} — blanks only, nothing your
+                    documents stated was changed.
+                  </p>
+                  {/* The financial period is not known yet at upload — it is
+                      entered on the workbook — so validity was judged against
+                      today. Most certificates on file expire within the current
+                      year, so this is expected rather than a data problem, and
+                      the levels fill once the period is set. Saying so here
+                      stops it reading as "we hold nothing for these suppliers". */}
+                  {certificateFill.report.notValid.length > 0 && (
+                    <p className="mt-1 text-[11px] text-amber-200/80">
+                      {certificateFill.report.notValid.length} matched certificate
+                      {certificateFill.report.notValid.length === 1 ? " is" : "s are"} not current
+                      today, so their B-BBEE levels were left blank. Set the financial period on the
+                      workbook and re-run “Fill from certificates” — a certificate that was live
+                      during the measured period still counts.
+                    </p>
+                  )}
+                  {certificateFill.report.conflicts.length > 0 && (
+                    <p className="mt-1 text-[11px] text-amber-200/80">
+                      {certificateFill.report.conflicts.length} supplier
+                      {certificateFill.report.conflicts.length === 1 ? "" : "s"} on file disagree with the
+                      uploaded figures — your figures were kept.
+                    </p>
+                  )}
+                  {certificateFill.report.ambiguous.length > 0 && (
+                    <p className="mt-1 text-[11px] text-[#8e8e93]">
+                      {certificateFill.report.ambiguous.length} name
+                      {certificateFill.report.ambiguous.length === 1 ? "" : "s"} matched more than one
+                      company — left for you to pick in the workbook.
+                    </p>
+                  )}
+                </>
+              ) : certificateFill?.report.registryUnavailable ? (
+                <p className="text-[11px] text-[#8e8e93]">
+                  Certificate database unavailable — procurement was left exactly as extracted.
+                </p>
+              ) : (
+                <p className="text-[11px] text-[#8e8e93]">
+                  No new supplier details found in the certificate database.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Detail lines for the amber tiles (extracted-but-needs-detail) */}
           {mapped.coverage.some((c) => c.status === "needs-detail" && c.extractedValue) && (
             <div className="dus-fade-up mb-4 space-y-1" style={{ animationDelay: "700ms" }}>
@@ -1894,7 +2193,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               data-testid="docs-company-name"
             />
             <button
-              onClick={handleCreate}
+              onClick={() => void handleCreate()}
               disabled={!canCreate}
               className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
               style={{

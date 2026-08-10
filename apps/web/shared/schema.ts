@@ -380,6 +380,22 @@ const organizationSchema = new Schema(
     adminUserId: { type: String, default: null, index: true },
     createdByUserId: { type: String, default: null },
     createdAt: { type: String, default: () => new Date().toISOString() },
+    // ---- Credit wallet -------------------------------------------------
+    // Document processing is bought as credit tokens up front rather than
+    // charged per upload. The wallet belongs to the ORGANISATION, not the
+    // user: colleagues working the same client must draw on one balance, and
+    // an admin buying tokens must top up for the whole team.
+    //
+    // `tokenBalance` is deliberately NOT defaulted here. A default would make
+    // every organisation that has never been read look like it already holds
+    // the free grant, which makes "have we granted this org its tokens yet?"
+    // unanswerable. `seededAt` is the record of the grant, and
+    // tokenWallet.ensureWallet() is the only thing that writes it.
+    plan: { type: String, enum: ["free", "pro"], default: "free" },
+    tokenBalance: { type: Number, default: null },
+    tokensSeededAt: { type: String, default: null },
+    /** When the current Pro term ends. null on the free plan. */
+    planRenewsAt: { type: String, default: null },
   },
   { collection: "organizations" }
 );
@@ -695,6 +711,98 @@ clientSchema.set("toJSON", {
     return ret;
   },
 });
+
+/**
+ * Every movement of credit tokens, append-only.
+ *
+ * The balance on the organisation is a cache of this ledger's sum, kept there
+ * so a balance read is one document rather than a scan. The ledger is the
+ * record of truth for "where did my tokens go", which is the first question a
+ * customer asks when a number surprises them.
+ *
+ * `reference` is what makes a debit IDEMPOTENT: it is unique, and every debit
+ * carries the id of the thing being paid for (a quote id, a PayFast payment
+ * id). A retried request therefore collides on the index and is recognised as
+ * the same movement instead of charging twice.
+ */
+const tokenLedgerSchema = new Schema(
+  {
+    id: { type: String, default: () => crypto.randomUUID(), unique: true },
+    organizationId: { type: String, required: true, index: true },
+    /** Who triggered it. null for system grants. */
+    userId: { type: String, default: null },
+    /** Negative for spend, positive for grants/top-ups/refunds. */
+    delta: { type: Number, required: true },
+    /** Organisation balance immediately after this movement was applied. */
+    balanceAfter: { type: Number, required: true },
+    kind: {
+      type: String,
+      enum: ["grant", "purchase", "extraction", "refund", "adjustment"],
+      required: true,
+    },
+    /** Human-readable, shown verbatim in the billing ledger. */
+    description: { type: String, default: "" },
+    /** Idempotency key — the id of whatever was paid for. */
+    reference: { type: String, required: true, unique: true },
+    metadata: { type: Schema.Types.Mixed, default: null },
+    createdAt: { type: Date, default: Date.now, index: true },
+  },
+  { collection: "tokenLedger", id: false }
+);
+
+tokenLedgerSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+/**
+ * A token purchase in flight.
+ *
+ * Written before the user is sent to PayFast and settled only by a verified
+ * ITN, so the tokens a customer receives are decided by our record of what
+ * they bought — never by anything the browser hands back on return.
+ */
+const tokenOrderSchema = new Schema(
+  {
+    id: { type: String, default: () => crypto.randomUUID(), unique: true },
+    organizationId: { type: String, required: true, index: true },
+    userId: { type: String, default: null },
+    packId: { type: String, required: true },
+    tokens: { type: Number, required: true },
+    amountCents: { type: Number, required: true },
+    currency: { type: String, default: "ZAR" },
+    /** Whether this pack also moves the org onto the Pro plan. */
+    grantsPro: { type: Boolean, default: false },
+    status: {
+      type: String,
+      enum: ["pending", "paid", "failed", "cancelled"],
+      default: "pending",
+      index: true,
+    },
+    providerRef: { type: String, default: null },
+    createdAt: { type: Date, default: Date.now, index: true },
+    settledAt: { type: Date, default: null },
+  },
+  { collection: "tokenOrders", id: false }
+);
+
+tokenOrderSchema.set("toJSON", {
+  virtuals: true,
+  transform: (_doc: any, ret: any) => {
+    delete ret._id;
+    delete ret.__v;
+    return ret;
+  },
+});
+
+export const TokenLedgerModel =
+  mongoose.models.TokenLedger || mongoose.model("TokenLedger", tokenLedgerSchema);
+export const TokenOrderModel =
+  mongoose.models.TokenOrder || mongoose.model("TokenOrder", tokenOrderSchema);
 
 export const OrganizationModel =
   mongoose.models.Organization || mongoose.model("Organization", organizationSchema);

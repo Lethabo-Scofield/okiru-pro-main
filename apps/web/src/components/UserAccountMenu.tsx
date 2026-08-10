@@ -8,8 +8,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Building2, ChevronDown, LogOut, Users } from "lucide-react";
+import { Building2, ChevronDown, LogOut, Settings, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TokenBalancePill } from "@/components/TokenBalancePill";
 
 type Variant = "hub" | "dashboard" | "certificate";
 
@@ -24,9 +25,15 @@ type UserAccountMenuProps = {
   className?: string;
   /** Replaces the default name chip trigger (still wrapped for accessibility). */
   trigger?: import("react").ReactNode;
+  /**
+   * The token balance rides with the account chip so it appears on every page
+   * that has one — which is every page with a header — without editing nine
+   * layouts. Set false only where the header genuinely has no room.
+   */
+  showTokens?: boolean;
 };
 
-export function UserAccountMenu({ variant = "hub", className, trigger }: UserAccountMenuProps) {
+export function UserAccountMenu({ variant = "hub", className, trigger, showTokens = true }: UserAccountMenuProps) {
   const [pathname, navigate] = useLocation();
   const { user, logout } = useAuth();
   const returnPath = pathname || "/hub";
@@ -78,7 +85,9 @@ export function UserAccountMenu({ variant = "hub", className, trigger }: UserAcc
     );
 
   return (
-    <DropdownMenu>
+    <div className="inline-flex items-center gap-2">
+      {showTokens && <TokenBalancePill />}
+      <DropdownMenu>
       <DropdownMenuTrigger asChild className={className}>
         {trigger ?? defaultTrigger}
       </DropdownMenuTrigger>
@@ -90,6 +99,15 @@ export function UserAccountMenu({ variant = "hub", className, trigger }: UserAcc
           ) : null}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() => {
+            navigate("/settings");
+          }}
+          data-testid="menu-settings"
+        >
+          <Settings />
+          Settings &amp; billing
+        </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
             navigate(profileUrl);
@@ -120,6 +138,7 @@ export function UserAccountMenu({ variant = "hub", className, trigger }: UserAcc
           Sign out
         </DropdownMenuItem>
       </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenu>
+    </div>
   );
 }

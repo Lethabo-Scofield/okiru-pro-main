@@ -26,6 +26,7 @@ import { registerExcelImportRoutes } from "./excelImportRoute";
 import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { registerTokenRoutes } from "./tokenRoutes";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
 import { deleteWorkbookForClient } from "./workbookRoutes";
@@ -3799,6 +3800,7 @@ Respond ONLY with a valid JSON array.`;
   registerAiMappingRoutes(app, requireAuth);
   registerFeedbackRoutes(app, requireAuth);
   registerAdminRollbackRoutes(app, requireAuth);
+  registerTokenRoutes(app);
 
   logger.info("Route registration completed");
   return httpServer;

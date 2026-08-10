@@ -33,6 +33,7 @@ import ParserDocumentDetail from "@/pages/ParserDocumentDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
 import Workspace from "@/pages/Workspace";
+import Settings from "@/pages/Settings";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
@@ -196,6 +197,14 @@ function AppRouter() {
       </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
+      {/* Settings — account, billing/tokens, team, company in one shell.
+          The bare /settings lands on Account; /settings/:tab picks a pane. */}
+      <Route path="/settings">
+        <ProtectedRoute><Settings /></ProtectedRoute>
+      </Route>
+      <Route path="/settings/:tab">
+        <ProtectedRoute><Settings /></ProtectedRoute>
       </Route>
       {/* /team retired: two member/invite screens with different role models
           confused the permissions story — /workspace is the one surface. */}
