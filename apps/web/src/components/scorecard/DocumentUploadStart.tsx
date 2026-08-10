@@ -1984,6 +1984,65 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         );
       })()}
 
+      {/* Figures the documents disagree on.
+          NOT collapsed like the rest of the detail: a withheld entity-level
+          figure leaves a hole in the score, and the person who can close it is
+          standing here with the documents open. Buried in an accordion it
+          would be found after the scorecard looked wrong, not before. */}
+      {revealed && (injected?.metaConflicts.length ?? 0) > 0 && (
+        <div
+          className="dus-fade-up mt-4 rounded-xl px-4 py-3 text-left"
+          style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.22)" }}
+          data-testid="meta-conflicts"
+        >
+          <p className="text-[12.5px] font-medium text-amber-200/90 flex items-center gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            {injected!.metaConflicts.length} figure
+            {injected!.metaConflicts.length === 1 ? "" : "s"} your documents disagree on
+          </p>
+          <p className="mt-1 text-[11.5px] text-[#a1a1a6]">
+            Left blank rather than guessed — pick the right one in the workbook and the
+            score follows.
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {injected!.metaConflicts.map((c) => (
+              <li key={`${c.section}.${c.column}`} className="text-[11.5px] text-[#d1d1d6]">
+                <span className="text-[#8e8e93]">{c.column}:</span>{" "}
+                {c.candidates
+                  .map((cand) => `${String(cand.value)} (${cand.sources.join(", ") || "unknown source"})`)
+                  .join("  vs  ")}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Figures more than one document confirms. Corroboration is the cheapest
+          evidence there is, and showing it stops every extracted number reading
+          with the same weight. */}
+      {revealed && (injected?.metaCorroboration.length ?? 0) > 0 && (
+        <div
+          className="dus-fade-up mt-3 rounded-xl px-4 py-2.5 text-left"
+          style={{ background: "rgba(48,209,88,0.05)", border: "1px solid rgba(48,209,88,0.18)" }}
+          data-testid="meta-corroboration"
+        >
+          <p className="text-[12px] text-emerald-200/90 flex items-center gap-1.5">
+            <Check className="w-3.5 h-3.5 shrink-0" />
+            {injected!.metaCorroboration.length} figure
+            {injected!.metaCorroboration.length === 1 ? "" : "s"} confirmed by more than one
+            document
+          </p>
+          <ul className="mt-1.5 space-y-1">
+            {injected!.metaCorroboration.map((c) => (
+              <li key={`${c.section}.${c.column}`} className="text-[11.5px] text-[#a1a1a6]">
+                <span className="text-[#d1d1d6]">{c.column}</span> — {String(c.value)}, agreed by{" "}
+                {c.agreementCount} documents ({c.sources.join(", ")})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* ACT 3 — the reveal */}
       {/* Confidence + gaps: what we read, what could not be placed, what is
           still needed — COLLAPSED by default so it never pushes the Build

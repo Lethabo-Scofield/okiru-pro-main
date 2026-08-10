@@ -202,13 +202,85 @@ describe("entity-level values go to meta, not a row", () => {
     expect(result.rows.procurement ?? []).toHaveLength(0);
   });
 
-  it("keeps the first meta value when two documents disagree", () => {
+  it("withholds a meta value when two documents disagree, and says so", () => {
+    // This used to keep whichever figure arrived first and drop the other
+    // without a word. Arrival order is not evidence, and one entity-level
+    // number wrong by an order of magnitude moves the whole scorecard.
     const result = parserExtractionsToWorkbook([
       extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] }),
       extraction({ sourceFile: "b.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 9500000 }] }),
     ]);
 
+    expect(result.meta["financial-information"]?.revenue).toBeUndefined();
+    expect(result.metaConflicts).toHaveLength(1);
+    const conflict = result.metaConflicts[0];
+    expect(conflict.column).toBe("revenue");
+    expect(conflict.candidates.map((c) => Number(c.value)).sort((a, b) => a - b))
+      .toEqual([9500000, 10826271]);
+    expect(conflict.candidates.flatMap((c) => c.sources).sort()).toEqual(["a.pdf", "b.pdf"]);
+  });
+
+  it("records corroboration when two documents state the same figure", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] }),
+      extraction({ sourceFile: "b.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] }),
+    ]);
+
     expect(result.meta["financial-information"]?.revenue).toBe(10826271);
+    expect(result.metaConflicts).toHaveLength(0);
+    expect(result.metaCorroboration).toHaveLength(1);
+    expect(result.metaCorroboration[0].agreementCount).toBe(2);
+    expect(result.metaCorroboration[0].sources.sort()).toEqual(["a.pdf", "b.pdf"]);
+  });
+
+  it("keeps a contested figure out even when a third document mentions it", () => {
+    // Once withheld the cell is empty — and an empty cell must not read as an
+    // opening for the next document to fill.
+    const result = parserExtractionsToWorkbook([
+      extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] }),
+      extraction({ sourceFile: "b.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 9500000 }] }),
+      extraction({ sourceFile: "c.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 7000000 }] }),
+    ]);
+
+    expect(result.meta["financial-information"]?.revenue).toBeUndefined();
+    expect(result.metaConflicts[0].candidates).toHaveLength(3);
+  });
+
+  it("folds a third document agreeing with one side into that side", () => {
+    const result = parserExtractionsToWorkbook([
+      extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] }),
+      extraction({ sourceFile: "b.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 9500000 }] }),
+      extraction({ sourceFile: "c.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 9500000 }] }),
+    ]);
+
+    const conflict = result.metaConflicts[0];
+    expect(conflict.candidates).toHaveLength(2);
+    expect(conflict.candidates.find((c) => Number(c.value) === 9500000)?.sources.sort())
+      .toEqual(["b.pdf", "c.pdf"]);
+  });
+
+  it("does not call labelled-beats-computed a conflict", () => {
+    // A stated total on the Finance sheet outranks a model-computed one by
+    // rule. That disagreement is already settled, so it must NOT be put to the
+    // user as a choice — asking them to re-decide what we already know is how a
+    // review queue fills with noise nobody reads.
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        documentId: "sheet_financials",
+        sourceFile: "wb.xlsm › Finance",
+        element: "ESD",
+        values: [{ field: "total_measured_procurement_spend", value: 4674994.56 }],
+      }),
+      extraction({
+        documentId: "esd__audited_financial_statements",
+        sourceFile: "afs.pdf",
+        element: "ESD",
+        values: [{ field: "total_pre_exclusions_tmps", value: 8100064 }],
+      }),
+    ]);
+
+    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(4674994.56, 2);
+    expect(result.metaConflicts).toHaveLength(0);
   });
 
   it("lets a LABELLED reading replace a model-computed one, whatever the order", () => {
@@ -753,5 +825,68 @@ describe("ledger-block attribute inheritance (same beneficiary only)", () => {
     // A DIFFERENT beneficiary must not inherit anything.
     const other = rows.find((r) => r.beneficiaryName === "Other Org");
     expect(other?.contributionType).toBeUndefined();
+  });
+});
+
+describe("the parser's resolver decides entity-level figures", () => {
+  // The resolver saw every document at once. This loop sees one at a time, so
+  // where the resolver has an opinion it is strictly better informed — and it
+  // was being thrown away entirely before.
+  const resolvedField = (
+    over: Partial<import("../parserToWorkbook").ResolvedFieldInfo> = {},
+  ): import("../parserToWorkbook").ResolvedFieldInfo => ({
+    field: "current_year_revenue",
+    value: 10826271,
+    sources: ["a.pdf"],
+    agreementCount: 1,
+    conflicted: false,
+    alternatives: [],
+    ...over,
+  });
+
+  it("uses the resolver's value over anything decided document-by-document", () => {
+    const result = parserExtractionsToWorkbook(
+      [extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 111 }] })],
+      { resolved: { current_year_revenue: resolvedField({ value: 10826271 }) } },
+    );
+    expect(result.meta["financial-information"]?.revenue).toBe(10826271);
+  });
+
+  it("carries the resolver's corroboration through", () => {
+    const result = parserExtractionsToWorkbook(
+      [extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] })],
+      {
+        resolved: {
+          current_year_revenue: resolvedField({ agreementCount: 3, sources: ["a.pdf", "b.pdf", "c.pdf"] }),
+        },
+      },
+    );
+    expect(result.metaCorroboration[0].agreementCount).toBe(3);
+    expect(result.metaCorroboration[0].sources).toHaveLength(3);
+  });
+
+  it("scores nothing from a field the resolver marked conflicted", () => {
+    const result = parserExtractionsToWorkbook(
+      [extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] })],
+      {
+        resolved: {
+          current_year_revenue: resolvedField({
+            conflicted: true,
+            alternatives: [{ value: 9500000, sources: ["b.pdf"] }],
+          }),
+        },
+      },
+    );
+    expect(result.meta["financial-information"]?.revenue).toBeUndefined();
+    expect(result.metaConflicts).toHaveLength(1);
+    expect(result.metaConflicts[0].candidates.map((c) => c.value)).toEqual([10826271, 9500000]);
+  });
+
+  it("does not record corroboration for a single-source value", () => {
+    const result = parserExtractionsToWorkbook(
+      [extraction({ sourceFile: "a.pdf", element: "ESD", values: [{ field: "current_year_revenue", value: 10826271 }] })],
+      { resolved: { current_year_revenue: resolvedField({ agreementCount: 1 }) } },
+    );
+    expect(result.metaCorroboration).toHaveLength(0);
   });
 });

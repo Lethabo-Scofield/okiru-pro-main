@@ -42,6 +42,62 @@ export interface WorkbookRow extends Record<string, unknown> {
   _sourceFiles?: string[];
 }
 
+/**
+ * One field, already compared across every document by the parser's resolver.
+ *
+ * Mirrors `ResolvedField` in okiru-ai-parser/src/services/entityResolution.ts.
+ * Kept as its own type rather than imported because the parser is a separate
+ * service reached over HTTP — this is the wire shape, and it should break
+ * loudly here if the service changes it.
+ */
+export interface ResolvedFieldInfo {
+  field: string;
+  value: unknown;
+  /** Files that reported this value. */
+  sources: string[];
+  /** How many documents agreed on it. */
+  agreementCount: number;
+  /** True when documents reported materially different values. */
+  conflicted: boolean;
+  /** Rival values, present only when conflicted. */
+  alternatives: Array<{ value: unknown; sources: string[] }>;
+}
+
+/**
+ * An entity-level figure the documents disagree on — two different revenues,
+ * two different TMPS totals.
+ *
+ * NOTHING IS SCORED FROM ONE. A single number wrong by a factor of ten moves a
+ * whole scorecard, and there is no honest way to choose between two documents
+ * that each state a total plainly. Arrival order is not evidence. So the value
+ * is withheld and the choice goes to the person holding the documents.
+ */
+export interface MetaConflict {
+  section: WorkbookSectionKey;
+  column: string;
+  /** The parser field name, so the choice can be traced back to the extraction. */
+  field: string;
+  /** Every distinct value asserted, each with the files that asserted it. */
+  candidates: Array<{ value: unknown; sources: string[] }>;
+}
+
+/**
+ * An entity-level figure more than one document agrees on.
+ *
+ * Corroboration is the cheapest evidence there is: two independently-produced
+ * documents stating the same total is far stronger than one, and worth showing
+ * as such rather than presenting every extracted number with equal weight.
+ */
+export interface MetaCorroboration {
+  section: WorkbookSectionKey;
+  column: string;
+  field: string;
+  value: unknown;
+  /** Number of separate documents asserting this value. Always ≥ 2. */
+  agreementCount: number;
+  sources: string[];
+}
+
 export interface ParserToWorkbookResult {
   /** Grid rows, per workbook section. */
   rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>;
@@ -57,6 +113,10 @@ export interface ParserToWorkbookResult {
    * Advisory: the lower figure is scored and the gap is reported.
    */
   reconciliation: ReconciliationFinding[];
+  /** Entity-level figures withheld because the documents disagree. */
+  metaConflicts: MetaConflict[];
+  /** Entity-level figures more than one document confirmed. */
+  metaCorroboration: MetaCorroboration[];
 }
 
 let rowCounter = 0;
@@ -360,6 +420,20 @@ export function linkWorkbookRows(
   return { rows: linked, reconciliation };
 }
 
+/**
+ * Add a value to a conflict's candidate list, merging into an existing
+ * candidate when the value already appears — a third document agreeing with
+ * the first is corroboration for that side, not a new option to choose from.
+ */
+function addCandidate(conflict: MetaConflict, value: unknown, sourceFile: string): void {
+  const same = conflict.candidates.find((c) => cellsAgree(c.value, value));
+  if (same) {
+    if (sourceFile && !same.sources.includes(sourceFile)) same.sources.push(sourceFile);
+    return;
+  }
+  conflict.candidates.push({ value, sources: sourceFile ? [sourceFile] : [] });
+}
+
 /** Is this value a table — an array of row-shaped objects? */
 function isRowTable(value: unknown): value is Array<Record<string, unknown>> {
   return Array.isArray(value)
@@ -375,12 +449,28 @@ function isRowTable(value: unknown): value is Array<Record<string, unknown>> {
  */
 export function parserExtractionsToWorkbook(
   extractions: ParserExtraction[],
-  options: { sectorCode?: string; scorecardType?: string } = {},
+  options: {
+    sectorCode?: string;
+    scorecardType?: string;
+    /**
+     * The parser's RESOLVED entity-level fields, keyed by parser field name.
+     *
+     * The resolver saw every document at once and compared them, so where it
+     * has an opinion it beats anything decided here from one extraction at a
+     * time: it knows how many documents agreed, and it knows when they did not.
+     * Rows still come from the per-document extractions — a share register
+     * genuinely is many rows — but a single entity-level figure like revenue or
+     * TMPS should be the resolver's answer or nobody's.
+     */
+    resolved?: Record<string, ResolvedFieldInfo>;
+  } = {},
 ): ParserToWorkbookResult {
   const rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>> = {};
   const meta: Partial<Record<WorkbookSectionKey, Record<string, unknown>>> = {};
   const rejected: ParserToWorkbookResult["rejected"] = [];
   const unmapped = new Set<string>();
+  const metaConflicts: MetaConflict[] = [];
+  const metaCorroboration: MetaCorroboration[] = [];
 
   const addRow = (section: WorkbookSectionKey, row: WorkbookRow) => {
     (rows[section] ??= []).push(row);
@@ -393,6 +483,22 @@ export function parserExtractionsToWorkbook(
   // denominator by millions on the real pack.
   const AUTHORITATIVE_DOCS = new Set(["sheet_financials"]);
   const metaFromAuthoritative = new Set<string>();
+  /** Meta keys already decided by the resolver — settled, not revisited. */
+  const metaFromResolver = new Set<string>();
+  /**
+   * What each meta key was first filled with, so a LATER disagreement is
+   * reported instead of dropped. Without this a second document stating a
+   * different revenue simply vanished: whichever figure arrived first was
+   * scored and nobody was told there had been a choice.
+   */
+  const metaFirstValue = new Map<string, { value: unknown; sourceFile: string; field: string }>();
+  /**
+   * Meta keys known to be contested. Once a figure is in dispute it stays out
+   * of the workbook — otherwise the next document to mention it would find the
+   * cell empty and quietly fill it back in, reinstating the value we had just
+   * established we cannot stand behind.
+   */
+  const metaContested = new Set<string>();
 
   for (const extraction of extractions) {
     // Values for THIS document, split into the scalar ones (which together make
@@ -425,10 +531,58 @@ export function parserExtractionsToWorkbook(
         // live in the section's `meta` array, not its `columns`, so they take
         // the meta injection path — same type/validation rules, different lookup.
         const bucket = (meta[target.section] ??= {});
+        const metaKey = `${target.section}.${target.column}`;
+
+        // THE RESOLVER'S ANSWER WINS. It compared every document at once; this
+        // loop only ever sees one at a time, so anything decided here would be
+        // a worse version of a question already answered properly.
+        const resolvedField = options.resolved?.[field];
+        if (resolvedField) {
+          if (metaFromResolver.has(metaKey)) continue; // settled on first sight
+          metaFromResolver.add(metaKey);
+
+          if (resolvedField.conflicted) {
+            metaConflicts.push({
+              section: target.section,
+              column: target.column,
+              field,
+              candidates: [
+                { value: resolvedField.value, sources: resolvedField.sources },
+                ...resolvedField.alternatives,
+              ],
+            });
+            continue;
+          }
+
+          const fromResolver = injectMetaValue(target.section, target.column, resolvedField.value, options);
+          if (fromResolver.ok) {
+            bucket[target.column] = fromResolver.value;
+            if (resolvedField.agreementCount > 1) {
+              metaCorroboration.push({
+                section: target.section,
+                column: target.column,
+                field,
+                value: fromResolver.value,
+                agreementCount: resolvedField.agreementCount,
+                sources: resolvedField.sources,
+              });
+            }
+          } else {
+            rejected.push({ ...fromResolver.rejection, sourceFile: extraction.sourceFile });
+          }
+          continue;
+        }
+
         const injected = injectMetaValue(target.section, target.column, value, options);
         if (injected.ok) {
-          const metaKey = `${target.section}.${target.column}`;
           const authoritative = AUTHORITATIVE_DOCS.has(extraction.documentId);
+          if (metaContested.has(metaKey)) {
+            const open = metaConflicts.find(
+              (c) => c.section === target.section && c.column === target.column,
+            );
+            if (open) addCandidate(open, injected.value, extraction.sourceFile);
+            continue;
+          }
           // First value wins between peers, but a labelled (deterministic)
           // reading replaces a model-computed one, and once a labelled value is
           // in, nothing overwrites it.
@@ -438,6 +592,56 @@ export function parserExtractionsToWorkbook(
           ) {
             bucket[target.column] = injected.value;
             if (authoritative) metaFromAuthoritative.add(metaKey);
+            metaFirstValue.set(metaKey, {
+              value: injected.value,
+              sourceFile: extraction.sourceFile,
+              field,
+            });
+          } else {
+            // A disagreement with a LABELLED total is not a conflict — it is
+            // already settled. The stated figure on the Finance sheet beats a
+            // model-computed one by rule (the computed TMPS summed the
+            // exclusions back in and overstated the denominator by millions),
+            // so putting that to the user would be asking them to re-decide
+            // something we know the answer to.
+            if (metaFromAuthoritative.has(metaKey)) continue;
+
+            const first = metaFirstValue.get(metaKey);
+            if (first && !cellsAgree(first.value, injected.value)) {
+              // Contested, so nothing is scored from it — the first-arrived
+              // value comes back OUT of the bucket.
+              delete bucket[target.column];
+              metaContested.add(metaKey);
+              metaConflicts.push({
+                section: target.section,
+                column: target.column,
+                field,
+                candidates: [
+                  { value: first.value, sources: [first.sourceFile].filter(Boolean) },
+                  { value: injected.value, sources: [extraction.sourceFile].filter(Boolean) },
+                ],
+              });
+            } else if (first) {
+              // Two documents, same figure. Worth saying so.
+              const agreed = metaCorroboration.find(
+                (c) => c.section === target.section && c.column === target.column,
+              );
+              if (agreed) {
+                if (extraction.sourceFile && !agreed.sources.includes(extraction.sourceFile)) {
+                  agreed.sources.push(extraction.sourceFile);
+                  agreed.agreementCount = agreed.sources.length;
+                }
+              } else {
+                metaCorroboration.push({
+                  section: target.section,
+                  column: target.column,
+                  field,
+                  value: first.value,
+                  agreementCount: 2,
+                  sources: [first.sourceFile, extraction.sourceFile].filter(Boolean),
+                });
+              }
+            }
           }
         } else {
           rejected.push({ ...injected.rejection, sourceFile: extraction.sourceFile });
@@ -510,6 +714,8 @@ export function parserExtractionsToWorkbook(
     rejected,
     coverage,
     reconciliation: [...linked.reconciliation, ...duplicateFindings],
+    metaConflicts,
+    metaCorroboration,
   };
 }
 
