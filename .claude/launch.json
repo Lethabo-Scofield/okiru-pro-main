@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "esg-toolkit",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8791", "--directory", "C:/Users/Administrator/Documents/GitHub/okiru-pro-main/docs/ESG_Upgrade"],
+      "port": 8791
+    },
+    {
       "name": "arthouse",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "C:/Users/Administrator/Documents/arthouse", "run", "dev"],
@@ -18,6 +24,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "C:/Users/Administrator/Documents/GitHub/okiru-pro-main/apps/web", "run", "dev:client"],
       "port": 5000
+    },
+    {
+      "name": "okiru-parser",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "C:/Users/Administrator/Documents/GitHub/okiru-pro-main/okiru-ai-parser", "run", "dev"],
+      "port": 3200
     },
     {
       "name": "okiru-web",

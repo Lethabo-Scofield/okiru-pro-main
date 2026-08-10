@@ -1,0 +1,102 @@
+# Baidu Unlimited-OCR sidecar — self-hosted scanned-document transcription.
+#
+# STATUS: READY BUT NOT DEPLOYABLE YET. The subscription has ZERO GPU quota in
+# southafricanorth (Standard NCASv3_T4 Family: 0 as of 2026-08-02). Until the
+# quota request is approved this manifest cannot schedule.
+#
+# The parser already contains the client (src/services/ocrClient.ts): any
+# OpenAI-compatible vision endpoint works, every failure falls back to the
+# existing path, and the feature is OFF until PARSER_OCR_ENDPOINT is set.
+# Azure Document Intelligence (okiru-docintel, wired 2026-08-02 via the
+# external-api-keys secret) covers scanned documents in the meantime.
+#
+# TO ENABLE (in order):
+#   1. GPU quota: request Standard NCASv3_T4 Family ≥ 4 vCPUs in
+#      southafricanorth on subscription a566a919 (Portal → Quotas → Compute).
+#   2. GPU node pool (spot keeps it ~R2k/mo instead of ~R7k/mo; the sidecar is
+#      an enhancement, so spot eviction only degrades to the fallback path):
+#      az aks nodepool add -g okiru-pro-rg --cluster-name okiru-pro-aks \
+#        -n gpuocr --node-count 1 -s Standard_NC4as_T4_v3 \
+#        --priority Spot --eviction-policy Delete --spot-max-price -1 \
+#        --node-taints sku=gpu:NoSchedule --labels workload=ocr
+#   3. NVIDIA device plugin (AKS GPU image ships the driver; the plugin
+#      exposes it): az aks nodepool update ... --gpu-driver install, or apply
+#      the nvidia-device-plugin DaemonSet.
+#   4. kubectl apply -f kubernetes/infrastructure/optional/unlimited-ocr.yaml
+#   5. Point the parser at it:
+#      kubectl -n okiru-pro set env deployment/parser \
+#        PARSER_OCR_ENDPOINT=http://unlimited-ocr:8000/v1
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unlimited-ocr
+  namespace: okiru-pro
+  labels:
+    app: unlimited-ocr
+    component: ocr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unlimited-ocr
+  template:
+    metadata:
+      labels:
+        app: unlimited-ocr
+    spec:
+      tolerations:
+        - key: sku
+          operator: Equal
+          value: gpu
+          effect: NoSchedule
+        - key: kubernetes.azure.com/scalesetpriority
+          operator: Equal
+          value: spot
+          effect: NoSchedule
+      nodeSelector:
+        workload: ocr
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:latest
+          args:
+            - --model
+            - baidu/Unlimited-OCR
+            - --trust-remote-code
+            - --max-model-len
+            - "65536"
+            - --gpu-memory-utilization
+            - "0.92"
+          ports:
+            - containerPort: 8000
+              name: http
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 15
+          volumeMounts:
+            - name: model-cache
+              mountPath: /root/.cache/huggingface
+      volumes:
+        - name: model-cache
+          emptyDir:
+            sizeLimit: 30Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unlimited-ocr
+  namespace: okiru-pro
+  labels:
+    app: unlimited-ocr
+spec:
+  selector:
+    app: unlimited-ocr
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
