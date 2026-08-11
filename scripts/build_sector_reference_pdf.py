@@ -22,20 +22,76 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
-    KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+    Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
 )
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DUMP = os.path.join(ROOT, "docs", "toolkits", "live_sector_config.json")
 OUT = os.path.join(ROOT, "docs", "Okiru-Sector-Configuration-Reference.pdf")
 
-INK = colors.HexColor("#111318")
-MUTED = colors.HexColor("#5b6270")
-RULE = colors.HexColor("#d4d8e0")
-BAND = colors.HexColor("#f2f4f8")
-ACCENT = colors.HexColor("#0f6f4c")
-BONUS = colors.HexColor("#a4640a")
-BONUS_BG = colors.HexColor("#fdf5e6")
+# ---------------------------------------------------------------------------
+# Design tokens — three layers: primitive -> semantic -> component.
+# Nothing below the primitive layer names a raw colour, so a brand change is a
+# one-line edit rather than a search-and-replace through the layout code.
+#
+# The primitives are Okiru's own, read off the live application stylesheet
+# (apps/web/src/index.css and the built CSS served by okiru.pro) rather than
+# invented — the greys are the Toolkit's surface scale, the amber is already the
+# colour the app uses for bonus badges, so this document and the product agree.
+# ---------------------------------------------------------------------------
+
+# -- Primitive ---------------------------------------------------------------
+P = {
+    "green_500": colors.HexColor("#00bb7f"),   # Okiru accent
+    "amber_500": colors.HexColor("#f99c00"),   # app's bonus / attention colour
+    "amber_050": colors.HexColor("#fdf6ea"),   # derived tint for banded rows
+    "neutral_950": colors.HexColor("#0d0d0d"),
+    "neutral_800": colors.HexColor("#2c2c2e"),
+    "neutral_500": colors.HexColor("#636366"),
+    "neutral_400": colors.HexColor("#8e8e93"),
+    "neutral_200": colors.HexColor("#d1d1d6"),
+    "neutral_100": colors.HexColor("#e8e9ec"),
+    "neutral_050": colors.HexColor("#f5f5f5"),
+    "white": colors.HexColor("#ffffff"),
+}
+
+# -- Semantic ----------------------------------------------------------------
+S = {
+    "text": P["neutral_950"],
+    "text_muted": P["neutral_500"],
+    "text_subtle": P["neutral_400"],
+    "accent": P["green_500"],
+    "bonus": P["amber_500"],
+    "bonus_surface": P["amber_050"],
+    "surface_subtle": P["neutral_050"],
+    "surface_zebra": colors.HexColor("#fafafa"),
+    "border": P["neutral_200"],
+    "border_soft": P["neutral_100"],
+}
+
+# -- Component ---------------------------------------------------------------
+C = {
+    "table_header_bg": S["surface_subtle"],
+    "table_header_text": S["text"],
+    "table_rule": S["border_soft"],
+    "table_rule_strong": S["border"],
+    "table_zebra": S["surface_zebra"],
+    "row_highlight_bg": S["bonus_surface"],
+    "row_highlight_text": S["bonus"],
+    "title_rule": S["accent"],
+    "footer_text": S["text_muted"],
+    "footer_rule": S["border"],
+}
+
+# -- Type scale (points, print) ----------------------------------------------
+T = {"display": 17, "heading": 10.5, "body": 8.2, "table": 7.6, "small": 7.4, "micro": 7}
+
+# -- Spacing scale (points) --------------------------------------------------
+SP = {"xs": 2, "sm": 3, "md": 4, "lg": 6, "xl": 8}
+
+# Back-compat aliases used by the layout code below.
+INK, MUTED, RULE, BAND = S["text"], S["text_muted"], C["table_rule"], C["table_header_bg"]
+ACCENT, BONUS, BONUS_BG = S["accent"], S["bonus"], S["bonus_surface"]
 
 # Display order and short labels. Construction is kept last: it runs a separate
 # engine (constructionScoring) with a combined ESD element.
@@ -70,15 +126,32 @@ PILLARS = [
 
 styles = getSampleStyleSheet()
 H1 = ParagraphStyle("H1", parent=styles["Title"], fontName="Helvetica-Bold",
-                    fontSize=17, leading=20, textColor=INK, alignment=TA_LEFT, spaceAfter=1)
+                    fontSize=T["display"], leading=T["display"] * 1.18, textColor=S["text"],
+                    alignment=TA_LEFT, spaceAfter=SP["xs"] / 2)
 SUB = ParagraphStyle("SUB", parent=styles["Normal"], fontName="Helvetica",
-                     fontSize=8.5, leading=11, textColor=MUTED, spaceAfter=7)
+                     fontSize=T["body"] + 0.3, leading=T["body"] * 1.34,
+                     textColor=S["text_muted"], spaceAfter=SP["md"])
 H2 = ParagraphStyle("H2", parent=styles["Normal"], fontName="Helvetica-Bold",
-                    fontSize=10.5, leading=13, textColor=INK, spaceBefore=7, spaceAfter=3)
+                    fontSize=T["heading"], leading=T["heading"] * 1.24, textColor=S["text"],
+                    spaceBefore=SP["xl"], spaceAfter=SP["sm"])
 BODY = ParagraphStyle("BODY", parent=styles["Normal"], fontName="Helvetica",
-                      fontSize=8.2, leading=11, textColor=INK)
-SMALL = ParagraphStyle("SMALL", parent=BODY, fontSize=7.4, leading=9.6, textColor=MUTED)
-CELL = ParagraphStyle("CELL", parent=BODY, fontSize=7.4, leading=9)
+                      fontSize=T["body"], leading=T["body"] * 1.34, textColor=S["text"])
+SMALL = ParagraphStyle("SMALL", parent=BODY, fontSize=T["small"],
+                       leading=T["small"] * 1.3, textColor=S["text_muted"])
+CELL = ParagraphStyle("CELL", parent=BODY, fontSize=T["small"], leading=T["small"] * 1.22)
+
+
+class AccentRule(Flowable):
+    """Short brand rule under the page title — the one piece of Okiru green."""
+
+    def __init__(self, width=26 * mm, thickness=2.2):
+        super().__init__()
+        self.width, self.thickness = width, thickness
+        self.height = thickness
+
+    def draw(self):
+        self.canv.setFillColor(C["title_rule"])
+        self.canv.rect(0, 0, self.width, self.thickness, stroke=0, fill=1)
 
 
 def n(v):
@@ -95,24 +168,27 @@ def load():
 
 def header(story, title, subtitle):
     story.append(Paragraph(title, H1))
+    story.append(Spacer(1, SP["xs"]))
+    story.append(AccentRule())
+    story.append(Spacer(1, SP["sm"]))
     story.append(Paragraph(subtitle, SUB))
 
 
-def base_table_style(ncols, header_bg=BAND):
+def base_table_style(ncols, header_bg=None):
     return TableStyle([
-        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 7.6),
-        ("FONT", (0, 1), (-1, -1), "Helvetica", 7.6),
-        ("TEXTCOLOR", (0, 0), (-1, 0), INK),
-        ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", T["table"]),
+        ("FONT", (0, 1), (-1, -1), "Helvetica", T["table"]),
+        ("TEXTCOLOR", (0, 0), (-1, 0), C["table_header_text"]),
+        ("BACKGROUND", (0, 0), (-1, 0), header_bg or C["table_header_bg"]),
         ("ALIGN", (1, 0), (-1, -1), "CENTER"),
         ("ALIGN", (0, 0), (0, -1), "LEFT"),
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LINEBELOW", (0, 0), (-1, 0), 0.7, RULE),
-        ("GRID", (0, 0), (-1, -1), 0.25, RULE),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.8, C["table_rule_strong"]),
+        ("GRID", (0, 0), (-1, -1), 0.25, C["table_rule"]),
+        ("TOPPADDING", (0, 0), (-1, -1), SP["sm"]),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), SP["sm"]),
+        ("LEFTPADDING", (0, 0), (-1, -1), SP["md"]),
+        ("RIGHTPADDING", (0, 0), (-1, -1), SP["md"]),
     ])
 
 
@@ -155,9 +231,9 @@ def page_pillar_matrix(story, data):
     t = Table(rows, colWidths=[36 * mm] + [16 * mm] * len(PILLARS) + [16 * mm, 18 * mm],
               repeatRows=1, hAlign="LEFT")
     st = base_table_style(len(head))
-    st.add("FONT", (-1, 1), (-1, -1), "Helvetica-Bold", 7.6)
+    st.add("FONT", (-1, 1), (-1, -1), "Helvetica-Bold", T["table"])
     for r in shaded:
-        st.add("BACKGROUND", (0, r), (-1, r), colors.HexColor("#fafbfd"))
+        st.add("BACKGROUND", (0, r), (-1, r), C["table_zebra"])
     t.setStyle(st)
     story.append(t)
 
@@ -201,7 +277,7 @@ def page_pillar_matrix(story, data):
     for (subs, pcts), labels in groups.items():
         sub_rows.append([
             Paragraph(", ".join(subs) if subs else
-                      "<font color='#5b6270'>none configured</font>", CELL),
+                      "<font color='#636366'>none configured</font>", CELL),
             f"{n(pcts[0])}% of the element" if len(pcts) == 1 else
             (", ".join(f"{n(x)}%" for x in pcts) if pcts else "-"),
             Paragraph(", ".join(labels), CELL),
@@ -244,7 +320,7 @@ def page_base_bonus(story, data):
             n(v["bonusAvailable"]) if v["bonusAvailable"] else "-",
             n(v["reachableMax"]),
             Paragraph("&nbsp;&nbsp;".join(detail) if detail else
-                      "<font color='#5b6270'>no bonus points on this scorecard</font>", CELL),
+                      "<font color='#636366'>no bonus points on this scorecard</font>", CELL),
         ])
 
     t = Table(rows, colWidths=[36 * mm, 26 * mm, 22 * mm, 22 * mm, 126 * mm],
@@ -256,9 +332,9 @@ def page_base_bonus(story, data):
     for i, (key, _) in enumerate(SECTORS, start=1):
         v = data.get(key)
         if v and v["reachableMax"] > v["totalMaxPoints"]:
-            st.add("BACKGROUND", (0, i), (-1, i), BONUS_BG)
-            st.add("TEXTCOLOR", (3, i), (3, i), BONUS)
-            st.add("FONT", (3, i), (3, i), "Helvetica-Bold", 7.6)
+            st.add("BACKGROUND", (0, i), (-1, i), C["row_highlight_bg"])
+            st.add("TEXTCOLOR", (3, i), (3, i), C["row_highlight_text"])
+            st.add("FONT", (3, i), (3, i), "Helvetica-Bold", T["table"])
     t.setStyle(st)
     story.append(t)
 
@@ -369,14 +445,17 @@ def page_rules(story, data):
 
 def footer(canvas, doc):
     canvas.saveState()
-    canvas.setFont("Helvetica", 7)
-    canvas.setFillColor(MUTED)
+    canvas.setFont("Helvetica", T["micro"])
+    canvas.setFillColor(C["footer_text"])
     w, _ = landscape(A4)
-    canvas.drawString(14 * mm, 8 * mm, "Okiru - B-BBEE Sector Configuration Reference")
+    canvas.drawString(18.5 * mm, 8 * mm, "Okiru - B-BBEE Sector Configuration Reference")
     canvas.drawRightString(w - 14 * mm, 8 * mm, f"Page {doc.page} of 3")
-    canvas.setStrokeColor(RULE)
+    canvas.setStrokeColor(C["footer_rule"])
     canvas.setLineWidth(0.4)
     canvas.line(14 * mm, 11.5 * mm, w - 14 * mm, 11.5 * mm)
+    # Brand tick, matching the accent rule under each page title.
+    canvas.setFillColor(C["title_rule"])
+    canvas.rect(14 * mm, 7.6 * mm, 2.6 * mm, 2.2, stroke=0, fill=1)
     canvas.restoreState()
 
 
