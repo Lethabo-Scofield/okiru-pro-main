@@ -37,9 +37,15 @@ suite('live sector config dump', () => {
       const sc = value as SectorConfig;
       if (!sc || typeof sc !== 'object' || !('pillarConfigs' in sc) || !('sectorCode' in sc)) continue;
 
-      const pillars: Record<string, { max: number; base: number | null; bonus: number }> = {};
+      const pillars: Record<string, {
+        max: number; base: number | null; bonus: number;
+        subMinPercent: number | null; elective: string | null;
+      }> = {};
       for (const p of PILLARS) {
-        const pc = (sc.pillarConfigs as Record<string, { maxPoints: number; basePoints?: number } | undefined>)[p];
+        const pc = (sc.pillarConfigs as Record<string, {
+          maxPoints: number; basePoints?: number; hasSubMinimum?: boolean;
+          subMinimumPercent?: number; chooseOneGroup?: string;
+        } | undefined>)[p];
         if (!pc) continue;
         const base = pc.basePoints ?? null;
         pillars[p] = {
@@ -48,6 +54,8 @@ suite('live sector config dump', () => {
           // Bonus is only KNOWN where the config declares basePoints. Elsewhere
           // it is reported as 0 = "not declared", never guessed.
           bonus: base == null ? 0 : Math.max(0, pc.maxPoints - base),
+          subMinPercent: pc.hasSubMinimum ? (pc.subMinimumPercent ?? null) : null,
+          elective: pc.chooseOneGroup ?? null,
         };
       }
 
@@ -101,6 +109,11 @@ suite('live sector config dump', () => {
       out[name] = {
         sectorCode: sc.sectorCode,
         scorecardType: sc.scorecardType,
+        sectorName: (sc as { sectorName?: string }).sectorName ?? name,
+        /** Level ladder — minimum points per B-BBEE level, best first. */
+        levels: (sc.levelThresholds ?? []).map((l) => ({ level: l.level, min: l.minPoints })),
+        /** How many members of each elective group are measured. */
+        electiveGroupSizes: (sc as { electiveGroupSizes?: Record<string, number> }).electiveGroupSizes ?? {},
         totalMaxPoints: sc.totalMaxPoints,
         /** Highest attainable score including bonus. */
         reachableMax: reachable,

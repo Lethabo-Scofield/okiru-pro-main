@@ -2,6 +2,42 @@
   "RCOGP_GENERIC": {
     "sectorCode": "RCOGP",
     "scorecardType": "Generic",
+    "sectorName": "Revised Codes of Good Practice (Generic)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 120,
     "reachableMax": 120,
     "bonusAvailable": 9,
@@ -11,42 +47,58 @@
       "ownership": {
         "max": 25,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 19,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 25,
         "base": 20,
-        "bonus": 5
+        "bonus": 5,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 29,
         "base": 27,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 10,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 7,
         "base": 5,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -93,6 +145,42 @@
   "ICT_GENERIC": {
     "sectorCode": "ICT",
     "scorecardType": "Generic",
+    "sectorName": "ICT Sector Code (Generic)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 120
+      },
+      {
+        "level": 2,
+        "min": 115
+      },
+      {
+        "level": 3,
+        "min": 110
+      },
+      {
+        "level": 4,
+        "min": 100
+      },
+      {
+        "level": 5,
+        "min": 95
+      },
+      {
+        "level": 6,
+        "min": 90
+      },
+      {
+        "level": 7,
+        "min": 75
+      },
+      {
+        "level": 8,
+        "min": 55
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 140,
     "reachableMax": 140,
     "bonusAvailable": 10,
@@ -102,47 +190,65 @@
       "ownership": {
         "max": 25,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 23,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 25,
         "base": 20,
-        "bonus": 5
+        "bonus": 5,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 27,
         "base": 25,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 10,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 18,
         "base": 15,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 12,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -189,6 +295,42 @@
   "FSC_GENERIC": {
     "sectorCode": "FSC",
     "scorecardType": "Generic",
+    "sectorName": "Financial Sector Code (Generic)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 96.33
+      },
+      {
+        "level": 2,
+        "min": 91.51
+      },
+      {
+        "level": 3,
+        "min": 86.7
+      },
+      {
+        "level": 4,
+        "min": 77.06
+      },
+      {
+        "level": 5,
+        "min": 72.25
+      },
+      {
+        "level": 6,
+        "min": 67.43
+      },
+      {
+        "level": 7,
+        "min": 52.98
+      },
+      {
+        "level": 8,
+        "min": 38.53
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 119,
     "reachableMax": 119,
     "bonusAvailable": 11,
@@ -198,47 +340,65 @@
       "ownership": {
         "max": 25,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 20,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 23,
         "base": 20,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 24,
         "base": 20,
-        "bonus": 4
+        "bonus": 4,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 10,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 9,
         "base": 5,
-        "bonus": 4
+        "bonus": 4,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 8,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -285,6 +445,42 @@
   "FSC_BANKS": {
     "sectorCode": "FSC",
     "scorecardType": "Generic",
+    "sectorName": "Financial Sector Code (Banks — FS701)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 110.09
+      },
+      {
+        "level": 2,
+        "min": 104.59
+      },
+      {
+        "level": 3,
+        "min": 99.08
+      },
+      {
+        "level": 4,
+        "min": 88.07
+      },
+      {
+        "level": 5,
+        "min": 82.57
+      },
+      {
+        "level": 6,
+        "min": 77.06
+      },
+      {
+        "level": 7,
+        "min": 60.55
+      },
+      {
+        "level": 8,
+        "min": 44.04
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 132,
     "reachableMax": 132,
     "bonusAvailable": 9,
@@ -294,47 +490,65 @@
       "ownership": {
         "max": 23,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 20,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 23,
         "base": 20,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 19,
         "base": 15,
-        "bonus": 4
+        "bonus": 4,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 7,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 5,
         "base": 3,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 8,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -381,6 +595,42 @@
   "FSC_LTI": {
     "sectorCode": "FSC",
     "scorecardType": "Generic",
+    "sectorName": "Financial Sector Code (Long-Term Insurers — FS702)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 110.09
+      },
+      {
+        "level": 2,
+        "min": 104.59
+      },
+      {
+        "level": 3,
+        "min": 99.08
+      },
+      {
+        "level": 4,
+        "min": 88.07
+      },
+      {
+        "level": 5,
+        "min": 82.57
+      },
+      {
+        "level": 6,
+        "min": 77.06
+      },
+      {
+        "level": 7,
+        "min": 60.55
+      },
+      {
+        "level": 8,
+        "min": 44.04
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 134,
     "reachableMax": 134,
     "bonusAvailable": 11,
@@ -390,47 +640,65 @@
       "ownership": {
         "max": 23,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 20,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 23,
         "base": 20,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 19,
         "base": 15,
-        "bonus": 4
+        "bonus": 4,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 7,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 7,
         "base": 3,
-        "bonus": 4
+        "bonus": 4,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 8,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -477,6 +745,42 @@
   "FSC_STI": {
     "sectorCode": "FSC",
     "scorecardType": "Generic",
+    "sectorName": "Financial Sector Code (Short-Term Insurers — FS703)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 105.5
+      },
+      {
+        "level": 2,
+        "min": 100.23
+      },
+      {
+        "level": 3,
+        "min": 94.95
+      },
+      {
+        "level": 4,
+        "min": 84.4
+      },
+      {
+        "level": 5,
+        "min": 79.13
+      },
+      {
+        "level": 6,
+        "min": 73.85
+      },
+      {
+        "level": 7,
+        "min": 58.03
+      },
+      {
+        "level": 8,
+        "min": 42.2
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 129,
     "reachableMax": 129,
     "bonusAvailable": 11,
@@ -486,47 +790,65 @@
       "ownership": {
         "max": 23,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 20,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 23,
         "base": 20,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 24,
         "base": 20,
-        "bonus": 4
+        "bonus": 4,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 10,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 9,
         "base": 5,
-        "bonus": 4
+        "bonus": 4,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 8,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -573,6 +895,42 @@
   "AGRI_GENERIC": {
     "sectorCode": "AGRI",
     "scorecardType": "Generic",
+    "sectorName": "AgriBEE Sector Code (Generic)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 128,
     "reachableMax": 128,
     "bonusAvailable": 9,
@@ -582,47 +940,65 @@
       "ownership": {
         "max": 25,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 19,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 25,
         "base": 20,
-        "bonus": 5
+        "bonus": 5,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 27,
         "base": 25,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 10,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 7,
         "base": 5,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 15,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -669,6 +1045,42 @@
   "RCOGP_QSE": {
     "sectorCode": "RCOGP",
     "scorecardType": "QSE",
+    "sectorName": "Revised Codes (QSE)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 108,
     "reachableMax": 108,
     "bonusAvailable": 8,
@@ -678,42 +1090,58 @@
       "ownership": {
         "max": 25,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 15,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 30,
         "base": 25,
-        "bonus": 5
+        "bonus": 5,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 21,
         "base": 20,
-        "bonus": 1
+        "bonus": 1,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 7,
         "base": 5,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -760,6 +1188,42 @@
   "ICT_QSE": {
     "sectorCode": "ICT",
     "scorecardType": "QSE",
+    "sectorName": "ICT Sector Code (QSE)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 116,
     "reachableMax": 116,
     "bonusAvailable": 9,
@@ -769,42 +1233,58 @@
       "ownership": {
         "max": 25,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 15,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 30,
         "base": 25,
-        "bonus": 5
+        "bonus": 5,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 21,
         "base": 20,
-        "bonus": 1
+        "bonus": 1,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 8,
         "base": 5,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 12,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -851,6 +1331,42 @@
   "FSC_QSE": {
     "sectorCode": "FSC",
     "scorecardType": "QSE",
+    "sectorName": "Financial Sector Code (QSFI)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 100,
     "reachableMax": 100,
     "bonusAvailable": 6,
@@ -860,47 +1376,65 @@
       "ownership": {
         "max": 25,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "managementControl": {
         "max": 15,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 25,
         "base": 20,
-        "bonus": 5
+        "bonus": 5,
+        "subMinPercent": 40,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 20,
         "base": 19,
-        "bonus": 1
+        "bonus": 1,
+        "subMinPercent": 40,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -947,6 +1481,42 @@
   "TRANSPORT_GENERIC": {
     "sectorCode": "TRANSPORT",
     "scorecardType": "Generic",
+    "sectorName": "Transport Sector Code (Large Enterprise)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 85
+      },
+      {
+        "level": 3,
+        "min": 75
+      },
+      {
+        "level": 4,
+        "min": 65
+      },
+      {
+        "level": 5,
+        "min": 55
+      },
+      {
+        "level": 6,
+        "min": 45
+      },
+      {
+        "level": 7,
+        "min": 40
+      },
+      {
+        "level": 8,
+        "min": 30
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 108,
     "reachableMax": 108,
     "bonusAvailable": 6,
@@ -956,47 +1526,65 @@
       "ownership": {
         "max": 24,
         "base": 22,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": null
       },
       "managementControl": {
         "max": 11,
         "base": 10,
-        "bonus": 1
+        "bonus": 1,
+        "subMinPercent": null,
+        "elective": null
       },
       "employmentEquity": {
         "max": 18,
         "base": 15,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 15,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 20,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 15,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -1043,6 +1631,44 @@
   "TRANSPORT_QSE": {
     "sectorCode": "TRANSPORT",
     "scorecardType": "QSE",
+    "sectorName": "Transport Sector Code (QSE)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 85
+      },
+      {
+        "level": 3,
+        "min": 75
+      },
+      {
+        "level": 4,
+        "min": 65
+      },
+      {
+        "level": 5,
+        "min": 55
+      },
+      {
+        "level": 6,
+        "min": 45
+      },
+      {
+        "level": 7,
+        "min": 40
+      },
+      {
+        "level": 8,
+        "min": 30
+      }
+    ],
+    "electiveGroupSizes": {
+      "transport_qse_elective": 4
+    },
     "totalMaxPoints": 100,
     "reachableMax": 107,
     "bonusAvailable": 7,
@@ -1052,47 +1678,65 @@
       "ownership": {
         "max": 28,
         "base": 25,
-        "bonus": 3
+        "bonus": 3,
+        "subMinPercent": null,
+        "elective": "transport_qse_elective"
       },
       "managementControl": {
         "max": 27,
         "base": 25,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": "transport_qse_elective"
       },
       "employmentEquity": {
         "max": 27,
         "base": 25,
-        "bonus": 2
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": "transport_qse_elective"
       },
       "skillsDevelopment": {
         "max": 25,
         "base": 25,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": "transport_qse_elective"
       },
       "preferentialProcurement": {
         "max": 25,
         "base": 25,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": "transport_qse_elective"
       },
       "supplierDevelopment": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 25,
         "base": 25,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": "transport_qse_elective"
       },
       "socioEconomicDevelopment": {
         "max": 25,
         "base": 25,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": "transport_qse_elective"
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -1139,6 +1783,42 @@
   "CONSTRUCTION_QSE": {
     "sectorCode": "CONSTRUCTION",
     "scorecardType": "QSE",
+    "sectorName": "Construction Sector Code (QSE)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 110,
     "reachableMax": 110,
     "bonusAvailable": 0,
@@ -1148,42 +1828,58 @@
       "ownership": {
         "max": 30,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "managementControl": {
         "max": 20,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 26,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 29,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 5,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -1230,6 +1926,42 @@
   "CONSTRUCTION_CONTRACTOR": {
     "sectorCode": "CONSTRUCTION",
     "scorecardType": "Contractor",
+    "sectorName": "Construction Sector Code (Contractor)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 123,
     "reachableMax": 123,
     "bonusAvailable": 0,
@@ -1239,42 +1971,58 @@
       "ownership": {
         "max": 31,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "managementControl": {
         "max": 22,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 26,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 38,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 6,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
@@ -1321,6 +2069,42 @@
   "CONSTRUCTION_BEP": {
     "sectorCode": "CONSTRUCTION",
     "scorecardType": "BEP",
+    "sectorName": "Construction Sector Code (Built Environment Professional)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
     "totalMaxPoints": 123,
     "reachableMax": 123,
     "bonusAvailable": 0,
@@ -1330,42 +2114,58 @@
       "ownership": {
         "max": 31,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "managementControl": {
         "max": 22,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "skillsDevelopment": {
         "max": 34,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "preferentialProcurement": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "supplierDevelopment": {
         "max": 30,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "enterpriseDevelopment": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "socioEconomicDevelopment": {
         "max": 6,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       },
       "yesInitiative": {
         "max": 0,
         "base": null,
-        "bonus": 0
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
       }
     },
     "compare": {
