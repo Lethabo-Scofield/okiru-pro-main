@@ -20,7 +20,14 @@ export interface TransportPillarResult {
    * of. Before this, the breakdown page ran the RCOGP calculator and displayed
    * sub-lines the Transport score never evaluates ("breakdowns don't link").
    */
-  subLines?: Array<{ name: string; target: string; weighting: number; score: number; note?: string }>;
+  /**
+   * `isBonus` marks a row the Transport Codes award ON TOP of the element's
+   * weighting. Every Transport element carries one: MC QSE 27 = 25 + 2 (black
+   * women in top management), EE QSE 27 = 25 + 2 (EAP), MC Large 11 = 10 + 1
+   * (independent NEDs), EE Large 18 = 15 + 3 (EAP). Untagged, the scorecard has
+   * no way to tell base from bonus and prints the merged cap as the weight.
+   */
+  subLines?: Array<{ name: string; target: string; weighting: number; score: number; note?: string; isBonus?: boolean }>;
   /** Honest methodology notes (e.g. a bonus that scored 0 because a black woman
    *  sits at Senior, which the Codes measure separately from Top Management). */
   coverageNotes?: string[];
@@ -102,7 +109,7 @@ export function calculateTransportQseManagement(
 
   const subLines = [
     { name: 'Black people in top management', target: '50.1%', weighting: 25, score: round2(clampScore(safeRatio(blackPct, 0.501, 25), 25)) },
-    { name: 'Black women in top management (bonus)', target: '25%', weighting: 2, score: bwBonus, note: coverageNotes[0] },
+    { name: 'Black women in top management (bonus)', target: '25%', weighting: 2, score: bwBonus, note: coverageNotes[0], isBonus: true },
   ];
   const score = subLines.reduce((s, l) => s + l.score, 0);
 
@@ -163,7 +170,7 @@ export function calculateTransportQseEmploymentEquity(
     { name: 'Black women in management', target: '20%', weighting: 7.5, score: round2(raw[1]) },
     { name: 'Black employees (all staff)', target: '60%', weighting: 5, score: round2(raw[2]) },
     { name: 'Black women employees (all staff)', target: '30%', weighting: 5, score: round2(raw[3]) },
-    { name: 'EAP bonus (meets provincial EAP in every band)', target: 'EAP', weighting: 2, score: bonus, note: bonus === 0 ? 'Bonus 0/2: at least one occupational band is below its provincial EAP target.' : undefined },
+    { name: 'EAP bonus (meets provincial EAP in every band)', target: 'EAP', weighting: 2, score: bonus, note: bonus === 0 ? 'Bonus 0/2: at least one occupational band is below its provincial EAP target.' : undefined, isBonus: true },
   ];
 
   return { score: round2(clampScore(score, maxTotal)), maxPoints: maxTotal, subLines };
@@ -210,7 +217,7 @@ export function calculateTransportLargeManagementControl(
     { name: 'Black women senior top management', target: '20%', weighting: 1.5, score: round2(clampScore(safeRatio(pctOf(senior, countBlackWomen), 0.2, 1.5), 1.5)) },
     { name: 'Black other top management', target: '40%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(middle, countBlack), 0.4, 1), 1)) },
     { name: 'Black women other top management', target: '20%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(middle, countBlackWomen), 0.2, 1), 1)) },
-    { name: 'Independent non-executive directors (bonus)', target: '40%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(board, countBlack), 0.4, 1), 1)) },
+    { name: 'Independent non-executive directors (bonus)', target: '40%', weighting: 1, score: round2(clampScore(safeRatio(pctOf(board, countBlack), 0.4, 1), 1)), isBonus: true },
   ];
   const mc = subLines.reduce((s, l) => s + l.score, 0);
 
@@ -238,34 +245,31 @@ export function calculateTransportLargeEmploymentEquity(
   const junior = grouped['Junior'] || [];
   const semiPool = [...(grouped['Semi-skilled'] || []), ...(grouped['Unskilled'] || [])];
 
-  let ee = 0;
-  ee += clampScore(safeRatio(pctOf(senior, countBlack), 0.43, 2.5), 2.5);
-  ee += clampScore(safeRatio(pctOf(senior, countBlackWomen), 0.22, 2.5), 2.5);
-  ee += clampScore(safeRatio(pctOf(middle, countBlack), 0.63, 1.5), 1.5);
-  ee += clampScore(safeRatio(pctOf(middle, countBlackWomen), 0.32, 1.5), 1.5);
-  ee += clampScore(safeRatio(pctOf(junior, countBlack), 0.68, 1.5), 1.5);
-  ee += clampScore(safeRatio(pctOf(junior, countBlackWomen), 0.34, 1.5), 1.5);
+  const seniorB = clampScore(safeRatio(pctOf(senior, countBlack), 0.43, 2.5), 2.5);
+  const seniorBW = clampScore(safeRatio(pctOf(senior, countBlackWomen), 0.22, 2.5), 2.5);
+  const middleB = clampScore(safeRatio(pctOf(middle, countBlack), 0.63, 1.5), 1.5);
+  const middleBW = clampScore(safeRatio(pctOf(middle, countBlackWomen), 0.32, 1.5), 1.5);
+  const juniorB = clampScore(safeRatio(pctOf(junior, countBlack), 0.68, 1.5), 1.5);
+  const juniorBW = clampScore(safeRatio(pctOf(junior, countBlackWomen), 0.34, 1.5), 1.5);
 
   const semiBw = semiPool.filter(e => isBlackRace(e.race) && e.gender === 'Female').length;
   const semiBwPctTotal = allNonForeign.length > 0 ? semiBw / allNonForeign.length : 0;
   const semiMax = eeCfg.semiUnskilledWomenMaxPts ?? 2;
-  ee += clampScore(safeRatio(semiBwPctTotal, 0.15, semiMax), semiMax);
+  const semiScore = clampScore(safeRatio(semiBwPctTotal, 0.15, semiMax), semiMax);
 
   const disabledTarget = eeCfg.disabledTarget ?? 0.02;
   const disabledMax = eeCfg.disabledMaxPts ?? 1;
   const blackDisabledPct = allNonForeign.length > 0
     ? allNonForeign.filter(e => e.isDisabled && isBlackRace(e.race)).length / allNonForeign.length
     : 0;
-  ee += clampScore(safeRatio(blackDisabledPct, disabledTarget, disabledMax), disabledMax);
+  const disabledScore = clampScore(safeRatio(blackDisabledPct, disabledTarget, disabledMax), disabledMax);
 
   const dwMax = eeCfg.disabledWomenMaxPts ?? 1;
   const dwTarget = eeCfg.disabledWomenTarget ?? 0.01;
-  if (dwMax > 0) {
-    const bwDisabledPct = allNonForeign.length > 0
-      ? allNonForeign.filter(e => e.isDisabled && isBlackRace(e.race) && e.gender === 'Female').length / allNonForeign.length
-      : 0;
-    ee += clampScore(safeRatio(bwDisabledPct, dwTarget, dwMax), dwMax);
-  }
+  const bwDisabledPct = allNonForeign.length > 0
+    ? allNonForeign.filter(e => e.isDisabled && isBlackRace(e.race) && e.gender === 'Female').length / allNonForeign.length
+    : 0;
+  const dwScore = dwMax > 0 ? clampScore(safeRatio(bwDisabledPct, dwTarget, dwMax), dwMax) : 0;
 
   const bonusMax = eeCfg.eapBonusMaxPts ?? 3;
   const bonusEE =
@@ -274,10 +278,32 @@ export function calculateTransportLargeEmploymentEquity(
     pctOf(junior, countBlack) >= 0.68 && pctOf(junior, countBlackWomen) >= 0.34
       ? bonusMax
       : 0;
-  ee += bonusEE;
 
-  const result = { score: round2(clampScore(ee, maxTotal)), maxPoints: maxTotal };
-  return result;
+  // Σ base 15 (2.5+2.5+1.5+1.5+1.5+1.5+2+1+1) + bonus 3 = the 18-pt cap.
+  const subLines = [
+    { name: 'Black senior management', target: '43%', weighting: 2.5, score: round2(seniorB) },
+    { name: 'Black women senior management', target: '22%', weighting: 2.5, score: round2(seniorBW) },
+    { name: 'Black middle management', target: '63%', weighting: 1.5, score: round2(middleB) },
+    { name: 'Black women middle management', target: '32%', weighting: 1.5, score: round2(middleBW) },
+    { name: 'Black junior management', target: '68%', weighting: 1.5, score: round2(juniorB) },
+    { name: 'Black women junior management', target: '34%', weighting: 1.5, score: round2(juniorBW) },
+    { name: 'Black women in semi-skilled & unskilled roles', target: '15% of workforce', weighting: semiMax, score: round2(semiScore) },
+    { name: 'Black disabled employees', target: `${(disabledTarget * 100).toFixed(0)}%`, weighting: disabledMax, score: round2(disabledScore) },
+    ...(dwMax > 0
+      ? [{ name: 'Black disabled women employees', target: `${(dwTarget * 100).toFixed(0)}%`, weighting: dwMax, score: round2(dwScore) }]
+      : []),
+    {
+      name: 'EAP bonus (meets provincial EAP in every band)',
+      target: 'EAP',
+      weighting: bonusMax,
+      score: round2(bonusEE),
+      isBonus: true,
+      note: bonusEE === 0 ? `Bonus 0/${bonusMax}: at least one occupational band is below its provincial EAP target.` : undefined,
+    },
+  ];
+
+  const ee = subLines.reduce((s, l) => s + l.score, 0);
+  return { score: round2(clampScore(ee, maxTotal)), maxPoints: maxTotal, subLines };
 }
 
 /**

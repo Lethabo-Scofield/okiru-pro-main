@@ -3,7 +3,7 @@ import { useBbeeStore } from "@toolkit/lib/store";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
-import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
+import { pillarBreakdownSubtitle, summarizeSubLines } from "@toolkit/lib/sectors/sector-labels";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Button } from "@toolkit/components/ui/button";
@@ -118,6 +118,13 @@ export default function Ownership() {
 
   if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateOwnershipScore(ownership, calculatorConfig);
+  // Element weighting vs bonus, derived from the SAME sub-lines that produced the
+  // score. Never hardcode the total: Transport QSE ownership is 25 base + 3 bonus
+  // (cap 28), Transport Large 22 + 2 (cap 24), Construction 30/31.
+  const ownershipWeighting = (() => {
+    const { basePoints, bonusPoints } = summarizeSubLines(score.subLines);
+    return { base: basePoints, bonus: bonusPoints };
+  })();
 
   const chartData = ownership.shareholders.map(sh => ({
     name: sh.name,
@@ -574,8 +581,11 @@ export default function Ownership() {
               </thead>
               <tbody className="divide-y divide-border">
                 {score.subLines.map((sl, idx) => (
-                  <tr key={idx} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 text-muted-foreground">{sl.name}</td>
+                  <tr key={idx} className={cn("hover:bg-muted/30", sl.isBonus && "bg-amber-50/50 dark:bg-amber-950/20")}>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {sl.isBonus && <Badge variant="outline" className="text-[9px] mr-1.5 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Bonus</Badge>}
+                      {sl.name}
+                    </td>
                     <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.target}</td>
                     <td className="px-4 py-3 text-right font-mono whitespace-nowrap">{sl.weighting.toFixed(2)}</td>
                     <td className="px-4 py-3 text-right font-mono font-bold text-primary whitespace-nowrap">{sl.score.toFixed(2)}</td>
@@ -585,7 +595,18 @@ export default function Ownership() {
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total Ownership Score</td>
-                  <td className="px-4 py-4 text-right font-mono">25.00</td>
+                  {/* Was hardcoded "25.00" — wrong for every sector whose ownership
+                      element is not 25 (Transport Large 24, Construction 30/31) and
+                      it hid the bonus split entirely. Derived from the live
+                      sub-lines: the element weighting, with bonus called out. */}
+                  <td className="px-4 py-4 text-right font-mono">
+                    {ownershipWeighting.base.toFixed(2)}
+                    {ownershipWeighting.bonus > 0 && (
+                      <span className="block text-[10px] font-normal text-amber-600 dark:text-amber-400">
+                        + {ownershipWeighting.bonus.toFixed(2)} bonus
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-4 text-right font-mono text-lg text-primary">{score.total.toFixed(2)}</td>
                 </tr>
               </tfoot>

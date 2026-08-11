@@ -69,6 +69,14 @@ export interface ManagementSubLine {
   target: string;
   weighting: number;
   score: number;
+  /**
+   * Bonus indicator — awarded on top of the element weighting, not out of it.
+   * No generic-Codes MC indicator is a bonus, so this calculator never sets it;
+   * the field exists because the Management Control page renders either these
+   * lines or the Transport calculators' (which do carry bonuses), and the split
+   * shown to the user must come from the flag rather than from the page guessing.
+   */
+  isBonus?: boolean;
 }
 
 export interface ManagementResult {

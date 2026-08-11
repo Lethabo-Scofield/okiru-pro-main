@@ -41,6 +41,15 @@ export interface CalculatorConfig {
     designatedGroupsMax?: number;
     designatedGroupsTarget?: number;
     /**
+     * Sectors where black-women voting rights / black-women economic interest are
+     * BONUS points on top of the element weighting rather than part of it. Default
+     * (absent/false) is the generic Codes treatment, where both are base
+     * indicators. Transport sets these so the scorecard can show ownership as
+     * "25 base + 3 bonus" instead of a merged 28.
+     */
+    womenVotingIsBonus?: boolean;
+    womenEIIsBonus?: boolean;
+    /**
      * QSE-only: the toolkit collapses "Black New Entrants" and "Designated Groups"
      * into a single combined economic-interest indicator. When true, a shareholder
      * qualifies for the designated-group indicator on EITHER criterion

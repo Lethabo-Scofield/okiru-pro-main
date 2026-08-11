@@ -27,6 +27,19 @@ export interface OwnershipSubLine {
   target: string;
   weighting: number;
   score: number;
+  /**
+   * True when the Codes award this indicator as a BONUS on top of the element's
+   * weighting rather than as part of it. The scorecard splits base from bonus off
+   * this flag, so an untagged bonus line silently inflates the element's
+   * denominator (Transport QSE ownership read 25/28 = "At Risk" when the entity
+   * had in fact earned every one of the 25 base points).
+   *
+   * Which lines are bonus is SECTOR-specific, never universal: black-women voting
+   * rights is a base indicator under the generic Codes but a bonus under the
+   * Transport Codes. So it is declared per sector on CalculatorConfig.ownership,
+   * not hardcoded here.
+   */
+  isBonus?: boolean;
 }
 
 export interface OwnershipResult {
@@ -85,6 +98,12 @@ function resolveOwnershipTargets(config: CalculatorConfig) {
     designatedGroupsTarget: oc?.designatedGroupsTarget ?? DEFAULT_DG_TARGET,
     subMinNetValue: oc?.subMinNetValue ?? 3.2,
     esopBonusMaxPts: oc?.esopBonusMaxPts ?? 0,
+    // Sector-declared bonus indicators. Default false: under the generic Codes
+    // black-women voting rights and black-women economic interest are BASE
+    // indicators. The Transport Codes award both as bonus (QSE: 2 + 1 = the 3
+    // bonus points that sit on top of ownership's 25-pt weighting for a 28 cap).
+    womenVotingIsBonus: oc?.womenVotingIsBonus === true,
+    womenEIIsBonus: oc?.womenEIIsBonus === true,
     // QSE: single combined "Black New Entrants or Designated Groups" indicator —
     // a shareholder qualifies on EITHER criterion. (TOOLKIT-RESOLVED.md Q8.)
     combinedNewEntrantsDesignated: oc?.combinedNewEntrantsDesignated === true,
@@ -241,9 +260,9 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
   // ownershipBreakdown.reconciliation.test.ts.)
   const subLines: OwnershipSubLine[] = [
     { name: 'Exercisable voting rights of black individuals', target: `${(ot.votingRightsTarget * 100).toFixed(0)}% + 1 vote`, weighting: ot.votingRightsMaxPts, score: votingRightsBlack },
-    { name: 'Exercisable voting rights of black females', target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`, weighting: ot.womenVotingMaxPts, score: votingRightsBWO },
+    { name: 'Exercisable voting rights of black females', target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`, weighting: ot.womenVotingMaxPts, score: votingRightsBWO, isBonus: ot.womenVotingIsBonus || undefined },
     { name: 'Economic interest of black individuals', target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`, weighting: ot.economicInterestMaxPts, score: economicInterestBlack },
-    { name: 'Economic interest of black females', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO },
+    { name: 'Economic interest of black females', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO, isBonus: ot.womenEIIsBonus || undefined },
     // Designated-groups line: shown when the sector allocates points to it, or
     // when it is the combined "new entrants OR designated groups" QSE indicator.
     ...(ot.designatedGroupsMax > 0 || ot.combinedNewEntrantsDesignated
@@ -256,7 +275,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       : []),
     { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
     ...(ot.esopBonusMaxPts > 0
-      ? [{ name: 'ESOP / broad-based scheme participation (bonus)', target: 'scheme in share register', weighting: ot.esopBonusMaxPts, score: esopBonus }]
+      ? [{ name: 'ESOP / broad-based scheme participation (bonus)', target: 'scheme in share register', weighting: ot.esopBonusMaxPts, score: esopBonus, isBonus: true }]
       : []),
   ];
 

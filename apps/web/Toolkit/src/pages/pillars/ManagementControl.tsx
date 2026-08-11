@@ -31,7 +31,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
-import { pillarBreakdownSubtitle } from "@toolkit/lib/sectors/sector-labels";
+import { pillarBreakdownSubtitle, summarizeSubLines } from "@toolkit/lib/sectors/sector-labels";
 import type { Employee } from "@toolkit/lib/types";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import * as XLSX from "xlsx";
@@ -511,6 +511,12 @@ export default function ManagementControl() {
   const displayTotal = transportMc ? transportMc.score : mcScore.total;
   const displayMax = transportMc ? transportMc.maxPoints : mcMax;
   const mcTotalWeighting = displaySubLines.reduce((sum, sl) => sum + sl.weighting, 0);
+  // Base vs bonus, derived from the sub-lines actually being displayed — so the
+  // footer reports the element's weighting rather than the bonus-inflated cap.
+  const mcWeightingSplit = (() => {
+    const { basePoints, bonusPoints } = summarizeSubLines(displaySubLines);
+    return { base: basePoints, bonus: bonusPoints };
+  })();
 
   const eapLevelMap: Record<number, string> = {};
   if (!smjNotAvailable && !transportMc) {
@@ -971,6 +977,7 @@ export default function ManagementControl() {
                         className={cn(
                           isNotAvailable ? "bg-muted/20 text-muted-foreground" : "hover:bg-muted/30",
                           hasBreakdown && "cursor-pointer",
+                          sl.isBonus && "bg-amber-50/50 dark:bg-amber-950/20",
                         )}
                         onClick={() => {
                           if (!hasBreakdown) return;
@@ -984,6 +991,7 @@ export default function ManagementControl() {
                         <td className="px-4 py-3 text-muted-foreground">
                           <span className="inline-flex items-center gap-1.5">
                             {hasBreakdown && (isExpanded ? <ChevronDown className="h-3 w-3 shrink-0" /> : <ChevronRight className="h-3 w-3 shrink-0" />)}
+                            {sl.isBonus && <Badge variant="outline" className="text-[9px] bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300">Bonus</Badge>}
                             {sl.name}
                           </span>
                         </td>
@@ -1035,7 +1043,16 @@ export default function ManagementControl() {
               <tfoot className="bg-primary/5 font-bold border-t-2 border-primary/20">
                 <tr>
                   <td className="px-4 py-4 text-primary font-medium uppercase tracking-wider" colSpan={2}>Total Management Control Score</td>
-                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">{mcTotalWeighting.toFixed(0)}.00</td>
+                  {/* Element weighting and bonus stated separately, as the Codes
+                      state them — Transport QSE MC is 25 + 2, not a merged 27. */}
+                  <td className="px-4 py-4 text-right font-mono whitespace-nowrap">
+                    {mcWeightingSplit.base.toFixed(2)}
+                    {mcWeightingSplit.bonus > 0 && (
+                      <span className="block text-[10px] font-normal text-amber-600 dark:text-amber-400">
+                        + {mcWeightingSplit.bonus.toFixed(2)} bonus
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-4"></td>
                   <td className="px-4 py-4 text-right font-mono text-lg text-primary whitespace-nowrap">{mcScore.total.toFixed(2)}</td>
                 </tr>

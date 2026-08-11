@@ -40,6 +40,11 @@ export function sectorConfigToTransportQseCalculatorConfig(sc: SectorConfig): Ca
     ownership: {
       votingRightsMax: own.votingRightsMaxPts,             // 6
       womenBonusMax: own.womenVotingMaxPts,                // 2 (bonus: black women 10%)
+      // The two Transport QSE bonus indicators. pillarConfigs.ownership declares
+      // basePoints 25 / maxPoints 28 — these flags are what let the scorecard
+      // show that 25/3 split instead of one merged 28-pt weight.
+      womenVotingIsBonus: true,
+      womenEIIsBonus: true,
       economicInterestMax: own.economicInterestMaxPts,     // 9
       netValueMax: own.netValueMaxPts,                     // 9
       targetEconomicInterest: own.economicInterestTarget,  // 0.25
