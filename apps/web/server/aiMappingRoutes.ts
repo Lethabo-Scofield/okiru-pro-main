@@ -14,6 +14,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import OpenAI, { AzureOpenAI } from "openai";
 import { createLogger } from "./logger";
+import { createChatCompletion } from "./openaiCompat";
 import {
   buildFieldMapping,
   type FieldMapping,
@@ -99,7 +100,7 @@ async function aiMapHeaders(
   const user = `TARGET FIELDS:\n${fieldList}\n\nSOURCE COLUMNS (with sample values):\n${columnList}`;
 
   try {
-    const response = await cfg.client.chat.completions.create({
+    const response = await createChatCompletion(cfg.client, {
       model: cfg.model,
       temperature: 0,
       response_format: { type: "json_object" },
@@ -237,7 +238,7 @@ export function registerAiMappingRoutes(
       const user = `SCORECARD SECTIONS:\n${sectionList}\n\nWORKBOOK SHEETS:\n${sheetList}`;
 
       try {
-        const response = await cfg.client.chat.completions.create({
+        const response = await createChatCompletion(cfg.client, {
           model: cfg.model,
           temperature: 0,
           response_format: { type: "json_object" },

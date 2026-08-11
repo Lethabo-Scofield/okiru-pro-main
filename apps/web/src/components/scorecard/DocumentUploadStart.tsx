@@ -1745,15 +1745,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       {/* The upload surface itself, one batch per pillar plus the whole-file
           uploads. Shown before processing so the user can go and fetch what is
           missing rather than spending tokens to be told their score is low.
-          Once documents have been read it doubles as a coverage ledger. */}
-      {!quote && (
+          Once documents have been read it doubles as a coverage ledger.
+
+          Gated on `parserCase`, NOT on `quote`. A quote arrives the moment the
+          first pillar's files land, and gating on it tore the uploader off the
+          screen mid-task: you could fill Ownership and then had nowhere to put
+          Skills. A quote is just a price for what is staged so far — it is
+          re-issued whenever the list changes, so it is not a commitment and must
+          not behave like one. Extraction is the point of no return, so that is
+          what closes the uploader. */}
+      {!parserCase && (
         <div className="mt-3">
           <PillarDocumentBatches
             satisfiedDocumentIds={satisfiedDocumentIds}
             filedBatchByFile={filedBatchByFile}
             stagedFileNames={files.map((f) => f.name)}
             onPick={handleBatchPick}
-            disabled={parsing || quoting}
+            disabled={parsing}
           />
         </div>
       )}

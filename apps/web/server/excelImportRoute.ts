@@ -3,6 +3,7 @@ import OpenAI, { AzureOpenAI } from "openai";
 import { createLogger } from "./logger";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { getScorecardTypeOptions } from "../src/components/workbook/sections";
+import { createChatCompletion } from "./openaiCompat";
 
 const logger = createLogger("ExcelImportRoute");
 
@@ -204,7 +205,7 @@ async function normalizeWithOpenAI(input: {
   ].join(" ");
 
   try {
-    const response = await openai.chat.completions.create({
+    const response = await createChatCompletion(openai, {
       model,
       temperature: 0,
       response_format: { type: "json_object" },
@@ -311,7 +312,15 @@ export function registerExcelImportRoutes(
             validationWarnings,
           });
         }
-        notes.push("Azure OpenAI / OpenAI not configured or AI call failed — using deterministic values only.");
+        // Two very different faults used to share one sentence, and it cost
+        // real time: the deployment was correctly configured and the call was
+        // failing on a bad parameter, but the message sent everyone to check
+        // environment variables. Say which one it is.
+        notes.push(
+          getOpenAIClient()
+            ? "AI normalization call failed — using deterministic values only. See the server log for the reason."
+            : "Azure OpenAI / OpenAI is not configured — using deterministic values only.",
+        );
       }
 
       if (sector && scorecardType) {

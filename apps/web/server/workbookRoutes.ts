@@ -29,6 +29,7 @@ import {
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
 import { coerceYesNo } from "../src/lib/yesNoValue";
 import { isBlackRace, isScoringDesignation, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
+import { createChatCompletion } from "./openaiCompat";
 import {
   getClient as memGetClient,
   canAccessClient as memCanAccessClient,
@@ -1876,7 +1877,7 @@ export function registerWorkbookRoutes(app: Express): void {
         `User typed: "${rawValue}"\n` +
         `What is the correct normalized value?`;
 
-      const response = await client.chat.completions.create({
+      const response = await createChatCompletion(client, {
         model,
         temperature: 0,
         response_format: { type: "json_object" },
