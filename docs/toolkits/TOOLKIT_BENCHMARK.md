@@ -14,6 +14,48 @@ Two independent benchmarks, because they answer different questions:
 
 ---
 
+## Base, bonus and maximum reachable — every sector
+
+The Codes state an element's **weighting** and its **bonus points** separately, and bonus is earned ON TOP
+of the weighting. Merging them inflates the denominator: an entity that earns all 25 of Transport QSE
+ownership's base points read 25/28 = 89% "At Risk" when it had achieved 100% of the element.
+
+`pillarConfigs.*.basePoints` now carries the weighting for every bonus-bearing pillar (38 declarations,
+each verified against what the calculator actually emits). Where `basePoints` is absent, the element has no
+bonus and the weighting equals `maxPoints`.
+
+| Sector | Target (denominator) | Bonus available | Max reachable |
+|---|---:|---:|---:|
+| RCOGP Generic | 120 | 9 | 120 |
+| RCOGP QSE | 108 | 8 | 108 |
+| ICT Generic | 140 | 10 | 140 |
+| ICT QSE | 116 | 9 | 116 |
+| AgriBEE | 128 | 9 | 128 |
+| FSC Others | 119 | 11 | 119 |
+| FSC QSE | 100 | 6 | 100 |
+| FSC Banks | 132 | 9 | 132 |
+| FSC LTI | 134 | 11 | 134 |
+| FSC STI | 129 | 11 | 129 |
+| Transport Large | 108 | 6 | 108 |
+| **Transport QSE** | **100** | **7** | **107 — bonus lifts above target** |
+| Construction QSE / Contractor / BEP | 110 / 123 / 123 | 0 | 110 / 123 / 123 |
+
+Transport QSE is the only sector whose reachable max exceeds its target, because its `totalMaxPoints` is
+the pure 4 × 25 elective denominator. Everywhere else `totalMaxPoints` already includes the bonus, so
+target == reachable — but the split still matters **per element**, which is what the scorecard, the pillar
+pages, both summary views and the PDF/Excel exports now show.
+
+Per-pillar bonus, from the live configs: Skills absorption (5 pts; 3 in the FSC family), Preferential
+Procurement designated-group (1–4), Enterprise Development graduation + jobs + stockbroker (2–4), and the
+Transport-specific ownership / MC / EE bonuses.
+
+Regenerate the table with `compare_all.py` (it reads `live_sector_config.json`); the invariants are held by
+`apps/web/Toolkit/src/lib/calculators/__tests__/bonusSeparation.test.ts`, which asserts for every sector and
+pillar that sub-lines reconcile to `maxPoints`, that non-bonus lines sum to `basePoints`, and that no line
+named "bonus" lacks the flag.
+
+---
+
 ## B. Behavioural — all sectors, end-to-end
 
 Every workbook: normalize → project to client → load sector config → score every pillar → level.

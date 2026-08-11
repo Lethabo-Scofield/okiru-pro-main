@@ -474,10 +474,10 @@ export const RCOGP_GENERIC: SectorConfig = {
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 29, basePoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -572,13 +572,13 @@ export const ICT_GENERIC: SectorConfig = {
     managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // Skills: 8+4+4+4+5 = 25 (6% all-spend, no bursary, 2×headcount, absorption bonus)
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     // PP: 5+3+4+9+4 = 25 base + 2 DG bonus = 27
-    preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 27, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     // SD: 2% NPAT / 10 pts
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
     // ED: 15 base (3% NPAT) + 1 graduation + 2 jobs≥11% = 18 max
-    enterpriseDevelopment: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 18, basePoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     // SED: 1.5% NPAT / 12 pts (ICT Specific Initiatives)
     socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -692,10 +692,10 @@ export const FSC_GENERIC: SectorConfig = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined (Others: 2+1+2+1+10+4+1=21)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 }, // 2+2+3+4+4+1+4+3 = 23
-    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 }, // 5+3+2+7+3+2+2 = 24 (Others, no EF)
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 }, // 2+2+3+4+4+1+4+3 = 23
+    preferentialProcurement: { maxPoints: 24, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 }, // 5+3+2+7+3+2+2 = 24 (Others, no EF)
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 3 bonus
+    enterpriseDevelopment: { maxPoints: 9, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 3 bonus
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // SED 3 + CE 2 + bonus = 8
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -788,13 +788,13 @@ export const FSC_BANKS: SectorConfig = {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 19, basePoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },
     // Banks SD row on the EF & ESD scorecard = 7 pts (C17 =IF(D7="Banks",7,0),
     // FSC_Generic.md L15913) — the previous 10 was the Others ESD-scorecard value.
     supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
     // Banks ED: 3 base (C19, L15923) + 1 grad + 1 jobs = 5 (no stockbroker row on Banks EF sheet)
-    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 5, basePoints: 3, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // EF-proper: Targeted Investments 12 (C14 =IF(D7="Banks",12,0), L15893) +
@@ -896,13 +896,13 @@ export const FSC_LTI: SectorConfig = {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 19, basePoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },
     // LTI SD row on the EF & ESD scorecard = 7 pts (C16 =IF(LTI,7,0),
     // FSC_Generic.md L16040) — the previous 10 was the Others ESD-scorecard value.
     supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
     // LTI ED: 3 base (C18, L16050) + 1 grad + 1 jobs + 2 stockbroker (C22, L16078) = 7
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 3, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // EF-proper: Targeted Investments 12 (C13 =IF(LTI,12,0), L16020) +
@@ -1000,10 +1000,10 @@ export const FSC_STI: SectorConfig = {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 9, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // No EF for STI (N/A per SLS §2)
@@ -1100,10 +1100,10 @@ export const AGRI_GENERIC: SectorConfig = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined, 19 pts (GG 41306 — audit item 11)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // EE folded into MC
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 27, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
     socioEconomicDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 }, // Agriculture-specific SED
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -1214,10 +1214,10 @@ export const RCOGP_QSE: SectorConfig = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     // QSE MC: no board, no EAP bands, no disabled — 2-section flat-target scorecard
     managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 30, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 21, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   },
@@ -1303,10 +1303,10 @@ export const ICT_QSE: SectorConfig = {
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 30, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 21, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + tiered jobs (1 or 2)
+    enterpriseDevelopment: { maxPoints: 8, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + tiered jobs (1 or 2)
     socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 }, // ICT-specific 12 pts
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -1421,8 +1421,8 @@ export const FSC_QSE: SectorConfig = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 20, basePoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -1505,9 +1505,9 @@ export const TRANSPORT_GENERIC: SectorConfig = {
   // Previously they were merged into MC = 29 / EE = 0, leaving EE invisible
   // in Super Admin.
   pillarConfigs: {
-    ownership: { maxPoints: 24, hasSubMinimum: false, subMinimumPercent: 0 },
-    managementControl: { maxPoints: 11, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 },
+    ownership: { maxPoints: 24, basePoints: 22, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 11, basePoints: 10, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 18, basePoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     preferentialProcurement: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     supplierDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },

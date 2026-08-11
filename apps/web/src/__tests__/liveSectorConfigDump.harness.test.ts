@@ -59,10 +59,55 @@ suite('live sector config dump', () => {
       const pr = t?.procurement ?? {};
       const esd = t?.esd ?? {};
 
+      /**
+       * Target vs maximum reachable.
+       *
+       * `totalMaxPoints` is the DENOMINATOR the level thresholds are read
+       * against. `reachable` is the highest score actually attainable once bonus
+       * points are added — they are earned ON TOP of the weighting, which is why
+       * a real certificate can report 102 out of 100.
+       *
+       * Elective sectors complicate the sum: Transport QSE measures any FOUR of
+       * seven elements, so its reachable max is the four highest CAPS
+       * (28+27+27+25 = 107), not the sum of all seven.
+       */
+      const groupSizes = (sc as { electiveGroupSizes?: Record<string, number> }).electiveGroupSizes ?? {};
+      const grouped = new Map<string, number[]>();
+      let ungroupedMax = 0;
+      let ungroupedBase = 0;
+      // Iterate the config's OWN keys, not the fixed PILLARS list — FSC
+      // sub-sectors add empowermentFinancing and accessToFinancialServices, and
+      // omitting them understated FSC Banks' reachable max as 105 against a
+      // 132-point scorecard.
+      const allPillarKeys = Object.keys(sc.pillarConfigs ?? {});
+      for (const p of allPillarKeys) {
+        const pc = (sc.pillarConfigs as Record<string, { maxPoints: number; basePoints?: number; chooseOneGroup?: string } | undefined>)[p];
+        if (!pc || pc.maxPoints <= 0) continue;
+        if (pc.chooseOneGroup) {
+          if (!grouped.has(pc.chooseOneGroup)) grouped.set(pc.chooseOneGroup, []);
+          grouped.get(pc.chooseOneGroup)!.push(pc.maxPoints);
+        } else {
+          ungroupedMax += pc.maxPoints;
+          ungroupedBase += pc.basePoints ?? pc.maxPoints;
+        }
+      }
+      let reachable = ungroupedMax;
+      for (const [group, caps] of grouped) {
+        const take = groupSizes[group] ?? 1;
+        reachable += caps.sort((a, b) => b - a).slice(0, take).reduce((n, c) => n + c, 0);
+      }
+      const bonusAvailable = Object.values(pillars).reduce((n, p) => n + p.bonus, 0);
+
       out[name] = {
         sectorCode: sc.sectorCode,
         scorecardType: sc.scorecardType,
         totalMaxPoints: sc.totalMaxPoints,
+        /** Highest attainable score including bonus. */
+        reachableMax: reachable,
+        /** Bonus declared across pillars (only where basePoints is set). */
+        bonusAvailable,
+        /** Sum of element weightings for pillars outside any elective group. */
+        ungroupedBase,
         pillarSum: Object.values(pillars).reduce((n, p) => n + p.max, 0),
         pillars,
         // Flat view keyed exactly as docs/toolkits/compare_all.py expects, so the

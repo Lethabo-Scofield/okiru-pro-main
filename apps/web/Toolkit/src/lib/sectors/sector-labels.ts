@@ -35,6 +35,47 @@ export function activeSectorDisplayLabel(
   return `${base} ${type}`;
 }
 
+export interface PillarBonusSplit {
+  /** The element's WEIGHTING — what the entity is measured against. */
+  baseWeight: number;
+  /** Score earned against the weighting (total score minus bonus earned). */
+  baseScore: number;
+  bonusAvailable: number;
+  bonusEarned: number;
+  hasBonus: boolean;
+}
+
+/**
+ * Split a pillar into base weighting and bonus, from the sub-lines that produced
+ * its score. The single implementation behind every surface that shows a pillar
+ * total — the scorecard table, the pillar pages, and both summary views — so
+ * they cannot disagree about what an element is worth.
+ *
+ * Why it matters: the Codes state weighting and bonus SEPARATELY, and merging
+ * them inflates the denominator. An entity that earns all 25 of Transport QSE
+ * ownership's base points read 25/28 = 89% "At Risk" when it had in fact
+ * achieved 100% of the element.
+ *
+ * `score` is never altered — the full total including bonus is what counts
+ * toward the grand total, exactly as a certificate reports it.
+ */
+export function pillarBonusSplit(
+  weighting: number,
+  score: number,
+  subLines: Array<{ weighting: number; score: number; isBonus?: boolean }> | undefined,
+): PillarBonusSplit {
+  const bonusLines = (subLines ?? []).filter((l) => l.isBonus);
+  const bonusAvailable = bonusLines.reduce((n, l) => n + (l.weighting || 0), 0);
+  const bonusEarned = bonusLines.reduce((n, l) => n + (l.score || 0), 0);
+  return {
+    baseWeight: Math.max(0, weighting - bonusAvailable),
+    baseScore: Math.max(0, score - bonusEarned),
+    bonusAvailable,
+    bonusEarned,
+    hasBonus: bonusLines.length > 0,
+  };
+}
+
 export interface SubLineSummary {
   count: number;
   basePoints: number;

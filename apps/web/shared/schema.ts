@@ -236,16 +236,25 @@ export interface CalculatorConfig {
   };
   recognitionTable?: { level: number; multiplier: number }[];
   levelThresholds?: Array<{ level: number; minPoints: number; recognition?: number }>;
+  /**
+   * `basePoints` is the element's WEIGHTING as the Codes state it; `maxPoints`
+   * additionally carries any bonus points the element can earn on top. Where the
+   * two differ, the target is basePoints and the extra is bonus — an entity that
+   * earns every base point has achieved 100% of the element even though its
+   * score is below maxPoints. Absent basePoints means "no bonus": target ==
+   * maxPoints. Carried through from SectorConfig.pillarConfigs; dropping it here
+   * is what made Transport QSE ownership print 28 as the weight instead of 25+3.
+   */
   pillarConfigs?: {
-    ownership?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
-    managementControl?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
-    employmentEquity?: { maxPoints: number; chooseOneGroup?: string };
-    skillsDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
-    preferentialProcurement?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
-    supplierDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
-    enterpriseDevelopment?: { maxPoints: number; subMinimumPercent?: number; chooseOneGroup?: string };
-    socioEconomicDevelopment?: { maxPoints: number; chooseOneGroup?: string };
-    yesInitiative?: { maxPoints: number; chooseOneGroup?: string };
+    ownership?: { maxPoints: number; basePoints?: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    managementControl?: { maxPoints: number; basePoints?: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    employmentEquity?: { maxPoints: number; basePoints?: number; chooseOneGroup?: string };
+    skillsDevelopment?: { maxPoints: number; basePoints?: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    preferentialProcurement?: { maxPoints: number; basePoints?: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    supplierDevelopment?: { maxPoints: number; basePoints?: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    enterpriseDevelopment?: { maxPoints: number; basePoints?: number; subMinimumPercent?: number; chooseOneGroup?: string };
+    socioEconomicDevelopment?: { maxPoints: number; basePoints?: number; chooseOneGroup?: string };
+    yesInitiative?: { maxPoints: number; basePoints?: number; chooseOneGroup?: string };
   };
   /**
    * FSC Banks/LTI — Empowerment Financing pillar config.

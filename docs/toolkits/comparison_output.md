@@ -1,3 +1,27 @@
+## Target vs maximum reachable (live `sectorConfig.ts`)
+
+| Sector | Target (denominator) | Bonus available | Max reachable |
+|--------|---------------------:|----------------:|--------------:|
+| RCOGP_GENERIC | 120 | 9 | 120 |
+| ICT_GENERIC | 140 | 10 | 140 |
+| FSC_GENERIC | 119 | 11 | 119 |
+| FSC_BANKS | 132 | 9 | 132 |
+| FSC_LTI | 134 | 11 | 134 |
+| FSC_STI | 129 | 11 | 129 |
+| AGRI_GENERIC | 128 | 9 | 128 |
+| RCOGP_QSE | 108 | 8 | 108 |
+| ICT_QSE | 116 | 9 | 116 |
+| FSC_QSE | 100 | 6 | 100 |
+| TRANSPORT_GENERIC | 108 | 6 | 108 |
+| TRANSPORT_QSE | 100 | 7 | 107 **← bonus lifts above target** |
+| CONSTRUCTION_QSE | 110 | 0 | 110 |
+| CONSTRUCTION_CONTRACTOR | 123 | 0 | 123 |
+| CONSTRUCTION_BEP | 123 | 0 | 123 |
+
+Where target == reachable the sector's `totalMaxPoints` already includes its bonus points; the split still matters per element, because an entity on full base points must read 100% of that element rather than short of a merged cap.
+
+---
+
 ### RCOGP Generic
 
 #### Summary Scorecard (Pillar Max Points)

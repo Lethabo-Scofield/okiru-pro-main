@@ -69,6 +69,8 @@ export interface ManagementSubLine {
   target: string;
   weighting: number;
   score: number;
+  /** Free-text detail rendered under the row (informational bands, caveats). */
+  note?: string;
   /**
    * Bonus indicator — awarded on top of the element weighting, not out of it.
    * No generic-Codes MC indicator is a bonus, so this calculator never sets it;
@@ -437,10 +439,37 @@ export function calculateManagementScore(
         { name: "Black female employees in junior management (incl. Semi-skilled & Unskilled)", target: `${(juniorBWBandTarget * 100).toFixed(0)}% (EAP-adjusted)`, weighting: juniorBWMaxPts, score: juniorBWOScore },
       ];
 
+  /**
+   * Skilled Technical is INFORMATIONAL — the Codes do not award points for it,
+   * and `totalPoints` below deliberately excludes these two scores.
+   *
+   * They used to be emitted with `weighting: seniorMaxPts` (borrowed from the
+   * Senior band), which put points into the breakdown that the pillar can never
+   * award: RCOGP Generic MC showed 15 lines summing to 22 against a 19-pt cap,
+   * RCOGP QSE 23 against 15. That breaks the invariant that a breakdown
+   * reconciles to its pillar, and it corrupts the base/bonus split, which is
+   * derived from these same sub-line weightings.
+   *
+   * Emitted as weighting 0 / score 0 with the achievement in the note — the
+   * same shape `eapDetailRows` uses for informational rows — so the reader
+   * still sees the band without it pretending to be scored.
+   */
   const skilledTechnicalSubLines: ManagementSubLine[] = seniorMaxPts > 0
     ? [
-        { name: "Black employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorMaxPts, score: skilledTechnicalBlackScore },
-        { name: "Black female employees in skilled technical positions", target: `${(skilledTechnicalEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`, weighting: seniorBWMaxPts, score: skilledTechnicalBWOScore },
+        {
+          name: "Black employees in skilled technical positions (informational — not scored)",
+          target: `${(skilledTechnicalEAP.blackTarget * 100).toFixed(1)}% (EAP)`,
+          weighting: 0,
+          score: 0,
+          note: `Actual ${(skilledTechnicalBlackPct * 100).toFixed(1)}% — the Codes award no points for this band.`,
+        },
+        {
+          name: "Black female employees in skilled technical positions (informational — not scored)",
+          target: `${(skilledTechnicalEAP.blackWomenTarget * 100).toFixed(1)}% (EAP)`,
+          weighting: 0,
+          score: 0,
+          note: `Actual ${(skilledTechnicalBWOPct * 100).toFixed(1)}% — the Codes award no points for this band.`,
+        },
       ]
     : [];
 

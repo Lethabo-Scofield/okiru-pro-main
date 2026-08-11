@@ -4,6 +4,7 @@ import { calculateManagementScore } from './calculators/management';
 import { calculateSkillsScore } from './calculators/skills';
 import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
+import { pillarBonusSplit } from './sectors/sector-labels';
 
 interface ExportOptions {
   analystName?: string;
@@ -429,7 +430,19 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
   const RECOGNITION_TABLE: Record<number, number> = { 1: 1.35, 2: 1.25, 3: 1.10, 4: 1.00, 5: 0.80, 6: 0.60, 7: 0.50, 8: 0.10, 0: 0 };
 
   const procRows: any[][] = [
-    ['PREFERENTIAL PROCUREMENT — ELEMENT 4 (Max 29 Base + 2 Bonus = 31 Points)'],
+    // Derived per sector. The old literal read "Max 29 Base + 2 Bonus = 31",
+    // which was wrong even for RCOGP — its PP element is 29 IN TOTAL (27 base +
+    // 2 designated-group bonus), not 31.
+    [`PREFERENTIAL PROCUREMENT — ELEMENT 4 (${(() => {
+      const s = pillarBonusSplit(
+        state.scorecard.preferentialProcurement?.weighting ?? 0,
+        state.scorecard.preferentialProcurement?.score ?? 0,
+        state.scorecard.preferentialProcurement?.subLines,
+      );
+      return s.bonusAvailable > 0
+        ? `${s.baseWeight} base + ${s.bonusAvailable} bonus = ${s.baseWeight + s.bonusAvailable} points`
+        : `${s.baseWeight} points`;
+    })()})`],
     [''],
     ['PROCUREMENT OVERVIEW'],
     ['Metric', 'Value (ZAR)', 'Notes'],

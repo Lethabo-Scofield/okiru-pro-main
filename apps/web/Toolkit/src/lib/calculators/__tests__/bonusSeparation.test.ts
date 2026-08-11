@@ -24,16 +24,34 @@ import {
   calculateTransportQseEmploymentEquity,
   calculateTransportLargeManagementControl,
   calculateTransportLargeEmploymentEquity,
+  calculateTransportLargeSkills,
 } from '../transport';
 import { calculateOwnershipScore } from '../ownership';
 import { TRANSPORT_QSE_CALCULATOR_CONFIG } from '../../sectors/transport-qse';
 import { TRANSPORT_GENERIC_CALCULATOR_CONFIG } from '../../sectors/transport-generic';
+import { calculateManagementScore } from '../management';
+import { calculateSkillsScore } from '../skills';
+import { calculateProcurementScore } from '../procurement';
 import { RCOGP_GENERIC_CALCULATOR_CONFIG } from '../../sectors/rcogp-generic';
+import { RCOGP_QSE_CALCULATOR_CONFIG } from '../../sectors/rcogp-qse';
+import { ICT_GENERIC_CALCULATOR_CONFIG } from '../../sectors/ict-generic';
+import { ICT_QSE_CALCULATOR_CONFIG } from '../../sectors/ict-qse';
+import { AGRI_GENERIC_CALCULATOR_CONFIG } from '../../sectors/agri-generic';
+import { FSC_GENERIC_CALCULATOR_CONFIG } from '../../sectors/fsc-generic';
+import { FSC_QSE_CALCULATOR_CONFIG } from '../../sectors/fsc-qse';
+import { FSC_BANKS_CALCULATOR_CONFIG } from '../../sectors/fsc-banks';
+import { FSC_LTI_CALCULATOR_CONFIG } from '../../sectors/fsc-lti';
+import { FSC_STI_CALCULATOR_CONFIG } from '../../sectors/fsc-sti';
 import { pillarBreakdownSubtitle, summarizeSubLines } from '../../sectors/sector-labels';
+import type { CalculatorConfig } from '../../../../../shared/schema';
 import { TRANSPORT_QSE, TRANSPORT_GENERIC } from '../../../../../../api/pipeline/sectorConfig';
 import type { ManagementData, OwnershipData } from '../../types';
 
 const EMPTY_MANAGEMENT: ManagementData = { id: '1', clientId: 'C-1', employees: [] };
+// Weightings do not depend on the data — only scores do — so empty fixtures are
+// enough to assert how each pillar's points are apportioned.
+const EMPTY_SKILLS = { id: '1', clientId: 'C-1', leviableAmount: 1_000_000, trainingPrograms: [] } as never;
+const EMPTY_PROCUREMENT = { id: '1', clientId: 'C-1', tmps: 1_000_000, suppliers: [] } as never;
 const EMPTY_OWNERSHIP: OwnershipData = {
   id: '1',
   clientId: 'C-1',
@@ -101,6 +119,80 @@ const CASES: Array<{
     maxPoints: TRANSPORT_GENERIC.pillarConfigs.employmentEquity!.maxPoints,
   },
 ];
+
+/**
+ * EVERY sector, EVERY pillar — the cross-sector half of the guard.
+ *
+ * The Transport cases above pin exact numbers because they were the reported
+ * bug. These check the invariants that must hold sector-wide, so a new sector or
+ * a changed weighting cannot quietly reintroduce a merged cap:
+ *
+ *   1. sub-lines reconcile to pillarConfigs.maxPoints (nothing phantom, nothing
+ *      missing — this is what caught the MC "skilled technical" rows that
+ *      carried Senior's weighting while scoring nothing);
+ *   2. where the config declares basePoints, the NON-bonus lines sum to exactly
+ *      it, so the declared weighting and the calculator cannot drift apart;
+ *   3. no line is named "bonus" without carrying isBonus.
+ */
+const ALL_SECTORS: Array<[string, CalculatorConfig]> = [
+  ['RCOGP Generic', RCOGP_GENERIC_CALCULATOR_CONFIG],
+  ['RCOGP QSE', RCOGP_QSE_CALCULATOR_CONFIG],
+  ['ICT Generic', ICT_GENERIC_CALCULATOR_CONFIG],
+  ['ICT QSE', ICT_QSE_CALCULATOR_CONFIG],
+  ['AgriBEE', AGRI_GENERIC_CALCULATOR_CONFIG],
+  ['FSC Others', FSC_GENERIC_CALCULATOR_CONFIG],
+  ['FSC QSE', FSC_QSE_CALCULATOR_CONFIG],
+  ['FSC Banks', FSC_BANKS_CALCULATOR_CONFIG],
+  ['FSC LTI', FSC_LTI_CALCULATOR_CONFIG],
+  ['FSC STI', FSC_STI_CALCULATOR_CONFIG],
+  ['Transport Large', TRANSPORT_GENERIC_CALCULATOR_CONFIG],
+  ['Transport QSE', TRANSPORT_QSE_CALCULATOR_CONFIG],
+];
+
+/** The pillars this suite can build from empty fixtures, with their config key. */
+function pillarLines(cfg: CalculatorConfig, sector: string): Array<[string, Line[]]> {
+  const qse = cfg.sectorCode === 'TRANSPORT' && cfg.scorecardType === 'QSE';
+  const large = cfg.sectorCode === 'TRANSPORT' && cfg.scorecardType !== 'QSE';
+  const out: Array<[string, Line[]]> = [
+    ['ownership', calculateOwnershipScore(EMPTY_OWNERSHIP, cfg).subLines],
+    ['managementControl', qse
+      ? calculateTransportQseManagement(EMPTY_MANAGEMENT, cfg).subLines!
+      : large
+        ? calculateTransportLargeManagementControl(EMPTY_MANAGEMENT, cfg).subLines!
+        : calculateManagementScore(EMPTY_MANAGEMENT, cfg, 'Gauteng').subLines],
+    ['skillsDevelopment', (large
+      ? calculateTransportLargeSkills(EMPTY_SKILLS, cfg)
+      : calculateSkillsScore(EMPTY_SKILLS, cfg, 'Gauteng')).subLines],
+    ['preferentialProcurement', calculateProcurementScore(EMPTY_PROCUREMENT, cfg).subLines],
+  ];
+  if (qse) out.push(['employmentEquity', calculateTransportQseEmploymentEquity(EMPTY_MANAGEMENT, cfg, 'Gauteng').subLines!]);
+  if (large) out.push(['employmentEquity', calculateTransportLargeEmploymentEquity(EMPTY_MANAGEMENT, cfg).subLines!]);
+  void sector;
+  return out as Array<[string, Line[]]>;
+}
+
+describe.each(ALL_SECTORS)('%s — every pillar reconciles', (sector, cfg) => {
+  const pc = (cfg.pillarConfigs ?? {}) as Record<string, { maxPoints: number; basePoints?: number } | undefined>;
+
+  for (const [pillar, lines] of pillarLines(cfg, sector)) {
+    const declared = pc[pillar];
+    if (!declared || declared.maxPoints <= 0 || !lines?.length) continue;
+
+    it(`${pillar}: sub-lines sum to maxPoints (${declared.maxPoints})`, () => {
+      expect(sum(lines)).toBeCloseTo(declared.maxPoints, 2);
+    });
+
+    it(`${pillar}: non-bonus lines sum to the declared weighting`, () => {
+      // basePoints absent means "no bonus here" — then base must equal the cap.
+      const expected = declared.basePoints ?? declared.maxPoints;
+      expect(baseOf(lines)).toBeCloseTo(expected, 2);
+    });
+
+    it(`${pillar}: no line says "bonus" without the flag`, () => {
+      expect(lines.filter((l) => /bonus/i.test(l.name) && !l.isBonus).map((l) => l.name)).toEqual([]);
+    });
+  }
+});
 
 describe('bonus points are separated from base weighting', () => {
   describe.each(CASES)('$label', ({ lines, basePoints, maxPoints }) => {

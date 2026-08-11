@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { OKIRU_LOGO_BASE64 } from "./logo";
+import { pillarBonusSplit } from "./sectors/sector-labels";
 
 interface ExportOptions {
   analystName?: string;
@@ -595,7 +596,18 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
   doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
   doc.setFontSize(9);
   doc.setTextColor(...AMBER);
-  doc.text(`TMPS: ${formatCurrency(state.procurement?.tmps || 0)}    |    Score: ${state.scorecard.procurement.score.toFixed(2)} / 27 (Base 25 + DG Bonus 2)`, margin + 5, y + 7);
+  // Derived, not hardcoded: "/ 27 (Base 25 + DG Bonus 2)" was RCOGP-shaped and
+  // wrong everywhere else (RCOGP PP is 29 = 27 + 2; FSC Others 24 = 20 + 4;
+  // Transport QSE 25 with no bonus line at all).
+  const ppSplit = pillarBonusSplit(
+    state.scorecard.preferentialProcurement?.weighting ?? 0,
+    state.scorecard.preferentialProcurement?.score ?? 0,
+    state.scorecard.preferentialProcurement?.subLines,
+  );
+  const ppLabel = ppSplit.bonusAvailable > 0
+    ? `${ppSplit.baseWeight} base + ${ppSplit.bonusAvailable} bonus`
+    : `${ppSplit.baseWeight} pts`;
+  doc.text(`TMPS: ${formatCurrency(state.procurement?.tmps || 0)}    |    Score: ${state.scorecard.procurement.score.toFixed(2)} / ${ppSplit.baseWeight} (${ppLabel})`, margin + 5, y + 7);
 
   doc.addPage();
   addPageHeader(doc, "ENTERPRISE, SUPPLIER & SOCIO-ECONOMIC DEVELOPMENT", SECTION_THEMES.esd);

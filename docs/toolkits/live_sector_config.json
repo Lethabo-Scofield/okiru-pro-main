@@ -3,6 +3,9 @@
     "sectorCode": "RCOGP",
     "scorecardType": "Generic",
     "totalMaxPoints": 120,
+    "reachableMax": 120,
+    "bonusAvailable": 9,
+    "ungroupedBase": 111,
     "pillarSum": 120,
     "pillars": {
       "ownership": {
@@ -17,13 +20,13 @@
       },
       "skillsDevelopment": {
         "max": 25,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 5
       },
       "preferentialProcurement": {
         "max": 29,
-        "base": null,
-        "bonus": 0
+        "base": 27,
+        "bonus": 2
       },
       "supplierDevelopment": {
         "max": 10,
@@ -32,8 +35,8 @@
       },
       "enterpriseDevelopment": {
         "max": 7,
-        "base": null,
-        "bonus": 0
+        "base": 5,
+        "bonus": 2
       },
       "socioEconomicDevelopment": {
         "max": 5,
@@ -91,6 +94,9 @@
     "sectorCode": "ICT",
     "scorecardType": "Generic",
     "totalMaxPoints": 140,
+    "reachableMax": 140,
+    "bonusAvailable": 10,
+    "ungroupedBase": 130,
     "pillarSum": 140,
     "pillars": {
       "ownership": {
@@ -110,13 +116,13 @@
       },
       "skillsDevelopment": {
         "max": 25,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 5
       },
       "preferentialProcurement": {
         "max": 27,
-        "base": null,
-        "bonus": 0
+        "base": 25,
+        "bonus": 2
       },
       "supplierDevelopment": {
         "max": 10,
@@ -125,8 +131,8 @@
       },
       "enterpriseDevelopment": {
         "max": 18,
-        "base": null,
-        "bonus": 0
+        "base": 15,
+        "bonus": 3
       },
       "socioEconomicDevelopment": {
         "max": 12,
@@ -184,6 +190,9 @@
     "sectorCode": "FSC",
     "scorecardType": "Generic",
     "totalMaxPoints": 119,
+    "reachableMax": 119,
+    "bonusAvailable": 11,
+    "ungroupedBase": 108,
     "pillarSum": 119,
     "pillars": {
       "ownership": {
@@ -203,13 +212,13 @@
       },
       "skillsDevelopment": {
         "max": 23,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 3
       },
       "preferentialProcurement": {
         "max": 24,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 4
       },
       "supplierDevelopment": {
         "max": 10,
@@ -218,8 +227,8 @@
       },
       "enterpriseDevelopment": {
         "max": 9,
-        "base": null,
-        "bonus": 0
+        "base": 5,
+        "bonus": 4
       },
       "socioEconomicDevelopment": {
         "max": 8,
@@ -277,6 +286,9 @@
     "sectorCode": "FSC",
     "scorecardType": "Generic",
     "totalMaxPoints": 132,
+    "reachableMax": 132,
+    "bonusAvailable": 9,
+    "ungroupedBase": 123,
     "pillarSum": 105,
     "pillars": {
       "ownership": {
@@ -296,13 +308,13 @@
       },
       "skillsDevelopment": {
         "max": 23,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 3
       },
       "preferentialProcurement": {
         "max": 19,
-        "base": null,
-        "bonus": 0
+        "base": 15,
+        "bonus": 4
       },
       "supplierDevelopment": {
         "max": 7,
@@ -311,8 +323,8 @@
       },
       "enterpriseDevelopment": {
         "max": 5,
-        "base": null,
-        "bonus": 0
+        "base": 3,
+        "bonus": 2
       },
       "socioEconomicDevelopment": {
         "max": 8,
@@ -370,6 +382,9 @@
     "sectorCode": "FSC",
     "scorecardType": "Generic",
     "totalMaxPoints": 134,
+    "reachableMax": 134,
+    "bonusAvailable": 11,
+    "ungroupedBase": 123,
     "pillarSum": 107,
     "pillars": {
       "ownership": {
@@ -389,13 +404,13 @@
       },
       "skillsDevelopment": {
         "max": 23,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 3
       },
       "preferentialProcurement": {
         "max": 19,
-        "base": null,
-        "bonus": 0
+        "base": 15,
+        "bonus": 4
       },
       "supplierDevelopment": {
         "max": 7,
@@ -404,8 +419,8 @@
       },
       "enterpriseDevelopment": {
         "max": 7,
-        "base": null,
-        "bonus": 0
+        "base": 3,
+        "bonus": 4
       },
       "socioEconomicDevelopment": {
         "max": 8,
@@ -463,6 +478,9 @@
     "sectorCode": "FSC",
     "scorecardType": "Generic",
     "totalMaxPoints": 129,
+    "reachableMax": 129,
+    "bonusAvailable": 11,
+    "ungroupedBase": 118,
     "pillarSum": 117,
     "pillars": {
       "ownership": {
@@ -482,13 +500,13 @@
       },
       "skillsDevelopment": {
         "max": 23,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 3
       },
       "preferentialProcurement": {
         "max": 24,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 4
       },
       "supplierDevelopment": {
         "max": 10,
@@ -497,8 +515,8 @@
       },
       "enterpriseDevelopment": {
         "max": 9,
-        "base": null,
-        "bonus": 0
+        "base": 5,
+        "bonus": 4
       },
       "socioEconomicDevelopment": {
         "max": 8,
@@ -556,6 +574,9 @@
     "sectorCode": "AGRI",
     "scorecardType": "Generic",
     "totalMaxPoints": 128,
+    "reachableMax": 128,
+    "bonusAvailable": 9,
+    "ungroupedBase": 119,
     "pillarSum": 128,
     "pillars": {
       "ownership": {
@@ -575,13 +596,13 @@
       },
       "skillsDevelopment": {
         "max": 25,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 5
       },
       "preferentialProcurement": {
         "max": 27,
-        "base": null,
-        "bonus": 0
+        "base": 25,
+        "bonus": 2
       },
       "supplierDevelopment": {
         "max": 10,
@@ -590,8 +611,8 @@
       },
       "enterpriseDevelopment": {
         "max": 7,
-        "base": null,
-        "bonus": 0
+        "base": 5,
+        "bonus": 2
       },
       "socioEconomicDevelopment": {
         "max": 15,
@@ -649,6 +670,9 @@
     "sectorCode": "RCOGP",
     "scorecardType": "QSE",
     "totalMaxPoints": 108,
+    "reachableMax": 108,
+    "bonusAvailable": 8,
+    "ungroupedBase": 100,
     "pillarSum": 108,
     "pillars": {
       "ownership": {
@@ -663,13 +687,13 @@
       },
       "skillsDevelopment": {
         "max": 30,
-        "base": null,
-        "bonus": 0
+        "base": 25,
+        "bonus": 5
       },
       "preferentialProcurement": {
         "max": 21,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 1
       },
       "supplierDevelopment": {
         "max": 5,
@@ -678,8 +702,8 @@
       },
       "enterpriseDevelopment": {
         "max": 7,
-        "base": null,
-        "bonus": 0
+        "base": 5,
+        "bonus": 2
       },
       "socioEconomicDevelopment": {
         "max": 5,
@@ -737,6 +761,9 @@
     "sectorCode": "ICT",
     "scorecardType": "QSE",
     "totalMaxPoints": 116,
+    "reachableMax": 116,
+    "bonusAvailable": 9,
+    "ungroupedBase": 107,
     "pillarSum": 116,
     "pillars": {
       "ownership": {
@@ -751,13 +778,13 @@
       },
       "skillsDevelopment": {
         "max": 30,
-        "base": null,
-        "bonus": 0
+        "base": 25,
+        "bonus": 5
       },
       "preferentialProcurement": {
         "max": 21,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 1
       },
       "supplierDevelopment": {
         "max": 5,
@@ -766,8 +793,8 @@
       },
       "enterpriseDevelopment": {
         "max": 8,
-        "base": null,
-        "bonus": 0
+        "base": 5,
+        "bonus": 3
       },
       "socioEconomicDevelopment": {
         "max": 12,
@@ -825,6 +852,9 @@
     "sectorCode": "FSC",
     "scorecardType": "QSE",
     "totalMaxPoints": 100,
+    "reachableMax": 100,
+    "bonusAvailable": 6,
+    "ungroupedBase": 94,
     "pillarSum": 100,
     "pillars": {
       "ownership": {
@@ -844,13 +874,13 @@
       },
       "skillsDevelopment": {
         "max": 25,
-        "base": null,
-        "bonus": 0
+        "base": 20,
+        "bonus": 5
       },
       "preferentialProcurement": {
         "max": 20,
-        "base": null,
-        "bonus": 0
+        "base": 19,
+        "bonus": 1
       },
       "supplierDevelopment": {
         "max": 5,
@@ -918,22 +948,25 @@
     "sectorCode": "TRANSPORT",
     "scorecardType": "Generic",
     "totalMaxPoints": 108,
+    "reachableMax": 108,
+    "bonusAvailable": 6,
+    "ungroupedBase": 102,
     "pillarSum": 108,
     "pillars": {
       "ownership": {
         "max": 24,
-        "base": null,
-        "bonus": 0
+        "base": 22,
+        "bonus": 2
       },
       "managementControl": {
         "max": 11,
-        "base": null,
-        "bonus": 0
+        "base": 10,
+        "bonus": 1
       },
       "employmentEquity": {
         "max": 18,
-        "base": null,
-        "bonus": 0
+        "base": 15,
+        "bonus": 3
       },
       "skillsDevelopment": {
         "max": 15,
@@ -1011,6 +1044,9 @@
     "sectorCode": "TRANSPORT",
     "scorecardType": "QSE",
     "totalMaxPoints": 100,
+    "reachableMax": 107,
+    "bonusAvailable": 7,
+    "ungroupedBase": 0,
     "pillarSum": 182,
     "pillars": {
       "ownership": {
@@ -1104,6 +1140,9 @@
     "sectorCode": "CONSTRUCTION",
     "scorecardType": "QSE",
     "totalMaxPoints": 110,
+    "reachableMax": 110,
+    "bonusAvailable": 0,
+    "ungroupedBase": 110,
     "pillarSum": 110,
     "pillars": {
       "ownership": {
@@ -1192,6 +1231,9 @@
     "sectorCode": "CONSTRUCTION",
     "scorecardType": "Contractor",
     "totalMaxPoints": 123,
+    "reachableMax": 123,
+    "bonusAvailable": 0,
+    "ungroupedBase": 123,
     "pillarSum": 123,
     "pillars": {
       "ownership": {
@@ -1280,6 +1322,9 @@
     "sectorCode": "CONSTRUCTION",
     "scorecardType": "BEP",
     "totalMaxPoints": 123,
+    "reachableMax": 123,
+    "bonusAvailable": 0,
+    "ungroupedBase": 123,
     "pillarSum": 123,
     "pillars": {
       "ownership": {

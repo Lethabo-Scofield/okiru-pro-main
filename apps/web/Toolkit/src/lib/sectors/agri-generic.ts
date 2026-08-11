@@ -241,28 +241,28 @@ export function sectorConfigToAgriGenericCalculatorConfig(sc: SectorConfig): Cal
     })),
     pillarConfigs: {
       ownership: {
-        maxPoints: pOwn.maxPoints,                     // 25
+        maxPoints: pOwn.maxPoints, basePoints: pOwn.basePoints,                     // 25
         subMinimumPercent: pOwn.subMinimumPercent,     // 40
       },
       managementControl: {
-        maxPoints: pMc.maxPoints,                      // 23
+        maxPoints: pMc.maxPoints, basePoints: pMc.basePoints,                      // 23
         subMinimumPercent: pMc.subMinimumPercent,      // 0
       },
       employmentEquity: { maxPoints: pEe.maxPoints },  // 0
       skillsDevelopment: {
-        maxPoints: pSk.maxPoints,                      // 25
+        maxPoints: pSk.maxPoints, basePoints: pSk.basePoints,                      // 25
         subMinimumPercent: pSk.subMinimumPercent,      // 40
       },
       preferentialProcurement: {
-        maxPoints: pPp.maxPoints,                      // 27
+        maxPoints: pPp.maxPoints, basePoints: pPp.basePoints,                      // 27
         subMinimumPercent: pPp.subMinimumPercent,      // 40
       },
       supplierDevelopment: {
-        maxPoints: pSd.maxPoints,                      // 10
+        maxPoints: pSd.maxPoints, basePoints: pSd.basePoints,                      // 10
         subMinimumPercent: pSd.subMinimumPercent,      // 40
       },
       enterpriseDevelopment: {
-        maxPoints: pEd.maxPoints,                      // 7
+        maxPoints: pEd.maxPoints, basePoints: pEd.basePoints,                      // 7
         subMinimumPercent: pEd.subMinimumPercent,      // 0
       },
       socioEconomicDevelopment: { maxPoints: pSed.maxPoints }, // 15
