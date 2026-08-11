@@ -23,6 +23,7 @@ import { Check, ChevronRight, FileText, GitMerge, ListChecks, Sparkles, Triangle
 import {
   buildExtractionReview,
   type ExtractionReview,
+  type ReviewChoice,
   type ReviewDecision,
 } from "@/lib/extractionReview";
 import type { WorkbookSectionsInput } from "./workbookValidation";
@@ -36,6 +37,8 @@ export interface CellUpdate {
 interface Props {
   sections: WorkbookSectionsInput;
   onApplyCellUpdates: (sectionKey: string, updates: CellUpdate[]) => Promise<void> | void;
+  /** Settle an entity-level figure the documents disagreed on. */
+  onApplyMetaValue?: (sectionKey: string, column: string, value: string) => Promise<void> | void;
   onNavigateToSection: (sectionKey: string) => void;
 }
 
@@ -94,16 +97,16 @@ function DecisionRow({
   );
 }
 
-export function ExtractionReviewModal({ sections, onApplyCellUpdates, onNavigateToSection }: Props) {
+export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMetaValue, onNavigateToSection }: Props) {
   const [open, setOpen] = useState(false);
   const [applied, setApplied] = useState<Set<string>>(() => new Set());
 
   const review: ExtractionReview = useMemo(() => buildExtractionReview(sections), [sections]);
   const fromDocuments = review.extracted.some((s) => s.aiRowCount > 0);
-  if (!fromDocuments) return null;
+  if (!fromDocuments && review.choices.length === 0) return null;
 
   const pendingSuggestions = review.suggestions.filter((s) => !applied.has(s.id));
-  const badge = pendingSuggestions.length + review.conflicts.length + review.decisions.length;
+  const badge = pendingSuggestions.length + review.conflicts.length + review.decisions.length + review.choices.length;
 
   const applySuggestion = async (id: string) => {
     const s = review.suggestions.find((x) => x.id === id);
@@ -199,6 +202,80 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onNavigate
                   ))}
                 </div>
               </section>
+
+              {/* Which did you mean? — FIRST, above everything else.
+                  Every other group is an improvement to a workbook that already
+                  scores. These are figures the scorecard is currently missing
+                  because the documents disagreed, so they are the only items
+                  here that are actively costing points. */}
+              {review.choices.length > 0 && (
+                <section data-testid="review-choices">
+                  <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-amber-300/90">
+                    <TriangleAlert className="h-3.5 w-3.5" /> Which did you mean?
+                  </div>
+                  <div className="space-y-2">
+                    {review.choices.map((c) => (
+                      <div
+                        key={c.id}
+                        className="rounded-xl border border-amber-300/20 bg-[#17150f] px-3.5 py-3"
+                        data-testid={`review-choice-${c.column}`}
+                      >
+                        <p className="text-[12.5px] text-white">{c.statement}</p>
+                        <p className="mt-0.5 text-[11.5px] text-[#8e8e93]">
+                          {c.sectionLabel} · {c.columnLabel}
+                        </p>
+                        <div className="mt-2.5 flex flex-wrap gap-2">
+                          {c.options.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              disabled={!onApplyMetaValue}
+                              onClick={() => void onApplyMetaValue?.(c.section, c.column, o.value)}
+                              className="rounded-lg border border-white/[0.12] bg-[#1c1c1e] px-3 py-2 text-left hover:border-amber-300/50 disabled:opacity-40"
+                              data-testid={`review-choice-option-${o.value}`}
+                            >
+                              <span className="block text-[13px] font-medium tabular-nums text-white">{o.value}</span>
+                              {/* Naming the documents is the whole basis for
+                                  choosing — a bare pair of numbers is not a
+                                  question anyone can answer. */}
+                              <span className="mt-0.5 block text-[10.5px] text-[#8e8e93]">
+                                {o.sources.length > 0 ? `from ${o.sources.join(", ")}` : "source unknown"}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Confirmed by more than one document. Not an action — the
+                  opposite. It marks the figures nobody needs to re-check, so
+                  attention goes to the ones that do. */}
+              {review.corroborated.length > 0 && (
+                <section data-testid="review-corroborated">
+                  <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-emerald-300/80">
+                    <Check className="h-3.5 w-3.5" /> Confirmed by more than one document
+                  </div>
+                  <div className="space-y-1.5">
+                    {review.corroborated.map((c) => (
+                      <div
+                        key={`${c.section}.${c.column}`}
+                        className="rounded-lg border border-emerald-400/15 bg-[#0f1512] px-3 py-2"
+                      >
+                        <span className="text-[12.5px] text-white">
+                          {c.columnLabel} — <span className="tabular-nums">{c.value}</span>
+                        </span>
+                        <span className="ml-2 text-[11px] text-emerald-300/70">
+                          {c.agreementCount} documents agree
+                        </span>
+                        <span className="mt-0.5 block text-[10.5px] text-[#8e8e93]">{c.sources.join(", ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               {/* Suggestions */}
               {pendingSuggestions.length > 0 && (

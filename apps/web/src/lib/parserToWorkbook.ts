@@ -98,6 +98,16 @@ export interface MetaCorroboration {
   sources: string[];
 }
 
+/**
+ * Reserved section-meta keys carrying the extraction's unfinished business.
+ *
+ * Underscore-prefixed so they can never collide with a workbook column, and
+ * exported so the review layer reads the same constant the writer used rather
+ * than a string literal that can drift.
+ */
+export const META_CONFLICTS_KEY = "_metaConflicts";
+export const META_CORROBORATION_KEY = "_metaCorroboration";
+
 export interface ParserToWorkbookResult {
   /** Grid rows, per workbook section. */
   rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>;
@@ -942,6 +952,37 @@ export function toWorkbookSections(
   }
   for (const [section, sectionMeta] of Object.entries(result.meta)) {
     sections[section] = { rows: sections[section]?.rows ?? [], meta: sectionMeta };
+  }
+
+  // Unresolved disagreements travel WITH the workbook, under reserved keys.
+  //
+  // A conflict is found once, at upload, but it is answered later — in the
+  // workbook, by someone with the documents open. If it lived only in the
+  // upload screen's memory it would be gone by the time anyone could act on
+  // it, and the figure would just be permanently missing with no explanation.
+  // Reserved `_` keys are not columns, so the grid ignores them and
+  // persistSection writes the section wholesale, so they survive a reload.
+  const attach = (section: string, key: string, value: unknown[]) => {
+    if (value.length === 0) return;
+    const target = (sections[section] ??= { rows: [] });
+    target.meta = { ...(target.meta ?? {}), [key]: value };
+  };
+
+  for (const section of Array.from(new Set(result.metaConflicts.map((c) => c.section)))) {
+    attach(
+      section,
+      META_CONFLICTS_KEY,
+      result.metaConflicts.filter((c) => c.section === section).map(({ column, field, candidates }) => ({ column, field, candidates })),
+    );
+  }
+  for (const section of Array.from(new Set(result.metaCorroboration.map((c) => c.section)))) {
+    attach(
+      section,
+      META_CORROBORATION_KEY,
+      result.metaCorroboration
+        .filter((c) => c.section === section)
+        .map(({ column, field, value, agreementCount, sources }) => ({ column, field, value, agreementCount, sources })),
+    );
   }
   return sections;
 }

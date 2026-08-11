@@ -27,6 +27,7 @@ import {
   aggregateWorkbookValidation,
   type WorkbookSectionsInput,
 } from "@/components/workbook/workbookValidation";
+import { META_CONFLICTS_KEY, META_CORROBORATION_KEY } from "@/lib/parserToWorkbook";
 
 export interface ReviewRowRef {
   rowId: string;
@@ -79,12 +80,47 @@ export interface ReviewDecision {
   statement: string;
 }
 
+/**
+ * An entity-level figure the documents disagree on — "which of these did you
+ * mean?".
+ *
+ * Distinct from ReviewConflict, which reports a disagreement for a human to go
+ * and fix somewhere else. A choice is ANSWERABLE HERE: the rival values are
+ * known, each with the documents asserting it, and picking one writes it.
+ * Until then the figure is absent from the scorecard, so this is not advisory —
+ * it is a hole in the score with the answer sitting next to it.
+ */
+export interface ReviewChoice {
+  id: string;
+  section: string;
+  sectionLabel: string;
+  column: string;
+  columnLabel: string;
+  statement: string;
+  options: Array<{ value: string; sources: string[] }>;
+}
+
+/** An entity-level figure more than one document agreed on. */
+export interface ReviewCorroboration {
+  section: string;
+  sectionLabel: string;
+  column: string;
+  columnLabel: string;
+  value: string;
+  agreementCount: number;
+  sources: string[];
+}
+
 export interface ExtractionReview {
   extracted: ReviewSectionSummary[];
   suggestions: ReviewSuggestion[];
   conflicts: ReviewConflict[];
   decisions: ReviewDecision[];
-  /** suggestions + conflicts + decisions — the modal badge count. */
+  /** Disagreements the user can settle right here by picking a value. */
+  choices: ReviewChoice[];
+  /** Figures confirmed by more than one document — shown as strength. */
+  corroborated: ReviewCorroboration[];
+  /** suggestions + conflicts + decisions + choices — the modal badge count. */
   openItems: number;
 }
 
@@ -179,6 +215,15 @@ function columnDefOf(section: string, column: string): ColumnDef | undefined {
   return getSection(section)?.columns?.find((c) => c.key === column);
 }
 
+/** Entity-level fields live in the section's `meta` list, not its `columns`. */
+function metaLabelOf(section: string, column: string): string {
+  const def = getSection(section) as { meta?: ColumnDef[] } | undefined;
+  return def?.meta?.find((m) => m.key === column)?.label ?? columnDefOf(section, column)?.label ?? column;
+}
+
+const blankMeta = (v: unknown): boolean =>
+  v === undefined || v === null || String(v).trim() === "";
+
 /** Build the full review. Pure; recomputable on every workbook load. */
 export function buildExtractionReview(sections: WorkbookSectionsInput): ExtractionReview {
   const extracted: ReviewSectionSummary[] = [];
@@ -200,6 +245,62 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
    */
   const id = (prefix: string, ...parts: Array<string | number>) =>
     `${prefix}_${parts.map((p) => String(p).replace(/[^A-Za-z0-9]+/g, "-")).join("_")}`;
+
+  // ── 0. Entity-level figures the documents could not agree on ─────────────
+  // Written into section meta at extraction time and answered here, because
+  // this is where someone with the documents open actually is.
+  const choices: ReviewChoice[] = [];
+  const corroborated: ReviewCorroboration[] = [];
+  for (const [key, sec] of Object.entries(sections)) {
+    const meta = (sec?.meta ?? {}) as Record<string, unknown>;
+
+    const rawConflicts = meta[META_CONFLICTS_KEY];
+    if (Array.isArray(rawConflicts)) {
+      for (const raw of rawConflicts as Array<Record<string, unknown>>) {
+        const column = str(raw.column);
+        // A conflict is spent once the figure has an agreed value in the cell —
+        // it would otherwise keep asking a question already answered.
+        if (!column || !blankMeta(meta[column])) continue;
+        const candidates = Array.isArray(raw.candidates) ? raw.candidates : [];
+        const options = candidates
+          .map((c) => {
+            const cand = c as { value?: unknown; sources?: unknown };
+            return {
+              value: str(cand.value),
+              sources: Array.isArray(cand.sources) ? cand.sources.map(String) : [],
+            };
+          })
+          .filter((o) => o.value);
+        if (options.length < 2) continue;
+        choices.push({
+          id: id("choice", key, column),
+          section: key,
+          sectionLabel: sectionLabelOf(key),
+          column,
+          columnLabel: metaLabelOf(key, column),
+          statement: `Your documents give ${options.length} different values for ${metaLabelOf(key, column)}. Nothing is scored from it until you pick one.`,
+          options,
+        });
+      }
+    }
+
+    const rawAgreed = meta[META_CORROBORATION_KEY];
+    if (Array.isArray(rawAgreed)) {
+      for (const raw of rawAgreed as Array<Record<string, unknown>>) {
+        const column = str(raw.column);
+        if (!column) continue;
+        corroborated.push({
+          section: key,
+          sectionLabel: sectionLabelOf(key),
+          column,
+          columnLabel: metaLabelOf(key, column),
+          value: str(raw.value),
+          agreementCount: Number(raw.agreementCount ?? 0),
+          sources: Array.isArray(raw.sources) ? raw.sources.map(String) : [],
+        });
+      }
+    }
+  }
 
   // ── 1. What landed where, with provenance ────────────────────────────────
   for (const [key, sec] of Object.entries(sections)) {
@@ -417,6 +518,8 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
     suggestions,
     conflicts,
     decisions,
-    openItems: suggestions.length + conflicts.length + decisions.length,
+    choices,
+    corroborated,
+    openItems: suggestions.length + conflicts.length + decisions.length + choices.length,
   };
 }

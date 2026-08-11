@@ -38,6 +38,7 @@ import { ExtractionReviewModal, type CellUpdate } from "@/components/workbook/Ex
 import { CellValidationPopup, FIELD_LEARN_MORE } from "@/components/workbook/CellValidationPopup";
 import { NumericDateInput } from "@/components/ui/NumericDateInput";
 import { normalizeCellForColumn } from "@/lib/tabularNormalize";
+import { META_CONFLICTS_KEY } from "@/lib/parserToWorkbook";
 import { usePillarPermission } from "@/hooks/usePillarPermission";
 import {
   formatWorkbookValidationSummary,
@@ -2204,6 +2205,27 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         <ExtractionReviewModal
           sections={workbook.sections}
           onNavigateToSection={selectSection}
+          onApplyMetaValue={(sectionKey: string, column: string, value: string) => {
+            // Settle an entity-level figure the documents disagreed on.
+            //
+            // The resolved conflict is REMOVED as the value is written, in the
+            // same update. Leaving it behind would re-ask a question the user
+            // has just answered every time the review recomputes, and the
+            // review reads the cell to decide whether a choice is still live —
+            // so the two must move together or the modal contradicts itself.
+            const wb = workbookRef.current;
+            const prev = (wb?.sections[sectionKey]?.meta ?? {}) as Record<string, unknown>;
+            const remaining = Array.isArray(prev[META_CONFLICTS_KEY])
+              ? (prev[META_CONFLICTS_KEY] as Array<Record<string, unknown>>).filter(
+                  (c) => String(c.column) !== column,
+                )
+              : [];
+            handleMetaChange(sectionKey, {
+              ...prev,
+              [column]: value,
+              [META_CONFLICTS_KEY]: remaining,
+            });
+          }}
           onApplyCellUpdates={(sectionKey: string, updates: CellUpdate[]) => {
             const current = (workbookRef.current?.sections[sectionKey]?.rows ?? []) as Row[];
             const byRow = new Map<string, CellUpdate[]>();

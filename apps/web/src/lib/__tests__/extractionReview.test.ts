@@ -225,3 +225,89 @@ describe("the ID outranks a value copied from another sheet", () => {
     expect(review.suggestions.filter((s) => s.column === "gender" && s.value === "Male")).toHaveLength(0);
   });
 });
+
+describe("which did you mean — entity-level disagreements", () => {
+  // Written into section meta at extraction time (parserToWorkbook) and
+  // answered here, in the workbook, by someone with the documents open.
+  const withConflict = (over: Record<string, unknown> = {}): WorkbookSectionsInput => ({
+    ownership: { rows: [{ _id: "o1", shareholderName: "A", idNumber: MALE_ID, _sourceFiles: ["reg.pdf"] }] },
+    "financial-information": {
+      rows: [],
+      meta: {
+        _metaConflicts: [
+          {
+            column: "revenue",
+            field: "current_year_revenue",
+            candidates: [
+              { value: 10826271, sources: ["afs.pdf"] },
+              { value: 9500000, sources: ["mgmt-accounts.xlsx"] },
+            ],
+          },
+        ],
+        ...over,
+      },
+    },
+  });
+
+  it("asks the question, with each value's documents named", () => {
+    const review = buildExtractionReview(withConflict());
+    expect(review.choices).toHaveLength(1);
+    const choice = review.choices[0];
+    expect(choice.column).toBe("revenue");
+    expect(choice.options.map((o) => o.value)).toEqual(["10826271", "9500000"]);
+    // Without knowing which document said what, the question is unanswerable.
+    expect(choice.options[0].sources).toEqual(["afs.pdf"]);
+    expect(choice.options[1].sources).toEqual(["mgmt-accounts.xlsx"]);
+  });
+
+  it("counts toward the open items so it cannot be missed", () => {
+    const review = buildExtractionReview(withConflict());
+    expect(review.openItems).toBeGreaterThanOrEqual(1);
+  });
+
+  it("stops asking once the figure has been chosen", () => {
+    // The handler writes the value and drops the conflict together; either
+    // alone would leave the modal contradicting itself.
+    const answered = buildExtractionReview(withConflict({ revenue: 10826271 }));
+    expect(answered.choices).toHaveLength(0);
+  });
+
+  it("ignores a conflict that no longer offers a real choice", () => {
+    const review = buildExtractionReview({
+      "financial-information": {
+        rows: [],
+        meta: { _metaConflicts: [{ column: "revenue", field: "r", candidates: [{ value: 1, sources: ["a.pdf"] }] }] },
+      },
+    });
+    expect(review.choices).toHaveLength(0);
+  });
+});
+
+describe("corroboration is reported as strength", () => {
+  const base = (meta: Record<string, unknown>): WorkbookSectionsInput => ({
+    ownership: {
+      rows: [{ _id: "o1", shareholderName: "A", idNumber: MALE_ID, gender: "Male", race: "African", _sourceFiles: ["reg.pdf"] }],
+    },
+    "financial-information": { rows: [], meta },
+  });
+  const agreement = {
+    column: "revenue",
+    field: "current_year_revenue",
+    value: 10826271,
+    agreementCount: 3,
+    sources: ["afs.pdf", "mgmt.xlsx", "tb.pdf"],
+  };
+
+  it("names the figure, the count and the documents", () => {
+    const review = buildExtractionReview(base({ revenue: 10826271, _metaCorroboration: [agreement] }));
+    expect(review.corroborated).toHaveLength(1);
+    expect(review.corroborated[0].agreementCount).toBe(3);
+    expect(review.corroborated[0].sources).toHaveLength(3);
+  });
+
+  it("adds nothing to the badge — agreement is not a task", () => {
+    const without = buildExtractionReview(base({ revenue: 10826271 }));
+    const with_ = buildExtractionReview(base({ revenue: 10826271, _metaCorroboration: [agreement] }));
+    expect(with_.openItems).toBe(without.openItems);
+  });
+});
