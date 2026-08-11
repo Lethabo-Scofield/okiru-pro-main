@@ -36,6 +36,17 @@ export interface Client {
   /** FSC Reinsurer flag — reduces Consumer Education to Additional CE (1 pt, no CE bonus). */
   fscReinsurer?: boolean;
   industry: string;                     // For industry norm lookup
+  /**
+   * Industry description carried from the imported workbook and printed on the
+   * PDF / Excel / PPTX reports as "Industry Sector". Not used in scoring —
+   * `sectorCode` drives that.
+   *
+   * Declared here to match reality: it is persisted server-side
+   * (shared/schema.ts, `default: null`), written by `updateSettings`, and read by
+   * the three exporters. Omitting it from this type produced errors wherever it
+   * was read and invited callers to treat a live field as absent.
+   */
+  industrySector?: string;
   
   // Financials
   financialYear: string;
