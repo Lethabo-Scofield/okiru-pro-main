@@ -1,0 +1,1367 @@
+{
+  "RCOGP_GENERIC": {
+    "sectorCode": "RCOGP",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 120,
+    "pillarSum": 120,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 19,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 29,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 10,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 7,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 120,
+      "ownership": 25,
+      "mc": 19,
+      "ee": null,
+      "skills": 25,
+      "pp": 29,
+      "sd": 10,
+      "ed": 7,
+      "sed": 5,
+      "mc_board_black_pts": 2,
+      "mc_board_bw_pts": 1,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 2,
+      "mc_other_exec_bw_pts": 1,
+      "mc_senior_pts": 2,
+      "mc_senior_bw_pts": 1,
+      "mc_middle_pts": 2,
+      "mc_middle_bw_pts": 1,
+      "mc_junior_pts": 1,
+      "mc_junior_bw_pts": 1,
+      "ee_disabled_pts": 2,
+      "skills_learning_pts": 6,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 4,
+      "skills_learnership_pts": 6,
+      "skills_absorption_pts": 5,
+      "pp_all_pts": 5,
+      "pp_qse_pts": 3,
+      "pp_eme_pts": 4,
+      "pp_bo51_pts": 11,
+      "pp_bwo30_pts": 4,
+      "pp_dg_pts": 2,
+      "esd_sd_pts": 10,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 1,
+      "sed_pts": 5
+    }
+  },
+  "ICT_GENERIC": {
+    "sectorCode": "ICT",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 140,
+    "pillarSum": 140,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 27,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 10,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 18,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 12,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 140,
+      "ownership": 25,
+      "mc": 23,
+      "ee": 0,
+      "skills": 25,
+      "pp": 27,
+      "sd": 10,
+      "ed": 18,
+      "sed": 12,
+      "mc_board_black_pts": 3,
+      "mc_board_bw_pts": 2,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 3,
+      "mc_other_exec_bw_pts": 2,
+      "mc_senior_pts": 2,
+      "mc_senior_bw_pts": 1,
+      "mc_middle_pts": 2,
+      "mc_middle_bw_pts": 1,
+      "mc_junior_pts": 1,
+      "mc_junior_bw_pts": 1,
+      "ee_disabled_pts": 2,
+      "skills_learning_pts": 8,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 4,
+      "skills_learnership_pts": 4,
+      "skills_absorption_pts": 5,
+      "pp_all_pts": 5,
+      "pp_qse_pts": 3,
+      "pp_eme_pts": 4,
+      "pp_bo51_pts": 9,
+      "pp_bwo30_pts": 4,
+      "pp_dg_pts": 2,
+      "esd_sd_pts": 10,
+      "esd_ed_pts": 15,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 2,
+      "sed_pts": 12
+    }
+  },
+  "FSC_GENERIC": {
+    "sectorCode": "FSC",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 119,
+    "pillarSum": 119,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 20,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 24,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 10,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 9,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 8,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 119,
+      "ownership": 25,
+      "mc": 20,
+      "ee": 0,
+      "skills": 23,
+      "pp": 24,
+      "sd": 10,
+      "ed": 9,
+      "sed": 8,
+      "mc_board_black_pts": 1,
+      "mc_board_bw_pts": 1,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 10,
+      "mc_other_exec_bw_pts": 4,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 1,
+      "skills_learning_pts": 11,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 1,
+      "skills_learnership_pts": 4,
+      "skills_absorption_pts": 3,
+      "pp_all_pts": 5,
+      "pp_qse_pts": 3,
+      "pp_eme_pts": 2,
+      "pp_bo51_pts": 7,
+      "pp_bwo30_pts": 3,
+      "pp_dg_pts": 4,
+      "esd_sd_pts": 10,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 3,
+      "sed_pts": 8
+    }
+  },
+  "FSC_BANKS": {
+    "sectorCode": "FSC",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 132,
+    "pillarSum": 105,
+    "pillars": {
+      "ownership": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 20,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 19,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 7,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 8,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 132,
+      "ownership": 23,
+      "mc": 20,
+      "ee": 0,
+      "skills": 23,
+      "pp": 19,
+      "sd": 7,
+      "ed": 5,
+      "sed": 8,
+      "mc_board_black_pts": 1,
+      "mc_board_bw_pts": 1,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 10,
+      "mc_other_exec_bw_pts": 4,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 1,
+      "skills_learning_pts": 11,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 1,
+      "skills_learnership_pts": 4,
+      "skills_absorption_pts": 3,
+      "pp_all_pts": 4,
+      "pp_qse_pts": 2,
+      "pp_eme_pts": 2,
+      "pp_bo51_pts": 5,
+      "pp_bwo30_pts": 2,
+      "pp_dg_pts": 4,
+      "esd_sd_pts": 7,
+      "esd_ed_pts": 3,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 1,
+      "sed_pts": 8
+    }
+  },
+  "FSC_LTI": {
+    "sectorCode": "FSC",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 134,
+    "pillarSum": 107,
+    "pillars": {
+      "ownership": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 20,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 19,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 7,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 7,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 8,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 134,
+      "ownership": 23,
+      "mc": 20,
+      "ee": 0,
+      "skills": 23,
+      "pp": 19,
+      "sd": 7,
+      "ed": 7,
+      "sed": 8,
+      "mc_board_black_pts": 1,
+      "mc_board_bw_pts": 1,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 10,
+      "mc_other_exec_bw_pts": 4,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 1,
+      "skills_learning_pts": 11,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 1,
+      "skills_learnership_pts": 4,
+      "skills_absorption_pts": 3,
+      "pp_all_pts": 4,
+      "pp_qse_pts": 2,
+      "pp_eme_pts": 2,
+      "pp_bo51_pts": 5,
+      "pp_bwo30_pts": 2,
+      "pp_dg_pts": 4,
+      "esd_sd_pts": 7,
+      "esd_ed_pts": 3,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 3,
+      "sed_pts": 8
+    }
+  },
+  "FSC_STI": {
+    "sectorCode": "FSC",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 129,
+    "pillarSum": 117,
+    "pillars": {
+      "ownership": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 20,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 23,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 24,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 10,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 9,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 8,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 129,
+      "ownership": 23,
+      "mc": 20,
+      "ee": 0,
+      "skills": 23,
+      "pp": 24,
+      "sd": 10,
+      "ed": 9,
+      "sed": 8,
+      "mc_board_black_pts": 1,
+      "mc_board_bw_pts": 1,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 10,
+      "mc_other_exec_bw_pts": 4,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 1,
+      "skills_learning_pts": 11,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 1,
+      "skills_learnership_pts": 4,
+      "skills_absorption_pts": 3,
+      "pp_all_pts": 5,
+      "pp_qse_pts": 3,
+      "pp_eme_pts": 2,
+      "pp_bo51_pts": 7,
+      "pp_bwo30_pts": 3,
+      "pp_dg_pts": 4,
+      "esd_sd_pts": 10,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 3,
+      "sed_pts": 8
+    }
+  },
+  "AGRI_GENERIC": {
+    "sectorCode": "AGRI",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 128,
+    "pillarSum": 128,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 19,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 27,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 10,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 7,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 15,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 128,
+      "ownership": 25,
+      "mc": 19,
+      "ee": 0,
+      "skills": 25,
+      "pp": 27,
+      "sd": 10,
+      "ed": 7,
+      "sed": 15,
+      "mc_board_black_pts": 2,
+      "mc_board_bw_pts": 1,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 2,
+      "mc_other_exec_bw_pts": 1,
+      "mc_senior_pts": 2,
+      "mc_senior_bw_pts": 1,
+      "mc_middle_pts": 2,
+      "mc_middle_bw_pts": 1,
+      "mc_junior_pts": 1,
+      "mc_junior_bw_pts": 1,
+      "ee_disabled_pts": 2,
+      "skills_learning_pts": 8,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 4,
+      "skills_learnership_pts": 4,
+      "skills_absorption_pts": 5,
+      "pp_all_pts": 5,
+      "pp_qse_pts": 3,
+      "pp_eme_pts": 4,
+      "pp_bo51_pts": 9,
+      "pp_bwo30_pts": 4,
+      "pp_dg_pts": 2,
+      "esd_sd_pts": 10,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 1,
+      "sed_pts": 15
+    }
+  },
+  "RCOGP_QSE": {
+    "sectorCode": "RCOGP",
+    "scorecardType": "QSE",
+    "totalMaxPoints": 108,
+    "pillarSum": 108,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 15,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 30,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 21,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 7,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 108,
+      "ownership": 25,
+      "mc": 15,
+      "ee": null,
+      "skills": 30,
+      "pp": 21,
+      "sd": 5,
+      "ed": 7,
+      "sed": 5,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 0,
+      "mc_exec_black_pts": 5,
+      "mc_exec_bw_pts": 2,
+      "mc_other_exec_black_pts": 0,
+      "mc_other_exec_bw_pts": 0,
+      "mc_senior_pts": 6,
+      "mc_senior_bw_pts": 2,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 0,
+      "skills_learning_pts": 15,
+      "skills_bursary_pts": 7,
+      "skills_disabled_pts": 3,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 5,
+      "pp_all_pts": 15,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 5,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 1,
+      "esd_sd_pts": 5,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 1,
+      "sed_pts": 5
+    }
+  },
+  "ICT_QSE": {
+    "sectorCode": "ICT",
+    "scorecardType": "QSE",
+    "totalMaxPoints": 116,
+    "pillarSum": 116,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 15,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 30,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 21,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 8,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 12,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 116,
+      "ownership": 25,
+      "mc": 15,
+      "ee": null,
+      "skills": 30,
+      "pp": 21,
+      "sd": 5,
+      "ed": 8,
+      "sed": 12,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 0,
+      "mc_exec_black_pts": 5,
+      "mc_exec_bw_pts": 2,
+      "mc_other_exec_black_pts": 0,
+      "mc_other_exec_bw_pts": 0,
+      "mc_senior_pts": 6,
+      "mc_senior_bw_pts": 2,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 0,
+      "skills_learning_pts": 15,
+      "skills_bursary_pts": 7,
+      "skills_disabled_pts": 3,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 5,
+      "pp_all_pts": 15,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 5,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 1,
+      "esd_sd_pts": 5,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 2,
+      "sed_pts": 12
+    }
+  },
+  "FSC_QSE": {
+    "sectorCode": "FSC",
+    "scorecardType": "QSE",
+    "totalMaxPoints": 100,
+    "pillarSum": 100,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 15,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 25,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 20,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 100,
+      "ownership": 25,
+      "mc": 15,
+      "ee": 0,
+      "skills": 25,
+      "pp": 20,
+      "sd": 5,
+      "ed": 5,
+      "sed": 5,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 0,
+      "mc_exec_black_pts": 5,
+      "mc_exec_bw_pts": 2,
+      "mc_other_exec_black_pts": 0,
+      "mc_other_exec_bw_pts": 0,
+      "mc_senior_pts": 6,
+      "mc_senior_bw_pts": 2,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 0,
+      "skills_learning_pts": 12,
+      "skills_bursary_pts": 5,
+      "skills_disabled_pts": 3,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 5,
+      "pp_all_pts": 12,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 7,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 1,
+      "esd_sd_pts": 5,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 0,
+      "esd_jobs_bonus": 0,
+      "sed_pts": 5
+    }
+  },
+  "TRANSPORT_GENERIC": {
+    "sectorCode": "TRANSPORT",
+    "scorecardType": "Generic",
+    "totalMaxPoints": 108,
+    "pillarSum": 108,
+    "pillars": {
+      "ownership": {
+        "max": 24,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 11,
+        "base": null,
+        "bonus": 0
+      },
+      "employmentEquity": {
+        "max": 18,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 15,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 20,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 15,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 108,
+      "ownership": 24,
+      "mc": 11,
+      "ee": 18,
+      "skills": 15,
+      "pp": 20,
+      "sd": 15,
+      "ed": 0,
+      "sed": 5,
+      "mc_board_black_pts": 1.5,
+      "mc_board_bw_pts": 1.5,
+      "mc_exec_black_pts": 1,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 1.5,
+      "mc_other_exec_bw_pts": 1.5,
+      "mc_senior_pts": 1,
+      "mc_senior_bw_pts": 1,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 1,
+      "skills_learning_pts": 3,
+      "skills_bursary_pts": 3,
+      "skills_disabled_pts": 3,
+      "skills_learnership_pts": 3,
+      "skills_absorption_pts": 3,
+      "pp_all_pts": 12,
+      "pp_qse_pts": 3,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 3,
+      "pp_bwo30_pts": 2,
+      "pp_dg_pts": 0,
+      "esd_sd_pts": 15,
+      "esd_ed_pts": 0,
+      "esd_grad_bonus": 0,
+      "esd_jobs_bonus": 0,
+      "sed_pts": 5
+    }
+  },
+  "TRANSPORT_QSE": {
+    "sectorCode": "TRANSPORT",
+    "scorecardType": "QSE",
+    "totalMaxPoints": 100,
+    "pillarSum": 182,
+    "pillars": {
+      "ownership": {
+        "max": 28,
+        "base": 25,
+        "bonus": 3
+      },
+      "managementControl": {
+        "max": 27,
+        "base": 25,
+        "bonus": 2
+      },
+      "employmentEquity": {
+        "max": 27,
+        "base": 25,
+        "bonus": 2
+      },
+      "skillsDevelopment": {
+        "max": 25,
+        "base": 25,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 25,
+        "base": 25,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 25,
+        "base": 25,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 25,
+        "base": 25,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 100,
+      "ownership": 28,
+      "mc": 27,
+      "ee": 27,
+      "skills": 25,
+      "pp": 25,
+      "sd": 0,
+      "ed": 25,
+      "sed": 25,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 2,
+      "mc_exec_black_pts": 25,
+      "mc_exec_bw_pts": 0,
+      "mc_other_exec_black_pts": 0,
+      "mc_other_exec_bw_pts": 0,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 2,
+      "skills_learning_pts": 12.5,
+      "skills_bursary_pts": 12.5,
+      "skills_disabled_pts": 0,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 0,
+      "pp_all_pts": 25,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 0,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 0,
+      "esd_sd_pts": 0,
+      "esd_ed_pts": 25,
+      "esd_grad_bonus": 0,
+      "esd_jobs_bonus": 0,
+      "sed_pts": 25
+    }
+  },
+  "CONSTRUCTION_QSE": {
+    "sectorCode": "CONSTRUCTION",
+    "scorecardType": "QSE",
+    "totalMaxPoints": 110,
+    "pillarSum": 110,
+    "pillars": {
+      "ownership": {
+        "max": 30,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 20,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 26,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 29,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 110,
+      "ownership": 30,
+      "mc": 20,
+      "ee": null,
+      "skills": 26,
+      "pp": 0,
+      "sd": 29,
+      "ed": 0,
+      "sed": 5,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 0,
+      "mc_exec_black_pts": 0,
+      "mc_exec_bw_pts": 0,
+      "mc_other_exec_black_pts": 0,
+      "mc_other_exec_bw_pts": 0,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 0,
+      "skills_learning_pts": 0,
+      "skills_bursary_pts": 0,
+      "skills_disabled_pts": 0,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 0,
+      "pp_all_pts": 0,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 0,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 0,
+      "esd_sd_pts": 0,
+      "esd_ed_pts": 0,
+      "esd_grad_bonus": 0,
+      "esd_jobs_bonus": 0,
+      "sed_pts": 5
+    }
+  },
+  "CONSTRUCTION_CONTRACTOR": {
+    "sectorCode": "CONSTRUCTION",
+    "scorecardType": "Contractor",
+    "totalMaxPoints": 123,
+    "pillarSum": 123,
+    "pillars": {
+      "ownership": {
+        "max": 31,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 22,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 26,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 38,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 6,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 123,
+      "ownership": 31,
+      "mc": 22,
+      "ee": null,
+      "skills": 26,
+      "pp": 0,
+      "sd": 38,
+      "ed": 0,
+      "sed": 6,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 0,
+      "mc_exec_black_pts": 0,
+      "mc_exec_bw_pts": 0,
+      "mc_other_exec_black_pts": 0,
+      "mc_other_exec_bw_pts": 0,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 0,
+      "skills_learning_pts": 0,
+      "skills_bursary_pts": 0,
+      "skills_disabled_pts": 0,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 0,
+      "pp_all_pts": 0,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 0,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 0,
+      "esd_sd_pts": 0,
+      "esd_ed_pts": 0,
+      "esd_grad_bonus": 0,
+      "esd_jobs_bonus": 0,
+      "sed_pts": 6
+    }
+  },
+  "CONSTRUCTION_BEP": {
+    "sectorCode": "CONSTRUCTION",
+    "scorecardType": "BEP",
+    "totalMaxPoints": 123,
+    "pillarSum": 123,
+    "pillars": {
+      "ownership": {
+        "max": 31,
+        "base": null,
+        "bonus": 0
+      },
+      "managementControl": {
+        "max": 22,
+        "base": null,
+        "bonus": 0
+      },
+      "skillsDevelopment": {
+        "max": 34,
+        "base": null,
+        "bonus": 0
+      },
+      "preferentialProcurement": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "supplierDevelopment": {
+        "max": 30,
+        "base": null,
+        "bonus": 0
+      },
+      "enterpriseDevelopment": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      },
+      "socioEconomicDevelopment": {
+        "max": 6,
+        "base": null,
+        "bonus": 0
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0
+      }
+    },
+    "compare": {
+      "grand_total": 123,
+      "ownership": 31,
+      "mc": 22,
+      "ee": null,
+      "skills": 34,
+      "pp": 0,
+      "sd": 30,
+      "ed": 0,
+      "sed": 6,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 0,
+      "mc_exec_black_pts": 0,
+      "mc_exec_bw_pts": 0,
+      "mc_other_exec_black_pts": 0,
+      "mc_other_exec_bw_pts": 0,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 0,
+      "skills_learning_pts": 0,
+      "skills_bursary_pts": 0,
+      "skills_disabled_pts": 0,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 0,
+      "pp_all_pts": 0,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 0,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 0,
+      "esd_sd_pts": 0,
+      "esd_ed_pts": 0,
+      "esd_grad_bonus": 0,
+      "esd_jobs_bonus": 0,
+      "sed_pts": 6
+    }
+  }
+}

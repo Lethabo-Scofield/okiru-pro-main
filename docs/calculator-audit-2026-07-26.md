@@ -12,6 +12,14 @@
 
 Verdicts: **SOUND** (matches the official code), **DISCREPANCY** (differs from the official code), **UNVERIFIABLE-ONLINE** (no machine-readable authoritative source found), **TEMPLATE-TENSION** (code matches okiru's expert-verified Excel/certificate ground truth but not the gazette — noted, per audit guardrails, rather than declared wrong).
 
+**This document overrides the template-derived reference docs** where they disagree. As of 2026-08-11 the
+affected cells are annotated at the other end too: `docs/SECTOR_TRUTH_LEDGER.md` (`[SUPERSEDED]` markers,
+§0/§1/§7/§8/§10) and `docs/SCORECARD_GROUND_TRUTH.md` (banner + `template → engine` markers, §1/§2/§5/§6).
+The two TEMPLATE-TENSION items that keep resurfacing as false "config bugs" are **item 11** (AgriBEE MC
+19 not 23; total 128 not 132) and **item 9** (FSC Others MC 20 not 21; total 119 not 120) — both are
+pinned as `TEMPLATE_TENSION` in `docs/toolkits/compare_all.py` so the toolkit benchmark reports them as
+`GAZETTE`, not as defects.
+
 ---
 
 ## 1. RCOGP (Amended Generic Codes of Good Practice, as amended 31 May 2019)

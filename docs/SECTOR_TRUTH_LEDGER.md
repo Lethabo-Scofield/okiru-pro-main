@@ -4,6 +4,33 @@
 
 **Last audited**: 2026-05-21
 
+> ### ⚠ Superseded in part by the 2026-07-26 gazette audit
+>
+> This ledger is built from the **client-supplied Excel toolkits and training pack**. Where those disagree
+> with the gazette itself, `docs/calculator-audit-2026-07-26.md` — a first-hand gazette text extraction with
+> page citations — is the authority, and `apps/api/pipeline/sectorConfig.ts` follows it, not this document.
+>
+> **Do not "fix" the engine to match the cells below marked `[SUPERSEDED]`.** Doing so awards points the
+> gazette does not. This is not hypothetical: aligning the config to this ledger's AgriBEE MC on 2026-08-11
+> gave every AgriBEE client +4 points and every FSC-Others client +1, and was reverted.
+>
+> The trap is that this ledger, `docs/SCORECARD_GROUND_TRUTH.md` and the toolkits appear to be three
+> independent sources agreeing against the config. They are not — all three derive from the same vendor
+> template. Only the audit read the gazette.
+>
+> | Cell | This ledger | Engine (gazette) | Authority |
+> |---|---|---|---|
+> | AgriBEE MC / grand total | 23 / 132 | **19 / 128** | GG 41306 pp.33-34 — audit item 11 |
+> | FSC Others MC / grand total | 21 / 120 | **20 / 119** | FS200 §3.4.1 — audit item 9 |
+>
+> **Transport QSE is NOT in this list.** Its 107 is correct. The engine's `totalMaxPoints: 100` is the
+> scoring *denominator* (4 × 25 base); 107 is the *maximum achievable* once Ownership's +3, MC's +2 and
+> EE's +2 bonus points are added. Comparing a grand total against a denominator makes them look like a
+> 7-point conflict when nothing is wrong — see §10.
+>
+> Verified continuously by `docs/toolkits/compare_all.py`, which pins these as `TEMPLATE_TENSION` and
+> reports them as `GAZETTE` rather than as defects. See `docs/toolkits/TOOLKIT_BENCHMARK.md`.
+
 **Conflict-resolution rule**: where two sources disagree, the most-recently gazetted official source is preferred and the conflict is flagged inline as `[CONFLICT]`. Internal derivative documents (`docs/domain/_index.md` summary tables that still show the older 111-point structure) are explicitly downgraded against `docs/SCORECARD_GROUND_TRUTH.md` and the Excel toolkits.
 
 **Symbols used below**:
@@ -13,6 +40,7 @@
 | `✓` | Value verified against canonical source |
 | `[CONFLICT]` | Multiple sources disagree — preferred value used, conflict flagged |
 | `[UNVERIFIED]` | No source available in workspace — needs expert review |
+| `[SUPERSEDED]` | Template-derived value the 2026-07-26 gazette audit overrode — the engine deliberately differs; do not align it to this doc |
 | `[DERIVED]` | Computed from sub-element rows, not stated as a header |
 | `MC` | Management Control element |
 | `EE` | Employment Equity element |
@@ -29,8 +57,8 @@ The answer is **sector-dependent**. The training pack explicitly defines this fo
 | **RCOGP QSE** | **ONE pillar — "Management Control" (15 pts)**. QSE drops the EAP-banded Senior/Middle/Junior rows; only Board + Executive + disabled remain. | `docs/SCORECARD_GROUND_TRUTH.md` §7 ("QSE changes vs Generic: MC drops to 15 (merges MC+EE)") |
 | **ICT Generic** | **ONE pillar — "Management Control" (23 pts)** including EAP-banded staff rows and disabled. | `docs/SCORECARD_GROUND_TRUTH.md` §4 ("MC Total 23 = board 3+2, exec 2+1, other exec 3+2, EE via EAP, disabled 2") |
 | **ICT QSE** | **ONE pillar — "Management Control" (15 pts)** mirroring RCOGP QSE. | `docs/SCORECARD_GROUND_TRUTH.md` §7 |
-| **FSC Generic (Others)** | **ONE pillar — "Management Control" (21 pts)** with board 3, exec 3, other exec **14**, disabled 1. | `docs/SCORECARD_GROUND_TRUTH.md` §5 |
-| **AGRI Generic** | **ONE pillar — "Management Control" (23 pts)** same shape as ICT MC. | `docs/SCORECARD_GROUND_TRUTH.md` §6 |
+| **FSC Generic (Others)** | **ONE pillar — "Management Control" (21 pts)** with board 3, exec 3, other exec **14**, disabled 1. `[SUPERSEDED]` — gazette board black = 1 not 2, so MC = **20**. | `docs/SCORECARD_GROUND_TRUTH.md` §5; overridden by FS200 §3.4.1 (audit item 9) |
+| **AGRI Generic** | **ONE pillar — "Management Control" (23 pts)** same shape as ICT MC. `[SUPERSEDED]` — gazette board 2+1 and other exec 2+1, so MC = **19**. | `docs/SCORECARD_GROUND_TRUTH.md` §6; overridden by GG 41306 pp.33-34 (audit item 11) |
 | **Transport Sector (Road Freight Large)** | **TWO separate pillars — "Management Control" (11 pts) and "Employment Equity" (18 pts)** on the gazetted toolkit. | `docs/Transport Codes.xlsx`, sheet "Road Freight Large" (rows 17–29 split element column) |
 | **Transport Sector QSE (Road Freight QSE)** | **TWO separate compulsory pillars — "Management Control" (27 pts) and "Employment Equity" (27 pts)**. | `docs/Transport Codes.xlsx`, sheet "Road Freight QSE" (rows 9–17) |
 | **Construction QSE** | **ONE pillar — "Management Control" (20 pts)** that covers exec + senior/middle/junior representation (no separate EE element in the QSE scorecard). | `apps/api/pipeline/constructionIndicators.ts` line 1282–1293; primary docx "CONSTRUCTION_QUALIFYING_SMALL_ENTERPRISE_(QSE)_SCORECARD" referenced in source comments but not present in workspace — `[UNVERIFIED]` against original. |
@@ -48,7 +76,7 @@ This is the authoritative pillar header table. Every cell is cited against a can
 | Pillar | RCOGP Gen | RCOGP QSE | ICT Gen | ICT QSE | FSC Gen (Others) | AGRI Gen | Transport Large | Transport QSE | Construction QSE | Construction Contractor | Construction BEP |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Ownership | **25** | 25 | 25 | 25 | 25 | 25 | **24** | **28** | **30** | **31** | **31** |
-| Management Control | **19** | 15 | 23 | 15 | 21 | 23 | **11** | **27** | **20** | **22** | **22** |
+| Management Control | **19** | 15 | 23 | 15 | 21 `[SUPERSEDED]`→20 | 23 `[SUPERSEDED]`→19 | **11** | **27** | **20** | **22** | **22** |
 | Employment Equity | merged into MC | merged into MC | merged into MC | merged into MC | merged into MC | merged into MC | **18** | **27** | merged into MC | merged into MC | merged into MC |
 | Skills Development | 25 | 30 | 25 | 30 | 23 | 25 | **15** | 25 (elective) | **26** | **26** | **34** |
 | Preferential Procurement | 29 | 21 | 27 | 21 | 24 | 27 | **20** | 25 (elective) | n/a (combined into ESD) | n/a (combined into ESD) | n/a (combined into ESD) |
@@ -57,7 +85,7 @@ This is the authoritative pillar header table. Every cell is cited against a can
 | Enterprise & Supplier Development (combined) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | **29** | **38** | **30** |
 | Socio-Economic Development | 5 | 5 | 12 | 12 | 8 | 15 | **5** | 25 (elective) | **5** | **6** | **6** |
 | YES Initiative | 0 (level boost) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Grand Total** | **120** | **108** | **140** | **116** | **120** | **132** | **108** | **107** | **110** | **123** | **123** |
+| **Grand Total** | **120** | **108** | **140** | **116** | **120** `[SUPERSEDED]`→119 | **132** `[SUPERSEDED]`→128 | **108** | **107** ✓ (100 base + 7 bonus; see §10) | **110** | **123** | **123** |
 
 **Sources per column**:
 - RCOGP Gen / RCOGP QSE / ICT Gen / ICT QSE / FSC Gen / AGRI Gen — `docs/SCORECARD_GROUND_TRUTH.md` §1, §2 and per-sector tables; verified against `docs/toolkits/BBBEE Toolkit (...).xlsx`
@@ -260,7 +288,11 @@ Levels: ICT scale.
 
 ---
 
-## 7. FSC Generic (Others sub-sector) — full ledger (120 pts)
+## 7. FSC Generic (Others sub-sector) — full ledger (120 pts) `[SUPERSEDED]` → 119
+
+> The MC row below (21) is template-derived. FS200 gives board black = 1 pt, not 2, so MC = **20** and the
+> grand total is **119** — what `sectorConfig.ts` implements. See `docs/calculator-audit-2026-07-26.md`
+> item 9. Do not align the engine up to 21/120.
 
 Source: `docs/SCORECARD_GROUND_TRUTH.md` §5; `docs/toolkits/BBBEE Toolkit (FSC) Template v1.0.xlsx`; `docs/toolkits/extracted_FSC_Generic.json`.
 
@@ -280,7 +312,12 @@ FSC sub-sector variants exist (Banks, Long-Term Insurers, Short-Term Insurers, O
 
 ---
 
-## 8. AGRI Generic — full ledger (132 pts)
+## 8. AGRI Generic — full ledger (132 pts) `[SUPERSEDED]` → 128
+
+> The MC row below (23) is template-derived. GG 41306 pp.33-34 gives the generic 19-pt MC structure —
+> board 2+1 (not 3+2) and other exec 2+1 (not 3+2) — so MC = **19** and the grand total is **128**, what
+> `sectorConfig.ts` implements. The audit's words: *"+4 phantom MC points also inflate `totalMaxPoints`
+> 132 → gazette-consistent max incl. bonuses is 128."* See `docs/calculator-audit-2026-07-26.md` item 11.
 
 Source: `docs/SCORECARD_GROUND_TRUTH.md` §6; `docs/toolkits/BBBEE Toolkit (Agri Generic)_Master_v.1.0.1.xlsx`; `docs/toolkits/extracted_AGRI_Generic.json`.
 
@@ -352,11 +389,33 @@ Levels: standard scale (§2.1 above).
 
 ---
 
-## 10. Transport Sector (Road Freight QSE) — full ledger (107 pts)
+## 10. Transport Sector (Road Freight QSE) — full ledger (107 pts) ✓
 
 **Source**: `docs/Transport Codes.xlsx`, sheet `Road Freight QSE` (rows 2–24).
 
+> **107 is correct — and so is the engine's `totalMaxPoints: 100`.** They are different quantities, and
+> conflating them is easy:
+>
+> | | Value | What it is |
+> |---|---|---|
+> | Scoring **denominator** | **100** | four elements × **25 base** each (`TRANSPORT_QSE.totalMaxPoints`) |
+> | **Grand total incl. bonus** | **107** | 100 base + 7 bonus — Ownership +3, MC +2, EE +2 |
+>
+> The three compulsory elements carry bonus points on top of their 25-pt weighting: Ownership 28 = 25 + 3,
+> MC 27 = 25 + 2, EE 27 = 25 + 2 (`pillarConfigs` declares both `basePoints` and `maxPoints`). So 28 + 27 +
+> 27 + 25 = **107 maximum achievable**, against a **100-point denominator**. Level is assessed on absolute
+> points with no clamp, which is exactly why Thandanani's **102 is a legitimate Level 1** — it exceeds 100
+> on bonus.
+
 **Structure**: 3 compulsory pillars (Ownership 28 + MC 27 + EE 27 = 82) + **choose ONE** of 4 elective pillars (Skills Dev 25 / PP 25 / Enterprise Dev 25 / SED 25). The chosen elective contributes 25 to the total → 82 + 25 = 107.
+
+**Implementation note (not a discrepancy in the totals)**: the engine models the selection as *any four of
+the seven* elements in one `chooseOneGroup` rather than *three compulsory + one of four*. With Ownership,
+MC and EE typically scoring highest, best-four-of-seven selects the same three plus the best elective, so
+the outcome matches this structure. The looser model was adopted because treating Ownership/MC/EE as
+non-electives excluded them from the selector entirely and silently scored them 0 (Thandanani: 50 instead
+of 102). Fixed in 7ad99ccd. If the gazette genuinely mandates the three as compulsory, the engine is
+permissive in a case that does not arise in practice — worth confirming with the sector expert.
 
 | Element | Indicator | Pts | Target | Source row |
 |---|---|---|---|---|

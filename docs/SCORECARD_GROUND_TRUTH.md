@@ -1,6 +1,33 @@
 # B-BBEE Scorecard Ground Truth
 
-**Document Purpose**: Definitive, Excel-verified reference values for all B-BBEE scorecard calculations. All code must match these values exactly.
+**Document Purpose**: Excel-verified reference values for B-BBEE scorecard calculations, taken from the
+client-supplied toolkits listed below.
+
+> ### ⚠ "All code must match these values exactly" no longer holds without qualification
+>
+> These values come from the **Excel toolkits**, not from the gazette. Where the two disagree, the gazette
+> wins and `apps/api/pipeline/sectorConfig.ts` deliberately differs from this document. The authority is
+> `docs/calculator-audit-2026-07-26.md` — a first-hand gazette text extraction with page citations.
+>
+> | Value here | Engine (gazette) | Authority |
+> |---|---|---|
+> | AgriBEE MC 23, total 132 | **19 / 128** | GG 41306 pp.33-34 — audit item 11 |
+> | FSC Others MC 21, total 120 | **20 / 119** | FS200 §3.4.1 — audit item 9 |
+>
+> **Do not raise the engine to match those cells.** It was tried on 2026-08-11 and reverted: it gave every
+> AgriBEE client +4 points and every FSC-Others client +1. The trap is that this document,
+> `docs/SECTOR_TRUTH_LEDGER.md` and the toolkits look like three independent sources outvoting the config —
+> but all three derive from the same vendor template, and only the audit read the gazette.
+>
+> Scope note: the two rows above are the only places where the audit found **this document** wrong. Most of
+> the audit's other findings were the reverse — the code had drifted from values this document already
+> stated correctly (Skills absorption target 100%, §3.3 row "Absorption after B,C,D programmes … 100%";
+> ICT ownership voting target 30%, §4). Those were fixed in the code, not here. So this document remains a
+> good reference; it is specifically its **AgriBEE and FSC-Others Management Control** figures that are
+> template-derived and superseded.
+>
+> `docs/toolkits/compare_all.py` enforces the split continuously: it pins these as `TEMPLATE_TENSION` and
+> reports them as `GAZETTE` rather than defects. Summary in `docs/toolkits/TOOLKIT_BENCHMARK.md`.
 
 **Verified Against**:
 - `BBBEE Toolkit (RCOGP)_Template_v.1.4.xlsx` (RCOGP Generic)
@@ -24,8 +51,8 @@
 | RCOGP (QSE) | **108** | 51 | Standard |
 | ICT (Generic) | **140** | 53 | ICT (120/115/110/100/95/90/75/55) |
 | ICT (QSE) | **116** | 51 | ICT |
-| FSC (Generic - Others) | **120** | 63 | FSC Scaled (95.5/90.7/86.0/76.4/71.6/66.8/52.5/38.2) |
-| AGRI (Generic) | **132** | 53 | Standard |
+| FSC (Generic - Others) | **120** → engine **119** (gazette) | 63 | FSC Scaled (95.5/90.7/86.0/76.4/71.6/66.8/52.5/38.2) |
+| AGRI (Generic) | **132** → engine **128** (gazette) | 53 | Standard |
 
 **YES Initiative is NOT part of any scored total. It provides level improvement only.**
 
@@ -36,13 +63,16 @@
 | Pillar | RCOGP Gen | RCOGP QSE | ICT Gen | ICT QSE | FSC Gen | AGRI Gen |
 |--------|-----------|-----------|---------|---------|---------|----------|
 | Ownership | 25 | 25 | 25 | 25 | 25 | 25 |
-| Management Control | 19 | 15 | 23 | 15 | 21 | 23 |
+| Management Control | 19 | 15 | 23 | 15 | 21 → **20** | 23 → **19** |
 | Skills Development | 25 | 30 | 25 | 30 | 23 | 25 |
 | Preferential Procurement | 29 | 21 | 27 | 21 | 24 | 27 |
 | Supplier Development | 10 | 5 | 10 | 5 | 10 | 10 |
 | Enterprise Development | 7 | 7 | 18 | 8 | 9 | 7 |
 | Socio-Economic Development | 5 | 5 | 12 | 12 | 8 | 15 |
-| **Grand Total** | **120** | **108** | **140** | **116** | **120** | **132** |
+| **Grand Total** | **120** | **108** | **140** | **116** | **120** → **119** | **132** → **128** |
+
+Cells shown as `template → **engine**` are the gazette overrides described in the banner at the top of this
+document. The engine value is the correct one; the template value is retained here for provenance.
 
 ---
 
@@ -164,7 +194,7 @@ Sub-minimum: 40% of Net Value points (3.2 out of 8).
 | Difference | RCOGP Generic | FSC Generic (Others) |
 |-----------|---------------|---------------------|
 | Grand Total | 120 | **120** (106 excl. bonus) |
-| MC Total | 19 | **21** (board 2+1, exec 2+1, other exec **10+4**, disabled 1) |
+| MC Total | 19 | **21** (board 2+1, exec 2+1, other exec **10+4**, disabled 1) — engine uses **20**: FS200 gives board black **1**, not 2 (audit item 9) |
 | Skills Total | 25 | **23** (banded by management level) |
 | PP Total | 29 | **24** (incl. intermediated professionals, stock brokers) |
 | ED Total | 7 | **9** (5 base + 1 grad + 3 bonus) |
@@ -180,7 +210,7 @@ FSC has sub-sector variants: Banks, Long-Term Insurers, Short-Term Insurers, Oth
 | Difference | RCOGP Generic | AGRI Generic |
 |-----------|---------------|-------------|
 | Grand Total | 120 | **132** |
-| MC Total | 19 | **23** (same structure as ICT MC) |
+| MC Total | 19 | **23** (same structure as ICT MC) — engine uses **19**: GG 41306 pp.33-34 gives board 2+1 and other exec 2+1, not 3+2 (audit item 11) |
 | PP Total | 29 | **27** (BO51 = **9** pts at same target) |
 | SED Total | 5 | **15** (Agriculture-specific community development) |
 | Ownership | Same structure | Includes **farm workers** in designated groups |
