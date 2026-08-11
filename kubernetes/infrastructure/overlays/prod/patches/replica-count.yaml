@@ -1,16 +1,24 @@
+# Prod runs on a single Standard_B4s_v2 (3860m allocatable CPU, ~11.8Gi), so
+# these trim the base manifest's counts to what one node can actually hold.
+#
+# api and web sit at TWO because one replica means every rollout, crash and OOM
+# is downtime — the HPA scaled api to 1 on low traffic and the next deploy took
+# the service down with it. Two costs 350m CPU / 700Mi more and takes the node
+# to ~77% CPU, which it has. Note this buys resilience against POD failure only;
+# with one node there is nothing to reschedule onto if the node itself goes.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: api
 spec:
-  replicas: 1
+  replicas: 2
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: web
 spec:
-  replicas: 1
+  replicas: 2
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -24,7 +32,7 @@ kind: HorizontalPodAutoscaler
 metadata:
   name: api-hpa
 spec:
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 5
 ---
 apiVersion: autoscaling/v2
@@ -32,7 +40,7 @@ kind: HorizontalPodAutoscaler
 metadata:
   name: web-hpa
 spec:
-  minReplicas: 1
+  minReplicas: 2
   maxReplicas: 5
 ---
 apiVersion: autoscaling/v2
