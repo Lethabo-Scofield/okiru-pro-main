@@ -247,10 +247,16 @@ def page_pillar_matrix(story, data):
         "and Access to Financial Services, and the YES initiative.", BODY))
     story.append(Spacer(1, 4))
     story.append(Paragraph(
-        "A dash means the element does not exist on that scorecard, not that it is worth zero. Most sectors "
-        "fold Employment Equity into Management Control as a single gazetted element; Transport is the "
-        "exception and reports them separately. Construction combines Supplier and Enterprise Development "
-        "into one ESD element and is scored by a separate engine.", SMALL))
+        "A dash means the element does not exist on that scorecard, not that it is worth zero. The 2013 "
+        "Amended Codes cut the scorecard from seven elements to five and folded Employment Equity into "
+        "Management Control, so only Transport - whose code predates that amendment (GG 32511, 2009) - "
+        "still reports the two separately.", SMALL))
+    story.append(Spacer(1, SP["xs"]))
+    story.append(Paragraph(
+        "Two columns need a caveat. Transport has no Supplier Development element: <b>Transport Large's 15 "
+        "points under SD are gazetted as Enterprise Development</b> (3% of NPAT) and occupy the SD slot only "
+        "as an implementation detail. Construction combines Supplier and Enterprise Development into a "
+        "single ESD element, shown under SD, and is scored by a separate engine.", SMALL))
     story.append(Spacer(1, 3))
     story.append(Paragraph(
         "<b>*</b> An elective scorecard measures only a subset of its elements, so the row does not add up "
