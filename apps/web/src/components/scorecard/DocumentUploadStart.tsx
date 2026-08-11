@@ -23,6 +23,7 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
+  ChevronLeft,
   CloudUpload,
   CreditCard,
   FileText,
@@ -382,6 +383,21 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
+  /**
+   * Has the user said they are FINISHED adding documents?
+   *
+   * The quote is free and re-issued on every change, but the checkout panel it
+   * fed used to appear the instant the first file landed — above the uploader,
+   * pushing it down the page. Staging one pillar therefore looked like being
+   * marched to payment with nowhere to carry on, and the natural response was
+   * to pay before the other pillars had been filled. Nothing is read until
+   * payment, so an early checkout does not cost money; it costs the user the
+   * rest of their evidence.
+   *
+   * Reset to false whenever the file list changes, because a batch you have
+   * added to is a batch you are still working on.
+   */
+  const [doneStaging, setDoneStaging] = useState(false);
   const [paying, setPaying] = useState(false);
   /** The batch's cost in credit tokens, priced by the server from the quote. */
   const [tokenCost, setTokenCost] = useState<TokenCost | null>(null);
@@ -1031,6 +1047,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       return;
     }
     setFiles(next);
+    // A batch you have just changed is a batch you are still working on, so
+    // adding or removing a document always returns you to staging rather than
+    // leaving you looking at a checkout for a different set of files.
+    setDoneStaging(false);
     // Remember which batch each file was filed under so every card can show its
     // own pile. Presentation only: the classifier still decides what a document
     // is, and a misfiled one is still scored where it belongs.
@@ -1047,6 +1067,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const removeFile = (name: string) => {
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
+    // A batch you have just changed is a batch you are still working on, so
+    // adding or removing a document always returns you to staging rather than
+    // leaving you looking at a checkout for a different set of files.
+    setDoneStaging(false);
     setFiledBatchByFile((prev) => {
       const merged = { ...prev };
       delete merged[name];
@@ -1098,7 +1122,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const spendUp = useCountUp(spendCaptured, 1100);
 
   const revealed = Boolean((mapped || injected) && !parsing && files.length > 0);
-  const quoteReady = Boolean(quote && !parserCase && !quoting);
+  // Requires `doneStaging`: this flag collapses the stage into the checkout
+  // layout, and doing that the moment a quote landed is what left people with
+  // "files appear but there is nowhere to carry on".
+  const quoteReady = Boolean(quote && doneStaging && !parserCase && !quoting);
   // Missing documents never block: the user can always proceed and the workbook
   // scores on whatever was extracted (even nothing — they complete it manually).
   // Sector + size are REQUIRED: they pick the scorecard the company is judged
@@ -1416,7 +1443,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             data-testid="docs-folder-input"
           />
       <AnimatePresence mode="wait" initial={false}>
-      {quote && !parserCase && !quoting && (
+      {quote && doneStaging && !parserCase && !quoting && (
         (() => {
           const totalPages = quote.files.reduce((sum, file) => sum + (file.structure.pages ?? 0), 0);
           const spreadsheetCount = quote.files.filter((file) => (file.structure.sheets ?? 0) > 0).length;
@@ -1444,6 +1471,17 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               className="mb-4 rounded-[22px] border border-white/[0.08] bg-[#0e0e10] p-5"
               data-testid="payment-summary"
             >
+              {/* Reviewing the cost is not a one-way door either. Without this,
+                  the only route back to the uploader was removing a document. */}
+              <button
+                type="button"
+                onClick={() => setDoneStaging(false)}
+                className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[#8e8e93] transition-colors hover:text-white"
+                data-testid="button-add-more-documents"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Add more documents
+              </button>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">
@@ -1763,6 +1801,37 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             onPick={handleBatchPick}
             disabled={parsing}
           />
+        </div>
+      )}
+
+      {/* The way ON from staging. Without this there was no affirmative step
+          between "files are listed" and the checkout panel, so the checkout had
+          to appear by itself — which is what made adding one pillar feel like
+          being marched to payment. Whether the documents arrived through the
+          main button or a pillar batch is irrelevant here: both stage into the
+          same list, so both end at the same control. */}
+      {!parserCase && !doneStaging && files.length > 0 && (
+        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[#141416] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-white">
+              {files.length} document{files.length === 1 ? "" : "s"} staged
+              {quoting ? " · checking" : ""}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[#8e8e93]">
+              Keep adding — from any pillar, or the buttons above. Nothing is read, and nothing is
+              charged, until you review the cost on the next step.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={quoting}
+            onClick={() => setDoneStaging(true)}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
+            data-testid="button-done-staging"
+          >
+            {quoting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Done adding — review cost
+          </button>
         </div>
       )}
 
