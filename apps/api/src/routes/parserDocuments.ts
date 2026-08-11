@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Document, ParserRunModel } from '../../models.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
+import { resolveFileWithParser } from '../services/parserClient.js';
 
 const logger = createLogger('ParserDocuments');
 const router = Router();
@@ -155,6 +156,62 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
   }
 });
 
+/**
+ * Append a run and point the document at it.
+ *
+ * Shared by the client-supplied path (`POST /:id/runs`) and the server-side
+ * re-parse, so a re-parse produces a record indistinguishable from a first
+ * read — same fields, same derivation, same history. A re-parse that recorded
+ * itself differently would make the run history unreadable.
+ */
+async function appendRun(
+  doc: { _id: unknown },
+  owner: SessionIdentity,
+  output: Record<string, any>,
+  extra: { caseId?: string | null; parserVersion?: string | null; reviewReasons?: string[] } = {},
+) {
+  const derived = deriveParserRunData(output, extra.reviewReasons ?? []);
+  const run = await ParserRunModel.create({
+    documentId: doc._id,
+    userId: owner.userId,
+    organizationId: owner.organizationId,
+    caseId: extra.caseId ?? null,
+    parserVersion: extra.parserVersion ?? null,
+    graphVersion: typeof derived.audit.graph_version === 'string' ? derived.audit.graph_version : null,
+    status: output.status,
+    documentType: String(output.document_type || 'Unknown'),
+    overallConfidence: Number(output.overall_confidence || 0),
+    extractedFieldCount: derived.extractedFieldCount,
+    missingFieldCount: derived.missingFields.length,
+    problemFieldCount: derived.problemFieldCount,
+    missingFields: derived.missingFields,
+    lowConfidenceFields: derived.lowConfidenceFields,
+    warnings: derived.warnings,
+    errors: derived.errors,
+    reviewReasons: derived.reviewReasons,
+    requiresHumanReview: derived.requiresHumanReview,
+    parserOutput: output,
+  });
+  return run;
+}
+
+/** The document-level mirror of a run's headline numbers. */
+function documentSetFromRun(run: Record<string, any>): Record<string, unknown> {
+  return {
+    latestParserRunId: run.runId,
+    parserStatus: run.status,
+    parserDocumentType: run.documentType,
+    parserOverallConfidence: run.overallConfidence,
+    parserExtractedFieldCount: run.extractedFieldCount,
+    parserProblemFieldCount: run.problemFieldCount,
+    parserReviewRequired: run.requiresHumanReview,
+    parserMissingFields: run.missingFields,
+    parserLowConfidenceFields: run.lowConfidenceFields,
+    parserLastRunAt: run.createdAt,
+    status: run.status === 'passed' ? 'parsed' : run.status,
+  };
+}
+
 router.post('/:id/runs', async (req: Request, res: Response) => {
   const parsed = runInputSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ message: 'Invalid parser result', issues: parsed.error.issues });
@@ -171,45 +228,12 @@ router.post('/:id/runs', async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'Parser status must be passed, review_required, or failed' });
     }
 
-    const derived = deriveParserRunData(output, parsed.data.reviewReasons ?? []);
-
-    const run = await ParserRunModel.create({
-      documentId: doc._id,
-      userId: owner.userId,
-      organizationId: owner.organizationId,
+    const run = await appendRun(doc as unknown as { _id: unknown }, owner, output, {
       caseId: parsed.data.caseId ?? null,
       parserVersion: parsed.data.parserVersion ?? null,
-      graphVersion: typeof derived.audit.graph_version === 'string' ? derived.audit.graph_version : null,
-      status,
-      documentType: String(output.document_type || 'Unknown'),
-      overallConfidence: Number(output.overall_confidence || 0),
-      extractedFieldCount: derived.extractedFieldCount,
-      missingFieldCount: derived.missingFields.length,
-      problemFieldCount: derived.problemFieldCount,
-      missingFields: derived.missingFields,
-      lowConfidenceFields: derived.lowConfidenceFields,
-      warnings: derived.warnings,
-      errors: derived.errors,
-      reviewReasons: derived.reviewReasons,
-      requiresHumanReview: derived.requiresHumanReview,
-      parserOutput: output,
+      reviewReasons: parsed.data.reviewReasons ?? [],
     });
-
-    await Document.updateOne(documentFilter(req, documentId), {
-      $set: {
-        latestParserRunId: run.runId,
-        parserStatus: status,
-        parserDocumentType: run.documentType,
-        parserOverallConfidence: run.overallConfidence,
-        parserExtractedFieldCount: run.extractedFieldCount,
-        parserProblemFieldCount: run.problemFieldCount,
-        parserReviewRequired: run.requiresHumanReview,
-        parserMissingFields: run.missingFields,
-        parserLowConfidenceFields: run.lowConfidenceFields,
-        parserLastRunAt: run.createdAt,
-        status: status === 'passed' ? 'parsed' : status,
-      },
-    });
+    await Document.updateOne(documentFilter(req, documentId), { $set: documentSetFromRun(run.toObject()) });
 
     return res.status(201).json({ run: runSummary(run.toObject()) });
   } catch (error) {
@@ -218,11 +242,149 @@ router.post('/:id/runs', async (req: Request, res: Response) => {
   }
 });
 
+const patchSchema = z.object({
+  /** The saved company this document belongs to. Null unlinks it. */
+  entityId: z.string().max(200).nullable().optional(),
+  /** A human overriding the classifier. */
+  documentType: z.string().min(1).max(200).optional(),
+  /** Why the type was changed — kept with the correction, not instead of it. */
+  note: z.string().max(2000).optional(),
+});
+
+/**
+ * PATCH /:id — the two things a human can tell us that the parser cannot work
+ * out for itself: which company this belongs to, and what the document
+ * actually is.
+ *
+ * A type correction is recorded as a review event on the LATEST RUN rather
+ * than overwriting the run's own reading. The run is an immutable record of
+ * what the parser saw; a correction is a separate, attributable fact about it.
+ * Losing the original would destroy the only evidence of what the classifier
+ * gets wrong, which is exactly what anyone improving it needs.
+ */
+router.patch('/:id', async (req: Request, res: Response) => {
+  const parsed = patchSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid update', issues: parsed.error.issues });
+  const owner = identity(req);
+  const documentId = routeParam(req.params.id);
+
+  try {
+    const doc = await Document.findOne(documentFilter(req, documentId));
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+    const set: Record<string, unknown> = {};
+    if ('entityId' in parsed.data) set.entityId = parsed.data.entityId ?? null;
+
+    if (parsed.data.documentType) {
+      set.parserDocumentType = parsed.data.documentType;
+      const latestRunId = (doc as unknown as { latestParserRunId?: string }).latestParserRunId;
+      if (latestRunId) {
+        const previous = String((doc as unknown as { parserDocumentType?: string }).parserDocumentType ?? '');
+        await ParserRunModel.updateOne(
+          { runId: latestRunId },
+          {
+            $push: {
+              reviewHistory: {
+                fieldKey: 'document_type',
+                originalValue: previous,
+                correctedValue: parsed.data.documentType,
+                reviewerUserId: owner.userId,
+                approvalState: 'corrected',
+                note: parsed.data.note ?? null,
+                reviewedAt: new Date(),
+              },
+            },
+          },
+        );
+      }
+    }
+
+    if (Object.keys(set).length === 0) return res.status(400).json({ message: 'Nothing to update' });
+
+    await Document.updateOne(documentFilter(req, documentId), { $set: set });
+    const updated = await Document.findOne(documentFilter(req, documentId)).lean();
+    return res.json({ document: documentJson(updated as Record<string, any>) });
+  } catch (error) {
+    logger.error('Failed to update parser document', error as Error, { documentId });
+    return res.status(500).json({ message: 'Could not update this document' });
+  }
+});
+
+/**
+ * POST /:id/reparse — read the SAME bytes again, optionally after replacing
+ * them with a better copy of the file.
+ *
+ * "Upload a different file" and "try again" are one operation because they end
+ * the same way: new bytes or old, the document is re-read and the result is
+ * appended as another run. Nothing is overwritten — the previous run stays in
+ * the history, so a re-parse that turns out worse can be seen and compared
+ * rather than having quietly replaced a better reading.
+ */
+router.post('/:id/reparse', upload.single('file'), async (req: Request, res: Response) => {
+  const owner = identity(req);
+  const documentId = routeParam(req.params.id);
+
+  try {
+    const doc = await Document.findOne(documentFilter(req, documentId));
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+    const replacement = req.file;
+    const raw = replacement?.buffer ?? (doc as unknown as { rawContent?: Buffer }).rawContent;
+    if (!raw || raw.length === 0) {
+      return res.status(409).json({
+        message: 'The original file is not stored for this document, so it cannot be re-read. Upload the file again.',
+      });
+    }
+
+    const filename = replacement?.originalname ?? String((doc as unknown as { filename: string }).filename);
+    const mimeType = replacement?.mimetype ?? String((doc as unknown as { fileType?: string }).fileType ?? '');
+
+    const outcome = await resolveFileWithParser({ buffer: Buffer.from(raw), filename, mimeType });
+    if (!outcome.ok || !outcome.result) {
+      return res.status(502).json({ message: outcome.error ?? 'The parser could not read this file' });
+    }
+
+    // Swap the stored bytes only once the new file has actually been read —
+    // a failed re-parse must not leave the document holding a file nobody has
+    // successfully parsed and no copy of the one that worked.
+    if (replacement) {
+      await Document.updateOne(documentFilter(req, documentId), {
+        $set: {
+          rawContent: replacement.buffer,
+          filename: replacement.originalname,
+          fileType: replacement.mimetype,
+          fileSize: replacement.size,
+          contentHash: crypto.createHash('sha256').update(replacement.buffer).digest('hex'),
+        },
+      });
+    }
+
+    const output = outcome.result as unknown as Record<string, any>;
+    const run = await appendRun(doc as unknown as { _id: unknown }, owner, output, {
+      reviewReasons: replacement ? ['Re-read after the file was replaced by a user.'] : ['Re-read on request.'],
+    });
+    await Document.updateOne(documentFilter(req, documentId), { $set: documentSetFromRun(run.toObject()) });
+
+    const updated = await Document.findOne(documentFilter(req, documentId)).lean();
+    return res.status(201).json({
+      document: documentJson(updated as Record<string, any>),
+      run: runSummary(run.toObject()),
+    });
+  } catch (error) {
+    logger.error('Failed to re-parse document', error as Error, { documentId });
+    return res.status(500).json({ message: 'Could not re-read this document' });
+  }
+});
+
 router.get('/', async (req: Request, res: Response) => {
   const owner = identity(req);
   const page = Math.max(1, Number.parseInt(String(req.query.page || '1'), 10) || 1);
   const limit = Math.min(100, Math.max(1, Number.parseInt(String(req.query.limit || '25'), 10) || 25));
   const filter: Record<string, any> = { source: 'parser', ...tenantFilter(owner) };
+  // Documents filed against one saved company — the library's per-client view.
+  if (typeof req.query.entityId === 'string' && req.query.entityId.trim()) {
+    filter.entityId = req.query.entityId.trim();
+  }
   const search = String(req.query.search || '').trim();
   if (search) filter.filename = { $regex: escapeRegex(search), $options: 'i' };
   if (['passed', 'review_required', 'failed'].includes(String(req.query.status))) filter.parserStatus = String(req.query.status);

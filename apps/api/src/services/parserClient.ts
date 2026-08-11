@@ -101,6 +101,52 @@ export async function resolveWithParser(
   }
 }
 
+/**
+ * Calls POST /api/parser/resolve-file with the raw bytes. Never throws.
+ *
+ * The text-based `resolveWithParser` above needs the caller to have already
+ * turned a file into text, which the library cannot do — it stores the original
+ * bytes and nothing else. Sending the file itself lets the parser run its own
+ * extraction chain (text layer → Document Intelligence → OCR), which is the
+ * whole point of re-parsing: the second attempt should be able to succeed where
+ * the first failed, and it cannot if it re-uses the first attempt's text.
+ */
+export async function resolveFileWithParser(
+  file: { buffer: Buffer; filename: string; mimeType: string },
+  options: { timeoutMs?: number } = {},
+): Promise<ParserResolveOutcome> {
+  const url = `${parserServiceUrl()}/api/parser/resolve-file`;
+  // Re-extraction can involve OCR on a scanned pack, so this is deliberately
+  // far more generous than the text path's 30s.
+  const timeoutMs = options.timeoutMs ?? (Number(process.env.PARSER_FILE_TIMEOUT_MS) || 180_000);
+  try {
+    const form = new FormData();
+    form.append(
+      'file',
+      new Blob([new Uint8Array(file.buffer)], { type: file.mimeType || 'application/octet-stream' }),
+      file.filename,
+    );
+
+    const res = await fetchWithTimeout(url, { method: 'POST', body: form }, timeoutMs);
+    const body = await res.text();
+    let parsed: unknown = null;
+    try { parsed = body ? JSON.parse(body) : null; } catch { /* non-JSON */ }
+
+    // 200 for passed/review_required, 422 for failed — both carry a result.
+    if ((res.ok || res.status === 422) && parsed && typeof parsed === 'object' && 'status' in parsed) {
+      return { ok: true, result: parsed as ParserResult };
+    }
+    const detail = parsed && typeof parsed === 'object' && 'error' in parsed
+      ? String((parsed as { error?: { message?: string } }).error?.message ?? '')
+      : '';
+    return { ok: false, error: detail || `Parser responded ${res.status}` };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn('Parser file resolve failed', { url, error: message });
+    return { ok: false, error: message };
+  }
+}
+
 export interface ParserSupplierRow {
   supplier_name: string | null;
   spend_amount: number | null;
