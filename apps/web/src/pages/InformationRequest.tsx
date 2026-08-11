@@ -626,11 +626,17 @@ function CompanyPicker({
           <div className="space-y-2.5">
             {options.map(({ key, title, description, icon: Icon, badge, badgeClass }) => {
               const selected = setupMethod === key;
+              // Recede, but stay CLICKABLE. `pointer-events-none` here meant that
+              // picking any path killed the other two: choose Excel import and
+              // "Enter details manually" and "Upload documents" stopped responding,
+              // with the Back button the only way out. Dimming is a hint about
+              // where you are, not a decision you are locked into — switching
+              // between the three costs nothing and commits nothing.
               const dimmed = setupMethod !== "choose" && !selected;
               return (
                 <div
                   key={key}
-                  className={`transition-opacity duration-200 ${dimmed ? "pointer-events-none opacity-45" : "opacity-100"}`}
+                  className={`transition-opacity duration-200 ${dimmed ? "opacity-45 hover:opacity-100" : "opacity-100"}`}
                 >
                   <button
                     type="button"
