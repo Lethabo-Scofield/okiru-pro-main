@@ -17,7 +17,7 @@ import os
 from datetime import date
 
 from reportlab.lib import colors
-from reportlab.lib.enums import TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -139,6 +139,9 @@ BODY = ParagraphStyle("BODY", parent=styles["Normal"], fontName="Helvetica",
 SMALL = ParagraphStyle("SMALL", parent=BODY, fontSize=T["small"],
                        leading=T["small"] * 1.3, textColor=S["text_muted"])
 CELL = ParagraphStyle("CELL", parent=BODY, fontSize=T["small"], leading=T["small"] * 1.22)
+# Centred variant for table cells that need inline markup (superscript markers).
+CELL_C = ParagraphStyle("CELL_C", parent=CELL, alignment=TA_CENTER, fontSize=T["table"],
+                        leading=T["table"] * 1.1)
 
 
 class AccentRule(Flowable):
@@ -164,6 +167,43 @@ def n(v):
 def load():
     with open(DUMP, encoding="utf-8") as f:
         return json.load(f)
+
+
+# MC criterion keys, grouped by which gazetted concept they came from. Post-2013
+# the two live inside one element ("Management Control"), but they remain
+# distinguishable, so the table can show the EE points as EE instead of burying
+# them in MC.
+MC_PROPER_KEYS = ["mc_board_black_pts", "mc_board_bw_pts", "mc_exec_black_pts",
+                  "mc_exec_bw_pts", "mc_other_exec_black_pts", "mc_other_exec_bw_pts"]
+EE_WITHIN_MC_KEYS = ["mc_senior_pts", "mc_senior_bw_pts", "mc_middle_pts", "mc_middle_bw_pts",
+                     "mc_junior_pts", "mc_junior_bw_pts", "ee_disabled_pts"]
+
+
+def mc_ee_split(v):
+    """Return (mc_points, ee_points, folded) for the MC / EE columns.
+
+    `folded` marks a scorecard where the two are ONE gazetted element and the
+    split is its internal composition rather than two separate elements.
+
+    Only derived where it reconciles against the element total. Transport keeps
+    its genuinely separate EE element untouched; Construction's configs carry
+    `indicators` rather than the mc_* target fields, so there is nothing to split
+    and it is reported as not itemised rather than guessed at.
+    """
+    pil = v["pillars"]
+    mc_max = pil.get("managementControl", {}).get("max", 0)
+    ee_max = pil.get("employmentEquity", {}).get("max", 0)
+
+    if ee_max > 0:                      # Transport — a real, separate element
+        return mc_max, ee_max, False
+
+    c = v.get("compare", {})
+    proper = sum(c.get(k) or 0 for k in MC_PROPER_KEYS)
+    ee_part = sum(c.get(k) or 0 for k in EE_WITHIN_MC_KEYS)
+    if mc_max > 0 and abs(proper + ee_part - mc_max) < 0.01 and ee_part > 0:
+        return proper, ee_part, True
+
+    return mc_max, None, False          # not derivable — say so, do not invent
 
 
 def header(story, title, subtitle):
@@ -209,8 +249,21 @@ def page_pillar_matrix(story, data):
         if not v:
             continue
         pil = v["pillars"]
+        mc_pts, ee_pts, folded = mc_ee_split(v)
         row = [label]
         for pkey, _ in PILLARS:
+            if pkey == "managementControl":
+                row.append(n(mc_pts) if mc_pts else "-")
+                continue
+            if pkey == "employmentEquity":
+                # Dagger = these points ARE Employment Equity, but the gazette
+                # scores them inside the Management Control element.
+                # Superscript marker, not a dagger: Helvetica has no U+2020
+                # glyph and reportlab renders it as a replacement box.
+                row.append("n/i" if ee_pts is None else
+                           (Paragraph(f"{n(ee_pts)}<super>a</super>", CELL_C)
+                            if folded else n(ee_pts)))
+                continue
             p = pil.get(pkey)
             row.append(n(p["max"]) if p and p["max"] > 0 else "-")
         # Anything outside the eight standard elements (FSC's EF / AFS, YES),
@@ -239,29 +292,29 @@ def page_pillar_matrix(story, data):
 
     story.append(Paragraph("Reading this table", H2))
     story.append(Paragraph(
-        "<b>Own</b> Ownership &nbsp;|&nbsp; <b>MC</b> Management Control &nbsp;|&nbsp; "
-        "<b>EE</b> Employment Equity &nbsp;|&nbsp; <b>Skills</b> Skills Development &nbsp;|&nbsp; "
-        "<b>PP</b> Preferential Procurement &nbsp;|&nbsp; <b>SD</b> Supplier Development &nbsp;|&nbsp; "
-        "<b>ED</b> Enterprise Development &nbsp;|&nbsp; <b>SED</b> Socio-Economic Development. "
-        "<b>Other</b> covers elements outside the standard eight - the FSC family's Empowerment Financing "
-        "and Access to Financial Services, and the YES initiative.", BODY))
-    story.append(Spacer(1, 4))
-    story.append(Paragraph(
-        "A dash means the element does not exist on that scorecard, not that it is worth zero. The 2013 "
-        "Amended Codes cut the scorecard from seven elements to five and folded Employment Equity into "
-        "Management Control, so only Transport - whose code predates that amendment (GG 32511, 2009) - "
-        "still reports the two separately.", SMALL))
+        "<b>Own</b> Ownership &nbsp; <b>MC</b> Management Control &nbsp; <b>EE</b> Employment Equity "
+        "&nbsp; <b>Skills</b> Skills Development &nbsp; <b>PP</b> Preferential Procurement &nbsp; "
+        "<b>SD</b> Supplier Development &nbsp; <b>ED</b> Enterprise Development &nbsp; <b>SED</b> "
+        "Socio-Economic Development &nbsp; <b>Other</b> the FSC family's Empowerment Financing and Access "
+        "to Financial Services, and YES. A dash means the element does not exist on that scorecard.", BODY))
     story.append(Spacer(1, SP["xs"]))
     story.append(Paragraph(
-        "Two columns need a caveat. Transport has no Supplier Development element: <b>Transport Large's 15 "
-        "points under SD are gazetted as Enterprise Development</b> (3% of NPAT) and occupy the SD slot only "
-        "as an implementation detail. Construction combines Supplier and Enterprise Development into a "
-        "single ESD element, shown under SD, and is scored by a separate engine.", SMALL))
-    story.append(Spacer(1, 3))
+        "<b><super>a</super> Employment Equity, shown separately.</b> The 2013 Amended Codes folded EE into "
+        "Management Control - the Senior, Middle and Junior bands plus the disabled indicator moved across "
+        "with EAP targets. Marked figures are those EE points, scored inside the single gazetted "
+        "<b>Management Control</b> element; the MC column beside them is board, executive directors and "
+        "other executive management only. The two add to the element: RCOGP Generic is 9 + 10 = 19. "
+        "Transport is unmarked - its code predates the amendment and it reports two genuinely separate "
+        "elements. <b>n/i</b>: the Construction configs itemise differently, so the split is not derivable.",
+        SMALL))
+    story.append(Spacer(1, SP["xs"]))
     story.append(Paragraph(
-        "<b>*</b> An elective scorecard measures only a subset of its elements, so the row does not add up "
-        "to the total. Transport QSE lists all seven elements at 25 each but measures any four - a "
-        "100-point denominator. See page 3, section 4.", SMALL))
+        "Transport has no Supplier Development element: <b>Transport Large's 15 points under SD are "
+        "gazetted as Enterprise Development</b> (3% of NPAT) and occupy that slot only as an implementation "
+        "detail. Construction combines Supplier and Enterprise Development into one ESD element, shown "
+        "under SD, and is scored by a separate engine. <b>*</b> An elective scorecard measures a subset of "
+        "its elements, so the row does not add up to the total - Transport QSE lists seven at 25 each but "
+        "measures any four, a 100-point denominator (page 3, section 4).", SMALL))
     story.append(Spacer(1, 6))
 
     # Sub-minimums are a scoring rule, but they belong beside the weightings.
