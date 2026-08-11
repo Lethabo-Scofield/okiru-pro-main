@@ -131,3 +131,97 @@ describe("buildExtractionReview", () => {
     expect(review.extracted.every((s) => s.aiRowCount === 0)).toBe(true);
   });
 });
+
+describe("item ids survive recomputation", () => {
+  // The review is rebuilt from scratch whenever the workbook changes, and the
+  // modal remembers applied items by id. Ids used to be a shared running
+  // counter, so applying one suggestion renumbered the rest: a different,
+  // untouched suggestion inherited the retired id and the modal filtered it out
+  // as "already applied". It disappeared without ever being applied.
+  const twoBlanks = (): WorkbookSectionsInput => ({
+    ownership: {
+      rows: [
+        { _id: "o1", shareholderName: "A Ndlovu", idNumber: MALE_ID, race: "African", gender: "Male", _sourceFiles: ["reg.pdf"] },
+        { _id: "o2", shareholderName: "B Khumalo", idNumber: FEMALE_ID, race: "African", gender: "Female", _sourceFiles: ["reg.pdf"] },
+      ],
+    },
+    "management-control": {
+      rows: [
+        { _id: "m1", name: "A", surname: "Ndlovu", idNumber: MALE_ID, _sourceFiles: ["ee.pdf"] },
+        { _id: "m2", name: "B", surname: "Khumalo", idNumber: FEMALE_ID, _sourceFiles: ["ee.pdf"] },
+      ],
+    },
+  });
+
+  it("gives the same finding the same id every time", () => {
+    const a = buildExtractionReview(twoBlanks());
+    const b = buildExtractionReview(twoBlanks());
+    expect(a.suggestions.map((s) => s.id)).toEqual(b.suggestions.map((s) => s.id));
+  });
+
+  it("does not renumber the survivors when one suggestion is applied", () => {
+    const before = buildExtractionReview(twoBlanks());
+    const raceForM2 = before.suggestions.find((s) => s.rowId === "m2" && s.column === "race");
+    expect(raceForM2).toBeDefined();
+
+    // Apply the FIRST row's race, exactly as the modal would.
+    const after = twoBlanks();
+    const mc = after["management-control"]!.rows as Array<Record<string, unknown>>;
+    mc[0].race = "African";
+
+    const reviewAfter = buildExtractionReview(after);
+    const stillThere = reviewAfter.suggestions.find((s) => s.id === raceForM2!.id);
+    expect(stillThere, "m2's race suggestion must keep its id after m1 was applied").toBeDefined();
+    expect(stillThere!.rowId).toBe("m2");
+  });
+
+  it("keys a suggestion by the cell it fills, not by discovery order", () => {
+    const review = buildExtractionReview(twoBlanks());
+    for (const s of review.suggestions) {
+      expect(s.id).toContain(s.rowId);
+      expect(s.id).toContain(s.column);
+    }
+  });
+});
+
+describe("the ID outranks a value copied from another sheet", () => {
+  // Digits 7-10 of a checksum-valid SA ID ARE the person's gender. A value
+  // copied off another sheet is hearsay next to that. The copy used to win and
+  // suppress the ID-derived suggestion for the same cell, so "Apply all" could
+  // write a gender into a row whose own ID says the opposite.
+  const contradicted = (): WorkbookSectionsInput => ({
+    ownership: {
+      // MALE_ID, but this sheet claims Female — the sheet is wrong.
+      rows: [{ _id: "o1", shareholderName: "A Ndlovu", idNumber: MALE_ID, gender: "Female", _sourceFiles: ["reg.pdf"] }],
+    },
+    "management-control": {
+      // Same person, gender blank — this is the cell that gets filled.
+      rows: [{ _id: "m1", name: "A", surname: "Ndlovu", idNumber: MALE_ID, _sourceFiles: ["ee.pdf"] }],
+    },
+  });
+
+  it("fills the blank from the ID, not from the contradicting sheet", () => {
+    const review = buildExtractionReview(contradicted());
+    const genderFills = review.suggestions.filter((s) => s.rowId === "m1" && s.column === "gender");
+    expect(genderFills).toHaveLength(1);
+    expect(genderFills[0].value).toBe("Male");
+    expect(genderFills[0].basis).toMatch(/ID number/i);
+  });
+
+  it("still raises the contradiction against the sheet that stated it", () => {
+    const review = buildExtractionReview(contradicted());
+    expect(review.conflicts.some((c) => /contradicts the SA ID/i.test(c.statement))).toBe(true);
+  });
+
+  it("copies gender across sections when no ID can settle it", () => {
+    // Without a derivable gender the cross-section copy is the best evidence
+    // there is, and must still be offered.
+    const review = buildExtractionReview({
+      ownership: { rows: [{ _id: "o1", shareholderName: "C Mokoena", idNumber: "9999999999999", gender: "Female", _sourceFiles: ["reg.pdf"] }] },
+      "management-control": { rows: [{ _id: "m1", name: "C", surname: "Mokoena", idNumber: "9999999999999", _sourceFiles: ["ee.pdf"] }] },
+    });
+    // 9999999999999 fails Luhn, so nothing is derivable from it and the rows
+    // are not even linked — no suggestion, and certainly no invention.
+    expect(review.suggestions.filter((s) => s.column === "gender" && s.value === "Male")).toHaveLength(0);
+  });
+});

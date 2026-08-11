@@ -2216,7 +2216,18 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               const rowUpdates = byRow.get(String((row as Record<string, unknown>)._id ?? ""));
               if (!rowUpdates) return row;
               const next = { ...row } as Row;
-              for (const u of rowUpdates) (next as Record<string, unknown>)[u.column] = u.value;
+              for (const u of rowUpdates) {
+                // FILL BLANKS ONLY, checked against the cell as it is RIGHT NOW.
+                //
+                // Suggestions are minted for empty cells, but the workbook can
+                // move between minting and applying — the user edits a cell, or
+                // an earlier item in the same "Apply all" already filled it.
+                // This wrote regardless, so a batch could overwrite a value the
+                // user had just typed with one derived before they typed it.
+                const cell = (next as Record<string, unknown>)[u.column];
+                const empty = cell === undefined || cell === null || String(cell).trim() === "";
+                if (empty) (next as Record<string, unknown>)[u.column] = u.value;
+              }
               return next;
             });
             handleRowsChange(sectionKey, nextRows);

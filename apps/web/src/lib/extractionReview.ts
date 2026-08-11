@@ -185,8 +185,21 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
   const suggestions: ReviewSuggestion[] = [];
   const conflicts: ReviewConflict[] = [];
   const decisions: ReviewDecision[] = [];
-  let nextId = 0;
-  const id = (prefix: string) => `${prefix}_${++nextId}`;
+  /**
+   * Item ids are derived from WHAT the item is about, never from its position.
+   *
+   * These used to be a shared running counter. The modal remembers applied
+   * items by id, and the review is recomputed from scratch on every workbook
+   * change — so applying one suggestion renumbered everything after it, a
+   * different untouched suggestion inherited the retired id, and the modal
+   * filtered it out as "already applied". It vanished from the list without
+   * ever being applied, and the more you applied the more silently disappeared.
+   *
+   * A content-derived id is stable across recomputation: the same finding keeps
+   * the same id whatever else happens around it.
+   */
+  const id = (prefix: string, ...parts: Array<string | number>) =>
+    `${prefix}_${parts.map((p) => String(p).replace(/[^A-Za-z0-9]+/g, "-")).join("_")}`;
 
   // ── 1. What landed where, with provenance ────────────────────────────────
   for (const [key, sec] of Object.entries(sections)) {
@@ -220,7 +233,7 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
       if (distinct.length > 1) {
         // The same person, two different answers — a human must pick.
         conflicts.push({
-          id: id("conflict"),
+          id: id("conflict", "identity", idNumber, attr),
           statement: `${facts[0].label} (ID …${idNumber.slice(-4)}) has a different ${attr} in different sections.`,
           sides: stated.map((f) => ({
             label: sectionLabelOf(f.section),
@@ -229,11 +242,22 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
           rows: facts.map((f) => ({ rowId: f.rowId, label: f.label })),
         });
       } else if (distinct.length === 1 && missing.length > 0) {
+        // GENDER IS NOT COPIED WHEN THE ID STATES IT. Every row in this group
+        // carries the same ID number, and digits 7–10 of a checksum-valid SA ID
+        // ARE the gender — arithmetic on the person's own identity document.
+        // A value copied off another sheet is hearsay by comparison. Letting
+        // the copy win meant "Apply all" could write a gender into a row whose
+        // own ID says the opposite, and nothing flagged it because this branch
+        // suppressed the ID-derived suggestion for the same cell. The ID pass
+        // below now owns gender; where the copied value disagrees with the ID,
+        // the stated-vs-ID check raises it against the row that stated it.
+        if (attr === "gender" && genderFromSaId(idNumber)) continue;
+
         // One consistent answer elsewhere → grounded fill for the blanks.
         for (const f of missing) {
           const from = stated[0];
           suggestions.push({
-            id: id("suggest"),
+            id: id("suggest", f.section, f.rowId, attr),
             section: f.section,
             sectionLabel: sectionLabelOf(f.section),
             rowId: f.rowId,
@@ -264,7 +288,7 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
         );
         if (!covered) {
           suggestions.push({
-            id: id("suggest"),
+            id: id("suggest", spec.key, str(row._id), "gender"),
             section: spec.key,
             sectionLabel: sectionLabelOf(spec.key),
             rowId: str(row._id),
@@ -278,7 +302,7 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
         }
       } else if (stated.toLowerCase() !== derived.toLowerCase()) {
         conflicts.push({
-          id: id("conflict"),
+          id: id("conflict", "said-gender", spec.key, str(row._id)),
           statement: `${label}: the stated gender ("${stated}") contradicts the SA ID number, which encodes ${derived.toLowerCase()}.`,
           sides: [
             { label: sectionLabelOf(spec.key), value: stated },
@@ -304,7 +328,7 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
     const bo = Number(row.blackOwnership ?? 0);
     if (bwo > 0 && gender && gender !== "female") {
       conflicts.push({
-        id: id("conflict"),
+        id: id("conflict", "bwo-vs-gender", str(row._id)),
         statement: `${label} carries ${Math.round(bwo * 100)}% black-women ownership, but the row's stated gender is "${str(row.gender)}". These points would be scored for a black woman who does not appear in the register.`,
         sides: [
           { label: "Aggregate on this row", value: `${Math.round(bwo * 100)}% black women` },
@@ -316,7 +340,7 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
     }
     if (bo > 0 && race && !BLACK_RACES.has(race)) {
       conflicts.push({
-        id: id("conflict"),
+        id: id("conflict", "bo-vs-race", str(row._id)),
         statement: `${label} carries ${Math.round(bo * 100)}% black ownership, but the row's stated race is "${str(row.race)}".`,
         sides: [
           { label: "Aggregate on this row", value: `${Math.round(bo * 100)}% black` },
@@ -336,7 +360,7 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
       const total = shares.reduce((a, b) => a + b, 0);
       if (Math.abs(total - 100) > 0.5) {
         conflicts.push({
-          id: id("conflict"),
+          id: id("conflict", "shareholdings-total"),
           statement: `Shareholdings add up to ${total}%, not 100% — a percentage is missing or double-counted.`,
           sides: ownRows.map((r) => ({
             label: rowLabel("ownership", r),
@@ -372,7 +396,7 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
     const columnLabel = def?.label ?? group.column;
     const secLabel = sectionLabelOf(group.section);
     decisions.push({
-      id: id("decision"),
+      id: id("decision", group.section, group.column),
       section: group.section,
       sectionLabel: secLabel,
       column: group.column,
