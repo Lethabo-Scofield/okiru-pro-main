@@ -601,10 +601,18 @@ function CompanyPicker({
         {
           key: "excel" as const,
           title: "Import Excel workbook",
-          description: "Continue from an existing RCOGP workbook. Unmapped sheets are matched with AI.",
+          // Not "an RCOGP workbook": the normalizer detects ICT, Construction, FSC
+          // (incl. sub-sector), Transport and AgriBEE from the workbook's own
+          // "Sector / Codes" header and only falls back to RCOGP. Naming one sector
+          // told every Transport/FSC/AgriBEE client this path was not for them and
+          // pushed them onto the token-charged "Upload documents" route instead.
+          description: "Continue from an existing B-BBEE information-gathering workbook, any sector. Unmapped sheets are matched with AI.",
           icon: ExcelLogoMark,
-          badge: "Uses AI",
-          badgeClass: "border-violet-300/25 bg-violet-300/[0.06] text-[#c4b5fd]",
+          // The badge sits in the same column as "Uses tokens" and "Free", so it is
+          // read as the cost signal. "Uses AI" there implied a charge and then the
+          // panel below said "free" — say both, and lead with the cost.
+          badge: "Free · uses AI",
+          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
         },
       ];
       return (
@@ -674,7 +682,14 @@ function CompanyPicker({
                   {selected && key === "excel" && (
                     <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[#111113] p-5 text-center">
                       <ExcelLogoMark className="mx-auto h-10 w-10" />
-                      <p className="mt-3 text-[13px] text-[#a1a1a6]">Upload an existing RCOGP workbook. This path is free.</p>
+                      <p className="mt-3 text-[13px] text-[#a1a1a6]">
+                        Upload an existing B-BBEE information-gathering workbook — RCOGP, ICT, FSC, Transport,
+                        AgriBEE or Construction. The sector is read from the workbook.
+                      </p>
+                      <p className="mt-1.5 text-[13px] text-[#8e8e93]">
+                        No tokens are charged. Sheet names and sample rows from unrecognised tabs are sent to
+                        the AI mapper.
+                      </p>
                       <div className="mt-4">
                         <ExcelImportButton
                           label="Choose workbook"
