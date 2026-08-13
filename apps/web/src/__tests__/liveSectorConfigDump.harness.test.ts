@@ -36,23 +36,36 @@ suite('live sector config dump', () => {
     const out: Record<string, unknown> = {};
 
     for (const [name, value] of Object.entries(configs)) {
-      const sc = value as SectorConfig;
-      if (!sc || typeof sc !== 'object' || !('pillarConfigs' in sc) || !('sectorCode' in sc)) continue;
+      const raw = value as SectorConfig;
+      if (!raw || typeof raw !== 'object' || !('pillarConfigs' in raw) || !('sectorCode' in raw)) continue;
+      // Read the ENRICHED config, not the raw export: attachSubElements() runs
+      // when ALL_CONFIGS is built, so the exported const carries no subElements
+      // and every pillar would be reported as having no indicator breakdown.
+      const sc = configs.getSectorConfig(raw.sectorCode, raw.scorecardType);
 
       const pillars: Record<string, {
         max: number; base: number | null; bonus: number;
+        breakdownRows: number; breakdownSum: number;
         subMinPercent: number | null; elective: string | null;
       }> = {};
       for (const p of PILLARS) {
         const pc = (sc.pillarConfigs as Record<string, {
           maxPoints: number; basePoints?: number; hasSubMinimum?: boolean;
           subMinimumPercent?: number; chooseOneGroup?: string;
+          subElements?: Array<{ criteria: string; points: number }>;
+          indicators?: Array<{ weight: number }>;
         } | undefined>)[p];
         if (!pc) continue;
         const base = pc.basePoints ?? null;
+        // Itemised indicator detail, for the "what breakdowns are we missing"
+        // report. Construction carries `indicators` instead of `subElements`.
+        const rows = pc.subElements ?? [];
+        const rowSum = rows.reduce((n, r) => n + (r.points || 0), 0);
         pillars[p] = {
           max: pc.maxPoints,
           base,
+          breakdownRows: rows.length,
+          breakdownSum: Number(rowSum.toFixed(2)),
           // Bonus is only KNOWN where the config declares basePoints. Elsewhere
           // it is reported as 0 = "not declared", never guessed.
           bonus: base == null ? 0 : Math.max(0, pc.maxPoints - base),
