@@ -27,7 +27,7 @@ export interface Client {
   contactPhone: string;
   
   // BEE specifics
-  sectorCode: 'RCOGP' | 'ICT' | 'FSC' | 'AGRI' | 'TOURISM' | 'CONSTRUCTION' | 'MINING' | 'OTHER';
+  sectorCode: 'RCOGP' | 'ICT' | 'FSC' | 'AGRI' | 'TOURISM' | 'CONSTRUCTION' | 'MINING' | 'MAC' | 'OTHER';
   /**
    * FSC sub-sector picker (Bug #6). Drives EF + AFS pillar routing.
    * Others = FS700 (generic, no EF/AFS). Banks = FS701. LTI = FS702. STI = FS703.

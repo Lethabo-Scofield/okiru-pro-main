@@ -106,6 +106,8 @@ SECTORS = [
     ("FSC_BANKS", "FSC Banks"),
     ("FSC_LTI", "FSC Long-Term"),
     ("FSC_STI", "FSC Short-Term"),
+    ("MAC_GENERIC", "MAC Generic"),
+    ("MAC_QSE", "MAC QSE"),
     ("TRANSPORT_GENERIC", "Transport Large"),
     ("TRANSPORT_QSE", "Transport QSE"),
     ("CONSTRUCTION_QSE", "Constr. QSE"),
@@ -122,6 +124,8 @@ PILLARS = [
     ("supplierDevelopment", "SD"),
     ("enterpriseDevelopment", "ED"),
     ("socioEconomicDevelopment", "SED"),
+    # MAC only - Responsible Social Marketing and Communications.
+    ("responsibleSocialMarketing", "RSM"),
 ]
 
 styles = getSampleStyleSheet()
@@ -200,10 +204,13 @@ def mc_ee_split(v):
     c = v.get("compare", {})
     proper = sum(c.get(k) or 0 for k in MC_PROPER_KEYS)
     ee_part = sum(c.get(k) or 0 for k in EE_WITHIN_MC_KEYS)
-    if mc_max > 0 and abs(proper + ee_part - mc_max) < 0.01 and ee_part > 0:
-        return proper, ee_part, True
+    if mc_max > 0 and abs(proper + ee_part - mc_max) < 0.01:
+        # ee_part == 0 is a real answer, not a gap: MAC QSE's Management Control
+        # is two executive bands with no Senior/Middle/Junior or disabled rows,
+        # so there are genuinely no EE points to separate out.
+        return proper, ee_part, ee_part > 0
 
-    return mc_max, None, False          # not derivable — say so, do not invent
+    return mc_max, None, False          # not derivable, say so rather than invent
 
 
 def header(story, title, subtitle):
@@ -225,8 +232,8 @@ def base_table_style(ncols, header_bg=None):
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("LINEBELOW", (0, 0), (-1, 0), 0.8, C["table_rule_strong"]),
         ("GRID", (0, 0), (-1, -1), 0.25, C["table_rule"]),
-        ("TOPPADDING", (0, 0), (-1, -1), SP["sm"]),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), SP["sm"]),
+        ("TOPPADDING", (0, 0), (-1, -1), SP["xs"]),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), SP["xs"]),
         ("LEFTPADDING", (0, 0), (-1, -1), SP["md"]),
         ("RIGHTPADDING", (0, 0), (-1, -1), SP["md"]),
     ])
@@ -262,7 +269,7 @@ def page_pillar_matrix(story, data):
                 # glyph and reportlab renders it as a replacement box.
                 row.append("n/i" if ee_pts is None else
                            (Paragraph(f"{n(ee_pts)}<super>a</super>", CELL_C)
-                            if folded else n(ee_pts)))
+                            if folded else (n(ee_pts) if ee_pts else "-")))
                 continue
             p = pil.get(pkey)
             row.append(n(p["max"]) if p and p["max"] > 0 else "-")
@@ -295,8 +302,9 @@ def page_pillar_matrix(story, data):
         "<b>Own</b> Ownership &nbsp; <b>MC</b> Management Control &nbsp; <b>EE</b> Employment Equity "
         "&nbsp; <b>Skills</b> Skills Development &nbsp; <b>PP</b> Preferential Procurement &nbsp; "
         "<b>SD</b> Supplier Development &nbsp; <b>ED</b> Enterprise Development &nbsp; <b>SED</b> "
-        "Socio-Economic Development &nbsp; <b>Other</b> the FSC family's Empowerment Financing and Access "
-        "to Financial Services, and YES. A dash means the element does not exist on that scorecard.", BODY))
+        "Socio-Economic Development &nbsp; <b>RSM</b> Responsible Social Marketing (MAC only) &nbsp; "
+        "<b>Other</b> FSC Empowerment Financing and Access to Financial Services, and YES. "
+        "A dash means the element does not exist on that scorecard.", SMALL))
     story.append(Spacer(1, SP["xs"]))
     story.append(Paragraph(
         "<b><super>a</super> Employment Equity, shown separately.</b> The 2013 Amended Codes folded EE into "
@@ -353,7 +361,6 @@ def page_pillar_matrix(story, data):
         "are missed.", SMALL))
 
 
-# ---------------------------------------------------------------- page 2
 def page_base_bonus(story, data):
     header(
         story,
@@ -431,22 +438,19 @@ def page_rules(story, data):
     story.append(Paragraph("1. Indicator scoring", H2))
     story.append(Paragraph(
         "Each indicator scores pro-rata against its target: <b>points = (actual / target) x weighting</b>, "
-        "capped at the weighting. An entity at half its target earns half the points; exceeding the target "
-        "earns no more than the weighting. Element scores are the sum of their indicators, capped at the "
-        "element's maximum. Bonus indicators score the same way but are added on top of the weighting.", BODY))
+        "capped at the weighting. Element scores are the sum of their indicators, capped at the element's "
+        "maximum. Bonus indicators score the same way but are added on top of the weighting.", BODY))
 
     story.append(Paragraph("2. Recognition of procurement spend", H2))
     story.append(Paragraph(
         "Supplier spend is recognised at the supplier's B-BBEE recognition level, not rand-for-rand: "
-        "Level 1 counts 135%, Level 2 125%, Level 3 110%, Level 4 100%, Level 5 80%, Level 6 60%, "
-        "Level 7 50%, Level 8 10%, non-compliant 0%.", BODY))
+        "L1 135%, L2 125%, L3 110%, L4 100%, L5 80%, L6 60%, L7 50%, L8 10%, non-compliant 0%.", SMALL))
 
     story.append(Paragraph("3. Sub-minimums and discounting", H2))
     story.append(Paragraph(
         "Priority elements carry a sub-minimum - typically 40% of the element, measured on the base "
         "weighting and excluding bonus points. Missing any one discounts the final level by one, applied "
-        "once regardless of how many are missed. Sub-minimums per scorecard are listed on page 1.", BODY))
-
+        "once regardless of how many are missed. Per-scorecard detail is on page 1.", BODY))
     story.append(Paragraph("4. Elective elements", H2))
     elective = [(k, l) for k, l in SECTORS
                 if (v := data.get(k)) and v.get("electiveGroupSizes")]
@@ -461,7 +465,6 @@ def page_rules(story, data):
             "from both the score and the denominator.", BODY))
     else:
         story.append(Paragraph("No elective scorecards configured.", BODY))
-
     story.append(Paragraph("5. Level ladders", H2))
     ladders = {}
     for key, label in SECTORS:
@@ -470,7 +473,6 @@ def page_rules(story, data):
             continue
         sig = tuple((l["level"], l["min"]) for l in v["levels"])
         ladders.setdefault(sig, []).append(label)
-
     lrows = [["Applies to", "L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8"]]
     for sig, labels in ladders.items():
         mins = {lvl: m for lvl, m in sig}
@@ -485,14 +487,14 @@ def page_rules(story, data):
     story.append(Paragraph(
         "Minimum points required for each level. Levels are assessed on absolute points, so a scorecard "
         "whose bonus lifts it above the denominator keeps the excess.", SMALL))
+# ---------------------------------------------------------------- page 2
 
     story.append(Paragraph("6. Deemed levels", H2))
     story.append(Paragraph(
-        "An EME (turnover below the sector threshold) is deemed Level 4 on affidavit; at 51% black ownership "
-        "it is deemed Level 2 and at 100% Level 1. A QSE at 51% black ownership is deemed Level 2, at 100% "
-        "Level 1. A deemed level is a floor - the better of deemed and scored applies, and discounting "
-        "cannot drag an entity below it. Transport is excluded: the 2009 Transport Code has no deeming "
-        "provision and Transport QSEs are scored on points.", BODY))
+        "An EME is deemed Level 4 on affidavit; at 51% black ownership Level 2, at 100% Level 1. A QSE at "
+        "51% is deemed Level 2, at 100% Level 1. A deemed level is a FLOOR - the better of deemed and "
+        "scored applies and discounting cannot drag an entity below it. Transport is excluded: the 2009 "
+        "code has no deeming provision, so Transport QSEs are scored on points.", SMALL))
 
     story.append(Spacer(1, 5))
     story.append(Paragraph(
@@ -522,7 +524,7 @@ def main():
     data = load()
     doc = SimpleDocTemplate(
         OUT, pagesize=landscape(A4),
-        leftMargin=14 * mm, rightMargin=14 * mm, topMargin=12 * mm, bottomMargin=16 * mm,
+        leftMargin=14 * mm, rightMargin=14 * mm, topMargin=10 * mm, bottomMargin=14 * mm,
         title="Okiru B-BBEE Sector Configuration Reference",
         author="Okiru", subject="Sector weightings, bonus points and scoring rules",
     )

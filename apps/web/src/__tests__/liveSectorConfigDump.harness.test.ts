@@ -26,6 +26,8 @@ const PILLARS = [
   'supplierDevelopment',
   'enterpriseDevelopment',
   'socioEconomicDevelopment',
+  // MAC only - the sixth gazetted element.
+  'responsibleSocialMarketing',
   'yesInitiative',
 ] as const;
 

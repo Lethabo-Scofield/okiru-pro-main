@@ -17,6 +17,8 @@
 | CONSTRUCTION_QSE | 110 | 0 | 110 |
 | CONSTRUCTION_CONTRACTOR | 123 | 0 | 123 |
 | CONSTRUCTION_BEP | 123 | 0 | 123 |
+| MAC_GENERIC | 138 | 14 | 138 |
+| MAC_QSE | 115 | 10 | 115 |
 
 Where target == reachable the sector's `totalMaxPoints` already includes its bonus points; the split still matters per element, because an entity on full base points must read 100% of that element rather than short of a merged cap.
 

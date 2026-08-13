@@ -424,6 +424,8 @@ export const LEDGER_GRAND_TOTALS: Record<string, number> = {
   'FSC:Generic': 119,
   'FSC:QSE': 100,
   'AGRI:Generic': 132,
+  'MAC:Generic': 138,
+  'MAC:QSE': 115,
   'TRANSPORT:Generic': 108,
   // Any four of the seven elements × 25. Was 107, carried over from a
   // "82 compulsory + one elective" reading that the sector code does not state

@@ -44,6 +44,7 @@ export const TRUSTED_SECTOR_CODES = [
   'AGRI',
   'TRANSPORT',
   'CONSTRUCTION',
+  'MAC',
 ] as const;
 
 export type TrustedSectorCode = (typeof TRUSTED_SECTOR_CODES)[number];
@@ -60,7 +61,7 @@ export const UNTRUSTED_SECTOR_TOKENS = [
   'PROPERTY',
   'CAS',
   'FORESTRY',
-  'MAC',
+  // 'MAC' moved to TRUSTED_SECTOR_CODES on 2026-08-13 when the sector shipped.
 ] as const;
 
 /** Strict check — unknown or untrusted tokens (incl. GENERIC) return false. */
@@ -502,6 +503,42 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     readinessReasons: [
       ADVISORY_ONLY_REASON,
       'Indicator-based scorecard with Preferential Procurement carrying 0 points; supplier evidence does not map onto the scored SD indicators.',
+    ],
+  },
+  {
+    configId: 'MAC_GENERIC',
+    sectorCode: 'MAC',
+    scorecardType: 'Generic',
+    sectorName: 'Marketing, Advertising and Communication Sector Code (Generic)',
+    totalMaxPoints: 138, // 124 weighting + 14 bonus (GG 39887, 1 April 2016)
+    pillarPoints: {
+      ownership: 25, managementControl: 27, employmentEquity: 0, skillsDevelopment: 30,
+      preferentialProcurement: 29, supplierDevelopment: 10, enterpriseDevelopment: 7,
+      socioEconomicDevelopment: 5, responsibleSocialMarketing: 5, yesInitiative: 0,
+    },
+    readiness: 'shadow_mode',
+    readinessReasons: [
+      ADVISORY_ONLY_REASON,
+      'Responsible Social Marketing (5 pts) has no calculator - a MAC entity cannot reach its full total until that element is scored.',
+      'Level ladder, priority elements and sub-minimums are assumed from the Amended Codes; the gazette extract states none.',
+    ],
+  },
+  {
+    configId: 'MAC_QSE',
+    sectorCode: 'MAC',
+    scorecardType: 'QSE',
+    sectorName: 'Marketing, Advertising and Communication Sector Code (QSE)',
+    totalMaxPoints: 115, // 105 weighting + 10 bonus
+    pillarPoints: {
+      ownership: 25, managementControl: 15, employmentEquity: 0, skillsDevelopment: 35,
+      preferentialProcurement: 20, supplierDevelopment: 5, enterpriseDevelopment: 5,
+      socioEconomicDevelopment: 5, responsibleSocialMarketing: 5, yesInitiative: 0,
+    },
+    readiness: 'shadow_mode',
+    readinessReasons: [
+      ADVISORY_ONLY_REASON,
+      'Responsible Social Marketing (3 + 2 pts) has no calculator.',
+      'Level ladder and sub-minimums assumed from the Amended Codes.',
     ],
   },
 ] as const;

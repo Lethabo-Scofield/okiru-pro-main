@@ -42,6 +42,8 @@ import { FSC_QSE_CALCULATOR_CONFIG } from '../../sectors/fsc-qse';
 import { FSC_BANKS_CALCULATOR_CONFIG } from '../../sectors/fsc-banks';
 import { FSC_LTI_CALCULATOR_CONFIG } from '../../sectors/fsc-lti';
 import { FSC_STI_CALCULATOR_CONFIG } from '../../sectors/fsc-sti';
+import { MAC_GENERIC_CALCULATOR_CONFIG } from '../../sectors/mac-generic';
+import { MAC_QSE_CALCULATOR_CONFIG } from '../../sectors/mac-qse';
 import { pillarBreakdownSubtitle, summarizeSubLines } from '../../sectors/sector-labels';
 import type { CalculatorConfig } from '../../../../../shared/schema';
 import { TRANSPORT_QSE, TRANSPORT_GENERIC } from '../../../../../../api/pipeline/sectorConfig';
@@ -145,6 +147,8 @@ const ALL_SECTORS: Array<[string, CalculatorConfig]> = [
   ['FSC Banks', FSC_BANKS_CALCULATOR_CONFIG],
   ['FSC LTI', FSC_LTI_CALCULATOR_CONFIG],
   ['FSC STI', FSC_STI_CALCULATOR_CONFIG],
+  ['MAC Generic', MAC_GENERIC_CALCULATOR_CONFIG],
+  ['MAC QSE', MAC_QSE_CALCULATOR_CONFIG],
   ['Transport Large', TRANSPORT_GENERIC_CALCULATOR_CONFIG],
   ['Transport QSE', TRANSPORT_QSE_CALCULATOR_CONFIG],
 ];

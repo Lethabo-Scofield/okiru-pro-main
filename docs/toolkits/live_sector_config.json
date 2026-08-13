@@ -2208,5 +2208,319 @@
       "esd_jobs_bonus": 0,
       "sed_pts": 6
     }
+  },
+  "MAC_GENERIC": {
+    "sectorCode": "MAC",
+    "scorecardType": "Generic",
+    "sectorName": "Marketing, Advertising and Communication Sector Code (Generic)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
+    "totalMaxPoints": 138,
+    "reachableMax": 138,
+    "bonusAvailable": 14,
+    "ungroupedBase": 124,
+    "pillarSum": 138,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "managementControl": {
+        "max": 27,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "skillsDevelopment": {
+        "max": 30,
+        "base": 20,
+        "bonus": 10,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "preferentialProcurement": {
+        "max": 29,
+        "base": 27,
+        "bonus": 2,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "supplierDevelopment": {
+        "max": 10,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "enterpriseDevelopment": {
+        "max": 7,
+        "base": 5,
+        "bonus": 2,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "socioEconomicDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "responsibleSocialMarketing": {
+        "max": 5,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      }
+    },
+    "compare": {
+      "grand_total": 138,
+      "ownership": 25,
+      "mc": 27,
+      "ee": 0,
+      "skills": 30,
+      "pp": 29,
+      "sd": 10,
+      "ed": 7,
+      "sed": 5,
+      "mc_board_black_pts": 2,
+      "mc_board_bw_pts": 1,
+      "mc_exec_black_pts": 2,
+      "mc_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 3,
+      "mc_other_exec_bw_pts": 2,
+      "mc_senior_pts": 3,
+      "mc_senior_bw_pts": 2,
+      "mc_middle_pts": 3,
+      "mc_middle_bw_pts": 2,
+      "mc_junior_pts": 2,
+      "mc_junior_bw_pts": 2,
+      "ee_disabled_pts": 2,
+      "skills_learning_pts": 8,
+      "skills_bursary_pts": 4,
+      "skills_disabled_pts": 4,
+      "skills_learnership_pts": 4,
+      "skills_absorption_pts": 10,
+      "pp_all_pts": 5,
+      "pp_qse_pts": 4,
+      "pp_eme_pts": 5,
+      "pp_bo51_pts": 9,
+      "pp_bwo30_pts": 4,
+      "pp_dg_pts": 2,
+      "esd_sd_pts": 10,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 1,
+      "esd_jobs_bonus": 1,
+      "sed_pts": 5
+    }
+  },
+  "MAC_QSE": {
+    "sectorCode": "MAC",
+    "scorecardType": "QSE",
+    "sectorName": "Marketing, Advertising and Communication Sector Code (QSE)",
+    "levels": [
+      {
+        "level": 1,
+        "min": 100
+      },
+      {
+        "level": 2,
+        "min": 95
+      },
+      {
+        "level": 3,
+        "min": 90
+      },
+      {
+        "level": 4,
+        "min": 80
+      },
+      {
+        "level": 5,
+        "min": 75
+      },
+      {
+        "level": 6,
+        "min": 70
+      },
+      {
+        "level": 7,
+        "min": 55
+      },
+      {
+        "level": 8,
+        "min": 40
+      }
+    ],
+    "electiveGroupSizes": {},
+    "totalMaxPoints": 115,
+    "reachableMax": 115,
+    "bonusAvailable": 10,
+    "ungroupedBase": 105,
+    "pillarSum": 115,
+    "pillars": {
+      "ownership": {
+        "max": 25,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "managementControl": {
+        "max": 15,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "employmentEquity": {
+        "max": 0,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "skillsDevelopment": {
+        "max": 35,
+        "base": 25,
+        "bonus": 10,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "preferentialProcurement": {
+        "max": 20,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "supplierDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": 40,
+        "elective": null
+      },
+      "enterpriseDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "socioEconomicDevelopment": {
+        "max": 5,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "responsibleSocialMarketing": {
+        "max": 5,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      },
+      "yesInitiative": {
+        "max": 0,
+        "base": null,
+        "bonus": 0,
+        "subMinPercent": null,
+        "elective": null
+      }
+    },
+    "compare": {
+      "grand_total": 115,
+      "ownership": 25,
+      "mc": 15,
+      "ee": 0,
+      "skills": 35,
+      "pp": 20,
+      "sd": 5,
+      "ed": 5,
+      "sed": 5,
+      "mc_board_black_pts": 0,
+      "mc_board_bw_pts": 0,
+      "mc_exec_black_pts": 5,
+      "mc_exec_bw_pts": 2,
+      "mc_other_exec_black_pts": 6,
+      "mc_other_exec_bw_pts": 2,
+      "mc_senior_pts": 0,
+      "mc_senior_bw_pts": 0,
+      "mc_middle_pts": 0,
+      "mc_middle_bw_pts": 0,
+      "mc_junior_pts": 0,
+      "mc_junior_bw_pts": 0,
+      "ee_disabled_pts": 0,
+      "skills_learning_pts": 20,
+      "skills_bursary_pts": 5,
+      "skills_disabled_pts": 0,
+      "skills_learnership_pts": 0,
+      "skills_absorption_pts": 10,
+      "pp_all_pts": 12,
+      "pp_qse_pts": 0,
+      "pp_eme_pts": 0,
+      "pp_bo51_pts": 8,
+      "pp_bwo30_pts": 0,
+      "pp_dg_pts": 0,
+      "esd_sd_pts": 5,
+      "esd_ed_pts": 5,
+      "esd_grad_bonus": 0,
+      "esd_jobs_bonus": 0,
+      "sed_pts": 5
+    }
   }
 }

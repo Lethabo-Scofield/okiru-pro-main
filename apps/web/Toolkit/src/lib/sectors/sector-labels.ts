@@ -10,6 +10,7 @@ const SECTOR_DISPLAY_NAMES: Record<string, string> = {
   TOURISM: 'Tourism',
   CONSTRUCTION: 'Construction',
   MINING: 'Mining',
+  MAC: 'MAC',
   // "Road Freight" explicitly: the Transport Sector Code covers several
   // sub-sectors (road freight, rail, air, maritime, bus, taxi, forwarding &
   // clearing) and our configs implement Road Freight only. Labelling them

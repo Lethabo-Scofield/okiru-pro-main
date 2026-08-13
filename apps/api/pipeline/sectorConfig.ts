@@ -80,6 +80,11 @@ export interface OwnershipTargets {
   womenEIMaxPts: number;
   netValueMaxPts: number;
   newEntrantsMaxPts: number;
+  /**
+   * Compliance target for the black-new-entrants economic-interest indicator.
+   * Optional because most codes use the generic 2%; MAC sets 4% (GG 39887 8.2.4).
+   */
+  newEntrantsTarget?: number;
   /** Transport Sector (Large): designated-group economic interest indicator row */
   economicInterestDesignatedGroupTarget?: number;
   economicInterestDesignatedGroupMaxPts?: number;
@@ -247,6 +252,13 @@ export interface SectorConfig {
     enterpriseDevelopment: PillarConfig;
     socioEconomicDevelopment: PillarConfig;
     yesInitiative?: PillarConfig; // YES points are included in totalMaxPoints for some sectors
+    /**
+     * MAC only — "Responsible Social Marketing and Communications" (GG 39887
+     * §13 / §20), a sixth gazetted element with no analogue in any other code.
+     * Large entities score 5 pts on sector-initiative contributions; QSE splits
+     * it 3 (no adverse RSM ruling) + 2 (attending sector RSM initiatives).
+     */
+    responsibleSocialMarketing?: PillarConfig;
     empowermentFinancing?: PillarConfig;
     accessToFinancialServices?: PillarConfig;
     consumerEducation?: PillarConfig;
@@ -1953,10 +1965,209 @@ function getEnrichedConfig(sectorCode: string, scorecardType: string = 'Generic'
 // Lookup
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// MAC - Marketing, Advertising and Communication Sector Code
+// Government Gazette No. 39887, 1 April 2016. Transcribed from
+// docs/toolkits/MAC Codes.xlsx (supplied via Zoleka Mnanzana, 2026-08-13).
+//
+// MAC has SIX elements: the usual five plus Responsible Social Marketing and
+// Communications. Its Skills absorption bonus is 10 points - the largest of any
+// code we implement.
+//
+// [UNVERIFIED] The extract gives indicator weightings and targets ONLY. It
+// states no level ladder, no priority elements and no sub-minimums. The QSE
+// sheet says the total is "capped per Amended Codes rules", so the standard
+// ladder, recognition table and 40% sub-minimums are applied by analogy. Those
+// three are ASSUMPTIONS, not transcriptions - confirm before relying on a MAC
+// level.
+// ---------------------------------------------------------------------------
+export const MAC_GENERIC: SectorConfig = {
+  sectorCode: 'MAC',
+  sectorName: 'Marketing, Advertising and Communication Sector Code (Generic)',
+  scorecardType: 'Generic',
+  // The gazette states 124 "excl. bonus" + 14 bonus. Every other config in this
+  // file declares the BONUS-INCLUSIVE total (RCOGP's 120 already contains its 9
+  // bonus points), and the integrity test enforces
+  // totalMaxPoints === sum(pillar maxPoints). So: 138 total, of which 124 is the
+  // element weighting and 14 is bonus (Skills 10, PP 2, ED 2).
+  totalMaxPoints: 138,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 30, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 29, basePoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    responsibleSocialMarketing: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      // Section 8. MAC targets are HIGHER than the generic codes: 45% voting and
+      // economic interest rather than 25%, and 30% for black women rather 10%.
+      votingRightsTarget: 0.45, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.30, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.45, economicInterestMaxPts: 4,
+      womenEITarget: 0.30, womenEIMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.05, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2, newEntrantsTarget: 0.04,
+    },
+    managementControl: {
+      // Section 9.1-9.6
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
+      seniorMaxPts: 3, seniorBWMaxPts: 2,
+      middleMaxPts: 3, middleBWMaxPts: 2,
+      juniorMaxPts: 2, juniorBWMaxPts: 2,
+      seniorBlackTarget: 0.60, seniorBWTarget: 0.30,
+      middleBlackTarget: 0.75, middleBWTarget: 0.38,
+      juniorBlackTarget: 0.88, juniorBWTarget: 0.44,
+    },
+    employmentEquity: {
+      seniorMaxPts: 3, middleMaxPts: 3, juniorMaxPts: 2,
+      disabledMaxPts: 2, disabledTarget: 0.02,
+    },
+    skills: {
+      // Section 10. 8 pts at 6% of leviable, well above the generic 3.5%.
+      learningProgrammesMaxPts: 8,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 10,
+      overallSpendPercent: 6.0,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 2.5,
+      absorptionTargetPercent: 100,
+    },
+    procurement: {
+      // Section 11.1
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.20, qseMaxPts: 4,
+      emeTarget: 0.20, emeMaxPts: 5,
+      bo51Target: 0.40, bo51MaxPts: 9,
+      bwo30Target: 0.12, bwo30MaxPts: 4,
+      dgTarget: 0.02, dgMaxPts: 2,
+    },
+    esd: {
+      sdPercent: 2.0, sdMaxPts: 10,
+      edPercent: 1.0, edMaxPts: 5,
+      edGraduationBonus: 1,
+      edJobsBonus: 1,
+    },
+    sed: { spendPercent: 2.5, maxPts: 5 },
+  },
+  levelThresholds: STANDARD_LEVELS,             // [UNVERIFIED] - see header
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// Ownership: 4+2+4+2+3+2+8 = 25
+// MC: 2+1+2+1+3+2+3+2+3+2+2+2+2 = 27
+// Skills: 8+4+4+4 = 20 base (+10 bonus)
+// PP: 5+4+5+9+4 = 27 base (+2 bonus); ESD element = 27+10+5 = 42
+// Grand total: 25+27+20+42+5+5 = 124 base, 14 bonus
+
+export const MAC_QSE: SectorConfig = {
+  sectorCode: 'MAC',
+  sectorName: 'Marketing, Advertising and Communication Sector Code (QSE)',
+  scorecardType: 'QSE',
+  // Gazette states 105 "excl. bonus" + 10 bonus; declared bonus-inclusive to
+  // match every other config and the integrity test. Base weighting is 105.
+  totalMaxPoints: 115,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 35, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    responsibleSocialMarketing: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      // Section 15. QSE reverts to the familiar 25% + 1 vote / 25% EI targets.
+      votingRightsTarget: 0.25, votingRightsMaxPts: 5,
+      womenVotingTarget: 0.12, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 5,
+      womenEITarget: 0.12, womenEIMaxPts: 2,
+      // 15.2.3 is a single combined "new entrants OR designated groups" row.
+      economicInterestDesignatedGroupTarget: 0.02, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 0,
+    },
+    managementControl: {
+      // Section 16 - only two bands: executive and non-executive management.
+      boardBlackTarget: 0, boardBlackMaxPts: 0,
+      boardBWTarget: 0, boardBWMaxPts: 0,
+      execBlackTarget: 0.50, execBlackMaxPts: 5,
+      execBWTarget: 0.30, execBWMaxPts: 2,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 6,
+      otherExecBWTarget: 0.35, otherExecBWMaxPts: 2,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 0, disabledTarget: 0,
+    },
+    skills: {
+      // Section 17. Two spend lines only, plus the absorption bonus.
+      learningProgrammesMaxPts: 20,
+      bursaryMaxPts: 5,
+      disabledLearningMaxPts: 0,
+      learnershipsMaxPts: 0,
+      absorptionMaxPts: 10,
+      overallSpendPercent: 4.0,
+      bursarySpendPercent: 3.0,
+      disabledSpendPercent: 0,
+      learnershipTargetPercent: 0,
+      absorptionTargetPercent: 100,
+    },
+    procurement: {
+      // Section 18.1 - two indicators only.
+      allSuppliersTarget: 0.60, allSuppliersMaxPts: 12,
+      qseTarget: 0, qseMaxPts: 0,
+      emeTarget: 0, emeMaxPts: 0,
+      bo51Target: 0.20, bo51MaxPts: 8,
+      bwo30Target: 0, bwo30MaxPts: 0,
+      dgTarget: 0, dgMaxPts: 0,
+    },
+    esd: {
+      sdPercent: 2.0, sdMaxPts: 5,
+      edPercent: 2.0, edMaxPts: 5,
+      edGraduationBonus: 0,
+      edJobsBonus: 0,
+    },
+    sed: { spendPercent: 2.0, maxPts: 5 },
+  },
+  levelThresholds: STANDARD_LEVELS,             // [UNVERIFIED] - see header
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// Ownership: 5+2+5+2+3+8 = 25
+// MC: 5+2+6+2 = 15
+// Skills: 20+5 = 25 base (+10 bonus)
+// PP: 12+8 = 20; ESD element = 20+5+5 = 30
+// Grand total: 25+15+25+30+5+5 = 105 base, 10 bonus
+
 const ALL_CONFIGS: SectorConfig[] = [
   RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, FSC_BANKS, FSC_LTI, FSC_STI,
   FSC_QSE, AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
   CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
+  MAC_GENERIC, MAC_QSE,
 ].map(attachSubElements);
 
 export function getSectorConfig(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig {
