@@ -931,11 +931,11 @@
       }
     ],
     "electiveGroupSizes": {},
-    "totalMaxPoints": 128,
-    "reachableMax": 128,
+    "totalMaxPoints": 132,
+    "reachableMax": 132,
     "bonusAvailable": 9,
-    "ungroupedBase": 119,
-    "pillarSum": 128,
+    "ungroupedBase": 123,
+    "pillarSum": 132,
     "pillars": {
       "ownership": {
         "max": 25,
@@ -945,7 +945,7 @@
         "elective": null
       },
       "managementControl": {
-        "max": 19,
+        "max": 23,
         "base": null,
         "bonus": 0,
         "subMinPercent": null,
@@ -1002,21 +1002,21 @@
       }
     },
     "compare": {
-      "grand_total": 128,
+      "grand_total": 132,
       "ownership": 25,
-      "mc": 19,
+      "mc": 23,
       "ee": 0,
       "skills": 25,
       "pp": 27,
       "sd": 10,
       "ed": 7,
       "sed": 15,
-      "mc_board_black_pts": 2,
-      "mc_board_bw_pts": 1,
+      "mc_board_black_pts": 3,
+      "mc_board_bw_pts": 2,
       "mc_exec_black_pts": 2,
       "mc_exec_bw_pts": 1,
-      "mc_other_exec_black_pts": 2,
-      "mc_other_exec_bw_pts": 1,
+      "mc_other_exec_black_pts": 3,
+      "mc_other_exec_bw_pts": 2,
       "mc_senior_pts": 2,
       "mc_senior_bw_pts": 1,
       "mc_middle_pts": 2,
@@ -1481,7 +1481,7 @@
   "TRANSPORT_GENERIC": {
     "sectorCode": "TRANSPORT",
     "scorecardType": "Generic",
-    "sectorName": "Transport Sector Code (Large Enterprise)",
+    "sectorName": "Transport Sector Code - Road Freight (Large Enterprise)",
     "levels": [
       {
         "level": 1,
@@ -1631,7 +1631,7 @@
   "TRANSPORT_QSE": {
     "sectorCode": "TRANSPORT",
     "scorecardType": "QSE",
-    "sectorName": "Transport Sector Code (QSE)",
+    "sectorName": "Transport Sector Code - Road Freight (QSE)",
     "levels": [
       {
         "level": 1,

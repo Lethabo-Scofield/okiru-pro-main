@@ -81,9 +81,9 @@ function eapDistributedBlackBand(designation: string, province: string, n = 600)
 
 describe('AGRI Generic — CalculatorConfig completeness', () => {
   it('loads 132 total and all pillar maxima from bundled config', () => {
-    expect(CONFIG.totalMaxPoints).toBe(128); // Gazette (audit 2026-07-26): 25+19+25+27+10+7+15 = 128
+    expect(CONFIG.totalMaxPoints).toBe(132); // Expert-set (Zoleka 2026-08-13): 25+23+25+27+10+7+15 = 132
     expect(CONFIG.pillarConfigs?.ownership?.maxPoints).toBe(25);
-    expect(CONFIG.pillarConfigs?.managementControl?.maxPoints).toBe(19);
+    expect(CONFIG.pillarConfigs?.managementControl?.maxPoints).toBe(23);
     expect(CONFIG.pillarConfigs?.employmentEquity?.maxPoints).toBe(0);
     expect(CONFIG.pillarConfigs?.skillsDevelopment?.maxPoints).toBe(25);
     expect(CONFIG.pillarConfigs?.preferentialProcurement?.maxPoints).toBe(27);
@@ -111,14 +111,14 @@ describe('AGRI Generic — CalculatorConfig completeness', () => {
     expect(sum).toBe(25);
   });
 
-  it('MC targets (GG 41306 — audit item 11): board 2+1, exec 2+1, other-exec 2+1, senior 2+1, middle 2+1, junior 1+1, disabled 2 = 19', () => {
+  it('MC targets (Zoleka 2026-08-13): board 3+2, exec 2+1, other-exec 3+2, senior 2+1, middle 2+1, junior 1+1, disabled 2 = 23', () => {
     const mc = CONFIG.managementControl!;
-    expect(mc.boardBlackMaxPts).toBe(2); // Gazette (audit 2026-07-26): board 2, not the template's 3
-    expect(mc.boardBWMaxPts).toBe(1);
+    expect(mc.boardBlackMaxPts).toBe(3); // Expert-set: board 3 (supersedes audit item 11's gazette reading of 2)
+    expect(mc.boardBWMaxPts).toBe(2);
     expect(mc.execBlackMaxPts).toBe(2);
     expect(mc.execBWMaxPts).toBe(1);
-    expect(mc.otherExecBlackMaxPts).toBe(2);
-    expect(mc.otherExecBWMaxPts).toBe(1);
+    expect(mc.otherExecBlackMaxPts).toBe(3);
+    expect(mc.otherExecBWMaxPts).toBe(2);
     expect(mc.seniorMaxPts).toBe(2);
     expect(mc.seniorBWMaxPts).toBe(1);
     expect(mc.middleMaxPts).toBe(2);
@@ -135,7 +135,7 @@ describe('AGRI Generic — CalculatorConfig completeness', () => {
       + mc.middleMaxPts + mc.middleBWMaxPts
       + mc.juniorMaxPts + mc.juniorBWMaxPts
       + mc.disabledMaxPts;
-    expect(sum).toBe(19); // Gazette (audit 2026-07-26): 19, not 23
+    expect(sum).toBe(23); // Expert-set (Zoleka 2026-08-13): 23, superseding the audit's 19
   });
 
   it('skills: 8+4+4+4+5 = 25 with correct AGRI targets', () => {
@@ -581,12 +581,12 @@ describe('AGRI Generic — absorption target is 100% (not 2.5%)', () => {
 // ---------------------------------------------------------------------------
 
 describe('AGRI Generic — differs from RCOGP Generic', () => {
-  it('grand total = 128 (not 120)', () => {
-    expect(CONFIG.totalMaxPoints).toBe(128); // Gazette (audit 2026-07-26): 25+19+25+27+10+7+15 = 128
+  it('grand total = 132 (not 120)', () => {
+    expect(CONFIG.totalMaxPoints).toBe(132); // Expert-set (Zoleka 2026-08-13): 25+23+25+27+10+7+15 = 132
   });
 
-  it('MC max = 19 (gazette; RCOGP also 19)', () => {
-    expect(CONFIG.pillarConfigs?.managementControl?.maxPoints).toBe(19);
+  it('MC max = 23 (expert-set; RCOGP is 19)', () => {
+    expect(CONFIG.pillarConfigs?.managementControl?.maxPoints).toBe(23);
   });
 
   it('SED max = 15 (not 5)', () => {

@@ -189,19 +189,6 @@ LIVE_CONFIG_NAMES = {
 #
 # Keyed (sector, table, criterion) → why.
 TEMPLATE_TENSION = {
-    ("AGRI_Generic", "summary", "Grand Total"):
-        "GG 41306 pp.33-34: MC is the generic 19-pt structure, so the total is 128. "
-        "The toolkit's 132 carries +4 phantom MC points (audit item 11).",
-    ("AGRI_Generic", "summary", "Management Control"):
-        "GG 41306 pp.33-34: 19 pts, not the toolkit's 23 (audit item 11).",
-    ("AGRI_Generic", "mc", "Board Black"):
-        "GG 41306: board black = 2, not the toolkit's 3 (audit item 11).",
-    ("AGRI_Generic", "mc", "Board BW"):
-        "GG 41306: board BW = 1, not the toolkit's 2 (audit item 11).",
-    ("AGRI_Generic", "mc", "Other Exec Black"):
-        "GG 41306: other exec black = 2, not the toolkit's 3 (audit item 11).",
-    ("AGRI_Generic", "mc", "Other Exec BW"):
-        "GG 41306: other exec BW = 1, not the toolkit's 2 (audit item 11).",
     ("FSC_Generic", "summary", "Grand Total"):
         "FS200: MC is 20, so the total is 119, not the toolkit's 120 (audit item 9).",
     ("FSC_Generic", "summary", "Management Control"):

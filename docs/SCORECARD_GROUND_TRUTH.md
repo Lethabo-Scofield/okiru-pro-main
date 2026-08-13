@@ -11,19 +11,22 @@ client-supplied toolkits listed below.
 >
 > | Value here | Engine (gazette) | Authority |
 > |---|---|---|
-> | AgriBEE MC 23, total 132 | **19 / 128** | GG 41306 pp.33-34 — audit item 11 |
+> | ~~AgriBEE MC 23, total 132~~ | **23 / 132 — matches** | resolved 2026-08-13; expert instruction supersedes audit item 11 |
 > | FSC Others MC 21, total 120 | **20 / 119** | FS200 §3.4.1 — audit item 9 |
 >
-> **Do not raise the engine to match those cells.** It was tried on 2026-08-11 and reverted: it gave every
-> AgriBEE client +4 points and every FSC-Others client +1. The trap is that this document,
-> `docs/SECTOR_TRUTH_LEDGER.md` and the toolkits look like three independent sources outvoting the config —
-> but all three derive from the same vendor template, and only the audit read the gazette.
+> **Do not raise the engine to match the remaining FSC-Others cell** without an expert instruction. The trap
+> is that this document, `docs/SECTOR_TRUTH_LEDGER.md` and the toolkits look like three independent sources
+> outvoting the config, when all three derive from the same vendor template and only the audit read the
+> gazette.
 >
-> Scope note: the two rows above are the only places where the audit found **this document** wrong. Most of
+> AgriBEE was such a case and is now settled the other way: on 2026-08-13 Zoleka Mnanzana confirmed MC 23 /
+> total 132, and the engine was changed to match. Every AgriBEE client gained 4 points.
+>
+> Scope note: FSC-Others MC is now the only place where the audit still finds **this document** wrong. Most of
 > the audit's other findings were the reverse — the code had drifted from values this document already
 > stated correctly (Skills absorption target 100%, §3.3 row "Absorption after B,C,D programmes … 100%";
 > ICT ownership voting target 30%, §4). Those were fixed in the code, not here. So this document remains a
-> good reference; it is specifically its **AgriBEE and FSC-Others Management Control** figures that are
+> good reference; it is specifically its **FSC-Others Management Control** figure that remains
 > template-derived and superseded.
 >
 > `docs/toolkits/compare_all.py` enforces the split continuously: it pins these as `TEMPLATE_TENSION` and
@@ -52,7 +55,7 @@ client-supplied toolkits listed below.
 | ICT (Generic) | **140** | 53 | ICT (120/115/110/100/95/90/75/55) |
 | ICT (QSE) | **116** | 51 | ICT |
 | FSC (Generic - Others) | **120** → engine **119** (gazette) | 63 | FSC Scaled (95.5/90.7/86.0/76.4/71.6/66.8/52.5/38.2) |
-| AGRI (Generic) | **132** → engine **128** (gazette) | 53 | Standard |
+| AGRI (Generic) | **132** | 53 | Standard |
 
 **YES Initiative is NOT part of any scored total. It provides level improvement only.**
 
@@ -63,13 +66,13 @@ client-supplied toolkits listed below.
 | Pillar | RCOGP Gen | RCOGP QSE | ICT Gen | ICT QSE | FSC Gen | AGRI Gen |
 |--------|-----------|-----------|---------|---------|---------|----------|
 | Ownership | 25 | 25 | 25 | 25 | 25 | 25 |
-| Management Control | 19 | 15 | 23 | 15 | 21 → **20** | 23 → **19** |
+| Management Control | 19 | 15 | 23 | 15 | 21 → **20** | 23 |
 | Skills Development | 25 | 30 | 25 | 30 | 23 | 25 |
 | Preferential Procurement | 29 | 21 | 27 | 21 | 24 | 27 |
 | Supplier Development | 10 | 5 | 10 | 5 | 10 | 10 |
 | Enterprise Development | 7 | 7 | 18 | 8 | 9 | 7 |
 | Socio-Economic Development | 5 | 5 | 12 | 12 | 8 | 15 |
-| **Grand Total** | **120** | **108** | **140** | **116** | **120** → **119** | **132** → **128** |
+| **Grand Total** | **120** | **108** | **140** | **116** | **120** → **119** | **132** |
 
 Cells shown as `template → **engine**` are the gazette overrides described in the banner at the top of this
 document. The engine value is the correct one; the template value is retained here for provenance.
@@ -210,7 +213,7 @@ FSC has sub-sector variants: Banks, Long-Term Insurers, Short-Term Insurers, Oth
 | Difference | RCOGP Generic | AGRI Generic |
 |-----------|---------------|-------------|
 | Grand Total | 120 | **132** |
-| MC Total | 19 | **23** (same structure as ICT MC) — engine uses **19**: GG 41306 pp.33-34 gives board 2+1 and other exec 2+1, not 3+2 (audit item 11) |
+| MC Total | 19 | **23** (same structure as ICT MC) — engine matches (expert-confirmed 2026-08-13) |
 | PP Total | 29 | **27** (BO51 = **9** pts at same target) |
 | SED Total | 5 | **15** (Agriculture-specific community development) |
 | Ownership | Same structure | Includes **farm workers** in designated groups |

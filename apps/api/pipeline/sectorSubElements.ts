@@ -266,12 +266,12 @@ export const SECTOR_PILLAR_SUB_ELEMENTS: Record<string, SectorPillarMap> = {
       { criteria: 'Black new entrants / designated groups', points: 3, target: '2%', formula: PROP, isBonus: true },
     ],
     managementControl: [
-      { criteria: 'Black board members', points: 2, /* GG 41306 (audit item 11) */ target: '50%', formula: PROP },
-      { criteria: 'Black women board members', points: 1, target: '25%', formula: PROP },
+      { criteria: 'Black board members', points: 3, /* expert-set 2026-08-13; supersedes audit item 11 */ target: '50%', formula: PROP },
+      { criteria: 'Black women board members', points: 2, target: '25%', formula: PROP },
       { criteria: 'Black executive directors', points: 2, target: '50%', formula: PROP },
       { criteria: 'Black female executive directors', points: 1, target: '25%', formula: PROP },
-      { criteria: 'Black other executive management', points: 2, target: '60%', formula: PROP },
-      { criteria: 'Black female other executive management', points: 1, target: '30%', formula: PROP },
+      { criteria: 'Black other executive management', points: 3, target: '60%', formula: PROP },
+      { criteria: 'Black female other executive management', points: 2, target: '30%', formula: PROP },
       { criteria: 'EAP-banded staff + disabled', points: 10, target: 'EAP-based', formula: PROP },
     ],
     skillsDevelopment: [
@@ -423,7 +423,7 @@ export const LEDGER_GRAND_TOTALS: Record<string, number> = {
   // GG 41306 (item 11) → 128; FSC QSFI (GG 41287 §8.2) = 100.
   'FSC:Generic': 119,
   'FSC:QSE': 100,
-  'AGRI:Generic': 128,
+  'AGRI:Generic': 132,
   'TRANSPORT:Generic': 108,
   // Any four of the seven elements × 25. Was 107, carried over from a
   // "82 compulsory + one elective" reading that the sector code does not state

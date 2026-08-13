@@ -10,7 +10,11 @@ const SECTOR_DISPLAY_NAMES: Record<string, string> = {
   TOURISM: 'Tourism',
   CONSTRUCTION: 'Construction',
   MINING: 'Mining',
-  TRANSPORT: 'Transport',
+  // "Road Freight" explicitly: the Transport Sector Code covers several
+  // sub-sectors (road freight, rail, air, maritime, bus, taxi, forwarding &
+  // clearing) and our configs implement Road Freight only. Labelling them
+  // "Transport" implies coverage we do not have. (Zoleka Mnanzana, 2026-08-13.)
+  TRANSPORT: 'Transport (Road Freight)',
 };
 
 type SectorClient = Pick<Client, 'sectorCode' | 'scorecardType' | 'companySize' | 'fscSubSector'>;

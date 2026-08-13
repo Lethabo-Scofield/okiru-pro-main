@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
+import { cn } from "@toolkit/lib/utils";
 import { useAuth } from "@toolkit/lib/auth";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { Button } from "@toolkit/components/ui/button";
@@ -122,6 +123,22 @@ export default function WorkspacePage() {
     () => workspaces.find((w) => w.id === activeId) || null,
     [workspaces, activeId],
   );
+  /**
+   * A team name that was never really set.
+   *
+   * Covers two cases: genuinely blank, and the legacy sentence that
+   * /api/onboarding/skip used to persist into companyName ("Company profile
+   * skipped (add details anytime ...)"), which then rendered as the team name.
+   * The server no longer writes it, but records created before that fix still
+   * carry it, so the guard matches on the text rather than waiting for a
+   * migration. The stored value is also mis-encoded, hence matching on the
+   * stable fragment instead of the exact string.
+   */
+  const isUnnamedTeam = useMemo(() => {
+    const name = (active?.name ?? "").trim();
+    return !name || /profile skipped/i.test(name);
+  }, [active]);
+
   const myMembership = useMemo(
     () => members.find((m) => m.userId === user?.id),
     [members, user],
@@ -440,8 +457,15 @@ export default function WorkspacePage() {
                         </div>
                       ) : (
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-medium" data-testid="text-workspace-name">
-                            {active.name}
+                          {/* An unnamed team renders as a prompt, not as whatever
+                              happens to be in the field. Skipping onboarding used
+                              to persist a sentence into the company name, which
+                              surfaced here verbatim as the team name. */}
+                          <p
+                            className={cn("text-sm", isUnnamedTeam ? "italic text-muted-foreground" : "font-medium")}
+                            data-testid="text-workspace-name"
+                          >
+                            {isUnnamedTeam ? "Not set — add a team name" : active.name}
                           </p>
                           {isOwner && (
                             <Button

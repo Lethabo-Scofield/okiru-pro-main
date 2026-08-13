@@ -376,9 +376,9 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     sectorCode: 'AGRI',
     scorecardType: 'Generic',
     sectorName: 'AgriBEE Sector Code (Generic)',
-    totalMaxPoints: 128, // gazette shapes (audit 2026-07-26, docs/calculator-audit-2026-07-26.md items 7-11)
+    totalMaxPoints: 132, // MC 23 per Zoleka Mnanzana 2026-08-13 (supersedes audit item 11)
     pillarPoints: {
-      ownership: 25, managementControl: 19, employmentEquity: 0, skillsDevelopment: 25,
+      ownership: 25, managementControl: 23, employmentEquity: 0, skillsDevelopment: 25,
       preferentialProcurement: 27, supplierDevelopment: 10, enterpriseDevelopment: 7,
       socioEconomicDevelopment: 15, yesInitiative: 0,
     },
@@ -392,7 +392,7 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     configId: 'TRANSPORT_GENERIC',
     sectorCode: 'TRANSPORT',
     scorecardType: 'Generic',
-    sectorName: 'Transport Sector Code (Large Enterprise)',
+    sectorName: 'Transport Sector Code - Road Freight (Large Enterprise)',
     totalMaxPoints: 108,
     pillarPoints: {
       ownership: 24, managementControl: 11, employmentEquity: 18, skillsDevelopment: 15,
@@ -441,7 +441,7 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     configId: 'TRANSPORT_QSE',
     sectorCode: 'TRANSPORT',
     scorecardType: 'QSE',
-    sectorName: 'Transport Sector Code (QSE)',
+    sectorName: 'Transport Sector Code - Road Freight (QSE)',
     // Any four of the seven elements × 25. pillarPoints below are each element's
     // bonus-inclusive maximum, which is why they do not sum to this total.
     totalMaxPoints: 100,

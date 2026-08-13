@@ -783,6 +783,11 @@ export const FSC_BANKS: SectorConfig = {
   sectorName: 'Financial Sector Code (Banks — FS701)',
   scorecardType: 'Generic',
   // Banks gazette shapes: 23+20+23+19+7(SD)+5(ED)+15(EF)+12(AFS)+8 = 132 (audit items 7-9)
+  // TODO(Zoleka 2026-08-13): ownership carries 5 BONUS points on top of the
+  //   23-pt weighting (-> 28). Not applied yet: the five bonus INDICATORS are
+  //   not specified anywhere we hold, and raising maxPoints alone made the
+  //   points unearnable - the calculator emits 23 pts of sub-lines, so every
+  //   client read 5 short. Needs the indicator list before it goes in.
   totalMaxPoints: 132,
   pillarConfigs: {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -891,6 +896,11 @@ export const FSC_LTI: SectorConfig = {
   sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
   scorecardType: 'Generic',
   // 25+21+23+24+7(SD)+7(ED with stockbroker)+15(EF)+12(AFS)+8 = 142
+  // TODO(Zoleka 2026-08-13): ownership carries 5 BONUS points on top of the
+  //   23-pt weighting (-> 28). Not applied yet: the five bonus INDICATORS are
+  //   not specified anywhere we hold, and raising maxPoints alone made the
+  //   points unearnable - the calculator emits 23 pts of sub-lines, so every
+  //   client read 5 short. Needs the indicator list before it goes in.
   totalMaxPoints: 134, // LTI: 23+20+23+19+7+7+15(EF)+12(AFS)+8 = 134 (gazette shapes — audit items 7-9)
   pillarConfigs: {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -995,6 +1005,11 @@ export const FSC_STI: SectorConfig = {
   sectorName: 'Financial Sector Code (Short-Term Insurers — FS703)',
   scorecardType: 'Generic',
   // 25+21+23+24+10+9+12+8 = 132 (same as LTI, EF=N/A for STI)
+  // TODO(Zoleka 2026-08-13): ownership carries 5 BONUS points on top of the
+  //   23-pt weighting (-> 28). Not applied yet: the five bonus INDICATORS are
+  //   not specified anywhere we hold, and raising maxPoints alone made the
+  //   points unearnable - the calculator emits 23 pts of sub-lines, so every
+  //   client read 5 short. Needs the indicator list before it goes in.
   totalMaxPoints: 129, // STI: 23+20+... (own 23 + MC 20 per gazette — audit items 7,9)
   pillarConfigs: {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -1095,10 +1110,17 @@ export const AGRI_GENERIC: SectorConfig = {
   sectorCode: 'AGRI',
   sectorName: 'AgriBEE Sector Code (Generic)',
   scorecardType: 'Generic',
-  totalMaxPoints: 128, // AgriBEE gazette: 25+19+25+27+10+7+15 = 128 (MC 19 per GG 41306 — audit item 11)
+  // AgriBEE: 25+23+25+27+10+7+15 = 132.
+  // MC is 23 on Zoleka Mnanzana's instruction (2026-08-13): Exco sub-total 13
+  // (board 3+2, exec 2+1, other exec 3+2) + EE bands 10. This REVERSES audit
+  // item 11, which read GG 41306 pp.33-34 as the generic 19-pt structure and
+  // called the template's 23 "+4 phantom points". Adopted on the expert's
+  // authority over the audit; if the gazette is ever re-read, this is the line
+  // to revisit. Every AgriBEE client gains 4 points.
+  totalMaxPoints: 132,
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined, 19 pts (GG 41306 — audit item 11)
+    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined: Exco 13 + EE bands 10 (expert-set 2026-08-13)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // EE folded into MC
     skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     preferentialProcurement: { maxPoints: 27, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
@@ -1123,20 +1145,20 @@ export const AGRI_GENERIC: SectorConfig = {
       netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      // AGRI MC: AgriBEE gazette (GG 41306) Statement — 19-pt combined total.
-      // Exco sub-total: 9 — Board Black 2@50%, Board BW 1@25%, Exec Black 2@50%,
-      //   Exec BW 1@25%, Other Exec Black 2@60%, Other Exec BW 1@30%.
-      // The Agri Excel template carried 3+2 / 3+2 (= 23 total, +4 phantom
-      // points) — the gazette is unambiguous. (Audit 2026-07-26 item 11.)
+      // AGRI MC — 23-pt combined total, per Zoleka Mnanzana 2026-08-13.
+      // Exco sub-total: 13 — Board Black 3@50%, Board BW 2@25%, Exec Black 2@50%,
+      //   Exec BW 1@25%, Other Exec Black 3@60%, Other Exec BW 2@30%.
+      // Supersedes audit item 11 (which read the gazette as 2+1 / 2+1 = 9 and
+      // treated the template's 3+2 / 3+2 as phantom). Expert instruction wins.
       // EE bands sub-total: 10 — Senior Black 2@60%, Senior BW 1@30%,
       //   Middle Black 2@75%, Middle BW 1@38%, Junior Black 1@88%, Junior BW 1@44%,
       //   Disabled 2@2%
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
-      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
+      boardBWTarget: 0.25, boardBWMaxPts: 2,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
       execBWTarget: 0.25, execBWMaxPts: 1,   // 25% (NOT 30% — exec directors only)
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
       seniorMaxPts: 2, seniorBWMaxPts: 1,    // EAP-based (60%/30%)
       middleMaxPts: 2, middleBWMaxPts: 1,    // EAP-based (75%/38%)
       juniorMaxPts: 1, juniorBWMaxPts: 1,    // EAP-based (88%/44%)
@@ -1497,7 +1519,7 @@ export const FSC_QSE: SectorConfig = {
 
 export const TRANSPORT_GENERIC: SectorConfig = {
   sectorCode: 'TRANSPORT',
-  sectorName: 'Transport Sector Code (Large Enterprise)',
+  sectorName: 'Transport Sector Code - Road Freight (Large Enterprise)',
   scorecardType: 'Generic',
   totalMaxPoints: 108,
   // Super Admin Fix Plan §1.3 + §3.1 T1/T2 — Transport Large has two separate
@@ -1642,7 +1664,7 @@ export const TRANSPORT_GENERIC: SectorConfig = {
 
 export const TRANSPORT_QSE: SectorConfig = {
   sectorCode: 'TRANSPORT',
-  sectorName: 'Transport Sector Code (QSE)',
+  sectorName: 'Transport Sector Code - Road Freight (QSE)',
   scorecardType: 'QSE',
   // Any four of the seven elements, 25 each → 100. Bonuses may exceed it.
   totalMaxPoints: 100,

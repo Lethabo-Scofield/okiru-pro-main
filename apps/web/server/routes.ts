@@ -817,8 +817,19 @@ export async function registerRoutes(
     }
   });
 
-  const ONBOARDING_SKIPPED_COMPANY_NAME_WEB =
-    "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Company profile skipped (add details anytime ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â open the menu under your name)";
+  /**
+   * Skipping onboarding leaves the company name UNSET.
+   *
+   * It used to persist a sentence -- "Company profile skipped (add details
+   * anytime, open the menu under your name)" -- into companyName, which then
+   * rendered verbatim as the team name on /team. Two faults in one: a note
+   * addressed to the user was stored as data, and the literal was itself
+   * multiply mis-encoded (an em dash round-tripped through cp1252), so it came
+   * out as a run of accented gibberish on screen.
+   *
+   * Storage now records that nothing was given; the UI owns the empty state.
+   */
+  const ONBOARDING_SKIPPED_COMPANY_NAME_WEB = null;
 
   app.post("/api/onboarding/skip", requireAuth, async (req, res) => {
     try {
