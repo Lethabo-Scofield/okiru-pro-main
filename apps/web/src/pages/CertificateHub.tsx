@@ -283,25 +283,20 @@ function needsReview(cert: CertificateRow): boolean {
     || Object.keys(cert.reviewCandidates ?? {}).length > 0;
 }
 
-/** Sworn affidavits (EME/QSE self-declarations) get their own tab. */
-function isAffidavitRow(cert: CertificateRow): boolean {
-  if (cert.certificateType) return /affidavit/i.test(cert.certificateType);
-  return /affidavit/i.test(cert.fileName || cert.name || '');
-}
-
 /**
- * A document earns a spot in the registry views when it either already has
- * extracted metadata, has suggested candidates awaiting review, or its text
- * extracted cleanly so the data is still recoverable. Unreadable documents
- * with no metadata stay out of both tabs.
+ * Certificates and affidavits are ONE registry.
+ *
+ * They used to be split across two tabs, and the split misled twice over: the
+ * tab counts were derived here from the file name, while the list itself was
+ * filtered by the server on `certificateType` — a field almost nothing writes.
+ * So the Affidavits tab promised a number it could not show, and a search
+ * inside either tab silently hid every match sitting in the other one. A
+ * supplier who holds an affidavit rather than a certificate simply looked
+ * absent.
+ *
+ * The list is now unbroken and the headline is a single total. The document
+ * type survives as an optional filter pill for anyone who wants to narrow.
  */
-function hasDataOrPotential(cert: CertificateRow): boolean {
-  if (cert.vatNumber || cert.bbbeeLevel != null || cert.bbbeeLevelStatus || cert.expiryDate) return true;
-  if (cert.blackOwnership != null || cert.blackWomenOwnership != null) return true;
-  if (Object.keys(cert.reviewCandidates ?? {}).length > 0) return true;
-  return cert.extractionStatus === 'completed';
-}
-
 const REVIEW_EDIT_FIELDS = [
   { key: 'vatNumber', label: 'VAT Number', type: 'text' },
   { key: 'bbbeeLevel', label: 'B-BBEE Level', type: 'number' },
@@ -503,7 +498,14 @@ export default function CertificateHub() {
   const [refreshing, setRefreshing] = useState(false);
 
   const initialQuery = useMemo(() => new URLSearchParams(window.location.search), []);
-  const [docTab, setDocTab] = useState<'certificates' | 'affidavits'>(() => initialQuery.get('type') === 'affidavit' ? 'affidavits' : 'certificates');
+  // '' means both — the default. `?type=affidavit` links from the old tabbed
+  // view keep working, they just resolve to the filter instead of a tab.
+  const [docTypeFilter, setDocTypeFilter] = useState(() => {
+    const type = initialQuery.get('type');
+    if (type === 'affidavit') return 'affidavits';
+    if (type === 'certificate') return 'certificates';
+    return '';
+  });
   const [search, setSearch] = useState(() => initialQuery.get('search') || '');
   const [debouncedSearch, setDebouncedSearch] = useState(() => initialQuery.get('search') || '');
   const [statusFilter, setStatusFilter] = useState(() => initialQuery.get('status') || '');
@@ -559,7 +561,7 @@ export default function CertificateHub() {
       return;
     }
     setPage(1);
-  }, [debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTab]);
+  }, [debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTypeFilter]);
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -573,12 +575,13 @@ export default function CertificateHub() {
     if (bbbeeLevelFilter) params.set('level', bbbeeLevelFilter);
     if (fileTypeFilter) params.set('file_type', fileTypeFilter);
     if (reviewOnly) params.set('review', '1');
-    if (docTab === 'affidavits') params.set('type', 'affidavit');
+    if (docTypeFilter === 'affidavits') params.set('type', 'affidavit');
+    else if (docTypeFilter === 'certificates') params.set('type', 'certificate');
     if (sortBy !== 'uploaded_at') params.set('sort_by', sortBy);
     if (sortOrder !== 'desc') params.set('sort_order', sortOrder);
     const query = params.toString();
     window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
-  }, [page, pageSize, debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTab, sortBy, sortOrder]);
+  }, [page, pageSize, debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTypeFilter, sortBy, sortOrder]);
 
   const loadAllCerts = useCallback(async () => {
     setAllCertsLoading(true);
@@ -597,7 +600,8 @@ export default function CertificateHub() {
       if (bbbeeLevelFilter) params.set('bbbee_level', bbbeeLevelFilter);
       if (fileTypeFilter) params.set('file_type', fileTypeFilter);
       if (reviewOnly) params.set('review_required', 'true');
-      params.set('document_kind', docTab);
+      // Omitted by default, so the registry returns certificates and affidavits together.
+      if (docTypeFilter) params.set('document_kind', docTypeFilter);
       if (ownershipFilter) {
         const [min, max] = ownershipFilter.split('-');
         params.set('min_ownership', min);
@@ -617,7 +621,7 @@ export default function CertificateHub() {
     } finally {
       setAllCertsLoading(false);
     }
-  }, [page, pageSize, sortBy, sortOrder, debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTab, toast]);
+  }, [page, pageSize, sortBy, sortOrder, debouncedSearch, statusFilter, sizeFilter, sectorFilter, ownershipFilter, bbbeeLevelFilter, fileTypeFilter, reviewOnly, docTypeFilter, toast]);
 
   const loadStats = useCallback(async () => {
     const controller = new AbortController();
@@ -653,19 +657,7 @@ export default function CertificateHub() {
   }, [loadAllCerts, loadStats]);
 
   const reviewCount = useMemo(() => allCerts.filter(needsReview).length, [allCerts]);
-  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || bbbeeLevelFilter || fileTypeFilter || reviewOnly);
-
-  const tabCounts = useMemo(() => {
-    let certificates = 0;
-    let affidavits = 0;
-    let hidden = 0;
-    for (const c of allCerts) {
-      if (!hasDataOrPotential(c)) { hidden++; continue; }
-      if (isAffidavitRow(c)) affidavits++;
-      else certificates++;
-    }
-    return { certificates, affidavits, hidden };
-  }, [allCerts]);
+  const hasActiveFilters = !!(search.trim() || statusFilter || sizeFilter || sectorFilter || ownershipFilter || bbbeeLevelFilter || fileTypeFilter || docTypeFilter || reviewOnly);
 
   const filtered = allCerts;
 
@@ -677,6 +669,7 @@ export default function CertificateHub() {
     setOwnershipFilter('');
     setBbbeeLevelFilter('');
     setFileTypeFilter('');
+    setDocTypeFilter('');
     setReviewOnly(false);
     setPage(1);
   };
@@ -815,7 +808,7 @@ export default function CertificateHub() {
           </div>
           <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center">
             <h1 className="flex shrink-0 items-center gap-2 text-[24px] font-semibold tracking-tight text-white sm:text-[28px]">
-              {loading && allCerts.length === 0 ? 'Loading certificates' : `${headlineCount.toLocaleString()} certificates`}
+              {loading && allCerts.length === 0 ? 'Loading documents' : `${headlineCount.toLocaleString()} certificates & affidavits`}
               {(loading || allCertsLoading) && (
                 <Loader2 className="h-4 w-4 animate-spin text-[#636366]" aria-label="Loading more certificates" />
               )}
@@ -826,7 +819,7 @@ export default function CertificateHub() {
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search by company name, VAT number, or B-BBEE level…"
+                placeholder="Search every certificate and affidavit by company, VAT number, or B-BBEE level…"
                 className="w-full rounded-lg border border-[#2c2c2e] bg-[#111114] py-2.5 pl-11 pr-11 text-[14px] text-white outline-none placeholder:text-[#55555a] focus:border-[#6366f1] transition-colors"
                 autoComplete="off"
               />
@@ -951,36 +944,18 @@ export default function CertificateHub() {
           </div>
         )}
 
-        {/* ─── Toolbar: document tabs + filters ────────────────── */}
+        {/* ─── Toolbar: filters ───────────────────────────────── */}
         <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div
-            className="inline-flex rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] p-0.5"
-            title={tabCounts.hidden > 0 ? `${tabCounts.hidden.toLocaleString()} unreadable documents without metadata are excluded` : undefined}
-          >
-            {([
-              { key: 'certificates', label: 'Certificates', count: tabCounts.certificates },
-              { key: 'affidavits', label: 'Affidavits', count: tabCounts.affidavits },
-            ] as const).map(tab => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setDocTab(tab.key)}
-                className={[
-                  'inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] font-medium transition-colors',
-                  docTab === tab.key
-                    ? 'bg-[#2c2c2e] text-white shadow-sm'
-                    : 'text-[#8e8e93] hover:text-white',
-                ].join(' ')}
-              >
-                {tab.label}
-                <span className={docTab === tab.key ? 'text-[#a5b4fc]' : 'text-[#636366]'}>
-                  {tab.count.toLocaleString()}
-                </span>
-              </button>
-            ))}
-          </div>
-          <div className="hidden h-5 w-px bg-[#2c2c2e] sm:block" />
           <div className="flex flex-wrap items-center gap-2">
+            <FilterPill
+              label="Document type"
+              value={docTypeFilter}
+              options={[
+                { value: 'certificates', label: 'Certificates only' },
+                { value: 'affidavits', label: 'Affidavits only' },
+              ]}
+              onChange={setDocTypeFilter}
+            />
             <FilterPill
               label="Validity"
               value={statusFilter}
