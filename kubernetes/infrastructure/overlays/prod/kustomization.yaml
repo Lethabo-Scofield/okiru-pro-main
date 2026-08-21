@@ -17,21 +17,26 @@ patchesStrategicMerge:
 - patches/security-context.yaml
 
 # Images - updated during deployment
-# 2026-07-30: migrated to okiruproacr2026 (new news@okiru.biz subscription a566a919;
-# old ACR okiruproacrde4d539b is locked inside the disabled cfc3d77c subscription).
+# 2026-08-21: images live in okiruproacr (okiru-pro-rg, subscription
+# b2bfd54a under rememberdevtech@gmail.com). The two earlier registries are
+# both unreachable: okiruproacrde4d539b is locked inside the disabled
+# cfc3d77c subscription, and okiruproacr2026 went with a566a919.
+# The `name:` keys below are the original build-time references and are only
+# match targets for kustomize — do not "correct" them to the new registry or
+# the rewrite stops matching.
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
   newName: okiruproacr.azurecr.io/okiru-pro/api
-  newTag: "e748c517-20260818"
+  newTag: "1f323ac9-20260821"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
   newName: okiruproacr.azurecr.io/okiru-pro/compute
-  newTag: "e748c517-20260818"
+  newTag: "1f323ac9-20260821"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
   newName: okiruproacr.azurecr.io/okiru-pro/web
-  newTag: "e748c517-20260818"
+  newTag: "1f323ac9-20260821"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/parser
   newName: okiruproacr.azurecr.io/okiru-pro/parser
-  newTag: "e748c517-20260818"
+  newTag: "1f323ac9-20260821"
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
