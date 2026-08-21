@@ -1,3 +1,13 @@
+/**
+ * Reopen an ESG scorecard that already exists.
+ *
+ * This page used to BE the ESG front door, and its first control was "New
+ * company — name it". That put naming before knowing: the evidence pack is what
+ * knows the registered name, and half the companies created here were never
+ * used again. Starting now lives at `/esg`, where the name comes out of what
+ * was uploaded; this page kept the half it was always good at — finding a
+ * scorecard you already started.
+ */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Building2, ChevronRight, Leaf, Loader2, Plus, Search } from "lucide-react";
@@ -7,7 +17,7 @@ import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { DeleteCompanyButton } from "@/components/DeleteCompanyButton";
 import { API_BASE } from "@toolkit/lib/config";
 import { useToast } from "@/hooks/use-toast";
-import { esgCreateHref, setEsgActiveCompany } from "@/lib/esgRoutes";
+import { esgCreateHref, esgHomeHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import "@/styles/esg-glass.css";
 
 interface CompanyRow {
@@ -23,8 +33,6 @@ export default function EsgClientSelector() {
   const [companies, setCompanies] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -57,34 +65,6 @@ export default function EsgClientSelector() {
     navigate(esgCreateHref(id));
   };
 
-  const createCompany = async () => {
-    if (!newName.trim()) return;
-    setCreating(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/clients`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
-      });
-      if (res.ok) {
-        const c = await res.json();
-        toast({ title: "Company created", description: c.name });
-        setNewName("");
-        pickCompany(c);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        toast({
-          title: "Could not create",
-          description: (err as { error?: string }).error || "Server error.",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setCreating(false);
-    }
-  };
-
   return (
     <div className="esg-theme min-h-screen flex flex-col bg-black text-white">
       <header
@@ -107,37 +87,31 @@ export default function EsgClientSelector() {
           className="text-[28px] sm:text-[32px] font-semibold tracking-tight text-[var(--esg-text)]"
           style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
         >
-          Select a company
+          Open an ESG scorecard
         </h1>
         <p className="text-[14px] text-[var(--esg-text2)] mt-2 mb-8">
-          Reuses your workspace companies — start with the ESG workbook, then summary and toolkit.
+          Pick up a workbook you have already started — inputs, summary, then toolkit.
         </p>
 
-        <div className="rounded-2xl border border-[#2c2c2e] bg-white/[0.02] p-5 mb-6">
-          <label htmlFor="esg-new-company" className="block text-[11px] font-semibold uppercase tracking-wider text-[var(--esg-text3)] mb-2">
-            New company
-          </label>
-          <div className="flex gap-2">
-            <input
-              id="esg-new-company"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && createCompany()}
-              placeholder="Company name"
-              className="flex-1 bg-black/30 border border-[var(--esg-glass-border)] rounded-xl px-4 py-2.5 text-[14px] text-[var(--esg-text)] placeholder-[var(--esg-text3)] outline-none focus:border-[var(--esg-acc-e)]/40"
-              data-testid="input-esg-new-company"
-            />
-            <button
-              type="button"
-              onClick={createCompany}
-              disabled={!newName.trim() || creating}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[13px] disabled:opacity-50"
-              data-testid="button-esg-create-company"
-            >
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Create
-            </button>
+        {/* Starting one is not naming one: the new-scorecard flow reads the
+            documents first and takes the entity's name out of them. */}
+        <div className="rounded-2xl border border-[#2c2c2e] bg-white/[0.02] p-5 mb-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold text-[var(--esg-text)]">Starting a new one?</p>
+            <p className="text-[12px] text-[var(--esg-text2)] mt-0.5">
+              Upload your documents, import a workbook, or enter it by hand — we name the company
+              from what you provide.
+            </p>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate(esgHomeHref())}
+            className="inline-flex shrink-0 items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[13px]"
+            data-testid="button-esg-start-new"
+          >
+            <Plus className="h-4 w-4" />
+            New ESG scorecard
+          </button>
         </div>
 
         <div className="rounded-2xl border border-[#2c2c2e] bg-white/[0.02] p-5">
@@ -160,7 +134,9 @@ export default function EsgClientSelector() {
               <Loader2 className="h-4 w-4 animate-spin" /> Loading…
             </div>
           ) : filtered.length === 0 ? (
-            <p className="text-center py-10 text-[13px] text-[var(--esg-text3)]">No companies yet — create one above.</p>
+            <p className="text-center py-10 text-[13px] text-[var(--esg-text3)]">
+              Nothing started yet — begin a new ESG scorecard above.
+            </p>
           ) : (
             <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
               {filtered.map((c) => {

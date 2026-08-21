@@ -7,6 +7,7 @@ import {
   Leaf,
   Loader2,
   Save,
+  Upload,
 } from "lucide-react";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
@@ -26,10 +27,24 @@ import { useEsgStore } from "../../EsgToolkit/src/lib/esgStore";
 import { EsgReportScopePanel } from "../../EsgToolkit/src/components/EsgReportScopePanel";
 import { API_BASE } from "@toolkit/lib/config";
 import { useToast } from "@/hooks/use-toast";
-import { esgSummaryHref, setEsgActiveCompany } from "@/lib/esgRoutes";
+import {
+  esgHomeHref,
+  esgSummaryHref,
+  hasChosenEsgStart,
+  rememberEsgStartChosen,
+  setEsgActiveCompany,
+} from "@/lib/esgRoutes";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import { EsgImportPreviewModal } from "@/components/esg-workbook/EsgImportPreviewModal";
 import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
+import EsgCreateStartChoice from "@/components/esg/EsgCreateStartChoice";
+import EsgDocumentUploadStart from "@/components/esg/EsgDocumentUploadStart";
+import EsgFlowSteps from "@/components/esg/EsgFlowSteps";
+import {
+  esgPatchCellCount,
+  persistEsgSectionPatches,
+  type EsgInjectionResult,
+} from "@/components/esg/esgParserInjection";
 import "@/styles/esg-glass.css";
 
 const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "company-reporting-setup";
@@ -40,10 +55,19 @@ function sectionFromQuery(): string | null {
   return q && ESG_INPUT_SECTIONS.some((s) => s.id === q) ? q : null;
 }
 
+/**
+ * Which of the three ways in the user is on.
+ *
+ * `deciding` is the moment before the workbook has loaded — we cannot tell an
+ * empty workbook from an unloaded one, and flashing the chooser at somebody
+ * with a half-filled workbook is worse than a beat of nothing.
+ */
+type EsgStartStage = "deciding" | "choose" | "upload" | "workbook";
+
 export default function EsgInformationRequest() {
   const params = useParams<{ companyId: string }>();
   const companyId = params.companyId ?? "";
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
   const isEsgAdmin = canSeedEsgSampleData(user);
@@ -68,9 +92,32 @@ export default function EsgInformationRequest() {
   const editorRef = useRef<EsgWorkbookSectionEditorHandle>(null);
   const [sectionBusy, setSectionBusy] = useState(false);
 
+  /**
+   * `/esg/create/:companyId/start` always asks; the bare route only asks when
+   * there is nothing in the workbook to go back to (see `stage` below).
+   */
+  const startRouteRequested = location.endsWith("/start");
+  const [stage, setStage] = useState<EsgStartStage>(
+    startRouteRequested ? "choose" : "deciding",
+  );
+  /** True while the parsed sections are being written into the workbook. */
+  const [injecting, setInjecting] = useState(false);
+
+  const goToWorkbook = useCallback(() => {
+    if (companyId) rememberEsgStartChosen(companyId);
+    setStage("workbook");
+    // Leaving the /start route behind means Back does not drop the user into
+    // the chooser again, and a refresh lands where they actually are.
+    if (startRouteRequested) {
+      navigate(`/esg/create/${encodeURIComponent(companyId)}`, { replace: true });
+    }
+  }, [companyId, navigate, startRouteRequested]);
+
   useEffect(() => {
     if (!companyId) {
-      navigate("/esg/clients", { replace: true });
+      // No company in the URL is not "pick one from a list" — it is "you have
+      // not started one yet", which is what `/esg` is for.
+      navigate(esgHomeHref(), { replace: true });
       return;
     }
     setEsgActiveCompany(companyId);
@@ -100,6 +147,40 @@ export default function EsgInformationRequest() {
       cancelled = true;
     };
   }, [companyId, load, navigate, setCompanyName]);
+
+  /** Every captured cell across every section — the "is this workbook empty" test. */
+  const totalCapturedCells = useMemo(
+    () =>
+      Object.values(workbook?.sections ?? {}).reduce(
+        (sum, section) => sum + Object.keys(section?.cells ?? {}).length,
+        0,
+      ),
+    [workbook],
+  );
+
+  /**
+   * Decide, once, whether to offer the three ways in or go straight to the
+   * workbook.
+   *
+   * The chooser is for a workbook with nothing in it — the state where the only
+   * previous route to bulk data was an "Import / bulk upload" button hidden in
+   * the toolbar. Anything else (a deep link to a section, a workbook with data,
+   * a submitted workbook, a choice already made this session) goes straight
+   * through, so no existing path grows a click.
+   */
+  useEffect(() => {
+    if (stage !== "deciding") return;
+    if (!companyId || loading) return;
+    // `workbook` null after loading means the fetch failed; the workbook view
+    // handles that itself and is the safer place to be.
+    if (!workbook) {
+      setStage("workbook");
+      return;
+    }
+    const deepLinked = sectionFromQuery() !== null;
+    const empty = totalCapturedCells === 0 && !submittedAt;
+    setStage(empty && !deepLinked && !hasChosenEsgStart(companyId) ? "choose" : "workbook");
+  }, [companyId, loading, stage, submittedAt, totalCapturedCells, workbook]);
 
   const activeSection = useMemo(
     () => ESG_INPUT_SECTIONS.find((s) => s.id === activeSectionId) ?? ESG_INPUT_SECTIONS[0],
@@ -166,23 +247,31 @@ export default function EsgInformationRequest() {
   };
 
   const handleImportFile = async (file: File) => {
-    const buf = await file.arrayBuffer();
-    const res = await fetch(
-      `${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/import`,
-      {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/octet-stream" },
-        body: buf,
-      },
-    );
-    if (!res.ok) {
-      toast({ title: "Import failed", variant: "destructive" });
-      return;
+    // `importing` also drives the entry choice's spinner: parsing a 20-tab
+    // workbook is not instant, and a card that does nothing for four seconds
+    // reads as a card that does nothing.
+    setImporting(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const res = await fetch(
+        `${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/import`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: buf,
+        },
+      );
+      if (!res.ok) {
+        toast({ title: "Import failed", variant: "destructive" });
+        return;
+      }
+      const preview = (await res.json()) as EsgImportPreview;
+      setImportPreview(preview);
+      setImportOpen(true);
+    } finally {
+      setImporting(false);
     }
-    const preview = (await res.json()) as EsgImportPreview;
-    setImportPreview(preview);
-    setImportOpen(true);
   };
 
   const confirmImport = async () => {
@@ -203,10 +292,54 @@ export default function EsgInformationRequest() {
       setImportPreview(null);
       await load(companyId, companyName, { force: true });
       toast({ title: "Import complete" });
+      // An import from the entry choice has to land somewhere: without this the
+      // chooser stayed on screen behind the modal and the imported data was
+      // invisible.
+      goToWorkbook();
     } catch {
       toast({ title: "Import failed", variant: "destructive" });
     } finally {
       setImporting(false);
+    }
+  };
+
+  /**
+   * The document route's landing.
+   *
+   * Writes whatever the mapping seam produced into the workbook through the
+   * SAME import endpoint the `.xlsx` path confirms with, then opens the
+   * workbook. While `applyEsgParserResult` is a stub there is nothing to write
+   * — so we say so plainly and still land them in the workbook rather than
+   * pretending the upload achieved nothing.
+   */
+  const handleParsedDocuments = async ({ injection }: { injection: EsgInjectionResult }) => {
+    setInjecting(true);
+    try {
+      const cells = esgPatchCellCount(injection.patches);
+      if (cells > 0) {
+        await persistEsgSectionPatches(companyId, injection.patches);
+        await load(companyId, companyName, { force: true });
+        toast({
+          title: "Values added to your workbook",
+          description: `${cells} field${cells === 1 ? "" : "s"} filled in from your documents — review them before you submit.`,
+        });
+      } else {
+        toast({
+          title: "Documents read — workbook not filled in",
+          description: injection.valuesRead > 0
+            ? `${injection.valuesRead} value${injection.valuesRead === 1 ? "" : "s"} were read and saved to your document library, but none could be placed into workbook cells yet.`
+            : "No values could be extracted, so nothing was written. Complete the workbook below.",
+        });
+      }
+      goToWorkbook();
+    } catch (err) {
+      toast({
+        title: "Could not write the extracted values",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setInjecting(false);
     }
   };
 
@@ -327,10 +460,23 @@ export default function EsgInformationRequest() {
               <p className="text-[12px] text-[var(--esg-text3)] font-mono truncate">{companyId}</p>
             </div>
           </div>
+          {stage === "workbook" ? (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-[var(--esg-text3)]" data-testid="esg-save-status">
               {saveStatusText}
             </span>
+            {/* The document route, reachable from inside the workbook too — a
+                user who started manually and then received the client's
+                evidence pack should not have to leave and come back. */}
+            <button
+              type="button"
+              onClick={() => setStage("choose")}
+              disabled={Boolean(submittedAt) || loading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+              data-testid="button-esg-add-documents"
+            >
+              <Upload className="h-3.5 w-3.5" /> Add documents
+            </button>
             <button
               type="button"
               onClick={() => void handleManualSave()}
@@ -397,8 +543,48 @@ export default function EsgInformationRequest() {
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
+          ) : null}
         </div>
 
+        {/* The Excel preview lives outside the stage branch: the entry choice
+            and the workbook toolbar both open it, and it is the SAME preview +
+            confirm in both cases. One import path, two doors. */}
+        <EsgImportPreviewModal
+          open={importOpen}
+          preview={importPreview}
+          onClose={() => {
+            setImportOpen(false);
+            setImportPreview(null);
+          }}
+          onConfirm={() => void confirmImport()}
+          confirming={importing}
+        />
+
+        {stage === "deciding" ? (
+          <div className="p-12 flex items-center justify-center gap-2 text-[var(--esg-text2)] text-[13px]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading workbook…
+          </div>
+        ) : stage === "choose" ? (
+          <EsgCreateStartChoice
+            companyName={companyName}
+            importing={importing}
+            onChooseUpload={() => setStage("upload")}
+            onChooseExcel={(file) => void handleImportFile(file)}
+            onChooseManual={goToWorkbook}
+          />
+        ) : stage === "upload" ? (
+          <div className="mx-auto w-full max-w-2xl">
+            <EsgFlowSteps current={2} className="mb-6" />
+            <EsgDocumentUploadStart
+              companyId={companyId}
+              companyName={companyName}
+              busy={injecting}
+              onBack={() => setStage("choose")}
+              onComplete={handleParsedDocuments}
+            />
+          </div>
+        ) : (
+        <>
         <p className="text-[13px] text-[var(--esg-text2)] mb-6 -mt-2">
           Complete each section — scores update as you save. Once the required fields pass validation, continue to
           Summary and open the toolkit from there.
@@ -498,17 +684,6 @@ export default function EsgInformationRequest() {
             </div>
           </aside>
 
-          <EsgImportPreviewModal
-            open={importOpen}
-            preview={importPreview}
-            onClose={() => {
-              setImportOpen(false);
-              setImportPreview(null);
-            }}
-            onConfirm={() => void confirmImport()}
-            confirming={importing}
-          />
-
           <section
             className="flex-1 min-w-0 rounded-2xl border border-white/[0.06] bg-[var(--esg-section-bg,#141416)] overflow-hidden"
             data-testid={`section-panel-${activeSection?.id ?? "unknown"}`}
@@ -557,6 +732,8 @@ export default function EsgInformationRequest() {
             ) : null}
           </section>
         </div>
+        </>
+        )}
       </main>
     </div>
   );

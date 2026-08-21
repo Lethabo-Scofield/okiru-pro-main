@@ -141,6 +141,10 @@ export type ScorecardPillarKey =
   | 'supplierDevelopment'
   | 'enterpriseDevelopment'
   | 'socioEconomicDevelopment'
+  // MAC (GG 39887) scores Responsible Social Marketing as its own 5-point pillar.
+  // The MAC_GENERIC/MAC_QSE pillarPoints below already carry it, and their totals
+  // only reconcile with it (25+27+0+30+29+10+7+5+5+0 = 138 = totalMaxPoints).
+  | 'responsibleSocialMarketing'
   | 'yesInitiative'
   | 'empowermentFinancing'
   | 'accessToFinancialServices'
@@ -203,6 +207,7 @@ export const PILLAR_PARSER_MAPPING: Record<
     parserPillars: ['SED'],
     notes: 'SED confirmation yields contribution amount + beneficiary. Missing: NPAT denominator and % black beneficiaries.',
   },
+  responsibleSocialMarketing: { level: 'not_covered', parserPillars: [], notes: 'MAC-only pillar (GG 39887); no calculator and no evidence document type yet, so a MAC entity cannot reach its full total.' },
   yesInitiative: { level: 'not_covered', parserPillars: [], notes: 'No YES initiative evidence document type.' },
   empowermentFinancing: { level: 'not_covered', parserPillars: [], notes: 'FSC-only pillar; no parser coverage.' },
   accessToFinancialServices: { level: 'not_covered', parserPillars: [], notes: 'FSC-only pillar; no parser coverage.' },

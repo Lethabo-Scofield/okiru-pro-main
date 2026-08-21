@@ -64,8 +64,22 @@ describe("esgGoldenFixture", () => {
 });
 
 describe("esg submit validation", () => {
-  it("golden workbook fails King5 gate until 17 statuses entered", () => {
+  /**
+   * Was "golden workbook fails King5 gate until 17 statuses entered". That
+   * assertion pinned the defect: the King V gate ignored an imported
+   * King5_Scorecard!E21, and every failing warning was promoted to a blocker on
+   * submit, so POST /submit returned 400 for every workbook that has ever
+   * existed. See apps/web/src/lib/esg/__tests__/esgValidation.test.ts.
+   */
+  it("accepts the fully-populated golden workbook", () => {
     const wb = buildSgConsumerGoldenWorkbook();
-    expect(validateEsgWorkbookForSubmit(wb).ok).toBe(false);
+    const result = validateEsgWorkbookForSubmit(wb);
+    expect(result.blockers.map((b) => b.id)).toEqual([]);
+    expect(result.ok).toBe(true);
+  });
+
+  it("still rejects a workbook with nothing captured", () => {
+    const empty = { companyId: "C-1", sections: {}, updatedAt: new Date().toISOString() };
+    expect(validateEsgWorkbookForSubmit(empty).ok).toBe(false);
   });
 });

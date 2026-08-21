@@ -67,7 +67,7 @@ function structuredRows(tables: unknown[] | undefined): Array<Record<string, unk
  * workbook. Reported, never auto-resolved — which revision is authoritative is
  * the client's call, not ours.
  */
-function duplicateWorkbookException(inputs: RawExtractionInput[]): string | null {
+export function duplicateWorkbookException(inputs: RawExtractionInput[]): string | null {
   const workbooksBySheet = new Map<string, Set<string>>();
   for (const input of inputs) {
     const name = input.filename ?? '';

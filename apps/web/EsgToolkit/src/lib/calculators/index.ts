@@ -42,7 +42,22 @@ export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgSco
   };
 }
 
-export { computeCarbonTax } from "./carbonTax";
-export { computeNetZeroRoadmap } from "./netZero";
-export { computeBbbeeBridge } from "./bbbeeBridge";
+export { computeCarbonTax, type CarbonTaxResult } from "./carbonTax";
+export {
+  computeNetZeroRoadmap,
+  netZeroReductionAt,
+  type NetZeroLever,
+  type NetZeroMilestone,
+  type NetZeroRoadmapResult,
+} from "./netZero";
+export {
+  computeBbbeeBridge,
+  BBBEE_ELEMENT_WEIGHTS,
+  type BbbeeBridgeResult,
+  type BbbeeElement,
+  type BbbeeElementId,
+} from "./bbbeeBridge";
+export { scoreEnvironmental } from "./environmental";
+export { scoreSocial } from "./social";
+export { scoreGovernance } from "./governance";
 export * from "./shared";

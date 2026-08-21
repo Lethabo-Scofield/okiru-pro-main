@@ -3,14 +3,36 @@
  * Maps routes → workbook section keys for inline editing.
  */
 import type { EsgScorecardResult } from "../../../EsgToolkit/src/lib/calculators";
+import { sumIndicatorMaxPoints, type EsgScorecardPillar } from "./esgScorecardDefinitions";
 
 export type EsgToolkitPillar = "e" | "s" | "g" | "overview" | "data";
 
 export type EsgToolkitScoreGroup = {
-  pillar: "environmental" | "social" | "governance";
+  pillar: EsgScorecardPillar;
+  /** Indicator row keys owned by this page — the membership definition. */
   keys: string[];
+  /**
+   * Σ of the members' column-B maxima. Always DERIVED via `scoreGroup()` below,
+   * never typed by hand. Optional only for backwards compatibility with
+   * consumers that read it defensively.
+   */
   max?: number;
 };
+
+/**
+ * Build a nav score group, deriving `max` from the indicator ledger in
+ * `esgScorecardDefinitions.ts` (the single source of truth, transcribed from
+ * `<Pillar>_Scorecard!B{row}`).
+ *
+ * `max` used to be a hand-typed literal on every sub-section — a fourth copy of
+ * the points allocation, drifting independently of the definitions, the
+ * dashboard table, and the pillar-max constants. Now the literals are gone and
+ * `keys` alone defines the group; an unknown key throws instead of silently
+ * shrinking the badge denominator.
+ */
+function scoreGroup(pillar: EsgScorecardPillar, keys: string[]): EsgToolkitScoreGroup {
+  return { pillar, keys, max: sumIndicatorMaxPoints(pillar, keys) };
+}
 
 export type EsgToolkitNavSubItem = {
   id: string;
@@ -68,7 +90,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         sectionKey: "e-data",
         visibleSubtabs: E_GHG_SUBTABS,
         sheet: "E_Data",
-        scoreGroup: { pillar: "environmental", keys: ["d5", "d6", "d7", "d8", "d9"], max: 33 },
+        scoreGroup: scoreGroup("environmental", ["d5", "d6", "d7", "d8", "d9"]),
         description: "Scope 1/2/3 summary and monthly emission inputs.",
       },
       {
@@ -78,7 +100,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         sectionKey: "e-data",
         visibleSubtabs: E_ENERGY_SUBTABS,
         sheet: "E_Data",
-        scoreGroup: { pillar: "environmental", keys: ["d11", "d12", "d13"], max: 18 },
+        scoreGroup: scoreGroup("environmental", ["d11", "d12", "d13"]),
         description: "Electricity and onsite solar generation.",
       },
       {
@@ -87,7 +109,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/environmental/fleet",
         sectionKey: "fleet",
         sheet: "Fleet_Register",
-        scoreGroup: { pillar: "environmental", keys: ["d15", "d16", "d17"], max: 18 },
+        scoreGroup: scoreGroup("environmental", ["d15", "d16", "d17"]),
         description: "Per-vehicle fuel norms and fleet register.",
       },
       {
@@ -96,7 +118,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/environmental/waste",
         sectionKey: "waste",
         sheet: "Waste_Register",
-        scoreGroup: { pillar: "environmental", keys: ["d19", "d20", "d21"], max: 12 },
+        scoreGroup: scoreGroup("environmental", ["d19", "d20", "d21"]),
         description: "Waste streams, diversion rate, and landfill tCO₂e.",
       },
       {
@@ -107,7 +129,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         subtabId: "water",
         visibleSubtabs: ["water"],
         sheet: "E_Data",
-        scoreGroup: { pillar: "environmental", keys: ["d23", "d24"], max: 7 },
+        scoreGroup: scoreGroup("environmental", ["d23", "d24"]),
         description: "Scope 3 water consumption by depot.",
       },
       {
@@ -116,7 +138,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/environmental/iso",
         sectionKey: "iso-tracker",
         sheet: "ISO_Tracker",
-        scoreGroup: { pillar: "environmental", keys: ["d26", "d27", "d28", "d29"], max: 20 },
+        scoreGroup: scoreGroup("environmental", ["d26", "d27", "d28", "d29"]),
         description: "ISO 14001 clause tracker and environmental management.",
       },
     ],
@@ -134,7 +156,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/social/management",
         sectionKey: "ee",
         sheet: "EE_Scorecard",
-        scoreGroup: { pillar: "social", keys: ["d5", "d6", "d7", "d8", "d9", "d10"], max: 30 },
+        scoreGroup: scoreGroup("social", ["d5", "d6", "d7", "d8", "d9", "d10"]),
         description: "EE scorecard bridge — EEA2 headcount and MC indicators.",
       },
       {
@@ -145,7 +167,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         subtabId: "training",
         visibleSubtabs: ["training", "payroll"],
         sheet: "S_Data",
-        scoreGroup: { pillar: "social", keys: ["d12", "d13", "d14", "d15"], max: 20 },
+        scoreGroup: scoreGroup("social", ["d12", "d13", "d14", "d15"]),
         description: "Workplace skills plan, ATR, and leviable payroll.",
       },
       {
@@ -156,7 +178,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         subtabId: "hs",
         visibleSubtabs: ["hs"],
         sheet: "S_Data",
-        scoreGroup: { pillar: "social", keys: ["d17", "d18", "d19", "d20"], max: 25 },
+        scoreGroup: scoreGroup("social", ["d17", "d18", "d19", "d20"]),
         description: "LTIFR, fatalities, fatigue programme, and incidents.",
       },
       {
@@ -165,7 +187,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/social/community",
         sectionKey: "s-data-csi",
         sheet: "S_Data",
-        scoreGroup: { pillar: "social", keys: ["d22", "d23", "d24", "d26", "d27"], max: 25 },
+        scoreGroup: scoreGroup("social", ["d22", "d23", "d24", "d26", "d27"]),
         description: "Community investment, social calendar, and supplier compliance.",
       },
     ],
@@ -183,6 +205,20 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/governance/board",
         sectionKey: "g-data",
         sheet: "G_Data",
+        // NO scoreGroup — deliberate, not an omission.
+        //
+        // G_Scorecard has 14 scored rows (A5:B25) and all 14 are already claimed
+        // by the four groups below: g-king5 (d5,d6,d7) + g-ifrs (d9,d10) +
+        // g-garp (d12,d14) + g-ethics (d16,d17,d19,d20,d22,d24,d25) = 14 of 14,
+        // Σ 35+15+13+37 = 100. The ledger assigns this page nothing left to own.
+        //
+        // Board Composition is a pure INPUT page: it edits the G_Data maturity
+        // column (F5, F13–F21, F23) whose values are scored on the pages above —
+        // e.g. G_Data!F13 feeds `d6` (Social & Ethics Committee), scored under
+        // King V, and F21/F23 feed `d12`/`d24`, scored under GARP and Ethics.
+        // Giving it a score group would double-count those points against the
+        // pillar total, which the single-source-of-truth invariant test forbids.
+        // A nav badge of "—" here is correct.
         description: "Board diversity and governance maturity inputs.",
       },
       {
@@ -191,7 +227,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/governance/king5",
         sectionKey: "king5",
         sheet: "King5_Scorecard",
-        scoreGroup: { pillar: "governance", keys: ["d5", "d6", "d7"], max: 35 },
+        scoreGroup: scoreGroup("governance", ["d5", "d6", "d7"]),
         description: "17 King V principles — Apply & Explain scoring.",
       },
       {
@@ -200,7 +236,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/governance/ifrs",
         sectionKey: "ifrs",
         sheet: "IFRS_S1_S2",
-        scoreGroup: { pillar: "governance", keys: ["d9", "d10"], max: 15 },
+        scoreGroup: scoreGroup("governance", ["d9", "d10"]),
         description: "Climate-related financial disclosures.",
       },
       {
@@ -209,7 +245,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/governance/garp",
         sectionKey: "garp",
         sheet: "GARP_GRAP",
-        scoreGroup: { pillar: "governance", keys: ["d12", "d14"], max: 13 },
+        scoreGroup: scoreGroup("governance", ["d12", "d14"]),
         description: "ESG risk register and GRAP public interest.",
       },
       {
@@ -218,7 +254,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         href: "/governance/ethics",
         sectionKey: "g-data",
         sheet: "G_Data",
-        scoreGroup: { pillar: "governance", keys: ["d16", "d17", "d19", "d20", "d22", "d24", "d25"], max: 37 },
+        scoreGroup: scoreGroup("governance", ["d16", "d17", "d19", "d20", "d22", "d24", "d25"]),
         description: "Code of ethics, POPIA, transparency, and compliance.",
       },
     ],

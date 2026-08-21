@@ -40,12 +40,14 @@ import {
   getExtractionCache,
   logCacheHit,
 } from './extractionCache.js';
+import type { VerificationDocument } from '../../schemas/verification_document_matrix.js';
 import {
-  aliasIndex,
-  findDocumentById,
-  type VerificationDocument,
-  type VerificationElement,
-} from '../../schemas/verification_document_matrix.js';
+  extractionDomain,
+  hoistGridRows,
+  type DomainDocument,
+  type ExtractionDomain,
+  type RoutableElement,
+} from './extractionDomain.js';
 
 const logger = createLogger('AiExtraction');
 
@@ -161,8 +163,22 @@ export function createAzureExtractionModel(): ExtractionModel | null {
   };
 }
 
-const SYSTEM_PROMPT = [
-  'You are a B-BBEE verification analyst extracting evidence from a client document.',
+/**
+ * The extraction system prompt.
+ *
+ * Only the FIRST line is domain-specific — who is reading the document. Every
+ * rule after it is about not inventing values, and is identical whether the
+ * evidence is a share register or a municipal water account, so both domains
+ * share one prompt body rather than drifting apart in two copies.
+ */
+function systemPromptFor(domain: ExtractionDomain): string {
+  return [
+    extractionDomain(domain).analystRole,
+    ...SYSTEM_PROMPT_RULES,
+  ].join('\n');
+}
+
+const SYSTEM_PROMPT_RULES = [
   'Follow the analyst instruction exactly and return ONLY a JSON object.',
   'Rules that matter more than completeness:',
   '- Never invent or infer a value. If the document does not state it, use null.',
@@ -175,7 +191,7 @@ const SYSTEM_PROMPT = [
   '  date/amount belongs to the last row above it that stated the name/type. Apply',
   '  that stated context to each continuation row; never emit a data row whose only',
   '  content is template vocabulary.',
-].join('\n');
+];
 
 /**
  * Parse the model's reply into an object.
@@ -236,12 +252,22 @@ function toExceptions(value: unknown): string[] {
 export function selectSpecsForDocument(
   text: string,
   filename: string,
-  options: { limit?: number } = {},
-): VerificationDocument[] {
+  options?: { limit?: number; domain?: 'bbbee' },
+): VerificationDocument[];
+export function selectSpecsForDocument(
+  text: string,
+  filename: string,
+  options: { limit?: number; domain: ExtractionDomain },
+): DomainDocument[];
+export function selectSpecsForDocument(
+  text: string,
+  filename: string,
+  options: { limit?: number; domain?: ExtractionDomain } = {},
+): DomainDocument[] {
   const haystack = `${filename}\n${text}`.toLowerCase();
-  const hits = new Map<string, { doc: VerificationDocument; strength: number }>();
+  const hits = new Map<string, { doc: DomainDocument; strength: number }>();
 
-  for (const { lower, doc } of aliasIndex()) {
+  for (const { lower, doc } of extractionDomain(options.domain).aliasIndex()) {
     // Very short aliases ("VAT", "AFS") match far too loosely to route work on.
     if (lower.length < 5) continue;
     if (!haystack.includes(lower)) continue;
@@ -293,7 +319,7 @@ const SWEEP_SYSTEM_PROMPT = [
  */
 async function sweepForMissingFields(
   model: ExtractionModel,
-  spec: VerificationDocument,
+  spec: DomainDocument,
   filename: string,
   chunks: Array<{ text: string; index: number }>,
   missing: string[],
@@ -337,9 +363,11 @@ async function sweepForMissingFields(
 /** Run one document's extraction prompt against one file. */
 export async function extractWithSpec(
   model: ExtractionModel,
-  spec: VerificationDocument,
+  spec: DomainDocument,
   input: { filename: string; markdown?: string; raw_text: string },
+  options: { domain?: ExtractionDomain } = {},
 ): Promise<DocumentExtraction> {
+  const domain = options.domain ?? 'bbbee';
   // Markdown preferred: the values live in tables and under headings, and a flat
   // text projection destroys the row/column relationship they depend on.
   const source = input.markdown?.trim() || input.raw_text;
@@ -412,7 +440,7 @@ export async function extractWithSpec(
   // should not cost N sequential round trips.
   const replies = await Promise.all(chunks.map(async (chunk) => {
     try {
-      return { ok: true as const, reply: await model.complete(SYSTEM_PROMPT, promptFor(chunk)) };
+      return { ok: true as const, reply: await model.complete(systemPromptFor(domain), promptFor(chunk)) };
     } catch (err) {
       logger.error('Extraction model call failed', err as Error, {
         document: spec.id, file: input.filename, chunk: chunk.index,
@@ -449,6 +477,32 @@ export async function extractWithSpec(
   // Treated as "nothing found here", never as a failure.
   if (parsed.not_this_document === true) return base;
 
+  // ── GRID PASS ───────────────────────────────────────────────────────────
+  // Some specs describe a REGISTER, not a record: the fleet list, the EEA2
+  // occupational-level matrix, the King application register, the risk register.
+  // Their prompt asks for an array of rows PLUS the register's own totals in one
+  // reply, so the row columns are never top-level keys. Without this the pipeline
+  // would report all eighteen fleet columns "missing", sweep the model twice
+  // looking for them, and then discard the 134 vehicles as an unexpected key.
+  //
+  // The rows become ONE array-valued field — the same convention the B-BBEE side
+  // already uses for `shareholder_rows` / `supplier_rows` — which the calculator
+  // mapping expands into N rows. `gridForDocument` returns null for every B-BBEE
+  // spec, so nothing below this comment changes for that domain.
+  const grid = extractionDomain(domain).gridForDocument(spec.id);
+  const gridRows = grid ? hoistGridRows(parsed, grid) : [];
+  // Row columns stop counting as document-level fields once the rows are in
+  // hand — except where the same name is legitimately BOTH a row column and a
+  // register total (waste per stream and per site), where both are read.
+  const scalarFields = grid && gridRows.length > 0 && grid.suppressRowScalars
+    ? spec.expectedFields.filter((field) => !grid.rowFields.includes(field))
+    : spec.expectedFields;
+  if (grid && gridRows.length > 0) {
+    logger.info('Extracted a register grid', {
+      document: spec.id, file: input.filename, field: grid.rowsField, rows: gridRows.length,
+    });
+  }
+
   // ── SWEEP PASS ──────────────────────────────────────────────────────────
   // A single pass reads a whole prompt's worth of fields at once and reliably
   // overlooks some — particularly values sitting in tables, footers or under
@@ -458,7 +512,8 @@ export async function extractWithSpec(
   //
   // Bounded to one extra round trip per document, and skipped entirely when the
   // first pass found everything (the common case for clean documents).
-  const foundSomething = spec.expectedFields.some((field) => !isEmptyValue(parsed[field]));
+  const foundSomething = scalarFields.some((field) => !isEmptyValue(parsed[field]))
+    || gridRows.length > 0;
   // Only sweep a spec the first pass got SOMETHING from. Zero fields found means
   // this is almost certainly the wrong spec for this document (retrieval offers
   // candidates; most are wrong), not a right document with hidden values — so a
@@ -472,7 +527,7 @@ export async function extractWithSpec(
   if (foundSomething && sweepEnabled()) {
     const maxRounds = Math.max(1, Number(process.env.PARSER_SWEEP_ROUNDS) || 2);
     for (let round = 0; round < maxRounds; round++) {
-      const stillMissing = spec.expectedFields.filter((field) => isEmptyValue(parsed[field]));
+      const stillMissing = scalarFields.filter((field) => isEmptyValue(parsed[field]));
       if (stillMissing.length === 0) break;
       const swept = await sweepForMissingFields(model, spec, input.filename, chunks, stillMissing);
       let recovered = 0;
@@ -490,7 +545,7 @@ export async function extractWithSpec(
 
   const values: ExtractedValue[] = [];
   const missingFields: string[] = [];
-  for (const field of spec.expectedFields) {
+  for (const field of scalarFields) {
     const value = parsed[field];
     if (isEmptyValue(value)) {
       missingFields.push(field);
@@ -498,8 +553,25 @@ export async function extractWithSpec(
     }
     values.push({ field, value, sourceFile: input.filename, sourceDocumentId: spec.id });
   }
+  if (grid && gridRows.length > 0) {
+    values.push({
+      field: grid.rowsField,
+      value: gridRows,
+      sourceFile: input.filename,
+      sourceDocumentId: spec.id,
+    });
+  } else if (grid) {
+    // A register that yielded no rows says so, rather than reporting each column
+    // absent as if the client had left them blank.
+    missingFields.push(grid.rowsField);
+  }
 
-  const known = new Set([...spec.expectedFields, 'exceptions', 'not_this_document']);
+  const known = new Set([
+    ...spec.expectedFields,
+    ...(grid ? [...grid.containerKeys, ...grid.rowFields] : []),
+    'exceptions',
+    'not_this_document',
+  ]);
   const unexpectedFields = Object.keys(parsed).filter((key) => !known.has(key) && !isEmptyValue(parsed[key]));
 
   // ── VERIFY PASS ─────────────────────────────────────────────────────────
@@ -563,18 +635,27 @@ export async function extractWithSpec(
 export async function extractDocument(
   model: ExtractionModel,
   input: { filename: string; markdown?: string; raw_text: string; elementHint?: string },
-  options: { specIds?: string[]; limit?: number; elementOverride?: VerificationElement } = {},
+  options: {
+    specIds?: string[];
+    limit?: number;
+    elementOverride?: RoutableElement;
+    /** Which matrix to extract against. Defaults to the B-BBEE matrix. */
+    domain?: ExtractionDomain;
+  } = {},
 ): Promise<DocumentExtraction[]> {
+  const domain = options.domain ?? 'bbbee';
+  const definition = extractionDomain(domain);
   // Prefer markdown for RETRIEVAL too: a sheet's column headers ("Beneficiary",
   // "% Black participation") are the terms that discriminate its element, and
   // they live in the markdown table, not the flat text projection.
   const retrievalText = input.markdown?.trim() || input.raw_text;
   const specs = options.specIds
-    ? options.specIds.map(findDocumentById).filter((doc): doc is VerificationDocument => doc !== null)
+    ? options.specIds.map((id) => definition.findDocumentById(id)).filter((doc): doc is DomainDocument => doc !== null)
     : rankSpecsForDocument(retrievalText, input.filename, {
         limit: options.limit, // retrieval picks a smart default: 3 with a hint, 5 without
         elementHint: input.elementHint,
         elementOverride: options.elementOverride, // Pass A classification, when confident
+        domain,
       }).map((c) => c.spec);
 
   if (specs.length === 0) return [];
@@ -589,7 +670,7 @@ export async function extractDocument(
   // lose extractions the user has already paid for.
   const results: DocumentExtraction[] = [];
   for (const spec of specs) {
-    results.push(await extractWithSpec(model, spec, input));
+    results.push(await extractWithSpec(model, spec, input, { domain }));
   }
 
   // Retrieval now offers CANDIDATES (BM25 surfaces weak matches); the model is

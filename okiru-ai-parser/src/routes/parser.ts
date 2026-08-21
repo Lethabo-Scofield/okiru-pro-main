@@ -26,6 +26,7 @@ import { documentsByElement } from '../../schemas/verification_document_matrix.j
 import { extractCaseEntities } from '../services/caseExtraction.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
+import esgRouter from './esgParser.js';
 
 const logger = createLogger('ParserRoutes');
 const router = Router();
@@ -661,5 +662,16 @@ router.post('/load-ontology', requireAdminToken, async (req: Request, res: Respo
     await repository.close?.();
   }
 });
+
+/**
+ * The ESG evidence pipeline, at `/api/parser/esg/*`.
+ *
+ * Mounted here rather than in server.ts so ESG inherits this router's path,
+ * proxy configuration and deployment surface unchanged — and so the payment
+ * routes above (`/quotes/:id/checkout`, `/quotes/:id/settle`, the PayFast
+ * webhook) remain the ONLY payment path for both domains. No route above is
+ * touched: `/esg` collides with none of them.
+ */
+router.use('/esg', esgRouter);
 
 export default router;

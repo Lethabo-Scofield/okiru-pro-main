@@ -22,10 +22,13 @@ import { ESG_PANEL_HEADER, ESG_SAVE_BTN } from "./esgEditorChrome";
 import {
   ASSUMPTIONS_FIELDS,
   COVER_FIELDS,
+  E_DATA_ENERGY_BASELINE_FIELDS,
   E_DATA_GHG_SUMMARY_FIELDS,
   E_DATA_NZ_FIELDS,
+  E_DATA_WATER_INITIATIVE_FIELDS,
   EE_MATURITY_ROWS,
   G_DATA_MATURITY_ROWS,
+  S_DATA_HEADCOUNT_FIELDS,
   S_DATA_HS_FIELDS,
   S_DATA_PAYROLL_FIELDS,
   S_DATA_TRAINING_FIELDS,
@@ -37,6 +40,7 @@ import {
   eDataWasteRows,
   eDataWaterRows,
 } from "./esgSectionConfigs";
+import { getEsgSectorConfig } from "../../../EsgToolkit/src/lib/esgConfig";
 import { E_DATA_SUBTABS, S_DATA_SUBTABS } from "@/lib/esg/esgSectionRegistry";
 
 const SAVE_DEBOUNCE_MS = 800;
@@ -52,6 +56,34 @@ type Props = {
   initialSubtab?: string;
   visibleSubtabs?: string[];
 };
+
+/**
+ * Emission factors for the tonnes-of-CO₂e preview beside each monthly grid.
+ *
+ * These used to be six literals typed into the JSX (2.68 / 2.31 / 1.51 / 0.82 /
+ * 0.025 / 0.000344), duplicating the sector configuration. They now come from the
+ * sector registry, so a sector that publishes its own factor changes the preview
+ * without anyone editing this component.
+ *
+ * Precedence is unchanged: a factor carried on the workbook itself (the emission
+ * factor block at the top of the environmental data sheet) still wins, because a
+ * real client workbook may have been prepared against a different grid factor
+ * vintage. The sector configuration is the fallback, never the override.
+ *
+ * NB the water factor is published in TONNES per kilolitre while the grid's preview
+ * divides by 1,000 like the kilogram factors, hence the ×1000 at the call site.
+ */
+function emissionFactors(sector: string | null | undefined) {
+  const ef = getEsgSectorConfig(sector).emissionFactors;
+  return {
+    diesel: ef.dieselScope1,
+    petrol: ef.petrolBusinessCars,
+    lpg: ef.lpg,
+    electricity: ef.electricityScope2,
+    solar: ef.solarOnsite,
+    waterPerKl: ef.waterTco2ePerKl,
+  };
+}
 
 function useSectionDraft(sectionId: string, autosave: boolean) {
   const { workbook, submittedAt, saving, updateSectionCells, recalculate, markTouched } =
@@ -98,7 +130,7 @@ function useSectionDraft(sectionId: string, autosave: boolean) {
     scheduleSave();
   };
 
-  return { draft, updateDraft, persist, locked, saving, timerRef, markTouched };
+  return { draft, updateDraft, persist, locked, saving, timerRef, markTouched, workbook };
 }
 
 export const EsgWorkbookSectionEditor = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
@@ -137,11 +169,17 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
     ref,
   ) {
     const section = ESG_INPUT_SECTIONS.find((s) => s.id === sectionId);
-    const { draft, updateDraft, persist, locked, saving, timerRef } = useSectionDraft(
+    const { draft, updateDraft, persist, locked, saving, timerRef, workbook } = useSectionDraft(
       sectionId,
       autosave ?? true,
     );
     const [subTab, setSubTab] = useState(initialSubtab ?? "scope-1a");
+    // The reporting sector is captured on the setup screen; the assumptions sheet
+    // mirrors it. Either is enough to pick the sector's emission factors.
+    const ef = emissionFactors(
+      (workbook?.sections?.["company-reporting-setup"]?.cells?.sector as string | undefined) ??
+        (workbook?.sections?.assumptions?.cells?.B10 as string | undefined),
+    );
 
     useImperativeHandle(ref, () => ({
       flush: async () => {
@@ -194,7 +232,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           <EsgMonthlyGrid
             rows={eDataDepotRows(eCompanyWide)}
             cellPrefix="s1a"
-            emissionFactor={Number(draft.B4 ?? 2.68)}
+            emissionFactor={Number(draft.B4 ?? ef.diesel)}
             unitLabel="L diesel"
             values={draft}
             onChange={updateDraft}
@@ -206,7 +244,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           <EsgMonthlyGrid
             rows={eDataGeneratorRows(eCompanyWide)}
             cellPrefix="s1b"
-            emissionFactor={Number(draft.B4 ?? 2.68)}
+            emissionFactor={Number(draft.B4 ?? ef.diesel)}
             unitLabel="L diesel"
             values={draft}
             onChange={updateDraft}
@@ -218,7 +256,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           <EsgMonthlyGrid
             rows={eDataLpgRows()}
             cellPrefix="s1c"
-            emissionFactor={Number(draft.B6 ?? 1.51)}
+            emissionFactor={Number(draft.B6 ?? ef.lpg)}
             unitLabel="kg"
             values={draft}
             onChange={updateDraft}
@@ -230,7 +268,7 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
           <EsgMonthlyGrid
             rows={eDataBusinessCarRows()}
             cellPrefix="s1d"
-            emissionFactor={Number(draft.B5 ?? 2.31)}
+            emissionFactor={Number(draft.B5 ?? ef.petrol)}
             unitLabel="L petrol"
             values={draft}
             onChange={updateDraft}
@@ -239,22 +277,33 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         ),
         eTab(
           "scope-2",
-          <EsgMonthlyGrid
-            rows={eDataDepotRows(eCompanyWide)}
-            cellPrefix="s2"
-            emissionFactor={Number(draft.B7 ?? 0.82)}
-            unitLabel="kWh"
-            values={draft}
-            onChange={updateDraft}
-            readOnly={locked}
-          />,
+          // The prior-year total sits with the electricity it is compared against.
+          // Ledger section 5.1, energy efficiency year on year: the indicator has
+          // never been able to score because no baseline was ever collected.
+          <div className="space-y-4">
+            <EsgMonthlyGrid
+              rows={eDataDepotRows(eCompanyWide)}
+              cellPrefix="s2"
+              emissionFactor={Number(draft.B7 ?? ef.electricity)}
+              unitLabel="kWh"
+              values={draft}
+              onChange={updateDraft}
+              readOnly={locked}
+            />
+            <EsgScalarForm
+              fields={E_DATA_ENERGY_BASELINE_FIELDS}
+              values={draft}
+              onChange={updateDraft}
+              readOnly={locked}
+            />
+          </div>,
         ),
         eTab(
           "solar",
           <EsgMonthlyGrid
             rows={eDataSolarRows(eCompanyWide)}
             cellPrefix="solar"
-            emissionFactor={Number(draft.B8 ?? 0.025)}
+            emissionFactor={Number(draft.B8 ?? ef.solar)}
             unitLabel="kWh"
             values={draft}
             onChange={updateDraft}
@@ -263,15 +312,25 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         ),
         eTab(
           "water",
-          <EsgMonthlyGrid
-            rows={eDataWaterRows(eCompanyWide)}
-            cellPrefix="water"
-            emissionFactor={Number(draft.B9 ?? 0.000344) * 1000}
-            unitLabel="kL"
-            values={draft}
-            onChange={updateDraft}
-            readOnly={locked}
-          />,
+          // Ledger section 5.1, water efficiency initiative: the indicator carries a
+          // literal zero and no formula because the flag was never collected anywhere.
+          <div className="space-y-4">
+            <EsgMonthlyGrid
+              rows={eDataWaterRows(eCompanyWide)}
+              cellPrefix="water"
+              emissionFactor={Number(draft.B9 ?? ef.waterPerKl) * 1000}
+              unitLabel="kL"
+              values={draft}
+              onChange={updateDraft}
+              readOnly={locked}
+            />
+            <EsgScalarForm
+              fields={E_DATA_WATER_INITIATIVE_FIELDS}
+              values={draft}
+              onChange={updateDraft}
+              readOnly={locked}
+            />
+          </div>,
         ),
         eTab(
           "waste",
@@ -296,8 +355,15 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         eTab(
           "ghg-summary",
           <div className="space-y-3">
+            {/*
+              This claim is now true of every field below. Each one is calculated
+              from the scope tabs when the workbook is saved, and the calculation
+              only fills a blank — a figure you type always wins. Verified field by
+              field before this copy was kept; re-verify before changing it.
+            */}
             <p className="text-[12px] text-[var(--esg-text3)]">
-              Auto-calculated from scope tabs above. Override only when reconciling to audited totals.
+              Calculated from the scope tabs above. Override only when reconciling to audited
+              totals — anything you type here is kept.
             </p>
             <EsgScalarForm
               fields={E_DATA_GHG_SUMMARY_FIELDS}
@@ -360,7 +426,19 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
             const all = [
               sTab(
                 "headcount",
-                <EsgHeadcountGrid values={draft} onChange={updateDraft} readOnly={locked} />,
+                // Ledger section 5.3, employees with disabilities: the percentage the
+                // scorecard reads is a constant zero in the source workbook, so the
+                // indicator could never score. The headcount is the honest input; the
+                // percentage is worked out from it and the workforce total.
+                <div className="space-y-4">
+                  <EsgHeadcountGrid values={draft} onChange={updateDraft} readOnly={locked} />
+                  <EsgScalarForm
+                    fields={S_DATA_HEADCOUNT_FIELDS}
+                    values={draft}
+                    onChange={updateDraft}
+                    readOnly={locked}
+                  />
+                </div>,
               ),
               sTab(
                 "hs",

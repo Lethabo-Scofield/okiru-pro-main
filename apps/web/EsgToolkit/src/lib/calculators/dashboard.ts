@@ -1,3 +1,8 @@
+import {
+  SCORECARD_INDICATORS,
+  type EsgScorecardIndicator,
+  type EsgScorecardPillar,
+} from "@/lib/esg/esgScorecardDefinitions";
 import { esgOverallPercent } from "@/lib/esgScoringDefaults";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { computeCarbonTax } from "./carbonTax";
@@ -40,81 +45,32 @@ export type EsgDashboardKpis = {
   };
 };
 
-const E_ENV_ROWS: { key: string; label: string; max: number }[] = [
-  { key: "d5",  label: "GHG: Scope 1 baseline established & tracked",     max: 5  },
-  { key: "d6",  label: "GHG: Scope 1 reduction vs prior year",             max: 10 },
-  { key: "d7",  label: "GHG: Scope 2 net reduction (solar offset)",        max: 8  },
-  { key: "d8",  label: "GHG: Scope 3 tracking initiated",                  max: 5  },
-  { key: "d9",  label: "GHG: Net-zero target formally set (SBTi)",         max: 5  },
-  { key: "d11", label: "Energy: kWh tracked monthly (all depots)",         max: 5  },
-  { key: "d12", label: "Energy: efficiency improvement YoY",               max: 5  },
-  { key: "d13", label: "Energy: ≥20% renewable electricity",               max: 8  },
-  { key: "d15", label: "Fleet: L/100km within norm",                       max: 8  },
-  { key: "d16", label: "Fleet: CO₂ per tonne-km tracked",                  max: 5  },
-  { key: "d17", label: "Fleet: EV % of fleet",                             max: 5  },
-  { key: "d19", label: "Waste: diversion rate ≥75%",                      max: 5  },
-  { key: "d20", label: "Waste: cardboard recycling tracked (Cority)",      max: 4  },
-  { key: "d21", label: "Waste: landfill tCO₂e tracked",                    max: 3  },
-  { key: "d23", label: "Water: consumption tracked monthly",               max: 4  },
-  { key: "d24", label: "Water: intensity (kL/unit) tracked",               max: 4  },
-  { key: "d26", label: "ISO 14001: certified or on-track",                 max: 5  },
-  { key: "d27", label: "ISO 45001 / H&S system",                          max: 5  },
-  { key: "d28", label: "Supplier sustainability engagement",               max: 4  },
-  { key: "d29", label: "Environmental penalties: zero",                    max: 3  },
-];
-
-const E_SOC_ROWS: { key: string; label: string; max: number }[] = [
-  { key: "d5",  label: "EE: % Black employees (all levels) vs target",     max: 8  },
-  { key: "d6",  label: "EE: % Black at senior/top management",             max: 5  },
-  { key: "d7",  label: "EE: EE plan in place",                             max: 5  },
-  { key: "d8",  label: "EE: % PWD employees vs 2% target",                 max: 5  },
-  { key: "d9",  label: "EE: EE forum active",                              max: 3  },
-  { key: "d10", label: "EE: Designated group oversight",                   max: 3  },
-  { key: "d12", label: "Training: WSP submitted to SETA",                  max: 5  },
-  { key: "d13", label: "Training: ATR submitted to SETA",                  max: 5  },
-  { key: "d14", label: "Training: Hours per employee ≥40 hrs",             max: 5  },
-  { key: "d15", label: "Training: Mandatory grant utilised",               max: 5  },
-  { key: "d17", label: "H&S: LTIFR ≤ threshold",                          max: 8  },
-  { key: "d18", label: "H&S: Zero fatalities",                             max: 8  },
-  { key: "d19", label: "H&S: Driver debrief programme active",             max: 5  },
-  { key: "d20", label: "H&S: Near-miss incidents reported",                max: 4  },
-  { key: "d22", label: "H&S: Safety files active (all suppliers)",         max: 3  },
-  { key: "d23", label: "Community: CSI initiatives ≥3",                    max: 5  },
-  { key: "d24", label: "Community: SED spend vs threshold",                max: 5  },
-  { key: "d26", label: "Social: Supplier code of conduct",                 max: 3  },
-  { key: "d27", label: "Social: Labour law compliance",                    max: 3  },
-];
-
-const E_GOV_ROWS: { key: string; label: string; max: number }[] = [
-  { key: "d5",  label: "King V: Overall scorecard (all 17 principles)",    max: 25 },
-  { key: "d6",  label: "Governance: S&EC committee maturity",              max: 5  },
-  { key: "d7",  label: "Governance: ESG linked to remuneration",           max: 5  },
-  { key: "d9",  label: "IFRS S1/S2: Disclosure completeness",              max: 10 },
-  { key: "d10", label: "Governance: Climate risk in risk register",        max: 5  },
-  { key: "d12", label: "Governance: Risk register + climate risk",         max: 8  },
-  { key: "d14", label: "Governance: Board members appointed",              max: 5  },
-  { key: "d16", label: "Governance: POPIA Information Officer",            max: 5  },
-  { key: "d17", label: "Governance: POPIA impact assessment",              max: 5  },
-  { key: "d19", label: "Governance: Integrated report published",          max: 8  },
-  { key: "d20", label: "Governance: External assurance of ESG report",     max: 5  },
-  { key: "d22", label: "Governance: Ethics & anti-corruption training",    max: 4  },
-  { key: "d24", label: "Governance: Risk register updated",                max: 5  },
-  { key: "d25", label: "Governance: No regulatory penalties",              max: 5  },
-];
-
+/**
+ * Dashboard pillar rows are projected straight from the indicator ledger in
+ * `@/lib/esg/esgScorecardDefinitions` — the single source of truth, transcribed
+ * from `<Pillar>_Scorecard!A{row}` (label) and `!B{row}` (max points).
+ *
+ * This module used to carry its own hand-typed copy of that table. It had
+ * drifted: E summed to 106 instead of 108 and S to 93 instead of 100 (d24, d26,
+ * d27, d29 in E and d6, d22, d26, d27 in S all carried wrong maxima), and its
+ * labels had diverged too, so the same indicator showed a different "Max Pts"
+ * and "% Achieved" on the Dashboard than on the pillar Scorecard page. Deriving
+ * removes the whole class of defect — do not reintroduce a local table.
+ */
 function pillarRows(
   rows: Record<string, number>,
-  defs: { key: string; label: string; max: number }[],
+  pillar: EsgScorecardPillar,
 ): EsgPillarRow[] {
-  return defs.map(({ key, label, max }) => {
+  const defs: readonly EsgScorecardIndicator[] = SCORECARD_INDICATORS[pillar];
+  return defs.map(({ key, indicator, maxPoints }) => {
     const score = rows[key] ?? 0;
     return {
-      indicator: label,
+      indicator,
       actual: score.toFixed(1),
-      target: String(max),
-      maxPoints: max,
+      target: String(maxPoints),
+      maxPoints,
       score,
-      achievementPct: max > 0 ? (score / max) * 100 : 0,
+      achievementPct: maxPoints > 0 ? (score / maxPoints) * 100 : 0,
     };
   });
 }
@@ -208,9 +164,9 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
     carbonTaxTier1: tax.tier1Liability,
     kpis,
     pillarRows: {
-      environmental: pillarRows(e.rows, E_ENV_ROWS),
-      social: pillarRows(s.rows, E_SOC_ROWS),
-      governance: pillarRows(g.rows, E_GOV_ROWS),
+      environmental: pillarRows(e.rows, "environmental"),
+      social: pillarRows(s.rows, "social"),
+      governance: pillarRows(g.rows, "governance"),
     },
   };
 }

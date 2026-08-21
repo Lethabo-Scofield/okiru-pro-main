@@ -11,6 +11,19 @@ export type EsgGridSectionDef = {
   columns: ColumnDef[];
   /** First data row on sheet (1-based). */
   startRow: number;
+  /**
+   * Explicit Excel column letter per column `key`, for sheets whose data does
+   * not start at A or whose columns are not contiguous.
+   *
+   * Without this, `esgGridRows` maps columns positionally (index 0 → A), which
+   * silently mis-filed two sheets: `ISO_Tracker` and `IFRS_S1_S2` both start at
+   * B and carry a derived `Score /5` in E, so a user's Status landed in C while
+   * every scorecard formula reads D. That cost 16 environmental points on the
+   * ISO rows and made `G d9` unscoreable.
+   *
+   * Omit for sheets that genuinely start at A — positional stays the default.
+   */
+  columnLetters?: Readonly<Record<string, string>>;
 };
 
 const KING5_STATUS = [
@@ -80,6 +93,28 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
       { key: "monthlyTco2", label: "Monthly tCO₂e", type: "number", width: 110 },
       { key: "serviceStatus", label: "Service Status", type: "text", width: 120 },
       { key: "licenceExpiry", label: "Licence Expiry", type: "date", width: 115 },
+      /*
+       * EV flag — column P, appended deliberately AFTER `licenceExpiry` (column
+       * O, the last column the v1.7 Fleet_Register sheet uses).
+       *
+       * `E_Scorecard!C17` (EV % of fleet, 5 pts) reads `Fleet_Register!H28` — the
+       * EV total of a per-depot summary block (rows 23–27) that this app has
+       * never modelled, so there was no way to record a single electric vehicle
+       * and the indicator was unreachable. Recording it per vehicle is the only
+       * shape the register supports; `esgDeriveSummary.ts` counts these rows into
+       * `H28` (an explicit imported `H28`, or a captured summary block, still wins).
+       *
+       * Appending keeps every existing column letter (A…O) stable, so no stored
+       * workbook is re-interpreted and the XLSX round-trip is unchanged.
+       */
+      {
+        key: "isEv",
+        label: "Electric (EV)",
+        type: "select",
+        options: ["Yes", "No"],
+        width: 105,
+        aliases: ["EV", "Electric", "EV Vehicle", "Is EV", "Electric Vehicle"],
+      },
     ],
   },
   waste: {
@@ -119,6 +154,16 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
     sheet: "ISO_Tracker",
     description: "ISO clause-level compliance status",
     startRow: 5,
+    // ISO_Tracker!R4 headers: B=Requirement C=Clause D=Status E=Score/5
+    // F=Weight G=Evidence Needed H=Current Evidence/Status I=Net-Zero/ESG Link.
+    // E is derived by the sheet (=IF(D="Fully Compliant",5,…)) so we never write it.
+    columnLetters: {
+      requirement: "B",
+      clause: "C",
+      status: "D",
+      evidence: "H",
+      netZeroLink: "I",
+    },
     columns: [
       { key: "requirement", label: "Requirement", type: "text", required: true, width: 220 },
       { key: "clause", label: "Clause", type: "text", width: 70 },
@@ -158,6 +203,16 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
     sheet: "IFRS_S1_S2",
     description: "IFRS S1/S2 climate disclosure tracker",
     startRow: 5,
+    // IFRS_S1_S2!R4 headers: B=Disclosure Requirement C=Pillar D=Status
+    // E=Score/5 F=Data Source G=Current Status/Evidence H=Action Required.
+    // E is derived by the sheet (=IF(D="Disclosed",5,…)) so we never write it.
+    columnLetters: {
+      requirement: "B",
+      pillar: "C",
+      status: "D",
+      evidence: "G",
+      action: "H",
+    },
     columns: [
       { key: "requirement", label: "Disclosure Requirement", type: "text", required: true, width: 240 },
       { key: "pillar", label: "Pillar", type: "text", width: 100 },

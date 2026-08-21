@@ -109,12 +109,15 @@ export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPre
     }
   }
 
+  // Sector is Assumptions!B10 ("Sector", code SECTOR). B8 is the scoring stance —
+  // writing a sector there would overwrite the stance and, through the derived B9
+  // banding floor, silently re-band every quantitative indicator.
   const reporting = sections["company-reporting-setup"] ?? sections.cover;
-  if (reporting && sections.assumptions?.cells?.B8 == null) {
+  if (reporting && sections.assumptions?.cells?.B10 == null) {
     const sector = reporting.cells.sector ?? reporting.cells.C11;
     if (sector) {
       sections.assumptions = sections.assumptions ?? { cells: {} };
-      sections.assumptions.cells.B8 = sector;
+      sections.assumptions.cells.B10 = sector;
     }
   }
 

@@ -159,7 +159,10 @@ export function computeScopedSummary(
     pillars,
     overallScore,
     overallMax,
-    overallPercent: overallMax > 0 ? (overallScore / overallMax) * 100 : 0,
+    // 0–1 fraction, matching EsgScorecardResult.overallPercent. Every consumer
+    // renders these two interchangeably through formatEsgPercent(), which
+    // multiplies by 100 — returning 0–100 here showed "4461.8%" in topic mode.
+    overallPercent: overallMax > 0 ? overallScore / overallMax : 0,
     selectedCount: selected.length,
     totalCount: ALL_ESG_TOPIC_IDS.length,
   };

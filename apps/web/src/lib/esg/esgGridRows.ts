@@ -4,6 +4,7 @@
 import type { ColumnDef } from "@/components/workbook/sections";
 import {
   ESG_GRID_SECTIONS,
+  type EsgGridSectionDef,
   type EsgGridSectionId,
   isEsgGridSection,
 } from "./esgGridSections";
@@ -24,6 +25,18 @@ function colLetter(index: number): string {
 
 function makeId(): string {
   return `esg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Excel column for a grid column: the section's explicit `columnLetters`
+ * override when present, else positional (index 0 → A).
+ *
+ * ISO_Tracker and IFRS_S1_S2 start at B and reserve E for a sheet-derived
+ * "Score /5", so positional mapping put Status in C while every scorecard
+ * formula reads D.
+ */
+function refFor(def: EsgGridSectionDef, col: ColumnDef, colIdx: number): string {
+  return def.columnLetters?.[col.key] ?? colLetter(colIdx);
 }
 
 export function readEsgGridRows(
@@ -59,7 +72,7 @@ function rowsFromFlatCells(
   for (const rowNum of sorted) {
     const row: EsgGridRow = { _id: makeId() };
     def.columns.forEach((col, colIdx) => {
-      const ref = `${colLetter(colIdx)}${rowNum}`;
+      const ref = `${refFor(def, col, colIdx)}${rowNum}`;
       if (cells[ref] !== undefined) row[col.key] = cells[ref];
     });
     if (hasRowData(row, def.columns)) out.push(row);
@@ -93,7 +106,7 @@ export function writeEsgGridCells(
     def.columns.forEach((col, colIdx) => {
       const v = row[col.key];
       if (v === undefined || v === null || v === "") return;
-      cells[`${colLetter(colIdx)}${rowNum}`] =
+      cells[`${refFor(def, col, colIdx)}${rowNum}`] =
         typeof v === "boolean" ? (v ? 1 : 0) : (v as string | number);
     });
   }

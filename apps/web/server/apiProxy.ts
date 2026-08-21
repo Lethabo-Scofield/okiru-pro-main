@@ -110,11 +110,14 @@ function proxyRequest(req: Request, res: Response): void {
   }
 
   const isHybridExtract = req.path.startsWith("/api/extract-entities-hybrid");
-  const isParserExtraction = req.path.startsWith("/api/parser/resolve-case-files")
-    || req.path.startsWith("/api/parser/resolve-file");
+  // The ESG routes mount the same operations one segment deeper
+  // (/api/parser/esg/resolve-case-files-stream), so match on the operation
+  // rather than the exact prefix. Without this an ESG read the user has PAID
+  // for is cut off at the 120s default — the one place a timeout costs money.
+  const isParserExtraction = /^\/api\/parser\/(esg\/)?(resolve-case-files|resolve-file)/.test(req.path);
   // Pricing a big evidence pack inspects every file; give it the long budget too
   // so it can't be cut off at the 120s default mid-scan.
-  const isParserQuote = req.path.startsWith("/api/parser/quote-files");
+  const isParserQuote = /^\/api\/parser\/(esg\/)?quote-files/.test(req.path);
   const isLongRunning = isHybridExtract || isParserExtraction || isParserQuote || req.path.startsWith("/api/import");
   const options: http.RequestOptions = {
     hostname: url.hostname,

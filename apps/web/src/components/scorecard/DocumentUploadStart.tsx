@@ -360,6 +360,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
   const persistedDocumentsRef = useRef<Map<string, string>>(new Map());
+  /**
+   * The phase banner that reports the paid read.
+   *
+   * It renders below a staged list that is often long enough to push it off the
+   * screen, so starting extraction changed nothing the user could see and the
+   * work looked like it had not begun. We carry them to it instead.
+   */
+  const extractionPhaseRef = useRef<HTMLDivElement | null>(null);
   // Per-file extraction progress, keyed by the file's name (the streaming parser
   // reports fileName, and the create-scorecard list is de-duped by name).
   const [docProgress, setDocProgress] = useState<Record<string, 'parsing' | 'done' | 'error'>>({});
@@ -707,6 +715,22 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     })();
     return () => { cancelled = true; };
   }, [quote?.quoteId]);
+
+  /**
+   * Take the user to the phase banner the moment the paid read starts.
+   *
+   * Pressing process swaps a panel that sits below the staged documents, so on
+   * any real evidence pack the only visible change was a button going quiet —
+   * indistinguishable from a click that did nothing. Runs on the rising edge
+   * only, so the banner's own updates never yank the page around while reading.
+   */
+  useEffect(() => {
+    if (!parsing) return;
+    const frame = requestAnimationFrame(() => {
+      extractionPhaseRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [parsing]);
 
   const filePersistenceKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
@@ -1835,6 +1859,48 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
+      {/* The dead end. "Done adding" hides the staging bar above, and the review
+          panel below only renders once a quote exists — so when pricing failed
+          the button appeared to do nothing at all: the way ON vanished and
+          nothing replaced it. The only escape was adding or removing a file
+          (which resets doneStaging), and the only clue was a red line far below
+          the fold. Say what went wrong where the button was, and offer both
+          ways forward. */}
+      {!parserCase && doneStaging && !quote && !quoting && files.length > 0 && (
+        <div
+          className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="quote-unavailable"
+        >
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-amber-100">
+              We could not work out the cost of these {files.length} document{files.length === 1 ? "" : "s"}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[#a1a1aa]">
+              {parseError ?? "Pricing did not finish, so there is nothing to review yet."} Nothing has
+              been read and nothing has been charged.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDoneStaging(false)}
+              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[#8e8e93] transition-colors hover:text-white"
+              data-testid="button-back-to-staging"
+            >
+              Back to adding
+            </button>
+            <button
+              type="button"
+              onClick={() => void prepareAndQuote(files)}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
+              data-testid="button-retry-quote"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Double-check before anything is staged. */}
       <ConfirmUploadDialog
         pending={pendingUpload}
@@ -1847,7 +1913,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       {/* Phase banner — names where we are (Reading → Reconciling → Scoring) so
           the multi-minute paid wait shows movement, not a frozen spinner. */}
       {parsing && (
-        <div className="mt-3 flex items-center gap-3 rounded-xl border border-violet-300/20 bg-[#17151d] px-4 py-3" data-testid="extraction-phase">
+        <div ref={extractionPhaseRef} className="mt-3 flex items-center gap-3 rounded-xl border border-violet-300/20 bg-[#17151d] px-4 py-3" data-testid="extraction-phase">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-300" />
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-semibold text-violet-100">

@@ -579,45 +579,66 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
     }
   }
 
-  const fullOwnership = totalBlackVoting >= ot.votingRightsTarget && hasShares;
+  // EVERY indicator scores on its own measure (Statement 100; Annexe 100).
+  //
+  // The old fast path awarded FULL economic interest, FULL black-women EI,
+  // a hardcoded `dg = 3` and FULL net value the moment black VOTING crossed
+  // 25% — inventing points for indicators the entity never evidenced. A
+  // 26%-black-voting entity with zero black women collected the black-women
+  // EI maximum. Removed per docs/calculator-audit-2026-07-26.md item 12(a),
+  // and to match what docs/Okiru-Sector-Configuration-Reference.pdf (sent to
+  // the sector expert 2026-08-13) already states this engine does:
+  // "points = (actual / target) x weighting".
+  //
+  // The web calculator (Toolkit/src/lib/calculators/ownership.ts) was fixed on
+  // 2026-07-26; this server copy is the one /api/calculate actually runs, so
+  // the fix had to land here too.
+  const vrBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
+  const vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
 
-  let vrBlack: number, vrBWO: number, eiBlack: number, eiBWO: number;
-  let dg: number, ne: number, nv: number;
+  // Economic interest is a PLAIN ratio to target. The time-graduation factor
+  // previously sat here inside a max() that always selected the graduated
+  // formula (factor <= 1 makes it the larger), inflating EI for young deals.
+  // Annexe 100(E) graduates the NET VALUE target, not EI. (Audit item 12(b).)
+  const eiBlack = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.economicInterestMaxPts), ot.economicInterestMaxPts);
+  const eiBWO = clampScore(safeRatio(totalEIBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
+  const dg = clampScore(safeRatio(totalDG, 0.10, 3), 3);
+  const ne = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
 
-  if (fullOwnership) {
-    vrBlack = ot.votingRightsMaxPts;
-    vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
-    eiBlack = ot.economicInterestMaxPts;
-    eiBWO = ot.womenEIMaxPts;
-    dg = 3;
-    ne = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
-    nv = ot.netValueMaxPts;
-  } else {
-    vrBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
-    vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
-
+  let nv: number;
+  const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
+  if (hasNetValue) {
+    // Annexe 100(E): the net-value target phases in over ten years, so a young
+    // deal is measured against the SMALLER target.
+    // Annexe 100(C)/(E): net-value POINTS = (achieved net-value % / target) x
+    // maxPts, where the target is the EI target graduated over the first ten
+    // years. `netValueAgg` is a FRACTION (a debt-free 100% black owner gives
+    // 1.0), so it must be scored against that target — clamping the raw
+    // fraction against an 8-point maximum awarded 1 of 8 and made providing a
+    // valuation score WORSE than omitting one. This branch was unreachable
+    // before the fast path above was removed, which is why it went unnoticed.
     const gradFactor = getGraduationFactor(yearsHeld);
-    const formulaA = gradFactor > 0 ? totalEI * (1 / (ot.economicInterestTarget * gradFactor)) * ot.economicInterestMaxPts : 0;
-    const formulaB = (totalEI / ot.economicInterestTarget) * ot.economicInterestMaxPts;
-    eiBlack = clampScore(Math.max(formulaA, formulaB), ot.economicInterestMaxPts);
-
-    eiBWO = clampScore(safeRatio(totalEIBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
-    dg = clampScore(safeRatio(totalDG, 0.10, 3), 3);
-    ne = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
-
-    const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
-    if (hasNetValue) {
-      nv = clampScore(netValueAgg, ot.netValueMaxPts);
-    } else {
-      nv = totalBlackVoting >= 1.0
-        ? ot.netValueMaxPts
-        : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
-    }
+    const nvTarget = ot.economicInterestTarget * (gradFactor > 0 ? gradFactor : 1);
+    nv = clampScore(safeRatio(netValueAgg, nvTarget, ot.netValueMaxPts), ot.netValueMaxPts);
+  } else if (outstandingDebt > 0) {
+    // Recorded acquisition debt with NO valuation cannot be netted — Annexe
+    // 100(C) needs the equity value to weigh the debt against. Award nothing
+    // rather than invent a figure; the points wait for a valuation.
+    nv = 0;
+  } else {
+    // No valuation AND no debt: Annexe 100(C) reduces to black ECONOMIC
+    // INTEREST, because debt = 0 cancels the valuation out of the formula.
+    // The old fallback scored this from VOTING — the wrong measure entirely.
+    const gradFactor = getGraduationFactor(yearsHeld);
+    const graduatedTarget = ot.economicInterestTarget * (gradFactor > 0 ? gradFactor : 1);
+    nv = clampScore(safeRatio(totalEI, graduatedTarget, ot.netValueMaxPts), ot.netValueMaxPts);
   }
 
   const total = clampScore(vrBlack + vrBWO + eiBlack + eiBWO + dg + ne + nv, maxTotal);
   const netValueSubMinThreshold = ot.netValueMaxPts * (cfg.pillarConfigs.ownership.subMinimumPercent / 100);
-  const subMinimumMet = fullOwnership || nv >= netValueSubMinThreshold;
+  // Was `fullOwnership || nv >= threshold` — the deleted fast path also spared
+  // the entity its one-level discount. The sub-minimum is now measured, only.
+  const subMinimumMet = nv >= netValueSubMinThreshold;
 
   return { score: r2(total), maxPoints: maxTotal, subMinimumMet };
 }
@@ -988,8 +1009,6 @@ function calcTransportLargeOwnership(
     }
   }
 
-  const fullOwnership = totalBlackVoting >= ot.votingRightsTarget && hasShares;
-
   const vrBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
   const vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
   const eiBlack = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.economicInterestMaxPts), ot.economicInterestMaxPts);
@@ -1003,10 +1022,15 @@ function calcTransportLargeOwnership(
   const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
   if (hasNetValue) {
     nv = clampScore(netValueAgg, ot.netValueMaxPts);
+  } else if (outstandingDebt > 0) {
+    // Recorded acquisition debt with no valuation cannot be netted — award
+    // nothing rather than invent a figure. (Audit item 12, net-value measure.)
+    nv = 0;
   } else {
-    nv = totalBlackVoting >= 1.0
-      ? ot.netValueMaxPts
-      : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
+    // No valuation and no debt: net value reduces to black ECONOMIC INTEREST.
+    // This previously scored from VOTING against the VOTING target — a
+    // different measure, so 25% voting paid full net value on no evidence.
+    nv = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.netValueMaxPts), ot.netValueMaxPts);
   }
 
   const fulfil = totalBlackVoting >= ot.votingRightsTarget && totalEI >= ot.economicInterestTarget ? 1 : 0;
@@ -1017,7 +1041,7 @@ function calcTransportLargeOwnership(
   const netValueSubMinThreshold = ot.netValueMaxPts * (cfg.pillarConfigs.ownership.subMinimumPercent / 100);
   const subMinimumMet = cfg.pillarConfigs.ownership.subMinimumPercent <= 0
     ? true
-    : (fullOwnership || nv >= netValueSubMinThreshold);
+    : nv >= netValueSubMinThreshold;
 
   return { score: r2(total), maxPoints: maxTotal, subMinimumMet };
 }

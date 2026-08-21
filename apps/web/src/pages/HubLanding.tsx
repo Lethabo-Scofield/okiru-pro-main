@@ -73,7 +73,7 @@ export default function HubLanding() {
       try {
         const gate = await checkOnboardingGate();
         if (cancelled) return;
-        if (gate.status === "needs-onboarding") {
+        if (gate.status === "unauthenticated" || gate.status === "needs-onboarding") {
           const safe =
             location.startsWith('/') && !location.startsWith('//') && location !== '/onboarding' && location !== '/auth'
               ? location
@@ -124,7 +124,7 @@ export default function HubLanding() {
       tag: 'ESG',
       aiBadge: 'AI-Insights',
       icon: <Leaf className="w-4 h-4" />,
-      link: '/esg/clients',
+      link: '/esg',
       description: 'Carbon, social and governance scoring aligned to King V, IFRS S1/S2 and GRI.',
       features: ['GHG inventory & carbon tax', 'E/S/G scorecards', 'Net-zero roadmap'],
     }]
@@ -526,7 +526,7 @@ export default function HubLanding() {
 
           {esgAllowed && (
           <Link
-            href="/esg/clients"
+            href="/esg"
             className="card-rise group relative block rounded-2xl p-6 sm:p-7 min-h-[200px] overflow-hidden border border-emerald-400/20 hover:border-emerald-300/40 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_60px_-20px_rgba(29,233,160,0.25)] cursor-pointer"
             style={{
               backgroundImage:

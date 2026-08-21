@@ -3,10 +3,23 @@
  * ESG_Dashboard!D9 = avg(E_pts/100, S_pts/100, G_pts/100).
  */
 
-/** Pillar scorecard maxima (display); overall D9 divides each pillar by 100, not by these maxima. */
-export const ESG_PILLAR_MAX = { environmental: 108, social: 100, governance: 92 } as const;
+/**
+ * Pillar scorecard maxima (display) — the sum of column B on each scorecard sheet.
+ * Cross-checked against ESG_Dashboard!C6/C7/C8, which the workbook hardcodes to
+ * 108 / 100 / 100. Governance was previously 92 here, which made the governance
+ * page render 64.85/92 = 70.5% instead of the workbook's D8 = 64.85%.
+ */
+export const ESG_PILLAR_MAX = { environmental: 108, social: 100, governance: 100 } as const;
 
-/** ESG_Dashboard D9 divisor per pillar — not HTML 40/30/30, not ÷292. */
+/**
+ * ESG_Dashboard!D9 = (E_Scorecard!D30/100 + S_Scorecard!D28/100 + G_Scorecard!D26/100)/3.
+ *
+ * The workbook divides every pillar by a flat 100 — including Environmental,
+ * whose scorecard maximum is 108. That is the workbook's own definition of the
+ * overall score, not an error on our side, so we reproduce it exactly rather
+ * than "correcting" it to ÷ESG_PILLAR_MAX. Changing this divisor would break
+ * parity with ESG_GOLDEN_SG_CONSUMER.overallPercent below.
+ */
 export const ESG_D9_PILLAR_DIVISOR = 100;
 
 /** Workbook v1.7 SG Consumer live golden values (E_Scorecard D30, S_Scorecard D28, G_Scorecard D26). */
@@ -30,9 +43,6 @@ export function esgOverallPercent(ePoints: number, sPoints: number, gPoints: num
   const parts = [ePoints, sPoints, gPoints].map((p) => p / ESG_D9_PILLAR_DIVISOR);
   return parts.reduce((a, b) => a + b, 0) / parts.length;
 }
-
-/** @deprecated use esgOverallPercent */
-export const esgOverallPercentPlaceholder = esgOverallPercent;
 
 /**
  * S_Scorecard row 17 — LTIFR points.

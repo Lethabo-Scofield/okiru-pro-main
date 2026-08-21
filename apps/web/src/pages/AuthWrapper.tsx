@@ -61,6 +61,16 @@ export default function AuthWrapper() {
       try {
         const status = await fetchOnboardingStatus();
         if (cancelled) return;
+        // Not signed in — an expired session, or a cookie bound to a different
+        // host (this is what DNS moving to okiru.pro caused). Showing the
+        // company form here strands the user on a screen whose every request
+        // 401s, which reads as "cannot get past onboarding". Send them to sign
+        // in instead.
+        if (status === "unauthenticated") {
+          clearOnboardingFlowVisible();
+          setGate("anon");
+          return;
+        }
         if (status === "onboarded") {
           if (readSessionFlag(PENDING_TEAM_INVITE_KEY)) {
             setOnboardingFlowVisible();

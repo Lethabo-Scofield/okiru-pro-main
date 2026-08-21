@@ -41,6 +41,7 @@ import EsgClientSelector from "@/pages/EsgClientSelector";
 import EsgInformationRequest from "@/pages/EsgInformationRequest";
 import EsgScoreSummary from "@/pages/EsgScoreSummary";
 import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
+import EsgCreateFlow from "@/components/esg/EsgCreateFlow";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
@@ -136,19 +137,6 @@ function EsgToolkitLoader() {
     >
       <EsgToolkitView />
     </Suspense>
-  );
-}
-
-/** /esg → company picker */
-function EsgHubRedirect() {
-  const [, navigate] = useLocation();
-  useEffect(() => {
-    navigate("/esg/clients", { replace: true });
-  }, [navigate]);
-  return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
-    </div>
   );
 }
 
@@ -271,14 +259,25 @@ function AppRouter() {
       <Route path="/toolkit" nest>
         <ProtectedRoute><ToolkitLoader /></ProtectedRoute>
       </Route>
+      {/* The ESG front door: choose → provide → review, with NO company up
+          front. It used to redirect here to the company picker, which forced a
+          name out of the user before the documents that know it had been read. */}
       <Route path="/esg">
-        <ProtectedRoute><EsgPreviewRoute><EsgHubRedirect /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgCreateFlow /></EsgPreviewRoute></ProtectedRoute>
       </Route>
+      {/* Still here, still reachable — this is how an EXISTING ESG scorecard is
+          reopened (step 1 links to it). It is no longer the way IN. */}
       <Route path="/esg/clients">
         <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId/summary">
         <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      {/* The ESG entry choice — upload documents / import Excel / start manual.
+          Same page as the workbook: it owns the stage, so a chosen route lands
+          in the workbook without a remount (and /start rewrites itself away). */}
+      <Route path="/esg/create/:companyId/start">
+        <ProtectedRoute><EsgPreviewRoute><EsgInformationRequest /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId">
         <ProtectedRoute><EsgPreviewRoute><EsgInformationRequest /></EsgPreviewRoute></ProtectedRoute>

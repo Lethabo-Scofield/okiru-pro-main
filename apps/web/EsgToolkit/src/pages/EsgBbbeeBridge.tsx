@@ -26,28 +26,81 @@ export default function EsgBbbeeBridge() {
       </header>
 
       {bridge ? (
-        <div className="esg-glass p-5 grid gap-4 sm:grid-cols-2">
-          <div>
-            <div className="text-[10px] uppercase text-[var(--esg-text3)]">EE Scorecard points (E15)</div>
-            <div className="text-[24px] font-bold text-[var(--esg-acc-s)]">{fmt(bridge.eeScorecardPoints)}</div>
+        <>
+          <div className="esg-glass p-5 grid gap-4 sm:grid-cols-3">
+            <div>
+              <div className="text-[10px] uppercase text-[var(--esg-text3)]">EE Scorecard points (E15)</div>
+              <div className="text-[24px] font-bold text-[var(--esg-acc-s)]">
+                {fmt(bridge.eeScorecardPoints)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-[var(--esg-text3)]">Stance floor (B9)</div>
+              <div className="text-[24px] font-bold text-[var(--esg-text)]">
+                {bridge.stanceFloor.toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase text-[var(--esg-text3)]">
+                Points earned (measured elements)
+              </div>
+              <div className="text-[24px] font-bold text-[var(--esg-text)]">
+                {bridge.available
+                  ? `${fmt(bridge.totalPoints)} / ${bridge.measuredWeight}`
+                  : "Not available"}
+              </div>
+              <div className="text-[10px] text-[var(--esg-text3)] mt-1">
+                Generic Scorecard total: {bridge.totalWeight} pts
+              </div>
+            </div>
           </div>
-          <div>
-            <div className="text-[10px] uppercase text-[var(--esg-text3)]">Stance floor (B9)</div>
-            <div className="text-[24px] font-bold text-[var(--esg-text)]">{bridge.stanceFloor.toFixed(2)}</div>
+
+          <div className="esg-glass p-5 overflow-x-auto">
+            <table className="w-full text-[12px]" data-testid="esg-bbbee-elements">
+              <thead>
+                <tr className="text-[var(--esg-text3)] text-left">
+                  <th className="pb-2">Element</th>
+                  <th className="pb-2">Weight</th>
+                  <th className="pb-2">Actual</th>
+                  <th className="pb-2">Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bridge.elements.map((el) => (
+                  <tr key={el.id} className="border-t border-[var(--esg-glass-border)] align-top">
+                    <td className="py-2 text-[var(--esg-text)]">
+                      {el.label}
+                      {el.note ? (
+                        <div className="text-[10px] text-[var(--esg-text3)] mt-0.5">{el.note}</div>
+                      ) : null}
+                    </td>
+                    <td className="py-2 tabular-nums">{el.weight}</td>
+                    <td className="py-2 tabular-nums">
+                      {el.actual == null ? "—" : `${(el.actual * 100).toFixed(1)}%`}
+                    </td>
+                    <td className="py-2 tabular-nums">
+                      {el.points == null ? (
+                        <span className="text-[var(--esg-text3)]">Not available</span>
+                      ) : (
+                        fmt(el.points)
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-          <div>
-            <div className="text-[10px] uppercase text-[var(--esg-text3)]">MC partial credit (EE → 19 pts)</div>
-            <div className="text-[20px] font-semibold">{fmt(bridge.ownershipPartialCredit)}</div>
+
+          <div className="esg-glass p-5">
+            <div className="text-[10px] uppercase text-[var(--esg-text3)]">B-BBEE status level</div>
+            <div className="text-[20px] font-semibold text-[var(--esg-text)]">
+              {bridge.statusLevel ?? "Not determined"}
+            </div>
+            {bridge.statusLevelNote ? (
+              <p className="text-[11px] text-[var(--esg-text3)] mt-1">{bridge.statusLevelNote}</p>
+            ) : null}
           </div>
-          <div>
-            <div className="text-[10px] uppercase text-[var(--esg-text3)]">Skills partial credit (25 pts)</div>
-            <div className="text-[20px] font-semibold">{fmt(bridge.skillsPartialCredit)}</div>
-          </div>
-          <div className="sm:col-span-2">
-            <div className="text-[10px] uppercase text-[var(--esg-text3)]">SED partial credit (5 pts)</div>
-            <div className="text-[20px] font-semibold">{fmt(bridge.sedPartialCredit)}</div>
-          </div>
-        </div>
+        </>
       ) : (
         <p className="text-[13px] text-[var(--esg-text3)]">Load workbook data to compute bridge.</p>
       )}
