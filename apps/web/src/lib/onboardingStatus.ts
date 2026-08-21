@@ -72,7 +72,12 @@ export async function checkOnboardingGate(): Promise<OnboardingGateResult> {
       /* network — not an auth answer */
       everyAttemptUnauthorized = false;
     }
-    await delay(BASE_DELAY_MS * (attempt + 1));
+    // No point sleeping after the final attempt — the loop is over and the
+    // answer is already decided. Waiting here only delayed a signed-out user
+    // by the largest backoff to accomplish nothing.
+    if (attempt < ATTEMPTS - 1) {
+      await delay(BASE_DELAY_MS * (attempt + 1));
+    }
   }
 
   return everyAttemptUnauthorized ? { status: "unauthenticated" } : { status: "needs-onboarding" };
