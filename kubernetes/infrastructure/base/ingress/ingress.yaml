@@ -17,10 +17,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - okiru.20.164.101.114.nip.io
+        - okiru-compute.4.253.195.45.nip.io
       secretName: okiru-pro-tls
   rules:
-    - host: okiru.20.164.101.114.nip.io
+    - host: okiru-compute.4.253.195.45.nip.io
       http:
         paths:
           # API auth routes (MUST come before web routes)
@@ -206,10 +206,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - okiru.20.164.101.114.nip.io
+        - okiru-compute.4.253.195.45.nip.io
       secretName: okiru-pro-tls
   rules:
-    - host: okiru.20.164.101.114.nip.io
+    - host: okiru-compute.4.253.195.45.nip.io
       http:
         paths:
           # Compute routes - strip /compute prefix

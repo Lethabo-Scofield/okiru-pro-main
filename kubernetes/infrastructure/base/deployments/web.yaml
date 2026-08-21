@@ -160,6 +160,15 @@ spec:
                   name: external-api-keys
                   key: AZURE_OPENAI_DEPLOYMENT
                   optional: true
+            # The toolkit chat and the Excel/booklet AI mapping prefer the FAST
+            # deployment and only fall back to AZURE_OPENAI_DEPLOYMENT. Without
+            # this, chat ran on the 400K-TPM deployment instead of the 100K one.
+            - name: AZURE_OPENAI_FAST_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_FAST_DEPLOYMENT
+                  optional: true
             - name: AZURE_OPENAI_API_VERSION
               valueFrom:
                 secretKeyRef:

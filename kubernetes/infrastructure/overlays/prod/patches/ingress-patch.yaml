@@ -7,7 +7,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: "letsencrypt-production"
     nginx.ingress.kubernetes.io/limit-rps: "50"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru.pro,https://www.okiru.pro,https://okiru.20.164.101.114.nip.io"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://okiru.pro,https://www.okiru.pro,https://okiru.4.253.195.45.nip.io"
     # Evidence packs (multi-file ledger/PDF batches for the parser quote-files
     # upload) routinely exceed 100m; nginx 413'd them before reaching the app.
     # Parser multer allows 50MB x 100 files, so 500m gives real headroom.
@@ -18,7 +18,6 @@ metadata:
 spec:
   tls:
     - hosts:
-        - okiru.20.164.101.114.nip.io
         - okiru.pro
         - www.okiru.pro
       secretName: okiru-pro-tls

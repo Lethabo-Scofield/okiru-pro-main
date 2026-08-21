@@ -21,17 +21,17 @@ patchesStrategicMerge:
 # old ACR okiruproacrde4d539b is locked inside the disabled cfc3d77c subscription).
 images:
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
-  newName: okiruproacr2026.azurecr.io/okiru-pro/api
-  newTag: "029dacb7-20260730"
+  newName: okiruproacr.azurecr.io/okiru-pro/api
+  newTag: "e748c517-20260818"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
-  newName: okiruproacr2026.azurecr.io/okiru-pro/compute
-  newTag: "029dacb7-20260730"
+  newName: okiruproacr.azurecr.io/okiru-pro/compute
+  newTag: "e748c517-20260818"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
-  newName: okiruproacr2026.azurecr.io/okiru-pro/web
-  newTag: "029dacb7-20260730"
+  newName: okiruproacr.azurecr.io/okiru-pro/web
+  newTag: "e748c517-20260818"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/parser
-  newName: okiruproacr2026.azurecr.io/okiru-pro/parser
-  newTag: "029dacb7-20260730"
+  newName: okiruproacr.azurecr.io/okiru-pro/parser
+  newTag: "e748c517-20260818"
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
@@ -45,7 +45,7 @@ configMapGenerator:
   literals:
   - NODE_ENV=production
   - LOG_LEVEL=warn
-  - CORS_ORIGIN=https://okiru.pro,https://www.okiru.pro,https://okiru.102-133-130-99.nip.io
+  - CORS_ORIGIN=https://okiru.pro,https://www.okiru.pro,https://okiru.4.253.195.45.nip.io
   - ESG_PREVIEW_ALLOWLIST=
   name: app-config
 
