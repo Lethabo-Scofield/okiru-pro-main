@@ -8,6 +8,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import helmet from 'helmet';
 import parserRouter from './routes/parser.js';
 import { createLogger } from './logger.js';
+import { parserHelmetOptions, resolveCorsOrigin } from './securityConfig.js';
 import { setQuoteStore } from './services/quoteStore.js';
 import { createRedisQuoteStore } from './services/redisQuoteStore.js';
 
@@ -18,11 +19,10 @@ export const PARSER_VERSION = '0.1.0';
 export const ONTOLOGY_VERSION = 'v1';
 
 const JSON_BODY_LIMIT = process.env.PARSER_JSON_BODY_LIMIT || '25mb';
-const corsOrigin = process.env.PARSER_ALLOWED_ORIGINS
-  ? process.env.PARSER_ALLOWED_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
-  : true;
 
-app.use(helmet({ contentSecurityPolicy: false }));
+const corsOrigin = resolveCorsOrigin();
+
+app.use(helmet(parserHelmetOptions()));
 app.use(compression());
 app.use(cors({ origin: corsOrigin, credentials: true }));
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
@@ -102,6 +102,15 @@ function validateStartupConfig(): void {
   if (isProd) {
     if (!process.env.PARSER_ADMIN_TOKEN) {
       logger.warn('PARSER_ADMIN_TOKEN is not set — the /load-ontology admin route will refuse requests (503)');
+    }
+    // Say which way the browser gate is facing. A silent CORS posture is how
+    // this service ended up reflecting every origin in production.
+    if (corsOrigin === false) {
+      logger.info('CORS is closed to browsers — /api/parser is reached same-origin through the web proxy');
+    } else if (Array.isArray(corsOrigin)) {
+      logger.info('CORS is open to an explicit allowlist', { origins: corsOrigin });
+    } else {
+      logger.warn('CORS is reflecting every Origin in production — set PARSER_ALLOWED_ORIGINS or unset it to close');
     }
     if (process.env.PARSER_REQUIRE_NEO4J === 'true'
       && !(process.env.NEO4J_URI && process.env.NEO4J_USERNAME && process.env.NEO4J_PASSWORD)) {
