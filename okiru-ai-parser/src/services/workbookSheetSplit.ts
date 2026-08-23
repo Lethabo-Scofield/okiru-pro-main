@@ -19,6 +19,7 @@
  * exactly as before.
  */
 import * as XLSX from 'xlsx';
+import { sheetMatrix } from './sheetCellValues.js';
 
 export interface SheetDocument {
   /** Sheet name, verbatim. */
@@ -108,7 +109,10 @@ function findHeaderRow(matrix: unknown[][]): number {
 
 /** Build header-keyed row objects from a sheet, skipping banner/legend rows. */
 function sheetRowsWithHeader(sheet: XLSX.WorkSheet, maxRows: number): Array<Record<string, unknown>> {
-  const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][];
+  // Format-aware: a cell displaying `32%` must not reach the model as `0.32`.
+  // See sheetCellValues.ts — losing the percent format is unrecoverable
+  // downstream and forces the mapping layer to guess the unit.
+  const matrix = sheetMatrix(sheet);
   if (matrix.length === 0) return [];
 
   const headerIdx = findHeaderRow(matrix);
@@ -175,7 +179,9 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
 
   let workbook: XLSX.WorkBook;
   try {
-    workbook = XLSX.read(buffer, { type: 'buffer' });
+    // cellNF keeps each cell's number format — without it a percentage cell is
+    // indistinguishable from a bare ratio (see sheetCellValues.ts).
+    workbook = XLSX.read(buffer, { type: 'buffer', cellNF: true });
   } catch {
     return [];
   }

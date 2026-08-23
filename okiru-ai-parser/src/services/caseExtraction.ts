@@ -28,6 +28,7 @@ import { elementFromHint } from './specRetrieval.js';
 import {
   fieldElementIndex,
   mapEntitiesToCalculator,
+  mapEntitiesToCalculatorWithSemantics,
   type CalculatorMappingResult,
 } from './entityCalculatorMapping.js';
 
@@ -287,7 +288,14 @@ export async function extractCaseEntities(
     }
   }
 
-  const calculator = mapEntitiesToCalculator(resolved, fieldElementIndex(extractions));
+  // Declared mappings first, then one semantic pass over whatever they did not
+  // cover — a field the table never anticipated reaches its pillar instead of
+  // being reported as read-but-unused. Same coercion, same allowlist.
+  const calculator = await mapEntitiesToCalculatorWithSemantics(
+    resolved,
+    fieldElementIndex(extractions),
+    model,
+  );
 
   // Would this evidence survive verification? Extraction says what a document
   // contains; the auditor tests say whether it counts. Advisory only — it never

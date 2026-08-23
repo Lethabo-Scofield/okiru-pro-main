@@ -29,7 +29,13 @@
  *    so a mapping error cannot inject an arbitrary calculator path.
  */
 import { createLogger } from '../logger.js';
-import { admitCalculatorEntry, calculatorKeySpec } from '../../schemas/calculator_allowlist.js';
+import {
+  admitCalculatorEntry,
+  calculatorKeySpec,
+  CALCULATOR_KEY_ALLOWLIST,
+} from '../../schemas/calculator_allowlist.js';
+import type { ExtractionModel } from './aiExtraction.js';
+import { proposeFieldMappings, type MappableKey } from './semanticFieldMapping.js';
 import type { CaseEntities } from './entityResolution.js';
 import { findDocumentById, type VerificationElement } from '../../schemas/verification_document_matrix.js';
 
@@ -242,6 +248,12 @@ export interface MappedCalculatorEntry {
   sourceField: string;
   sourceFiles: string[];
   agreementCount: number;
+  /**
+   * True when the destination was decided by the semantic pass rather than by a
+   * declared mapping. The value itself is still the grounded, extracted one —
+   * but a human chose none of these, so the UI marks them for review.
+   */
+  viaSemanticMapping?: boolean;
 }
 
 export interface CalculatorMappingResult {
@@ -327,6 +339,106 @@ export function mapEntitiesToCalculator(
   }
 
   return { payload, entries, unmapped, needsReview };
+}
+
+/**
+ * The keys the semantic pass is allowed to choose from, described in the
+ * allowlist's own words so the model is never told about a key the code would
+ * then reject.
+ */
+function mappableKeys(): MappableKey[] {
+  return CALCULATOR_KEY_ALLOWLIST.map((spec) => ({ key: spec.key, description: spec.description }));
+}
+
+/**
+ * How to coerce a value whose destination the semantic pass chose.
+ *
+ * There is no declared `coerce` for these, so it is derived from the key's own
+ * allowlist spec. A key whose description says "percentage" gets percentage
+ * handling, which is what keeps a 0-1 ratio from being scored as a fraction of
+ * a percent.
+ */
+function coercionForKey(key: string): FieldMapping['coerce'] {
+  const spec = calculatorKeySpec(key);
+  if (!spec) return 'text';
+  if (spec.type === 'iso_date') return 'iso_date';
+  if (spec.type === 'string') return 'text';
+  return /percentage|percent|%/i.test(spec.description) ? 'percentage' : 'number';
+}
+
+/**
+ * Declared mapping first, semantic placement for the leftovers.
+ *
+ * Runs `mapEntitiesToCalculator` unchanged, then offers ONLY the fields it
+ * reported `no_mapping` to the model. A proposal has to survive the same
+ * coercion and the same allowlist as any declared mapping, and can never
+ * displace a key a declared mapping already filled.
+ *
+ * With no model this is `mapEntitiesToCalculator` exactly.
+ */
+export async function mapEntitiesToCalculatorWithSemantics(
+  entities: CaseEntities,
+  fieldElements: Map<string, Set<VerificationElement>>,
+  model: ExtractionModel | null,
+): Promise<CalculatorMappingResult> {
+  const base = mapEntitiesToCalculator(entities, fieldElements);
+
+  const orphans = base.unmapped.filter((u) => u.reason === 'no_mapping').map((u) => u.field);
+  if (orphans.length === 0 || !model) return base;
+
+  const proposals = await proposeFieldMappings(model, orphans, mappableKeys(), {
+    context: 'a B-BBEE verification evidence pack',
+  });
+  if (Object.keys(proposals).length === 0) return base;
+
+  const payload = { ...base.payload };
+  const entries = [...base.entries];
+  const unmapped: CalculatorMappingResult['unmapped'] = [];
+
+  for (const orphan of base.unmapped) {
+    const key = orphan.reason === 'no_mapping' ? proposals[orphan.field] : undefined;
+    const resolved = key ? entities.fields[orphan.field] : undefined;
+    if (!key || !resolved) {
+      unmapped.push(orphan);
+      continue;
+    }
+
+    const value = coerce({ field: orphan.field, calculatorKey: key, coerce: coercionForKey(key) }, resolved.value);
+    if (value === null) {
+      unmapped.push({ field: orphan.field, reason: 'uncoercible' });
+      continue;
+    }
+
+    const admission = admitCalculatorEntry(key, value);
+    if (!admission.accepted) {
+      unmapped.push({ field: orphan.field, reason: 'rejected_by_allowlist' });
+      continue;
+    }
+
+    // A declared mapping already owns this key: the human's answer stands and
+    // the inferred one is reported as unplaced rather than silently dropped.
+    if (entries.some((entry) => entry.key === key)) {
+      unmapped.push(orphan);
+      continue;
+    }
+
+    payload[key] = value;
+    entries.push({
+      key,
+      value,
+      sourceField: orphan.field,
+      sourceFiles: resolved.sources,
+      agreementCount: resolved.agreementCount,
+      viaSemanticMapping: true,
+    });
+  }
+
+  logger.info('Semantic pass placed fields the declared table did not cover', {
+    orphans: orphans.length,
+    placed: entries.length - base.entries.length,
+  });
+
+  return { ...base, payload, entries, unmapped };
 }
 
 /** Build the field → elements index from the per-document extractions. */
