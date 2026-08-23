@@ -25,18 +25,23 @@ patchesStrategicMerge:
 # match targets for kustomize — do not "correct" them to the new registry or
 # the rewrite stops matching.
 images:
+# api and compute are pinned a commit behind web/parser ON PURPOSE: 48f1f342
+# (the MAC sector) touched only okiru-ai-parser and apps/web, so no api or
+# compute image was built for it. Pinning them to a tag that was never built
+# would make `kustomize build | kubectl apply` pull an image that does not
+# exist. Bump them when their own code changes.
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/api
   newName: okiruproacr.azurecr.io/okiru-pro/api
-  newTag: "1f323ac9-20260821"
+  newTag: "519a9866-20260823"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/compute
   newName: okiruproacr.azurecr.io/okiru-pro/compute
-  newTag: "1f323ac9-20260821"
+  newTag: "519a9866-20260823"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
   newName: okiruproacr.azurecr.io/okiru-pro/web
-  newTag: "1f323ac9-20260821"
+  newTag: "48f1f342-20260823"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/parser
   newName: okiruproacr.azurecr.io/okiru-pro/parser
-  newTag: "1f323ac9-20260821"
+  newTag: "48f1f342-20260823"
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation

@@ -69,3 +69,7 @@ kubernetes/infrastructure/overlays/*/secrets/secrets.yaml
 # The authoritative copies live in the okirubackups2026 storage account.
 docs/Certificates/
 docs/Test Data/
+
+# Written by deploy/aks-deploy.sh and contains a LIVE ACR admin password.
+# It was tracked once and reached a public repo; never track it again.
+.aks_env

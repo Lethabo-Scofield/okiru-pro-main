@@ -70,9 +70,14 @@ create_acr() {
     
     log_info "ACR Created!"
     log_info "ACR Login Server: ${ACR_NAME}.azurecr.io"
+    # .aks_env holds a LIVE ACR admin password. It is gitignored, and it must
+    # stay that way: it was tracked once and reached a public repo, where the
+    # credential stayed readable in history long after the file was current.
     echo "ACR_NAME=$ACR_NAME" > .aks_env
     echo "ACR_USERNAME=$ACR_USERNAME" >> .aks_env
     echo "ACR_PASSWORD=$ACR_PASSWORD" >> .aks_env
+    chmod 600 .aks_env 2>/dev/null || true
+    log_warn "Wrote ACR credentials to .aks_env — gitignored; do not commit or paste it."
 }
 
 # Create AKS Cluster
