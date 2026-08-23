@@ -8,21 +8,11 @@
 
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger.js';
-import { aql } from 'arangojs';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { getComputeClient } from '../../pipeline/computeClient.js';
 
 const logger = createLogger("Scorecard");
-import { evaluateGraphWithOverrides } from '../../pipeline/tsGraphEvaluator.js';
-import { getArangoDB } from '../../arango/connection.js';
-import { COLLECTIONS } from '../../arango/collections.js';
 import { generateScorecardSummary } from '../../pipeline/scorecardSummaryGenerator.js';
-import {
-  getEntityCellMapping,
-  applyEntitiesToScorecard,
-  validateEntityCoverage,
-  buildEntityCellMapping,
-} from '../../arango/entityCellMapping.js';
 import { buildManifest, getAllEntities } from '../../pipeline/extraction/entityManifest.js';
 import { getSectorConfig, type SectorConfig } from '../../pipeline/sectorConfig.js';
 
@@ -95,25 +85,6 @@ router.post('/compile', async (req: Request, res: Response) => {
       Object.keys(metadata).length > 0 ? metadata : undefined
     );
 
-    // If sectorCode/scorecardType provided, store the mapping in ArangoDB
-    if (sectorCode && scorecardType) {
-      try {
-        const db = getArangoDB();
-        const col = db.collection(COLLECTIONS.sectorModelMappings);
-        const updatedAt = new Date().toISOString();
-        const upsertCursor = await db.query(aql`
-          UPSERT { sectorCode: ${sectorCode}, scorecardType: ${scorecardType} }
-          INSERT { sectorCode: ${sectorCode}, scorecardType: ${scorecardType}, versionId: ${modelVersion.version_id}, modelName: ${modelVersion.name}, updatedAt: ${updatedAt} }
-          UPDATE { versionId: ${modelVersion.version_id}, modelName: ${modelVersion.name}, updatedAt: ${updatedAt} }
-          IN ${col}
-          RETURN NEW
-        `);
-        await upsertCursor.all();
-      } catch (dbError: unknown) {
-        logger.warn('Failed to store sector mapping', { error: dbError instanceof Error ? dbError.message : String(dbError) });
-        // Continue - compile succeeded, mapping is optional
-      }
-    }
 
     return res.json(modelVersion);
   } catch (error: unknown) {
@@ -149,77 +120,6 @@ router.post('/evaluate', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// POST /api/scorecard/evaluate-by-sector - Evaluate by sector (looks up active model)
-// ---------------------------------------------------------------------------
-router.post('/evaluate-by-sector', async (req: Request, res: Response) => {
-  try {
-    const { sectorCode, scorecardType, overrides } = req.body as {
-      sectorCode?: string;
-      scorecardType?: string;
-      overrides?: Record<string, unknown>;
-    };
-
-    if (!sectorCode || !scorecardType) {
-      return res.status(400).json({
-        message: 'sectorCode and scorecardType are required',
-      });
-    }
-
-    const db = getArangoDB();
-    const col = db.collection(COLLECTIONS.sectorModelMappings);
-    const cursor = await db.query(aql`
-      FOR doc IN ${col}
-        FILTER doc.sectorCode == ${sectorCode} AND doc.scorecardType == ${scorecardType}
-        SORT doc.updatedAt DESC
-        LIMIT 1
-        RETURN doc.versionId
-    `);
-    const rows = await cursor.all();
-    const versionId = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-
-    let result;
-
-    if (versionId && typeof versionId === 'string') {
-      try {
-        const available = await computeClient.isAvailable();
-        if (available) {
-          result = await computeClient.evaluateModel(versionId, overrides ?? undefined);
-          return res.json(result);
-        }
-      } catch (engineErr) {
-        logger.warn('Computation Engine unavailable', { error: engineErr instanceof Error ? engineErr.message : String(engineErr) });
-      }
-    }
-
-    const graphCursor = await db.query(aql`
-      FOR g IN ${db.collection(COLLECTIONS.formulaGraphs)}
-        FILTER g.sectorCode == ${sectorCode} AND g.scorecardType == ${scorecardType}
-        LIMIT 1
-        RETURN g._key
-    `);
-    const graphKeys = await graphCursor.all();
-    if (graphKeys.length === 0) {
-      return res.status(404).json({
-        message: `No formula graph found for ${sectorCode}/${scorecardType}.`,
-      });
-    }
-
-    const tsResult = await evaluateGraphWithOverrides(graphKeys[0], (overrides ?? {}) as Record<string, unknown>);
-    return res.json({
-      results: tsResult.results,
-      stats: tsResult.stats,
-      pillarScores: tsResult.pillarScores,
-      engine: 'typescript-evaluator',
-    });
-  } catch (error: unknown) {
-    logger.error('Evaluate-by-sector error', error);
-    return res.status(500).json({
-      message: error instanceof Error ? error.message : 'Evaluation by sector failed',
-    });
-  }
-});
-
-// ---------------------------------------------------------------------------
 // GET /api/scorecard/health - Check if Computation Engine is available
 // ---------------------------------------------------------------------------
 router.get('/health', async (_req: Request, res: Response) => {
@@ -229,122 +129,6 @@ router.get('/health', async (_req: Request, res: Response) => {
   } catch (error: unknown) {
     logger.error('Health check error', error);
     return res.json({ available: false });
-  }
-});
-
-// ---------------------------------------------------------------------------
-// POST /api/scorecard/evaluate-from-entities
-// Combined endpoint: entities → cell mapping → evaluation → scorecard
-// ---------------------------------------------------------------------------
-router.post('/evaluate-from-entities', async (req: Request, res: Response) => {
-  try {
-    const { sectorCode, scorecardType, entities } = req.body as {
-      sectorCode?: string;
-      scorecardType?: string;
-      entities?: Record<string, number | string>;
-    };
-
-    if (!sectorCode || !scorecardType || !entities) {
-      return res.status(400).json({
-        message: 'sectorCode, scorecardType, and entities are required',
-      });
-    }
-
-    let mapping = await getEntityCellMapping(sectorCode.toUpperCase(), scorecardType);
-
-    if (!mapping) {
-      const db = getArangoDB();
-      const graphCursor = await db.query(aql`
-        FOR g IN ${db.collection(COLLECTIONS.formulaGraphs)}
-          FILTER g.sectorCode == ${sectorCode.toUpperCase()}
-             AND g.scorecardType == ${scorecardType}
-          LIMIT 1
-          RETURN g._key
-      `);
-      const graphKeys = await graphCursor.all();
-
-      if (graphKeys.length === 0) {
-        return res.status(404).json({
-          message: `No formula graph found for ${sectorCode}/${scorecardType}. Ingest the toolkit first.`,
-        });
-      }
-
-      const manifest = await buildManifest(sectorCode.toUpperCase(), scorecardType);
-      mapping = await buildEntityCellMapping(
-        graphKeys[0],
-        sectorCode.toUpperCase(),
-        scorecardType,
-        getAllEntities(manifest),
-      );
-    }
-
-    const cellOverrides = applyEntitiesToScorecard(mapping, entities);
-    const coverage = validateEntityCoverage(mapping, entities);
-
-    let evaluationResult: Record<string, unknown> = {};
-    let evaluationStats: Record<string, unknown> = {};
-    let usedEngine = 'none';
-
-    try {
-      const available = await computeClient.isAvailable();
-      if (available) {
-        const db = getArangoDB();
-        const col = db.collection(COLLECTIONS.sectorModelMappings);
-        const cursor = await db.query(aql`
-          FOR doc IN ${col}
-            FILTER doc.sectorCode == ${sectorCode.toUpperCase()}
-               AND doc.scorecardType == ${scorecardType}
-            SORT doc.updatedAt DESC LIMIT 1
-            RETURN doc.versionId
-        `);
-        const rows = await cursor.all();
-        const versionId = rows[0];
-
-        if (versionId) {
-          const result = await computeClient.evaluateModel(versionId, cellOverrides);
-          evaluationResult = result.results;
-          evaluationStats = result.stats;
-          usedEngine = 'computation-engine';
-        }
-      }
-    } catch (engineErr) {
-      logger.warn('Computation Engine unavailable, falling back to TS evaluator', { error: engineErr instanceof Error ? engineErr.message : String(engineErr) });
-    }
-
-    if (usedEngine === 'none') {
-      try {
-        const tsResult = await evaluateGraphWithOverrides(mapping.graphKey, cellOverrides);
-        evaluationResult = tsResult.results;
-        evaluationStats = tsResult.stats;
-        usedEngine = 'typescript-evaluator';
-      } catch (tsErr) {
-        logger.error('TypeScript evaluator also failed', tsErr);
-        return res.status(500).json({
-          message: 'Both Computation Engine and TS evaluator failed. Check that the toolkit is properly ingested.',
-          cellOverrides,
-          coverage,
-        });
-      }
-    }
-
-    return res.json({
-      success: true,
-      sectorCode,
-      scorecardType,
-      engine: usedEngine,
-      cellOverrides,
-      overrideCount: Object.keys(cellOverrides).length,
-      coverage,
-      evaluation: {
-        results: evaluationResult,
-        stats: evaluationStats,
-      },
-    });
-  } catch (error: unknown) {
-    logger.error('Evaluate-from-entities error', error);
-    return res.status(500).json({
-      message: error instanceof Error ? error.message : 'Entity evaluation failed',
-    });
   }
 });
 
@@ -582,44 +366,13 @@ function sectorConfigToCalculatorConfig(sc: any) {
   };
 }
 
-/** Reject Arango rows whose pillar weightings don't match verified sectorConfig.ts. */
-function calculatorConfigHasValidPillars(config: ReturnType<typeof sectorConfigToCalculatorConfig>): boolean {
-  const pc = config.pillarConfigs;
-  if (!pc) return false;
-  const ownMax = pc.ownership?.maxPoints ?? 0;
-  const mcMax = pc.managementControl?.maxPoints ?? 0;
-  return (ownMax + mcMax) > 0 && (config.totalMaxPoints ?? 0) > 0;
-}
-
-function isStaleStoredSectorConfig(
-  sectorCode: string,
-  scorecardType: string,
-  dbConfig: ReturnType<typeof sectorConfigToCalculatorConfig>,
-): boolean {
-  if (!calculatorConfigHasValidPillars(dbConfig)) return true;
-  try {
-    const expected = sectorConfigToCalculatorConfig(getSectorConfig(sectorCode, scorecardType));
-    if (expected.totalMaxPoints !== dbConfig.totalMaxPoints) return true;
-    const expectedOwn = expected.pillarConfigs?.ownership?.maxPoints ?? 0;
-    const dbOwn = dbConfig.pillarConfigs?.ownership?.maxPoints ?? 0;
-    if (expectedOwn > 0 && expectedOwn !== dbOwn) return true;
-    const expectedMc = expected.pillarConfigs?.managementControl?.maxPoints ?? 0;
-    const dbMc = dbConfig.pillarConfigs?.managementControl?.maxPoints ?? 0;
-    if (expectedMc > 0 && expectedMc !== dbMc) return true;
-    const expectedGroup = expected.pillarConfigs?.skillsDevelopment?.chooseOneGroup;
-    const dbGroup = dbConfig.pillarConfigs?.skillsDevelopment?.chooseOneGroup;
-    if (expectedGroup && expectedGroup !== dbGroup) return true;
-    return false;
-  } catch {
-    return false;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // GET /api/scorecard/sector-config/:sectorCode/:scorecardType
 // Returns sector-specific calculator configuration in CalculatorConfig shape.
-// Primary source: ArangoDB sector_rules (seeded from verified sectorConfig.ts)
-// Fallback: Hardcoded sectorConfig.ts (if ArangoDB unavailable or stale)
+// Source: the verified sectorConfig.ts registry. This used to try ArangoDB
+// first, but sector_rules was empty everywhere, so the hardcoded branch was
+// the only one that ever answered.
 // ---------------------------------------------------------------------------
 router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
   try {
@@ -629,31 +382,6 @@ router.get('/sector-config/:sectorCode/:scorecardType', async (req: Request, res
       return res.status(400).json({ message: 'sectorCode and scorecardType are required' });
     }
 
-    // Primary: Try ArangoDB first (seeded with corrected values from sectorConfig.ts)
-    try {
-      const db = getArangoDB();
-      const cursor = await db.query(aql`
-        FOR sr IN ${db.collection(COLLECTIONS.sectorRules)}
-          FILTER sr.sectorCode == ${sectorCode.toUpperCase()}
-             AND sr.scorecardType == ${scorecardType}
-          SORT sr.updatedAt DESC
-          LIMIT 1
-          RETURN sr
-      `);
-      const rows = await cursor.all();
-
-      if (rows.length > 0 && rows[0]) {
-        const dbConfig = sectorConfigToCalculatorConfig(rows[0]);
-        if (!isStaleStoredSectorConfig(sectorCode, scorecardType, dbConfig)) {
-          return res.json({ success: true, config: dbConfig, source: 'arangodb' });
-        }
-        logger.warn('Stale Arango sector config — falling back to hardcoded', { sectorCode, scorecardType });
-      }
-    } catch (arangoErr) {
-      logger.warn('ArangoDB unavailable, falling back to hardcoded', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });
-    }
-
-    // Fallback: Use verified hardcoded sectorConfig.ts
     try {
       const fallbackConfig = getSectorConfig(sectorCode, scorecardType);
       const config = sectorConfigToCalculatorConfig(fallbackConfig);

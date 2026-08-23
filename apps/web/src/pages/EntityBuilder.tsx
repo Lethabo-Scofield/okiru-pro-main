@@ -241,7 +241,7 @@ export default function EntityBuilder() {
   const deleteTemplateFromRepo = async (id: number) => {
     const template = storedTemplates.find(t => t.id === id);
     try {
-      const res = await fetch(`/api/templates/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/entity-templates/${id}`, { method: "DELETE" });
       if (res.ok) {
         setStoredTemplates(prev => prev.filter(t => t.id !== id));
         if (selectedRepoTemplate?.id === id) setSelectedRepoTemplate(null);
@@ -366,7 +366,7 @@ export default function EntityBuilder() {
         positives: e.positives, negatives: e.negatives, zones: e.zones,
         keywords: e.keywords, pattern: e.pattern,
       }));
-      const res = await fetch(`/api/templates/${editingTemplateId}`, {
+      const res = await fetch(`/api/entity-templates/${editingTemplateId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -465,7 +465,7 @@ export default function EntityBuilder() {
         positives: e.positives, negatives: e.negatives, zones: e.zones,
         keywords: e.keywords, pattern: e.pattern,
       }));
-      const url = editingTemplateId ? `/api/templates/${editingTemplateId}` : "/api/templates";
+      const url = editingTemplateId ? `/api/entity-templates/${editingTemplateId}` : "/api/entity-templates";
       const method = editingTemplateId ? "PUT" : "POST";
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: projectName, description: `${entities.length} entities`, version: "1.0", entities: templateEntities }) });
       if (!res.ok) throw new Error("Failed to publish");
@@ -856,7 +856,7 @@ export default function EntityBuilder() {
               {!loadingTemplates && storedTemplates.length === 0 && (
                 <div className="text-center py-8">
                   <p className="text-[#636366] text-[12px]">No toolkit templates available</p>
-                  <p className="text-[#3a3a3c] text-[11px] mt-1">ArangoDB connection may be unavailable</p>
+                  <p className="text-[#3a3a3c] text-[11px] mt-1">Nothing has been saved here yet</p>
                 </div>
               )}
               <div className="space-y-2">

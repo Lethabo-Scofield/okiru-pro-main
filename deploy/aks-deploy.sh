@@ -214,7 +214,6 @@ apply_manifests() {
     # Generate and apply secrets
     log_info "Creating secrets..."
     MONGO_PASSWORD=$(openssl rand -base64 32)
-    ARANGO_PASSWORD=$(openssl rand -base64 32)
     REDIS_PASSWORD=$(openssl rand -base64 32)
     SESSION_SECRET=$(openssl rand -base64 64)
     JWT_SECRET=$(openssl rand -base64 64)
@@ -225,13 +224,6 @@ apply_manifests() {
         --from-literal=MONGO_INITDB_ROOT_PASSWORD="$MONGO_PASSWORD" \
         --from-literal=MONGODB_URI="mongodb://admin:${MONGO_PASSWORD}@mongodb:27017/okiru-pro?authSource=admin" \
         --from-literal=MONGODB_DB_NAME=okiru-pro \
-        --dry-run=client -o yaml | kubectl apply -f -
-    
-    kubectl create secret generic arangodb-credentials \
-        --namespace okiru-pro \
-        --from-literal=ARANGO_ROOT_PASSWORD="$ARANGO_PASSWORD" \
-        --from-literal=ARANGO_URL="http://root:${ARANGO_PASSWORD}@arangodb:8529" \
-        --from-literal=ARANGO_DB_NAME=okiru_pro \
         --dry-run=client -o yaml | kubectl apply -f -
     
     kubectl create secret generic redis-credentials \
@@ -259,17 +251,14 @@ apply_manifests() {
     kubectl apply -f deploy/k8s/02-storage-classes.yaml
     kubectl apply -f deploy/k8s/04-configmap.yaml
     kubectl apply -f deploy/k8s/05-pvc-mongodb.yaml
-    kubectl apply -f deploy/k8s/06-pvc-arangodb.yaml
     kubectl apply -f deploy/k8s/07-pvc-redis.yaml
     kubectl apply -f deploy/k8s/08-deployment-mongodb.yaml
-    kubectl apply -f deploy/k8s/09-deployment-arangodb.yaml
     kubectl apply -f deploy/k8s/10-deployment-redis.yaml
     kubectl apply -f deploy/k8s/14-services.yaml
     
     # Wait for databases
     log_info "Waiting for databases to be ready..."
     kubectl wait --for=condition=ready pod -l app=mongodb -n okiru-pro --timeout=300s || true
-    kubectl wait --for=condition=ready pod -l app=arangodb -n okiru-pro --timeout=300s || true
     kubectl wait --for=condition=ready pod -l app=redis -n okiru-pro --timeout=120s || true
     
     # Apply application deployments

@@ -43,10 +43,6 @@ const envSchema = z.object({
   // Databases — optional at boot (the app degrades gracefully when absent).
   MONGO_URI: z.string().optional(),
   MONGODB_URI: z.string().optional(),
-  ARANGO_URL: z.string().url().optional(),
-  ARANGO_DATABASE: z.string().optional(),
-  ARANGO_USERNAME: z.string().optional(),
-  ARANGO_PASSWORD: z.string().optional(),
 
   // Data layer provider toggle (mongo | inmemory | future…)
   DATA_PROVIDER: z.string().default("mongo"),

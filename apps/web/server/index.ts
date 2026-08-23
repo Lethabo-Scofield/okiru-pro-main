@@ -9,7 +9,6 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { connectDB } from "./db";
 import { createLogger, requestContext } from "./logger";
-import { connectArango } from "../../api/arango/connection.js";
 import crypto from 'crypto';
 
 const logger = createLogger("WebServer");
@@ -92,9 +91,6 @@ app.use((req, res, next) => {
   await connectDB();
   logger.info("Database connection step completed");
 
-  logger.debug("Connecting to ArangoDB...");
-  await connectArango();
-  logger.info("ArangoDB connection step completed");
 
   // Session must be mounted BEFORE the proxy so the proxy can read
   // req.session to forward the offline-demo identity to the API server.

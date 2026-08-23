@@ -87,31 +87,6 @@ spec:
                 secretKeyRef:
                   name: redis-credentials
                   key: REDIS_URL
-            - name: ARANGO_URL
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_URL
-            - name: ARANGO_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_PASSWORD
-            - name: ARANGO_DB
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_DB_NAME
-            - name: ARANGO_USER
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_USER
-            - name: ARANGO_VERIFY_SSL
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_VERIFY_SSL
             - name: JWT_SECRET
               valueFrom:
                 secretKeyRef:

@@ -89,7 +89,7 @@ fi
 
 echo ""
 echo "=== Deployment Status ==="
-DEPLOYMENTS=("api" "web" "compute" "mongodb" "arangodb" "redis")
+DEPLOYMENTS=("api" "web" "compute" "mongodb" "redis")
 for deploy in "${DEPLOYMENTS[@]}"; do
   if kubectl get deployment "$deploy" -n "$NAMESPACE" &> /dev/null; then
     AVAILABLE=$(kubectl get deployment "$deploy" -n "$NAMESPACE" -o jsonpath='{.status.availableReplicas}')
@@ -137,7 +137,7 @@ fi
 
 echo ""
 echo "=== Secrets Status ==="
-REQUIRED_SECRETS=("mongodb-credentials" "arangodb-credentials" "redis-credentials" "session-secrets")
+REQUIRED_SECRETS=("mongodb-credentials" "redis-credentials" "session-secrets")
 for secret in "${REQUIRED_SECRETS[@]}"; do
   if kubectl get secret "$secret" -n "$NAMESPACE" &> /dev/null; then
     check_pass "Secret '$secret' exists"

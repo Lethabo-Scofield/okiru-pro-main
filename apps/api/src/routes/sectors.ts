@@ -1,112 +1,53 @@
 /**
  * Sectors Routes
  *
- * Provides sector configurations from ArangoDB as the single source of truth.
- * Replaces hardcoded sector lists with dynamic data from the database.
+ * Sector configuration comes from `pipeline/sectorConfig.ts`, which is the
+ * single source of truth.
+ *
+ * It used to come from ArangoDB, with sectorConfig.ts as a fallback. The
+ * fallback was the only path that ever ran: `sector_rules` held zero documents
+ * in every environment, so every request logged "ArangoDB not connected,
+ * falling back to hardcoded sectors" and served the same registry these routes
+ * now read directly. The AQL queries, the connection guards and the `source`
+ * discriminator they returned are gone with it.
+ *
+ * `GET /:sectorCode/:scorecardType` previously 503'd whenever Arango was
+ * absent, which was always — it is now answered from the registry like the
+ * others, so it returns a config for the first time.
  */
 
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger.js';
-import { aql } from 'arangojs';
-import { getArangoDB, isArangoConnected } from '../../arango/connection.js';
 
 const logger = createLogger("Sectors");
-import { COLLECTIONS } from '../../arango/collections.js';
 import {
-  enrichSectorApiPayload,
+  getSectorConfigSafe,
   listSectorConfigs,
   listSectorConfigsFull,
 } from '../../pipeline/sectorConfig.js';
-import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 import { requireAuth } from '../middleware/requireAuth.js';
-import { requireSuperAdmin } from '../middleware/requireRole.js';
 
 const router = Router();
 
 // Sector config (weights, thresholds, options) is read by authenticated build
 // and toolkit flows only — never a public/marketing page. These reads had no
-// guard and were anonymously reachable via the /api catch-all. Baseline: any
-// logged-in user; POST /seed is elevated to super-admin below.
+// guard and were anonymously reachable via the /api catch-all.
 router.use(requireAuth);
 
 // ---------------------------------------------------------------------------
-// GET /api/sectors - List all available sectors from ArangoDB
+// GET /api/sectors - List all available sectors
 // ---------------------------------------------------------------------------
 router.get('/', async (_req: Request, res: Response) => {
   try {
-    // Check if ArangoDB is connected
-    if (!isArangoConnected()) {
-      logger.warn('ArangoDB not connected, falling back to hardcoded sectors');
-      const fallbackSectors = getFallbackSectors();
-      return res.json({
-        success: true,
-        source: 'fallback',
-        sectors: fallbackSectors,
-      });
-    }
-
-    const db = getArangoDB();
-    const repo = new SectorRuleRepository();
-
-    // Query sector rules from ArangoDB
-    const cursor = await db.query(aql`
-      FOR s IN ${db.collection(COLLECTIONS.sectorRules)}
-        SORT s.sectorCode, s.scorecardType
-        RETURN {
-          code: s.sectorCode,
-          name: s.sectorName,
-          type: s.scorecardType,
-          totalPoints: s.totalMaxPoints,
-          pillarConfigs: s.pillarConfigs,
-          targets: s.targets,
-          levelThresholds: s.levelThresholds,
-          indicators: s.indicators
-        }
-    `);
-
-    const sectors = (await cursor.all()).map(enrichSectorApiPayload);
-
-    // If no sectors found in ArangoDB, seed and retry
-    if (sectors.length === 0) {
-      logger.info('No sectors found in ArangoDB, seeding from hardcoded configs');
-      const { seedOntology } = await import('../../pipeline/seedOntology.js');
-      await seedOntology();
-
-      // Re-query after seeding
-      const retryCursor = await db.query(aql`
-        FOR s IN ${db.collection(COLLECTIONS.sectorRules)}
-          SORT s.sectorCode, s.scorecardType
-          RETURN {
-            code: s.sectorCode,
-            name: s.sectorName,
-            type: s.scorecardType,
-            totalPoints: s.totalMaxPoints,
-            pillarConfigs: s.pillarConfigs,
-            targets: s.targets,
-            levelThresholds: s.levelThresholds
-          }
-      `);
-      const seededSectors = (await retryCursor.all()).map(enrichSectorApiPayload);
-
-      return res.json({
-        success: true,
-        source: 'seeded',
-        sectors: seededSectors,
-      });
-    }
-
     return res.json({
       success: true,
-      source: 'arangodb',
-      sectors,
+      sectors: listSectorConfigsFull(),
     });
   } catch (error: unknown) {
     logger.error('Error fetching sectors', error);
-    const fallbackSectors = getFallbackSectors();
     return res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : 'Failed to fetch sectors',
-      sectors: fallbackSectors,
     });
   }
 });
@@ -116,92 +57,28 @@ router.get('/', async (_req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 router.get('/options', async (_req: Request, res: Response) => {
   try {
-    if (!isArangoConnected()) {
-      logger.warn('ArangoDB not connected, falling back to hardcoded options');
-      return res.json({
-        success: true,
-        source: 'fallback',
-        options: getFallbackSectorOptions(),
-      });
-    }
-
-    const db = getArangoDB();
-
-    // Query unique sector codes with their QSE availability
-    const cursor = await db.query(aql`
-      FOR s IN ${db.collection(COLLECTIONS.sectorRules)}
-        COLLECT code = s.sectorCode INTO types = s.scorecardType
-        SORT code
-        RETURN {
-          code: code,
-          name: FIRST(
-            FOR sr IN ${db.collection(COLLECTIONS.sectorRules)}
-              FILTER sr.sectorCode == code
-              RETURN sr.sectorName
-          ),
-          types: types,
-          hasQSE: 'QSE' IN types
-        }
-    `);
-
-    const sectorGroups = await cursor.all();
-
-    // Map to dropdown format — FSC exposes planned sub-sector variants as advisory hint
-    const options = sectorGroups.map(group => ({
-      value: group.code,
-      label: group.name || `${group.code} Sector Code`,
-      code: group.code,
-      hasQSE: group.hasQSE,
-      availableTypes: group.types,
-      ...(group.code === 'FSC'
-        ? { availableVariants: ['Banks', 'LongTermInsurers', 'ShortTermInsurers', 'Others'] as const }
-        : {}),
-    }));
-
     return res.json({
       success: true,
-      source: 'arangodb',
-      options,
+      options: getSectorOptions(),
     });
   } catch (error: unknown) {
     logger.error('Error fetching sector options', error);
-    // Respond 200 so browsers and SPA fetch() can read fallback `options` (do not rely on scraping 500 bodies).
-    return res.status(200).json({
-      success: true,
-      source: 'fallback_after_error',
-      warning: error instanceof Error ? error.message : 'Failed to fetch sector options',
-      options: getFallbackSectorOptions(),
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch sector options',
     });
   }
 });
 
 // ---------------------------------------------------------------------------
-// GET /api/sectors/:sectorCode/:scorecardType - Get specific sector config
+// GET /api/sectors/:sectorCode/:scorecardType - Get one sector's config
 // ---------------------------------------------------------------------------
 router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) => {
   try {
     const sectorCode = Array.isArray(req.params.sectorCode) ? req.params.sectorCode[0] : req.params.sectorCode;
     const scorecardType = Array.isArray(req.params.scorecardType) ? req.params.scorecardType[0] : req.params.scorecardType;
 
-    if (!isArangoConnected()) {
-      return res.status(503).json({
-        success: false,
-        error: 'ArangoDB not connected',
-      });
-    }
-
-    const db = getArangoDB();
-
-    const cursor = await db.query(aql`
-      FOR s IN ${db.collection(COLLECTIONS.sectorRules)}
-        FILTER s.sectorCode == ${sectorCode.toUpperCase()}
-           AND s.scorecardType == ${scorecardType}
-        LIMIT 1
-        RETURN s
-    `);
-
-    const config = await cursor.next();
-
+    const config = getSectorConfigSafe(sectorCode.toUpperCase(), scorecardType);
     if (!config) {
       return res.status(404).json({
         success: false,
@@ -209,10 +86,7 @@ router.get('/:sectorCode/:scorecardType', async (req: Request, res: Response) =>
       });
     }
 
-    return res.json({
-      success: true,
-      config,
-    });
+    return res.json({ success: true, config });
   } catch (error: unknown) {
     logger.error('Error fetching sector config', error);
     return res.status(500).json({
@@ -247,49 +121,16 @@ router.get('/:sectorCode/manifest', async (req: Request, res: Response) => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// POST /api/sectors/seed - Seed sectors from hardcoded configs (super-admin only)
-// ---------------------------------------------------------------------------
-// Destructive: force-reseeds the entire sector ontology, overwriting live
-// configs. The comment always said "admin only" but nothing enforced it — it
-// was anonymously callable. Only the SuperAdmin console triggers this.
-router.post('/seed', requireSuperAdmin, async (_req: Request, res: Response) => {
-  try {
-    const { seedOntology } = await import('../../pipeline/seedOntology.js');
-    const result = await seedOntology({ force: true });
-
-    return res.json({
-      success: true,
-      message: 'Sectors seeded successfully',
-      result: {
-        totalSectors: result.totalSectors,
-        totalCriteria: result.totalCriteria,
-        totalEntityFields: result.totalEntityFields,
-      },
-    });
-  } catch (error: unknown) {
-    logger.error('Error seeding sectors', error);
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to seed sectors',
-    });
-  }
-});
+// NOTE: POST /seed is gone. It force-reseeded the ArangoDB sector ontology from
+// these same hardcoded configs — copying the source of truth into a store
+// nothing read.
 
 // ---------------------------------------------------------------------------
-// Fallback helpers — derived from `sectorConfig.ts` (single source of truth).
-//
-// Both the ArangoDB-backed code paths above and these fallbacks read from the
-// same `listSectorConfigs()` registry, which guarantees no duplicate or
-// drifting sector entries between the two paths. Adding a new sector to
-// `ALL_CONFIGS` in sectorConfig.ts automatically surfaces it here too.
+// Dropdown options, derived from the `sectorConfig.ts` registry. Adding a
+// sector to ALL_CONFIGS there surfaces it here automatically.
 // ---------------------------------------------------------------------------
 
-function getFallbackSectors() {
-  return listSectorConfigsFull();
-}
-
-function getFallbackSectorOptions() {
+function getSectorOptions() {
   // Group registry rows by sectorCode → dropdown option with availableTypes.
   const grouped = new Map<string, { code: string; name: string; types: string[] }>();
   for (const c of listSectorConfigs()) {

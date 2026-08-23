@@ -17,22 +17,6 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: arangodb
-  labels:
-    app: arangodb
-    component: database
-spec:
-  type: ClusterIP
-  selector:
-    app: arangodb
-  ports:
-    - port: 8529
-      targetPort: 8529
-      name: arangodb
----
-apiVersion: v1
-kind: Service
-metadata:
   name: redis
   labels:
     app: redis

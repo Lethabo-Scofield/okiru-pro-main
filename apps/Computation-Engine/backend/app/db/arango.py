@@ -94,8 +94,11 @@ class _InMemoryDB:
 
 
 def _init_arango_client():
-    if settings.ALLOW_IN_MEMORY_DB:
-        logger.warning("Using in-memory database (ALLOW_IN_MEMORY_DB=1). Data will NOT persist.")
+    if settings.use_in_memory_db:
+        logger.warning(
+            "No ARANGO_URL configured — using the in-memory store. Compiled models "
+            "will NOT survive a restart. Set ARANGO_URL to persist them."
+        )
         mem_db = _InMemoryDB()
         required_collections = {
             "scorecard_models": False,

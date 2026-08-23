@@ -18,10 +18,6 @@ if env_file.exists():
     load_dotenv(env_file)
 
 # Set defaults if not already set
-os.environ.setdefault('ARANGO_URL', 'http://127.0.0.1:8529')
-os.environ.setdefault('ARANGO_USER', 'root')
-os.environ.setdefault('ARANGO_PASSWORD', 'Okiru123!')
-os.environ.setdefault('ARANGO_DB', 'bbbee_db')
 os.environ.setdefault('REDIS_URL', 'redis://localhost:6379')
 
 import uvicorn

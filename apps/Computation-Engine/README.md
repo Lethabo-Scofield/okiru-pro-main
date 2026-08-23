@@ -95,10 +95,10 @@ Edit `.env` to customize:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ARANGO_URL` | `http://127.0.0.1:8529` | ArangoDB server URL |
-| `ARANGO_USER` | `root` | ArangoDB username |
-| `ARANGO_PASSWORD` | `Okiru123!` | ArangoDB password |
-| `ARANGO_DB` | `okiru` | ArangoDB database name |
+| `ARANGO_URL` | *(empty)* | ArangoDB server URL. **Optional** — leave empty to run on the in-memory store. ArangoDB was retired from the deployed stack; set this only if you want compiled models to persist. |
+| `ARANGO_USER` | `root` | ArangoDB username (only when `ARANGO_URL` is set) |
+| `ARANGO_PASSWORD` | *(empty)* | ArangoDB password (only when `ARANGO_URL` is set) |
+| `ARANGO_DB` | `bbbee_db` | ArangoDB database name (only when `ARANGO_URL` is set) |
 | `REDIS_URL` | `redis://localhost:6379` | Redis connection URL |
 | `API_HOST` | `127.0.0.1` | API server host |
 | `API_PORT` | `8000` | API server port |

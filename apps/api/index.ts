@@ -8,8 +8,6 @@ import cors from "cors";
 import { registerRoutes } from "./routes.js";
 import { createServer } from "http";
 import { connectDB } from "./db.js";
-import { connectArango, ensureCollections } from "./arango/index.js";
-import { seedOntology } from "./pipeline/seedOntology.js";
 import { createLogger, requestContext } from "./src/logger.js";
 import { ensureSearchIndex } from "./src/services/mongoSearch.js";
 import { runCertificateStartupExtraction } from "./src/services/certificateStartupExtraction.js";
@@ -108,31 +106,6 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     logger.warn("Failed to ensure search indexes (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
   }
 
-  logger.debug("Connecting to ArangoDB...");
-  const arangoDB = await connectArango();
-  if (arangoDB) {
-    logger.info("ArangoDB connected — ensuring collections...");
-    await ensureCollections();
-  } else {
-    logger.warn("Skipping ArangoDB collection setup — not connected");
-  }
-
-  if (arangoDB) {
-    seedOntology().then(summary => {
-      if (summary.totalCriteria > 0) {
-        logger.info("Ontology seeded", {
-          sectors: summary.totalSectors,
-          criteria: summary.totalCriteria,
-          fields: summary.totalEntityFields,
-          durationMs: summary.durationMs,
-        });
-      }
-    }).catch(err => {
-      logger.warn("Ontology seeding failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) });
-    });
-  } else {
-    logger.warn("Skipping ontology seeding — ArangoDB not connected");
-  }
 
   logger.debug("Registering routes...");
   await registerRoutes(httpServer, app);

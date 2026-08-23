@@ -34,7 +34,6 @@ import type {
 } from '../extraction/entityManifest.js';
 import type { SectorConfig } from '../sectorConfig.js';
 import { getSectorConfig } from '../sectorConfig.js';
-import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 import {
   calculateAllPillars,
   type PillarScore,
@@ -182,7 +181,7 @@ export interface OntologySnapshot {
   calculatedAt: string;
   sectorCode: string;
   scorecardType: string;
-  configSource: 'arango' | 'hardcoded';
+  configSource: 'hardcoded';
 
   sectorConfig: {
     pillarConfigs: Record<string, { maxPoints: number; hasSubMinimum: boolean; subMinimumPercent: number }>;
@@ -222,7 +221,7 @@ export interface CalculationContext {
   assessmentId: string;
   manifest: EntityManifest;
   sectorConfig: SectorConfig;
-  configSource: 'arango' | 'hardcoded';
+  configSource: 'hardcoded';
   entityValues: Map<string, EntityValue>;
   crossPillarValues: Map<string, number>; // NPAT, TMPS, leviableAmount, etc.
   employees: EmployeeInput[];
@@ -1245,7 +1244,7 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
   const { buildManifest } = await import('../extraction/entityManifest.js');
   const manifest = await buildManifest(options.sectorCode, options.scorecardType);
   
-  const { config: sectorConfig, source: configSource } = await resolveSectorConfig(
+  const { config: sectorConfig, source: configSource } = resolveSectorConfig(
     options.sectorCode, options.scorecardType
   );
 
@@ -1283,114 +1282,22 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
 }
 
 // ---------------------------------------------------------------------------
-// Sector Config Resolution — ArangoDB first, fallback to hardcoded
+// Sector Config Resolution
 // ---------------------------------------------------------------------------
 
 /**
- * Convert StoredSectorRule from ArangoDB to SectorConfig interface.
+ * Resolve a sector's config.
+ *
+ * This used to try ArangoDB first and fall back to the hardcoded configs. The
+ * Arango branch never ran: sector_rules held zero documents in every
+ * environment, so every call took the catch and returned the hardcoded config.
+ * The `source` field is kept on the result because the ontology snapshot
+ * reports it, and it now says the only thing that was ever true.
  */
-function storedRuleToSectorConfig(stored: import('../../arango/repositories/sectorRuleRepository.js').StoredSectorRule): SectorConfig {
-  // Defaults are intentionally empty — every pillar MUST come from ArangoDB.
-  // These only apply for any pillar code not present in stored.pillarConfigs.
-  const pillarConfigs: SectorConfig['pillarConfigs'] = {
-    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-  };
-  
-  for (const spc of stored.pillarConfigs) {
-    const keyMap: Record<string, keyof SectorConfig['pillarConfigs']> = {
-      'ownership': 'ownership',
-      'managementControl': 'managementControl',
-      'employmentEquity': 'employmentEquity',
-      'skillsDevelopment': 'skillsDevelopment',
-      'preferentialProcurement': 'preferentialProcurement',
-      'supplierDevelopment': 'supplierDevelopment',
-      'enterpriseDevelopment': 'enterpriseDevelopment',
-      'socioEconomicDevelopment': 'socioEconomicDevelopment',
-      'yesInitiative': 'yesInitiative',
-    };
-    const key = keyMap[spc.code];
-    if (key) {
-      pillarConfigs[key] = {
-        maxPoints: spc.maxPoints,
-        hasSubMinimum: spc.hasSubMinimum,
-        subMinimumPercent: spc.subMinimumThreshold,
-      };
-    }
-  }
-  
-  const targets = stored.targets as SectorConfig['targets'];
-  
-  // Use the verified totalMaxPoints from ArangoDB (source of truth from Excel).
-  // YES Initiative is a level boost, not scored points, so we exclude it from the sum.
-  const NON_SCORING_KEYS = ['yesInitiative', 'employmentEquity'];
-  const computedTotal = Object.entries(pillarConfigs)
-    .filter(([key]) => !NON_SCORING_KEYS.includes(key) || (key === 'employmentEquity' && pillarConfigs.employmentEquity?.maxPoints))
-    .reduce((sum, [, pc]) => sum + pc.maxPoints, 0);
-  const totalMaxPoints = stored.totalMaxPoints || computedTotal;
-  
-  return {
-    sectorCode: stored.sectorCode,
-    sectorName: stored.sectorName,
-    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME',
-    totalMaxPoints,
-    pillarConfigs,
-    targets,
-    levelThresholds: stored.levelThresholds.map(lt => ({
-      level: lt.level,
-      minPoints: lt.minPoints,
-      recognition: lt.recognition,
-    })),
-    recognitionTable: stored.recognitionTable?.map(rt => ({
-      beeLevel: rt.beeLevel,
-      recognitionPercent: rt.recognitionPercent,
-      multiplier: rt.multiplier,
-    })) ?? [],
-    benefitFactors: stored.benefitFactors?.map(bf => ({
-      contributionType: bf.contributionType,
-      sdFactor: bf.sdFactor,
-      edFactor: bf.edFactor,
-    })) ?? [],
-    categoryWeightings: stored.categoryWeightings?.map(cw => ({
-      code: cw.code,
-      name: cw.name,
-      weighting: cw.weighting,
-      cap: cw.cap,
-    })) ?? [],
-    industryNorms: stored.industryNorms?.map(ind => ({
-      industry: ind.industry,
-      normPercent: ind.normPercent,
-      quarterThresholdPercent: ind.quarterThresholdPercent,
-    })) ?? [],
-  };
-}
-
-/**
- * Resolve sector config from ArangoDB or fallback to hardcoded.
- * Returns both the config and its source for ontology tracking.
- */
-async function resolveSectorConfig(
+function resolveSectorConfig(
   sectorCode: string,
   scorecardType: string
-): Promise<{ config: SectorConfig; source: 'arango' | 'hardcoded' }> {
-  const repo = new SectorRuleRepository();
-  
-  try {
-    const stored = await repo.getSectorRule(sectorCode, scorecardType);
-    if (stored) {
-      return { config: storedRuleToSectorConfig(stored), source: 'arango' };
-    }
-  } catch (err) {
-    // ArangoDB query failed, fall through to hardcoded config
-  }
-  
+): { config: SectorConfig; source: 'hardcoded' } {
   return { config: getSectorConfig(sectorCode, scorecardType), source: 'hardcoded' };
 }
 
@@ -1427,7 +1334,7 @@ function toPillarResult(code: string, name: string, score: PillarScore): PillarR
 export async function calculateScorecard(
   options: CalculationOptions
 ): Promise<ScorecardResult> {
-  const { config: sectorConfig, source: configSource } = await resolveSectorConfig(
+  const { config: sectorConfig, source: configSource } = resolveSectorConfig(
     options.sectorCode, options.scorecardType
   );
 

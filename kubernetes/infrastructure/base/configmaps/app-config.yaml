@@ -29,9 +29,6 @@ data:
   MONGODB_PORT: "27017"
   MONGODB_OPTIONS: "retryWrites=true&w=majority"
 
-  ARANGO_HOST: "arangodb"
-  ARANGO_PORT: "8529"
-
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
   REDIS_DB: "0"
