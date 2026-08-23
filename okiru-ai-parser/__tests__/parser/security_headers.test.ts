@@ -88,12 +88,25 @@ describe('CORS on the wire', () => {
 });
 
 describe('security headers', () => {
-  it('sends a content-security-policy that allows nothing by default', async () => {
+  it('sends a content-security-policy that allows nothing at all', async () => {
     const res = await request(appWith({ NODE_ENV: 'production' } as NodeJS.ProcessEnv)).get('/health');
     const csp = res.headers['content-security-policy'];
     expect(csp).toBeDefined();
     expect(csp).toContain("default-src 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).toContain("base-uri 'none'");
+    expect(csp).toContain("form-action 'none'");
+  });
+
+  it('does not let helmet merge its page-oriented defaults back in', async () => {
+    // The first deploy of this header shipped with helmet's defaults merged
+    // over the four directives, so the policy still carried `script-src 'self'`
+    // and a style-src with 'unsafe-inline' on a service that renders nothing.
+    const res = await request(appWith({ NODE_ENV: 'production' } as NodeJS.ProcessEnv)).get('/health');
+    const csp = res.headers['content-security-policy'];
+    expect(csp).not.toContain('unsafe-inline');
+    expect(csp).not.toContain("script-src 'self'");
+    expect(csp).not.toContain('upgrade-insecure-requests');
   });
 
   it('keeps the rest of helmet on', async () => {

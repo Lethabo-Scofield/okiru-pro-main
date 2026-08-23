@@ -48,6 +48,12 @@ export function resolveCorsOrigin(
 export function parserHelmetOptions(): HelmetOptions {
   return {
     contentSecurityPolicy: {
+      // Without this, helmet MERGES its defaults over the directives below and
+      // the served policy carries `script-src 'self'` and a `style-src` with
+      // 'unsafe-inline' — sensible for an app that renders pages, but it means
+      // the header no longer says what this one is here to say. Exactly four
+      // directives, all of them denials, so the policy is auditable at a glance.
+      useDefaults: false,
       directives: {
         defaultSrc: ["'none'"],
         frameAncestors: ["'none'"],
