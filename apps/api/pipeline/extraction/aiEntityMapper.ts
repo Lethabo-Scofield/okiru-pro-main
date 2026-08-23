@@ -217,15 +217,28 @@ function normalizeContributions(raw: any[]): ContributionInput[] {
     else if (rawCat.includes('sd')) category = 'sd';
     else if (rawCat.includes('ed')) category = 'ed';
 
-    const contribType = String(c.type || c.contributionType || 'direct_cost').toLowerCase()
-      .replace(/\s+/g, '_');
+    // Three inventions used to live here, and each one flattered the score:
+    //   - a missing type became 'direct_cost', whose benefit factor is 1.0;
+    //   - a missing benefit factor became 1.0 outright;
+    //   - a missing beneficiary became the word "Beneficiary".
+    // Extraction rarely carries an explicit benefitFactor, so that middle
+    // default was the common case, not the edge case. Absent data is now
+    // absent: the type stays unclassified and scores nothing until someone
+    // classifies it, the factor is left for the sector's own table to supply,
+    // and a nameless row stays nameless rather than acquiring a placeholder
+    // that reads like a real beneficiary.
+    const rawType = String(c.type || c.contributionType || '').toLowerCase().replace(/\s+/g, '_');
+    const contribType = rawType || 'unclassified';
+    const rawFactor = c.benefitFactor ?? c.benefit_factor;
 
     return {
-      beneficiary: c.beneficiary || c.name || 'Beneficiary',
+      beneficiary: c.beneficiary || c.name || '',
       type: contribType,
       amount: normalizeNumber(c.amount || c.value || 0),
       category,
-      benefitFactor: normalizeNumber(c.benefitFactor || c.benefit_factor || 1.0),
+      ...(rawFactor === undefined || rawFactor === null
+        ? {}
+        : { benefitFactor: normalizeNumber(rawFactor) }),
     };
   });
 }

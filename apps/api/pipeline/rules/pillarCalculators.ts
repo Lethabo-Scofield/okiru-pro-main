@@ -879,11 +879,15 @@ function calcEsd(
   const factors = buildBenefitLookup(cfg);
   let sdSpend = 0, edSpend = 0;
   for (const c of contributions) {
+    // An unrecognised contribution type contributes NOTHING. This used to
+    // fall through to 1.0 - full recognition - so a misread type was not
+    // flagged, it was rewarded. A guarantees row carries 0.03; the same row
+    // misread scored 1.0, a 33x overstatement.
     if (c.category === 'sd') {
-      const factor = factors.sd[c.type] ?? c.benefitFactor ?? 1.0;
+      const factor = factors.sd[c.type] ?? c.benefitFactor ?? 0;
       sdSpend += c.amount * factor;
     } else if (c.category === 'ed') {
-      const factor = factors.ed[c.type] ?? c.benefitFactor ?? 1.0;
+      const factor = factors.ed[c.type] ?? c.benefitFactor ?? 0;
       edSpend += c.amount * factor;
     }
   }
@@ -914,7 +918,8 @@ function calcSed(contributions: ContributionInput[], npat: number, cfg: SectorCo
   let totalSpend = 0;
   for (const c of contributions) {
     if (c.category !== 'sed') continue;
-    const factor = DEFAULT_BENEFIT_FACTORS_SED[c.type] ?? c.benefitFactor ?? 1.0;
+    // Unrecognised type -> no recognition. See the SD/ED note above.
+    const factor = DEFAULT_BENEFIT_FACTORS_SED[c.type] ?? c.benefitFactor ?? 0;
     totalSpend += c.amount * factor;
   }
 

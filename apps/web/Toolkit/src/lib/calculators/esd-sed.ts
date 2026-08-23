@@ -62,6 +62,13 @@ export interface EsdSubLine {
 }
 
 export interface EsdResult {
+  /**
+   * Contribution types we could not recognise, and the rand value excluded
+   * because of them. Nothing is scored from these — a reviewer has to say what
+   * the rows actually are. Empty on a clean case.
+   */
+  unrecognisedTypes: string[];
+  excludedSpend: number;
   supplierDev: number;
   enterpriseDev: number;
   graduationBonus: number;
@@ -84,6 +91,13 @@ export interface EsdResult {
 }
 
 export interface SedResult {
+  /**
+   * Contribution types we could not recognise, and the rand value excluded
+   * because of them. Nothing is scored from these — a reviewer has to say what
+   * the rows actually are. Empty on a clean case.
+   */
+  unrecognisedTypes: string[];
+  excludedSpend: number;
   total: number;
   subMinimumMet: boolean;
   actualSpend: number;
@@ -91,6 +105,32 @@ export interface SedResult {
   rawStats: {
     spendSED: number;
   };
+}
+
+/**
+ * The benefit factor for one contribution — or nothing, when we do not know.
+ *
+ * This used to be `factors[c.type] ?? 1.0`: a contribution whose type we did
+ * not recognise was recognised at ONE HUNDRED PERCENT. Upstream made that
+ * routine rather than rare — `mapContributionType` fell through to
+ * "direct_cost" for any unmatched string — so a misread type did not get
+ * flagged, it got full marks. A `guarantees` row carries a factor of 0.03; the
+ * same row misread scored 1.0, a 33x overstatement, and on an elective
+ * best-four-of-seven scorecard the inflated pillar is exactly the one that gets
+ * elected.
+ *
+ * An unrecognised type now contributes NOTHING and is reported, so the number
+ * moves only when a human says what the row actually is.
+ */
+export function benefitFactorFor(
+  type: string | undefined,
+  factors: Record<string, number>,
+): { factor: number; recognised: boolean } {
+  const key = (type ?? '').trim();
+  if (key && Object.prototype.hasOwnProperty.call(factors, key)) {
+    return { factor: factors[key], recognised: true };
+  }
+  return { factor: 0, recognised: false };
 }
 
 function buildBenefitFactors(
@@ -109,19 +149,26 @@ function buildBenefitFactors(
 function categorizeContributions(
   contributions: Contribution[],
   benefitFactors: Record<string, number>,
-): { sdSpend: number; edSpend: number } {
+): { sdSpend: number; edSpend: number; unrecognisedTypes: string[]; excludedSpend: number } {
   let sdSpend = 0;
   let edSpend = 0;
+  const unrecognisedTypes = new Set<string>();
+  let excludedSpend = 0;
 
   for (const c of contributions) {
-    const factor = benefitFactors[c.type] ?? 1.0;
-    const recognised = c.amount * factor;
+    const { factor, recognised } = benefitFactorFor(c.type, benefitFactors);
+    if (!recognised) {
+      unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
+      excludedSpend += c.amount;
+      continue;
+    }
+    const value = c.amount * factor;
 
-    if (c.category === 'supplier_development') sdSpend += recognised;
-    else if (c.category === 'enterprise_development') edSpend += recognised;
+    if (c.category === 'supplier_development') sdSpend += value;
+    else if (c.category === 'enterprise_development') edSpend += value;
   }
 
-  return { sdSpend, edSpend };
+  return { sdSpend, edSpend, unrecognisedTypes: Array.from(unrecognisedTypes), excludedSpend };
 }
 
 /**
@@ -186,7 +233,7 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
   const edTarget = npat * enterpriseDevTargetPct;
 
   const esdFactors = buildBenefitFactors('esd', config);
-  const { sdSpend, edSpend } = categorizeContributions(contributions, esdFactors);
+  const { sdSpend, edSpend, unrecognisedTypes, excludedSpend } = categorizeContributions(contributions, esdFactors);
 
   const sdScore = safeRatio(sdSpend, sdTarget, supplierDevMax);
   const edScore = safeRatio(edSpend, edTarget, enterpriseDevMax);
@@ -284,6 +331,8 @@ export function calculateEsdScore(data: ESDData, npat: number, config?: Calculat
     jobsCreatedBonus: round2(jobsCreatedBonusScore),
     stockbrokerBonus: round2(stockbrokerBonusScore),
     sdTotal: round2(sdTotal),
+    unrecognisedTypes,
+    excludedSpend: round2(excludedSpend),
     edTotal: round2(edTotal),
     total: round2(sdTotal + edTotal),
     sdSubMinimumMet,
@@ -319,8 +368,15 @@ export function calculateSedScore(
   const npatTargetPct = sc.npatTarget ?? SED_DEFAULTS.npatTarget;
 
   const sedFactors = buildBenefitFactors('sed', config);
+  const unrecognisedTypes = new Set<string>();
+  let excludedSpend = 0;
   const rowSpend = contributions.reduce((acc, c) => {
-    const factor = sedFactors[c.type] ?? 1.0;
+    const { factor, recognised } = benefitFactorFor(c.type, sedFactors);
+    if (!recognised) {
+      unrecognisedTypes.add((c.type ?? '').trim() || '(blank)');
+      excludedSpend += c.amount;
+      return acc;
+    }
     return acc + c.amount * factor;
   }, 0);
 
@@ -364,6 +420,8 @@ export function calculateSedScore(
   const total = round2(clampScore(score, maxPoints));
 
   return {
+    unrecognisedTypes: Array.from(unrecognisedTypes),
+    excludedSpend: round2(excludedSpend),
     total,
     subMinimumMet: true,
     actualSpend: round2(totalSpend),

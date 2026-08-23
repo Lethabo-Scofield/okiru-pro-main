@@ -899,8 +899,13 @@ function mapContributionType(raw: string): string {
   if (t.includes("professional")) return "professional_services_free";
   if (t.includes("human") || t.includes("employee_time")) return "employee_time";
   if (t.includes("direct")) return "direct_cost";
-  // "Other Monetary" / fallback Î“Ã‡Ã¶ Lake fixture uses this for direct-cost SD/ED
-  return "direct_cost";
+  // "Other monetary" is a genuine direct cost, so it keeps its factor.
+  if (t.includes("other") && t.includes("monetary")) return "direct_cost";
+  // Everything else ABSTAINS. This used to return "direct_cost" for any
+  // unmatched string, and direct_cost is recognised at 100%, so a type we
+  // could not read was not flagged - it was scored in full. That fallback was
+  // chosen to make a fixture pass, then applied to every real client upload.
+  return "unclassified";
 }
 
 function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
