@@ -171,6 +171,13 @@ interface SectorOption {
   code: string;
   label: string;
   subSectors?: Array<{ value: string; label: string }>;
+  /**
+   * The sector scores, but some part of its scorecard was applied by analogy
+   * rather than transcribed from the gazette. Surfaced next to the Build
+   * button, never left implicit.
+   */
+  provisional?: boolean;
+  provisionalNote?: string;
 }
 
 interface ExpectedDocsCatalog {
@@ -2252,7 +2259,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <p className="mb-2 text-[12px] text-[#8e8e93]" data-testid="scoring-as-line">
                 Scoring as:{" "}
                 <span className="text-emerald-300/90 font-medium">
-                  {sectorOptions.find((s) => s.code === sector)?.label ?? sector}
+                  {activeSector?.label ?? sector}
                   {subSector ? ` · ${subSector}` : ""} · {sizeOptions.find((o) => o.value === size)?.label ?? size}
                 </span>
               </p>
@@ -2260,6 +2267,20 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <p className="mb-2 text-[12px] text-amber-300/90" data-testid="scoring-as-line">
                 Choose your sector and organisation size in the Company profile panel — they decide
                 which scorecard rules your documents are scored against.
+              </p>
+            )}
+            {/* A sector whose ladder was applied by analogy rather than
+                transcribed says so HERE, next to the button that builds the
+                scorecard — not in a footnote. A level nobody flagged is a level
+                someone will certify. */}
+            {activeSector?.provisional && (
+              <p
+                className="mb-2.5 flex items-start gap-1.5 rounded-lg px-3 py-2 text-[11.5px] leading-5 text-amber-200/80"
+                style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.2)" }}
+                data-testid="sector-provisional-note"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span>{activeSector.provisionalNote}</span>
               </p>
             )}
             <input
