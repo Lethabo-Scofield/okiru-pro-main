@@ -207,7 +207,9 @@ function normalizeSuppliers(raw: any[]): SupplierInput[] {
 
 function normalizeContributions(raw: any[]): ContributionInput[] {
   return raw.map(c => {
-    let category: 'sd' | 'ed' | 'sed' = 'ed';
+    // Unknown stays unknown. 'ed' as the default meant an uncategorised row
+    // scored as Enterprise Development on a guess.
+    let category: 'sd' | 'ed' | 'sed' | 'unclassified' = 'unclassified';
     const rawCat = String(c.category || '').toLowerCase();
     if (rawCat === 'sd' || rawCat === 'supplier_development' || rawCat.includes('supplier dev')) category = 'sd';
     else if (rawCat === 'sed' || rawCat === 'socio_economic' || rawCat.includes('socio')) category = 'sed';

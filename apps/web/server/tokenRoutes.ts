@@ -22,6 +22,7 @@ import {
   TOKENS_PER_CENT,
   centsToTokens,
   creditTokens,
+  walletIsDurable,
   debitTokens,
   ensureWallet,
   listLedger,
@@ -240,6 +241,17 @@ export function registerTokenRoutes(app: Express): void {
           alreadyAuthorized: false,
           free: true,
           balance: (await ensureWallet(orgId)).balance,
+        });
+      }
+
+      // Fail CLOSED while the wallet's database is away. The old behaviour
+      // fell through to an in-memory wallet seeded with the free grant — Mongo
+      // going down made extraction free and lost the ledger. Nothing is
+      // charged and nothing is settled until the wallet is durable again.
+      if (process.env.NODE_ENV === "production" && !walletIsDurable()) {
+        return res.status(503).json({
+          message: "The token wallet is temporarily unavailable — nothing was charged. Try again in a minute.",
+          code: "WALLET_UNAVAILABLE",
         });
       }
 

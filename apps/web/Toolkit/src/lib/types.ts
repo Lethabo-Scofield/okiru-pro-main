@@ -387,7 +387,9 @@ export interface Contribution {
   type: SEDContributionType | ESDContributionType;
   
   amount: number;
-  category: 'supplier_development' | 'enterprise_development' | 'socio_economic';
+  // 'unclassified' scores nothing and is flagged by the calculator — it exists
+  // so an unknown SD-vs-ED split is reported instead of guessed.
+  category: 'supplier_development' | 'enterprise_development' | 'socio_economic' | 'unclassified';
   
   // NEW: For SED weighting
   blackBenefitPercent?: number;          // 0-100%, critical for SED scoring

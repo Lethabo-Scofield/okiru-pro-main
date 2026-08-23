@@ -166,6 +166,14 @@ function categorizeContributions(
 
     if (c.category === 'supplier_development') sdSpend += value;
     else if (c.category === 'enterprise_development') edSpend += value;
+    else {
+      // The row is an ESD contribution, but nobody has said whether it is
+      // Supplier or Enterprise Development — and the split decides a
+      // sub-minimum, so it may not be guessed. Excluded and reported.
+      const rawCategory = String(c.category ?? '').trim();
+      unrecognisedTypes.add(rawCategory ? 'category "' + rawCategory + '"' : 'category (blank)');
+      excludedSpend += c.amount;
+    }
   }
 
   return { sdSpend, edSpend, unrecognisedTypes: Array.from(unrecognisedTypes), excludedSpend };

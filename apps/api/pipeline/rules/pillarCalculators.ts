@@ -83,7 +83,12 @@ export interface ContributionInput {
   beneficiary: string;
   type: string;
   amount: number;
-  category: 'sd' | 'ed' | 'sed';
+  /**
+   * 'unclassified' is counted by NO pillar — the SD/ED/SED loops skip it.
+   * Upstream used to default an unknown category to 'ed', so a row whose
+   * SD-vs-ED split nobody stated quietly scored as Enterprise Development.
+   */
+  category: 'sd' | 'ed' | 'sed' | 'unclassified';
   benefitFactor?: number;
 }
 

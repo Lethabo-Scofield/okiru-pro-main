@@ -908,12 +908,15 @@ function mapContributionType(raw: string): string {
   return "unclassified";
 }
 
-function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
+function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" | "unclassified" {
   const t = (raw ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
   if (t === "ed" || t.startsWith("enterprise") || t.includes("enterprise development")) return "enterprise_development";
   if (t === "sd" || t.startsWith("supplier")) return "supplier_development";
-  // Lake Trading Fix Plan §1 Bug 4: safe default → counts toward SD sub-min
-  return "supplier_development";
+  // Unknown used to default to supplier_development — "counts toward SD
+  // sub-min" — which decided a compliance sub-minimum on a guess. Unknown now
+  // stays unclassified: the calculator excludes it AND flags it, and the
+  // workbook's category dropdown is where a person settles it.
+  return "unclassified";
 }
 
 // Lake Trading Fix Plan â”¬Âº1 Bug 3 + 7: supplier size Î“Ã¥Ã† enterpriseType + unit normalisation

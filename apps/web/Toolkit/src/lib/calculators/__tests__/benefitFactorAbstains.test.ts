@@ -90,6 +90,23 @@ describe("SED scoring", () => {
 });
 
 describe("ESD scoring", () => {
+  it("excludes a contribution whose SD-vs-ED split is unknown, and says so", () => {
+    // The split decides a sub-minimum. It used to default to supplier
+    // development — a compliance verdict decided by a guess.
+    const result = calculateEsdScore(
+      {
+        contributions: [
+          { beneficiary: "Acme", type: "grant", amount: 500_000, category: "unclassified" },
+        ],
+      } as never,
+      NPAT,
+    );
+    expect(result.sdSpend).toBe(0);
+    expect(result.edSpend).toBe(0);
+    expect(result.excludedSpend).toBe(500_000);
+    expect(result.unrecognisedTypes.join(" ")).toContain("category");
+  });
+
   it("excludes an unrecognised type from supplier development", () => {
     const result = calculateEsdScore(
       {

@@ -314,6 +314,12 @@ export default function SED() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {score.excludedSpend > 0 && (
+            <div className="mb-4 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200" data-testid="sed-excluded-note">
+              R{score.excludedSpend.toLocaleString("en-ZA")} of SED contributions scored nothing because their type could not be
+              classified: {score.unrecognisedTypes.join(", ")}. Set the contribution type on those rows to include them.
+            </div>
+          )}
           <div className="rounded-md border overflow-x-auto">
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
               <span>data as at <strong className="text-foreground">{client.measurementPeriodEnd ? new Date(client.measurementPeriodEnd).toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })}</strong></span>

@@ -237,13 +237,38 @@ function toLedgerEntry(doc: Record<string, unknown>): LedgerEntry {
 const memoryStore = new MemoryWalletStore();
 const mongoStore = new MongoWalletStore();
 
+/** Thrown instead of falling back to RAM when real money is at stake. */
+export class WalletUnavailableError extends Error {
+  constructor() {
+    super("The token wallet's database is unavailable, so no tokens can move right now.");
+    this.name = "WalletUnavailableError";
+  }
+}
+
+/** Whether wallet writes land somewhere that survives a restart. */
+export function walletIsDurable(): boolean {
+  return mongoose.connection?.readyState === 1;
+}
+
 /**
- * Mongo when it is actually connected, memory otherwise — checked per call
- * rather than once at import, because the web server starts before (and
- * survives without) the database.
+ * Mongo when it is actually connected — checked per call rather than once at
+ * import, because the web server starts before (and survives without) the
+ * database.
+ *
+ * The in-memory store is a dev/test convenience. In PRODUCTION with payment
+ * enforced it was a fail-open in the one path that moves money: Mongo going
+ * down handed every organisation a fresh FREE_TOKEN_GRANT from RAM (free
+ * extraction), and a PayFast credit written there evaporated on the next
+ * restart (paid money, lost credit). Refusing is the honest answer — the
+ * authorize route returns 503 and charges nothing, and a PayFast ITN gets a
+ * 5xx so PayFast retries until the ledger is durable again.
  */
 function store(): WalletStore {
-  return mongoose.connection?.readyState === 1 ? mongoStore : memoryStore;
+  if (walletIsDurable()) return mongoStore;
+  if (process.env.NODE_ENV === "production" && process.env.TOKENS_REQUIRE_PAYMENT !== "false") {
+    throw new WalletUnavailableError();
+  }
+  return memoryStore;
 }
 
 /**

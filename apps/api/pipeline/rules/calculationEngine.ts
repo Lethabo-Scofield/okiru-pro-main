@@ -148,7 +148,9 @@ export interface ContributionInput {
   beneficiary: string;
   type: string;
   amount: number;
-  category: 'sd' | 'ed' | 'sed';
+  // 'unclassified' is counted by no pillar — an unknown SD-vs-ED split is
+  // reported, never guessed.
+  category: 'sd' | 'ed' | 'sed' | 'unclassified';
   benefitFactor?: number;
 }
 
