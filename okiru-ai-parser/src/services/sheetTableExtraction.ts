@@ -24,6 +24,7 @@ import { createLogger } from '../logger.js';
 import { parseModelJson, type DocumentExtraction, type ExtractionModel } from './aiExtraction.js';
 import type { VerificationElement } from '../../schemas/verification_document_matrix.js';
 import { applyColumnMapping, collectHeaders, mapSheetColumns } from './sheetColumnMapping.js';
+import { mapLabelsToVocabulary } from './semanticVocabulary.js';
 import {
   decisionFingerprint,
   rememberDecision,
@@ -316,6 +317,89 @@ function unplacedRows(
   };
 }
 
+
+/**
+ * The contribution types the scoring code knows how to weight.
+ *
+ * Mirrors SED_BENEFIT_FACTORS / ESD_BENEFIT_FACTORS in the calculators
+ * (apps/web/Toolkit/src/lib/calculators/esd-sed.ts and
+ * apps/api/pipeline/rules/pillarCalculators.ts). If a term is added there it
+ * belongs here too — a term the parser can emit but the calculator cannot
+ * weight scores nothing, which is safe but silent.
+ */
+const CONTRIBUTION_TYPE_VOCABULARY = [
+  'grant',
+  'direct_cost',
+  'cost_covering',
+  'discounts',
+  'overhead_costs',
+  'interest_free_loan',
+  'standard_loan',
+  'lower_interest_loan',
+  'guarantees',
+  'minority_investment',
+  'equity_investment',
+  'professional_services_free',
+  'professional_services_discount',
+  'employee_time',
+  'shorter_payment_terms',
+];
+
+/** Already canonical, or trivially so once spaces become underscores. */
+function canonicalContributionType(raw: unknown): string | null {
+  const key = String(raw ?? '').trim().toLowerCase().replace(/\s+/g, '_');
+  return key && CONTRIBUTION_TYPE_VOCABULARY.includes(key) ? key : null;
+}
+
+/**
+ * Rewrite each row's contribution_type onto the scoring vocabulary.
+ *
+ * Substring rules ('includes("grant")') only ever matched wording somebody
+ * had anticipated, and everything else fell through to a default that scored
+ * at 100%. That default is now an abstention, so an unanticipated label like
+ * "Bursary" or "School feeding scheme" would score nothing at all — honest,
+ * but no smarter than before.
+ *
+ * So the labels the code cannot place are handed to the model as ONE closed
+ * question: which of these canonical terms is each label? The model classifies;
+ * the code still owns the vocabulary, the factors and the arithmetic. A label
+ * it cannot place keeps its raw value and scores nothing downstream.
+ */
+async function normaliseContributionTypes(
+  model: ExtractionModel,
+  rows: Array<Record<string, unknown>>,
+): Promise<string[]> {
+  const unknownLabels = new Set<string>();
+  for (const row of rows) {
+    if (!('contribution_type' in row)) continue;
+    const canonical = canonicalContributionType(row.contribution_type);
+    if (canonical) row.contribution_type = canonical;
+    else {
+      const label = String(row.contribution_type ?? '').trim();
+      if (label) unknownLabels.add(label);
+    }
+  }
+  if (unknownLabels.size === 0) return [];
+
+  const { resolved, unresolved } = await mapLabelsToVocabulary(model, {
+    vocabulary: CONTRIBUTION_TYPE_VOCABULARY,
+    labels: Array.from(unknownLabels),
+    what: 'a B-BBEE enterprise/supplier/socio-economic development contribution type',
+    kind: 'contribution_type',
+  });
+
+  for (const row of rows) {
+    const label = String(row.contribution_type ?? '').trim();
+    if (label && resolved[label]) row.contribution_type = resolved[label];
+  }
+
+  return unresolved.map(
+    (label) =>
+      `Contribution type "${label}" could not be matched to a scoring category, ` +
+      'so those rows were not scored. Classify them in the workbook to include them.',
+  );
+}
+
 export async function extractSheetTable(
   model: ExtractionModel,
   element: VerificationElement,
@@ -346,6 +430,7 @@ export async function extractSheetTable(
           ...table.stats,
           exceptions: table.exceptions.length,
         });
+        const typeNotes = await normaliseContributionTypes(model, table.rows);
         return {
           documentId: `sheet_table__${rowElement.toLowerCase()}`,
           documentName: `${rowElement} table`,
@@ -359,7 +444,7 @@ export async function extractSheetTable(
           }],
           missingFields: [],
           unexpectedFields: [],
-          exceptions: table.exceptions,
+          exceptions: [...table.exceptions, ...typeNotes],
         };
       }
     }
@@ -398,6 +483,8 @@ export async function extractSheetTable(
 
   logger.info('Extracted sheet table', { file: input.filename, element: rowElement, field: shape.field, rows: rows.length });
 
+  const typeNotes = await normaliseContributionTypes(model, rows);
+
   return {
     documentId: `sheet_table__${rowElement.toLowerCase()}`,
     documentName: `${rowElement} table`,
@@ -411,7 +498,7 @@ export async function extractSheetTable(
     }],
     missingFields: [],
     unexpectedFields: [],
-    exceptions: [],
+    exceptions: typeNotes,
   };
 }
 
