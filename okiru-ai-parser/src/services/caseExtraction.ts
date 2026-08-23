@@ -31,6 +31,7 @@ import {
   mapEntitiesToCalculatorWithSemantics,
   type CalculatorMappingResult,
 } from './entityCalculatorMapping.js';
+import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -316,6 +317,34 @@ export async function extractCaseEntities(
         model,
       )
     : { documents: [], failures: [], unresolved: [] };
+
+  // ── PLAUSIBILITY ────────────────────────────────────────────────────────
+  // Grounding checks each value against its own document; nothing above checks
+  // the values against EACH OTHER. That is where Thandanani's tmps=23 lived —
+  // a row count in a Rand field, grounded perfectly, wrong by four orders of
+  // magnitude. The invariants are arithmetic and always on; when a model is
+  // present it adds what the figure probably is, read from the source excerpt.
+  // Findings attach to the document that supplied the figure, so the upload
+  // reveal shows them with provenance — and never edit the payload.
+  for (const finding of payloadInvariantFindings(calculator.entries, extractions)) {
+    const source = inputs.find((input) => input.filename === finding.sourceFile);
+    const figure = Number(calculator.entries.find((e) => e.key === finding.key)?.value);
+    const suggestion = source && Number.isFinite(figure)
+      ? await explainImplausibleFigure(model, {
+          key: finding.key,
+          figure,
+          excerpt: excerptAround(source.markdown || source.raw_text || '', figure),
+        })
+      : null;
+    const target = extractions.find((extraction) => extraction.sourceFile === finding.sourceFile)
+      ?? extractions[0];
+    target?.exceptions.push(finding.message + (suggestion ?? ''));
+    logger.warn('Calculator payload failed a plausibility invariant', {
+      key: finding.key,
+      sourceFile: finding.sourceFile,
+      suggested: Boolean(suggestion),
+    });
+  }
 
   logger.info('Case extraction complete', {
     files: inputs.length,

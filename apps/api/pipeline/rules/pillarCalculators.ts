@@ -805,6 +805,19 @@ function mapCategory(cat?: string): string {
 // ===========================================================================================
 
 function calcProcurement(suppliers: SupplierInput[], tmps: number, cfg: SectorConfig): PillarScore {
+  // A TMPS smaller than its own supplier schedule is a misplaced or mis-scaled
+  // figure (Thandanani: a 23-row count landed here and every line clamped to
+  // full marks off spend/23). Treated as missing — targets go to 0 and
+  // safeRatio scores nothing — mirroring the web calculator, which also flags
+  // it to the user.
+  // A schedule's SUM may legitimately exceed TMPS (Codes-excluded rows sit in
+  // schedules but not in the measured total — Lake Trading runs 1.6% over), so
+  // only the single-supplier test applies, with a 2x margin: a real
+  // misplacement is orders of magnitude off.
+  if (tmps > 0 && suppliers.length > 0) {
+    const largest = suppliers.reduce((m, s) => Math.max(m, Number(s.spend) || 0), 0);
+    if (largest > tmps * 2) tmps = 0;
+  }
   const pc = cfg.targets.procurement;
   const maxPoints = cfg.pillarConfigs.preferentialProcurement.maxPoints;
   const subMinPct = cfg.pillarConfigs.preferentialProcurement.subMinimumPercent;

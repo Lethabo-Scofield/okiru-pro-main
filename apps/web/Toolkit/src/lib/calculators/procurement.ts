@@ -60,6 +60,12 @@ export interface ProcurementResult {
   designatedGroup: number;
   total: number;
   subMinimumMet: boolean;
+  /**
+   * Data-integrity findings that changed how the pillar scored — e.g. a TMPS
+   * smaller than its own supplier schedule, treated as missing. Rendered as an
+   * amber banner on the pillar page; empty on a clean case.
+   */
+  dataFlags: string[];
   recognisedSpend: number;
   target: number;
   subLines: ProcurementSubLine[];
@@ -107,6 +113,38 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const { tmps } = data;
   const suppliers = data.suppliers || [];
 
+  // ── DENOMINATOR PLAUSIBILITY ──────────────────────────────────────────
+  // TMPS is the denominator for every line in this pillar, and a misplaced
+  // one hands the pillar over whole: Thandanani arrived with tmps = 23 — the
+  // ROW COUNT of an earlier supplier schedule, not a Rand amount — so
+  // spend / 23 ran 137,000x over target and every line clamped to full
+  // marks. On an elective scorecard the inflated pillar is then exactly the
+  // one that gets elected.
+  //
+  // The test: a single supplier's measured spend cannot exceed total measured
+  // spend. The schedule's SUM may legitimately exceed TMPS (Codes-excluded
+  // rows — loans, levies — sit in schedules but not in the measured total;
+  // Lake Trading's genuine workbook runs 1.6% over), so the sum is NOT
+  // compared. A 2x margin keeps borderline-legitimate cases out: a real
+  // misplacement is orders of magnitude off (Thandanani: 18,000x). Per the
+  // scoring rule — score what is actually there, nothing for what is not —
+  // a failing figure is treated as MISSING, loudly, not as a tiny
+  // denominator that mints points.
+  const dataFlags: string[] = [];
+  let effectiveTmps = tmps;
+  if (tmps > 0 && suppliers.length > 0) {
+    const largestSupplierSpend = suppliers.reduce((m, s) => Math.max(m, Number(s.spend) || 0), 0);
+    const scheduleTotal = suppliers.reduce((a, s) => a + (Number(s.spend) || 0), 0);
+    if (largestSupplierSpend > tmps * 2) {
+      effectiveTmps = 0;
+      dataFlags.push(
+        `Total Measured Procurement Spend (R${Math.round(tmps).toLocaleString('en-ZA')}) is smaller than the supplier schedule it must contain ` +
+        `(largest single supplier R${Math.round(largestSupplierSpend).toLocaleString('en-ZA')}, schedule total R${Math.round(scheduleTotal).toLocaleString('en-ZA')}). ` +
+        'The figure is misplaced or mis-scaled — a row count or an R\'000 figure, not Rand — so Preferential Procurement scores 0 until the real TMPS is entered.',
+      );
+    }
+  }
+
   const allSuppliersTarget = pc.allSuppliersTarget ?? 0.80;
   const allSuppliersMaxPts = pc.allSuppliersMaxPts ?? 5;
   const qseTarget = pc.qseTarget ?? 0.15;
@@ -125,12 +163,12 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const subMinThreshold = config?.pillarConfigs?.preferentialProcurement?.subMinimumPercent ?? 0;
   const maxPoints = config?.pillarConfigs?.preferentialProcurement?.maxPoints ?? 29;
 
-  const TARGET_ALL = tmps * allSuppliersTarget;
-  const TARGET_QSE = tmps * qseTarget;
-  const TARGET_EME = tmps * emeTarget;
-  const TARGET_BO51 = tmps * bo51Target;
-  const TARGET_BWO30 = tmps * bwo30Target;
-  const TARGET_DG = tmps * dgTarget;
+  const TARGET_ALL = effectiveTmps * allSuppliersTarget;
+  const TARGET_QSE = effectiveTmps * qseTarget;
+  const TARGET_EME = effectiveTmps * emeTarget;
+  const TARGET_BO51 = effectiveTmps * bo51Target;
+  const TARGET_BWO30 = effectiveTmps * bwo30Target;
+  const TARGET_DG = effectiveTmps * dgTarget;
 
   let recognisedSpend = 0;
   let empoweringSpend = 0;
@@ -244,6 +282,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
 
   return {
     base: round2(baseTotal),
+    dataFlags,
     coverageNotes,
     empoweringSuppliers: round2(empoweringScore),
     qseSuppliers: round2(qseScore),

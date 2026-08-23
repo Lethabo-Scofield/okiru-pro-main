@@ -605,6 +605,11 @@ export default function Procurement() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {score.dataFlags.length > 0 && (
+            <div className="mb-4 rounded-md border border-amber-300/50 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200" data-testid="pp-data-flags">
+              {score.dataFlags.map((f, i) => (<p key={i} className={i > 0 ? "mt-1.5" : undefined}>{f}</p>))}
+            </div>
+          )}
           <div className="rounded-md border overflow-x-auto">
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
               <span>Target: 29 points | Max spend recognition: 135%</span>
