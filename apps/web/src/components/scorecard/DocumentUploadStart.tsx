@@ -22,7 +22,6 @@ import {
   FolderOpen,
   ArrowRight,
   Check,
-  ChevronDown,
   ChevronLeft,
   CloudUpload,
   CreditCard,
@@ -156,6 +155,7 @@ function collectEntityAliases(data: any): string[] {
   return Array.from(out);
 }
 import ExtractionConfidence from "./ExtractionConfidence";
+import ReviewSection from "./ReviewSection";
 
 interface RequiredGroup {
   key: string;
@@ -379,7 +379,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // The "what we read / still needed / didn't reconcile" detail is long; keep it
   // collapsed so it never pushes the Build button off-screen. The pillar rack
   // above it is the at-a-glance summary.
-  const [showReadDetails, setShowReadDetails] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [dragActive, setDragActive] = useState(false);
   // Deliberately UNSET: the sector/size choice decides which scorecard rules
@@ -1124,6 +1123,28 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     [injected],
   );
   const totalMappedRows = (mapped?.mappedRowCount ?? 0) + injectedRowCount;
+
+  /**
+   * Required document groups we still have nothing for, split by whether the
+   * parser could read one if the user supplied it. An evidence-only group is
+   * guidance for the verifier, never something we could have detected, so the
+   * two are never presented as the same kind of gap.
+   */
+  const missingDocGroups = useMemo(() => {
+    const groups = catalog?.required_groups ?? [];
+    return {
+      detectable: groups.filter((g) => g.required !== false && g.autoExtract && !groupSatisfied(g)),
+      evidenceOnly: groups.filter((g) => g.required !== false && !g.autoExtract),
+    };
+    // groupSatisfied reads the current parser case, which `parserCase` covers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog, parserCase]);
+
+  /** Pillars where a figure was read but cannot score without per-person rows. */
+  const needsDetailPillars = useMemo(
+    () => (mapped?.coverage ?? []).filter((c) => c.status === "needs-detail" && c.extractedValue),
+    [mapped],
+  );
 
   // Suppliers + spend come from whichever path actually read the procurement
   // schedule: the AI-entity path is authoritative where it has rows (it is what
@@ -2102,136 +2123,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
-      {/* Missing required docs nudge — only for docs the parser can detect
-          (auto-extractable). Evidence-only docs are guidance, not detectable. */}
-      {(() => {
-        if (!revealed || !catalog) return null;
-        const detectableMissing = catalog.required_groups.filter(
-          (g) => g.required !== false && g.autoExtract && !groupSatisfied(g),
-        );
-        const evidenceOnly = catalog.required_groups.filter((g) => g.required !== false && !g.autoExtract);
-        if (detectableMissing.length === 0 && evidenceOnly.length === 0) return null;
-        return (
-          <div className="dus-fade-up mt-3 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5" style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.18)" }}>
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-[12px] text-amber-200/80 text-left">
-              {detectableMissing.length > 0 && (
-                <>Still missing: {detectableMissing.map((g) => g.label).join("; ")}. </>
-              )}
-              {evidenceOnly.length > 0 && (
-                <>Have ready for your verifier: {evidenceOnly.map((g) => g.label).join("; ")}. </>
-              )}
-              You can add these now or in the workbook.
-            </p>
-          </div>
-        );
-      })()}
-
-      {/* Figures the documents disagree on.
-          NOT collapsed like the rest of the detail: a withheld entity-level
-          figure leaves a hole in the score, and the person who can close it is
-          standing here with the documents open. Buried in an accordion it
-          would be found after the scorecard looked wrong, not before. */}
-      {revealed && (injected?.metaConflicts.length ?? 0) > 0 && (
-        <div
-          className="dus-fade-up mt-4 rounded-xl px-4 py-3 text-left"
-          style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.22)" }}
-          data-testid="meta-conflicts"
-        >
-          <p className="text-[12.5px] font-medium text-amber-200/90 flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            {injected!.metaConflicts.length} figure
-            {injected!.metaConflicts.length === 1 ? "" : "s"} your documents disagree on
-          </p>
-          <p className="mt-1 text-[11.5px] text-[#a1a1a6]">
-            Left blank rather than guessed — pick the right one in the workbook and the
-            score follows.
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {injected!.metaConflicts.map((c) => (
-              <li key={`${c.section}.${c.column}`} className="text-[11.5px] text-[#d1d1d6]">
-                <span className="text-[#8e8e93]">{c.column}:</span>{" "}
-                {c.candidates
-                  .map((cand) => `${String(cand.value)} (${cand.sources.join(", ") || "unknown source"})`)
-                  .join("  vs  ")}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Figures more than one document confirms. Corroboration is the cheapest
-          evidence there is, and showing it stops every extracted number reading
-          with the same weight. */}
-      {revealed && (injected?.metaCorroboration.length ?? 0) > 0 && (
-        <div
-          className="dus-fade-up mt-3 rounded-xl px-4 py-2.5 text-left"
-          style={{ background: "rgba(48,209,88,0.05)", border: "1px solid rgba(48,209,88,0.18)" }}
-          data-testid="meta-corroboration"
-        >
-          <p className="text-[12px] text-emerald-200/90 flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 shrink-0" />
-            {injected!.metaCorroboration.length} figure
-            {injected!.metaCorroboration.length === 1 ? "" : "s"} confirmed by more than one
-            document
-          </p>
-          <ul className="mt-1.5 space-y-1">
-            {injected!.metaCorroboration.map((c) => (
-              <li key={`${c.section}.${c.column}`} className="text-[11.5px] text-[#a1a1a6]">
-                <span className="text-[#d1d1d6]">{c.column}</span> — {String(c.value)}, agreed by{" "}
-                {c.agreementCount} documents ({c.sources.join(", ")})
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* ACT 3 — the reveal */}
-      {/* Confidence + gaps: what we read, what could not be placed, what is
-          still needed — COLLAPSED by default so it never pushes the Build
-          button off-screen. The pillar rack below is the at-a-glance summary;
-          this is the detail for anyone who wants it. */}
-      {revealed && (injected || reconciliationFlags.length > 0) && (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => setShowReadDetails((s) => !s)}
-            className="w-full flex items-center gap-2 rounded-xl px-4 py-3 text-left border border-white/[0.07] bg-[#0e0e10]"
-            data-testid="toggle-read-details"
-          >
-            <ChevronDown className={`h-4 w-4 shrink-0 text-[#636366] transition-transform ${showReadDetails ? "rotate-180" : ""}`} />
-            <span className="text-[13px] font-medium text-[#e5e5ea]">What we read from your documents</span>
-            <span className="ml-auto text-[12px] text-[#8e8e93]">
-              {totalMappedRows} placed{reconciliationFlags.length > 0 ? ` · ${reconciliationFlags.length} to check` : ""}
-            </span>
-          </button>
-          {showReadDetails && (
-            <div className="mt-3">
-              {injected && <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />}
-              {reconciliationFlags.length > 0 && (
-                <div
-                  className="dus-fade-up mt-3 rounded-lg px-3 py-2.5"
-                  style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.25)" }}
-                  data-testid="reconciliation-flags"
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="text-[11px] font-medium text-amber-200/90 uppercase tracking-wider">
-                      Evidence that didn&apos;t reconcile
-                    </span>
-                  </div>
-                  {reconciliationFlags.map((flag, i) => (
-                    <p key={i} className="text-[11px] text-[#8e8e93] text-left">
-                      <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {revealed && mapped && (
         <div className="mt-4">
           {/* Pillar rack — status tiles light up */}
@@ -2287,83 +2178,67 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </div>
           </div>
 
-          {/* What the certificate registry added to Procurement.
-              Shown before Create so the registry's contribution is visible and
-              questionable, never a silent edit to the user's data. */}
-          {(certificateFillRunning || certificateFill) && (
+          {/* ── THE ONE THING THAT NEEDS A DECISION ────────────────────────
+              Figures the documents disagree on stay ABOVE the Build button and
+              are never collapsed. A withheld entity-level figure leaves a hole
+              in the score, and the person who can close it is standing here
+              with the documents open — inside an accordion it gets found after
+              the scorecard looks wrong, not before. Everything else is detail
+              and lives below the button. */}
+          {(injected?.metaConflicts.length ?? 0) > 0 && (
             <div
-              className="dus-fade-up mb-4 rounded-lg px-3 py-2.5 text-left"
-              style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: "660ms" }}
-              data-testid="certificate-autofill-summary"
+              className="dus-fade-up mb-4 rounded-xl px-4 py-3 text-left"
+              style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.22)" }}
+              data-testid="meta-conflicts"
             >
-              {certificateFillRunning ? (
-                <p className="text-[11px] text-[#8e8e93] flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Checking suppliers against the certificate database…
-                </p>
-              ) : certificateFill && certificateFill.report.cellsFilled > 0 ? (
-                <>
-                  <p className="text-[11px] text-emerald-200/90">
-                    <Check className="inline h-3 w-3 mr-1" />
-                    Certificate database filled {certificateFill.report.cellsFilled} field
-                    {certificateFill.report.cellsFilled === 1 ? "" : "s"} across{" "}
-                    {certificateFill.report.rowsChanged} supplier
-                    {certificateFill.report.rowsChanged === 1 ? "" : "s"} — blanks only, nothing your
-                    documents stated was changed.
-                  </p>
-                  {/* The financial period is not known yet at upload — it is
-                      entered on the workbook — so validity was judged against
-                      today. Most certificates on file expire within the current
-                      year, so this is expected rather than a data problem, and
-                      the levels fill once the period is set. Saying so here
-                      stops it reading as "we hold nothing for these suppliers". */}
-                  {certificateFill.report.notValid.length > 0 && (
-                    <p className="mt-1 text-[11px] text-amber-200/80">
-                      {certificateFill.report.notValid.length} matched certificate
-                      {certificateFill.report.notValid.length === 1 ? " is" : "s are"} not current
-                      today, so their B-BBEE levels were left blank. Set the financial period on the
-                      workbook and re-run “Fill from certificates” — a certificate that was live
-                      during the measured period still counts.
-                    </p>
-                  )}
-                  {certificateFill.report.conflicts.length > 0 && (
-                    <p className="mt-1 text-[11px] text-amber-200/80">
-                      {certificateFill.report.conflicts.length} supplier
-                      {certificateFill.report.conflicts.length === 1 ? "" : "s"} on file disagree with the
-                      uploaded figures — your figures were kept.
-                    </p>
-                  )}
-                  {certificateFill.report.ambiguous.length > 0 && (
-                    <p className="mt-1 text-[11px] text-[#8e8e93]">
-                      {certificateFill.report.ambiguous.length} name
-                      {certificateFill.report.ambiguous.length === 1 ? "" : "s"} matched more than one
-                      company — left for you to pick in the workbook.
-                    </p>
-                  )}
-                </>
-              ) : certificateFill?.report.registryUnavailable ? (
-                <p className="text-[11px] text-[#8e8e93]">
-                  Certificate database unavailable — procurement was left exactly as extracted.
-                </p>
-              ) : (
-                <p className="text-[11px] text-[#8e8e93]">
-                  No new supplier details found in the certificate database.
-                </p>
-              )}
+              <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-amber-200/90">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {injected!.metaConflicts.length} figure
+                {injected!.metaConflicts.length === 1 ? "" : "s"} your documents disagree on
+              </p>
+              <p className="mt-1 text-[11.5px] text-[#a1a1a6]">
+                Left blank rather than guessed — pick the right one in the workbook and the score
+                follows.
+              </p>
+              {/* One candidate per line. Joining them into `a (src) vs b (src)`
+                  produced a wrapping run of text at exactly the moment the user
+                  had to compare two numbers. */}
+              <div className="mt-2 space-y-2">
+                {injected!.metaConflicts.map((c) => (
+                  <div
+                    key={`${c.section}.${c.column}`}
+                    className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2"
+                  >
+                    <p className="text-[11.5px] font-medium text-[#d1d1d6]">{c.column}</p>
+                    <ul className="mt-1 space-y-0.5">
+                      {c.candidates.map((cand, i) => (
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[11.5px] leading-5">
+                          <span className="tabular-nums text-white">{String(cand.value)}</span>
+                          <span className="text-[11px] text-[#636366]">
+                            {cand.sources.join(", ") || "unknown source"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Detail lines for the amber tiles (extracted-but-needs-detail) */}
-          {mapped.coverage.some((c) => c.status === "needs-detail" && c.extractedValue) && (
-            <div className="dus-fade-up mb-4 space-y-1" style={{ animationDelay: "700ms" }}>
-              {mapped.coverage
-                .filter((c) => c.status === "needs-detail" && c.extractedValue)
-                .map((c) => (
-                  <p key={c.pillar} className="text-[11px] text-[#8e8e93] text-left">
-                    <span className="text-amber-300/80">{c.pillar}:</span> we extracted {c.extractedValue} — it needs
-                    per-person rows in the workbook to score.
-                  </p>
-                ))}
+          {/* What the certificate registry added to Procurement.
+              Shown before Create so the registry's contribution is visible and
+              questionable, never a silent edit to the user's data. */}
+          {certificateFillRunning && (
+            <div
+              className="dus-fade-up mb-4 rounded-lg px-3 py-2.5 text-left"
+              style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: "660ms" }}
+              data-testid="certificate-autofill-running"
+            >
+              <p className="text-[11px] text-[#8e8e93] flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Checking suppliers against the certificate database…
+              </p>
             </div>
           )}
 
@@ -2424,6 +2299,186 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
                 : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
             </p>
+          </div>
+
+          {/* ── THE DETAIL, BELOW THE BUTTON ───────────────────────────────
+              Everything here is worth reading and none of it blocks building.
+              As six always-open sibling panels it pushed the Build button off
+              the bottom of the screen on any real evidence pack; as counted,
+              collapsible groups it is a summary someone will actually open. */}
+          <div className="mt-4 space-y-1.5" data-testid="extraction-review">
+            {missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length > 0 && (
+              <ReviewSection
+                title="Documents still worth adding"
+                meta={`${missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length}`}
+                tone="check"
+                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                summary="You can add these now or in the workbook — neither blocks you from continuing."
+                testId="missing-docs-review"
+              >
+                {missingDocGroups.detectable.length > 0 && (
+                  <>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-[#636366]">
+                      We can read these automatically
+                    </p>
+                    <ul className="mb-2 mt-1 space-y-0.5">
+                      {missingDocGroups.detectable.map((g) => (
+                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[#d1d1d6]">
+                          {g.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {missingDocGroups.evidenceOnly.length > 0 && (
+                  <>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-[#636366]">
+                      Have ready for your verifier
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {missingDocGroups.evidenceOnly.map((g) => (
+                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                          {g.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </ReviewSection>
+            )}
+
+            {needsDetailPillars.length > 0 && (
+              <ReviewSection
+                title="Extracted, but needs per-person rows to score"
+                meta={`${needsDetailPillars.length}`}
+                tone="check"
+                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                testId="needs-detail-review"
+              >
+                <ul className="space-y-1">
+                  {needsDetailPillars.map((c) => (
+                    <li key={c.pillar} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                      <span className="text-amber-300/80">{c.pillar}:</span> we extracted{" "}
+                      {c.extractedValue} — it needs per-person rows in the workbook to score.
+                    </li>
+                  ))}
+                </ul>
+              </ReviewSection>
+            )}
+
+            {reconciliationFlags.length > 0 && (
+              <ReviewSection
+                title="Evidence that didn’t reconcile"
+                meta={`${reconciliationFlags.length}`}
+                tone="check"
+                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                summary="A total the rows don’t sum to is the first thing a verifier asks about."
+                testId="reconciliation-flags"
+              >
+                <ul className="space-y-1">
+                  {reconciliationFlags.map((flag, i) => (
+                    <li key={i} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                      <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
+                    </li>
+                  ))}
+                </ul>
+              </ReviewSection>
+            )}
+
+            {(injected?.metaCorroboration.length ?? 0) > 0 && (
+              <ReviewSection
+                title="Confirmed by more than one document"
+                meta={`${injected!.metaCorroboration.length}`}
+                tone="good"
+                icon={<Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
+                summary="Corroboration is the cheapest evidence there is — these figures agreed across files."
+                testId="meta-corroboration"
+              >
+                <ul className="space-y-1">
+                  {injected!.metaCorroboration.map((c) => (
+                    <li key={`${c.section}.${c.column}`} className="text-[11.5px] leading-5 text-[#a1a1a6]">
+                      <span className="text-[#d1d1d6]">{c.column}</span> — {String(c.value)}, agreed
+                      by {c.agreementCount} documents ({c.sources.join(", ")})
+                    </li>
+                  ))}
+                </ul>
+              </ReviewSection>
+            )}
+
+            {injected && (
+              <ReviewSection
+                title="What we read from your documents"
+                meta={`${totalMappedRows} placed`}
+                tone="neutral"
+                icon={<FileText className="h-3.5 w-3.5 shrink-0 text-[#636366]" />}
+                testId="toggle-read-details"
+              >
+                <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
+              </ReviewSection>
+            )}
+
+            {certificateFill && (
+              <ReviewSection
+                title="Certificate database"
+                meta={
+                  certificateFill.report.cellsFilled > 0
+                    ? `${certificateFill.report.cellsFilled} filled`
+                    : "nothing added"
+                }
+                tone={certificateFill.report.cellsFilled > 0 ? "good" : "neutral"}
+                icon={<Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
+                testId="certificate-autofill-summary"
+              >
+                {certificateFill.report.cellsFilled > 0 ? (
+                  <>
+                    <p className="text-[11.5px] leading-5 text-emerald-200/90">
+                      Filled {certificateFill.report.cellsFilled} field
+                      {certificateFill.report.cellsFilled === 1 ? "" : "s"} across{" "}
+                      {certificateFill.report.rowsChanged} supplier
+                      {certificateFill.report.rowsChanged === 1 ? "" : "s"} — blanks only, nothing
+                      your documents stated was changed.
+                    </p>
+                    {/* The financial period is not known yet at upload — it is
+                        entered on the workbook — so validity was judged against
+                        today. Most certificates on file expire within the current
+                        year, so this is expected rather than a data problem, and
+                        the levels fill once the period is set. Saying so here
+                        stops it reading as "we hold nothing for these suppliers". */}
+                    {certificateFill.report.notValid.length > 0 && (
+                      <p className="mt-1 text-[11.5px] leading-5 text-amber-200/80">
+                        {certificateFill.report.notValid.length} matched certificate
+                        {certificateFill.report.notValid.length === 1 ? " is" : "s are"} not current
+                        today, so their B-BBEE levels were left blank. Set the financial period on
+                        the workbook and re-run “Fill from certificates” — a certificate that was
+                        live during the measured period still counts.
+                      </p>
+                    )}
+                    {certificateFill.report.conflicts.length > 0 && (
+                      <p className="mt-1 text-[11.5px] leading-5 text-amber-200/80">
+                        {certificateFill.report.conflicts.length} supplier
+                        {certificateFill.report.conflicts.length === 1 ? "" : "s"} on file disagree
+                        with the uploaded figures — your figures were kept.
+                      </p>
+                    )}
+                    {certificateFill.report.ambiguous.length > 0 && (
+                      <p className="mt-1 text-[11.5px] leading-5 text-[#8e8e93]">
+                        {certificateFill.report.ambiguous.length} name
+                        {certificateFill.report.ambiguous.length === 1 ? "" : "s"} matched more than
+                        one company — left for you to pick in the workbook.
+                      </p>
+                    )}
+                  </>
+                ) : certificateFill.report.registryUnavailable ? (
+                  <p className="text-[11.5px] leading-5 text-[#8e8e93]">
+                    Certificate database unavailable — procurement was left exactly as extracted.
+                  </p>
+                ) : (
+                  <p className="text-[11.5px] leading-5 text-[#8e8e93]">
+                    No new supplier details found in the certificate database.
+                  </p>
+                )}
+              </ReviewSection>
+            )}
           </div>
         </div>
       )}
