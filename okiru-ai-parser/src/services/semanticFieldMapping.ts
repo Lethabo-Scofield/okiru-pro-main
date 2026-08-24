@@ -122,7 +122,9 @@ export async function proposeFieldMappings(
 
   try {
     const decision = await rememberDecision<SemanticFieldMap>('field-map', fingerprint, async () => {
-      const reply = await model.complete(SYSTEM_PROMPT, userPrompt(askable, keys, options.context));
+      // A judgment question, not transcription — worth the reasoning tier.
+      const think = model.completeHard?.bind(model) ?? model.complete.bind(model);
+      const reply = await think(SYSTEM_PROMPT, userPrompt(askable, keys, options.context));
       const parsed = parseModelJson(reply);
       if (!parsed) return null;
 

@@ -133,7 +133,10 @@ export async function explainImplausibleFigure(
       'figure-reading',
       fingerprint,
       async () => {
-        const reply = await model.complete(
+        // Reading a figure's meaning from context is a judgment question —
+        // worth the reasoning tier.
+        const think = model.completeHard?.bind(model) ?? model.complete.bind(model);
+        const reply = await think(
           UNIT_READING_PROMPT,
           `FIGURE: ${params.figure} (extracted as "${params.key}")\n\nEXCERPT:\n${params.excerpt.slice(0, 2000)}`,
         );

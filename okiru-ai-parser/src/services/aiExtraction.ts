@@ -95,6 +95,12 @@ export interface ExtractionModel {
    * absent (tests, non-reasoning deployments) the sweep uses `complete`.
    */
   completeHard?(system: string, user: string): Promise<string>;
+  /**
+   * The strongest reasoning tier — ONE call per case, for the analyst review
+   * that reads the assembled evidence as a whole. Optional: absent, the review
+   * uses completeHard, then complete.
+   */
+  completeReview?(system: string, user: string): Promise<string>;
 }
 
 // NOTE: the old AI_EXTRACTION_MAX_CHARS truncation is gone — long documents are
@@ -131,6 +137,8 @@ export function createAzureExtractionModel(): ExtractionModel | null {
   // few documents with gaps, not the whole pack, so the extra latency is paid
   // exactly where it buys extraction.
   const sweepEffort = process.env.PARSER_SWEEP_REASONING_EFFORT ?? 'medium';
+  // The case review is ONE call per case, so it can afford real thinking.
+  const reviewEffort = process.env.PARSER_REVIEW_REASONING_EFFORT ?? 'high';
 
   const callAt = (effort: string) => async (system: string, user: string): Promise<string> => {
     const response = await fetchAzureWithRetry(url, {
@@ -160,6 +168,7 @@ export function createAzureExtractionModel(): ExtractionModel | null {
     name: deployment,
     complete: callAt(reasoningEffort),
     completeHard: callAt(sweepEffort),
+    completeReview: callAt(reviewEffort),
   };
 }
 

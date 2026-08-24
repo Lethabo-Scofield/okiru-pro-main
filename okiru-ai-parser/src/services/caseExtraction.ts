@@ -29,9 +29,11 @@ import {
   fieldElementIndex,
   mapEntitiesToCalculator,
   mapEntitiesToCalculatorWithSemantics,
+  unfilledCalculatorKeys,
   type CalculatorMappingResult,
 } from './entityCalculatorMapping.js';
 import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
+import { reviewCase } from './caseReview.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -346,6 +348,27 @@ export async function extractCaseEntities(
     });
   }
 
+  // ── THE ANALYST'S READ ──────────────────────────────────────────────────
+  // One chain-of-thought call over the ASSEMBLED case, at the strongest
+  // reasoning tier — the altitude every narrow check above lacks. Advisory
+  // only: findings become exceptions a reviewer sees; not one payload value
+  // can move because of it.
+  const reviewFindings = await reviewCase(model, {
+    payloadEntries: calculator.entries.map((entry) => ({
+      key: entry.key, value: entry.value, sourceFiles: entry.sourceFiles,
+    })),
+    unmapped: calculator.unmapped,
+    needsReview: calculator.needsReview.map((item) => ({ field: item.field, values: item.values })),
+    unfilledKeys: unfilledCalculatorKeys(calculator.payload),
+    files: inputs.map((input) => input.filename),
+  });
+  for (const finding of reviewFindings) {
+    extractions[0]?.exceptions.push(
+      `${finding.severity === 'error' ? 'Analyst review' : 'Analyst note'}: ${finding.finding}`
+      + (finding.fix ? ` Fix: ${finding.fix}` : ''),
+    );
+  }
+
   logger.info('Case extraction complete', {
     files: inputs.length,
     documents: resolved.documentsExtracted,
@@ -353,6 +376,7 @@ export async function extractCaseEntities(
     conflicts: resolved.conflicts.length,
     calculatorKeys: Object.keys(calculator.payload).length,
     heldForReview: calculator.needsReview.length,
+    analystFindings: reviewFindings.length,
   });
 
   return { ...resolved, model: model.name, extractions, calculator, validation };

@@ -141,7 +141,9 @@ export async function mapLabelsToVocabulary(
       async () => {
         // A throw here is transient and must stay uncached. A reply that places
         // nothing is a real decision and is remembered.
-        const reply = await model.complete(SYSTEM_PROMPT, user);
+        // A judgment question, not transcription — worth the reasoning tier.
+        const think = model.completeHard?.bind(model) ?? model.complete.bind(model);
+        const reply = await think(SYSTEM_PROMPT, user);
         const parsed = parseObject(reply);
         if (!parsed) return {};
         const out: Record<string, string | null> = {};
