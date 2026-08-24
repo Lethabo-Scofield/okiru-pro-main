@@ -36,7 +36,7 @@ images:
   newTag: "55641be2-20260824"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/parser
   newName: okiruproacr.azurecr.io/okiru-pro/parser
-  newTag: "d0516fae-20260824"
+  newTag: "8a08936e-20260824"
 
 # Use 'labels' instead of 'commonLabels' to avoid modifying selectors
 # which are immutable after deployment creation
