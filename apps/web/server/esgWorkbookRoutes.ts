@@ -1,3 +1,4 @@
+import express from "express";
 import type { Express, Request, Response } from "express";
 import mongoose from "mongoose";
 import { requireAuth } from "./routes";
@@ -325,6 +326,15 @@ export function registerEsgWorkbookRoutes(app: Express): void {
   app.post(
     "/api/esg/workbook/:companyId/import",
     requireAuth,
+    // The upload client sends the workbook as RAW BINARY
+    // (Content-Type: application/octet-stream, EsgInformationRequest.tsx). The
+    // server only ever mounted express.json + urlencoded, which both ignore
+    // octet-stream — so req.body arrived as {}, the Buffer.isBuffer branch
+    // below could never be true, and EVERY binary import answered
+    // 400 "Missing xlsx file" in milliseconds. That is the "cannot import on
+    // ESG" report, live. This parser exists only on this route and only for
+    // octet-stream; the JSON confirm step still flows through express.json.
+    express.raw({ type: "application/octet-stream", limit: "50mb" }),
     async (req, res) => {
       const wb = await authorizeEsgWorkbook(req, res);
       if (!wb) return;

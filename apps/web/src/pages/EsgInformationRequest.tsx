@@ -263,12 +263,31 @@ export default function EsgInformationRequest() {
         },
       );
       if (!res.ok) {
-        toast({ title: "Import failed", variant: "destructive" });
+        // Say WHAT failed, in the server's words. The generic toast here is how
+        // a broken import read as "I selected the file and nothing happened" —
+        // the request fired, the server refused it, and the only evidence was
+        // a small unspecific toast (Zoleka's live report, prod 2026-08-24).
+        const detail = await res.json().catch(() => null);
+        toast({
+          title: "Import failed",
+          description:
+            (detail as { error?: string } | null)?.error ??
+            `The server refused the file (HTTP ${res.status}). Try again, and report this if it repeats.`,
+          variant: "destructive",
+        });
         return;
       }
       const preview = (await res.json()) as EsgImportPreview;
       setImportPreview(preview);
       setImportOpen(true);
+    } catch (err) {
+      // A network failure previously escaped the try (no catch): the spinner
+      // stopped and NOTHING was shown at all.
+      toast({
+        title: "Import failed",
+        description: err instanceof Error ? err.message : "Network error — please try again.",
+        variant: "destructive",
+      });
     } finally {
       setImporting(false);
     }
