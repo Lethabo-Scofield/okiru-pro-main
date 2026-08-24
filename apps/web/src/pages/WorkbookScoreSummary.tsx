@@ -1,6 +1,7 @@
+import { EsgAppLink } from "@/components/EsgAppLink";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Award, ChevronRight, FileText, Loader2, ScanLine, Sparkles } from "lucide-react";
+import { Award, ChevronRight, FileText, Leaf, Loader2, ScanLine, Sparkles } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
@@ -231,6 +232,25 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
           {provisional ? <FileText className="w-4 h-4" /> : <ScanLine className="w-4 h-4" />}
           {provisional ? "Open workbook to refine" : "View Scorecard"}
         </button>
+        {/* Same company, other scorecard. ESG lives in its own micro-app with
+            its own router, so these are native anchors (EsgAppLink) rather
+            than wouter links. */}
+        <EsgAppLink
+          href={`/esg/create/${encodeURIComponent(companyId)}`}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[#d1d1d6] hover:text-white hover:bg-white/[0.08]"
+          data-testid="link-esg-workbook"
+        >
+          <Leaf className="w-4 h-4" />
+          ESG workbook
+        </EsgAppLink>
+        <EsgAppLink
+          href={`/esg/toolkit/${encodeURIComponent(companyId)}`}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[#d1d1d6] hover:text-white hover:bg-white/[0.08]"
+          data-testid="link-esg-toolkit"
+        >
+          <Leaf className="w-4 h-4" />
+          ESG toolkit
+        </EsgAppLink>
       </div>
 
       {/* Provisional framing — the score is real (same calculator) but not the

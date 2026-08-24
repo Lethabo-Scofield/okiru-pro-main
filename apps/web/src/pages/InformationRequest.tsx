@@ -410,6 +410,15 @@ function CompanyPicker({
           variant: "destructive",
         });
       }
+    } catch (err) {
+      // Was try/finally with NO catch: a network or CORS failure threw, the
+      // finally re-enabled the button, and nothing else happened — the user
+      // saw the form simply not move, with no error anywhere.
+      toast({
+        title: "Could not create",
+        description: err instanceof Error ? err.message : "Network error — please try again.",
+        variant: "destructive",
+      });
     } finally {
       setCreating(false);
     }
@@ -2440,6 +2449,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
 }
 
 export default function InformationRequest() {
+  const { toast } = useToast();
   const params = useParams<{ companyId?: string }>();
   const [location, navigate] = useLocation();
   const [picked, setPicked] = useState<Company | null>(null);
@@ -2497,16 +2507,47 @@ export default function InformationRequest() {
     }
   }, [params.companyId, picked]);
 
+  /**
+   * Clears a stale selection when the user lands back on the bare
+   * /create-scorecard route.
+   *
+   * It must NOT clear a selection we have only just made. handlePick calls
+   * setPicked() and then navigate(), and this effect re-runs before wouter has
+   * updated params.companyId — so it saw "a company is picked but the route
+   * carries no id" and reset it, dropping the user back on the chooser. They
+   * pressed Start scorecard again and created a SECOND client: the duplicate
+   * "Test Company" and "Thandanani Packers and Hauliers cc" rows in production
+   * are this bug. Intermittent, because it depended on whether the route
+   * update landed before the effect ran.
+   */
+  const justPickedIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (isCreateScorecardFlow && !params.companyId && picked) {
-      setPicked(null);
-    }
+    if (!isCreateScorecardFlow || params.companyId || !picked) return;
+    const pickedId = picked.clientId || picked.id;
+    if (pickedId && justPickedIdRef.current === pickedId) return; // navigation in flight
+    setPicked(null);
   }, [isCreateScorecardFlow, params.companyId, picked]);
 
+  // Once the route carries the id the pick has landed — stop suppressing.
+  useEffect(() => {
+    if (params.companyId) justPickedIdRef.current = null;
+  }, [params.companyId]);
+
   const handlePick = (c: Company) => {
-    setPicked(c);
     const id = c.clientId || c.id;
-    if (id) navigate(`${basePath}/${id}`, { replace: true });
+    justPickedIdRef.current = id ?? null;
+    setPicked(c);
+    if (id) {
+      navigate(`${basePath}/${id}`, { replace: true });
+    } else {
+      // Never fail silently: with no id there is nothing to navigate to, and
+      // the old code just did nothing while the client had already been created.
+      toast({
+        title: "Scorecard created but could not be opened",
+        description: "It is saved under View saved scorecards — please open it from there.",
+        variant: "destructive",
+      });
+    }
   };
 
   // Document flow: land on the provisional live-score page (not the workbook).
@@ -2517,6 +2558,7 @@ export default function InformationRequest() {
   };
 
   const handleBack = () => {
+    justPickedIdRef.current = null;
     setPicked(null);
     navigate(basePath, { replace: true });
   };

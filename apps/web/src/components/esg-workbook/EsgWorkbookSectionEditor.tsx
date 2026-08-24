@@ -206,8 +206,34 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
 
     let body: ReactNode = null;
     if (sectionId === "company-reporting-setup") {
+      // Where the sector is CHOSEN is where its calibration must be said.
+      // 13 of the 14 sector configs inherit the shared base — real scoring,
+      // but thresholds nobody has signed off for that industry (the config's
+      // own `notes` name exactly what is outstanding). Choosing one silently
+      // was the MAC problem again: a number nobody flagged is a number
+      // someone will publish. The notice reads from the registry, so it
+      // disappears for a sector the day its calibration is signed off.
+      const chosenSector =
+        (draft.sector as string | undefined) ??
+        (workbook?.sections?.["company-reporting-setup"]?.cells?.sector as string | undefined);
+      const sectorConfig = chosenSector ? getEsgSectorConfig(chosenSector) : null;
       body = (
-        <EsgScalarForm fields={COVER_FIELDS} values={draft} onChange={updateDraft} readOnly={locked} />
+        <div className="space-y-3">
+          <EsgScalarForm fields={COVER_FIELDS} values={draft} onChange={updateDraft} readOnly={locked} />
+          {sectorConfig && sectorConfig.calibration !== "workbook-verified" ? (
+            <div
+              className="rounded-md border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-[12px] leading-5 text-[var(--esg-text2)]"
+              data-testid="esg-sector-calibration-note"
+            >
+              <strong className="text-[var(--esg-text)]">
+                {sectorConfig.label} uses the shared baseline, not signed-off sector thresholds.
+              </strong>{" "}
+              Scores compute in full, but treat sector comparisons as indicative until the
+              thresholds below are calibrated for this industry.
+              {sectorConfig.notes ? <> {sectorConfig.notes}</> : null}
+            </div>
+          ) : null}
+        </div>
       );
     } else if (sectionId === "assumptions") {
       body = (
