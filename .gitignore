@@ -73,3 +73,14 @@ docs/Test Data/
 # Written by deploy/aks-deploy.sh and contains a LIVE ACR admin password.
 # It was tracked once and reached a public repo; never track it again.
 .aks_env
+
+# Client-confidential data — PURGED from history 2026-08-24. The canonical
+# copies live outside the repo (Documents/okiru-private-data). This repo is
+# public: client workbooks, certificates and raw operational data never get
+# committed, full stop.
+docs/esg/Okiru_ESG_Toolkit_v1_7_SG_Consumer_LiveData.xlsx
+docs/esg/extracted/
+docs/BEE Information Gathering File - Thandanani Transport.xlsm
+docs/testdocs/
+docs/Demo - Kagiso Facilities Services (RCOGP)/
+docs/Lake Trading*.xlsx

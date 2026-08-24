@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -137,15 +137,30 @@ const RCOGP_GENERIC_CONFIG: CalculatorConfig = {
   industryNorms: [],
 };
 
+/**
+ * REAL CLIENT WORKBOOKS, NO LONGER IN THE REPO.
+ *
+ * These fixtures are Thandanani's and Lake Trading's actual gathering files.
+ * The repository is public, so they were purged from the tree AND its history
+ * (2026-08-24) — client fuel bills and shareholder IDs do not belong on the
+ * internet. The tests still run wherever the files exist locally: keep them in
+ * C:/Users/<you>/Documents/okiru-private-data/ and copy them to these paths,
+ * or set the paths below. Where the files are absent the suites SKIP — loudly,
+ * by name — rather than fail or silently pass.
+ */
 const fixturePath = resolve(
   process.cwd(),
   "../../docs/BEE Information Gathering File - Thandanani Transport.xlsm",
 );
 
 const lakeTradingPath = resolve(process.cwd(), "../../docs/Lake Trading Test.xlsx");
+const hasThandanani = existsSync(fixturePath);
+const hasLakeTrading = existsSync(lakeTradingPath);
 
-describe("excelImport — Thandanani Transport fixture", () => {
-  const buffer = readFileSync(fixturePath).buffer;
+describe.skipIf(!hasThandanani)("excelImport — Thandanani Transport fixture", () => {
+  // Collection still executes this body even when skipped, so the read must
+  // not throw on a machine without the private fixture.
+  const buffer = hasThandanani ? readFileSync(fixturePath).buffer : new ArrayBuffer(0);
 
   it("detects BEE gathering workbook format", () => {
     const wb = XLSX.read(buffer, { type: "array" });
@@ -291,7 +306,7 @@ describe("excelImport — Thandanani Transport fixture", () => {
     expect(total).toBeLessThan(80);
   });
 
-  it("maps Lake Trading Test.xlsx into supplier, ESD, and SED detail rows", () => {
+  it.skipIf(!hasLakeTrading)("maps Lake Trading Test.xlsx into supplier, ESD, and SED detail rows", () => {
     const buffer = readFileSync(lakeTradingPath).buffer;
     const extraction = extractBeeGatheringBuffer(buffer);
     expect(extraction.isBeeGatheringFormat).toBe(true);
