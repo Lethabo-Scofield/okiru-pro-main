@@ -37,9 +37,12 @@ import { classifyDocument, routingElement } from './documentClassification.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { elementFromHint } from './specRetrieval.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
+import { reviewCase } from './caseReview.js';
 import {
   esgFieldElementIndex,
   mapEsgEntitiesToCalculator,
+  mapEsgEntitiesToCalculatorWithSemantics,
+  unfilledEsgCalculatorKeys,
   type EsgCalculatorMappingResult,
 } from './esgEntityCalculatorMapping.js';
 
@@ -140,7 +143,30 @@ export async function extractEsgCaseEntities(
     allFiles: inputs.map((input) => input.filename),
   });
 
-  const calculator = mapEsgEntitiesToCalculator(resolved, esgFieldElementIndex(extractions));
+  // Declared table first, one semantic pass over what it did not cover, then
+  // the analyst's whole-case read — the same intelligence the B-BBEE path has,
+  // because ESG is not the lesser product.
+  const calculator = await mapEsgEntitiesToCalculatorWithSemantics(
+    resolved,
+    esgFieldElementIndex(extractions),
+    model,
+  );
+
+  const reviewFindings = await reviewCase(model, {
+    payloadEntries: calculator.entries.map((entry) => ({
+      key: entry.key, value: entry.value, sourceFiles: entry.sourceFiles,
+    })),
+    unmapped: calculator.unmapped,
+    needsReview: calculator.needsReview.map((item) => ({ field: item.field, values: item.values })),
+    unfilledKeys: unfilledEsgCalculatorKeys(calculator.payload),
+    files: inputs.map((input) => input.filename),
+  }, { domain: 'esg' });
+  for (const finding of reviewFindings) {
+    extractions[0]?.exceptions.push(
+      `${finding.severity === 'error' ? 'Analyst review' : 'Analyst note'}: ${finding.finding}`
+      + (finding.fix ? ` Fix: ${finding.fix}` : ''),
+    );
+  }
 
   logger.info('ESG case extraction complete', {
     files: inputs.length,

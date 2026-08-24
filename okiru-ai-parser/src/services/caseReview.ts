@@ -51,8 +51,14 @@ export interface CaseReviewFinding {
 
 const MAX_FINDINGS = 8;
 
+function analystRole(domain: 'bbbee' | 'esg'): string {
+  return domain === 'esg'
+    ? 'You are a senior ESG assurance analyst reviewing an ASSEMBLED case before it is scored.'
+    : 'You are a senior B-BBEE verification analyst reviewing an ASSEMBLED case before it is scored.';
+}
+
 const SYSTEM_PROMPT = [
-  'You are a senior B-BBEE verification analyst reviewing an ASSEMBLED case before it is scored.',
+  '{ANALYST_ROLE}',
   'You are given the extracted calculator values (with sources), the fields that could not be',
   'placed, the values documents disagreed on, and the calculator inputs still empty.',
   '',
@@ -132,12 +138,14 @@ function parseFindings(reply: string): CaseReviewFinding[] {
 export async function reviewCase(
   model: ExtractionModel | null,
   input: CaseSummaryInput,
+  options: { domain?: 'bbbee' | 'esg' } = {},
 ): Promise<CaseReviewFinding[]> {
+  const domain = options.domain ?? 'bbbee';
   if (!model || !caseReviewEnabled()) return [];
   if (input.payloadEntries.length === 0) return [];
 
   const summary = summariseCase(input);
-  const fingerprint = decisionFingerprint(['case-review', summary]);
+  const fingerprint = decisionFingerprint(['case-review', domain, summary]);
 
   try {
     const decision = await rememberDecision<CaseReviewFinding[]>(
@@ -147,7 +155,9 @@ export async function reviewCase(
         const think = model.completeReview?.bind(model)
           ?? model.completeHard?.bind(model)
           ?? model.complete.bind(model);
-        const findings = parseFindings(await think(SYSTEM_PROMPT, summary));
+        const findings = parseFindings(
+          await think(SYSTEM_PROMPT.replace('{ANALYST_ROLE}', analystRole(domain)), summary),
+        );
         logger.info('Case reviewed', { findings: findings.length });
         return findings;
       },

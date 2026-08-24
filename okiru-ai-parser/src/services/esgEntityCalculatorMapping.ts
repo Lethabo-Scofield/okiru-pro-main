@@ -43,11 +43,14 @@
 import { createLogger } from '../logger.js';
 import {
   admitEsgCalculatorEntry,
+  ESG_CALCULATOR_KEY_ALLOWLIST,
   esgCalculatorKeySpec,
 } from '../../schemas/esg_calculator_allowlist.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { findEsgDocumentById } from '../../schemas/esg_document_matrix.js';
 import type { CaseEntities } from './entityResolution.js';
+import type { ExtractionModel } from './aiExtraction.js';
+import { proposeFieldMappings, type MappableKey } from './semanticFieldMapping.js';
 
 const logger = createLogger('EsgEntityCalculatorMapping');
 
@@ -662,6 +665,99 @@ export interface EsgCalculatorMappingResult {
   unmapped: Array<{ field: string; reason: 'no_mapping' | 'conflicted' | 'uncoercible' | 'rejected_by_allowlist' }>;
   /** Fields held back for human review because sources disagreed. */
   needsReview: Array<{ field: string; values: unknown[]; sources: string[] }>;
+}
+
+
+/** Every allowlisted ESG key, as candidates for the semantic pass. */
+function esgMappableKeys(): MappableKey[] {
+  return ESG_CALCULATOR_KEY_ALLOWLIST.map((spec) => ({ key: spec.key, description: spec.description }));
+}
+
+/**
+ * Coercion for a key the SEMANTIC pass chose. Derived from the key's own
+ * allowlist spec — a key whose description says "percentage" gets percentage
+ * handling, which is what keeps a 0-1 ratio from scoring as a fraction of a
+ * percent. Booleans are the ESG allowlist's fourth runtime type.
+ */
+function coercionForEsgKey(key: string): Coercion {
+  const spec = esgCalculatorKeySpec(key);
+  if (!spec) return 'text';
+  if (spec.type === 'iso_date') return 'iso_date';
+  if (spec.type === 'boolean') return 'boolean';
+  if (spec.type === 'string') return 'text';
+  return /percentage|percent|%/i.test(spec.description) ? 'percentage' : 'number';
+}
+
+/**
+ * Declared mapping first, semantic placement for the leftovers — the same
+ * split of labour the B-BBEE mapper has, because "as good as B-BBEE" is the
+ * ESG bar. Runs `mapEsgEntitiesToCalculator` unchanged, then offers ONLY the
+ * fields it reported `no_mapping` to the model. A proposal has to survive the
+ * same coercion and the same allowlist as any declared mapping, and can never
+ * displace a key a declared mapping already filled. With no model this is
+ * `mapEsgEntitiesToCalculator` exactly.
+ */
+export async function mapEsgEntitiesToCalculatorWithSemantics(
+  entities: CaseEntities,
+  fieldElements: Map<string, Set<EsgElement>>,
+  model: ExtractionModel | null,
+): Promise<EsgCalculatorMappingResult> {
+  const base = mapEsgEntitiesToCalculator(entities, fieldElements);
+
+  const orphans = base.unmapped.filter((u) => u.reason === 'no_mapping').map((u) => u.field);
+  if (orphans.length === 0 || !model) return base;
+
+  const proposals = await proposeFieldMappings(model, orphans, esgMappableKeys(), {
+    context: 'an ESG evidence pack — environmental, social and governance disclosures, utility bills, registers',
+  });
+  if (Object.keys(proposals).length === 0) return base;
+
+  const payload = { ...base.payload };
+  const entries = [...base.entries];
+  const unmapped: EsgCalculatorMappingResult['unmapped'] = [];
+
+  for (const orphan of base.unmapped) {
+    const key = orphan.reason === 'no_mapping' ? proposals[orphan.field] : undefined;
+    const resolved = key ? entities.fields[orphan.field] : undefined;
+    if (!key || !resolved) {
+      unmapped.push(orphan);
+      continue;
+    }
+
+    const value = coerce(coercionForEsgKey(key), resolved.value);
+    if (value === null) {
+      unmapped.push({ field: orphan.field, reason: 'uncoercible' });
+      continue;
+    }
+
+    const admission = admitEsgCalculatorEntry(key, value);
+    if (!admission.accepted) {
+      unmapped.push({ field: orphan.field, reason: 'rejected_by_allowlist' });
+      continue;
+    }
+
+    // A declared mapping already owns this key: the human's answer stands.
+    if (entries.some((entry) => entry.key === key) || key in payload) {
+      unmapped.push(orphan);
+      continue;
+    }
+
+    payload[key] = value;
+    entries.push({
+      key,
+      value,
+      sourceField: orphan.field,
+      sourceFiles: resolved.sources,
+      agreementCount: resolved.agreementCount,
+    });
+  }
+
+  logger.info('ESG semantic pass placed fields the declared table did not cover', {
+    orphans: orphans.length,
+    placed: entries.length - base.entries.length,
+  });
+
+  return { ...base, payload, entries, unmapped };
 }
 
 /** Find the mapping for a field, respecting element scope (rule 3). */
