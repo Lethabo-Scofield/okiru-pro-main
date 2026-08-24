@@ -6,7 +6,7 @@ import {
   Download, Loader2, AlertCircle, Search, X, ChevronDown,
   RefreshCw, ShieldCheck, Clock, AlertTriangle, Award,
   Upload, CheckCircle2, XCircle, FileUp, FileText, TrendingUp,
-  Building2, Hash, Users2, Percent, CalendarClock, Eye, ExternalLink,
+  Building2, Hash, Users2, Percent, CalendarClock, Eye, ExternalLink, ArrowRight,
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { AppNavBack } from '@/components/AppNavBack';
@@ -807,6 +807,44 @@ export default function CertificateHub() {
       </header>
 
       <main className="max-w-[1180px] mx-auto px-4 sm:px-6 pt-6 pb-20">
+
+        {/* ─── Toolkit promo banner (image + overlaid CTAs) ─── */}
+        <div className="relative mb-6 overflow-hidden rounded-2xl border border-black/5 shadow-sm">
+          <img
+            src="/certificate-hub-banner.png"
+            alt="Okiru Toolkit — know your B-BBEE level in minutes. The B-BBEE Calculator auto-applies your latest, best-scoring certificate to your scorecard."
+            className="block h-auto w-full"
+            loading="eager"
+          />
+          {/* Action buttons overlaid on the banner footer. Tweak right-[..]/bottom-[..] to reposition. */}
+          <div className="absolute bottom-[6%] right-[3%] flex flex-wrap items-center gap-2 sm:gap-3">
+            {isAuthenticated ? (
+              <Link
+                href="/hub"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#6d4bff] px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-black/25 transition-colors hover:bg-[#5a3ce0] sm:px-5 sm:text-[14px]"
+              >
+                Open the Toolkit
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href={gatedAuthPath({ mode: "register", redirect: "/hub" })}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#6d4bff] px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-black/25 transition-colors hover:bg-[#5a3ce0] sm:px-5 sm:text-[14px]"
+                >
+                  Get started free
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+                <Link
+                  href={gatedAuthPath({ redirect: "/hub" })}
+                  className="inline-flex items-center rounded-lg border border-black/10 bg-white/90 px-4 py-2.5 text-[13px] font-medium text-[#241d4a] shadow-lg shadow-black/10 backdrop-blur transition-colors hover:bg-white sm:px-5 sm:text-[14px]"
+                >
+                  Sign in
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
 
         <div className="mb-5">
           <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[#636366]">
