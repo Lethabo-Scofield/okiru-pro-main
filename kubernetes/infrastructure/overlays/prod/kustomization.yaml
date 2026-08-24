@@ -33,7 +33,7 @@ images:
   newTag: "50ec7af4-20260823"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/web
   newName: okiruproacr.azurecr.io/okiru-pro/web
-  newTag: "a764f318-20260824"
+  newTag: "55641be2-20260824"
 - name: okiruproacrde4d539b.azurecr.io/okiru-pro/parser
   newName: okiruproacr.azurecr.io/okiru-pro/parser
   newTag: "d0516fae-20260824"
