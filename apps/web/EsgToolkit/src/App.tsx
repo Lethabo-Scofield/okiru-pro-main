@@ -16,6 +16,7 @@ import {
 import { EsgSidebar } from "./components/layout/EsgSidebar";
 import EsgDashboard from "./pages/EsgDashboard";
 import EsgCarbonTax from "./pages/EsgCarbonTax";
+import EsgEmissions from "./pages/EsgEmissions";
 import EsgNetZero from "./pages/EsgNetZero";
 import EsgEnvironmental from "./pages/EsgEnvironmental";
 import EsgSocial from "./pages/EsgSocial";
@@ -203,6 +204,7 @@ export function EsgAppRoutes() {
           <Switch>
             <Route path="/" component={EsgDashboard} />
             <Route path="/net-zero" component={EsgNetZero} />
+            <Route path="/emissions" component={EsgEmissions} />
             <Route path="/carbon-tax" component={EsgCarbonTax} />
             <Route path="/bbbee-bridge" component={EsgBbbeeBridge} />
             <Route path="/environmental" component={EsgEnvironmental} />

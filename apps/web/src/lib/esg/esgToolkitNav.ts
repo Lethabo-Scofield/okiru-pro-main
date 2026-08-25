@@ -70,6 +70,7 @@ const E_ENERGY_SUBTABS = ["scope-2", "solar"];
 export const ESG_TOOLKIT_OVERVIEW_NAV: EsgToolkitNavItem[] = [
   { id: "dashboard", label: "ESG Dashboard", href: "/", pillar: "overview", overview: true },
   { id: "net-zero", label: "Net-Zero Roadmap", href: "/net-zero", pillar: "overview", overview: true },
+  { id: "emissions", label: "GHG Emissions", href: "/emissions", pillar: "overview", overview: true },
   { id: "carbon-tax", label: "Carbon Tax", href: "/carbon-tax", pillar: "overview", overview: true },
   { id: "bbbee-bridge", label: "B-BBEE Bridge", href: "/bbbee-bridge", pillar: "overview", overview: true },
 ];
