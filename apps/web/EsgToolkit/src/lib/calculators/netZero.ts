@@ -26,6 +26,8 @@
  * from the trajectory and the prose is passed through unaltered for display.
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { computeGhgInventory } from "./ghgInventory";
+import { scoringMode, type EsgScoringOptions } from "./shared";
 
 export type NetZeroMilestone = {
   tier: string;
@@ -111,10 +113,29 @@ export function netZeroReductionAt(year: number): number {
   return last[1];
 }
 
-export function computeNetZeroRoadmap(workbook: EsgWorkbookData): NetZeroRoadmapResult {
+export function computeNetZeroRoadmap(
+  workbook: EsgWorkbookData,
+  options?: EsgScoringOptions,
+): NetZeroRoadmapResult {
+  const mode = scoringMode(options);
+
+  /*
+   * `F90 = =L79+L82` — the same mixed-unit block `carbonTax` used to read, so
+   * "current emissions" was litres + kWh rather than tonnes and every
+   * milestone gap was measured against it. Corrected mode uses the GHG
+   * inventory; parity mode keeps the sheet's own cell.
+   *
+   * The BASELINE stays `B90` in both modes: it is a figure the company enters
+   * for its chosen base year, not something derivable from this period's
+   * activity. Where it is unset the roadmap already reports "Set baseline"
+   * rather than inventing one.
+   */
   const baselineCell = readEsgCell(workbook, "e-data", "B90");
   const baseline = baselineCell ?? 0;
-  const current = readEsgCell(workbook, "e-data", "F90") ?? 0;
+  const current =
+    mode === "workbook-parity"
+      ? readEsgCell(workbook, "e-data", "F90") ?? 0
+      : computeGhgInventory(workbook).scope1And2;
 
   /*
    * `Assumptions!B107` (`ENT_NZ`). No config fallback: an unset target year is

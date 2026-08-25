@@ -27,8 +27,18 @@ function wb(sections: Record<string, Cells>): EsgWorkbookData {
  * ================================================================== */
 
 describe("Carbon_Tax", () => {
-  it("reproduces the workbook's C11 / E11 / B16 / C16 on the golden dataset", () => {
-    const tax = computeCarbonTax(deriveEsgSummaryCells(buildSgConsumerGoldenWorkbook()));
+  it("reproduces the workbook's C11 / E11 / B16 / C16 on the golden dataset — PARITY MODE", () => {
+    /*
+     * These figures are the client spreadsheet's own, defects included: C11
+     * sums `E_Data!L75:L78` + `L82`, a block labelled tCO₂e that actually
+     * holds litres + kWh. 3,184,558.93 is therefore not a tonnage — it is the
+     * mixed-unit total this mode exists to reproduce. The corrected figure is
+     * asserted in the test below; the two differ by ~857x.
+     */
+    const tax = computeCarbonTax(
+      deriveEsgSummaryCells(buildSgConsumerGoldenWorkbook()),
+      { mode: "workbook-parity" },
+    );
     expect(tax.ytdTco2e).toBeCloseTo(3184558.93, 6); // Carbon_Tax!C11
     /*
      * The annualised figures carry ~1e-4 of drift against the workbook because
@@ -42,6 +52,23 @@ describe("Carbon_Tax", () => {
     expect(tax.tier2Liability).toBeCloseTo(1086996114.77333, 1); // C16
   });
 
+  it("taxes real tonnes in corrected mode — the mode a client is actually charged on", () => {
+    const tax = computeCarbonTax(deriveEsgSummaryCells(buildSgConsumerGoldenWorkbook()));
+    /*
+     * 3,703.22 = fleet diesel 1,579.77 + electricity 2,123.45.
+     *
+     * The full SG workbook totals 3,714.94; the golden fixture is 11.72 lower
+     * because it carries NO generator-diesel, LPG or business-car activity
+     * (2,181.14 L + 2,280 kg + 1,053.82 L). That is a gap in the fixture, not
+     * in the calculation — worth closing when the fixture is next extended.
+     */
+    expect(tax.ytdTco2e).toBeCloseTo(3703.22, 1);
+    expect(tax.annualisedTco2e).toBeCloseTo(3703.22 * (12 / 9), 0);
+    expect(tax.taxableTco2e).toBeCloseTo(3703.22 * (12 / 9) * 0.4, 0);
+    // The liability a submission would quote: millions, not billions.
+    expect(tax.tier1Liability).toBeLessThan(1_000_000);
+  });
+
   it("is NOT R0 for a manually-entered workbook — the monthly grids now reach it", () => {
     const raw = wb({
       assumptions: { B111: 9, B37: 236, B38: 640, B39: 0.6 },
@@ -53,20 +80,28 @@ describe("Carbon_Tax", () => {
         s2_C41: 4000, //               L80 = L82 = 4000 (electricity)
       },
     });
+    // Parity mode still reports the sheet's mixed-unit sum: 1500+200+100+50+4000.
+    const parity = computeCarbonTax(deriveEsgSummaryCells(raw), { mode: "workbook-parity" });
+    expect(parity.ytdTco2e).toBe(5850);
+
+    /*
+     * Corrected mode converts each line: diesel 1700 L x 2.68, LPG 100 kg x
+     * 1.51, petrol 50 L x 2.31, electricity 4000 kWh x 0.82, all /1000.
+     */
     const tax = computeCarbonTax(deriveEsgSummaryCells(raw));
-    expect(tax.ytdTco2e).toBe(5850);
+    const expected = (1700 * 2.68 + 100 * 1.51 + 50 * 2.31 + 4000 * 0.82) / 1000;
+    expect(tax.ytdTco2e).toBeCloseTo(expected, 6);
     expect(tax.annualiseFactor).toBeCloseTo(12 / 9, 9);
-    expect(tax.annualisedTco2e).toBeCloseTo(7800, 6);
-    expect(tax.taxableTco2e).toBeCloseTo(3120, 6);
-    expect(tax.tier1Liability).toBeCloseTo(736320, 4);
-    expect(tax.tier2Liability).toBeCloseTo(1996800, 4);
+    expect(tax.annualisedTco2e).toBeCloseTo(expected * (12 / 9), 6);
+    expect(tax.taxableTco2e).toBeCloseTo(expected * (12 / 9) * 0.4, 6);
   });
 
   it("does not apply the source client's 9-month annualiser to another company", () => {
     // No B112 and no B111 → factor 1, not SG Consumer's 1.3333.
     const tax = computeCarbonTax(deriveEsgSummaryCells(wb({ "e-data": { s2_C41: 1000 } })));
     expect(tax.annualiseFactor).toBe(1);
-    expect(tax.annualisedTco2e).toBe(1000);
+    // 1000 kWh x 0.82 / 1000 = 0.82 tCO₂e, not 1000 "units".
+    expect(tax.annualisedTco2e).toBeCloseTo(0.82, 6);
   });
 
   it("prefers an explicit Assumptions!B112 over recomputing from B111", () => {
@@ -99,8 +134,10 @@ describe("NetZero_Roadmap", () => {
   });
 
   it("gives every milestone its OWN target and gap (they used to be identical)", () => {
+    // B90/F90 are the sheet's own cells, so this is a parity-mode fixture.
     const nz = computeNetZeroRoadmap(
       wb({ "e-data": { B90: 1000, F90: 900 }, assumptions: { B107: 2050 } }),
+      { mode: "workbook-parity" },
     );
     expect(nz.milestones.map((m) => m.year)).toEqual([2025, 2028, 2035, 2050]);
     [1000, 800, 350, 50].forEach((target, i) => {
@@ -116,6 +153,7 @@ describe("NetZero_Roadmap", () => {
   it("tracks each milestone independently", () => {
     const nz = computeNetZeroRoadmap(
       wb({ "e-data": { B90: 1000, F90: 900 }, assumptions: { B107: 2050 } }),
+      { mode: "workbook-parity" },
     );
     expect(nz.milestones.map((m) => m.onTrack)).toEqual([true, false, false, false]);
     expect(nz.gapTco2e).toBe(850); // gap to the terminal milestone
@@ -125,6 +163,7 @@ describe("NetZero_Roadmap", () => {
   it("uses Assumptions!B107 for the terminal milestone year (it was ignored)", () => {
     const nz = computeNetZeroRoadmap(
       wb({ "e-data": { B90: 1000, F90: 900 }, assumptions: { B107: 2040 } }),
+      { mode: "workbook-parity" },
     );
     expect(nz.targetYear).toBe(2040);
     const terminal = nz.milestones[nz.milestones.length - 1];

@@ -17,6 +17,8 @@
  * Scope 1 total — is deliberately NOT in the list; the four `L75:L78` rows are.)
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { computeGhgInventory } from "./ghgInventory";
+import { scoringMode, type EsgScoringOptions } from "./shared";
 import {
   CARBON_TAX_ALLOWANCE,
   CARBON_TAX_RATE_TIER1,
@@ -43,7 +45,11 @@ export type CarbonTaxResult = {
 /** `Carbon_Tax!C6:C10` — the taxable emission rows on `E_Data`. */
 const TAXABLE_SCOPE_ROWS = ["L75", "L76", "L77", "L78", "L82"] as const;
 
-export function computeCarbonTax(workbook: EsgWorkbookData): CarbonTaxResult {
+export function computeCarbonTax(
+  workbook: EsgWorkbookData,
+  options?: EsgScoringOptions,
+): CarbonTaxResult {
+  const mode = scoringMode(options);
   /*
    * `Assumptions!B112 = =12/B111` — the YTD→full-year annualiser, where `B111`
    * is the number of months of data captured.
@@ -65,10 +71,25 @@ export function computeCarbonTax(workbook: EsgWorkbookData): CarbonTaxResult {
   const rate1 = readEsgCell(workbook, "assumptions", "B37") ?? CARBON_TAX_RATE_TIER1;
   const rate2 = readEsgCell(workbook, "assumptions", "B38") ?? CARBON_TAX_RATE_TIER2;
 
-  const ytd = TAXABLE_SCOPE_ROWS.reduce(
-    (a, ref) => a + (readEsgCell(workbook, "e-data", ref) ?? 0),
-    0,
-  );
+  /*
+   * THE TAXED QUANTITY IS TONNES.
+   *
+   * This used to sum `E_Data!L75:L78` and `L82` — the workbook's "GHG
+   * Inventory Summary" block, which is LABELLED tCO₂e and holds raw ACTIVITY:
+   * litres, kWh and kilolitres, added together. For SG Consumer that is
+   * 3,184,558.93 against a real 3,714.94, so the liability came out roughly a
+   * thousand times too large. A client quoting it in a submission would have
+   * been catastrophically wrong, and nothing on the page said so.
+   *
+   * Corrected mode therefore takes the same scopes from the GHG inventory,
+   * where they are computed as activity x emission factor. Parity mode keeps
+   * reading the block verbatim, because reproducing the client's own
+   * spreadsheet — defects included — is exactly what that mode is for.
+   */
+  const ytd =
+    mode === "workbook-parity"
+      ? TAXABLE_SCOPE_ROWS.reduce((a, ref) => a + (readEsgCell(workbook, "e-data", ref) ?? 0), 0)
+      : computeGhgInventory(workbook).scope1And2;
   const annualised = ytd * annualise;
   const taxable = annualised * (1 - allowance);
 
