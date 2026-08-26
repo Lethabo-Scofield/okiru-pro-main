@@ -531,7 +531,10 @@ export function publicCertificateToDetailJson(c: PublicCertificate) {
     certificateNumber: c.certificateNumber,
     issueDate: c.issueDate,
     expiryDate: c.expiryDate,
-    blobName: c.blobName,
+    // SEC-001: never expose the raw storage blob path in PUBLIC output — it is the
+    // key an attacker would feed to /download. Files are resolved server-side by
+    // slug/id behind the ownership gate. (fileName is a display basename, not a path.)
+    blobName: null,
     fileName: c.fileName,
     status: c.metadataComplete ? c.status : 'unknown',
     verified: c.verified,

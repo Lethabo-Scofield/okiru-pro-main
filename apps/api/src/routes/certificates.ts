@@ -620,7 +620,7 @@ router.get(
   },
 );
 
-router.get('/download', async (req: Request, res: Response) => {
+router.get('/download', requireAuth, async (req: Request, res: Response) => {
   try {
     const file = req.query.file as string;
     if (!file || file.trim() === '') {
@@ -628,6 +628,18 @@ router.get('/download', async (req: Request, res: Response) => {
     }
 
     const trimmed = file.trim();
+
+    // SEC-001: authentication + organization-ownership gate. A certificate file is
+    // served only to the owning organization (or an admin). Anonymous or cross-tenant
+    // callers get 404 — never an existence oracle. Reuses canAccessCertificateFile.
+    const ownerRecord = (await CertificateMetadataModel.findOne(
+      { blobName: trimmed },
+      { _id: 0, organizationId: 1, uploadedByUserId: 1 },
+    ).lean()) as Record<string, any> | null;
+    if (!ownerRecord || !canAccessCertificateFile(req, ownerRecord)) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
     recordEvent({
       type: 'download',
       metadata: { blobName: trimmed, mode: req.query.mode || null },
@@ -1255,7 +1267,9 @@ router.get('/seo/list', async (_req: Request, res: Response) => {
         certificateNumber: doc.certificateNumber ?? null,
         expiryDate: dateOnly(doc.expiryDate),
         issueDate: dateOnly(doc.issueDate),
-        blobName: doc.blobName ?? null,
+        // SEC-001: never expose the raw storage blob name in the PUBLIC listing —
+        // it is the path an attacker would feed to /download. Files are fetched
+        // server-side by slug/id behind the ownership gate instead.
         status: doc.status ?? 'unknown',
         updatedAt: dateOnly(doc.updatedAt) ?? '',
         vatNumber: doc.vatNumber ?? null,
