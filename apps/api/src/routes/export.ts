@@ -1,3 +1,4 @@
+import { stripServerControlledFields } from '../middleware/sanitizeBody.js';
 import { Router, type Request as ExpressRequest, type Response } from 'express';
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
@@ -12,7 +13,7 @@ const router = Router();
 router.post('/log', requireAuth, async (req: Request, res: Response) => {
   try {
     const result = await storage.createExportLog({
-      ...req.body,
+      ...stripServerControlledFields(req.body),
       userId: req.session.userId!,
     });
     return res.json(result);
