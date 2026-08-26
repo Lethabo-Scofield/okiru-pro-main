@@ -97,7 +97,7 @@
     "uuid": "^13.0.0",
     "vaul": "^1.1.2",
     "wouter": "^3.9.0",
-    "ws": "^8.19.0",
+    "ws": "^8.20.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^3.25.76",
     "zod-validation-error": "^3.5.4",
