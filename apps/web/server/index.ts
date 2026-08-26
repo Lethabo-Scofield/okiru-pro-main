@@ -24,7 +24,21 @@ const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
 
 app.use(helmet({
-  contentSecurityPolicy: false,
+  // SEC-004: enforce a CSP in production (Vite dev needs unsafe-eval/-inline, so
+  // it stays off in dev). Built on helmet's secure defaults, then widened only to
+  // the sources the app actually uses: inline+external analytics (gtag), Google
+  // Fonts, Azure blob images over https, and blob: workers (pdf.js / tesseract).
+  contentSecurityPolicy: isProd
+    ? {
+        useDefaults: true,
+        directives: {
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com"],
+          imgSrc: ["'self'", "data:", "blob:", "https:"],
+          connectSrc: ["'self'", "https:", "wss:"],
+          workerSrc: ["'self'", "blob:"],
+        },
+      }
+    : false,
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: isProd ? undefined : false,
   crossOriginResourcePolicy: isProd ? undefined : false,

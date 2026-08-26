@@ -30,7 +30,9 @@ declare module "http" {
 app.set("trust proxy", 1);
 
 // Security
-app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+// SEC-004: enable helmet's default CSP in production (JSON API — no inline
+// script/style surface to break). Off in dev to avoid friction.
+app.use(helmet({ contentSecurityPolicy: isProd ? undefined : false, crossOriginEmbedderPolicy: false }));
 app.use(compression());
 
 // CORS — strict allowlist. Unknown origins are rejected and logged so operators
