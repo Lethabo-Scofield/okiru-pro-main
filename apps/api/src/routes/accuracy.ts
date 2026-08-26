@@ -68,7 +68,7 @@ router.post('/ingest', requireAuth, async (req: Request, res: Response) => {
   } catch (error: unknown) {
     logger.error('Ingest error', error);
     return res.status(500).json({
-      message: error instanceof Error ? error.message : 'Ingestion failed',
+      message: 'Ingestion failed',
     });
   }
 });
@@ -184,7 +184,7 @@ router.post('/compare', requireAuth, async (req: Request, res: Response) => {
   } catch (error: unknown) {
     logger.error('Compare error', error);
     return res.status(500).json({
-      message: error instanceof Error ? error.message : 'Comparison failed',
+      message: 'Comparison failed',
     });
   }
 });
@@ -237,7 +237,7 @@ router.post('/graph-analyze', requireAuth, async (req: Request, res: Response) =
   } catch (error: unknown) {
     logger.error('Graph analyze error', error);
     return res.status(500).json({
-      message: error instanceof Error ? error.message : 'Analysis failed',
+      message: 'Analysis failed',
     });
   }
 });
@@ -327,7 +327,7 @@ router.post('/provenance', requireAuth, async (req: Request, res: Response) => {
   } catch (error: unknown) {
     logger.error('Provenance error', error);
     return res.status(500).json({
-      message: error instanceof Error ? error.message : 'Provenance extraction failed',
+      message: 'Provenance extraction failed',
     });
   }
 });

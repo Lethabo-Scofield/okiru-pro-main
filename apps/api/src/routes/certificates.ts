@@ -1410,7 +1410,7 @@ router.post('/process', requireAuth, async (req: Request, res: Response) => {
     invalidateDerivedCaches();
   } catch (err: any) {
     logger.error('Bulk certificate extraction failed', err);
-    sendEvent({ type: 'error', message: err.message });
+    sendEvent({ type: 'error', message: 'Extraction failed' });
   }
 
   res.end();
@@ -1489,7 +1489,7 @@ async function runCertificateEnrichmentEndpoint(
     return res.json(result);
   } catch (err: any) {
     logger.error('Certificate enrichment job failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate enrichment failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate enrichment failed' });
   }
 }
 
@@ -1518,7 +1518,7 @@ router.post('/recover-vat', requireAuth, async (req: Request, res: Response) => 
     return res.json(result);
   } catch (err: any) {
     logger.error('Certificate VAT recovery failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate VAT recovery failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate VAT recovery failed' });
   }
 });
 
@@ -1645,7 +1645,7 @@ router.get('/vat-review-queue', requireAuth, async (req: Request, res: Response)
     });
   } catch (err: any) {
     logger.error('Certificate VAT review queue failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate VAT review queue failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate VAT review queue failed' });
   }
 });
 
@@ -1724,7 +1724,7 @@ router.post('/:id/confirm-vat', requireAuth, async (req: Request, res: Response)
     });
   } catch (err: any) {
     logger.error('Certificate VAT confirmation failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate VAT confirmation failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate VAT confirmation failed' });
   }
 });
 
@@ -1735,7 +1735,7 @@ router.get('/production-coverage', requireAuth, async (req: Request, res: Respon
     return res.json(await getProductionCertificateCoverage());
   } catch (err: any) {
     logger.error('Certificate production coverage failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate production coverage failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate production coverage failed' });
   }
 });
 
@@ -1747,7 +1747,7 @@ router.get('/extraction-coverage', requireAuth, async (req: Request, res: Respon
     return res.json(coverage);
   } catch (err: any) {
     logger.error('Certificate extraction coverage failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate extraction coverage failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate extraction coverage failed' });
   }
 });
 
@@ -1876,7 +1876,7 @@ router.get('/review-queue', requireAuth, async (req: Request, res: Response) => 
     });
   } catch (err: any) {
     logger.error('Certificate review queue failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate review queue failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate review queue failed' });
   }
 });
 
@@ -1918,7 +1918,7 @@ router.post('/retry-extraction', requireAuth, async (req: Request, res: Response
     return res.json(result);
   } catch (err: any) {
     logger.error('Certificate extraction retry failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate extraction retry failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate extraction retry failed' });
   }
 });
 
