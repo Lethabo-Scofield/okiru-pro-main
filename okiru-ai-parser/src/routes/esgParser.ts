@@ -25,16 +25,21 @@
  *  3. THE EXTRACTION ENGINE. `extractEsgCaseEntities` is a thin wrapper over the
  *     same `extractDocument` the B-BBEE path calls, with `domain: 'esg'`.
  *
- * WHAT IS DUPLICATED, AND WHY: the multer upload policy is restated here rather
- * than imported from `parser.ts`, because `parser.ts` mounts THIS router and
- * importing back out of it would be a cycle. The limits are deliberately
- * identical; if one changes, both must.
+ *  4. THE UPLOAD POLICY. Both domains now share `services/uploadPolicy.ts` —
+ *     same limits, same filter, one place to change. It used to be restated
+ *     here to avoid a cycle (`parser.ts` mounts THIS router); living in
+ *     `services/` removes the cycle and the "if one changes, both must" hazard.
  */
 import { Router, type Request, type Response } from 'express';
-import multer from 'multer';
 import { createLogger } from '../logger.js';
 import { fail, ok } from '../utils/apiResponse.js';
-import { extractionInputsFromUpload, isSupportedUpload } from '../services/fileExtraction.js';
+import { extractionInputsFromUpload } from '../services/fileExtraction.js';
+import {
+  MAX_UPLOAD_BATCH_BYTES,
+  skippedUploadSummary,
+  skippedUploads,
+  upload,
+} from '../services/uploadPolicy.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
 import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
@@ -59,18 +64,25 @@ function extractionRequiresPayment(): boolean {
   return process.env.PARSER_REQUIRE_PAYMENT !== 'false';
 }
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 100 },
-  fileFilter: (_req, file, cb) => {
-    if (isSupportedUpload(file.mimetype, file.originalname)) cb(null, true);
-    else cb(new Error(`Unsupported file type ${file.mimetype} (${file.originalname})`));
-  },
-});
-const MAX_UPLOAD_BATCH_BYTES = 500 * 1024 * 1024;
-
 function batchTooLarge(files: Express.Multer.File[]): boolean {
   return files.reduce((sum, file) => sum + file.size, 0) > MAX_UPLOAD_BATCH_BYTES;
+}
+
+/**
+ * The 400 for "nothing usable arrived".
+ *
+ * Two different situations reach it and they need different words: no files at
+ * all (a client bug — wrong field name), or files that were all skipped by the
+ * upload filter (a user problem — say which, so they can drop them and retry).
+ */
+function noUsableFiles(req: Request) {
+  const summary = skippedUploadSummary(req);
+  return summary
+    ? fail(
+      `None of the uploaded files are a type we can read: ${summary}. Remove them and upload the documents on their own.`,
+      'UNSUPPORTED_FILES_ONLY',
+    )
+    : fail('Upload files using multipart field name "files"', 'FILES_REQUIRED');
 }
 
 /**
@@ -120,7 +132,7 @@ router.post('/quote-files', upload.array('files', 100), async (req: Request, res
   try {
     const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
     if (files.length === 0) {
-      return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+      return res.status(400).json(noUsableFiles(req));
     }
     if (batchTooLarge(files)) {
       return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
@@ -150,6 +162,10 @@ router.post('/quote-files', upload.array('files', 100), async (req: Request, res
       domain: 'esg',
       esgRouting,
       paymentRequired: extractionRequiresPayment(),
+      // Files the filter dropped. Named at QUOTE time, which is free and comes
+      // before payment, so "we can't read your .eml" is something the user
+      // learns while they can still do something about it.
+      skippedFiles: skippedUploads(req),
     }));
   } catch (err) {
     logger.error('ESG pricing quote failed', err as Error);
@@ -166,7 +182,7 @@ router.post('/quote-files', upload.array('files', 100), async (req: Request, res
 router.post('/resolve-case-files', upload.array('files', 100), async (req: Request, res: Response) => {
   const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
   if (files.length === 0) {
-    return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+    return res.status(400).json(noUsableFiles(req));
   }
   if (batchTooLarge(files)) {
     return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
@@ -207,9 +223,15 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     const rawInputs = settled
       .filter((s) => s.ok)
       .flatMap((s) => (s as { inputs: Awaited<ReturnType<typeof extractionInputsFromUpload>> }).inputs);
-    const unreadableFiles = settled
-      .filter((s) => !s.ok)
-      .map((s) => ({ file_name: (s as { fileName: string }).fileName, reason: (s as { message: string }).message }));
+    const unreadableFiles = [
+      // Skipped by the upload filter (wrong type) and failed while being read
+      // are different causes with the same consequence: the user uploaded it
+      // and got nothing back. Report them together so neither disappears.
+      ...skippedUploads(req),
+      ...settled
+        .filter((s) => !s.ok)
+        .map((s) => ({ file_name: (s as { fileName: string }).fileName, reason: (s as { message: string }).message })),
+    ];
 
     if (rawInputs.length === 0) {
       return res.status(400).json(fail(
@@ -254,7 +276,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
 router.post('/resolve-case-files-stream', upload.array('files', 100), async (req: Request, res: Response) => {
   const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
   if (files.length === 0) {
-    return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+    return res.status(400).json(noUsableFiles(req));
   }
   if (batchTooLarge(files)) {
     return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
@@ -290,6 +312,18 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
   const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
 
   try {
+    // Files the upload filter dropped never reach `files`, so without this they
+    // would be silently absent from a stream the client uses as the record of
+    // what happened. Same event the per-file reader failures use, so the UI
+    // marks them without knowing the difference.
+    skippedUploads(req).forEach((skipped, i) => {
+      send('doc-error', {
+        index: -1 - i,
+        fileName: skipped.file_name,
+        message: `Skipped — ${skipped.reason}`,
+      });
+    });
+
     const fileLanes = (() => {
       const configured = Number(process.env.PARSER_FILE_CONCURRENCY);
       return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 3;
