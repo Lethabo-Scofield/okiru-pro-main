@@ -2523,19 +2523,15 @@ router.get('/:id/history', async (req: Request, res: Response) => {
       certificateId: doc.id,
       slug: doc.slug || null,
       latest: {
-        blobName: doc.blobName,
         fileName: doc.fileName,
         expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : null,
         uploadedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
-        uploadedByUserId: doc.uploadedByUserId || null,
       },
       versions: versions.map((v: any) => ({
-        blobName: v.blobName,
         fileName: v.fileName,
         expiryDate: v.expiryDate ? new Date(v.expiryDate).toISOString().slice(0, 10) : null,
         uploadedAt: v.uploadedAt ? new Date(v.uploadedAt).toISOString() : null,
         replacedAt: v.replacedAt ? new Date(v.replacedAt).toISOString() : null,
-        uploadedByUserId: v.uploadedByUserId || null,
       })),
     }));
   }
@@ -2545,19 +2541,15 @@ router.get('/:id/history', async (req: Request, res: Response) => {
     certificateId: rec.id,
     slug: buildCertSlug(rec.companyName, rec.id),
     latest: {
-      blobName: rec.blobName,
       fileName: rec.fileName,
       expiryDate: rec.expiryDate,
       uploadedAt: rec.updatedAt,
-      uploadedByUserId: rec.uploadedByUserId,
     },
     versions: (rec.versions || []).map((v) => ({
-      blobName: v.blobName,
       fileName: v.fileName,
       expiryDate: v.expiryDate,
       uploadedAt: v.uploadedAt,
       replacedAt: v.replacedAt,
-      uploadedByUserId: v.uploadedByUserId,
     })),
   }));
 });
