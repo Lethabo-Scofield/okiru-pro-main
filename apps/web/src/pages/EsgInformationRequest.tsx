@@ -577,6 +577,12 @@ export default function EsgInformationRequest() {
           }}
           onConfirm={() => void confirmImport()}
           confirming={importing}
+          // The workbook being imported INTO — what turns "812 cells" into
+          // "300 of these replace figures you already captured".
+          workbook={workbook ?? null}
+          sectionLabels={Object.fromEntries(
+            ESG_INPUT_SECTIONS.map((section) => [section.id, section.title]),
+          )}
         />
 
         {stage === "deciding" ? (

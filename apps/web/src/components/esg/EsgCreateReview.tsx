@@ -18,6 +18,8 @@ import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 import EsgExtractionSummary from "./EsgExtractionSummary";
 import EsgFlowSteps from "./EsgFlowSteps";
+import { EsgImportAnalysisPanel } from "@/components/esg-workbook/EsgImportAnalysisPanel";
+import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
 import type { EsgInjectionResult, EsgParserCaseLike } from "./esgParserInjection";
 
 /** Which way in produced what is being reviewed. */
@@ -157,17 +159,16 @@ export function EsgCreateReview({
               </span>
             </div>
           ))}
-          {excel.preview.unmatchedSheets.length > 0 ? (
-            <p className="border-t border-white/[0.06] px-4 py-3 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
-              Left out because they do not match a workbook section:{" "}
-              {excel.preview.unmatchedSheets.join(", ")}
-            </p>
-          ) : null}
-          {excel.preview.warnings.length > 0 ? (
-            <p className="border-t border-white/[0.06] px-4 py-3 text-[12px] leading-5 text-amber-300">
-              {excel.preview.warnings.join(" · ")}
-            </p>
-          ) : null}
+          {/* The same panel the in-workbook Import / bulk upload renders. There
+              is no workbook to compare against yet on this route, so it reports
+              additions, scope, duplicates and unmatched sheets — and no
+              overwrites, because nothing can be overwritten. */}
+          <div className="border-t border-white/[0.06] px-4 py-3">
+            <EsgImportAnalysisPanel
+              analysis={analyseEsgImport(excel.preview, null)}
+              sectionLabels={SECTION_TITLES}
+            />
+          </div>
         </div>
       ) : null}
 
