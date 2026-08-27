@@ -213,6 +213,15 @@ export interface EsgDocumentUploadStartProps {
   busy?: boolean;
   /** Back to the "how would you like to begin" choice. */
   onBack?: () => void;
+  /**
+   * Files to stage on mount.
+   *
+   * The Excel route hands its workbook over this way when the workbook is not
+   * OUR template: rather than dead-ending on "none of its sheets match", the
+   * same file is read as evidence by the parser, which maps a register's
+   * columns instead of requiring its tab to be named correctly.
+   */
+  initialFiles?: File[];
 }
 
 export function EsgDocumentUploadStart({
@@ -221,6 +230,7 @@ export function EsgDocumentUploadStart({
   onComplete,
   busy = false,
   onBack,
+  initialFiles,
 }: EsgDocumentUploadStartProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -827,6 +837,24 @@ export function EsgDocumentUploadStart({
     }
     void prepareAndQuote(next);
   };
+
+  /**
+   * Stage anything the host handed over on mount, exactly once.
+   *
+   * Guarded by a ref rather than by `files.length`: `addFiles` quotes, and a
+   * quote that re-fired on every render would bill the user for a batch they
+   * only chose once. `initialFiles` is a handover, not a controlled prop.
+   */
+  const stagedInitial = useRef(false);
+  useEffect(() => {
+    if (stagedInitial.current) return;
+    if (!initialFiles || initialFiles.length === 0) return;
+    stagedInitial.current = true;
+    addFiles(initialFiles);
+    // addFiles is recreated every render and is not a dependency worth chasing:
+    // the ref is what makes this run once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialFiles]);
 
   const removeFile = (name: string) => {
     const next = files.filter((f) => f.name !== name);

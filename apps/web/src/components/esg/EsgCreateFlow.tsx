@@ -88,6 +88,13 @@ export function EsgCreateFlow() {
   const { toast } = useToast();
 
   const [step, setStep] = useState<EsgCreateStep>("choose");
+  /**
+   * A workbook the template import could not read, handed to the document
+   * route instead. Foreign spreadsheets are the normal case once a client
+   * sends their own ESG file, and the parser can map a register by its
+   * COLUMNS where the template import can only match a tab NAME.
+   */
+  const [excelHandover, setExcelHandover] = useState<File[] | null>(null);
   const [work, setWork] = useState<PendingWork>(EMPTY_WORK);
   const [manualName, setManualName] = useState("");
   const [entityName, setEntityName] = useState("");
@@ -100,6 +107,9 @@ export function EsgCreateFlow() {
     setWork(EMPTY_WORK);
     setEntityName("");
     setNameSource("none");
+    // Leaving the document route drops the handed-over workbook: coming back
+    // must not silently re-stage (and re-quote) a file the user walked away from.
+    setExcelHandover(null);
   };
 
   /**
@@ -113,14 +123,20 @@ export function EsgCreateFlow() {
     try {
       const preview = parseEsgWorkbookXlsx(await file.arrayBuffer());
       if (Object.keys(preview.sections).length === 0) {
+        // Not our template. That used to end the road; it is now simply the
+        // other reader's job — the parser maps a register by its COLUMNS, so a
+        // client's own fleet list works even though its tab is not called
+        // "Fleet_Register". Tokens are quoted there before anything is read.
         toast({
-          title: "Nothing to import from that workbook",
+          title: "That is not the Okiru template",
           description:
             preview.unmatchedSheets.length > 0
-              ? `None of its sheets match a workbook section (${preview.unmatchedSheets.slice(0, 3).join(", ")}). Download the template and fill that in.`
-              : "No sheet in that file matched a workbook section.",
-          variant: "destructive",
+              ? `Reading it as evidence instead — none of its sheets (${preview.unmatchedSheets.slice(0, 3).join(", ")}) match a workbook section. You will see the token cost before anything is read.`
+              : "Reading it as evidence instead. You will see the token cost before anything is read.",
         });
+        setExcelHandover([file]);
+        setWork({ ...EMPTY_WORK, route: "documents" });
+        setStep("provide");
         return;
       }
       const name = esgEntityNameFromSections(preview.sections);
@@ -308,6 +324,7 @@ export function EsgCreateFlow() {
               companyId=""
               onBack={backToChoose}
               onComplete={handleParsedDocuments}
+              initialFiles={excelHandover ?? undefined}
             />
           </div>
         ) : null}

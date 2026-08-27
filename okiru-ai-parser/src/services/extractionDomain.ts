@@ -279,6 +279,18 @@ const ESG_ROW_FIELDS: ReadonlySet<string> = new Set(
 /** Every rows-field name the ESG grids emit. */
 export const ESG_GRID_ROW_FIELDS: readonly string[] = Object.values(ESG_GRIDS).map((g) => g.rowsField);
 
+/**
+ * Every ESG spec whose evidence is a TABLE, with its grid.
+ *
+ * `gridForDocument` answers "is THIS spec grid-shaped"; this answers "which
+ * specs are", which is the question a workbook sheet asks — a sheet arrives
+ * with columns and no spec, and the shape has to be chosen from the catalogue
+ * rather than looked up.
+ */
+export function esgGridDocuments(): Array<{ documentId: string; grid: DocumentGrid }> {
+  return Object.entries(ESG_GRIDS).map(([documentId, grid]) => ({ documentId, grid }));
+}
+
 export interface DomainDefinition {
   domain: ExtractionDomain;
   matrix: readonly DomainDocument[];

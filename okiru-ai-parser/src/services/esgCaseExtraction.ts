@@ -13,11 +13,15 @@
  * result unchanged. A missing API key must never turn a working upload into a
  * failed one.
  *
+ * WORKBOOK SHEETS are read by `esgSheetTableExtraction` alongside the spec pass.
+ * That used to be listed here as deliberately absent, on the grounds that the
+ * only shape catalogue was the five B-BBEE scorecard tables — true then, wrong
+ * now: `ESG_GRIDS` describes fourteen ESG registers with the row columns the
+ * calculator mapping already understands. A register that arrives as a
+ * SPREADSHEET is now mapped once and applied to every row, instead of being
+ * re-typed by the model a row at a time.
+ *
  * WHAT IS DELIBERATELY NOT HERE
- *   - The workbook SHEET table extractor. Its shape catalogue is the five B-BBEE
- *     scorecard tables (shareholders, employees, learners, suppliers, SED
- *     contributions); ESG registers arrive as documents and are read by the grid
- *     pass inside `extractWithSpec` instead.
  *   - The supplier-LEDGER reader and the B-BBEE financials sheet reader, for the
  *     same reason.
  *   - The entity-name fallback and the auditor-validation pass, whose prompts
@@ -38,6 +42,7 @@ import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { elementFromHint } from './specRetrieval.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { reviewCase } from './caseReview.js';
+import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
 import {
   esgFieldElementIndex,
   mapEsgEntitiesToCalculator,
@@ -59,6 +64,22 @@ export interface EsgCaseExtractionResult extends CaseEntities {
    * `payload`; register rows in `rows`, one object per source row.
    */
   calculator: EsgCalculatorMappingResult;
+}
+
+/**
+ * The header-keyed rows a split workbook sheet already parsed.
+ *
+ * Same shape check the B-BBEE path uses: anything that is not an array of plain
+ * objects is not a table, and a deterministic read of a non-table is worse than
+ * no read at all.
+ */
+function structuredRows(tables: unknown[] | undefined): Array<Record<string, unknown>> | undefined {
+  const first = tables?.[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const rows = (first as { rows?: unknown }).rows;
+  if (!Array.isArray(rows) || rows.length === 0) return undefined;
+  if (!rows.every((row) => row !== null && typeof row === 'object' && !Array.isArray(row))) return undefined;
+  return rows as Array<Record<string, unknown>>;
 }
 
 export async function extractEsgCaseEntities(
@@ -93,12 +114,26 @@ export async function extractEsgCaseEntities(
       : null;
     const elementOverride = routingElement(classification) ?? undefined;
 
-    const results = await extractDocument(model, {
-      filename: input.filename,
-      markdown: input.markdown,
-      raw_text: input.raw_text,
-      elementHint: sheetName,
-    }, { elementOverride, domain: 'esg' });
+    const [specResults, sheetTable] = await Promise.all([
+      extractDocument(model, {
+        filename: input.filename,
+        markdown: input.markdown,
+        raw_text: input.raw_text,
+        elementHint: sheetName,
+      }, { elementOverride, domain: 'esg' }),
+      // A register that arrived as a spreadsheet: the model maps its columns
+      // once, the code reads every row. Returns null for anything that is not a
+      // register, so the spec pass above remains the reader for PDFs, scans and
+      // narrative documents — this is additive, never a replacement.
+      extractEsgSheetTable(model, {
+        filename: input.filename,
+        rows: structuredRows(input.tables),
+        sheetName,
+      }),
+    ]);
+
+    const results = [...specResults];
+    if (sheetTable) results.push(sheetTable);
 
     done += 1;
     onProgress?.({ done, total, fileName: input.filename });
