@@ -84,3 +84,12 @@ docs/BEE Information Gathering File - Thandanani Transport.xlsm
 docs/testdocs/
 docs/Demo - Kagiso Facilities Services (RCOGP)/
 docs/Lake Trading*.xlsx
+
+# Super Group client documents added 2026-08-25 — same rule as above: this
+# repo is public, real client ESG data / proposals / reports never get
+# committed. Canonical copies live outside the repo.
+docs/2026 ESG Data/
+docs/ESG Toolkit/
+docs/Proposals/
+docs/Reports/
+docs/Super Group Upload Pack/
