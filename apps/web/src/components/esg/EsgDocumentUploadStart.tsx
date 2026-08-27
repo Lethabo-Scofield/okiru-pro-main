@@ -126,11 +126,24 @@ const MAX_UPLOAD_FILES = 100;
  */
 const STREAM_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
-/** Extensions the parser can read. Anything else is filtered with a warning. */
+/**
+ * Extensions the parser can read. Anything else is filtered with a warning.
+ *
+ * Mirrors SUPPORTED_UPLOAD_EXTENSIONS in the parser service — `.ppt` was
+ * missing here while the server accepted it, so a real deck was refused before
+ * it was ever offered.
+ */
 const READABLE = new Set([
-  ".pdf", ".docx", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx",
+  ".pdf", ".docx", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx", ".ppt",
   ".csv", ".txt", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".webp",
 ]);
+
+/**
+ * The same list as an `accept` attribute, so the picker and the filter agree.
+ * `Array.from` rather than a spread: this project's tsconfig targets below
+ * ES2015 for iteration and a spread over a Set is a compile error here.
+ */
+const READABLE_ACCEPT = Array.from(READABLE).join(",");
 
 /**
  * Fold a newly-read case into what we already had.
@@ -720,17 +733,14 @@ export function EsgDocumentUploadStart({
    * read, say plainly what was skipped, and let the user decide.
    */
   const addFolder = (incoming: File[], origin?: EsgUploadOrigin) => {
-    const readable: File[] = [];
-    const skipped: string[] = [];
-    for (const file of incoming) {
-      const dot = file.name.lastIndexOf(".");
-      const ext = dot === -1 ? "" : file.name.slice(dot).toLowerCase();
-      if (file.name.startsWith(".") || file.name === "Thumbs.db" || file.name === "desktop.ini") continue;
-      if (READABLE.has(ext) && file.size > 0) readable.push(file);
-      else skipped.push(file.name);
-    }
-    setSkippedFiles(skipped);
-    if (readable.length > 0) addFiles(readable, origin);
+    // Only the silent drops belong here — OS bookkeeping the user never chose
+    // and would not want listed back at them. Deciding what is READABLE now
+    // lives in `addFiles`, so a dragged folder, a dragged file and a picked
+    // file are all judged by the same rule.
+    const candidates = incoming.filter(
+      (file) => !(file.name.startsWith(".") || file.name === "Thumbs.db" || file.name === "desktop.ini"),
+    );
+    addFiles(candidates, origin);
   };
 
   /**
@@ -765,12 +775,32 @@ export function EsgDocumentUploadStart({
       return /^~\$/.test(base) || /^\._/.test(base) || /^\.(ds_store)$/i.test(base) || /^thumbs\.db$/i.test(base);
     };
     const skipped = incoming.filter((f) => isJunk(f.name)).map((f) => f.name.split(/[\\/]/).pop() ?? f.name);
-    const usable = incoming.filter((f) => !isJunk(f.name));
     if (skipped.length > 0) {
       setParseError(
         `Skipped ${skipped.length} temporary file${skipped.length === 1 ? "" : "s"} (${skipped.slice(0, 2).join(", ")}${skipped.length > 2 ? "…" : ""}) — these are Excel/Office lock files, not documents. Close the workbook in Excel and upload the real file.`,
       );
     }
+
+    /**
+     * Types the parser cannot read — a README beside the evidence, an .eml
+     * export, a stray .zip.
+     *
+     * This used to run only for whole-folder uploads, so a drag-and-drop or a
+     * hand-picked batch sent them to the server, where ONE of them failed the
+     * entire multipart request. The server no longer does that, but catching it
+     * here is what turns a server round-trip into an immediate, specific
+     * "these two were not documents" — before anything is priced.
+     */
+    const unreadable: string[] = [];
+    const usable = incoming.filter((f) => {
+      if (isJunk(f.name)) return false;
+      const dot = f.name.lastIndexOf(".");
+      const ext = dot === -1 ? "" : f.name.slice(dot).toLowerCase();
+      if (READABLE.has(ext) && f.size > 0) return true;
+      unreadable.push(f.name.split(/[\\/]/).pop() ?? f.name);
+      return false;
+    });
+    setSkippedFiles(unreadable);
     if (usable.length === 0) return;
     const next = [...files];
     for (const f of usable) {
@@ -890,7 +920,7 @@ export function EsgDocumentUploadStart({
         type="file"
         multiple
         className="hidden"
-        accept=".pdf,.txt,.csv,.doc,.docx,.xlsx,.xlsm,.xls,.pptx,.png,.jpg,.jpeg"
+        accept={READABLE_ACCEPT}
         onChange={(e) => {
           if (e.target.files?.length) addFiles(Array.from(e.target.files));
           e.currentTarget.value = "";
@@ -1227,8 +1257,10 @@ export function EsgDocumentUploadStart({
         >
           <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-200">
             <AlertTriangle className="h-4 w-4" />
-            {skippedFiles.length} file{skippedFiles.length === 1 ? "" : "s"} in that folder could not
-            be read
+            {/* Not "in that folder" any more: the same filter now runs for a
+                dragged file and a picked one, so this banner is reachable
+                without a folder ever being involved. */}
+            {skippedFiles.length} file{skippedFiles.length === 1 ? "" : "s"} could not be read
           </p>
           <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
             We only read PDFs, Word, Excel, PowerPoint, CSV and images. Everything else was left out —

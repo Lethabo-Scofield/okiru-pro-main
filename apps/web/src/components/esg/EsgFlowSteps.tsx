@@ -36,8 +36,16 @@ export function EsgFlowSteps({
         const step = index + 1;
         const done = step < current;
         const active = step === current;
+        const last = step === labels.length;
         return (
-          <div key={label} className="flex min-w-0 flex-1 items-center gap-2">
+          /* Only a step that HAS a connector may grow. Every step used to be
+             flex-1, which gave the last one an equal share of the width with
+             nothing to fill it — so the row stopped a third short of its right
+             edge and read as left-weighted rather than evenly spaced. */
+          <div
+            key={label}
+            className={`flex min-w-0 items-center gap-2 ${last ? "shrink-0" : "flex-1"}`}
+          >
             <span
               className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
                 done
@@ -52,7 +60,7 @@ export function EsgFlowSteps({
               {done ? <Check className="h-3.5 w-3.5" /> : step}
             </span>
             <span
-              className={`truncate text-[12px] font-medium ${
+              className={`min-w-0 truncate text-[12px] font-medium ${
                 active
                   ? "text-[var(--esg-text,#fff)]"
                   : "text-[var(--esg-text3,#636366)]"
@@ -60,7 +68,7 @@ export function EsgFlowSteps({
             >
               {label}
             </span>
-            {step < labels.length ? (
+            {!last ? (
               <span
                 aria-hidden="true"
                 className={`ml-1 hidden h-px flex-1 sm:block ${
