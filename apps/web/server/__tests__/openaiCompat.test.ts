@@ -114,4 +114,43 @@ describe("createChatCompletion", () => {
     expect(create.mock.calls[2][0]).not.toHaveProperty("temperature");
     expect(create.mock.calls[2][0]).not.toHaveProperty("top_p");
   });
+
+  it("renames max_tokens when the model demands max_completion_tokens — never drops the cap", async () => {
+    // The reasoning-family deployments reject max_tokens outright. Removing it
+    // (the temperature strategy) would uncap the reply on our bill; the fix is
+    // a RENAME, keeping the same limit under the name the model accepts.
+    const create = vi.fn()
+      .mockRejectedValueOnce(apiError({
+        param: "max_tokens",
+        code: "unsupported_parameter",
+        message: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
+      }))
+      .mockResolvedValueOnce({ ok: true });
+
+    await createChatCompletion(
+      clientWith(create),
+      { model: "m", messages: [], max_tokens: 700 } as never,
+    );
+
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[1][0]).not.toHaveProperty("max_tokens");
+    expect(create.mock.calls[1][0]).toHaveProperty("max_completion_tokens", 700);
+  });
+
+  it("remembers the rename, so later calls translate up front", async () => {
+    const create = vi.fn()
+      .mockRejectedValueOnce(apiError({
+        param: "max_tokens",
+        code: "unsupported_parameter",
+        message: "Use 'max_completion_tokens' instead.",
+      }))
+      .mockResolvedValue({ ok: true });
+
+    await createChatCompletion(clientWith(create), { model: "m", messages: [], max_tokens: 700 } as never);
+    await createChatCompletion(clientWith(create), { model: "m", messages: [], max_tokens: 500 } as never);
+
+    expect(create).toHaveBeenCalledTimes(3); // 1 failed + 1 retry + 1 clean
+    expect(create.mock.calls[2][0]).toHaveProperty("max_completion_tokens", 500);
+    expect(create.mock.calls[2][0]).not.toHaveProperty("max_tokens");
+  });
 });

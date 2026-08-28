@@ -61,6 +61,35 @@ function without<T extends Record<string, unknown>>(params: T, drop: Iterable<Tu
 
 type ChatParams = Parameters<OpenAI['chat']['completions']['create']>[0];
 
+/** Has this deployment told us to say `max_completion_tokens`? Per process. */
+let renameMaxTokens = false;
+
+/**
+ * The newer reasoning-family deployments reject `max_tokens` outright:
+ *
+ *   400 unsupported_parameter — "'max_tokens' is not supported with this
+ *   model. Use 'max_completion_tokens' instead."
+ *
+ * Same shape as the temperature problem above, but a RENAME rather than a
+ * removal — dropping the cap entirely would let a chatty model run to the
+ * context limit on our bill. Detected once, remembered for the process.
+ */
+function wantsMaxCompletionTokens(err: unknown): boolean {
+  const e = err as { status?: number; code?: string; param?: string; message?: string } | null;
+  if (!e || e.status !== 400) return false;
+  if (e.param === 'max_tokens' && e.code === 'unsupported_parameter') return true;
+  return /max_tokens.*max_completion_tokens/s.test(String(e.message ?? ''));
+}
+
+function withRenamedMaxTokens(params: ChatParams): ChatParams {
+  const copy = { ...(params as Record<string, unknown>) };
+  if (copy.max_tokens !== undefined && copy.max_completion_tokens === undefined) {
+    copy.max_completion_tokens = copy.max_tokens;
+  }
+  delete copy.max_tokens;
+  return copy as ChatParams;
+}
+
 /**
  * `client.chat.completions.create`, minus the parameters this deployment will
  * not accept. Any other error is rethrown untouched — an auth failure or a
@@ -71,11 +100,17 @@ export async function createChatCompletion(
   params: ChatParams,
 ): Promise<Awaited<ReturnType<OpenAI['chat']['completions']['create']>>> {
   let attempt = without(params as Record<string, unknown>, unsupported) as ChatParams;
+  if (renameMaxTokens) attempt = withRenamedMaxTokens(attempt);
 
   for (;;) {
     try {
       return await client.chat.completions.create(attempt);
     } catch (err) {
+      if (wantsMaxCompletionTokens(err) && !renameMaxTokens) {
+        renameMaxTokens = true;
+        attempt = withRenamedMaxTokens(attempt);
+        continue;
+      }
       const param = unsupportedParam(err);
       // Only retry when we learn something new; otherwise we would loop on a
       // model that rejects a parameter we have already removed.
@@ -89,4 +124,5 @@ export async function createChatCompletion(
 /** Test seam — forget what we learned about this deployment. */
 export function resetUnsupportedParams(): void {
   unsupported.clear();
+  renameMaxTokens = false;
 }

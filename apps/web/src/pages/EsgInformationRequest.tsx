@@ -14,6 +14,7 @@ import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { EsgSectionMissingPanel } from "@/components/esg-workbook/EsgSectionMissingPanel";
 import { EsgValidationPanel } from "@/components/esg-workbook/EsgValidationPanel";
+import { EsgAssistantChat } from "@/components/esg-workbook/EsgAssistantChat";
 import {
   esgSectionHasMissingRequired,
   missingIssuesForEsgSection,
@@ -767,6 +768,10 @@ export default function EsgInformationRequest() {
             ) : null}
           </section>
         </div>
+        {/* The AI chat — grounded server-side in THIS workbook's data,
+            scores and validation findings. Workbook stage only: on the
+            chooser and upload stages there is nothing to be asked about. */}
+        <EsgAssistantChat companyId={companyId} activeSectionId={activeSectionId} />
         </>
         )}
       </main>
