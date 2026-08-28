@@ -8,50 +8,20 @@
 import type { ESDData, SEDData, Contribution } from '../types';
 import type { CalculatorConfig } from '../../../../shared/schema';
 import { safeRatio, clampScore, round2, requireSectorConfig, resolveSectorContext } from './shared';
+import {
+  benefitFactorFor,
+  TOOLKIT_BENEFIT_FACTORS_ESD as ESD_BENEFIT_FACTORS,
+  TOOLKIT_BENEFIT_FACTORS_SED as SED_BENEFIT_FACTORS,
+} from '../../../../../api/pipeline/rules/benefitFactors';
 
-/**
- * ESD benefit factors per RCOGP slides 79-80
- * @domain-rule pillar:esd, slides:79,80
- * @see docs/domain/pillars/05_enterprise_supplier_dev.md#qualifying-contributions
- */
-const ESD_BENEFIT_FACTORS: Record<string, number> = {
-  grant: 1.0,
-  direct_cost: 1.0,
-  cost_covering: 1.0,
-  discounts: 1.0,
-  overhead_costs: 0.70,
-  interest_free_loan: 0.70,
-  standard_loan: 0.50,
-  guarantees: 0.03,
-  lower_interest_loan: 0.70,
-  minority_investment: 0.70,
-  professional_services_free: 0.60,
-  professional_services_discount: 0.60,
-  employee_time: 0.60,
-  shorter_payment_terms: 0.15,
-  equity_investment: 1.0,
-};
-
-/**
- * SED benefit factors per RCOGP slide 52 (higher recognition than ESD)
- * @domain-rule pillar:sed, slide:52
- * @see docs/domain/pillars/06_socioeconomic_dev.md#qualifying-contributions
- */
-const SED_BENEFIT_FACTORS: Record<string, number> = {
-  grant: 1.0,
-  direct_cost: 1.0,
-  cost_covering: 1.0,
-  discounts: 1.0,
-  overhead_costs: 0.80,
-  interest_free_loan: 0.70,
-  standard_loan: 0.50,
-  guarantees: 0.03,
-  lower_interest_loan: 0.70,
-  minority_investment: 0.70,
-  professional_services_free: 0.80,
-  professional_services_discount: 0.80,
-  employee_time: 0.80,
-};
+// ESD (RCOGP slides 79-80) and SED (RCOGP slide 52) benefit factors now live in
+// pipeline/rules/benefitFactors.ts, imported above under their original names.
+// They moved because a SECOND, different set of the same factors exists in the
+// pipeline, and the two need to be readable side by side.
+// @domain-rule pillar:esd, slides:79,80
+// @domain-rule pillar:sed, slide:52
+// @see docs/domain/pillars/05_enterprise_supplier_dev.md#qualifying-contributions
+// @see docs/domain/pillars/06_socioeconomic_dev.md#qualifying-contributions
 
 export interface EsdSubLine {
   name: string;
@@ -110,28 +80,20 @@ export interface SedResult {
 /**
  * The benefit factor for one contribution — or nothing, when we do not know.
  *
- * This used to be `factors[c.type] ?? 1.0`: a contribution whose type we did
- * not recognise was recognised at ONE HUNDRED PERCENT. Upstream made that
- * routine rather than rare — `mapContributionType` fell through to
- * "direct_cost" for any unmatched string — so a misread type did not get
- * flagged, it got full marks. A `guarantees` row carries a factor of 0.03; the
- * same row misread scored 1.0, a 33x overstatement, and on an elective
- * best-four-of-seven scorecard the inflated pillar is exactly the one that gets
- * elected.
+ * This file wrote the rule; `pipeline/rules/benefitFactors.ts` now OWNS it, and
+ * the pipeline's two copies of the same calculation call the same function
+ * rather than each carrying their own `??` default. Re-exported here so the
+ * toolkit's existing importers are unaffected.
  *
- * An unrecognised type now contributes NOTHING and is reported, so the number
- * moves only when a human says what the row actually is.
+ * The rule, for the record: an unrecognised type used to be recognised at ONE
+ * HUNDRED PERCENT, and upstream made that routine rather than rare —
+ * `mapContributionType` fell through to "direct_cost" for any unmatched
+ * string — so a misread type got full marks instead of a flag. A `guarantees`
+ * row carries 0.03; misread it scored 1.0, a 33x overstatement, and on an
+ * elective best-four-of-seven scorecard the inflated pillar is exactly the one
+ * that gets elected.
  */
-export function benefitFactorFor(
-  type: string | undefined,
-  factors: Record<string, number>,
-): { factor: number; recognised: boolean } {
-  const key = (type ?? '').trim();
-  if (key && Object.prototype.hasOwnProperty.call(factors, key)) {
-    return { factor: factors[key], recognised: true };
-  }
-  return { factor: 0, recognised: false };
-}
+export { benefitFactorFor };
 
 function buildBenefitFactors(
   pillar: 'esd' | 'sed',

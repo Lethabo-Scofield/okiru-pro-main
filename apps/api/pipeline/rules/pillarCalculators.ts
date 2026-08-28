@@ -150,6 +150,18 @@ export interface AllPillarScores {
   recognitionLevel: number;
   isDiscounted: boolean;
   discountedLevel: number;
+  /**
+   * Facts about the INPUT that a score alone cannot carry.
+   *
+   * `unrecognisedContributionTypes` are contribution types no factor table
+   * knows. They scored zero — correct arithmetic, but indistinguishable in the
+   * total from contributions that were never made. Anything presenting this
+   * scorecard should show them, because they are the difference between "you
+   * did not qualify" and "we could not read your evidence".
+   */
+  dataQuality: {
+    unrecognisedContributionTypes: string[];
+  };
 }
 
 /** Which Transport QSE scorecard elements are measured (exactly four). Maps to toolkit sheet2 elements. */
@@ -489,35 +501,16 @@ function getEAP(province: string, level: string): EAPValues {
 // Benefit factors for ESD/SED
 // ---------------------------------------------------------------------------
 
-const DEFAULT_BENEFIT_FACTORS_SD: Record<string, number> = {
-  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
-  overhead_costs: 1.0, interest_free_loan: 1.0,
-  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
-  minority_investment: 1.0, professional_services_free: 1.0,
-  professional_services_discounted: 0.8, professional_services_discount: 0.8,
-  employee_time: 1.0, shorter_payment_periods: 0.7, shorter_payment_terms: 0.7,
-  equity_investment: 0.0,
-};
-
-const DEFAULT_BENEFIT_FACTORS_ED: Record<string, number> = {
-  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
-  overhead_costs: 1.0, interest_free_loan: 1.0,
-  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
-  minority_investment: 1.0, professional_services_free: 1.0,
-  professional_services_discounted: 0.8, professional_services_discount: 0.8,
-  employee_time: 1.0, shorter_payment_periods: 0.0, shorter_payment_terms: 0.0,
-  equity_investment: 1.0,
-};
-
-const DEFAULT_BENEFIT_FACTORS_SED: Record<string, number> = {
-  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
-  overhead_costs: 0.8, interest_free_loan: 1.0,
-  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
-  minority_investment: 1.0, professional_services_free: 1.0,
-  professional_services_discounted: 0.8, professional_services_discount: 0.8,
-  employee_time: 0.8, shorter_payment_periods: 0.7, shorter_payment_terms: 0.7,
-  equity_investment: 1.0,
-};
+// The tables themselves now live in ./benefitFactors.ts alongside the toolkit's
+// competing set, because the two disagree on real numbers and that
+// disagreement needs to be visible rather than spread across two files.
+import {
+  benefitFactorFor,
+  UnrecognisedTypeLog,
+  PIPELINE_BENEFIT_FACTORS_SD as DEFAULT_BENEFIT_FACTORS_SD,
+  PIPELINE_BENEFIT_FACTORS_ED as DEFAULT_BENEFIT_FACTORS_ED,
+  PIPELINE_BENEFIT_FACTORS_SED as DEFAULT_BENEFIT_FACTORS_SED,
+} from './benefitFactors.js';
 
 // ---------------------------------------------------------------------------
 // Recognition table
@@ -883,6 +876,7 @@ function calcEsd(
   graduationBonus: boolean,
   jobsCreatedBonus: boolean,
   cfg: SectorConfig,
+  unrecognised: UnrecognisedTypeLog = new UnrecognisedTypeLog(),
 ): { sd: PillarScore; ed: PillarScore } {
   const et = cfg.targets.esd;
   const sdMaxPts = cfg.pillarConfigs.supplierDevelopment.maxPoints;
@@ -896,18 +890,22 @@ function calcEsd(
 
   const factors = buildBenefitLookup(cfg);
   let sdSpend = 0, edSpend = 0;
+  // An unrecognised contribution type contributes NOTHING — it used to fall
+  // through to 1.0, so a misread type was rewarded rather than flagged (a
+  // guarantees row carries 0.03; misread it scored 1.0, a 33x overstatement).
+  // Zero is the right arithmetic, but zero ALONE is the mirror-image defect:
+  // a real contribution vanishes from the score with nothing said. The log
+  // travels out with the result so the caller can say it.
   for (const c of contributions) {
-    // An unrecognised contribution type contributes NOTHING. This used to
-    // fall through to 1.0 - full recognition - so a misread type was not
-    // flagged, it was rewarded. A guarantees row carries 0.03; the same row
-    // misread scored 1.0, a 33x overstatement.
-    if (c.category === 'sd') {
-      const factor = factors.sd[c.type] ?? c.benefitFactor ?? 0;
-      sdSpend += c.amount * factor;
-    } else if (c.category === 'ed') {
-      const factor = factors.ed[c.type] ?? c.benefitFactor ?? 0;
-      edSpend += c.amount * factor;
+    if (c.category !== 'sd' && c.category !== 'ed') continue;
+    const table = c.category === 'sd' ? factors.sd : factors.ed;
+    const declared = benefitFactorFor(c.type, table);
+    if (!declared.recognised && (c.benefitFactor === undefined || c.benefitFactor === null)) {
+      unrecognised.record(c.type);
     }
+    const factor = declared.recognised ? declared.factor : (c.benefitFactor ?? 0);
+    if (c.category === 'sd') sdSpend += c.amount * factor;
+    else edSpend += c.amount * factor;
   }
 
   const sdScore = safeRatio(sdSpend, sdTarget, et.sdMaxPts);
@@ -928,7 +926,12 @@ function calcEsd(
 // SED (ported from frontend esd-sed.ts)
 // ===========================================================================================
 
-function calcSed(contributions: ContributionInput[], npat: number, cfg: SectorConfig): PillarScore {
+function calcSed(
+  contributions: ContributionInput[],
+  npat: number,
+  cfg: SectorConfig,
+  unrecognised: UnrecognisedTypeLog = new UnrecognisedTypeLog(),
+): PillarScore {
   const maxPoints = cfg.pillarConfigs.socioEconomicDevelopment.maxPoints;
   const effectiveNpat = Math.max(npat, 0);
   const target = effectiveNpat * (cfg.targets.sed.spendPercent / 100);
@@ -936,8 +939,13 @@ function calcSed(contributions: ContributionInput[], npat: number, cfg: SectorCo
   let totalSpend = 0;
   for (const c of contributions) {
     if (c.category !== 'sed') continue;
-    // Unrecognised type -> no recognition. See the SD/ED note above.
-    const factor = DEFAULT_BENEFIT_FACTORS_SED[c.type] ?? c.benefitFactor ?? 0;
+    // Unrecognised type -> no recognition, and it is REPORTED. See the SD/ED
+    // note above: silent zero is the mirror image of the generous default.
+    const declared = benefitFactorFor(c.type, DEFAULT_BENEFIT_FACTORS_SED);
+    if (!declared.recognised && (c.benefitFactor === undefined || c.benefitFactor === null)) {
+      unrecognised.record(c.type);
+    }
+    const factor = declared.recognised ? declared.factor : (c.benefitFactor ?? 0);
     totalSpend += c.amount * factor;
   }
 
@@ -1320,8 +1328,9 @@ export function calculateAllPillars(
       : calcProcurement(suppliers, financials.tmps, config);
   }
 
-  const { sd, ed } = calcEsd(contributions, effectiveNpat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, cfgEffective);
-  const sed = calcSed(contributions, effectiveNpat, cfgEffective);
+  const unrecognised = new UnrecognisedTypeLog();
+  const { sd, ed } = calcEsd(contributions, effectiveNpat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, cfgEffective, unrecognised);
+  const sed = calcSed(contributions, effectiveNpat, cfgEffective, unrecognised);
   const yes = calcYes(trainingPrograms, employees.length);
 
   const totalPoints = ownership.score + management.score + employmentEquity.score + skills.score + procurement.score +
@@ -1369,6 +1378,9 @@ export function calculateAllPillars(
     recognitionLevel: finalRecognition,
     isDiscounted,
     discountedLevel,
+    dataQuality: {
+      unrecognisedContributionTypes: unrecognised.types,
+    },
   };
 }
 
