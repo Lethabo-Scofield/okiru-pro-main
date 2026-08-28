@@ -33,12 +33,23 @@ export interface NormalizePasteOptions {
   sampleRows?: number;
 }
 
-/** Should we ask the LLM to help map headers the deterministic pass missed? */
+/**
+ * Should we ask the LLM to help map headers the deterministic pass missed?
+ *
+ * The AMBIGUOUS clause is the important one. The other two triggers fire on
+ * columns the matcher was UNSURE about — but the dangerous case is the column
+ * it was certain about and wrong: `Level` scores 1.00 against both the B-BBEE
+ * level and the occupational level, and the tie was broken by whichever field
+ * happened to be declared first. That never tripped a confidence floor, so the
+ * safety net had a hole exactly where the mistake was. A tie is precisely when
+ * a model's judgment is worth asking for.
+ */
 function deterministicNeedsHelp(mapping: ColumnMapping[]): boolean {
   return mapping.some(
     (m) =>
       (m.sourceHeader.trim() && !m.targetKey) ||
-      (m.targetKey && m.confidence > 0 && m.confidence < AI_CONFIDENCE_FLOOR),
+      (m.targetKey && m.confidence > 0 && m.confidence < AI_CONFIDENCE_FLOOR) ||
+      (m.targetKey && m.ambiguous),
   );
 }
 
@@ -112,17 +123,25 @@ export async function normalizePaste(
 
 /**
  * Merge AI mapping into deterministic mapping. Deterministic high-confidence
- * matches win; AI only fills gaps and low-confidence slots. A target key is
+ * matches win; AI fills gaps, low-confidence slots, and ties. A target key is
  * never assigned to two source columns.
+ *
+ * "Settled" is high confidence AND unambiguous. A 1.00 score that two fields
+ * both earned is not settled — it is a coin toss wearing a certainty score, and
+ * it must not out-rank the model that was asked precisely because of it.
  */
+function settledByName(m: ColumnMapping): boolean {
+  return Boolean(m.targetKey) && m.confidence >= AI_CONFIDENCE_FLOOR && !m.ambiguous;
+}
+
 function mergeMappings(deterministic: ColumnMapping[], ai: ColumnMapping[]): ColumnMapping[] {
   const aiByIndex = new Map(ai.map((m) => [m.sourceIndex, m] as const));
   const claimed = new Set<string>();
   for (const m of deterministic) {
-    if (m.targetKey && m.confidence >= AI_CONFIDENCE_FLOOR) claimed.add(m.targetKey);
+    if (settledByName(m)) claimed.add(m.targetKey!);
   }
   return deterministic.map((m) => {
-    if (m.targetKey && m.confidence >= AI_CONFIDENCE_FLOOR) return m;
+    if (settledByName(m)) return m;
     const aiMatch = aiByIndex.get(m.sourceIndex);
     if (aiMatch?.targetKey && !claimed.has(aiMatch.targetKey)) {
       claimed.add(aiMatch.targetKey);
