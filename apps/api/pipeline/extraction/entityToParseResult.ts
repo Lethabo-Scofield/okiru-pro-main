@@ -23,6 +23,7 @@ import type {
   ParsedSupplier,
   ParsedContribution,
 } from '../excelParser.js';
+import { toFractionOrZero } from '../units/percentage.js';
 
 // ---------------------------------------------------------------------------
 // Helper parsers
@@ -40,13 +41,16 @@ function parseCurrency(raw: string | number | null): number {
   return isNaN(num) ? 0 : num;
 }
 
+/**
+ * A percentage as a fraction (0–1).
+ *
+ * This used to strip the `%` sign FIRST and then guess the unit from magnitude,
+ * which threw away the one piece of evidence that settles the question: a cell
+ * reading `"0.5%"` became the bare `0.5` and was read as half of everything.
+ * `toFractionOrZero` reads the sign before it strips it.
+ */
 function parsePercentage(raw: string | number | null): number {
-  if (raw === null || raw === undefined) return 0;
-  if (typeof raw === 'number') return raw > 1 ? raw / 100 : raw;
-  const cleaned = String(raw).replace(/%/g, '').trim();
-  const num = parseFloat(cleaned);
-  if (isNaN(num)) return 0;
-  return num > 1 ? num / 100 : num; // normalise 51 → 0.51
+  return toFractionOrZero(raw);
 }
 
 function parseBeeLevel(raw: string | number | null): number {

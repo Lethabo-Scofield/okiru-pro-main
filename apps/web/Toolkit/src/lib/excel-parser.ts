@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { v4 as uuidv4 } from "uuid";
+import { toFractionOrZero, toPercentOrZero } from "../../../../api/pipeline/units/percentage";
 
 interface ParsedRow {
   [key: string]: string | number | boolean | null;
@@ -90,17 +91,22 @@ function extractShareholders(sheets: SheetData[]) {
     const name = toStr(findVal(row, ["name", "shareholder", "entity", "investor"]));
     if (!name) continue;
 
-    const shares = toNum(findVal(row, ["shares", "percentage", "holding", "%"]));
-    const bo = toNum(findVal(row, ["black", "blackownership", "bo%", "bo"]));
-    const bwo = toNum(findVal(row, ["blackwomen", "bwo", "women", "female"]));
+    // Percentages keep their RAW cell value here, not `toNum`: `toNum` strips
+    // the `%` sign, which is the only thing that says what the number means.
+    const shares = findVal(row, ["shares", "percentage", "holding", "%"]);
+    const bo = findVal(row, ["black", "blackownership", "bo%", "bo"]);
+    const bwo = findVal(row, ["blackwomen", "bwo", "women", "female"]);
     const sv = toNum(findVal(row, ["value", "sharevalue", "cost"]));
 
     shareholders.push({
       id: uuidv4(),
       name,
-      shares: shares > 1 ? shares : shares * 100,
-      blackOwnership: bo > 1 ? bo / 100 : bo,
-      blackWomenOwnership: bwo > 1 ? bwo / 100 : bwo,
+      // `shares` is a PERCENT here while the ownership columns are fractions —
+      // two conventions one line apart, which is how this drifted. Both now
+      // come from one reading; only the requested convention differs.
+      shares: toPercentOrZero(shares),
+      blackOwnership: toFractionOrZero(bo),
+      blackWomenOwnership: toFractionOrZero(bwo),
       shareValue: sv,
       ownershipType: "shareholder",
     });
@@ -222,8 +228,10 @@ function extractSuppliers(sheets: SheetData[]) {
 
     const spend = toNum(findVal(row, ["spend", "amount", "value", "total"]));
     const level = toNum(findVal(row, ["level", "beelevel", "bbbee", "rating"]));
-    const bo = toNum(findVal(row, ["blackownership", "bo", "black%"]));
-    const bwo = toNum(findVal(row, ["blackwomen", "bwo", "women"]));
+    // Raw, not `toNum` — see the shareholder block: stripping `%` first is what
+    // turned a 1%-black-owned supplier into a 100%-black-owned one.
+    const bo = findVal(row, ["blackownership", "bo", "black%"]);
+    const bwo = findVal(row, ["blackwomen", "bwo", "women"]);
     const entType = toStr(findVal(row, ["type", "enterprise", "size", "category"]));
 
     suppliers.push({
@@ -231,8 +239,8 @@ function extractSuppliers(sheets: SheetData[]) {
       name,
       spend,
       beeLevel: Math.min(Math.max(Math.round(level) || 4, 1), 8),
-      blackOwnership: bo > 1 ? bo / 100 : bo,
-      blackWomenOwnership: bwo > 1 ? bwo / 100 : bwo,
+      blackOwnership: toFractionOrZero(bo),
+      blackWomenOwnership: toFractionOrZero(bwo),
       youthOwnership: 0,
       disabledOwnership: 0,
       enterpriseType: mapEnterpriseType(entType),

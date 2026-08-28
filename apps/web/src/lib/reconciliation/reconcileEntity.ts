@@ -22,6 +22,7 @@ import { getSection, parseWorkbookDate } from "@/components/workbook/sections";
 import { normalizeRace, isBlackRace } from "@toolkit/lib/calculators/shared";
 import { genderFromSaId } from "@/lib/extractionReview";
 import { normaliseEntityName } from "@/lib/parserToWorkbook";
+import { readPercent, toFraction } from "../../../../api/pipeline/units/percentage";
 import type {
   EntitySummary,
   IssueSeverity,
@@ -61,12 +62,18 @@ function excelSerialToIso(value: unknown): string | null {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-/** Parse a percentage-or-fraction cell to a fraction (0–1), or null if empty/NaN. */
+/**
+ * Parse a percentage-or-fraction cell to a fraction (0–1), or null if empty/NaN.
+ *
+ * The old body stripped the `%` sign and then guessed the unit from magnitude,
+ * with a comment that admitted the cost: `100→1.0, 1→1.0`. A holder of ONE
+ * PERCENT was read as owning the whole company. `toFraction` reads the sign
+ * before it strips it; where a cell genuinely states no unit the reading is
+ * unchanged, and pass 1 reports it rather than deciding in silence.
+ */
 function pctCell(v: unknown): number | null {
   if (blank(v)) return null;
-  const n = Number(String(v).replace(/[%\s,]/g, ""));
-  if (!Number.isFinite(n)) return null;
-  return n > 1 ? n / 100 : n; // 100→1.0, 1→1.0, 0.5→0.5
+  return toFraction(v);
 }
 
 /**
@@ -109,14 +116,35 @@ function pushSummaryDefaults(sections: WorkbookSections, opts: ReconcileOptions)
 }
 
 // ── Pass 1: REPRESENTATION ────────────────────────────────────────────────
+/** Percentage columns whose unit decides a score if it is read the wrong way. */
+const PERCENT_COLS = [
+  "shareholding", "economicInterest", "votingRights",
+  "blackOwnership", "blackWomenOwnership",
+  "currentBlackOwnership", "currentBlackFemaleOwnership",
+  "percentBenefitingBlack",
+] as const;
+
 function normaliseRepresentation(sections: WorkbookSections, issues: ReconciliationIssue[]): void {
   let dateFixes = 0;
   let genderFixes = 0;
+  /** Percentage cells between 0 and 1 whose unit nothing stated. */
+  const unstatedUnits: Array<{ section: string; col: string; value: unknown }> = [];
   for (const [key, section] of Object.entries(sections)) {
     const def = getSection(key);
     if (!def?.columns) continue;
     const dateCols = def.columns.filter((c) => c.type === "date").map((c) => c.key);
+    const pctCols = def.columns
+      .map((c) => c.key)
+      .filter((k) => (PERCENT_COLS as readonly string[]).includes(k));
     for (const row of section.rows ?? []) {
+      // Percentages whose unit the sheet never stated: 0.51 could be 51% or
+      // half a percent, and the difference is a hundredfold in a scored field.
+      for (const col of pctCols) {
+        if (blank(row[col])) continue;
+        if (readPercent(row[col]).ambiguous) {
+          unstatedUnits.push({ section: key, col, value: row[col] });
+        }
+      }
       // Excel serial dates → real dates.
       for (const col of dateCols) {
         const iso = excelSerialToIso(row[col]);
@@ -147,6 +175,20 @@ function normaliseRepresentation(sections: WorkbookSections, issues: Reconciliat
     issues.push({
       id: nextId(), invariant: "representation", severity: "resolved",
       statement: `Recovered gender for ${genderFixes} ${genderFixes === 1 ? "person" : "people"} from their ID number.`,
+    });
+  }
+  if (unstatedUnits.length > 0) {
+    const example = unstatedUnits[0];
+    issues.push({
+      id: nextId(), invariant: "representation", severity: "resolved",
+      section: example.section,
+      statement:
+        `Read ${unstatedUnits.length} percentage${unstatedUnits.length === 1 ? "" : "s"} ` +
+        `as a fraction because the sheet stated no unit (e.g. ${example.col} = ${example.value} → ` +
+        `${Number(((readPercent(example.value).percent ?? 0)).toFixed(4))}%).`,
+      action:
+        "A bare 0.51 means 51% here. If the sheet meant 0.51%, these figures are 100x too high — " +
+        "add a % sign or a \"%\" column header and re-import to settle it.",
     });
   }
 }

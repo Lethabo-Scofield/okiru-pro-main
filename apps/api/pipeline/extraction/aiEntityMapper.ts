@@ -15,6 +15,7 @@
 import { chatCompletion, fastChatCompletion, isAzureOpenAIConfigured as isLLMAvailable } from './azureOpenAIClient.js';
 import type { EmployeeInput, ShareholderInput, SupplierInput, ContributionInput, FinancialsInput } from '../rules/calculationEngine.js';
 import { createLogger } from '../../src/logger.js';
+import { toPercentOrZero } from '../units/percentage.js';
 
 const logger = createLogger('AIEntityMapper');
 
@@ -139,9 +140,17 @@ function normalizeNumber(raw: any): number {
   return isNaN(num) ? 0 : num;
 }
 
+/**
+ * A percentage in the 0–100 convention the UCS engine's inputs use.
+ *
+ * This was `num > 1 ? num : num * 100` — the MIRROR IMAGE of the guess the
+ * other thirteen sites made, so one ambiguous cell was normalised in opposite
+ * directions depending on which path happened to read it. Both directions now
+ * come from one reading of one module, and an explicit `%` in the value is
+ * honoured instead of being stripped away first.
+ */
 function normalizePercent(raw: any): number {
-  const num = normalizeNumber(raw);
-  return num > 1 ? num : num * 100;
+  return toPercentOrZero(raw);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
