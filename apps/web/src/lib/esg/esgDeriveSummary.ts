@@ -37,6 +37,8 @@
  */
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { ESG_GRID_SECTIONS, type EsgGridSectionId } from "@/lib/esg/esgGridSections";
+import { king5Weight } from "@/lib/esg/esgGridRows";
+import { toFractionOrZero } from "../../../../api/pipeline/units/percentage";
 
 type CellValue = string | number | boolean | null;
 type Cells = Record<string, CellValue>;
@@ -576,7 +578,7 @@ function sumColumn(rows: NumberedRow[], key: string): number {
 
 /** Percentages may arrive as 91.1 or 0.911 — normalise to a 0–1 fraction. */
 function asFraction(n: number): number {
-  return n > 1 ? n / 100 : n;
+  return toFractionOrZero(n);
 }
 
 function clamp01(n: number): number {
@@ -1023,7 +1025,11 @@ function deriveKing5(d: Draft): void {
   for (const r of rows) {
     const score = king5Score(text(r.values.status));
     raw += score;
-    weighted += (score * (toNum(r.values.weight) ?? 0)) / 10;
+    // `?? 0` here was the same silent zero `esgGridRows` carried: a principle
+    // marked "Applied" with an untyped weight contributed nothing to F21. Both
+    // copies now read one function, so the rule cannot be fixed in one place
+    // and left in the other again.
+    weighted += (score * king5Weight(r.values.weight)) / 10;
   }
   const max =
     KING5_POINTS_PER_PRINCIPLE * Math.max(KING5_PRINCIPLE_COUNT, rows.length);

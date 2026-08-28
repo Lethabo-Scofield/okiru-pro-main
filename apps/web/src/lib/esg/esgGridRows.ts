@@ -13,6 +13,29 @@ export type EsgGridRow = Record<string, unknown> & { _id: string };
 
 const ROWS_KEY = "_rows";
 
+/**
+ * The weight a King IV principle carries when the sheet does not say.
+ *
+ * `G_Scorecard!C5 = King5_Scorecard!E21 / 170 * 25`, and 170 is 17 principles
+ * times 10 points — so 10 is the standard per-principle weight the workbook
+ * assumes. Mirrors KING5_POINTS_PER_PRINCIPLE in esgDeriveSummary.ts.
+ */
+const KING5_STANDARD_WEIGHT = 10;
+
+/**
+ * The weight to score a King IV principle at.
+ *
+ * Exported because `esgDeriveSummary.deriveKing5` computes the SAME weighted
+ * total from the same rows — two copies of one rule, which is how the blank
+ * weight came to be handled correctly in one and not the other. One function
+ * now, called from both.
+ */
+export function king5Weight(raw: unknown): number {
+  const typed = Number(raw);
+  if (!Number.isFinite(typed)) return KING5_STANDARD_WEIGHT;
+  return String(raw ?? "").trim() === "" ? KING5_STANDARD_WEIGHT : typed;
+}
+
 function colLetter(index: number): string {
   let n = index;
   let s = "";
@@ -35,8 +58,15 @@ function makeId(): string {
  * "Score /5", so positional mapping put Status in C while every scorecard
  * formula reads D.
  */
-function refFor(def: EsgGridSectionDef, col: ColumnDef, colIdx: number): string {
+export function refFor(def: EsgGridSectionDef, col: ColumnDef, colIdx: number): string {
   return def.columnLetters?.[col.key] ?? colLetter(colIdx);
+}
+
+/** The Excel column letter for one grid column of a section. */
+export function esgColumnRef(sectionId: EsgGridSectionId, colIdx: number): string {
+  const def = ESG_GRID_SECTIONS[sectionId];
+  const col = def.columns[colIdx];
+  return col ? refFor(def, col, colIdx) : colLetter(colIdx);
 }
 
 export function readEsgGridRows(
@@ -126,7 +156,8 @@ function syncDerivedFields(
     let total = 0;
     for (const r of rows) {
       const status = String(r.status ?? "");
-      const weight = Number(r.weight) || 0;
+      // A BLANK weight is not a weight of zero. See king5Weight above.
+      const weight = king5Weight(r.weight);
       const score =
         status === "Applied"
           ? 10

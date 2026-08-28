@@ -296,6 +296,44 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
   },
 };
 
+/**
+ * Grid sections that live on one sheet, in row order.
+ *
+ * Most sheets carry exactly one register. `S_Data` carries two — the OFO
+ * training register at row 59 and the CSI register at row 72 — which is the
+ * case every one-sheet-one-section assumption in this codebase got wrong.
+ */
+export function esgGridSectionsOnSheet(sheet: string): EsgGridSectionId[] {
+  const norm = (s: string) => s.replace(/[\s_]/g, "").toLowerCase();
+  return ESG_GRID_SECTION_IDS
+    .filter((id) => norm(ESG_GRID_SECTIONS[id].sheet) === norm(sheet))
+    .sort((a, b) => ESG_GRID_SECTIONS[a].startRow - ESG_GRID_SECTIONS[b].startRow);
+}
+
+/**
+ * The row window a section owns on its sheet.
+ *
+ * DERIVED, never declared: a section runs from its own `startRow` to the row
+ * before the next section on the same sheet, and to the end of the sheet when
+ * it is the last. Hand-written end rows would be one more pair of numbers to
+ * keep in step with `startRow`, and this codebase has already paid for that
+ * kind of duplication more than once.
+ *
+ * Without the window, `row >= startRow` made `s-data-ofo` (59) swallow every
+ * CSI row at 72+ as if they were its own.
+ */
+export function esgGridRowRange(
+  sectionId: EsgGridSectionId,
+): { startRow: number; endRow: number } {
+  const def = ESG_GRID_SECTIONS[sectionId];
+  const siblings = esgGridSectionsOnSheet(def.sheet);
+  const next = siblings.find((id) => ESG_GRID_SECTIONS[id].startRow > def.startRow);
+  return {
+    startRow: def.startRow,
+    endRow: next ? ESG_GRID_SECTIONS[next].startRow - 1 : Number.POSITIVE_INFINITY,
+  };
+}
+
 export function isEsgGridSection(sectionId: string): sectionId is EsgGridSectionId {
   return (ESG_GRID_SECTION_IDS as readonly string[]).includes(sectionId);
 }

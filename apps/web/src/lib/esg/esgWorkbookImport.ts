@@ -1,7 +1,13 @@
 import * as XLSX from "xlsx";
 import { ESG_SECTION_IDS } from "./esgSections";
-import { readEsgGridRows, writeEsgGridCells, type EsgGridRow } from "./esgGridRows";
-import { ESG_GRID_SECTIONS, isEsgGridSection, type EsgGridSectionId } from "./esgGridSections";
+import { readEsgGridRows, writeEsgGridCells, refFor, type EsgGridRow } from "./esgGridRows";
+import {
+  ESG_GRID_SECTIONS,
+  esgGridRowRange,
+  esgGridSectionsOnSheet,
+  isEsgGridSection,
+  type EsgGridSectionId,
+} from "./esgGridSections";
 
 const SHEET_TO_SECTION: Record<string, string> = {
   Cover: "company-reporting-setup",
@@ -57,18 +63,31 @@ function importGridSection(
   sectionId: EsgGridSectionId,
 ): Record<string, unknown> {
   const def = ESG_GRID_SECTIONS[sectionId];
+  // The section's OWN row window. `row >= startRow` alone made s-data-ofo (59)
+  // claim every CSI row at 72+ as if they were training interventions.
+  const { startRow, endRow } = esgGridRowRange(sectionId);
   const rows: EsgGridRow[] = [];
   const rowNums = new Set<number>();
   for (const ref of Object.keys(cells)) {
     const m = ref.match(/^([A-Z]+)(\d+)$/);
     if (!m) continue;
     const row = parseInt(m[2], 10);
-    if (row >= def.startRow) rowNums.add(row);
+    if (row >= startRow && row <= endRow) rowNums.add(row);
   }
   for (const rowNum of [...rowNums].sort((a, b) => a - b)) {
     const row: EsgGridRow = { _id: `imp_${rowNum}` };
     def.columns.forEach((col, colIdx) => {
-      const ref = `${colLetter(colIdx)}${rowNum}`;
+      /*
+       * `refFor`, NOT bare positional `colLetter(colIdx)`.
+       *
+       * `esgGridRows` learned this and the import never did: ISO_Tracker and
+       * IFRS_S1_S2 start at column B and reserve E for the sheet's own derived
+       * `Score /5`, so they declare `columnLetters`. Reading them positionally
+       * shifted every field by one — `status` came from the Pillar column, and
+       * since the scorers count `status === "Disclosed"` an imported IFRS
+       * tracker scored zero no matter what the client had filled in.
+       */
+      const ref = `${refFor(def, col, colIdx)}${rowNum}`;
       if (cells[ref] !== undefined) row[col.key] = cells[ref];
     });
     if (Object.keys(row).length > 1) rows.push(row);
@@ -98,14 +117,37 @@ export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPre
     }
     const sheet = book.Sheets[sheetName];
     if (!sheet) continue;
-    let cells = sheetToCellMap(sheet);
+    const raw = sheetToCellMap(sheet);
+
+    let cells = raw;
     if (isEsgGridSection(sectionId)) {
-      cells = importGridSection(cells, sectionId);
+      cells = importGridSection(raw, sectionId);
     }
     if (Object.keys(cells).length > 0) {
       sections[sectionId] = { cells };
     } else {
       warnings.push(`Sheet ${sheetName} had no importable cells`);
+    }
+
+    /*
+     * A sheet can carry MORE than one register.
+     *
+     * `SHEET_TO_SECTION` is one sheet to one section, so `S_Data` resolved to
+     * the flat `s-data` section and stopped. The two registers that also live
+     * on that sheet — `s-data-ofo` (training by OFO code, row 59) and
+     * `s-data-csi` (community investment, row 72) — were never read as rows by
+     * ANY import. They stayed empty behind an import that reported success, and
+     * `s-data-csi` feeds `S_Scorecard!C23`, where a missing count scores zero.
+     * So a client whose workbook was full of CSI initiatives lost those points
+     * silently.
+     *
+     * Each register is read from its own row window, so they cannot swallow
+     * each other's rows.
+     */
+    for (const gridId of esgGridSectionsOnSheet(sheetName)) {
+      if (gridId === sectionId) continue;
+      const gridCells = importGridSection(raw, gridId);
+      if (Object.keys(gridCells).length > 0) sections[gridId] = { cells: gridCells };
     }
   }
 

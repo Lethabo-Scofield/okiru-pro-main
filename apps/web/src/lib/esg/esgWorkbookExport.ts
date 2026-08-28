@@ -53,6 +53,14 @@ const INPUT_SHEET_BY_SECTION: Record<string, string> = {
   ifrs: "IFRS_S1_S2",
   garp: "GARP_GRAP",
   saq: "SAQ_Supplier",
+  // Both registers live INSIDE S_Data — the OFO training register at row 59 and
+  // the CSI register at row 72 — rather than on sheets of their own. They were
+  // simply absent from this map, so anything a user entered in either grid was
+  // dropped on export, the mirror of the import that never read them. Their row
+  // windows do not overlap `s-data`'s own cells, so all three write into the
+  // one sheet without colliding.
+  "s-data-ofo": "S_Data",
+  "s-data-csi": "S_Data",
 };
 
 const GRID_HEADERS: Partial<Record<string, { row: number; headers: string[] }>> = {
