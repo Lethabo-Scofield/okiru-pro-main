@@ -31,6 +31,11 @@ import { coerceYesNo } from "../src/lib/yesNoValue";
 import { isBlackRace, isScoringDesignation, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import { createChatCompletion } from "./openaiCompat";
 import {
+  suggestValueFingerprint,
+  rememberDecision,
+  EmptyModelReplyError,
+} from "./mappingDecisionCache";
+import {
   getClient as memGetClient,
   canAccessClient as memCanAccessClient,
   updateClient as memUpdateClient,
@@ -1885,26 +1890,73 @@ export function registerWorkbookRoutes(app: Express): void {
         `User typed: "${rawValue}"\n` +
         `What is the correct normalized value?`;
 
-      const response = await createChatCompletion(client, {
-        model,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
+      /*
+       * How a value normalises is a property of the QUESTION, not of the run.
+       *
+       * `temperature: 0` below is a request the gpt-5-family deployments reject
+       * outright, so every ask is sampled afresh: the same typo in the same
+       * field could be corrected on Tuesday and refused on Wednesday, and the
+       * corrected value is what gets scored. Decided once per (field, allowed
+       * values, rule, raw value) and replayed after that.
+       *
+       * The raw value belongs IN the fingerprint here — unlike a column mapping,
+       * where the question is about the template, this question IS "what does
+       * this particular string mean for this field".
+       */
+      const fingerprint = suggestValueFingerprint({
+        fieldKey,
+        fieldLabel,
+        fieldType,
+        allowedValues,
+        validationMessage,
+        dateFormat,
+        rawValue,
       });
-      const text = response.choices?.[0]?.message?.content;
-      if (!text) return res.json({ suggestion: null, explanation: "" });
 
-      const parsed = JSON.parse(text) as { suggestion?: string | null; explanation?: string };
-      const suggestion = typeof parsed.suggestion === "string" ? parsed.suggestion.trim() : null;
-      const validSuggestion =
-        suggestion && (allowedValues.length === 0 || allowedValues.includes(suggestion))
-          ? suggestion
-          : null;
+      type SuggestValueAnswer = { suggestion: string | null; explanation: string };
+      let answer: SuggestValueAnswer | null;
+      try {
+        const decision = await rememberDecision<SuggestValueAnswer>(
+          "suggest-value",
+          fingerprint,
+          async () => {
+            const response = await createChatCompletion(client, {
+              model,
+              temperature: 0,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: user },
+              ],
+            });
+            const text = response.choices?.[0]?.message?.content;
+            // Empty is a hiccup, not a verdict — never freeze it.
+            if (!text) throw new EmptyModelReplyError();
 
-      return res.json({ suggestion: validSuggestion, explanation: parsed.explanation ?? "" });
+            const parsed = JSON.parse(text) as { suggestion?: string | null; explanation?: string };
+            const suggestion = typeof parsed.suggestion === "string" ? parsed.suggestion.trim() : null;
+            // Validated BEFORE caching, and the allowed list is in the
+            // fingerprint, so a replayed answer can never be a value the field
+            // no longer permits.
+            const validSuggestion =
+              suggestion && (allowedValues.length === 0 || allowedValues.includes(suggestion))
+                ? suggestion
+                : null;
+            return { suggestion: validSuggestion, explanation: parsed.explanation ?? "" };
+          },
+        );
+        answer = decision.value;
+      } catch (err) {
+        if (err instanceof EmptyModelReplyError) {
+          return res.json({ suggestion: null, explanation: "" });
+        }
+        throw err;
+      }
+
+      return res.json({
+        suggestion: answer?.suggestion ?? null,
+        explanation: answer?.explanation ?? "",
+      });
     } catch (err) {
       logger.error("suggest-value failed", err);
       return res.status(500).json({ message: "suggest-value failed" });

@@ -4,8 +4,21 @@ import { createLogger } from "./logger";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { getScorecardTypeOptions } from "../src/components/workbook/sections";
 import { createChatCompletion } from "./openaiCompat";
+import {
+  excelImportNormalizeFingerprint,
+  rememberDecision,
+  EmptyModelReplyError,
+} from "./mappingDecisionCache";
 
 const logger = createLogger("ExcelImportRoute");
+
+/** What `normalizeWithOpenAI` decides — and therefore what gets remembered. */
+interface NormalizedImportFields {
+  sector?: string;
+  scorecardType?: string;
+  financialYearEnd?: string;
+  notes: string[];
+}
 
 const SCORECARD_TYPES = ["Generic", "QSE", "Contractor", "BEP"] as const;
 
@@ -182,12 +195,7 @@ async function normalizeWithOpenAI(input: {
   sector?: string;
   scorecardType?: string;
   financialYearEnd?: string;
-}): Promise<{
-  sector?: string;
-  scorecardType?: string;
-  financialYearEnd?: string;
-  notes: string[];
-} | null> {
+}): Promise<NormalizedImportFields | null> {
   const openaiConfig = getOpenAIClient();
   if (!openaiConfig) return null;
 
@@ -204,59 +212,91 @@ async function normalizeWithOpenAI(input: {
     "If input already matches an allowed value, return it unchanged.",
   ].join(" ");
 
+  /*
+   * The same spreadsheet header must classify to the same sector every time.
+   *
+   * `temperature: 0` is a request the gpt-5-family deployments reject, so this
+   * was re-sampled per upload: "Road Freight" could map to TRANSPORT on one
+   * import and to nothing on the next, and an unmapped sector picks a different
+   * scorecard entirely. Decided once per (inputs, allowed enums) and replayed.
+   *
+   * The allowed lists are in the fingerprint, so adding a sector re-asks
+   * rather than replaying an answer chosen from the old menu.
+   */
+  const fingerprint = excelImportNormalizeFingerprint({
+    sector: input.sector,
+    scorecardType: input.scorecardType,
+    financialYearEnd: input.financialYearEnd,
+    allowedSectors,
+    allowedTypes,
+  });
+
   try {
-    const response = await createChatCompletion(openai, {
-      model,
-      temperature: 0,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        {
-          role: "user",
-          content: JSON.stringify({
-            sector: input.sector ?? null,
-            scorecardType: input.scorecardType ?? null,
-            financialYearEnd: input.financialYearEnd ?? null,
-          }),
-        },
-      ],
-    });
+    const decision = await rememberDecision<NormalizedImportFields>(
+      "excel-import-normalize",
+      fingerprint,
+      async () => {
+        const response = await createChatCompletion(openai, {
+          model,
+          temperature: 0,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: system },
+            {
+              role: "user",
+              content: JSON.stringify({
+                sector: input.sector ?? null,
+                scorecardType: input.scorecardType ?? null,
+                financialYearEnd: input.financialYearEnd ?? null,
+              }),
+            },
+          ],
+        });
 
-    const text = response.choices?.[0]?.message?.content;
-    if (!text) return null;
-    const parsed = JSON.parse(text) as Record<string, string | null>;
+        const text = response.choices?.[0]?.message?.content;
+        // Empty is a hiccup, not a verdict — the outer catch degrades to null
+        // exactly as before, and nothing is frozen.
+        if (!text) throw new EmptyModelReplyError();
+        const parsed = JSON.parse(text) as Record<string, string | null>;
 
-    const notes: string[] = [];
-    let sector = parsed.sector ?? undefined;
-    let scorecardType = parsed.scorecardType ?? undefined;
-    let financialYearEnd = parsed.financialYearEnd ?? undefined;
+        // Validation happens BEFORE caching, and every list it validates
+        // against is in the fingerprint — so a replayed answer can never be a
+        // sector or scorecard type the enums no longer allow.
+        const notes: string[] = [];
+        let sector = parsed.sector ?? undefined;
+        let scorecardType = parsed.scorecardType ?? undefined;
+        let financialYearEnd = parsed.financialYearEnd ?? undefined;
 
-    if (sector && !SECTOR_CODE_OPTIONS.includes(String(sector).toUpperCase())) {
-      notes.push(`AI returned invalid sector "${sector}" — ignored.`);
-      sector = undefined;
-    } else if (sector) {
-      sector = String(sector).toUpperCase();
-    }
+        if (sector && !SECTOR_CODE_OPTIONS.includes(String(sector).toUpperCase())) {
+          notes.push(`AI returned invalid sector "${sector}" — ignored.`);
+          sector = undefined;
+        } else if (sector) {
+          sector = String(sector).toUpperCase();
+        }
 
-    if (scorecardType && !SCORECARD_TYPES.includes(scorecardType as (typeof SCORECARD_TYPES)[number])) {
-      notes.push(`AI returned invalid scorecard type "${scorecardType}" — ignored.`);
-      scorecardType = undefined;
-    }
+        if (scorecardType && !SCORECARD_TYPES.includes(scorecardType as (typeof SCORECARD_TYPES)[number])) {
+          notes.push(`AI returned invalid scorecard type "${scorecardType}" — ignored.`);
+          scorecardType = undefined;
+        }
 
-    if (financialYearEnd && !/^\d{4}-\d{2}-\d{2}$/.test(financialYearEnd)) {
-      notes.push(`AI returned invalid date "${financialYearEnd}" — ignored.`);
-      financialYearEnd = undefined;
-    }
+        if (financialYearEnd && !/^\d{4}-\d{2}-\d{2}$/.test(financialYearEnd)) {
+          notes.push(`AI returned invalid date "${financialYearEnd}" — ignored.`);
+          financialYearEnd = undefined;
+        }
 
-    if (sector && scorecardType) {
-      const allowed = getScorecardTypeOptions(sector);
-      if (!allowed.includes(scorecardType)) {
-        notes.push(`Scorecard type "${scorecardType}" is not valid for ${sector} — cleared.`);
-        scorecardType = allowed.length === 1 ? allowed[0] : undefined;
-      }
-    }
+        if (sector && scorecardType) {
+          const allowed = getScorecardTypeOptions(sector);
+          if (!allowed.includes(scorecardType)) {
+            notes.push(`Scorecard type "${scorecardType}" is not valid for ${sector} — cleared.`);
+            scorecardType = allowed.length === 1 ? allowed[0] : undefined;
+          }
+        }
 
-    return { sector, scorecardType, financialYearEnd, notes };
+        return { sector, scorecardType, financialYearEnd, notes };
+      },
+    );
+
+    return decision.value;
   } catch (err) {
     logger.warn("OpenAI normalization failed", err);
     return null;

@@ -20,6 +20,7 @@ import {
   type FieldMapping,
   type TargetField,
 } from "../src/lib/columnMatch";
+import { columnQuestionFingerprint, rememberDecision } from "./mappingDecisionCache";
 
 const logger = createLogger("AiMappingRoutes");
 
@@ -151,13 +152,21 @@ export function registerAiMappingRoutes(
         : [];
 
       const deterministic: FieldMapping[] = buildFieldMapping(headers, fields);
+      // "Settled" means confident AND unambiguous. A column whose name fits two
+      // fields equally scores 1.00 and was therefore treated as settled — so
+      // the one case most in need of a second opinion was the one case that
+      // never got one. The client applies the same rule; both ends must agree
+      // or the server simply never puts the ambiguous column in `leftovers`.
+      const settled = (m: FieldMapping) =>
+        Boolean(m.targetKey) && m.confidence >= AI_CONFIDENCE_FLOOR && !m.ambiguous;
+
       const claimed = new Set<string>();
       for (const m of deterministic) {
-        if (m.targetKey && m.confidence >= AI_CONFIDENCE_FLOOR) claimed.add(m.targetKey);
+        if (settled(m)) claimed.add(m.targetKey as string);
       }
 
       const leftovers = deterministic
-        .filter((m) => m.sourceHeader.trim() && (!m.targetKey || m.confidence < AI_CONFIDENCE_FLOOR))
+        .filter((m) => m.sourceHeader.trim() && !settled(m))
         .map((m) => ({
           sourceIndex: m.sourceIndex,
           header: m.sourceHeader,
@@ -170,13 +179,36 @@ export function registerAiMappingRoutes(
 
       if (leftovers.length > 0) {
         const availableFields = fields.filter((f) => !claimed.has(f.key));
-        const { assignments, notes: aiNotes } = await aiMapHeaders(leftovers, availableFields);
-        notes.push(...aiNotes);
+        // What a COLUMN means is a property of the template, not of this
+        // upload, so the answer is decided once per (headers, fields) pair and
+        // replayed. `temperature: 0` below is a request the gpt-5 deployments
+        // reject, so without this the same workbook can map two ways on two
+        // days — and an unmapped column scores zero.
+        const fingerprint = columnQuestionFingerprint(
+          leftovers.map((l) => l.header),
+          availableFields.map((f) => f.key),
+        );
+        const decision = await rememberDecision<Array<[number, string]>>(
+          "normalize-paste",
+          fingerprint,
+          async () => {
+            const { assignments: fresh, notes: freshNotes } = await aiMapHeaders(
+              leftovers,
+              availableFields,
+            );
+            notes.push(...freshNotes);
+            // A considered "nothing maps" is a real decision worth remembering;
+            // re-rolling a non-answer is the drift being removed.
+            return Array.from(fresh.entries());
+          },
+        );
+        const assignments = new Map<number, string>(decision.value ?? []);
+        if (decision.replayed) notes.push("Mapping replayed from a prior decision on this template.");
         if (assignments.size > 0) {
           usedAi = true;
           const used = new Set(claimed);
           mapping = deterministic.map((m) => {
-            if (m.targetKey && m.confidence >= AI_CONFIDENCE_FLOOR) return m;
+            if (settled(m)) return m;
             const key = assignments.get(m.sourceIndex);
             if (key && !used.has(key)) {
               used.add(key);
