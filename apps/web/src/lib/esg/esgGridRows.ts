@@ -84,11 +84,109 @@ export function readEsgGridRows(
   return rowsFromFlatCells(cells ?? {}, sectionId);
 }
 
+/**
+ * What a candidate register row actually IS.
+ *
+ * The live client workbooks lay banners ("FLEET SUMMARY"), the sheet's own
+ * TOTAL rows, repeated header rows and transposed matrices inside the same
+ * column window as the register. Both the XLSX import and this reader classify
+ * before accepting, so none of that furniture ever renders as data — and
+ * workbooks that were imported before the import learned this heal on read.
+ */
+export type EsgGridRowKind = "data" | "furniture" | "aggregate" | "header-echo" | "artifact";
+
+/**
+ * Text that reads like a sheet banner rather than a value: instruction arrows,
+ * "add new/more rows", the block names the live workbook uses (summary,
+ * scorecard, recycling, investment blocks), or a multi-word ALL-CAPS heading.
+ */
+function looksLikeBanner(raw: string): boolean {
+  const text = raw.trim();
+  if (/^[→↓•■]/.test(text)) return true;
+  if (/\badd\s+(new|more)\b/i.test(text)) return true;
+  if (/\b(summary|scorecard|recycling|investment)\b/i.test(text)) return true;
+  // "FLEET SUMMARY", "OFO CODES — TRAINING", "SANULAC / LACTALIS
+  // SUSTAINABILITY DATA [Source: …]" — the live sheets annotate banners with
+  // mixed-case source notes in brackets, so strip those before the caps test.
+  const head = text.replace(/\[[^\]]*\]|\([^)]*\)/g, "").trim();
+  return head.length >= 8 && /\s/.test(head) && head === head.toUpperCase() && /[A-Z]/.test(head);
+}
+
+export function classifyEsgGridRow(def: EsgGridSectionDef, row: EsgGridRow): EsgGridRowKind {
+  const filled = def.columns
+    .map((col) => ({ col, value: row[col.key] }))
+    .filter(({ value }) => value !== undefined && value !== null && String(value).trim() !== "");
+
+  // A lone text cell that READS like a banner ("FLEET SUMMARY", "CORITY
+  // CARDBOARD RECYCLING", "→ ADD NEW DEBRIEFS…") announces that the register
+  // has ENDED. The wording test matters: a row holding only its identity so
+  // far (a reg typed a moment ago, autosaved mid-entry) is DATA, and dropping
+  // it here would silently delete the row on the next save.
+  if (filled.length === 1 && typeof filled[0].value === "string" && looksLikeBanner(filled[0].value)) {
+    return "furniture";
+  }
+
+  // The sheet's own aggregate. Importing it doubles every number below it.
+  if (
+    filled.some(
+      ({ value }) =>
+        typeof value === "string" && /^(grand\s+)?(sub\s*)?total\b/i.test(value.trim()),
+    )
+  ) {
+    return "aggregate";
+  }
+
+  // A header row echoed mid-sheet ("Month | Depot | Waste Type").
+  if (
+    def.columns.some((col) => {
+      const v = row[col.key];
+      return typeof v === "string" && v.trim().toLowerCase() === col.label.trim().toLowerCase();
+    })
+  ) {
+    return "header-echo";
+  }
+
+  // Two or more TEXT columns holding numbers is a transposed matrix landing in
+  // the wrong window (the Cority % row put 0.107 in Depot and 0.111 in Waste
+  // Type). ONE numeric text column is normal — OFO codes are numeric strings.
+  const numericTextCells = filled.filter(
+    ({ col, value }) =>
+      col.type === "text" &&
+      (typeof value === "number" ||
+        (typeof value === "string" && value.trim() !== "" && isFinite(Number(value)))),
+  );
+  if (numericTextCells.length >= 2) return "artifact";
+
+  return "data";
+}
+
 function rowsFromFlatCells(
   cells: Record<string, unknown>,
   sectionId: EsgGridSectionId,
 ): EsgGridRow[] {
   const def = ESG_GRID_SECTIONS[sectionId];
+
+  /*
+   * Trust the pipeline's own stamp first. `writeEsgGridCells` records exactly
+   * how many rows it wrote, so those rows are read back VERBATIM — no
+   * classification, which exists to heal data stored before the import learned
+   * regions, and must never second-guess a row the app itself saved.
+   */
+  const stampedCount = Number(cells["_row_count"]);
+  if (Number.isFinite(stampedCount) && stampedCount >= 0) {
+    const out: EsgGridRow[] = [];
+    for (let i = 0; i < stampedCount; i++) {
+      const rowNum = def.startRow + i;
+      const row: EsgGridRow = { _id: makeId() };
+      def.columns.forEach((col, colIdx) => {
+        const ref = `${refFor(def, col, colIdx)}${rowNum}`;
+        if (cells[ref] !== undefined) row[col.key] = cells[ref];
+      });
+      if (hasRowData(row, def.columns)) out.push(row);
+    }
+    return out;
+  }
+
   const rowNums = new Set<number>();
   for (const ref of Object.keys(cells)) {
     if (ref === ROWS_KEY || ref.startsWith("_")) continue;
@@ -98,14 +196,34 @@ function rowsFromFlatCells(
     if (row >= def.startRow) rowNums.add(row);
   }
   const sorted = [...rowNums].sort((a, b) => a - b);
+  /*
+   * Register rows are CONTIGUOUS FROM startRow — both the app's save path
+   * (`mergeEsgSectionCells` compacts on every write) and the import write them
+   * that way. Cells that begin later are a different structure sharing the
+   * section: the waste scorecard scalars at B16–B19, King V's derived E21.
+   * Reading those as rows is how the waste grid once showed four phantom
+   * streams built out of its own scorecard.
+   */
+  if (sorted.length > 0 && sorted[0] !== def.startRow) return [];
   const out: EsgGridRow[] = [];
+  let prev: number | null = null;
   for (const rowNum of sorted) {
+    // …and a GAP marks the end of the register and the start of whatever
+    // shares the sheet below it (the fleet summary matrix at 21+, the Cority
+    // block at 12+). Reading past one is how "FLEET SUMMARY" became a vehicle.
+    if (prev != null && rowNum > prev + 1) break;
+    prev = rowNum;
     const row: EsgGridRow = { _id: makeId() };
     def.columns.forEach((col, colIdx) => {
       const ref = `${refFor(def, col, colIdx)}${rowNum}`;
       if (cells[ref] !== undefined) row[col.key] = cells[ref];
     });
-    if (hasRowData(row, def.columns)) out.push(row);
+    if (!hasRowData(row, def.columns)) continue;
+    const kind = classifyEsgGridRow(def, row);
+    if (kind === "furniture") break;
+    if (kind !== "data") continue;
+    out.push(row);
+    if (def.maxRows && out.length >= def.maxRows) break;
   }
   return out;
 }
@@ -140,6 +258,13 @@ export function writeEsgGridCells(
         typeof v === "boolean" ? (v ? 1 : 0) : (v as string | number);
     });
   }
+
+  // How many rows this write REALLY holds. The reader trusts this over its own
+  // furniture/gap heuristics, so a legitimate row that merely LOOKS like a
+  // banner ("ENGEN BLOEMFONTEIN" as the only cell typed so far) can never be
+  // dropped once it has been saved by this pipeline. Legacy sections without
+  // the stamp fall back to the healing heuristics.
+  cells["_row_count"] = cleanRows.length;
 
   syncDerivedFields(sectionId, cells, cleanRows);
   return cells;

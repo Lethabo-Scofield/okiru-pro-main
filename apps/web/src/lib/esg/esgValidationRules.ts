@@ -19,7 +19,12 @@
  * that promotion is what turned every advisory gap into a hard block.
  */
 import { readEsgCell, readEsgText, type EsgWorkbookData } from "./esgWorkbookStorage";
-import { countFleetRegisterRows, countKing5Principles } from "./esgGridRows";
+import { countFleetRegisterRows, countKing5Principles, readEsgGridRows } from "./esgGridRows";
+import {
+  ESG_GRID_SECTIONS,
+  ESG_GRID_SECTION_IDS,
+  type EsgGridSectionId,
+} from "./esgGridSections";
 import { computeEsgScorecard } from "../../../EsgToolkit/src/lib/calculators";
 
 export type EsgTouchedState = Record<string, Record<string, true>>;
@@ -54,6 +59,12 @@ export type EsgRule = {
     touched: EsgTouchedState,
     ctx: EsgRuleContext,
   ) => boolean;
+  /**
+   * Optional: what is actually wrong, in words, when the rule fails. Rendered
+   * as the issue's `actual`, so the panel says "row 3: Reg missing" instead of
+   * "No" — a rule the user cannot act on teaches them to ignore the panel.
+   */
+  detail?: (workbook: EsgWorkbookData) => string;
 };
 
 export type EsgRuleEvaluation = {
@@ -297,6 +308,70 @@ function pillarScored(
 ): boolean {
   if (!hasAnyCells(workbook, ESG_PILLAR_INPUT_SECTIONS[pillar])) return false;
   return (ctx.pillarScore(pillar) ?? 0) > 0;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Register hygiene                                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Row-level problems in one register: required columns left empty, and
+ * dropdown columns holding a value outside their vocabulary.
+ *
+ * This is what "the validator ignored required fields" was: `required` marked
+ * cells in the GRID, but no rule ever counted them, so an import full of
+ * banner text and transposed matrices passed validation untouched. Each
+ * problem names its row and column so the panel is actionable, not a tally.
+ */
+export function esgRegisterRowProblems(
+  workbook: EsgWorkbookData,
+  sectionId: EsgGridSectionId,
+): string[] {
+  const def = ESG_GRID_SECTIONS[sectionId];
+  const rows = readEsgGridRows(workbook.sections?.[sectionId]?.cells, sectionId);
+  const problems: string[] = [];
+  rows.forEach((row, i) => {
+    const rowHasData = def.columns.some((col) => {
+      const v = row[col.key];
+      return v !== undefined && v !== null && String(v).trim() !== "";
+    });
+    if (!rowHasData) return;
+    for (const col of def.columns) {
+      const v = row[col.key];
+      const blank = v === undefined || v === null || String(v).trim() === "";
+      if (col.required && blank) {
+        problems.push(`row ${i + 1}: ${col.label} missing`);
+        continue;
+      }
+      if (col.type === "select" && !blank && col.options?.length) {
+        const text = String(v).trim().toLowerCase();
+        if (!col.options.some((o) => o.trim().toLowerCase() === text)) {
+          problems.push(`row ${i + 1}: ${col.label} "${String(v)}" is not an expected value`);
+        }
+      }
+    }
+  });
+  return problems;
+}
+
+function registerHygieneRule(sectionId: EsgGridSectionId): EsgRule {
+  const label = ESG_GRID_SECTIONS[sectionId].description;
+  return {
+    id: `${sectionId}.rows-valid`,
+    scope: "section",
+    sectionId,
+    severity: "warning",
+    // "always", not "touched": the rows most likely to be malformed arrive by
+    // IMPORT, which touches nothing. An empty register passes vacuously.
+    trigger: "always",
+    message: `Register rows valid — ${label}`,
+    evaluate: (wb) => esgRegisterRowProblems(wb, sectionId).length === 0,
+    detail: (wb) => {
+      const problems = esgRegisterRowProblems(wb, sectionId);
+      const shown = problems.slice(0, 3).join("; ");
+      return problems.length > 3 ? `${shown}; +${problems.length - 3} more` : shown;
+    },
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -560,6 +635,7 @@ export const ESG_PHASE1_RULES: EsgRule[] = [
       countKing5Principles(wb) >= KING5_PRINCIPLE_COUNT ||
       (readEsgCell(wb, "king5", "E21") ?? 0) > 0,
   },
+  ...ESG_GRID_SECTION_IDS.map(registerHygieneRule),
 ];
 
 /**
@@ -676,8 +752,13 @@ export function evaluateEsgRules(
         fieldRef: rule.fieldRef,
         pass,
         pending,
-        expected: rule.trigger === "submit" ? "Pass on submit" : "Pass when touched",
-        actual: pass ? "Yes" : pending ? "Pending" : "No",
+        expected:
+          rule.trigger === "submit"
+            ? "Pass on submit"
+            : rule.trigger === "always"
+              ? "Pass"
+              : "Pass when touched",
+        actual: pass ? "Yes" : pending ? "Pending" : rule.detail?.(workbook) ?? "No",
       };
     });
 }

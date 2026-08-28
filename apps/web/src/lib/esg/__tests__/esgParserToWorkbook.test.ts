@@ -326,7 +326,11 @@ describe("registers — one array field, N rows", () => {
     expect(cells(result, "s-data-csi")).toMatchObject({ A72: "Soup kitchen", D72: 25_000 });
     expect(cells(result, "s-data-ofo")).toMatchObject({ A59: "2016-862101", C59: 12 });
     expect(cells(result, "waste")).toMatchObject({ C5: "Paper K4", D5: 22_470, E5: 20_470 });
-    expect(cells(result, "garp")).toMatchObject({ A5: "R-07", E5: "Partially Effective", G5: 3 });
+    // GARP_GRAP declares columnLetters (the sheet starts at B, A is blank) —
+    // risk→B, controlStatus→F, likelihood→I. The positional A/E/G addresses
+    // this test used to pin were the misalignment that put a Severity in
+    // Control Status on every real import.
+    expect(cells(result, "garp")).toMatchObject({ B5: "R-07", F5: "Partially Effective", I5: 3 });
     // The register's own derived columns stay for the derivation to fill.
     expect(cells(result, "waste").G5).toBeUndefined();
   });

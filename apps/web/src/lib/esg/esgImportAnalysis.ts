@@ -176,6 +176,7 @@ export function analyseEsgImport(
   for (const [sectionId, section] of Object.entries(preview.sections)) {
     const existing = current?.sections?.[sectionId]?.cells ?? {};
     for (const [cell, after] of Object.entries(section?.cells ?? {})) {
+      if (cell.startsWith("_")) continue; // pipeline metadata, not a user cell
       if (isEmpty(after)) continue; // an import never blanks a cell
       const before = existing[cell];
       if (sameValue(before, after)) {

@@ -20,8 +20,13 @@ describe("EsgInformationRequest (input layer)", () => {
     expect(PAGE).not.toMatch(/disabled=\{.*validationOk/);
   });
 
-  it("shows per-section missing hints instead of full validation sidebar", () => {
+  it("shows per-section missing hints AND the full validation box", () => {
+    // The panel-free layout was a deliberate early decision, reversed on
+    // explicit user request (2026-08-28): imported registers were arriving full
+    // of required-field gaps and off-vocabulary values that nothing on the page
+    // surfaced — "the validator ignored required fields". The rules now carry
+    // row-level detail, so the box earns its place beside the section hints.
     expect(PAGE).toMatch(/EsgSectionMissingPanel/);
-    expect(PAGE).not.toMatch(/EsgValidationPanel/);
+    expect(PAGE).toMatch(/EsgValidationPanel/);
   });
 });

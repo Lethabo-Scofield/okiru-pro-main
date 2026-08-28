@@ -3,6 +3,7 @@
  * Keys map to Excel columns via esgGridRows (A=first column).
  */
 import type { ColumnDef } from "@/components/workbook/sections";
+import { ESG_DEFAULT_DEPOTS, ESG_DEFAULT_MONTHS } from "./esgAxes";
 
 export type EsgGridSectionDef = {
   sectionId: string;
@@ -24,6 +25,13 @@ export type EsgGridSectionDef = {
    * Omit for sheets that genuinely start at A — positional stays the default.
    */
   columnLetters?: Readonly<Record<string, string>>;
+  /**
+   * Structural row cap, for registers whose row count is defined by a
+   * standard rather than by the client's data. King V has exactly 17
+   * principles; the sheet's TOTAL block starts on row 18 of the window and
+   * imported as principles 18 and 19 until this existed.
+   */
+  maxRows?: number;
 };
 
 const KING5_STATUS = [
@@ -123,8 +131,15 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
     description: "Monthly waste streams by type and disposal route",
     startRow: 5,
     columns: [
-      { key: "month", label: "Month", type: "text", width: 90 },
-      { key: "depot", label: "Depot", type: "text", width: 90 },
+      /*
+       * Month and depot are SELECTS, matching the live workbook's own
+       * data-validation dropdowns. The register previously accepted any text
+       * here, which is how imported banner rows sat in the Month column
+       * unquestioned — a dropdown makes the expected vocabulary visible and
+       * gives the hygiene rules something concrete to check against.
+       */
+      { key: "month", label: "Month", type: "select", options: [...ESG_DEFAULT_MONTHS], width: 90 },
+      { key: "depot", label: "Depot", type: "select", options: [...ESG_DEFAULT_DEPOTS, "ALL"], width: 90 },
       { key: "wasteType", label: "Waste Type", type: "text", required: true, width: 160 },
       { key: "totalKg", label: "Total kg", type: "number", width: 95 },
       { key: "recycledKg", label: "Recycled kg", type: "number", width: 100 },
@@ -183,6 +198,10 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
     sheet: "King5_Scorecard",
     description: "17 King V principles — Apply & Explain",
     startRow: 4,
+    // King IV/V defines exactly 17 principles — structural, like
+    // KING5_PRINCIPLE_COUNT in esgValidationRules. The sheet's TOTAL rows
+    // (21–22) sit inside the column window and are NOT principles.
+    maxRows: 17,
     columns: [
       { key: "num", label: "#", type: "number", width: 50 },
       { key: "principle", label: "Principle", type: "text", required: true, width: 280 },
@@ -232,6 +251,21 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
     sheet: "GARP_GRAP",
     description: "GARP / GRAP risk & compliance",
     startRow: 5,
+    // GARP_GRAP!R4 headers: B=Risk/Requirement C=Description D=Data Source
+    // E=Severity F=Control Status G=Current Control H=Improvement I=Likelihood.
+    // Column A is BLANK on the sheet. Read positionally, every field shifted
+    // one left — controlStatus was populated from the Severity column, so the
+    // hygiene rule reported `Control Status "High"` on every imported row and
+    // the governance calculator scored a column of severities.
+    columnLetters: {
+      risk: "B",
+      description: "C",
+      dataSource: "D",
+      severity: "E",
+      controlStatus: "F",
+      evidence: "G",
+      likelihood: "I",
+    },
     columns: [
       { key: "risk", label: "Risk / Requirement", type: "text", required: true, width: 200 },
       { key: "description", label: "Description", type: "text", width: 200 },

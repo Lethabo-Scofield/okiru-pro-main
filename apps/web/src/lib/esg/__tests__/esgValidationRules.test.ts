@@ -13,6 +13,7 @@ import {
 } from "../esgValidationRules";
 import { deriveEsgSummaryCells } from "../esgDeriveSummary";
 import { mergeEsgSectionCells } from "../esgGridRows";
+import { ESG_GRID_SECTION_IDS } from "../esgGridSections";
 import type { EsgWorkbookData } from "../esgWorkbookStorage";
 
 function wb(sections: Record<string, Record<string, unknown>>): EsgWorkbookData {
@@ -70,6 +71,10 @@ describe("no rule reads a cell nothing writes, and every rule can fail", () => {
       "company-reporting-setup.baseline-year-valid", // required-field rules own "unset"
       "assumptions.stance-valid", // unset defaults to Standard in the calculators
       "s-data.ltifr-threshold", // not computable — s-data.hours-worked reports it
+      // Register hygiene judges the rows that EXIST (required columns filled,
+      // dropdown values recognised); an empty register passes vacuously because
+      // emptiness is owned by the pillar submit gates, not by hygiene.
+      ...ESG_GRID_SECTION_IDS.map((id) => `${id}.rows-valid`),
     ]);
     for (const r of results) {
       if (unsetTolerant.has(r.id)) {

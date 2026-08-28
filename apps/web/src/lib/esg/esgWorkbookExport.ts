@@ -63,7 +63,9 @@ const INPUT_SHEET_BY_SECTION: Record<string, string> = {
   "s-data-csi": "S_Data",
 };
 
-const GRID_HEADERS: Partial<Record<string, { row: number; headers: string[] }>> = {
+const GRID_HEADERS: Partial<
+  Record<string, { row: number; headers: string[]; startCol?: string }>
+> = {
   Fleet_Register: {
     row: 3,
     headers: [
@@ -97,6 +99,7 @@ const GRID_HEADERS: Partial<Record<string, { row: number; headers: string[] }>> 
     headers: ["#", "Principle", "Status", "Weight", "Score", "Weighted Score", "Evidence Required", "Current Status"],
   },
   IFRS_S1_S2: {
+    startCol: "B",
     row: 4,
     headers: [
       "Disclosure Requirement",
@@ -109,10 +112,12 @@ const GRID_HEADERS: Partial<Record<string, { row: number; headers: string[] }>> 
     ],
   },
   ISO_Tracker: {
+    startCol: "B",
     row: 4,
     headers: ["Requirement", "Clause", "Status", "Score /5", "Weight", "Evidence Needed", "Current Evidence", "Net-Zero Link"],
   },
   GARP_GRAP: {
+    startCol: "B",
     row: 4,
     headers: [
       "Risk / Requirement",
@@ -193,8 +198,12 @@ function writeSectionCells(sheet: XLSX.WorkSheet, cells: Record<string, unknown>
 function writeGridHeaders(sheet: XLSX.WorkSheet, sheetName: string): void {
   const hdr = GRID_HEADERS[sheetName];
   if (!hdr) return;
+  // Sheets whose data starts at B (ISO_Tracker, IFRS_S1_S2, GARP_GRAP —
+  // declared via `columnLetters`) must get their headers at B too, or the
+  // exported header row sits one column left of every value under it.
+  const base = (hdr.startCol ?? "A").charCodeAt(0);
   hdr.headers.forEach((label, i) => {
-    const col = String.fromCharCode(65 + i);
+    const col = String.fromCharCode(base + i);
     setCell(sheet, `${col}${hdr.row}`, label);
   });
 }

@@ -10,6 +10,7 @@ import {
 import { Loader2, Save } from "lucide-react";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import { isEsgGridSection, type EsgGridSectionId } from "@/lib/esgGridSections";
+import { hydrateEsgSectionCells } from "@/lib/esg/esgSheetStructure";
 import { useEsgStore } from "../../../EsgToolkit/src/lib/esgStore";
 import { EsgScalarForm } from "./EsgScalarForm";
 import { EsgMonthlyGrid } from "./EsgMonthlyGrid";
@@ -98,7 +99,14 @@ function useSectionDraft(sectionId: string, autosave: boolean) {
   }, [draft]);
 
   useEffect(() => {
-    setDraft({ ...(workbook?.sections?.[sectionId]?.cells ?? {}) });
+    // XLSX imports store E_Data and the headcount matrix under sheet addresses;
+    // the grids read app addresses. Hydrate so imported data DISPLAYS (typed
+    // values always win), and re-persists under both spellings on next save.
+    setDraft(
+      hydrateEsgSectionCells(sectionId, {
+        ...(workbook?.sections?.[sectionId]?.cells ?? {}),
+      }) as Record<string, string | number | boolean | null>,
+    );
   }, [workbook, sectionId]);
 
   const persist = useCallback(async () => {

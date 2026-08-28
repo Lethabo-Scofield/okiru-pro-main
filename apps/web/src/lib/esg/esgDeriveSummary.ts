@@ -38,6 +38,7 @@
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { ESG_GRID_SECTIONS, type EsgGridSectionId } from "@/lib/esg/esgGridSections";
 import { king5Weight } from "@/lib/esg/esgGridRows";
+import { hydrateEsgWorkbookSections } from "@/lib/esg/esgSheetStructure";
 import { toFractionOrZero } from "../../../../api/pipeline/units/percentage";
 
 type CellValue = string | number | boolean | null;
@@ -323,9 +324,16 @@ function hasAnyCells(workbook: EsgWorkbookData): boolean {
  * derived from the raw grid inputs. Idempotent; explicit values are preserved
  * (except the four DERIVED-ONLY cells listed in the module header).
  */
-export function deriveEsgSummaryCells(workbook: EsgWorkbookData): EsgWorkbookData {
+export function deriveEsgSummaryCells(rawWorkbook: EsgWorkbookData): EsgWorkbookData {
   // A blank workbook derives to nothing at all — never a fabricated 0.
-  if (!hasAnyCells(workbook)) return workbook;
+  if (!hasAnyCells(rawWorkbook)) return rawWorkbook;
+
+  // Workbooks imported from XLSX hold E_Data and the headcount matrix under
+  // SHEET addresses (`C14`, `B5`) while everything below reads app addresses
+  // (`s1a_C14`, `hc_0_0`). Translate before deriving, so an imported workbook
+  // scores without waiting for someone to open and re-save each editor.
+  // Stored app-address cells always win over a translation.
+  const workbook = hydrateEsgWorkbookSections(rawWorkbook);
 
   const d = new Draft(workbook);
 

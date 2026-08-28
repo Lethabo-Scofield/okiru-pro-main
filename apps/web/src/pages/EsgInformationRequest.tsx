@@ -13,6 +13,7 @@ import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import { AppNavBack } from "@/components/AppNavBack";
 import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { EsgSectionMissingPanel } from "@/components/esg-workbook/EsgSectionMissingPanel";
+import { EsgValidationPanel } from "@/components/esg-workbook/EsgValidationPanel";
 import {
   esgSectionHasMissingRequired,
   missingIssuesForEsgSection,
@@ -661,6 +662,15 @@ export default function EsgInformationRequest() {
               touched={touched}
               sectionId={activeSectionId}
               sectionTitle={activeSection?.title}
+            />
+            {/* The validation box — the same rules the import analysis diffs
+                against, live on the page. Built long ago, mounted nowhere;
+                a validator nobody can see is a validator that ignores
+                everything. Clicking an issue jumps to its section. */}
+            <EsgValidationPanel
+              workbook={workbook}
+              activeSectionId={activeSectionId}
+              onSelectSection={(sectionId) => void changeSection(sectionId)}
             />
             <div
               className="rounded-xl border border-[var(--esg-glass-border)] bg-white/[0.02] p-2"
