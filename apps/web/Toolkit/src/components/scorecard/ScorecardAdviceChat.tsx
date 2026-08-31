@@ -81,7 +81,10 @@ export function ScorecardAdviceChat({ compact = false }: ScorecardAdviceChatProp
   const [, navigate] = useLocation();
   const { activeClientId } = useActiveClient();
   const store = useBbeeStore();
-  const scorecardId = activeClientId || store.activeClientId || store.client.id;
+  const persistedScorecardId = typeof window !== "undefined"
+    ? localStorage.getItem("okiru-pro-active-client")
+    : null;
+  const scorecardId = activeClientId || store.activeClientId || store.client.id || persistedScorecardId;
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");

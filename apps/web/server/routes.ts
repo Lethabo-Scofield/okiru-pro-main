@@ -30,6 +30,7 @@ import { registerTokenRoutes } from "./tokenRoutes";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
 import { deleteWorkbookForClient } from "./workbookRoutes";
+import { answerScorecardQuestionWithAi } from "./bbbeeKnowledge";
 import {
   listClientsForTenant as memListClients,
   getClient as memGetClient,
@@ -191,6 +192,36 @@ export async function registerRoutes(
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: isProduction ? 'production' : 'development',
+    });
+  });
+
+  app.post('/api/scorecards/:scorecardId/advice/chat', requireAuth, async (req: Request, res: Response) => {
+    const scorecardId = String(req.params.scorecardId || '').trim();
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+    if (!scorecardId) return res.status(400).json({ message: 'scorecardId is required' });
+    if (!message) return res.status(400).json({ message: 'Message is required' });
+    if (message.length > 2000) return res.status(400).json({ message: 'Message is too long' });
+    if (req.body?.toolkitId && req.body.toolkitId !== 'bbbee') {
+      return res.status(400).json({ message: 'Only the B-BBEE toolkit assistant is supported right now.' });
+    }
+
+    const result = await answerScorecardQuestionWithAi(message, req.body?.runtimeSnapshot);
+    return res.json({
+      answer: result.answer,
+      conversationId: typeof req.body?.conversationId === 'string' && req.body.conversationId.trim()
+        ? req.body.conversationId.trim()
+        : randomUUID(),
+      sources: result.sources.map((source) => ({ type: 'ontology', id: source.id, label: `${source.section}: ${source.title}` })),
+      tables: [],
+      actions: [],
+      suggestedQuestions: [
+        'Why did we receive this B-BBEE level?',
+        'Which pillar is reducing our score most?',
+        'Did we fail any priority-element subminimum?',
+        'What should we prioritise before verification?',
+      ],
+      warnings: result.answerMode === 'ontology' ? ['AI explanation is unavailable; showing grounded scorecard and ontology facts.'] : [],
+      answerMode: result.answerMode,
     });
   });
 

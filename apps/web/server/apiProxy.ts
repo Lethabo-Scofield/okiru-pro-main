@@ -60,6 +60,9 @@ const PROXIED_TEMPLATE_PATTERNS = [
 ];
 
 function shouldProxy(path: string): boolean {
+  // Ask Okiru is served by the web app in this branch. The singular
+  // `/api/scorecard` prefix would otherwise also swallow plural `/scorecards`.
+  if (/^\/api\/scorecards\/[^/]+\/advice\/chat$/.test(path)) return false;
   for (const prefix of PROXIED_PREFIXES) {
     if (path.startsWith(prefix)) return true;
   }

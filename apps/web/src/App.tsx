@@ -312,7 +312,7 @@ function GlobalScorecardAdvisor() {
   const [location] = useLocation();
   const [open, setOpen] = useState(false);
 
-  if (!location.startsWith("/toolkit")) return null;
+  if (location !== "/toolkit/scorecard") return null;
 
   return (
     <>
