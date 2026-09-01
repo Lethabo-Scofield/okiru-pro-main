@@ -14,6 +14,7 @@ import {
   parseSelectedTopics,
 } from "@/lib/esg/esgTopicScope";
 import { EsgSidebar } from "./components/layout/EsgSidebar";
+import { EsgAdvisor } from "./components/EsgAdviceChat";
 import EsgDashboard from "./pages/EsgDashboard";
 import EsgCarbonTax from "./pages/EsgCarbonTax";
 import EsgNetZero from "./pages/EsgNetZero";
@@ -230,6 +231,7 @@ export function EsgAppRoutes() {
           </Switch>
         </main>
       </div>
+      <EsgAdvisor />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   canReopenEsgWorkbook,
 } from "./esgWorkbookLock";
 import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
+import { answerEsgQuestionWithAi } from "./esgKnowledge";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -162,6 +163,35 @@ async function persistEsgWorkbook(wb: EsgWorkbookData): Promise<void> {
 }
 
 export function registerEsgWorkbookRoutes(app: Express): void {
+  app.post("/api/esg/scorecards/:companyId/advice/chat", requireAuth, async (req, res) => {
+    const workbook = await authorizeEsgWorkbook(req, res);
+    if (!workbook) return;
+    const message = typeof req.body?.message === "string" ? req.body.message.trim() : "";
+    if (!message || message.length > 2000) {
+      return res.status(400).json({ message: "Enter an ESG question of 2,000 characters or fewer." });
+    }
+    const result = await answerEsgQuestionWithAi(message, req.body?.runtimeSnapshot);
+    return res.json({
+      answer: result.answer,
+      conversationId: typeof req.body?.conversationId === "string" && req.body.conversationId
+        ? req.body.conversationId
+        : `esg-${Date.now()}`,
+      sources: result.sources,
+      warnings: result.warnings,
+      answerMode: result.answerMode,
+      tables: [],
+      actions: [],
+      suggestedQuestions: [
+        "Which ESG pillar is reducing our score most?",
+        "Explain our Scope 1 and Scope 2 position",
+        "What evidence should we collect next?",
+        "What is double materiality?",
+        "Which reporting framework fits us?",
+        "How do B-BBEE and ESG overlap?",
+      ],
+    });
+  });
+
   app.get("/api/esg/access", requireAuth, (req: Request, res: Response) => {
     const user = (req as any).user;
     res.json({ allowed: canAccessEsgToolkit(user) });
