@@ -51,15 +51,25 @@ spec:
               value: "production"
             - name: PORT
               value: "3200"
-            # Payment gate. The code defaults this ON and PayFast checkout fails
-            # closed, so without merchant keys every upload would dead-end at a
-            # checkout that cannot settle. Remaining blocker before flipping to
-            # "true": PAYFAST_MERCHANT_ID / _KEY / _PASSPHRASE as secrets here.
-            # (Shared quote state — the other blocker — is now solved by
-            # REDIS_URL below; the server refuses to boot if this is "true"
-            # without it.)
+            # Payment gate — ON. The card-checkout era needed PayFast keys
+            # before this could be "true" (a checkout that cannot settle
+            # dead-ends every upload). The token wallet removed that blocker:
+            # apps/web debits the organisation's token balance (10,000 free on
+            # first use) and settles the quote over PARSER_INTERNAL_SECRET, so
+            # extraction is paid for without a card ever appearing. PayFast is
+            # now only how wallets are TOPPED UP, and stays optional here.
+            # (Shared quote state is solved by REDIS_URL below; the server
+            # refuses to boot if this is "true" without it.)
             - name: PARSER_REQUIRE_PAYMENT
-              value: "false"
+              value: "true"
+            # The wallet-settle handshake — must equal the web Deployment's
+            # PARSER_INTERNAL_SECRET or every settle is refused and refunded.
+            - name: PARSER_INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: PARSER_INTERNAL_SECRET
+                  optional: true
             # Shared quote state across replicas. This Deployment runs 2 pods, so
             # a PayFast ITN can arrive at a pod that did not issue the quote; an
             # in-process store would never mark it paid and the payer would get

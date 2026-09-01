@@ -61,6 +61,7 @@ import {
   type EsgInjectionResult,
   type EsgParserCaseLike,
 } from "./esgParserInjection";
+import { writeEsgFlowSnapshot } from "./esgFlowSnapshot";
 
 /** The free, structure-only price scan (POST /api/parser/esg/quote-files). */
 interface ParserQuote {
@@ -99,9 +100,26 @@ interface ParserQuote {
  * converts the quote into tokens and reports the balance in the same call, so
  * the number shown and the number charged are the same number.
  */
+interface TokenCostFile {
+  filename: string;
+  tokens: number;
+  /** Which pricing rule the server put this document under. */
+  effort: "standard" | "high" | "workbook";
+  requiresOcr: boolean;
+  pages: number | null;
+  sheets: number | null;
+  rows: number | null;
+}
+
 interface TokenCost {
   quoteId: string;
   tokens: number;
+  /** Per-document itemisation — each file priced under its effort rule. */
+  files?: TokenCostFile[];
+  /** Tokens the batch minimum adds beyond the itemised documents. */
+  minimumTopUp?: number;
+  /** The effort rules themselves, served so the UI never restates them wrong. */
+  effortRules?: Array<{ tier: string; label: string; rule: string }>;
   balance: number;
   balanceAfter: number;
   sufficient: boolean;
@@ -110,6 +128,8 @@ interface TokenCost {
 }
 
 const tokenText = (value: number): string => value.toLocaleString("en-ZA");
+
+const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workbook", standard: "Standard" };
 
 /** A full ESG evidence pack is large, but not unbounded. */
 const MAX_UPLOAD_FILES = 100;
@@ -208,6 +228,8 @@ export interface EsgDocumentUploadStartProps {
   onComplete: (result: {
     injection: EsgInjectionResult;
     parserCase: EsgParserCaseLike | null;
+    /** Library ids of every persisted upload, for filing under the company. */
+    documentIds?: string[];
   }) => Promise<void>;
   /** True while the host is writing to the workbook. */
   busy?: boolean;
@@ -383,10 +405,23 @@ export function EsgDocumentUploadStart({
 
   const prepareAndQuote = async (list: File[]): Promise<void> => {
     setLibraryWarning(null);
+    // The WHOLE pipeline is "checking" — saving to the library and then
+    // pricing. `quoting` used to flip on only when pricing began, so during
+    // the save the Done button sat enabled next to whatever quote the
+    // PREVIOUS batch had left behind, and clicking it opened a checkout
+    // priced for a different set of files. Claim the checking state and drop
+    // the stale quote before anything async happens.
+    const requestId = ++quoteRequestRef.current;
+    setQuoting(true);
+    setQuote(null);
     try {
       await persistSelectedDocuments(list);
+      // A newer batch started while these files were saving — its pipeline
+      // owns the quote now, and pricing this older list would race it.
+      if (quoteRequestRef.current !== requestId) return;
       await runQuote(list);
     } catch (error) {
+      if (quoteRequestRef.current !== requestId) return; // superseded
       setQuote(null);
       setQuoting(false);
       setParseError(error instanceof Error ? error.message : "Could not save these documents");
@@ -672,7 +707,26 @@ export function EsgDocumentUploadStart({
       }
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
-      setParserCase(mergeEsgCases(keptCase, data));
+      const mergedCase = mergeEsgCases(keptCase, data);
+      setParserCase(mergedCase);
+      // Tokens have just been spent on this result — make it survive leaving
+      // the flow, even before "continue to workbook" is pressed. The host flow
+      // restores it (straight to review) on its next mount, and overwrites this
+      // with the proposed entity name once the user does continue.
+      const snapshotInjection = applyEsgParserResult(mergedCase);
+      writeEsgFlowSnapshot({
+        savedAt: new Date().toISOString(),
+        entityName: "",
+        nameSource: "none",
+        work: {
+          route: "documents",
+          patches: snapshotInjection.patches,
+          injection: snapshotInjection,
+          parserCase: mergedCase,
+          documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
+          excel: null,
+        },
+      });
     } catch (err) {
       if (timedOut || (err as Error)?.name === "AbortError") {
         setParseError(
@@ -1073,14 +1127,23 @@ export function EsgDocumentUploadStart({
                   </div>
                 </div>
 
+                {/* Each document shows the credit tokens IT costs, under the
+                    effort rule that priced it — the total is explained line by
+                    line rather than asserted. */}
                 <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--esg-glass-border,#2c2c2e)]">
                   <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--esg-text3,#636366)] max-md:hidden">
                     <span>Document</span>
                     <span>Effort</span>
-                    <span className="text-right">Size</span>
+                    <span className="text-right">{charging ? "Tokens" : "Size"}</span>
                   </div>
                   {quote!.files.map((file) => {
                     const units = fileUnits(file);
+                    const priced = tokenCost?.files?.find((f) => f.filename === file.filename);
+                    const effort = priced
+                      ? EFFORT_LABELS[priced.effort] ?? "Standard"
+                      : file.requiresOcr
+                        ? "High"
+                        : "Standard";
                     return (
                       <div
                         key={file.filename}
@@ -1088,19 +1151,40 @@ export function EsgDocumentUploadStart({
                       >
                         <div className="min-w-0">
                           <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
-                          <p className="mt-0.5 text-[11px] text-[var(--esg-text3,#636366)] md:hidden">
-                            {file.requiresOcr ? "High effort — scan" : "Standard"} · {units}
+                          <p className="mt-0.5 text-[11px] text-[var(--esg-text3,#636366)]">
+                            <span className="md:hidden">{effort} effort · </span>
+                            {units}
+                            {charging && priced ? (
+                              <span className="md:hidden"> · {tokenText(priced.tokens)} tokens</span>
+                            ) : null}
                           </p>
                         </div>
                         <span className="hidden text-[12px] text-[var(--esg-text2,#8e8e93)] md:block">
-                          {file.requiresOcr ? "High" : "Standard"}
+                          {effort}
                         </span>
-                        <span className="hidden text-[12px] text-[var(--esg-text2,#8e8e93)] md:block md:text-right">
-                          {units}
+                        <span className="hidden text-[12px] tabular-nums text-[var(--esg-text2,#8e8e93)] md:block md:text-right">
+                          {charging && priced ? `${tokenText(priced.tokens)} tokens` : units}
                         </span>
                       </div>
                     );
                   })}
+                  {charging && (tokenCost?.minimumTopUp ?? 0) > 0 && (
+                    <div
+                      className="grid gap-2 border-b border-white/[0.05] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
+                      data-testid="esg-quote-minimum-charge"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-[var(--esg-text2,#8e8e93)]">Small-batch minimum</p>
+                        <p className="mt-0.5 text-[11px] text-[var(--esg-text3,#636366)]">
+                          Batches this small are topped up to the minimum processing charge.
+                        </p>
+                      </div>
+                      <span className="hidden md:block" />
+                      <span className="text-[12px] tabular-nums text-[var(--esg-text2,#8e8e93)] md:text-right">
+                        {tokenText(tokenCost!.minimumTopUp!)} tokens
+                      </span>
+                    </div>
+                  )}
                   <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
                     <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text2,#8e8e93)]">
                       {charging ? "Total" : "This batch"}
@@ -1116,6 +1200,25 @@ export function EsgDocumentUploadStart({
                     </span>
                   </div>
                 </div>
+
+                {/* The rules the prices above came from — served by the same
+                    endpoint that priced them, so the explanation cannot drift
+                    from the charge. */}
+                {charging && (tokenCost?.effortRules?.length ?? 0) > 0 && (
+                  <div
+                    className="mt-3 rounded-2xl border border-white/[0.06] bg-[#111113] p-4"
+                    data-testid="esg-effort-rules"
+                  >
+                    <p className="text-[12px] font-semibold text-[var(--esg-text,#fff)]">How effort sets the token cost</p>
+                    <div className="mt-2 space-y-1.5">
+                      {tokenCost!.effortRules!.map((rule) => (
+                        <p key={rule.tier} className="text-[11.5px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+                          <span className="font-semibold text-[#d1d1d6]">{rule.label}</span> — {rule.rule}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {!charging && (
                   <p className="mt-3 text-[11px] text-[var(--esg-text3,#636366)]">
@@ -1573,7 +1676,13 @@ export function EsgDocumentUploadStart({
 
           <div className="esg-fade-up mt-4" style={{ animationDelay: "200ms" }}>
             <button
-              onClick={() => void onComplete({ injection, parserCase })}
+              onClick={() =>
+                void onComplete({
+                  injection,
+                  parserCase,
+                  documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
+                })
+              }
               disabled={busy}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
               style={{ background: "var(--esg-acc-e, #1de9a0)", color: "#080e14" }}

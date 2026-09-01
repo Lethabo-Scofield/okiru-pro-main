@@ -35,7 +35,7 @@
  *     `{confirm:true, sections}` endpoint, so there is one import path.
  *   - `persistEsgSectionPatches` — the one workbook write.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Leaf, Loader2 } from "lucide-react";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
@@ -62,6 +62,12 @@ import {
   type EsgParserCaseLike,
   type EsgSectionPatches,
 } from "./esgParserInjection";
+import {
+  clearEsgFlowSnapshot,
+  readEsgFlowSnapshot,
+  writeEsgFlowSnapshot,
+  type EsgSnapshotWork,
+} from "./esgFlowSnapshot";
 import "@/styles/esg-glass.css";
 
 type EsgCreateStep = "choose" | "provide" | "review";
@@ -72,6 +78,8 @@ interface PendingWork {
   patches: EsgSectionPatches;
   injection: EsgInjectionResult | null;
   parserCase: EsgParserCaseLike | null;
+  /** Library ids of the persisted uploads — filed under the company on create. */
+  documentIds?: string[];
   excel: { fileName: string; preview: EsgImportPreview } | null;
 }
 
@@ -82,6 +90,7 @@ const EMPTY_WORK: PendingWork = {
   parserCase: null,
   excel: null,
 };
+
 
 export function EsgCreateFlow() {
   const [, navigate] = useLocation();
@@ -101,12 +110,43 @@ export function EsgCreateFlow() {
   const [nameSource, setNameSource] = useState<EsgNameSource>("none");
   const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false);
+  /** Set when this mount rehydrated a previous run's paid extraction. */
+  const [restoredAt, setRestoredAt] = useState<string | null>(null);
+
+  // Rehydrate the document route's paid extraction. Runs once, on mount,
+  // before any interaction — landing straight on the review step it left.
+  useEffect(() => {
+    const snap = readEsgFlowSnapshot();
+    if (!snap) return;
+    setWork(snap.work);
+    setEntityName(snap.entityName);
+    setNameSource(snap.nameSource);
+    setRestoredAt(snap.savedAt);
+    setStep("review");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the snapshot's name current while reviewing, so leaving again loses
+  // nothing. Debounced — the case JSON can be large, the name is typed key by key.
+  useEffect(() => {
+    if (step !== "review" || work.route !== "documents") return;
+    const timer = window.setTimeout(() => {
+      const snap = readEsgFlowSnapshot();
+      if (!snap) return;
+      writeEsgFlowSnapshot({ ...snap, entityName, nameSource });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [step, work.route, entityName, nameSource]);
 
   const backToChoose = () => {
     setStep("choose");
     setWork(EMPTY_WORK);
     setEntityName("");
     setNameSource("none");
+    // Going back is a deliberate discard — restoring the abandoned run on the
+    // next visit would undo the user's own decision.
+    clearEsgFlowSnapshot();
+    setRestoredAt(null);
     // Leaving the document route drops the handed-over workbook: coming back
     // must not silently re-stage (and re-quote) a file the user walked away from.
     setExcelHandover(null);
@@ -168,20 +208,32 @@ export function EsgCreateFlow() {
   const handleParsedDocuments = async ({
     injection,
     parserCase,
+    documentIds,
   }: {
     injection: EsgInjectionResult;
     parserCase: EsgParserCaseLike | null;
+    documentIds?: string[];
   }) => {
     const proposed = esgProposedEntityName(parserCase, injection.patches);
-    setWork({
+    const nextWork: EsgSnapshotWork = {
       route: "documents",
       patches: injection.patches,
       injection,
       parserCase,
+      documentIds,
       excel: null,
-    });
+    };
+    setWork(nextWork);
     setEntityName(proposed);
     setNameSource(proposed ? "documents" : "none");
+    // Tokens have just been spent on this result — make it survive leaving
+    // the flow. Cleared when the company is created or the run is discarded.
+    writeEsgFlowSnapshot({
+      savedAt: new Date().toISOString(),
+      entityName: proposed,
+      nameSource: proposed ? "documents" : "none",
+      work: nextWork,
+    });
     setStep("review");
   };
 
@@ -203,7 +255,9 @@ export function EsgCreateFlow() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
+        // Stamped "esg" so this company lists under ESG everywhere — without
+        // it, saved-companies offers B-BBEE actions on an ESG company.
+        body: JSON.stringify({ name, product: "esg" }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -226,6 +280,24 @@ export function EsgCreateFlow() {
       }
 
       setEsgActiveCompany(companyId);
+      // The company now exists — a later restore of this snapshot would create
+      // a duplicate, so it goes the moment the create lands. The values are
+      // written next, and a failed write already has its own recovery path.
+      clearEsgFlowSnapshot();
+      // File the uploads under the company. The library is organised per
+      // company — an unlinked upload is findable but unowned. Non-fatal.
+      if (work.documentIds?.length) {
+        void Promise.allSettled(
+          work.documentIds.map((documentId) =>
+            fetch(`/api/parser-documents/${encodeURIComponent(documentId)}`, {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ entityId: companyId }),
+            }),
+          ),
+        );
+      }
       // The workbook offers the entry choice again when it is empty. Having
       // just come through it, this user must not be handed straight back to it.
       rememberEsgStartChosen(companyId);
@@ -396,6 +468,27 @@ export function EsgCreateFlow() {
           </div>
         ) : null}
 
+        {step === "review" && restoredAt && work.route === "documents" ? (
+          <div
+            className="mx-auto mb-4 w-full max-w-2xl rounded-[18px] border border-[var(--esg-acc-e,#1de9a0)]/25 bg-[var(--esg-acc-e,#1de9a0)]/[0.06] px-4 py-3.5"
+            data-testid="esg-restored-run-banner"
+          >
+            <p className="text-[13px] font-semibold text-[var(--esg-text,#fff)]">
+              Your processed documents were saved
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+              We restored the extraction you already paid for
+              {(() => {
+                const at = new Date(restoredAt);
+                return Number.isNaN(at.getTime())
+                  ? ""
+                  : ` from ${at.toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+              })()}
+              . Review it and create the scorecard — no tokens were spent again. Going back to the
+              start discards it.
+            </p>
+          </div>
+        ) : null}
         {step === "review" ? (
           <EsgCreateReview
             route={work.route}

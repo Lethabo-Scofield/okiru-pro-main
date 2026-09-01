@@ -1988,11 +1988,32 @@ export async function registerRoutes(
       if (isMongoConnected()) {
         const filter = buildClientVisibilityFilter(userId, user);
         const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
-        return res.json(clients.map((c: any) => c.toJSON()));
+        const rows = clients.map((c: any) => c.toJSON());
+        // Companies created before `product` existed carry no marker, yet the
+        // ESG ones must not surface with B-BBEE actions. The one durable trace
+        // of ESG-ness for a legacy company is its esg_workbooks document, so
+        // classify the unmarked rows by that in a single $in lookup.
+        const unmarked = rows.filter((r: any) => !r.product).map((r: any) => String(r.clientId ?? r.id));
+        const db = mongoose.connection.db;
+        if (unmarked.length > 0 && db) {
+          try {
+            const esgIds = new Set<string>(
+              (await db
+                .collection("esg_workbooks")
+                .distinct("companyId", { companyId: { $in: unmarked } })) as string[],
+            );
+            for (const r of rows as any[]) {
+              if (!r.product) r.product = esgIds.has(String(r.clientId ?? r.id)) ? "esg" : "bbbee";
+            }
+          } catch (lookupError) {
+            logger.warn("Could not classify legacy clients against esg_workbooks", { error: String(lookupError) });
+          }
+        }
+        return res.json(rows);
       }
 
       const clients = memListClients(userId, userOrgId);
-      res.json(clients);
+      res.json(clients.map((c) => ({ ...c, product: c.product ?? "bbbee" })));
     } catch (error: any) {
       logger.error("Error fetching clients", error);
       res.status(500).json({ error: "Failed to fetch clients" });
@@ -2000,8 +2021,16 @@ export async function registerRoutes(
   });
   app.post("/api/clients", requireAuth, async (req, res) => {
     try {
-      const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
+      const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount, product } = req.body;
       if (!name) return res.status(400).json({ error: "Client name is required" });
+      // Which product this company belongs to. The ESG create flow stamps
+      // "esg"; everything else defaults to B-BBEE. Anything unrecognised is a
+      // 400, not a silent default — a mislabelled company surfaces in the
+      // wrong list with the wrong actions.
+      const normalizedProduct = product == null ? "bbbee" : String(product).trim().toLowerCase();
+      if (normalizedProduct !== "bbbee" && normalizedProduct !== "esg") {
+        return res.status(400).json({ error: 'Invalid product. Use "bbbee" or "esg".' });
+      }
       if (industrySector) {
         const sector = String(industrySector).trim().toUpperCase();
         if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
@@ -2033,6 +2062,7 @@ export async function registerRoutes(
           leviableAmount: leviableAmount || 0,
           organizationId: userOrgId,
           createdByUserId: userId,
+          product: normalizedProduct,
         });
         return res.json(client.toJSON());
       }
@@ -2049,6 +2079,7 @@ export async function registerRoutes(
         leviableAmount: leviableAmount || 0,
         organizationId: userOrgId,
         createdByUserId: userId,
+        product: normalizedProduct,
         createdAt: now,
         updatedAt: now,
       };

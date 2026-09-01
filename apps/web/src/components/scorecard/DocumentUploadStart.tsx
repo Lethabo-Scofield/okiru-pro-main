@@ -235,9 +235,26 @@ interface ParserQuote {
  * the same call, so the number shown here and the number charged are the same
  * number — there is no client-side arithmetic to drift.
  */
+interface TokenCostFile {
+  filename: string;
+  tokens: number;
+  /** Which pricing rule the server put this document under. */
+  effort: "standard" | "high" | "workbook";
+  requiresOcr: boolean;
+  pages: number | null;
+  sheets: number | null;
+  rows: number | null;
+}
+
 interface TokenCost {
   quoteId: string;
   tokens: number;
+  /** Per-document itemisation — each file priced under its effort rule. */
+  files?: TokenCostFile[];
+  /** Tokens the batch minimum adds beyond the itemised documents. */
+  minimumTopUp?: number;
+  /** The effort rules themselves, served so the UI never restates them wrong. */
+  effortRules?: Array<{ tier: string; label: string; rule: string }>;
   balance: number;
   balanceAfter: number;
   sufficient: boolean;
@@ -246,6 +263,62 @@ interface TokenCost {
 }
 
 const tokenText = (value: number): string => value.toLocaleString("en-ZA");
+
+const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workbook", standard: "Standard" };
+
+/**
+ * Where the flow's paid work survives navigation.
+ *
+ * Extraction costs tokens, but its result used to live only in component
+ * state — stepping out to fetch a missing document (or following the billing
+ * link this very flow offers) threw away everything the tokens had bought.
+ * The snapshot is written the moment extraction completes and restored on the
+ * next mount, so leaving and returning lands on the same reveal, not an empty
+ * uploader. Session-scoped: it belongs to this tab's run, and creating the
+ * scorecard (or discarding) removes it.
+ */
+const FLOW_SNAPSHOT_KEY = "okiru-create-scorecard-flow-v1";
+
+interface FlowSnapshot {
+  savedAt: string;
+  companyName: string;
+  sector: string;
+  subSector: string;
+  size: string;
+  fileNames: string[];
+  filedBatchByFile: Record<string, string>;
+  /** Library ids of the persisted uploads, so create can still file them under the company. */
+  documentIds: string[];
+  parserCase: ParserCaseLike;
+}
+
+function readFlowSnapshot(): FlowSnapshot | null {
+  try {
+    const raw = sessionStorage.getItem(FLOW_SNAPSHOT_KEY);
+    if (!raw) return null;
+    const snap = JSON.parse(raw) as FlowSnapshot;
+    return snap && typeof snap === "object" && snap.parserCase ? snap : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeFlowSnapshot(snapshot: FlowSnapshot): void {
+  try {
+    sessionStorage.setItem(FLOW_SNAPSHOT_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Quota or private mode. The parser runs are still in the document
+    // library; losing only the convenience restore is the acceptable failure.
+  }
+}
+
+function clearFlowSnapshot(): void {
+  try {
+    sessionStorage.removeItem(FLOW_SNAPSHOT_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Fold a newly-read case into what we already had.
@@ -354,7 +427,16 @@ export interface DocumentUploadStartProps {
   onCreate: (
     companyName: string,
     sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>,
-    extras?: { verdicts?: VerdictReport; reconcile?: ReconcileResult },
+    extras?: {
+      verdicts?: VerdictReport;
+      reconcile?: ReconcileResult;
+      /**
+       * Library ids of every document this run persisted. The host files them
+       * under the created company, so the document library is organised per
+       * company instead of one flat, unowned list.
+       */
+      documentIds?: string[];
+    },
   ) => Promise<void>;
   creating: boolean;
 }
@@ -428,6 +510,21 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    * must never lose or re-charge these — they carry straight through.
    */
   const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
+  /**
+   * Set when this mount rehydrated a previous run's paid extraction. The
+   * reveal renders from the restored case even though no File objects survive
+   * navigation, and a banner says where the data came from.
+   */
+  const [restoredAt, setRestoredAt] = useState<string | null>(null);
+  /** Library ids carried by a restored snapshot — the File objects are gone
+      but the uploads still exist and must still be filed under the company. */
+  const restoredDocumentIdsRef = useRef<string[]>([]);
+
+  /** Every library id this run owns: restored ones plus this mount's uploads. */
+  const allDocumentIds = () =>
+    Array.from(
+      new Set(restoredDocumentIdsRef.current.concat(Array.from(persistedDocumentsRef.current.values()))),
+    );
   const inputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   /** Files a folder upload could not read — shown as a warning, not an error. */
@@ -455,6 +552,36 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const quoteRequestRef = useRef(0);
   const MAX_UPLOAD_FILES = 100; // a full verification evidence pack is ~70 files
+
+  // Rehydrate a previous run's paid extraction. Runs once, on mount, before
+  // any interaction — so it can never clobber work done in this mount.
+  useEffect(() => {
+    const snap = readFlowSnapshot();
+    if (!snap) return;
+    setParserCase(snap.parserCase);
+    setKeptCase(snap.parserCase);
+    setCompanyName((prev) => prev.trim() || snap.companyName);
+    if (snap.sector) setSector(snap.sector);
+    if (snap.subSector) setSubSector(snap.subSector);
+    if (snap.size) setSize(snap.size);
+    setFiledBatchByFile(snap.filedBatchByFile ?? {});
+    restoredDocumentIdsRef.current = snap.documentIds ?? [];
+    setRestoredAt(snap.savedAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the snapshot's profile fields (name, sector, size) current while a
+  // restored/extracted case is on screen, so leaving again loses nothing.
+  // Debounced: the case JSON can be large and the name is typed key by key.
+  useEffect(() => {
+    if (!parserCase) return;
+    const timer = window.setTimeout(() => {
+      const snap = readFlowSnapshot();
+      if (!snap) return;
+      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [parserCase, companyName, sector, subSector, size]);
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.
@@ -768,10 +895,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
   const prepareAndQuote = async (list: File[]): Promise<void> => {
     setLibraryWarning(null);
+    // The WHOLE pipeline is "checking" — saving to the library and then
+    // pricing. `quoting` used to flip on only when pricing began, so during
+    // the save the Done button sat enabled next to whatever quote the
+    // PREVIOUS batch had left behind, and clicking it opened a checkout
+    // priced for a different set of files. Claim the checking state and drop
+    // the stale quote before anything async happens.
+    const requestId = ++quoteRequestRef.current;
+    setQuoting(true);
+    setQuote(null);
     try {
       await persistSelectedDocuments(list);
+      // A newer batch started while these files were saving — its pipeline
+      // owns the quote now, and pricing this older list would race it.
+      if (quoteRequestRef.current !== requestId) return;
       await runQuote(list);
     } catch (error) {
+      if (quoteRequestRef.current !== requestId) return; // superseded
       setQuote(null);
       setQuoting(false);
       setParseError(error instanceof Error ? error.message : "Could not save these documents");
@@ -935,6 +1075,20 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       // crucially, gives reconciliation the registered name it needs.
       const entity = pickEntityName(mergedCase);
       if (entity) setCompanyName((prev) => prev.trim() || entity);
+      // Tokens have just been spent on this result — make it survive leaving
+      // the flow. Restored on the next mount, cleared when the scorecard is
+      // created or the run is discarded.
+      writeFlowSnapshot({
+        savedAt: new Date().toISOString(),
+        companyName: companyName.trim() || entity,
+        sector,
+        subSector,
+        size,
+        fileNames: list.map((f) => f.name),
+        filedBatchByFile,
+        documentIds: allDocumentIds(),
+        parserCase: mergedCase,
+      });
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not read the documents");
     } finally {
@@ -1173,7 +1327,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const suppliersUp = useCountUp(supplierCount);
   const spendUp = useCountUp(spendCaptured, 1100);
 
-  const revealed = Boolean((mapped || injected) && !parsing && files.length > 0);
+  // `files.length` OR a restore: File objects never survive navigation, so a
+  // rehydrated run must reveal from the case alone.
+  const revealed = Boolean((mapped || injected) && !parsing && (files.length > 0 || restoredAt));
   // Requires `doneStaging`: this flag collapses the stage into the checkout
   // layout, and doing that the moment a quote landed is what left people with
   // "files appear but there is nowhere to carry on".
@@ -1250,7 +1406,36 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       parserCase || Object.values(finalSections).some((s) => (s.rows?.length ?? 0) > 0)
         ? assessDocuments(parserCase ?? {}, finalSections as Record<string, { rows?: unknown[] }>)
         : undefined;
-    void onCreate(companyName.trim(), finalSections, { verdicts, reconcile: reconciled });
+    try {
+      await onCreate(companyName.trim(), finalSections, {
+        verdicts,
+        reconcile: reconciled,
+        // Everything this run put in the document library, restored ids
+        // included — so the host can file the uploads under the company.
+        documentIds: allDocumentIds(),
+      });
+      // The run is now a company; the snapshot has served its purpose. Cleared
+      // only after create resolves so a failure leaves the restore intact.
+      clearFlowSnapshot();
+    } catch {
+      // The host surfaces its own create errors; keeping the snapshot means
+      // the paid extraction survives to try again.
+    }
+  };
+
+  /** Throw the restored (or just-extracted) run away and start clean. */
+  const discardRun = () => {
+    clearFlowSnapshot();
+    setParserCase(null);
+    setKeptCase(null);
+    setRestoredAt(null);
+    restoredDocumentIdsRef.current = [];
+    setFiles([]);
+    setFiledBatchByFile({});
+    setQuote(null);
+    setTokenCost(null);
+    setDoneStaging(false);
+    setCompanyName("");
   };
 
   /**
@@ -1337,6 +1522,41 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             : "Upload what you have. We will identify what is present, missing or needs review."}
         </p>
       </div>
+
+      {/* A restored run announces itself. Without this, coming back to data
+          you don't remember paying for looks like a glitch — and the only way
+          out of a restore you don't want would be a hard refresh. */}
+      {restoredAt && parserCase && (
+        <div
+          className="mb-4 flex flex-col gap-3 rounded-[18px] border border-emerald-400/25 bg-emerald-500/[0.06] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="restored-run-banner"
+        >
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-[13px] font-semibold text-emerald-200">
+              <Check className="h-4 w-4 shrink-0" />
+              Your processed documents were saved
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[#a1a1a6]">
+              We restored the extraction you already paid for
+              {(() => {
+                const at = new Date(restoredAt);
+                return Number.isNaN(at.getTime())
+                  ? ""
+                  : ` from ${at.toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+              })()}
+              . Review it below and create the scorecard — no tokens were spent again.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={discardRun}
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/[0.10] px-4 py-2 text-[12px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+            data-testid="button-discard-restored-run"
+          >
+            Discard and start over
+          </button>
+        </div>
+      )}
 
       {/* Sector selector — drives the sector-aware document checklist and the
           scorecard's calculator. B-BBEE evidence differs by sector + size. */}
@@ -1596,15 +1816,19 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               {/* One "tokens" in this UI, and it is the credit kind. The
                   model's own token estimate is an internal cost input — showing
                   it beside a credit cost invited people to read one as the
-                  other. Size is what they can actually verify. */}
+                  other. Each document shows the credit tokens IT costs, under
+                  the effort rule that priced it, so the total is explained
+                  line by line rather than asserted. */}
               <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.07]">
                 <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#636366] max-md:hidden">
                   <span>Document</span>
                   <span>Effort</span>
-                  <span className="text-right">Size</span>
+                  <span className="text-right">{charging ? "Tokens" : "Size"}</span>
                 </div>
                 {quote.files.map((file) => {
                   const units = fileUnits(file);
+                  const priced = tokenCost?.files?.find((f) => f.filename === file.filename);
+                  const effort = priced ? EFFORT_LABELS[priced.effort] ?? "Standard" : file.requiresOcr ? "High" : "Standard";
                   return (
                     <div
                       key={file.filename}
@@ -1612,17 +1836,38 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     >
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
-                        <p className="mt-0.5 text-[11px] text-[#636366] md:hidden">
-                          {file.requiresOcr ? "High effort — scan" : "Standard"} · {units}
+                        <p className="mt-0.5 text-[11px] text-[#636366]">
+                          <span className="md:hidden">{effort} effort · </span>
+                          {units}
+                          {charging && priced ? (
+                            <span className="md:hidden"> · {tokenText(priced.tokens)} tokens</span>
+                          ) : null}
                         </p>
                       </div>
-                      <span className="hidden text-[12px] text-[#a1a1a6] md:block">
-                        {file.requiresOcr ? "High" : "Standard"}
+                      <span className="hidden text-[12px] text-[#a1a1a6] md:block">{effort}</span>
+                      <span className="hidden text-[12px] tabular-nums text-[#a1a1a6] md:block md:text-right">
+                        {charging && priced ? `${tokenText(priced.tokens)} tokens` : units}
                       </span>
-                      <span className="hidden text-[12px] text-[#a1a1a6] md:block md:text-right">{units}</span>
                     </div>
                   );
                 })}
+                {charging && (tokenCost?.minimumTopUp ?? 0) > 0 && (
+                  <div
+                    className="grid gap-2 border-b border-white/[0.05] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
+                    data-testid="quote-minimum-charge"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-[#a1a1a6]">Small-batch minimum</p>
+                      <p className="mt-0.5 text-[11px] text-[#636366]">
+                        Batches this small are topped up to the minimum processing charge.
+                      </p>
+                    </div>
+                    <span className="hidden md:block" />
+                    <span className="text-[12px] tabular-nums text-[#a1a1a6] md:text-right">
+                      {tokenText(tokenCost!.minimumTopUp!)} tokens
+                    </span>
+                  </div>
+                )}
                 <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
                   <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8e8e93]">
                     {charging ? "Total" : "This batch"}
@@ -1635,6 +1880,22 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   </span>
                 </div>
               </div>
+
+              {/* The rules the prices above came from — served by the same
+                  endpoint that priced them, so the explanation cannot drift
+                  from the charge. */}
+              {charging && (tokenCost?.effortRules?.length ?? 0) > 0 && (
+                <div className="mt-3 rounded-2xl border border-white/[0.06] bg-[#111113] p-4" data-testid="effort-rules">
+                  <p className="text-[12px] font-semibold text-white">How effort sets the token cost</p>
+                  <div className="mt-2 space-y-1.5">
+                    {tokenCost!.effortRules!.map((rule) => (
+                      <p key={rule.tier} className="text-[11.5px] leading-5 text-[#a1a1a6]">
+                        <span className="font-semibold text-[#d1d1d6]">{rule.label}</span> — {rule.rule}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {!charging && (
                 <p className="mt-3 text-[11px] text-[#636366]">

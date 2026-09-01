@@ -718,6 +718,17 @@ const clientSchema = new Schema({
   fundisaSpend: { type: Number, default: 0 },
   /** Platform demo workbook (Lake Trading ground truth); visible to super_admin only. */
   lakeTradingDemo: { type: Boolean, default: false, index: true },
+  /**
+   * Which product this company was created under. Every company used to be
+   * implicitly B-BBEE, so the ESG flow's companies landed in the same list
+   * with B-BBEE actions — "Edit Workbook" on an ESG company opened a B-BBEE
+   * workbook. Deliberately NO schema default: Mongoose applies defaults on
+   * hydration too, and a default of "bbbee" would stamp every legacy ESG
+   * company as B-BBEE on read. Creation always sets it explicitly; a missing
+   * value means "legacy" and is classified at read time by whether an
+   * esg_workbooks document exists.
+   */
+  product: { type: String, enum: ["bbbee", "esg"], index: true },
 });
 
 clientSchema.set("toJSON", {

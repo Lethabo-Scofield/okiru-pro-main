@@ -72,12 +72,57 @@ function orgOf(req: Request, res: Response): string | null {
   return orgId;
 }
 
+interface ParserQuoteFileState {
+  filename: string;
+  extractionCents: number;
+  requiresOcr: boolean;
+  pages: number | null;
+  sheets: number | null;
+  rows: number | null;
+}
+
 interface ParserQuoteState {
   quoteId: string;
   paymentStatus: string;
   totalCents: number;
   currency: string;
   consumed: boolean;
+  files: ParserQuoteFileState[];
+}
+
+/**
+ * The effort tiers a document can land in, and the rule that puts it there.
+ *
+ * These are the pricing rules shown on the review step, derived from the same
+ * structure facts the parser priced the file on — so the rule the user reads
+ * and the price they are charged cannot disagree. One list, served to both the
+ * B-BBEE and ESG upload flows.
+ */
+export const EFFORT_RULES = [
+  {
+    tier: "high",
+    label: "High",
+    rule: "Scanned documents and images need OCR — every page is read optically before extraction, which costs the most tokens.",
+  },
+  {
+    tier: "workbook",
+    label: "Workbook",
+    rule: "Spreadsheets are priced on how much data their sheets actually hold, not their file size.",
+  },
+  {
+    tier: "standard",
+    label: "Standard",
+    rule: "Digital documents with a readable text layer are priced on their length.",
+  },
+] as const;
+
+export type EffortTier = (typeof EFFORT_RULES)[number]["tier"];
+
+/** Which effort rule a quoted file falls under. Same facts the parser priced on. */
+export function effortTierOf(file: Pick<ParserQuoteFileState, "requiresOcr" | "sheets">): EffortTier {
+  if (file.requiresOcr) return "high";
+  if ((file.sheets ?? 0) > 0) return "workbook";
+  return "standard";
 }
 
 /** Ask the parser what a quote actually costs. Its number, not the browser's. */
@@ -89,12 +134,26 @@ async function readParserQuote(quoteId: string): Promise<ParserQuoteState | null
   const body = (await res.json().catch(() => null)) as { data?: Record<string, unknown> } | null;
   const data = body?.data;
   if (!data) return null;
+  // The stored quote rides along under data.quote and carries the per-file
+  // breakdown the review step itemises. Absent (older parser build), the
+  // response degrades to totals only and the UI shows the batch figure alone.
+  const quoteFiles = ((data.quote as { files?: unknown[] } | undefined)?.files ?? []) as Array<
+    Record<string, any>
+  >;
   return {
     quoteId: String(data.quoteId ?? quoteId),
     paymentStatus: String(data.paymentStatus ?? "unknown"),
     totalCents: Number(data.totalCents ?? 0),
     currency: String(data.currency ?? "ZAR"),
     consumed: Boolean(data.consumed),
+    files: quoteFiles.map((f) => ({
+      filename: String(f?.filename ?? ""),
+      extractionCents: Number(f?.pricing?.extractionCents ?? 0),
+      requiresOcr: Boolean(f?.requiresOcr),
+      pages: f?.structure?.pages == null ? null : Number(f.structure.pages),
+      sheets: f?.structure?.sheets == null ? null : Number(f.structure.sheets),
+      rows: f?.structure?.rows == null ? null : Number(f.structure.rows),
+    })),
   };
 }
 
@@ -175,20 +234,40 @@ export function registerTokenRoutes(app: Express): void {
       if (!orgId) return;
       const quote = await readParserQuote(String(req.params.quoteId));
       if (!quote) return res.status(404).json({ message: "That quote is unknown or has expired." });
-      const tokens = paymentRequired() ? centsToTokens(quote.totalCents) : 0;
+      const charging = paymentRequired();
+      const tokens = charging ? centsToTokens(quote.totalCents) : 0;
       const wallet = await ensureWallet(orgId);
+      // Itemise the batch: each document priced in tokens under the effort rule
+      // that priced it. The per-file figures use the SAME conversion as the
+      // total, so the itemisation is the total's explanation, not a second
+      // pricing model. Any gap left over is the batch minimum, named as such.
+      const files = quote.files.map((f) => ({
+        filename: f.filename,
+        tokens: charging ? centsToTokens(f.extractionCents) : 0,
+        effort: effortTierOf(f),
+        requiresOcr: f.requiresOcr,
+        pages: f.pages,
+        sheets: f.sheets,
+        rows: f.rows,
+      }));
+      const itemised = files.reduce((sum, f) => sum + f.tokens, 0);
       res.json({
         quoteId: quote.quoteId,
         tokens,
+        files,
+        // The R2-floor (and any future batch-level fee) surfaces as its own
+        // line instead of silently inflating the last document.
+        minimumTopUp: charging ? Math.max(0, tokens - itemised) : 0,
+        effortRules: EFFORT_RULES,
         balance: wallet.balance,
         balanceAfter: wallet.balance - tokens,
         // In free mode the price is zero, so the balance is always sufficient
         // and the dialog never warns about a shortfall the user cannot fix —
         // there is nowhere to buy tokens until PayFast is live.
-        sufficient: !paymentRequired() || wallet.balance >= tokens,
-        shortfall: paymentRequired() ? Math.max(0, tokens - wallet.balance) : 0,
+        sufficient: !charging || wallet.balance >= tokens,
+        shortfall: charging ? Math.max(0, tokens - wallet.balance) : 0,
         alreadyAuthorized: quote.paymentStatus === "paid",
-        free: !paymentRequired(),
+        free: !charging,
       });
     } catch (err) {
       logger.error("GET /api/tokens/quote failed", err as Error);

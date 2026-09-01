@@ -191,7 +191,7 @@ describe("documents route — the name comes out of the documents", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/esg/create/c-123"));
 
     const created = calls.find((c) => c.url.endsWith("/api/clients"));
-    expect(bodyOf(created)).toEqual({ name: "Lake Trading Proprietary Limited" });
+    expect(bodyOf(created)).toEqual({ name: "Lake Trading Proprietary Limited", product: "esg" });
 
     const imported = calls.find((c) => c.url.includes("/api/esg/workbook/c-123/import"));
     const importBody = bodyOf(imported);
@@ -243,6 +243,7 @@ describe("manual route — the only route that has to ask", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/esg/create/c-123"));
     expect(bodyOf(calls.find((c) => c.url.endsWith("/api/clients")))).toEqual({
       name: "Ubuntu Logistics",
+      product: "esg",
     });
   });
 

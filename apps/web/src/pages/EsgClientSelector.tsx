@@ -25,6 +25,8 @@ interface CompanyRow {
   id?: string;
   name: string;
   createdByUserId?: string | null;
+  /** "bbbee" | "esg" — which product created the company (server-classified). */
+  product?: string;
 }
 
 export default function EsgClientSelector() {
@@ -57,6 +59,13 @@ export default function EsgClientSelector() {
     () => companies.filter((c) => c.name?.toLowerCase().includes(search.toLowerCase())),
     [companies, search],
   );
+
+  // The two products stay visibly separate: this page reopens ESG scorecards,
+  // so ESG companies lead. B-BBEE companies remain reachable below — picking
+  // one deliberately STARTS an ESG workbook for it — but they are labelled as
+  // what they are rather than dressed up as ESG scorecards.
+  const esgCompanies = useMemo(() => filtered.filter((c) => c.product === "esg"), [filtered]);
+  const bbbeeCompanies = useMemo(() => filtered.filter((c) => c.product !== "esg"), [filtered]);
 
   const pickCompany = (c: CompanyRow) => {
     const id = c.clientId || c.id || "";
@@ -139,7 +148,13 @@ export default function EsgClientSelector() {
             </p>
           ) : (
             <div className="space-y-1.5 max-h-[50vh] overflow-y-auto">
-              {filtered.map((c) => {
+              {esgCompanies.length === 0 && (
+                <p className="px-1 py-4 text-[12px] text-[var(--esg-text3)]">
+                  No ESG scorecards yet — begin a new one above, or start one for a saved
+                  B-BBEE company below.
+                </p>
+              )}
+              {esgCompanies.map((c) => {
                 const companyId = c.clientId || c.id || "";
                 return (
                   <div
@@ -173,6 +188,57 @@ export default function EsgClientSelector() {
                   </div>
                 );
               })}
+
+              {/* B-BBEE companies are a different product. They are offered
+                  here only as a starting point — clicking one begins an ESG
+                  workbook for that company — and each is labelled so nobody
+                  mistakes it for an ESG scorecard already in progress. */}
+              {bbbeeCompanies.length > 0 && (
+                <>
+                  <p className="px-1 pt-4 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--esg-text3)]">
+                    Start ESG for a B-BBEE company
+                  </p>
+                  {bbbeeCompanies.map((c) => {
+                    const companyId = c.clientId || c.id || "";
+                    return (
+                      <div
+                        key={companyId || c.name}
+                        className="group flex items-center rounded-xl border border-transparent hover:border-[var(--esg-glass-border)] hover:bg-white/[0.03]"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => pickCompany(c)}
+                          className="flex-1 flex items-center justify-between px-3.5 py-3 text-left"
+                          data-testid={`esg-company-${companyId}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="h-9 w-9 rounded-lg border border-[var(--esg-glass-border)] grid place-items-center shrink-0">
+                              <Building2 className="h-4 w-4 text-[var(--esg-text2)]" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="text-[13px] font-medium text-[var(--esg-text)] truncate">{c.name}</span>
+                                <span className="inline-flex shrink-0 items-center rounded-full border border-white/[0.12] bg-white/[0.06] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[var(--esg-text2)]">
+                                  B-BBEE
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-[var(--esg-text3)] font-mono truncate">{companyId}</div>
+                            </div>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-[var(--esg-text3)] group-hover:text-[var(--esg-acc-e)]" />
+                        </button>
+                        <DeleteCompanyButton
+                          companyId={companyId}
+                          companyName={c.name}
+                          createdByUserId={c.createdByUserId}
+                          onDeleted={load}
+                          className="mr-2"
+                        />
+                      </div>
+                    );
+                  })}
+                </>
+              )}
             </div>
           )}
         </div>

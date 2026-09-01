@@ -495,6 +495,8 @@ function CompanyPicker({
       verdicts?: unknown;
       /** Reconciliation result (issues + entity summary) for the review page. */
       reconcile?: unknown;
+      /** Library ids of the uploads behind this create — filed under the company. */
+      documentIds?: string[];
     },
   ): Promise<boolean> => {
     setCreating(true);
@@ -516,6 +518,22 @@ function CompanyPicker({
       }
       const c = await res.json();
       const clientId = c.clientId || c.id;
+      // File the uploads under the company they just created. The library is
+      // organised per company — an unlinked upload is findable but unowned,
+      // and re-scans / corrections would have nothing to hang off. Non-fatal:
+      // a failed link never blocks the scorecard the user is here for.
+      if (opts?.documentIds?.length) {
+        void Promise.allSettled(
+          opts.documentIds.map((documentId) =>
+            fetch(`/api/parser-documents/${encodeURIComponent(documentId)}`, {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ entityId: clientId }),
+            }),
+          ),
+        );
+      }
       if (opts?.importMarker !== undefined) {
         sessionStorage.setItem(
           `okiru-excel-import-${clientId}`,
@@ -765,6 +783,7 @@ function CompanyPicker({
                 landOn: "estimate",
                 verdicts: extras?.verdicts,
                 reconcile: extras?.reconcile,
+                documentIds: extras?.documentIds,
               });
             }}
             creating={creating}
@@ -806,6 +825,7 @@ function CompanyPicker({
                   await createFromSections(companyName, sections as WorkbookSectionsInput, {
                     landOn: "estimate",
                     verdicts: extras?.verdicts,
+                    documentIds: extras?.documentIds,
                   });
                 }}
                 creating={creating}

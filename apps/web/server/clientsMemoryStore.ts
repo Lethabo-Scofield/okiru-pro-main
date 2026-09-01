@@ -31,6 +31,9 @@ export interface MemoryClient {
   tmps?: number;
   companyValue?: number;
   outstandingDebt?: number;
+  sectorCode?: string | null;
+  /** Which product created this company — "bbbee" (default) or "esg". */
+  product?: "bbbee" | "esg";
   createdAt: Date;
   updatedAt: Date;
 }

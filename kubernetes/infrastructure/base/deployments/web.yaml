@@ -92,6 +92,19 @@ spec:
             # defaults to 127.0.0.1:3200 (local only) and document upload 502s.
             - name: PARSER_SERVICE_URL
               value: "http://parser:3200"
+            # Wallet → parser settle handshake. /api/tokens/authorize debits
+            # the organisation's token wallet, then marks the parser quote paid
+            # with this shared secret. Unset, every authorize fails (and is
+            # refunded), so uploads dead-end — it MUST equal the parser
+            # Deployment's PARSER_INTERNAL_SECRET. optional only so a cluster
+            # missing the key still schedules pods; the wallet itself fails
+            # closed without it.
+            - name: PARSER_INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: PARSER_INTERNAL_SECRET
+                  optional: true
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:

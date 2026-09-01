@@ -6,6 +6,8 @@ export interface ParserDocumentSummary {
   fileType: string;
   fileSize: number;
   uploadedAt: string;
+  /** The saved company this document is filed under, or null if unassigned. */
+  entityId: string | null;
   status: ParserStatus | null;
   documentType: string | null;
   overallConfidence: number | null;

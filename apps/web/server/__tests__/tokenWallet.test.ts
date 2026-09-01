@@ -164,13 +164,16 @@ describe("free-mode switch", () => {
     else process.env[KEY] = original;
   });
 
-  it("charges by default when the variable is unset", async () => {
+  // Generous timeouts: whichever of these runs first pays for dynamically
+  // importing tokenRoutes — which pulls the entire server route graph — and
+  // that import alone hovers around the 5s default on a cold cache.
+  it("charges by default when the variable is unset", { timeout: 30_000 }, async () => {
     delete process.env[KEY];
     const { paymentRequired } = await import("../tokenRoutes");
     expect(paymentRequired()).toBe(true);
   });
 
-  it("only the exact string 'false' makes uploads free", async () => {
+  it("only the exact string 'false' makes uploads free", { timeout: 30_000 }, async () => {
     const { paymentRequired } = await import("../tokenRoutes");
     process.env[KEY] = "false";
     expect(paymentRequired()).toBe(false);
