@@ -62,6 +62,13 @@ spec:
             # refuses to boot if this is "true" without it.)
             - name: PARSER_REQUIRE_PAYMENT
               value: "true"
+            # The pricing rule: customer price = Azure cost × 2.5, i.e. a 60%
+            # gross margin on every read. The code default is a 100× PLACEHOLDER
+            # from before pricing was thought through — left unset it quoted a
+            # real evidence pack at ~374k tokens (R3.7k) whose compute cost was
+            # ~R37. One knob; change it here, never in code.
+            - name: PARSER_SELL_MULTIPLIER
+              value: "2.5"
             # The wallet-settle handshake — must equal the web Deployment's
             # PARSER_INTERNAL_SECRET or every settle is refused and refunded.
             - name: PARSER_INTERNAL_SECRET
