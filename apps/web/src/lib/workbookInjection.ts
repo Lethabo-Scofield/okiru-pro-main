@@ -380,10 +380,18 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
   const present = new Set(values.map((v) => v.field));
   const optionsOf = (key: string) => byKey.get(key)?.options ?? [];
 
+  // The level the register STATES for this row, as the dropdown would hold it.
+  // Stated evidence outranks anything inferred from a job title below.
+  const statedLevelRaw = values.find((v) => v.field === "occupationalLevel")?.value;
+  const statedLevel = statedLevelRaw == null
+    ? null
+    : matchOption(normaliseForColumn("occupationalLevel", String(statedLevelRaw)), optionsOf("occupationalLevel"));
+
   for (const entry of values) {
     if (entry.field === "designation" && hasDesignation) {
       const text = String(entry.value ?? "").trim();
       const direct = matchOption(normaliseForColumn("designation", text), optionsOf("designation"));
+      const stated = DESIGNATION_MAP[synonymKey(text)] !== undefined || optionsOf("designation").includes(text);
       if (direct === null && text) {
         const bands = classifyJobTitle(text);
         if (bands.designation === null && bands.occupationalLevel && hasOccLevel) {
@@ -397,6 +405,16 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
           }
           continue;
         }
+      }
+      // A designation READ FROM A TITLE is an inference. When the register
+      // also states the person's occupational level and the two disagree —
+      // "Admin Manager" (reads as middle) on a row stated as Senior Management
+      // — the stated level is the evidence and the inferred band must not
+      // outrank it in scoring. The title is consumed, the level scores.
+      // A designation the register states in the dropdown's own words is not
+      // an inference and is kept as written.
+      if (direct !== null && !stated && statedLevel && classifyJobTitle(text).occupationalLevel !== statedLevel) {
+        continue;
       }
       if (direct !== null || classifyJobTitle(text).designation) {
         const level = classifyJobTitle(text).occupationalLevel;

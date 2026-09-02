@@ -79,12 +79,41 @@ describe("injectIntoSection — people rows are reconciled before cells are judg
     expect(result.cells.occupationalLevel).toBe("Skilled");
   });
 
-  it("does not overwrite a level the row already states", () => {
+  it("lets a STATED occupational level outrank a designation inferred from a title", () => {
+    // Measured regression: "Admin Manager" read as Middle Manager overrode a
+    // register that stated Senior Management, and scoring moved the person.
     const result = injectIntoSection("management-control", [
-      { field: "designation", value: "Operations Manager" },
+      { field: "designation", value: "Admin Manager" },
       { field: "occupationalLevel", value: "Senior Management" },
     ]);
-    expect(result.cells.designation).toBe("Middle Manager");
+    expect(result.cells.designation).toBeUndefined(); // inference withheld
+    expect(result.cells.occupationalLevel).toBe("Senior Management"); // evidence scores
+    expect(result.rejected.filter((r) => r.field === "designation")).toHaveLength(0);
+  });
+
+  it("writes the inferred designation when it agrees with the stated level", () => {
+    const result = injectIntoSection("management-control", [
+      { field: "designation", value: "Code 14 Driver" },
+      { field: "occupationalLevel", value: "Semi-Skilled" },
+    ]);
+    expect(result.cells.designation).toBe("Semi-skilled");
+    expect(result.cells.occupationalLevel).toBe("Semi-Skilled");
+  });
+
+  it("keeps a designation the register states in the dropdown's own words, whatever the level says", () => {
+    const result = injectIntoSection("management-control", [
+      { field: "designation", value: "Senior Manager" },
+      { field: "occupationalLevel", value: "Middle Management" },
+    ]);
+    expect(result.cells.designation).toBe("Senior Manager");
+  });
+
+  it("does not overwrite a level the row already states, and fills the designation that agrees with it", () => {
+    const result = injectIntoSection("management-control", [
+      { field: "designation", value: "Senior Operations Manager" },
+      { field: "occupationalLevel", value: "Senior Management" },
+    ]);
+    expect(result.cells.designation).toBe("Senior Manager");
     expect(result.cells.occupationalLevel).toBe("Senior Management");
   });
 
