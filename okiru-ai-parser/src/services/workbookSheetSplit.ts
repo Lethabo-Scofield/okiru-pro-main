@@ -19,6 +19,7 @@
  * exactly as before.
  */
 import * as XLSX from 'xlsx';
+import { dittoFill, mainColumnRegion } from './sheetRegions.js';
 import { sheetMatrix } from './sheetCellValues.js';
 
 export interface SheetDocument {
@@ -107,7 +108,24 @@ function findHeaderRow(matrix: unknown[][]): number {
   return bestIdx;
 }
 
-/** Build header-keyed row objects from a sheet, skipping banner/legend rows. */
+/**
+ * Build header-keyed row objects from a sheet, skipping banner/legend rows.
+ *
+ * Two things the markdown renderer (sheetRegions) already did that this
+ * structured path did not, both measured on a real Skills sheet:
+ *
+ *  1. ONLY THE DATA REGION. A category key laid out beside the learner table
+ *     ("Category F | Bursaries…") shares the header row, so keying every
+ *     column made the key's cells look like each learner's category — every
+ *     learner "was" Category G/BR/MST, and the real (blank) category column
+ *     was never seen as blank.
+ *  2. BLANK-MEANS-DITTO. A training event is stated once (date, course,
+ *     provider, cost) and the other learners on it follow as rows carrying
+ *     only a name and ID. Without forward-fill those learners have no course
+ *     and no provider, and downstream cannot tell a continuation row from a
+ *     fragment. Text columns inherit; numeric/date columns never do, so the
+ *     event's cost is counted once, on the row that states it.
+ */
 function sheetRowsWithHeader(sheet: XLSX.WorkSheet, maxRows: number): Array<Record<string, unknown>> {
   // Format-aware: a cell displaying `32%` must not reach the model as `0.32`.
   // See sheetCellValues.ts — losing the percent format is unrecoverable
@@ -115,18 +133,35 @@ function sheetRowsWithHeader(sheet: XLSX.WorkSheet, maxRows: number): Array<Reco
   const matrix = sheetMatrix(sheet);
   if (matrix.length === 0) return [];
 
-  const headerIdx = findHeaderRow(matrix);
-  const rawHeaders = (matrix[headerIdx] ?? []).map((c, i) => {
+  const asText = matrix.map((row) => row.map((c) => String(c ?? '')));
+  const region = mainColumnRegion(asText) ?? { start: 0, end: Math.max(0, ...matrix.map((r) => r.length)) - 1 };
+  const inRegion = <T>(row: T[]): T[] => row.slice(region.start, region.end + 1);
+  const regionMatrix = matrix.map(inRegion);
+
+  const headerIdx = findHeaderRow(regionMatrix);
+  const rawHeaders = (regionMatrix[headerIdx] ?? []).map((c, i) => {
     const label = String(c ?? '').replace(/\s+/g, ' ').trim();
     return label || `col_${i}`;
   });
+  const width = rawHeaders.length;
+
+  // Ditto-fill on the TEXT projection, then read typed values back from the
+  // original cells where they exist — a filled cell is a copied string, a
+  // stated cell keeps its number/date/percent.
+  const bodyText = asText.slice(headerIdx + 1).map((row) => {
+    const cells = inRegion(row);
+    while (cells.length < width) cells.push('');
+    return cells.slice(0, width);
+  });
+  const filled = dittoFill(bodyText, width);
 
   const rows: Array<Record<string, unknown>> = [];
-  for (let i = headerIdx + 1; i < matrix.length && rows.length < maxRows; i += 1) {
-    const cells = matrix[i] ?? [];
+  for (let i = 0; i < filled.length && rows.length < maxRows; i += 1) {
+    const original = regionMatrix[headerIdx + 1 + i] ?? [];
     const obj: Record<string, unknown> = {};
-    for (let c = 0; c < rawHeaders.length; c += 1) {
-      const value = cells[c];
+    for (let c = 0; c < width; c += 1) {
+      const stated = original[c];
+      const value = stated !== undefined && stated !== null && String(stated).trim() !== '' ? stated : filled[i][c];
       if (value !== undefined && value !== null && String(value).trim() !== '') obj[rawHeaders[c]] = value;
     }
     if (Object.keys(obj).length > 0) rows.push(obj);

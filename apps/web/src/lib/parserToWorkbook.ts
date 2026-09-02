@@ -481,6 +481,8 @@ export function parserExtractionsToWorkbook(
   const unmapped = new Set<string>();
   const metaConflicts: MetaConflict[] = [];
   const metaCorroboration: MetaCorroboration[] = [];
+  /** Entity-level figures settled by rule rather than by the user — each one explained. */
+  const metaResolutions: ReconciliationFinding[] = [];
 
   const addRow = (section: WorkbookSectionKey, row: WorkbookRow) => {
     (rows[section] ??= []).push(row);
@@ -547,20 +549,48 @@ export function parserExtractionsToWorkbook(
         // loop only ever sees one at a time, so anything decided here would be
         // a worse version of a question already answered properly.
         const resolvedField = options.resolved?.[field];
-        if (resolvedField) {
-          if (metaFromResolver.has(metaKey)) continue; // settled on first sight
+        // A LABELLED, deterministic reading (the Finance sheet's own stated
+        // TMPS) outranks anything the resolver settled from another field
+        // feeding the same column. Two parser fields map to `tmps`; whichever
+        // arrived first used to claim the column for good — and on a real pack
+        // the first was `total_pre_exclusions_tmps` read as 23 (a row count),
+        // which then blocked the sheet's stated R4,674,995 from ever landing.
+        const authoritativeReading = AUTHORITATIVE_DOCS.has(extraction.documentId);
+        if (resolvedField && !authoritativeReading) {
+          if (metaFromResolver.has(metaKey) || metaFromAuthoritative.has(metaKey)) continue; // settled
           metaFromResolver.add(metaKey);
 
           if (resolvedField.conflicted) {
-            metaConflicts.push({
-              section: target.section,
-              column: target.column,
-              field,
-              candidates: [
-                { value: resolvedField.value, sources: resolvedField.sources },
-                ...resolvedField.alternatives,
-              ],
-            });
+            const candidates = [
+              { value: resolvedField.value, sources: resolvedField.sources },
+              ...resolvedField.alternatives,
+            ];
+            // A lopsided disagreement is not an open question. See
+            // resolveLopsidedConflict — the corroborated figure is scored and
+            // the outlier is reported, instead of blanking the pillar.
+            const settled = resolveLopsidedConflict(candidates);
+            if (settled) {
+              const fromSettled = injectMetaValue(target.section, target.column, settled.value, options);
+              if (fromSettled.ok) {
+                bucket[target.column] = fromSettled.value;
+                metaCorroboration.push({
+                  section: target.section,
+                  column: target.column,
+                  field,
+                  value: fromSettled.value,
+                  agreementCount: settled.sources.length,
+                  sources: settled.sources,
+                });
+                metaResolutions.push({
+                  section: target.section,
+                  entity: target.column,
+                  column: target.column,
+                  message: settled.note,
+                });
+                continue;
+              }
+            }
+            metaConflicts.push({ section: target.section, column: target.column, field, candidates });
             continue;
           }
 
@@ -585,7 +615,20 @@ export function parserExtractionsToWorkbook(
 
         const injected = injectMetaValue(target.section, target.column, value, options);
         if (injected.ok) {
-          const authoritative = AUTHORITATIVE_DOCS.has(extraction.documentId);
+          const authoritative = authoritativeReading;
+          if (authoritative && !metaFromAuthoritative.has(metaKey)) {
+            // The stated figure settles the column: it replaces whatever a
+            // resolver or a peer document put there, and closes any open
+            // conflict on it — a labelled total is not one opinion among many.
+            bucket[target.column] = injected.value;
+            metaFromAuthoritative.add(metaKey);
+            metaFromResolver.add(metaKey);
+            metaContested.delete(metaKey);
+            const openAt = metaConflicts.findIndex((c) => c.section === target.section && c.column === target.column);
+            if (openAt >= 0) metaConflicts.splice(openAt, 1);
+            metaFirstValue.set(metaKey, { value: injected.value, sourceFile: extraction.sourceFile, field });
+            continue;
+          }
           if (metaContested.has(metaKey)) {
             const open = metaConflicts.find(
               (c) => c.section === target.section && c.column === target.column,
@@ -717,16 +760,171 @@ export function parserExtractionsToWorkbook(
   // from one sheet, distinguished only once inheritance had run).
   const duplicateFindings = dedupeExactDuplicateRows(linked.rows);
 
+  // Peer conflicts (two documents, first-come) can BECOME lopsided once a third
+  // document weighs in and addCandidate merges its source onto one side. Settle
+  // those the same way the resolver's conflicts were settled above.
+  for (let i = metaConflicts.length - 1; i >= 0; i--) {
+    const conflict = metaConflicts[i];
+    const settled = resolveLopsidedConflict(conflict.candidates);
+    if (!settled) continue;
+    const injected = injectMetaValue(conflict.section, conflict.column, settled.value, options);
+    if (!injected.ok) continue;
+    (meta[conflict.section] ??= {})[conflict.column] = injected.value;
+    metaConflicts.splice(i, 1);
+    metaCorroboration.push({
+      section: conflict.section,
+      column: conflict.column,
+      field: conflict.field,
+      value: injected.value,
+      agreementCount: settled.sources.length,
+      sources: settled.sources,
+    });
+    metaResolutions.push({ section: conflict.section, entity: conflict.column, column: conflict.column, message: settled.note });
+  }
+
+  // Cross-checks that need the WHOLE case assembled: a denominator against
+  // the rows it must contain, and one person's race across the sections that
+  // name them. Both report; neither guesses.
+  const tmpsFindings = sanityCheckTmps(meta, linked.rows, metaConflicts);
+  const raceFindings = reconcileRaceAcrossSections(linked.rows);
+
   const coverage = huntRequiredFields(linked.rows, Array.from(unmapped), options);
   return {
     rows: linked.rows,
     meta,
     rejected,
     coverage,
-    reconciliation: [...linked.reconciliation, ...duplicateFindings],
+    reconciliation: [...linked.reconciliation, ...duplicateFindings, ...metaResolutions, ...tmpsFindings, ...raceFindings],
     metaConflicts,
     metaCorroboration,
   };
+}
+
+/**
+ * Settle a lopsided disagreement about an entity-level figure.
+ *
+ * The conflict rule ("two documents disagree → blank it, the user picks") is
+ * right when the documents are peers. It is wrong when one figure is stated by
+ * two or more documents and the only dissent is a single document off by an
+ * order of magnitude — that is not a disagreement, it is a monthly figure next
+ * to an annual one, or a subtotal next to a total. Measured: leviable payroll
+ * R2,124,744 on the Finance sheets of two workbooks against R22,057.61 on one
+ * PDF, and the conflict rule blanked the Skills denominator for a figure two
+ * sources had already agreed on.
+ *
+ * Returns the corroborated candidate with a plain-language note, or null when
+ * the disagreement is genuinely open (peers, or the outlier is not far off).
+ */
+export function resolveLopsidedConflict(
+  candidates: Array<{ value: unknown; sources: string[] }>,
+): { value: unknown; sources: string[]; note: string } | null {
+  const numeric = candidates
+    .map((c) => ({ ...c, n: Number(String(c.value ?? "").replace(/[^0-9.-]/g, "")) }))
+    .filter((c) => Number.isFinite(c.n) && c.n !== 0);
+  if (numeric.length < 2 || numeric.length !== candidates.length) return null;
+
+  const corroborated = numeric.filter((c) => c.sources.length >= 2);
+  if (corroborated.length !== 1) return null;
+  const winner = corroborated[0];
+  const others = numeric.filter((c) => c !== winner);
+  if (others.some((c) => c.sources.length >= 2)) return null;
+  const farOff = others.every((c) => {
+    const ratio = Math.max(Math.abs(winner.n), Math.abs(c.n)) / Math.min(Math.abs(winner.n), Math.abs(c.n));
+    return ratio >= 10;
+  });
+  if (!farOff) return null;
+
+  const fmt = (n: number) => `R${n.toLocaleString("en-ZA", { maximumFractionDigits: 2 })}`;
+  return {
+    value: winner.value,
+    sources: winner.sources,
+    note:
+      `${fmt(winner.n)} is stated by ${winner.sources.length} documents (${winner.sources.join(", ")}); `
+      + `${others.map((c) => `${fmt(c.n)} in ${c.sources.join(", ") || "one document"}`).join("; ")} `
+      + `is a single reading at least 10× away — most likely a monthly or partial figure — so the corroborated figure is used and the outlier is noted here.`,
+  };
+}
+
+/**
+ * Total Measured Procurement Spend must CONTAIN the supplier schedule. When
+ * the figure read as TMPS is smaller than the largest single supplier's spend,
+ * or equals the schedule's row count, it is not TMPS — it is a count or a
+ * misplaced cell. (Measured, twice: `tmps = 23` on a schedule of 23 rows
+ * summing to R3.3M. Scored, that makes every supplier "more than all
+ * procurement" and the pillar nonsense.) The figure is withdrawn from meta and
+ * put to the user as a conflict against the schedule total, which is the
+ * lower bound any verifier would start from.
+ */
+function sanityCheckTmps(
+  meta: Partial<Record<WorkbookSectionKey, Record<string, unknown>>>,
+  rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
+  metaConflicts: MetaConflict[],
+): ReconciliationFinding[] {
+  const fin = meta["financial-information"];
+  const tmps = Number(fin?.tmps);
+  if (!fin || !Number.isFinite(tmps) || tmps <= 0) return [];
+  const suppliers = rows.procurement ?? [];
+  const spends = suppliers.map((r) => Number(String(r.spend ?? "").replace(/[^0-9.]/g, "")) || 0);
+  if (spends.length === 0) return [];
+  const largest = Math.max(...spends);
+  const sum = spends.reduce((n, v) => n + v, 0);
+  const looksLikeCount = Number.isInteger(tmps) && tmps <= suppliers.length + 2;
+  if (!(largest > tmps) && !looksLikeCount) return [];
+
+  delete fin.tmps;
+  const fmt = (n: number) => `R${n.toLocaleString("en-ZA", { maximumFractionDigits: 2 })}`;
+  const already = metaConflicts.find((c) => c.section === "financial-information" && c.column === "tmps");
+  const candidates = [
+    { value: tmps, sources: ["as read"] },
+    { value: Math.round(sum), sources: ["sum of the supplier schedule (lower bound)"] },
+  ];
+  if (already) already.candidates = candidates;
+  else metaConflicts.push({ section: "financial-information", column: "tmps", field: "total_measured_procurement_spend", candidates });
+  return [{
+    section: "financial-information",
+    entity: "Total Measured Procurement Spend",
+    column: "tmps",
+    message:
+      `TMPS was read as ${fmt(tmps)}, but the supplier schedule it must contain has ${suppliers.length} rows summing to ${fmt(sum)}`
+      + ` (largest single supplier ${fmt(largest)})${looksLikeCount ? " — the figure equals a row count, not a spend" : ""}.`
+      + ` It has been withdrawn; confirm TMPS in the workbook (the schedule total ${fmt(sum)} is the lower bound).`,
+  }];
+}
+
+/**
+ * One person, one race. The Ownership sheet often records an owner as
+ * "Black" — the Codes' umbrella term — which normalises to African, while the
+ * EE register states the specific race the person actually declared. When
+ * the SAME 13-digit ID appears on both, the EE register's specific race is
+ * the evidence and the ownership row takes it. Exact ID equality only; a
+ * name is never enough to say two rows are one person.
+ */
+function reconcileRaceAcrossSections(
+  rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
+): ReconciliationFinding[] {
+  const findings: ReconciliationFinding[] = [];
+  const idOf = (v: unknown) => String(v ?? "").replace(/\s+/g, "");
+  const declared = new Map<string, string>();
+  for (const row of rows["management-control"] ?? []) {
+    const id = idOf(row.idNumber);
+    const race = String(row.race ?? "").trim();
+    if (/^\d{13}$/.test(id) && race && !declared.has(id)) declared.set(id, race);
+  }
+  if (declared.size === 0) return findings;
+  for (const row of rows.ownership ?? []) {
+    const id = idOf(row.idNumber);
+    const stated = declared.get(id);
+    const current = String(row.race ?? "").trim();
+    if (!stated || !current || stated.toLowerCase() === current.toLowerCase()) continue;
+    row.race = stated;
+    findings.push({
+      section: "ownership",
+      entity: String(row.shareholderName ?? id),
+      column: "race",
+      message: `${String(row.shareholderName ?? "This owner")} is recorded as ${current} on the ownership evidence but as ${stated} on the EE register under the same ID (${id}). The register's declared race is used.`,
+    });
+  }
+  return findings;
 }
 
 /**

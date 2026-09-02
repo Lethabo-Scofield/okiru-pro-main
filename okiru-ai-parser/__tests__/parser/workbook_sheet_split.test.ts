@@ -24,6 +24,49 @@ function workbook(sheets: Record<string, Array<Array<string | number>>>): Buffer
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
 }
 
+describe('structured rows — the data region, ditto-filled', () => {
+  /**
+   * The real Skills sheet: a training event stated once (date, course,
+   * provider, cost, participants) with the other learners on it as rows that
+   * carry only a name and ID — and a category KEY laid out to the right of
+   * the table, separated by blank columns but sharing the header row.
+   */
+  const skillsSheet: Array<Array<string | number>> = [
+    ['Measured Entity: Acme', '', '', '', '', '', '', '', '', ''],
+    ['Date', 'Training Course', 'Provider', 'Learner Name & Surname', 'ID Number', 'Total Expenditure', 'Participants', '', 'Category F', 'Informal Training'],
+    ['15 Dec 2024', 'First Aid Training', 'AA Forklift', 'Tholakele Makhanya', '8902220505084', 2850, 3, '', 'Category G', 'Internal Training'],
+    ['', '', '', 'Siyanda Mkhulise', '9605056533083', '', '', '', 'Category BR', 'Bursaries'],
+    ['', '', '', 'Thapelo Mmako', '9505275828084', '', '', '', 'Category MST', 'Mandatory Sectoral Training'],
+    ['16 Apr 2025', 'Working at Heights', 'AA Forklift', 'Andile Khumalo', '8307275381086', 33600, 1, '', '', ''],
+    // Empty template rows: the "Total Expenditure" formula shows 0 all the way
+    // down. They are not learners, and must not be filled with the last one.
+    ['', '', '', '', '', 0, '', '', '', ''],
+    ['', '', '', '', '', 0, '', '', '', ''],
+  ];
+
+  it('keys rows by the data table only — the category key beside it is not a column', () => {
+    const [doc] = splitWorkbookIntoSheets(workbook({ 'Skills Development': skillsSheet }), { minContentRows: 1 });
+    const keys = new Set(doc.rows.flatMap((r) => Object.keys(r)));
+    expect(keys.has('Category F')).toBe(false);
+    expect(keys.has('Informal Training')).toBe(false);
+    expect(keys.has('Learner Name & Surname')).toBe(true);
+    // No learner "is" Category G/BR/MST because the key happened to sit on their row.
+    expect(doc.rows.some((r) => Object.values(r).some((v) => /^Category (G|BR|MST)$/.test(String(v))))).toBe(false);
+  });
+
+  it('continuation learners inherit the event they are on, never its cost', () => {
+    const [doc] = splitWorkbookIntoSheets(workbook({ 'Skills Development': skillsSheet }), { minContentRows: 1 });
+    const siyanda = doc.rows.find((r) => r['Learner Name & Surname'] === 'Siyanda Mkhulise')!;
+    expect(siyanda['Training Course']).toBe('First Aid Training');
+    expect(siyanda['Provider']).toBe('AA Forklift');
+    expect(siyanda['Total Expenditure']).toBeUndefined(); // counted once, on the stating row
+    const andile = doc.rows.find((r) => r['Learner Name & Surname'] === 'Andile Khumalo')!;
+    expect(andile['Training Course']).toBe('Working at Heights'); // a new event resets the memory
+    expect(andile['Total Expenditure']).toBe(33600);
+    expect(doc.rows.filter((r) => r['Learner Name & Surname'])).toHaveLength(4);
+  });
+});
+
 describe('splitting into sheets', () => {
   it('produces one document per sheet with content', () => {
     const buf = workbook({
