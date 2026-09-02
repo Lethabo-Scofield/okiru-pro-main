@@ -15,6 +15,10 @@ import {
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
+// Light snapshot peeks (type-only deps) — the create flows write these when a
+// paid extraction completes, and the Hub offers the way back to them.
+import { readFlowSnapshot } from '@/components/scorecard/flowSnapshot';
+import { readEsgFlowSnapshot } from '@/components/esg/esgFlowSnapshot';
 import { Crown } from 'lucide-react';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
 
@@ -102,6 +106,35 @@ export default function HubLanding() {
     toast({ title: 'Coming Soon', description: 'This toolkit is currently in development.' });
   };
 
+  /** A short "saved 10:42" label, or empty when the timestamp is unreadable. */
+  const savedLabel = (iso: string | undefined): string => {
+    if (!iso) return '';
+    const at = new Date(iso);
+    return Number.isNaN(at.getTime())
+      ? ''
+      : at.toLocaleString('en-ZA', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+  };
+
+  // Paid extractions waiting in this tab. Read once per visit — the create
+  // flows own writing and clearing; the Hub only offers the way back in.
+  const continueBbbee = useMemo(() => {
+    const snap = readFlowSnapshot();
+    if (!snap) return null;
+    return {
+      companyName: snap.companyName?.trim() ?? '',
+      fileNames: snap.fileNames ?? [],
+      savedLabel: savedLabel(snap.savedAt),
+    };
+  }, []);
+  const continueEsg = useMemo(() => {
+    const snap = readEsgFlowSnapshot();
+    if (!snap) return null;
+    return {
+      entityName: snap.entityName?.trim() ?? '',
+      savedLabel: savedLabel(snap.savedAt),
+    };
+  }, []);
+
   const toolkits = useMemo(() => {
     const items = [
     {
@@ -117,18 +150,9 @@ export default function HubLanding() {
       featured: true,
       backgroundImage: certCardBg,
     },
-    ...(esgAllowed
-      ? [{
-      id: 'esg',
-      title: 'ESG Intelligence Toolkit',
-      tag: 'ESG',
-      aiBadge: 'AI-Insights',
-      icon: <Leaf className="w-4 h-4" />,
-      link: '/esg',
-      description: 'Carbon, social and governance scoring aligned to King V, IFRS S1/S2 and GRI.',
-      features: ['GHG inventory & carbon tax', 'E/S/G scorecards', 'Net-zero roadmap'],
-    }]
-      : []),
+    // ESG deliberately NOT listed here — the primary-actions grid above already
+    // carries the ESG Toolkit card, and showing it twice (once next to the
+    // Certificate Hub) read as two different products.
     {
       id: 'employment-equity', title: 'Employment Equity', tag: 'HR & PEOPLE', aiBadge: 'AI-Analytics',
       icon: <Users className="w-4 h-4" />, action: handleComingSoon,
@@ -425,6 +449,61 @@ export default function HubLanding() {
             )}
           </div>
         </section>
+
+        {/* CONTINUE WHERE YOU LEFT OFF — a paid extraction is waiting in this
+            tab. The flows restore it themselves on mount; this strip is the
+            visible way back, so nobody re-uploads (and re-pays) out of not
+            knowing their work survived. */}
+        {(continueBbbee || (esgAllowed && continueEsg)) && (
+          <section className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-2" data-testid="continue-where-left-off">
+            {continueBbbee && (
+              <button
+                type="button"
+                onClick={() => navigate('/create-scorecard')}
+                className="group flex items-center justify-between gap-4 rounded-2xl border border-violet-400/25 bg-violet-500/[0.08] px-5 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-violet-300/50 hover:bg-violet-500/[0.14]"
+                data-testid="continue-bbbee"
+              >
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-200/80">
+                    Continue where you left off
+                  </span>
+                  <span className="mt-1 block truncate text-[15px] font-semibold text-white">
+                    B-BBEE scorecard{continueBbbee.companyName ? ` — ${continueBbbee.companyName}` : ''}
+                  </span>
+                  <span className="mt-0.5 block text-[12px] text-[#a1a1a6]">
+                    {continueBbbee.fileNames?.length
+                      ? `${continueBbbee.fileNames.length} document${continueBbbee.fileNames.length === 1 ? '' : 's'} already processed`
+                      : 'Documents already processed'}
+                    {continueBbbee.savedLabel ? ` · saved ${continueBbbee.savedLabel}` : ''} — no tokens will be spent again.
+                  </span>
+                </span>
+                <ArrowUpRight className="h-5 w-5 shrink-0 text-violet-200 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+              </button>
+            )}
+            {esgAllowed && continueEsg && (
+              <button
+                type="button"
+                onClick={() => navigate('/esg')}
+                className="group flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.07] px-5 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/[0.12]"
+                data-testid="continue-esg"
+              >
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-200/80">
+                    Continue where you left off
+                  </span>
+                  <span className="mt-1 block truncate text-[15px] font-semibold text-white">
+                    ESG scorecard{continueEsg.entityName ? ` — ${continueEsg.entityName}` : ''}
+                  </span>
+                  <span className="mt-0.5 block text-[12px] text-[#a1a1a6]">
+                    Documents already processed
+                    {continueEsg.savedLabel ? ` · saved ${continueEsg.savedLabel}` : ''} — no tokens will be spent again.
+                  </span>
+                </span>
+                <ArrowUpRight className="h-5 w-5 shrink-0 text-emerald-200 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+              </button>
+            )}
+          </section>
+        )}
 
         {/* PRIMARY ACTIONS — Create / View scorecard / ESG */}
         <section className="mb-14 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="hero-primary-actions">
