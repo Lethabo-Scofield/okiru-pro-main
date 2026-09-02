@@ -633,6 +633,51 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   }, [mergedProcurementRows]);
 
   /**
+   * Placement telemetry — the honest not-placed list is the improvement
+   * backlog. Fired once per extracted case (identity-deduped), after the
+   * mapping memos settle, so what the user sees in the rejection panel is
+   * exactly what lands in the backlog. Fire-and-forget: telemetry never
+   * blocks or fails the flow.
+   */
+  const telemetrySentForCaseRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!parserCase || !injected) return;
+    if (telemetrySentForCaseRef.current === parserCase) return;
+    telemetrySentForCaseRef.current = parserCase;
+    try {
+      const byKey = new Map<string, { field: string; context: string | null; reason: string; count: number }>();
+      for (const r of injected.rejected) {
+        const key = `${r.field}::${r.detail}`;
+        const row = byKey.get(key) ?? { field: r.field, context: null, reason: r.detail, count: 0 };
+        row.count += 1;
+        byKey.set(key, row);
+      }
+      const placedRows = Object.values(injected.rows).reduce(
+        (n, sectionRows) => n + (sectionRows?.length ?? 0),
+        0,
+      );
+      void Promise.resolve(
+        fetch("/api/telemetry/placement", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain: "bbbee",
+            caseId: (parserCase as { case_id?: string }).case_id ?? null,
+            fileCount: (parserCase.documents_detected ?? []).length,
+            placedCount: placedRows,
+            unplacedCount: injected.rejected.length,
+            unplaced: Array.from(byKey.values()),
+            unmapped: injected.coverage?.unmapped ?? [],
+          }),
+        }),
+      ).catch(() => {});
+    } catch {
+      // telemetry must never cost a user their extraction
+    }
+  }, [parserCase, injected]);
+
+  /**
    * Reconciliation findings from the deterministic table read — a sheet whose
    * labelled TOTAL the extracted rows do not sum to. Advisory and specific:
    * only the sheet-table extractions raise these (the matrix specs' free-form
@@ -2043,36 +2088,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
-      {/* The upload surface itself, one batch per pillar plus the whole-file
-          uploads. Shown before processing so the user can go and fetch what is
-          missing rather than spending tokens to be told their score is low.
-          Once documents have been read it doubles as a coverage ledger.
-
-          Gated on `parserCase`, NOT on `quote`. A quote arrives the moment the
-          first pillar's files land, and gating on it tore the uploader off the
-          screen mid-task: you could fill Ownership and then had nowhere to put
-          Skills. A quote is just a price for what is staged so far — it is
-          re-issued whenever the list changes, so it is not a commitment and must
-          not behave like one. Extraction is the point of no return, so that is
-          what closes the uploader. */}
-      {!parserCase && (
-        <div className="mt-3">
-          <PillarDocumentBatches
-            satisfiedDocumentIds={satisfiedDocumentIds}
-            filedBatchByFile={filedBatchByFile}
-            stagedFileNames={files.map((f) => f.name)}
-            onPick={handleBatchPick}
-            disabled={parsing}
-          />
-        </div>
-      )}
-
-      {/* The way ON from staging. Without this there was no affirmative step
-          between "files are listed" and the checkout panel, so the checkout had
-          to appear by itself — which is what made adding one pillar feel like
-          being marched to payment. Whether the documents arrived through the
-          main button or a pillar batch is irrelevant here: both stage into the
-          same list, so both end at the same control. */}
+      {/* The way ON from staging — kept at the TOP, directly under the drop
+          zone. It used to sit below the pillar batches, which on any real
+          screen put the one button that advances the flow beneath a long grid:
+          you staged files and then had to go hunting for how to continue.
+          Whether the documents arrived through the main button or a pillar
+          batch is irrelevant here: both stage into the same list, so both end
+          at the same control. */}
       {!parserCase && !doneStaging && files.length > 0 && (
         <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[#141416] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -2081,8 +2103,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               {quoting ? " · checking" : ""}
             </p>
             <p className="mt-0.5 text-[12px] leading-5 text-[#8e8e93]">
-              Keep adding — from any pillar, or the buttons above. Nothing is read, and nothing is
-              charged, until you review the cost on the next step.
+              Keep adding — the buttons above, or any pillar batch below. Nothing is read, and
+              nothing is charged, until you review the cost on the next step.
             </p>
           </div>
           <button
@@ -2137,6 +2159,30 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               Try again
             </button>
           </div>
+        </div>
+      )}
+
+      {/* The upload surface itself, one batch per pillar plus the whole-file
+          uploads. Shown before processing so the user can go and fetch what is
+          missing rather than spending tokens to be told their score is low.
+          Once documents have been read it doubles as a coverage ledger.
+
+          Gated on `parserCase`, NOT on `quote`. A quote arrives the moment the
+          first pillar's files land, and gating on it tore the uploader off the
+          screen mid-task: you could fill Ownership and then had nowhere to put
+          Skills. A quote is just a price for what is staged so far — it is
+          re-issued whenever the list changes, so it is not a commitment and must
+          not behave like one. Extraction is the point of no return, so that is
+          what closes the uploader. */}
+      {!parserCase && (
+        <div className="mt-3">
+          <PillarDocumentBatches
+            satisfiedDocumentIds={satisfiedDocumentIds}
+            filedBatchByFile={filedBatchByFile}
+            stagedFileNames={files.map((f) => f.name)}
+            onPick={handleBatchPick}
+            disabled={parsing}
+          />
         </div>
       )}
 

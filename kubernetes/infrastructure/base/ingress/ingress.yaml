@@ -152,6 +152,16 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # Placement telemetry (what the parser read but could not place) —
+          # lives on web like the wallet, and like the wallet it is invisible
+          # in prod unless routed past the /api catch-all.
+          - path: /api/telemetry
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # okiru-ai-parser document→calculator routes. The web Express server
           # proxies /api/parser/* to the parser service (apiProxy.ts); routing
           # this to `api` (the catch-all below) 404s since apps/api has no

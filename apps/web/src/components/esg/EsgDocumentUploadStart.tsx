@@ -714,6 +714,37 @@ export function EsgDocumentUploadStart({
       // restores it (straight to review) on its next mount, and overwrites this
       // with the proposed entity name once the user does continue.
       const snapshotInjection = applyEsgParserResult(mergedCase);
+      // The honest not-placed list IS the improvement backlog — record it
+      // server-side (fire-and-forget) so "what should the mapper learn next?"
+      // is answerable from data instead of memory. Never blocks the flow.
+      try {
+        const byKey = new Map<string, { field: string; context: string; reason: string; count: number }>();
+        for (const u of snapshotInjection.unplaced) {
+          const key = `${u.field}::${u.reason}`;
+          const row = byKey.get(key) ?? { field: u.field, context: u.element, reason: u.reason, count: 0 };
+          row.count += 1;
+          byKey.set(key, row);
+        }
+        void Promise.resolve(
+          fetch("/api/telemetry/placement", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              domain: "esg",
+              caseId: (data as { case_id?: string } | null)?.case_id ?? null,
+              fileCount: list.length,
+              valuesRead: snapshotInjection.valuesRead,
+              placedCount: snapshotInjection.placed.length,
+              unplacedCount: snapshotInjection.unplaced.length,
+              conflictCount: snapshotInjection.conflicts.length,
+              unplaced: Array.from(byKey.values()),
+            }),
+          }),
+        ).catch(() => {});
+      } catch {
+        // telemetry must never cost a user their extraction
+      }
       writeEsgFlowSnapshot({
         savedAt: new Date().toISOString(),
         entityName: "",
@@ -1404,26 +1435,10 @@ export function EsgDocumentUploadStart({
         </div>
       )}
 
-      {/* The upload surface itself, one batch per ESG element plus the whole-file
-          uploads. Gated on `parserCase`, NOT on `quote`: a quote arrives the
-          moment the first batch lands, and gating on it would tear the uploader
-          off the screen mid-task. Extraction is the point of no return, so that
-          is what closes the uploader. */}
-      {!parserCase && (
-        <div className="mt-3">
-          <EsgElementDocumentBatches
-            satisfiedDocumentIds={satisfiedDocumentIds}
-            filedBatchByFile={filedBatchByFile}
-            stagedFileNames={files.map((f) => f.name)}
-            onPick={handleBatchPick}
-            disabled={parsing}
-          />
-        </div>
-      )}
-
-      {/* The way ON from staging. Without an affirmative step between "files are
-          listed" and the checkout, the checkout has to appear by itself — which
-          is what makes adding one element feel like being marched to payment. */}
+      {/* The way ON from staging — kept at the TOP, directly under the drop
+          zone. It used to sit below the element batches, which put the one
+          button that advances the flow beneath a long grid: you staged files
+          and then had to go hunting for how to continue. */}
       {!parserCase && !doneStaging && files.length > 0 && (
         <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
@@ -1432,8 +1447,8 @@ export function EsgDocumentUploadStart({
               {quoting ? " · checking" : ""}
             </p>
             <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
-              Keep adding — from any element, or the buttons above. Nothing is read, and nothing is
-              charged, until you review the cost on the next step.
+              Keep adding — the buttons above, or any element batch below. Nothing is read, and
+              nothing is charged, until you review the cost on the next step.
             </p>
           </div>
           <button
@@ -1449,10 +1464,10 @@ export function EsgDocumentUploadStart({
         </div>
       )}
 
-      {/* The dead end. "Done adding" hides the staging bar, and the review panel
-          only renders once a quote exists — so when pricing fails the button
-          appears to do nothing at all. Say what went wrong where the button was,
-          and offer both ways forward. */}
+      {/* The dead end. "Done adding" hides the staging bar above, and the review
+          panel only renders once a quote exists — so when pricing fails the
+          button appears to do nothing at all. Say what went wrong where the
+          button was, and offer both ways forward. */}
       {!parserCase && doneStaging && !quote && !quoting && files.length > 0 && (
         <div
           className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
@@ -1487,6 +1502,23 @@ export function EsgDocumentUploadStart({
               Try again
             </button>
           </div>
+        </div>
+      )}
+
+      {/* The upload surface itself, one batch per ESG element plus the whole-file
+          uploads. Gated on `parserCase`, NOT on `quote`: a quote arrives the
+          moment the first batch lands, and gating on it would tear the uploader
+          off the screen mid-task. Extraction is the point of no return, so that
+          is what closes the uploader. */}
+      {!parserCase && (
+        <div className="mt-3">
+          <EsgElementDocumentBatches
+            satisfiedDocumentIds={satisfiedDocumentIds}
+            filedBatchByFile={filedBatchByFile}
+            stagedFileNames={files.map((f) => f.name)}
+            onPick={handleBatchPick}
+            disabled={parsing}
+          />
         </div>
       )}
 
