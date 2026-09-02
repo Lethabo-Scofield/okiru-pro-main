@@ -67,6 +67,18 @@ describe("injectIntoSection — people rows are reconciled before cells are judg
     expect(result.cells.occupationalLevel).toBe("Skilled");
   });
 
+  it("consumes a skilled-technical title even when the row already states its level", () => {
+    // Measured: "Administrator" ×3 survived the first fix because those rows
+    // carried an occupationalLevel, and the re-filing only ran when it was absent.
+    const result = injectIntoSection("management-control", [
+      { field: "designation", value: "Administrator" },
+      { field: "occupationalLevel", value: "Skilled" },
+    ]);
+    expect(result.rejected.filter((r) => r.field === "designation")).toHaveLength(0);
+    expect(result.cells.designation).toBeUndefined();
+    expect(result.cells.occupationalLevel).toBe("Skilled");
+  });
+
   it("does not overwrite a level the row already states", () => {
     const result = injectIntoSection("management-control", [
       { field: "designation", value: "Operations Manager" },

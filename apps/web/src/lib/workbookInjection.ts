@@ -386,10 +386,15 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
       const direct = matchOption(normaliseForColumn("designation", text), optionsOf("designation"));
       if (direct === null && text) {
         const bands = classifyJobTitle(text);
-        if (bands.designation === null && bands.occupationalLevel && hasOccLevel && !present.has("occupationalLevel")) {
+        if (bands.designation === null && bands.occupationalLevel && hasOccLevel) {
           // Skilled-technical: not a designation, but a level we can state.
-          out.push({ field: "occupationalLevel", value: bands.occupationalLevel, sourceFile: entry.sourceFile });
-          present.add("occupationalLevel");
+          // The title is consumed either way — a row that already names its
+          // level keeps it, and the title must not surface as a rejection of
+          // a band the dropdown never had for it.
+          if (!present.has("occupationalLevel")) {
+            out.push({ field: "occupationalLevel", value: bands.occupationalLevel, sourceFile: entry.sourceFile });
+            present.add("occupationalLevel");
+          }
           continue;
         }
       }
