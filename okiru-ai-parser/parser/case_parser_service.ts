@@ -2,7 +2,7 @@ import type { OntologyRepository } from '../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../graph/ontology_queries.js';
 import type { ParserCaseOutput, ParserOutput, RawExtractionInput } from '../schemas/parser_output.js';
 import { parserCaseOutputSchema, parserOutputSchema } from '../schemas/parser_output.js';
-import { ParserService } from './parser_service.js';
+import { ParserService, type ParserServiceOptions } from './parser_service.js';
 
 export interface RequiredDocumentGroup {
   key: string;
@@ -134,8 +134,11 @@ function resolveCaseStatus(
 export class CaseParserService {
   private parser: ParserService;
 
-  constructor(repository: OntologyRepository = new InMemoryOntologyRepository()) {
-    this.parser = new ParserService(repository);
+  constructor(
+    repository: OntologyRepository = new InMemoryOntologyRepository(),
+    options: ParserServiceOptions = {},
+  ) {
+    this.parser = new ParserService(repository, options);
   }
 
   async resolveCase(rawInputs: RawExtractionInput[], caseId = caseIdFromInputs(rawInputs)): Promise<ParserCaseOutput> {

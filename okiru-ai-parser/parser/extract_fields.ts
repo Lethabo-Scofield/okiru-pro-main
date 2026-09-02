@@ -108,9 +108,21 @@ function cleanExtractedRawValue(fieldName: string, rawValue: string): string {
     .trim();
 }
 
+export interface ExtractFieldsOptions {
+  /**
+   * Only accept values the document LABELS (a field's own pattern, or a
+   * "Field name: value" line). Skips the name/date/money-shaped heuristics,
+   * which will find a "beneficiary" in a lunch menu. Used when the document's
+   * type is itself uncertain: an unlabelled guess about an unidentified
+   * document is two guesses stacked, and reads as fact once it is a field.
+   */
+  labelledOnly?: boolean;
+}
+
 export function extractFields(
   input: RawExtractionInput,
   fields: FieldKnowledge[],
+  options: ExtractFieldsOptions = {},
 ): Record<string, ExtractedFieldWithMeta> {
   const output: Record<string, ExtractedFieldWithMeta> = {};
   const text = input.raw_text || '';
@@ -146,7 +158,7 @@ export function extractFields(
       }
     }
 
-    if (rawValue == null) {
+    if (rawValue == null && !options.labelledOnly) {
       const heuristic = findHeuristicValue(field.name, text);
       if (heuristic) {
         rawValue = cleanExtractedRawValue(field.name, heuristic.rawValue);

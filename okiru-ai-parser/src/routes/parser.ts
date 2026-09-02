@@ -29,6 +29,10 @@ import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_d
 import { ParserService } from '../../parser/parser_service.js';
 import { documentsByElement } from '../../schemas/verification_document_matrix.js';
 import { extractCaseEntities } from '../services/caseExtraction.js';
+// The reader behind the lexical classifier: settles low-confidence / too-close
+// document types by purpose and layout. Undefined without a model, in which
+// case the lexical decision stands and extraction still runs under it.
+import { modelTypeAdjudicator } from '../services/documentTypeAdjudication.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 import esgRouter from './esgParser.js';
@@ -187,7 +191,7 @@ router.get('/required-documents', (_req: Request, res: Response) => {
 router.post('/resolve', async (req: Request, res: Response) => {
   const repository = await getParserRepository();
   try {
-    const service = new ParserService(repository);
+    const service = new ParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const result = await service.resolve(req.body);
     return res.status(result.status === 'failed' ? 422 : 200).json(result);
   } catch (err) {
@@ -214,7 +218,7 @@ router.post('/resolve-file', upload.single('file'), async (req: Request, res: Re
     }
 
     const rawInput = await rawExtractionInputFromUpload(req.file);
-    const service = new ParserService(repository);
+    const service = new ParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const result = await service.resolve(rawInput);
     return res.status(result.status === 'failed' ? 422 : 200).json(result);
   } catch (err) {
@@ -233,7 +237,7 @@ router.post('/resolve-case', async (req: Request, res: Response) => {
       return res.status(400).json(fail('Body must include documents[]', 'DOCUMENTS_REQUIRED'));
     }
 
-    const service = new CaseParserService(repository);
+    const service = new CaseParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(documents, caseId);
     return res.status(result.status === 'failed' ? 422 : 200).json(result);
@@ -319,7 +323,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
         'CASE_FILE_PARSE_FAILED',
       ));
     }
-    const service = new CaseParserService(repository);
+    const service = new CaseParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
 
@@ -439,7 +443,7 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       .flatMap((r) => r.value as Awaited<ReturnType<typeof extractionInputsFromUpload>>);
 
     send('resolving', { total: rawInputs.length });
-    const service = new CaseParserService(repository);
+    const service = new CaseParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
     // Sub-progress through the slow, rate-limited AI resolve phase, so the wait

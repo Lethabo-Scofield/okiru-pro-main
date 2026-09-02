@@ -58,9 +58,10 @@ describe('pricing quote — shape & guarantees', () => {
       upload('scan.png', 'image/png', Buffer.from([0x89, 0x50])),
     ]);
 
-    // The shown price is the internal Azure cost × 100 (PARSER_SELL_MULTIPLIER),
-    // not the raw cost. Normalisation / mapping carry no fee by default.
-    const SELL = 100;
+    // The shown price is the internal Azure cost × 2.5 (PARSER_SELL_MULTIPLIER —
+    // a 60% gross margin), not the raw cost. Normalisation / mapping carry no
+    // fee by default.
+    const SELL = 2.5;
     expect(quote.lineItems.find((li) => li.key === 'extraction')!.cents).toBeCloseTo(quote.totals.azureCents * SELL, 2);
     expect(quote.lineItems.some((li) => li.key === 'normalisation')).toBe(false);
     expect(quote.lineItems.some((li) => li.key === 'entity_mapping')).toBe(false);
