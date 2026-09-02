@@ -32,6 +32,8 @@ import {
   type SectionDef,
 } from "@/components/workbook/sections";
 import { normalizeRace } from "@toolkit/lib/calculators/shared";
+import { classifyJobTitle } from "./jobTitleBands";
+import { deriveGenderFromSaId } from "./saIdGender";
 
 /** Lower-case and strip non-alphanumerics — the key shape the workbook's synonym maps use. */
 function synonymKey(value: string): string {
@@ -86,13 +88,26 @@ function normaliseForColumn(columnKey: string, value: unknown): unknown {
   }
 
   // Designation: EEA / job-band wording → the Designation dropdown vocabulary.
+  // A synonym miss is then read as a JOB TITLE — "Code 14 Driver", "Admin
+  // Manager" — and classified into its band by the kind of work it names.
   if (columnKey === "designation") {
     if (DESIGNATION_MAP[key]) return DESIGNATION_MAP[key];
+    const band = classifyJobTitle(text).designation;
+    if (band) return band;
   }
 
-  // Occupational level: "Executive Management" → "Top Management", etc.
+  // Occupational level: "Executive Management" → "Top Management", etc.,
+  // then the same job-title reading onto the EEA2 ladder.
   if (columnKey === "occupationalLevel") {
     if (OCC_LEVEL_MAP[key]) return OCC_LEVEL_MAP[key];
+    const band = classifyJobTitle(text).occupationalLevel;
+    if (band) return band;
+  }
+
+  // Skills category: "Category G" / "Cat G" / "G — learnership" → "G".
+  if (columnKey === "categoryCode") {
+    const letter = text.match(/^(?:cat(?:egory)?\.?\s*)?([A-Ga-g])(?![a-z])/i);
+    if (letter) return letter[1].toUpperCase();
   }
 
   // Supplier size: "Exempted Micro Enterprise" → "EME", legacy "Large" → "Generic".
@@ -233,7 +248,7 @@ export function toIsoDate(value: unknown): string | null {
 
   const longForm = text.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
   if (longForm) {
-    const month = MONTHS[longForm[2].slice(0, 3).toLowerCase()];
+    const month = MONTHS[longForm[2].slice(0, 3).toLowerCase()] ?? fuzzyMonth(longForm[2]);
     if (month) return `${longForm[3]}-${month}-${longForm[1].padStart(2, "0")}`;
   }
 
@@ -246,6 +261,31 @@ export function toIsoDate(value: unknown): string | null {
     }
   }
   return null;
+}
+
+/**
+ * A month name with one typo ("Ocober", "Febuary", "Setpember") still names a
+ * month. One edit only, against the full names — a token two edits from a
+ * month is not a month, and "Jun"/"Jan" stay apart.
+ */
+const MONTH_NAMES = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+function fuzzyMonth(token: string): string | null {
+  const t = token.toLowerCase();
+  if (t.length < 4) return null;
+  const within1 = (a: string, b: string): boolean => {
+    if (Math.abs(a.length - b.length) > 1) return false;
+    let i = 0, j = 0, edits = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i] === b[j]) { i++; j++; continue; }
+      if (++edits > 1) return false;
+      if (a.length > b.length) i++;
+      else if (b.length > a.length) j++;
+      else { i++; j++; }
+    }
+    return edits + (a.length - i) + (b.length - j) <= 1;
+  };
+  const hits = MONTH_NAMES.filter((name) => within1(t, name));
+  return hits.length === 1 ? String(MONTH_NAMES.indexOf(hits[0]) + 1).padStart(2, "0") : null;
 }
 
 const TRUTHY = new Set(["yes", "y", "true", "1", "checked"]);
@@ -313,6 +353,74 @@ export function coerceToColumn(
 }
 
 /**
+ * Row-level reconciliation for PEOPLE rows, before per-cell coercion.
+ *
+ * Three things a cell-by-cell pass cannot see, all evidence-based:
+ *
+ *  1. A JOB TITLE in the designation slot that is skilled-technical
+ *     ("Administrator", "Panelbeater", "Supervisor") has no Designation band —
+ *     the dropdown has none for it — but it IS an Occupational Level ("Skilled").
+ *     Filed there instead of rejected as "not one of: Executive Director…".
+ *  2. A title that classifies to a band also states the occupational level;
+ *     fill it when the row did not carry one. Scoring falls back to it.
+ *  3. Gender coded "1"/"2" or missing, on a row with a valid SA ID: the ID
+ *     number ENCODES gender (digits 7–10), so it is read from the ID rather
+ *     than guessed from a code whose convention the document never stated.
+ *
+ * Only sections that actually have these columns are touched; everything
+ * else passes through untouched.
+ */
+function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, ColumnDef>): InjectionValue[] {
+  const hasDesignation = byKey.has("designation");
+  const hasOccLevel = byKey.has("occupationalLevel");
+  const hasGender = byKey.has("gender");
+  if (!hasDesignation && !hasGender) return values;
+
+  const out: InjectionValue[] = [];
+  const present = new Set(values.map((v) => v.field));
+  const optionsOf = (key: string) => byKey.get(key)?.options ?? [];
+
+  for (const entry of values) {
+    if (entry.field === "designation" && hasDesignation) {
+      const text = String(entry.value ?? "").trim();
+      const direct = matchOption(normaliseForColumn("designation", text), optionsOf("designation"));
+      if (direct === null && text) {
+        const bands = classifyJobTitle(text);
+        if (bands.designation === null && bands.occupationalLevel && hasOccLevel && !present.has("occupationalLevel")) {
+          // Skilled-technical: not a designation, but a level we can state.
+          out.push({ field: "occupationalLevel", value: bands.occupationalLevel, sourceFile: entry.sourceFile });
+          present.add("occupationalLevel");
+          continue;
+        }
+      }
+      if (direct !== null || classifyJobTitle(text).designation) {
+        const level = classifyJobTitle(text).occupationalLevel;
+        if (level && hasOccLevel && !present.has("occupationalLevel")) {
+          out.push({ field: "occupationalLevel", value: level, sourceFile: entry.sourceFile });
+          present.add("occupationalLevel");
+        }
+      }
+    }
+    out.push(entry);
+  }
+
+  if (hasGender) {
+    const id = values.find((v) => v.field === "idNumber");
+    const genderEntry = out.find((v) => v.field === "gender");
+    const genderText = String(genderEntry?.value ?? "").trim();
+    const genderValid = genderText && matchOption(normaliseForColumn("gender", genderText), optionsOf("gender")) !== null;
+    if (!genderValid) {
+      const fromId = deriveGenderFromSaId(id?.value);
+      if (fromId) {
+        if (genderEntry) genderEntry.value = fromId;
+        else out.push({ field: "gender", value: fromId, sourceFile: id?.sourceFile });
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * Inject values into one workbook row for a section.
  *
  * Every value is coerced to its column's declared type, matched against its
@@ -333,7 +441,7 @@ export function injectIntoSection(
   const accepted: InjectionResult["accepted"] = [];
   const rejected: InjectionRejection[] = [];
 
-  for (const { field, value, sourceFile } of values) {
+  for (const { field, value, sourceFile } of reconcilePersonValues(values, byKey)) {
     const column = byKey.get(field);
     if (!column) {
       rejected.push({
