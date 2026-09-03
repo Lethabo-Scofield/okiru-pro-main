@@ -38,6 +38,8 @@ import {
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
 import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
+import { vocabularyDecisionKey, type VocabularyDecisions } from "@/lib/workbookInjection";
+import { getSection } from "@/components/workbook/sections";
 import PillarDocumentBatches, { batchLabel, type UploadOrigin } from "./PillarDocumentBatches";
 import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
@@ -461,6 +463,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
   /**
+   * Closed-vocabulary decisions from the server (model-backed, remembered).
+   * A dropdown value the local maps cannot place is asked about ONCE, and the
+   * answer is applied on the next mapping pass, exactly like a synonym.
+   */
+  const [vocabulary, setVocabulary] = useState<VocabularyDecisions>({});
+  /** Wordings already asked about in this mount, so a "none" is not re-asked every render. */
+  const vocabularyAskedRef = useRef<Set<string>>(new Set());
+  /**
    * Set when this mount rehydrated a previous run's paid extraction. The
    * reveal renders from the restored case even though no File objects survive
    * navigation, and a banner says where the data came from.
@@ -583,9 +593,61 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         element: e.element,
         values: e.values ?? [],
       })),
-      { sectorCode: sector || "Generic", scorecardType: size || "Generic" },
+      { sectorCode: sector || "Generic", scorecardType: size || "Generic", vocabulary },
     );
-  }, [parserCase, sector, size]);
+  }, [parserCase, sector, size, vocabulary]);
+
+  /**
+   * THE GENERAL MECHANISM behind every dropdown. Values the deterministic maps
+   * rejected as "not one of" are sent, in one batch, to the vocabulary
+   * resolver: the model places them by meaning onto the column's own options
+   * (or says none), the server remembers the answer for every customer, and
+   * the mapping memo re-runs with the decisions. A value it cannot place stays
+   * in review, as before. Nothing here guesses; it only stops the lists from
+   * being the ceiling.
+   */
+  useEffect(() => {
+    if (!injected) return;
+    const items: Array<{ column: string; value: string; options: string[] }> = [];
+    const seen = new Set<string>();
+    for (const r of injected.rejected) {
+      if (r.reason !== "no_matching_option" || !r.section) continue;
+      const value = String(r.value ?? "").trim();
+      if (!value) continue;
+      const key = vocabularyDecisionKey(r.field, value);
+      if (seen.has(key) || vocabularyAskedRef.current.has(key) || vocabulary[key]) continue;
+      const section = getSection(r.section, SECTOR_TO_WORKBOOK[sector] ?? "Generic", size || "Generic");
+      const column = section?.columns?.find((c) => c.key === r.field) ?? section?.meta?.find((c) => c.key === r.field);
+      const options = column?.options ?? [];
+      if (options.length === 0) continue;
+      seen.add(key);
+      items.push({ column: r.field, value, options });
+    }
+    if (items.length === 0) return;
+    for (const it of items) vocabularyAskedRef.current.add(vocabularyDecisionKey(it.column, it.value));
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/vocabulary/resolve", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+        });
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { decisions?: Array<{ column: string; value: string; option: string | null }> };
+        const next: VocabularyDecisions = {};
+        for (const d of body.decisions ?? []) {
+          if (d.option) next[vocabularyDecisionKey(d.column, d.value)] = d.option;
+        }
+        if (!cancelled && Object.keys(next).length > 0) setVocabulary((prev) => ({ ...prev, ...next }));
+      } catch {
+        // No resolver reachable: the rejections stand, honestly.
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [injected]);
 
   /**
    * The procurement rows as they will actually be created — the same merge

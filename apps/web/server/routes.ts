@@ -28,6 +28,7 @@ import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidati
 import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
 import { registerPlacementTelemetryRoutes } from "./placementTelemetry";
+import { registerVocabularyRoutes } from "./vocabularyRoutes";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
 import { deleteWorkbookForClient } from "./workbookRoutes";
@@ -3845,6 +3846,7 @@ Respond ONLY with a valid JSON array.`;
   registerAdminRollbackRoutes(app, requireAuth);
   registerTokenRoutes(app);
   registerPlacementTelemetryRoutes(app);
+  registerVocabularyRoutes(app);
 
   logger.info("Route registration completed");
   return httpServer;

@@ -60,7 +60,19 @@ const LEVEL_WORDS: Record<string, string> = {
   five: "5", six: "6", seven: "7", eight: "8",
 };
 
-function normaliseForColumn(columnKey: string, value: unknown): unknown {
+/**
+ * Decisions from the closed-vocabulary resolver (server, model-backed,
+ * cached): `${column}::${synonymKey(value)}` -> the option chosen. Consulted
+ * only after the deterministic maps miss, so a synonym never waits on a
+ * network round-trip and a remembered answer is applied like any other map.
+ */
+export type VocabularyDecisions = Record<string, string>;
+
+export function vocabularyDecisionKey(columnKey: string, value: unknown): string {
+  return `${columnKey}::${synonymKey(String(value ?? ""))}`;
+}
+
+function normaliseForColumn(columnKey: string, value: unknown, vocabulary?: VocabularyDecisions): unknown {
   // A boolean is a certificate's honest "empowering_supplier: true" — the
   // Yes/No dropdowns speak strings, so hand them their own vocabulary.
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -103,6 +115,10 @@ function normaliseForColumn(columnKey: string, value: unknown): unknown {
     const band = classifyJobTitle(text).occupationalLevel;
     if (band) return band;
   }
+
+  // The resolver had an answer for this exact wording on this column.
+  const decided = vocabulary?.[vocabularyDecisionKey(columnKey, text)];
+  if (decided) return decided;
 
   // Skills category: "Category G" / "Cat G" / "G — learnership" → "G".
   if (columnKey === "categoryCode") {
@@ -295,6 +311,7 @@ const FALSY = new Set(["no", "n", "false", "0", "unchecked"]);
 export function coerceToColumn(
   column: ColumnDef,
   value: unknown,
+  vocabulary?: VocabularyDecisions,
 ): { ok: true; value: unknown } | { ok: false; reason: RejectionReason; detail: string } {
   if (value === null || value === undefined || String(value).trim() === "") {
     return { ok: false, reason: "empty", detail: "No value supplied" };
@@ -330,7 +347,7 @@ export function coerceToColumn(
 
       // Normalise toward the dropdown's vocabulary first, using the scoring
       // engine's own domain maps, then match.
-      const normalised = normaliseForColumn(column.key, value);
+      const normalised = normaliseForColumn(column.key, value, vocabulary);
       const matched = matchOption(normalised, options);
       if (matched === null) {
         // Never pick the closest: a wrong dropdown value scores silently.
@@ -454,7 +471,7 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
 export function injectIntoSection(
   sectionKey: string,
   values: InjectionValue[],
-  options: { sectorCode?: string; scorecardType?: string; fscSubSector?: string } = {},
+  options: { sectorCode?: string; scorecardType?: string; fscSubSector?: string; vocabulary?: VocabularyDecisions } = {},
 ): InjectionResult {
   const section: SectionDef | undefined = getSection(sectionKey, options.sectorCode, options.scorecardType, options.fscSubSector);
   const columns = section?.columns ?? [];
@@ -476,7 +493,7 @@ export function injectIntoSection(
       continue;
     }
 
-    const coerced = coerceToColumn(column, value);
+    const coerced = coerceToColumn(column, value, options.vocabulary);
     if (!coerced.ok) {
       rejected.push({ field, value, reason: coerced.reason, detail: coerced.detail });
       continue;
@@ -508,7 +525,7 @@ export function injectMetaValue(
   sectionKey: string,
   field: string,
   value: unknown,
-  options: { sectorCode?: string; scorecardType?: string; fscSubSector?: string } = {},
+  options: { sectorCode?: string; scorecardType?: string; fscSubSector?: string; vocabulary?: VocabularyDecisions } = {},
 ): { ok: true; value: unknown } | { ok: false; rejection: InjectionRejection } {
   const section = getSection(sectionKey, options.sectorCode, options.scorecardType, options.fscSubSector);
   const column = (section?.meta ?? []).find((c) => c.key === field);
@@ -519,7 +536,7 @@ export function injectMetaValue(
     };
   }
 
-  const coerced = coerceToColumn(column, value);
+  const coerced = coerceToColumn(column, value, options.vocabulary);
   if (!coerced.ok) {
     return { ok: false, rejection: { field, value, reason: coerced.reason, detail: coerced.detail } };
   }
@@ -534,7 +551,7 @@ export function injectMetaValue(
 export function missingRequiredColumns(
   sectionKey: string,
   cells: Record<string, unknown>,
-  options: { sectorCode?: string; scorecardType?: string; fscSubSector?: string } = {},
+  options: { sectorCode?: string; scorecardType?: string; fscSubSector?: string; vocabulary?: VocabularyDecisions } = {},
 ): string[] {
   const section = getSection(sectionKey, options.sectorCode, options.scorecardType, options.fscSubSector);
   return (section?.columns ?? [])

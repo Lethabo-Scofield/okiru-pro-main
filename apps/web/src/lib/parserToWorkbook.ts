@@ -19,7 +19,7 @@
  * with no mapping is reported, and a required column left empty is reported.
  * The caller gets rows it can trust plus an honest account of what is missing.
  */
-import { injectIntoSection, injectMetaValue, type InjectionRejection } from "./workbookInjection";
+import { injectIntoSection, injectMetaValue, type InjectionRejection, type VocabularyDecisions } from "./workbookInjection";
 import {
   huntRequiredFields,
   targetForField,
@@ -114,7 +114,7 @@ export interface ParserToWorkbookResult {
   /** Entity-level values (TMPS, revenue, NPAT), per section. */
   meta: Partial<Record<WorkbookSectionKey, Record<string, unknown>>>;
   /** Values that could not be placed in a cell, with the reason. */
-  rejected: Array<InjectionRejection & { sourceFile: string }>;
+  rejected: Array<InjectionRejection & { sourceFile: string; section?: WorkbookSectionKey }>;
   /** Required columns still unfilled + parser fields with no mapping. */
   coverage: CoverageReport;
   /**
@@ -473,6 +473,8 @@ export function parserExtractionsToWorkbook(
      * TMPS should be the resolver's answer or nobody's.
      */
     resolved?: Record<string, ResolvedFieldInfo>;
+    /** Remembered closed-vocabulary decisions (see vocabularyRoutes) applied at injection. */
+    vocabulary?: VocabularyDecisions;
   } = {},
 ): ParserToWorkbookResult {
   const rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>> = {};
@@ -608,7 +610,7 @@ export function parserExtractionsToWorkbook(
               });
             }
           } else {
-            rejected.push({ ...fromResolver.rejection, sourceFile: extraction.sourceFile });
+            rejected.push({ ...fromResolver.rejection, sourceFile: extraction.sourceFile, section: target.section });
           }
           continue;
         }
@@ -697,7 +699,7 @@ export function parserExtractionsToWorkbook(
             }
           }
         } else {
-          rejected.push({ ...injected.rejection, sourceFile: extraction.sourceFile });
+          rejected.push({ ...injected.rejection, sourceFile: extraction.sourceFile, section: target.section });
         }
         continue;
       }
@@ -711,7 +713,7 @@ export function parserExtractionsToWorkbook(
     for (const [section, values] of Array.from(scalarBySection.entries())) {
       const injected = injectIntoSection(section, values.map((v: { field: string; value: unknown }) => ({ ...v, sourceFile: extraction.sourceFile })), options);
       for (const rejection of injected.rejected) {
-        rejected.push({ ...rejection, sourceFile: extraction.sourceFile });
+        rejected.push({ ...rejection, sourceFile: extraction.sourceFile, section });
       }
       if (Object.keys(injected.cells).length > 0) {
         addRow(section, { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] });
@@ -734,7 +736,7 @@ export function parserExtractionsToWorkbook(
 
         const injected = injectIntoSection(table.section, values, options);
         for (const rejection of injected.rejected) {
-          rejected.push({ ...rejection, sourceFile: extraction.sourceFile });
+          rejected.push({ ...rejection, sourceFile: extraction.sourceFile, section: table.section });
         }
         if (Object.keys(injected.cells).length > 0) {
           addRow(table.section, { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] });
