@@ -12,6 +12,7 @@ import {
   computeScopedSummary,
   parseSelectedTopics,
 } from "@/lib/esg/esgTopicScope";
+import { EsgReportExportPanel } from "@/components/esg/EsgReportExportPanel";
 import { EsgReportScopePanel } from "../components/EsgReportScopePanel";
 import { EsgToolkitValidationStrip } from "../components/EsgToolkitValidationStrip";
 import { useEsgStore } from "../lib/esgStore";
@@ -48,7 +49,7 @@ function PillarTable({ rows }: { rows: EsgPillarRow[] }) {
 }
 
 export default function EsgDashboard() {
-  const { companyId, workbook, scorecard, submittedAt, seedDemo, load } = useEsgStore();
+  const { companyId, companyName, workbook, scorecard, submittedAt, seedDemo, load } = useEsgStore();
   const { user } = useAuth();
   const isEsgAdmin = canSeedEsgSampleData(user);
   const reportMode = useEsgStore((s) => s.getReportMode());
@@ -310,6 +311,11 @@ export default function EsgDashboard() {
         ) : null}
       </div>
 
+      <EsgReportExportPanel
+        workbook={workbook}
+        companyName={companyName}
+        companyId={companyId}
+      />
       <EsgToolkitValidationStrip />
     </div>
   );

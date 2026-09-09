@@ -19,6 +19,13 @@ __pycache__/
 .venv/
 *.pptx
 *.pdf
+
+# ...except the ESG report templates the app ships and serves as downloads.
+# These are product assets the web build copies into dist/public, not stray
+# working files, so the blanket *.pptx / *.pdf rules above must not eat them.
+!apps/web/public/reports/*.pptx
+!apps/web/public/reports/*.pdf
+!docs/Report/*.pptx
 bee-execution-plan-extracted.txt
 assets/
 scripts/set-secrets.js
