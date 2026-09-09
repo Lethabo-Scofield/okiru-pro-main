@@ -57,6 +57,11 @@ export {
   type BbbeeElement,
   type BbbeeElementId,
 } from "./bbbeeBridge";
+export {
+  computeGhgInventory,
+  type GhgInventoryResult,
+  type GhgLine,
+} from "./ghgInventory";
 export { scoreEnvironmental } from "./environmental";
 export { scoreSocial } from "./social";
 export { scoreGovernance } from "./governance";
