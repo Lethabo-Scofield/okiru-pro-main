@@ -257,7 +257,7 @@ function AppRouter() {
         {(params) => <CertificateDetail slug={params.slug} />}
       </Route>
       <Route path="/admin/users">
-        <ProtectedRoute><AdminUsers /></ProtectedRoute>
+        <ProtectedRoute><SuperAdminOnlyRoute><AdminUsers /></SuperAdminOnlyRoute></ProtectedRoute>
       </Route>
       <Route path="/admin/certificates">
         <ProtectedRoute><AdminCertificates /></ProtectedRoute>

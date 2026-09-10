@@ -1515,10 +1515,22 @@ export async function registerRoutes(
   async function requireAdmin(req: Request, res: Response, next: NextFunction) {
     const userId = (req.session as any)?.userId;
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const user = await storage.getUserById(userId);
-    if (!user || user.role !== "admin") {
+    const user = (req as any).user ?? await storage.getUserById(userId);
+    if (!user || !hasAnyRole(user, "admin", "super_admin")) {
       return res.status(403).json({ message: "Admin access required" });
     }
+    (req as any).user = user;
+    next();
+  }
+
+  async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+    const userId = (req.session as any)?.userId;
+    if (!userId) return res.status(401).json({ message: "Not authenticated" });
+    const user = (req as any).user ?? await storage.getUserById(userId);
+    if (!user || !hasAnyRole(user, "super_admin")) {
+      return res.status(403).json({ message: "Super-admin access required" });
+    }
+    (req as any).user = user;
     next();
   }
 
@@ -1760,7 +1772,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res) => {
+  app.get("/api/admin/users", requireAuth, requireSuperAdmin, async (_req, res) => {
     try {
       const users = await storage.getAllUsers();
       const safeUsers = users.map((u) => sanitizeUser(u));
@@ -1771,7 +1783,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/users/:userId/2fa", requireAuth, requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:userId/2fa", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
       const { enabled } = req.body;
@@ -1809,7 +1821,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/users/:userId/role", requireAuth, requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:userId/role", requireAuth, requireSuperAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
       const { role } = req.body;
