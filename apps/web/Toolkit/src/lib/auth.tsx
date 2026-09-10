@@ -19,14 +19,9 @@ interface AuthUser {
 }
 
 interface RegisterData {
-  username: string;
   password: string;
-  fullName?: string;
-  email?: string;
-  organizationId?: string;
-  organizationName?: string;
-  subscriptionId?: string;
-  role?: string;
+  fullName: string;
+  email: string;
 }
 
 interface TwoFAResponse {

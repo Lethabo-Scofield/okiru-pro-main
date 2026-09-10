@@ -3,17 +3,17 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
-import { gatedAuthPath } from '@/lib/authRoutes';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import hubBackground from '@assets/image_1779723521128.png';
 import certCardBg from '@assets/image_1779724907320.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles, Plus, LineChart, UserCog, ChevronDown,
+  Sparkles, Plus, LineChart, UserCog, ChevronDown, Gift,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
+import { isSuperAdmin } from '@/lib/roles';
 import { Crown } from 'lucide-react';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
 
@@ -40,7 +40,7 @@ export default function HubLanding() {
   const { user, isLoading: authLoading } = useAuth();
   const { allowed: esgAllowed } = useEsgAccess();
   const { toast } = useToast();
-  const [location, navigate] = useLocation();
+  const [, navigate] = useLocation();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -48,6 +48,14 @@ export default function HubLanding() {
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [needsProfile, setNeedsProfile] = useState(false);
+  const [profileReminderVisible, setProfileReminderVisible] = useState(() => {
+    try {
+      return sessionStorage.getItem('okiru:profile-reminder-hidden') !== '1';
+    } catch {
+      return true;
+    }
+  });
 
   // Cmd/Ctrl+K opens search.
   useEffect(() => {
@@ -63,7 +71,7 @@ export default function HubLanding() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Load company profile (for personalized welcome) and force onboarding if incomplete.
+  // Load company profile for personalization. An incomplete profile never blocks the Hub.
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -73,13 +81,11 @@ export default function HubLanding() {
         const gate = await checkOnboardingGate();
         if (cancelled) return;
         if (gate.status === "needs-onboarding") {
-          const safe =
-            location.startsWith('/') && !location.startsWith('//') && location !== '/onboarding' && location !== '/auth'
-              ? location
-              : '/hub';
-          navigate(gatedAuthPath({ redirect: safe }), { replace: true });
+          setProfile(null);
+          setNeedsProfile(true);
           return;
         }
+        setNeedsProfile(false);
         const p = gate.profile;
         setProfile({
           companyName: typeof p?.companyName === "string" ? p.companyName : undefined,
@@ -95,7 +101,7 @@ export default function HubLanding() {
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id, location, navigate]);
+  }, [user?.id]);
 
   const handleComingSoon = () => {
     toast({ title: 'Coming Soon', description: 'This toolkit is currently in development.' });
@@ -116,18 +122,6 @@ export default function HubLanding() {
       featured: true,
       backgroundImage: certCardBg,
     },
-    ...(esgAllowed
-      ? [{
-      id: 'esg',
-      title: 'ESG Intelligence Toolkit',
-      tag: 'ESG',
-      aiBadge: 'AI-Insights',
-      icon: <Leaf className="w-4 h-4" />,
-      link: '/esg/clients',
-      description: 'Carbon, social and governance scoring aligned to King V, IFRS S1/S2 and GRI.',
-      features: ['GHG inventory & carbon tax', 'E/S/G scorecards', 'Net-zero roadmap'],
-    }]
-      : []),
     {
       id: 'employment-equity', title: 'Employment Equity', tag: 'HR & PEOPLE', aiBadge: 'AI-Analytics',
       icon: <Users className="w-4 h-4" />, action: handleComingSoon,
@@ -146,7 +140,7 @@ export default function HubLanding() {
   ];
     return items;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [esgAllowed]);
+  }, []);
 
   const active = toolkits.filter((t) => 'link' in t && t.link);
 
@@ -367,6 +361,68 @@ export default function HubLanding() {
       </header>
 
       <main className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
+        {!profileLoading && needsProfile && profileReminderVisible && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-reward-title"
+            data-testid="company-profile-reward-prompt"
+          >
+            <div className="relative w-full max-w-[470px] overflow-hidden rounded-lg bg-white text-[#171719] shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileReminderVisible(false);
+                  try { sessionStorage.setItem('okiru:profile-reminder-hidden', '1'); } catch { /* empty */ }
+                }}
+                className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-[#71717a] transition-colors hover:bg-[#f1f1f3] hover:text-black"
+                aria-label="Close"
+                data-testid="btn-close-profile-reward"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="px-7 pb-7 pt-8 sm:px-9 sm:pb-9 sm:pt-10">
+                <div className="mb-6 grid h-12 w-12 place-items-center rounded-lg bg-violet-100 text-violet-700">
+                  <Gift className="h-6 w-6" />
+                </div>
+                <p className="mb-2 text-[12px] font-semibold uppercase text-violet-700">
+                  Welcome reward
+                </p>
+                <h2 id="profile-reward-title" className="pr-8 text-[27px] font-semibold leading-tight text-[#171719]">
+                  Complete your profile. Get 500 free tokens.
+                </h2>
+                <p className="mt-3 text-[14px] leading-relaxed text-[#626269]">
+                  Add a few details about your company so Okiru can prepare the right workspace for your team.
+                </p>
+
+                <div className="mt-7 flex flex-col gap-2.5 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={() => navigate(companyProfilePath('/hub'))}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#171719] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+                    data-testid="btn-complete-company-profile"
+                  >
+                    Complete profile <ChevronRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileReminderVisible(false);
+                      try { sessionStorage.setItem('okiru:profile-reminder-hidden', '1'); } catch { /* empty */ }
+                    }}
+                    className="h-11 px-4 text-[13px] font-medium text-[#626269] transition-colors hover:text-black"
+                    data-testid="btn-remind-profile-later"
+                  >
+                    Remind me later
+                  </button>
+                </div>
+              </div>
+              <div className="h-1.5 bg-violet-600" />
+            </div>
+          </div>
+        )}
         {/* HERO - personalized */}
         <section className="mb-12 fade-in" data-testid="hero-welcome">
           <div className="flex items-center gap-2 mb-5 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
@@ -460,7 +516,7 @@ export default function HubLanding() {
                 Create Scorecard
               </h3>
               <p className="mt-2 text-[13.5px] text-[#d1d1d6]/90 leading-relaxed max-w-md">
-                Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
+                Start a new B-BBEE scorecard, enter your company information and complete the assessment workbook.
               </p>
               <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-white">
                 New workbook

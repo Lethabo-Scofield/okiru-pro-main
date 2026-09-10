@@ -27,8 +27,10 @@ import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
+import { creditTokens } from "./tokenWallet";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
+import { companyNameFromWorkEmail, isWorkEmail, usernameFromWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from "../shared/workEmail";
 import { deleteWorkbookForClient } from "./workbookRoutes";
 import { answerScorecardQuestionWithAi } from "./bbbeeKnowledge";
 import {
@@ -49,8 +51,13 @@ function isMongoConnected(): boolean {
 
 const DEMO_USER_ID = "demo-offline-user";
 
-function isOfflineDemoCredentials(loginId: unknown, password: unknown): boolean {
+function isDemoLoginEnabled(): boolean {
+  return process.env.ENABLE_DEMO_LOGIN === "true" || process.env.NODE_ENV !== "production";
+}
+
+function isDemoCredentials(loginId: unknown, password: unknown): boolean {
   return (
+    isDemoLoginEnabled() &&
     typeof loginId === "string" &&
     typeof password === "string" &&
     loginId.trim().toLowerCase() === "demo" &&
@@ -85,9 +92,8 @@ function getOfflineDemoUser(): User {
 }
 
 function getSessionDemoUser(req: Request): User | null {
-  if (isMongoConnected()) return null;
   const userData = (req.session as any)?.userData;
-  if ((req.session as any)?.userId === DEMO_USER_ID && userData?.username === "demo") {
+  if (isDemoLoginEnabled() && (req.session as any)?.userId === DEMO_USER_ID && userData?.username === "demo") {
     return { ...getOfflineDemoUser(), ...userData };
   }
   return null;
@@ -282,6 +288,7 @@ export async function registerRoutes(
       const trimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
       if (!trimmed) return res.json({ available: false, message: "Email is required" });
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return res.json({ available: false, message: "Enter a valid email address" });
+      if (!isWorkEmail(trimmed)) return res.json({ available: false, message: WORK_EMAIL_REQUIRED_MESSAGE });
       const existing = await storage.getUserByUsernameOrEmail(trimmed);
       if (existing && existing.isVerified) return res.json({ available: false, message: "This email is not available" });
       return res.json({ available: true, message: "Email is available" });
@@ -309,24 +316,18 @@ export async function registerRoutes(
   app.post("/api/auth/register", async (req, res) => {
     const start = Date.now();
     try {
-      const { username, password, fullName, email, organizationName, role } = req.body;
+      const { password, fullName, email } = req.body;
 
-      const trimmedUsername = typeof username === 'string' ? username.trim() : '';
       const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
       const trimmedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-      const trimmedOrgName = typeof organizationName === 'string' ? organizationName.trim() : '';
+      const trimmedUsername = usernameFromWorkEmail(trimmedEmail);
+      const trimmedOrgName = companyNameFromWorkEmail(trimmedEmail) ?? '';
 
-      if (!trimmedUsername || !password) {
-        return res.status(400).json({ message: "Username and password are required" });
+      if (!password) {
+        return res.status(400).json({ message: "Password is required" });
       }
-      if (trimmedUsername.length < 3 || trimmedUsername.length > 50) {
-        return res.status(400).json({ message: "Username must be between 3 and 50 characters" });
-      }
-      if (!/^[a-zA-Z0-9_.-]+$/.test(trimmedUsername)) {
-        return res.status(400).json({ message: "Username can only contain letters, numbers, dots, hyphens, and underscores" });
-      }
-      if (password.length < 4) {
-        return res.status(400).json({ message: "Password must be at least 4 characters" });
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
       }
       if (password.length > 128) {
         return res.status(400).json({ message: "Password must not exceed 128 characters" });
@@ -340,8 +341,11 @@ export async function registerRoutes(
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
         return res.status(400).json({ message: "Invalid email address" });
       }
+      if (!isWorkEmail(trimmedEmail)) {
+        return res.status(400).json({ message: WORK_EMAIL_REQUIRED_MESSAGE });
+      }
       if (!trimmedOrgName) {
-        return res.status(400).json({ message: "Company name is required" });
+        return res.status(400).json({ message: "Could not determine a company from this work email" });
       }
       if (trimmedOrgName.length < 2 || trimmedOrgName.length > 200) {
         return res.status(400).json({ message: "Company name must be between 2 and 200 characters" });
@@ -489,17 +493,18 @@ export async function registerRoutes(
         attempts.count++;
       }
 
-      if (!isMongoConnected() && isOfflineDemoCredentials(loginId, password)) {
+      if (isDemoCredentials(loginId, password)) {
         const demoUser = getOfflineDemoUser();
         const safeUser = sanitizeUser(demoUser);
         (req.session as any).userId = demoUser.id;
         (req.session as any).userData = safeUser;
         (req.session as any).otpVerified = true;
-        logger.warn("Offline demo login used while MongoDB is unavailable", {
+        logger.warn("Demo login used", {
           userId: demoUser.id,
+          mongoConnected: isMongoConnected(),
           durationMs: Date.now() - start,
         });
-        return res.json({ user: safeUser, offlineDemo: true });
+        return res.json({ user: safeUser, demo: true });
       }
 
       if (!isMongoConnected()) {
@@ -841,7 +846,20 @@ export async function registerRoutes(
         biggestChallenge: onboardSanitizeStr(body.biggestChallenge, 2000),
       };
       const profile = await storage.upsertCompanyProfile(data);
-      return res.json({ profile });
+      const user = await storage.getUserById(userId);
+      let reward: { tokens: number; alreadyApplied: boolean } | null = null;
+      if (user?.organizationId) {
+        const credited = await creditTokens({
+          organizationId: user.organizationId,
+          userId,
+          amount: 500,
+          reference: `onboarding-profile:${userId}`,
+          description: "Company profile completion reward",
+          kind: "grant",
+        });
+        reward = { tokens: 500, alreadyApplied: credited.alreadyApplied };
+      }
+      return res.json({ profile, reward });
     } catch (error: any) {
       logger.error("POST /api/onboarding failed", error);
       return res.status(500).json({ message: "Failed to save onboarding profile" });

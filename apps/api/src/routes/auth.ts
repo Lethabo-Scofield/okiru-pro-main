@@ -7,22 +7,49 @@ import { z } from 'zod';
 import { storage } from '../../storage.js';
 import { createLogger } from '../logger.js';
 import { recordAudit, validateBody } from '../security/index.js';
+import { companyNameFromWorkEmail, isWorkEmail, usernameFromWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from '../../../web/shared/workEmail.js';
 
 const logger = createLogger("Auth");
+const DEMO_USER_ID = "demo-offline-user";
+
+function isDemoLoginEnabled(): boolean {
+  return process.env.ENABLE_DEMO_LOGIN === "true" || process.env.NODE_ENV !== "production";
+}
+
+function isDemoCredentials(loginId: unknown, password: unknown): boolean {
+  return (
+    isDemoLoginEnabled() &&
+    typeof loginId === "string" &&
+    typeof password === "string" &&
+    loginId.trim().toLowerCase() === "demo" &&
+    password === "demo"
+  );
+}
+
+function getDemoUser() {
+  return {
+    id: DEMO_USER_ID,
+    username: "demo",
+    fullName: "Demo User",
+    email: "demo@okiru.pro",
+    role: "admin",
+    secondaryRoles: ["super_admin"],
+    organizationId: "demo-offline-workspace",
+    profilePicture: null,
+  };
+}
 
 // Sign-up always creates an Organization row, then the User (org / tenant layer). — Lethabo
 const registerSchema = z.object({
-  username: z.string().trim().min(3).max(50),
   password: z.string().min(8),
-  fullName: z.string().trim().min(1).max(200).optional(),
+  fullName: z.string().trim().min(1).max(200),
   email: z.preprocess(
     (v) => {
       if (v === null || v === undefined || v === "") return undefined;
       return String(v).trim().toLowerCase();
     },
-    z.string().email().optional(),
+    z.string().email(),
   ),
-  organizationName: z.string().trim().min(2).max(200),
 }).passthrough();
 
 const loginSchema = z.object({
@@ -115,6 +142,7 @@ router.post('/check-email', checkLimiter, async (req: Request, res: Response) =>
     const trimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
     if (!trimmed) return res.json({ available: false, message: "Email is required" });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return res.json({ available: false, message: "Invalid email format" });
+    if (!isWorkEmail(trimmed)) return res.json({ available: false, message: WORK_EMAIL_REQUIRED_MESSAGE });
     
     const existing = await storage.getUserByUsernameOrEmail?.(trimmed) || await storage.getUserByUsername(trimmed);
     if (existing) {
@@ -129,7 +157,15 @@ router.post('/check-email', checkLimiter, async (req: Request, res: Response) =>
 router.post('/register', authLimiter, validateBody(registerSchema), async (req: Request, res: Response) => {
   const start = Date.now();
   try {
-    const { username, password, fullName, email, organizationName } = req.body;
+    const { password, fullName, email } = req.body;
+    if (!isWorkEmail(email)) {
+      return res.status(400).json({ message: WORK_EMAIL_REQUIRED_MESSAGE });
+    }
+    const username = usernameFromWorkEmail(email);
+    const organizationName = companyNameFromWorkEmail(email);
+    if (!organizationName) {
+      return res.status(400).json({ message: "Could not determine a company from this work email" });
+    }
 
     const existing = await storage.getUserByUsername(username);
     if (existing) {
@@ -207,6 +243,14 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req: Reques
     // Support both username and email login
     const loginIdentifier = username || email;
     logger.debug('Looking up user', { loginIdentifier });
+
+    if (isDemoCredentials(loginIdentifier, password)) {
+      const demoUser = getDemoUser();
+      req.session.userId = demoUser.id;
+      req.session.organizationId = demoUser.organizationId;
+      logger.warn("Demo login used", { userId: demoUser.id, durationMs: Date.now() - start });
+      return res.json({ user: demoUser, demo: true });
+    }
 
     // Use getUserByUsernameOrEmail if available, otherwise fall back to getUserByUsername
     const getUserFn = storage.getUserByUsernameOrEmail || storage.getUserByUsername;
@@ -291,6 +335,10 @@ router.get('/me', async (req: Request, res: Response) => {
   if (!req.session.userId) {
     logger.debug('/me: No session userId, returning 401');
     return res.status(401).json({ message: "Not authenticated" });
+  }
+  if (req.session.userId === DEMO_USER_ID && isDemoLoginEnabled()) {
+    logger.debug('/me: Returning demo user');
+    return res.json({ user: getDemoUser() });
   }
   const user = await storage.getUser(req.session.userId);
   if (!user) {

@@ -5,22 +5,13 @@ import { Card, CardContent } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
 import { Label } from "@toolkit/components/ui/label";
-import { Loader2, ArrowRight, ArrowLeft, Check, User, KeyRound, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2, Building2 } from "lucide-react";
+import { Loader2, ArrowLeft, Check, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE } from "@toolkit/lib/config";
 import okiruLogo from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.png";
 import { AppNavBack } from "@/components/AppNavBack";
-
-const ROLES = [
-  { value: "auditor", label: "B-BBEE Auditor", description: "Conduct and manage compliance audits" },
-  { value: "analyst", label: "Compliance Analyst", description: "Analyse scorecard data and reports" },
-  { value: "manager", label: "Team Manager", description: "Oversee audit teams and review results" },
-];
-
-const TOTAL_STEPS = 4;
-const stepLabels = ["Your company", "About you", "Sign-in details", "Your role"];
-const stepIcons = [Building2, User, KeyRound, Shield];
+import { companyNameFromWorkEmail, isWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from "@shared/workEmail";
 
 interface AsyncFieldStatus {
   checking: boolean;
@@ -119,8 +110,6 @@ function OtpInput({ value, onChange, length = 6 }: { value: string; onChange: (v
 export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'login' | 'register' } = {}) {
   const [mode, setMode] = useState<'login' | 'register' | 'otp' | 'forgot' | 'reset'>(defaultMode);
   const [isLoading, setIsLoading] = useState(false);
-  const [step, setStep] = useState(1);
-  const [direction, setDirection] = useState(1);
   const { login, register, verifyOtp, resendOtp } = useAuth();
   const { toast } = useToast();
 
@@ -142,35 +131,24 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
   const [form, setForm] = useState({
     loginEmail: '',
-    username: '',
     password: '',
     confirmPassword: '',
     fullName: '',
     email: '',
-    role: 'auditor',
-    companyName: '',
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const defaultStatus: AsyncFieldStatus = { checking: false, available: null, message: '' };
-  const [usernameStatus, setUsernameStatus] = useState<AsyncFieldStatus>(defaultStatus);
   const [emailStatus, setEmailStatus] = useState<AsyncFieldStatus>(defaultStatus);
 
-  const debouncedUsername = useDebounce(form.username, 250);
   const debouncedEmail = useDebounce(form.email, 250);
 
-  const usernameAbort = useRef<AbortController | null>(null);
   const emailAbort = useRef<AbortController | null>(null);
-  const usernamePending = useRef<Promise<void> | null>(null);
   const emailPending = useRef<Promise<void> | null>(null);
-  const usernameStatusRef = useRef(defaultStatus);
   const emailStatusRef = useRef(defaultStatus);
-  const debouncedUsernameRef = useRef('');
   const debouncedEmailRef = useRef('');
-  useEffect(() => { usernameStatusRef.current = usernameStatus; }, [usernameStatus]);
   useEffect(() => { emailStatusRef.current = emailStatus; }, [emailStatus]);
-  useEffect(() => { debouncedUsernameRef.current = debouncedUsername; }, [debouncedUsername]);
   useEffect(() => { debouncedEmailRef.current = debouncedEmail; }, [debouncedEmail]);
 
   const waitForStable = async (
@@ -190,36 +168,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
   }, [resendCooldown]);
 
   useEffect(() => {
-    usernameAbort.current?.abort();
-    if (!debouncedUsername || debouncedUsername.length < 3) {
-      if (debouncedUsername && debouncedUsername.length < 3) {
-        setUsernameStatus({ checking: false, available: false, message: "At least 3 characters" });
-      } else {
-        setUsernameStatus(defaultStatus);
-      }
-      return;
-    }
-    if (!/^[a-zA-Z0-9_.-]+$/.test(debouncedUsername)) {
-      setUsernameStatus({ checking: false, available: false, message: "Only letters, numbers, dots, hyphens, underscores" });
-      return;
-    }
-    const controller = new AbortController();
-    usernameAbort.current = controller;
-    setUsernameStatus({ checking: true, available: null, message: '' });
-    const p = fetch(`${API_BASE}/api/auth/check-username`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: debouncedUsername }),
-      signal: controller.signal,
-    })
-      .then(r => r.json())
-      .then(data => { if (!controller.signal.aborted) setUsernameStatus({ checking: false, available: data.available, message: data.message }); })
-      .catch(e => { if (e.name !== 'AbortError') setUsernameStatus({ checking: false, available: null, message: '' }); });
-    usernamePending.current = p;
-    p.finally(() => { if (usernamePending.current === p) usernamePending.current = null; });
-  }, [debouncedUsername]);
-
-  useEffect(() => {
     emailAbort.current?.abort();
     if (!debouncedEmail) {
       setEmailStatus(defaultStatus);
@@ -227,6 +175,10 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(debouncedEmail.trim())) {
       setEmailStatus({ checking: false, available: false, message: "Enter a valid email address" });
+      return;
+    }
+    if (!isWorkEmail(debouncedEmail)) {
+      setEmailStatus({ checking: false, available: false, message: WORK_EMAIL_REQUIRED_MESSAGE });
       return;
     }
     const controller = new AbortController();
@@ -259,74 +211,20 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     }
   }, [emailStatus]);
 
-  useEffect(() => {
-    if (!usernameStatus.checking && usernameStatus.available !== null) {
-      setFieldErrors(prev => {
-        if (prev.username === "Still checking..." || prev.username === "Verification pending, please wait") {
-          const next = { ...prev };
-          if (usernameStatus.available === true) delete next.username;
-          else next.username = usernameStatus.message;
-          return next;
-        }
-        return prev;
-      });
-    }
-  }, [usernameStatus]);
-
-  const validateStep = (s: number): boolean => {
+  const validateRegistration = (): boolean => {
     const errors: Record<string, string> = {};
-    if (s === 1) {
-      if (!form.companyName.trim()) errors.companyName = "Company name is required";
-      else if (form.companyName.trim().length < 2) errors.companyName = "Please enter at least 2 characters";
-      else if (form.companyName.trim().length > 200) errors.companyName = "Must be 200 characters or fewer";
-    } else if (s === 2) {
-      if (!form.fullName.trim()) errors.fullName = "Full name is required";
-      if (!form.email.trim()) errors.email = "Email is required";
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = "Enter a valid email address";
-      else if (emailStatus.checking) errors.email = "Still checking...";
-      else if (emailStatus.available === false) errors.email = emailStatus.message;
-      else if (form.email.trim() && emailStatus.available === null) errors.email = "Verification pending, please wait";
-    } else if (s === 3) {
-      if (!form.username.trim()) errors.username = "Username is required";
-      else if (form.username.length < 3) errors.username = "At least 3 characters";
-      else if (usernameStatus.checking) errors.username = "Still checking...";
-      else if (usernameStatus.available === false) errors.username = usernameStatus.message;
-      else if (form.username.trim() && usernameStatus.available === null) errors.username = "Verification pending, please wait";
-      if (!form.password) errors.password = "Password is required";
-      // Must match the server registerSchema (min 8); a 4-7 char password used
-      // to pass every client step then fail with a generic "Registration Failed".
-      else if (form.password.length < 8) errors.password = "At least 8 characters";
-      if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match";
-    } else if (s === 4) {
-      if (!form.role) errors.role = "Please select a role";
-    }
+    if (!form.fullName.trim()) errors.fullName = "Full name is required";
+    if (!form.email.trim()) errors.email = "Work email is required";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = "Enter a valid email address";
+    else if (!isWorkEmail(form.email)) errors.email = WORK_EMAIL_REQUIRED_MESSAGE;
+    else if (emailStatus.checking) errors.email = "Still checking...";
+    else if (emailStatus.available === false) errors.email = emailStatus.message;
+    else if (emailStatus.available === null) errors.email = "Verification pending, please wait";
+    if (!form.password) errors.password = "Password is required";
+    else if (form.password.length < 8) errors.password = "At least 8 characters";
+    if (form.password !== form.confirmPassword) errors.confirmPassword = "Passwords do not match";
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
-  };
-
-  const goToStep = async (target: number) => {
-    if (target > step) {
-      if (step === 2 && form.email.trim()) {
-        await waitForStable(() =>
-          debouncedEmailRef.current === form.email &&
-          !emailStatusRef.current.checking &&
-          emailStatusRef.current.available !== null
-        );
-      }
-      if (step === 3 && form.username.trim()) {
-        await waitForStable(() =>
-          debouncedUsernameRef.current === form.username &&
-          !usernameStatusRef.current.checking &&
-          usernameStatusRef.current.available !== null
-        );
-      }
-      if (!validateStep(step)) return;
-      setDirection(1);
-    } else {
-      setDirection(-1);
-      setFieldErrors({});
-    }
-    setStep(target);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -364,7 +262,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
           setEmailHint(result.emailHint || '');
           setOtpValue('');
           setResendCooldown(30);
-          setDirection(1);
           setMode('otp');
           toast({ title: "Verification Required", description: result.message || "Check your email for the code." });
         } else {
@@ -377,17 +274,20 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       }
       return;
     }
-    if (!validateStep(step)) return;
-    if (step < TOTAL_STEPS) { goToStep(step + 1); return; }
+    if (form.email.trim()) {
+      await waitForStable(() =>
+        debouncedEmailRef.current === form.email &&
+        !emailStatusRef.current.checking &&
+        emailStatusRef.current.available !== null
+      );
+    }
+    if (!validateRegistration()) return;
     setIsLoading(true);
     try {
       const result = await register({
-        username: form.username,
         password: form.password,
         fullName: form.fullName,
         email: form.email.trim().toLowerCase(),
-        role: form.role,
-        organizationName: form.companyName.trim(),
       });
       if (result?.requiresVerification) {
         setEmailHint(result.emailHint || form.email);
@@ -432,7 +332,6 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Something went wrong");
       toast({ title: "Check Your Email", description: data.message });
-      setDirection(1);
       setMode('reset');
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Something went wrong", variant: "destructive" });
@@ -473,10 +372,8 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
     }
   };
 
-  const switchToRegister = () => { setMode('register'); setStep(1); setFieldErrors({}); };
-  const switchToLogin = () => { setMode('login'); setStep(1); setFieldErrors({}); setOtpValue(''); };
-
-  const StepIcon = mode === 'otp' ? Mail : stepIcons[(step - 1) % stepIcons.length];
+  const switchToRegister = () => { setMode('register'); setFieldErrors({}); };
+  const switchToLogin = () => { setMode('login'); setFieldErrors({}); setOtpValue(''); };
 
   const pageVariants = {
     enter: (dir: number) => ({ x: dir > 0 ? 40 : -40, opacity: 0 }),
@@ -556,44 +453,20 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                         )
                         : (
                           <span className="flex items-center justify-center gap-1.5">
-                            <StepIcon className="h-3.5 w-3.5" />
-                            {stepLabels[step - 1]}
-                            <span className="text-muted-foreground/40">— {step} of {TOTAL_STEPS}</span>
+                            <Mail className="h-3.5 w-3.5" />
+                            Use your company email
                           </span>
                         )
                     }
                   </p>
                 </div>
 
-                {mode === 'register' && (
-                  <div className="px-6 pb-1">
-                    <div className="flex items-center gap-1" data-testid="step-indicator">
-                      {Array.from({ length: TOTAL_STEPS }, (_, i) => {
-                        const s = i + 1;
-                        const done = s < step;
-                        const active = s === step;
-                        return (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => { if (s < step) goToStep(s); }}
-                            className={`flex-1 h-1.5 rounded-full transition-all duration-500 ${
-                              done ? "bg-primary cursor-pointer" : active ? "bg-primary/70" : "bg-muted"
-                            }`}
-                            data-testid={`step-bar-${s}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
                 <CardContent className="px-6 pb-7 pt-4">
                   <form onSubmit={mode === 'forgot' ? handleForgotPassword : mode === 'reset' ? handleResetPassword : handleSubmit}>
-                    <AnimatePresence mode="wait" custom={direction} initial={false}>
+                    <AnimatePresence mode="wait" custom={1} initial={false}>
                       <motion.div
-                        key={mode === 'login' ? 'login' : mode === 'otp' ? 'otp' : mode === 'forgot' ? 'forgot' : mode === 'reset' ? 'reset' : `step-${step}`}
-                        custom={direction}
+                        key={mode}
+                        custom={1}
                         variants={pageVariants}
                         initial="enter"
                         animate="center"
@@ -702,7 +575,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                         <div className="text-center">
                           <button
                             type="button"
-                            onClick={() => { setDirection(1); setFieldErrors({}); setResetEmail(form.loginEmail); setMode('forgot'); }}
+                            onClick={() => { setFieldErrors({}); setResetEmail(form.loginEmail); setMode('forgot'); }}
                             className="text-[12px] text-muted-foreground hover:text-primary transition-colors"
                             data-testid="btn-forgot-password"
                           >
@@ -812,241 +685,96 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {step === 1 && (
-                          <div className="space-y-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Company name</Label>
-                              <Input
-                                value={form.companyName}
-                                onChange={e => {
-                                  setForm(prev => ({ ...prev, companyName: e.target.value }));
-                                  setFieldErrors(prev => ({ ...prev, companyName: '' }));
-                                }}
-                                placeholder="e.g. Acme Holdings (Pty) Ltd"
-                                className="h-10"
-                                autoComplete="organization"
-                                autoFocus
-                                data-testid="input-company-name"
-                              />
-                              {fieldErrors.companyName ? (
-                                <p className="text-[11px] text-destructive" data-testid="error-company-name">{fieldErrors.companyName}</p>
-                              ) : (
-                                <p className="text-[11px] text-muted-foreground/60">Creates your organization in Okiru so teammates and clients stay isolated to this workspace.</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                        <div className="space-y-1.5">
+                          <Label className="text-[12px] font-medium text-muted-foreground/70">Full name</Label>
+                          <Input
+                            value={form.fullName}
+                            onChange={e => {
+                              setForm(prev => ({ ...prev, fullName: e.target.value }));
+                              setFieldErrors(prev => ({ ...prev, fullName: '' }));
+                            }}
+                            placeholder="e.g. Thabo Mokoena"
+                            className="h-10"
+                            autoComplete="name"
+                            autoFocus
+                            data-testid="input-fullname"
+                          />
+                          {fieldErrors.fullName && <p className="text-[11px] text-destructive" data-testid="error-fullname">{fieldErrors.fullName}</p>}
+                        </div>
 
-                        {step === 2 && (
-                          <div className="space-y-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Full Name</Label>
-                              <Input
-                                value={form.fullName}
-                                onChange={e => {
-                                  setForm(prev => ({ ...prev, fullName: e.target.value }));
-                                  setFieldErrors(prev => ({ ...prev, fullName: '' }));
-                                }}
-                                placeholder="e.g. Thabo Mokoena"
-                                className="h-10"
-                                autoComplete="name"
-                                data-testid="input-fullname"
-                              />
-                              {fieldErrors.fullName && (
-                                <p className="text-[11px] text-destructive" data-testid="error-fullname">{fieldErrors.fullName}</p>
-                              )}
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Email Address</Label>
-                              <Input
-                                type="email"
-                                value={form.email}
-                                onChange={e => {
-                                  setForm(prev => ({ ...prev, email: e.target.value }));
-                                  setFieldErrors(prev => ({ ...prev, email: '' }));
-                                }}
-                                placeholder="you@example.com"
-                                className="h-10"
-                                autoComplete="email"
-                                data-testid="input-email"
-                              />
-                              {fieldErrors.email ? (
-                                <p className="text-[11px] text-destructive" data-testid="error-email">{fieldErrors.email}</p>
-                              ) : (
-                                <FieldStatus status={emailStatus} />
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {step === 3 && (
-                          <div className="space-y-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Username</Label>
-                              <Input
-                                value={form.username}
-                                onChange={e => {
-                                  setForm({ ...form, username: e.target.value });
-                                  setFieldErrors(prev => ({ ...prev, username: '' }));
-                                }}
-                                placeholder="Choose a username"
-                                className="h-10"
-                                autoComplete="username"
-                                data-testid="input-username"
-                              />
-                              {fieldErrors.username ? (
-                                <p className="text-[11px] text-destructive" data-testid="error-username">{fieldErrors.username}</p>
-                              ) : (
-                                <FieldStatus status={usernameStatus} />
-                              )}
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Password</Label>
-                              <Input
-                                type="password"
-                                value={form.password}
-                                onChange={e => {
-                                  setForm({ ...form, password: e.target.value });
-                                  setFieldErrors(prev => ({ ...prev, password: '' }));
-                                }}
-                                placeholder="Min 8 characters"
-                                className="h-10"
-                                autoComplete="new-password"
-                                data-testid="input-password"
-                              />
-                              {fieldErrors.password && (
-                                <p className="text-[11px] text-destructive" data-testid="error-password">{fieldErrors.password}</p>
-                              )}
-                              {passwordStrength && !fieldErrors.password && (
-                                <div className="space-y-1">
-                                  <div className="h-1 bg-muted rounded-full overflow-hidden">
-                                    <div className={`h-full ${passwordStrength.color} ${passwordStrength.width} transition-all duration-300 rounded-full`} />
-                                  </div>
-                                  <p className={`text-[10px] ${passwordStrength.color.replace('bg-', 'text-')}`}>{passwordStrength.label}</p>
-                                </div>
-                              )}
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Confirm Password</Label>
-                              <Input
-                                type="password"
-                                value={form.confirmPassword}
-                                onChange={e => {
-                                  setForm({ ...form, confirmPassword: e.target.value });
-                                  setFieldErrors(prev => ({ ...prev, confirmPassword: '' }));
-                                }}
-                                placeholder="Re-enter password"
-                                className="h-10"
-                                autoComplete="new-password"
-                                data-testid="input-confirm-password"
-                              />
-                              {fieldErrors.confirmPassword && (
-                                <p className="text-[11px] text-destructive" data-testid="error-confirm-password">{fieldErrors.confirmPassword}</p>
-                              )}
-                              {form.confirmPassword && form.password === form.confirmPassword && !fieldErrors.confirmPassword && (
-                                <p className="text-[11px] text-emerald-500 flex items-center gap-1 mt-1">
-                                  <CheckCircle2 className="h-3 w-3" />
-                                  Passwords match
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {step === 4 && (
-                          <div className="space-y-4">
-                            <div className="space-y-1.5">
-                              <Label className="text-[12px] font-medium text-muted-foreground/70">Your Role</Label>
-                              <div className="grid gap-2" data-testid="role-options">
-                                {ROLES.map(r => (
-                                  <button
-                                    key={r.value}
-                                    type="button"
-                                    onClick={() => {
-                                      setForm({ ...form, role: r.value });
-                                      setFieldErrors(prev => ({ ...prev, role: '' }));
-                                    }}
-                                    className={`w-full text-left rounded-lg border p-3 transition-all duration-200 ${
-                                      form.role === r.value
-                                        ? "border-primary bg-primary/5 ring-1 ring-primary/20"
-                                        : "border-border/50 hover:border-border hover:bg-muted/30"
-                                    }`}
-                                    data-testid={`btn-role-${r.value}`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-sm font-medium">{r.label}</span>
-                                      {form.role === r.value && (
-                                        <div className="h-5 w-5 rounded-full bg-primary flex items-center justify-center">
-                                          <Check className="h-3 w-3 text-primary-foreground" />
-                                        </div>
-                                      )}
-                                    </div>
-                                    <p className="text-[11px] text-muted-foreground mt-0.5">{r.description}</p>
-                                  </button>
-                                ))}
-                              </div>
-                              {fieldErrors.role && (
-                                <p className="text-[11px] text-destructive" data-testid="error-role">{fieldErrors.role}</p>
-                              )}
-                            </div>
-
-                            <div className="rounded-lg border border-border/30 bg-muted/20 p-3 space-y-1.5">
-                              <p className="text-[11px] font-medium text-muted-foreground">Account Summary</p>
-                              <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[11px]">
-                                <span className="text-muted-foreground/60">Company</span>
-                                <span className="text-foreground font-medium truncate" data-testid="summary-company">{form.companyName || "—"}</span>
-                                <span className="text-muted-foreground/60">Name</span>
-                                <span className="text-foreground font-medium truncate">{form.fullName || '—'}</span>
-                                <span className="text-muted-foreground/60">Email</span>
-                                <span className="text-foreground font-medium truncate">{form.email || '—'}</span>
-                                <span className="text-muted-foreground/60">Username</span>
-                                <span className="text-foreground font-medium truncate">{form.username || '—'}</span>
-                              </div>
-                              <p className="text-[10px] text-muted-foreground/60 pt-1">You can invite teammates from your workspace once your account is created.</p>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="flex gap-2 pt-2">
-                          {step > 1 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => goToStep(step - 1)}
-                              className="h-10 text-[13px] rounded-full px-5"
-                              data-testid="btn-prev-step"
-                            >
-                              <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
-                              Back
-                            </Button>
-                          )}
-                          {step < TOTAL_STEPS ? (
-                            <Button
-                              type="button"
-                              onClick={() => goToStep(step + 1)}
-                              className="flex-1 h-10 text-[13px] font-medium rounded-full"
-                              data-testid="btn-next-step"
-                            >
-                              Continue
-                              <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
-                            </Button>
+                        <div className="space-y-1.5">
+                          <Label className="text-[12px] font-medium text-muted-foreground/70">Work email</Label>
+                          <Input
+                            type="email"
+                            value={form.email}
+                            onChange={e => {
+                              setForm(prev => ({ ...prev, email: e.target.value }));
+                              setFieldErrors(prev => ({ ...prev, email: '' }));
+                            }}
+                            placeholder="you@company.co.za"
+                            className="h-10"
+                            autoComplete="email"
+                            data-testid="input-email"
+                          />
+                          {fieldErrors.email ? (
+                            <p className="text-[11px] text-destructive" data-testid="error-email">{fieldErrors.email}</p>
                           ) : (
-                            <Button
-                              type="submit"
-                              className="flex-1 h-10 text-[13px] font-medium rounded-full"
-                              disabled={isLoading}
-                              data-testid="btn-submit-auth"
-                            >
-                              {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : (
-                                <>
-                                  Create Account
-                                  <Check className="h-3.5 w-3.5 ml-1.5" />
-                                </>
-                              )}
-                            </Button>
+                            <FieldStatus status={emailStatus} />
+                          )}
+                          {companyNameFromWorkEmail(form.email) && emailStatus.available !== false && (
+                            <p className="text-[11px] text-muted-foreground/60" data-testid="derived-company-name">
+                              Workspace: <span className="font-medium text-foreground/80">{companyNameFromWorkEmail(form.email)}</span>
+                            </p>
                           )}
                         </div>
+
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label className="text-[12px] font-medium text-muted-foreground/70">Password</Label>
+                            <Input
+                              type="password"
+                              value={form.password}
+                              onChange={e => {
+                                setForm(prev => ({ ...prev, password: e.target.value }));
+                                setFieldErrors(prev => ({ ...prev, password: '' }));
+                              }}
+                              placeholder="Min 8 characters"
+                              className="h-10"
+                              autoComplete="new-password"
+                              data-testid="input-password"
+                            />
+                            {fieldErrors.password && <p className="text-[11px] text-destructive" data-testid="error-password">{fieldErrors.password}</p>}
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-[12px] font-medium text-muted-foreground/70">Confirm password</Label>
+                            <Input
+                              type="password"
+                              value={form.confirmPassword}
+                              onChange={e => {
+                                setForm(prev => ({ ...prev, confirmPassword: e.target.value }));
+                                setFieldErrors(prev => ({ ...prev, confirmPassword: '' }));
+                              }}
+                              placeholder="Repeat password"
+                              className="h-10"
+                              autoComplete="new-password"
+                              data-testid="input-confirm-password"
+                            />
+                            {fieldErrors.confirmPassword && <p className="text-[11px] text-destructive" data-testid="error-confirm-password">{fieldErrors.confirmPassword}</p>}
+                          </div>
+                        </div>
+
+                        {passwordStrength && !fieldErrors.password && (
+                          <div className="space-y-1">
+                            <div className="h-1 bg-muted rounded-full overflow-hidden">
+                              <div className={`h-full ${passwordStrength.color} ${passwordStrength.width} transition-all duration-300 rounded-full`} />
+                            </div>
+                            <p className={`text-[10px] ${passwordStrength.color.replace('bg-', 'text-')}`}>{passwordStrength.label}</p>
+                          </div>
+                        )}
+
+                        <Button type="submit" className="w-full h-10 text-[13px] font-medium rounded-full" disabled={isLoading} data-testid="btn-submit-auth">
+                          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><span>Create Account</span><Check className="h-3.5 w-3.5 ml-1.5" /></>}
+                        </Button>
                       </div>
                     )}
                       </motion.div>
