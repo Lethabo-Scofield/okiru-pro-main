@@ -1,8 +1,8 @@
 {
   "Kgodiso_Industrial_Holdings_Generic_BBBEE.xlsx": {
-    "total": 104.76,
+    "total": 103.48,
     "level": 1,
-    "breakdown": "| own20 mc18 sk18 pp29 sd10 ed5 sed5 afs0 ef0 | npat52M tmps268M lev96M emp500 sup80"
+    "breakdown": "| own20 mc18 sk18 pp29 sd9 ed5 sed5 afs0 ef0 | npat52M tmps268M lev96M emp500 sup80"
   },
   "Khanya_Digital_Technologies_ICT_BBBEE.xlsx": {
     "total": 119.72,
@@ -10,7 +10,7 @@
     "breakdown": "| own20 mc22 sk23 pp27 sd10 ed7 sed10 afs0 ef0 | npat66M tmps239M lev140M emp500 sup80"
   },
   "Khethiwe_Construction_Contractor_BBBEE.xlsx": {
-    "total": 79.47,
+    "total": 78.12,
     "level": 5,
     "breakdown": ""
   },
@@ -60,9 +60,9 @@
     "breakdown": "| own17 mc18 sk17 pp24 sd10 ed5 sed5 afs12 ef0 | npat6M tmps17M lev17M emp70 sup60"
   },
   "Sandile_Freight_Logistics_Transport_BBBEE.xlsx": {
-    "total": 101.37,
-    "level": 1,
-    "breakdown": "| own20 mc11 ee18 sk14 pp20 sd13 sed5 | emp500"
+    "total": 98.84,
+    "level": 2,
+    "breakdown": "| own20 mc11 ee18 sk14 pp20 sd10 sed5 | emp500"
   },
   "Sechaba_Financial_Group_FSC_Banks_LongTerm_BBBEE.xlsx": {
     "total": 111.04,
