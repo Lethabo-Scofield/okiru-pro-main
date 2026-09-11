@@ -14,9 +14,8 @@ import JSZip from "jszip";
 import { buildGoldenSections } from "../../../../../server/esgGoldenFixture";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { buildEsgReportModel } from "../esgReportModel";
-import { buildDisclosurePack } from "../esgReportDocument";
+import { buildDisclosurePack, esgReportFilename } from "../esgReportDocument";
 import { renderEsgReportDocx } from "../esgReportDocx";
-import { esgReportFilename } from "../esgReportPdf";
 
 const NOW = new Date("2026-09-09T08:00:00.000Z");
 
@@ -164,7 +163,7 @@ describe("the document structure", () => {
       "Section 11 — Roadmap",
       "Appendix A — Methodology",
       "Appendix B — Emission factors and sources",
-      "Appendix C — Full metric register (Data Book extract)",
+      "Appendix C — Metric register (Data Book extract)",
       "Appendix D — Framework index",
       "Appendix E — Restatements",
       "Appendix F — Evidence register",

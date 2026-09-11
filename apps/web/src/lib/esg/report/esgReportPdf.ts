@@ -323,10 +323,3 @@ export function renderEsgReportPdf(model: EsgReportModel, lock: PdfLockdown): Bl
 
   return doc.output("blob");
 }
-
-/** A stable, human-legible filename that carries the generation reference. */
-export function esgReportFilename(model: EsgReportModel, ext: "docx" | "pdf"): string {
-  const safe = model.meta.entityName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "Entity";
-  const state = model.meta.isDraft ? "DRAFT" : "FINAL";
-  return `${safe}-ESG-Disclosure-Pack-${state}-${model.meta.generationReference}.${ext}`;
-}

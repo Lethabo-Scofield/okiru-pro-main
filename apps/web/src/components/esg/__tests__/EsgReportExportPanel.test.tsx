@@ -73,36 +73,44 @@ describe("the export panel", () => {
 describe("the download", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
 
-  const clickDocx = async () => {
+  const clickExport = (kind: "docx" | "pptx") => {
     render(<EsgReportExportPanel workbook={golden()} companyName="SG Consumer" companyId="sg-consumer" />);
-    fireEvent.click(screen.getByTestId("button-esg-export-docx"));
+    fireEvent.click(screen.getByTestId(`button-esg-export-${kind}`));
   };
 
-  it("refuses a response that is the SPA page rather than the document", async () => {
-    // The server answers every unknown path with 200 text/html, so an absent
-    // asset arrives looking like a success. Without the magic-number check the
-    // client gets an HTML file named .docx and only finds out when Word fails.
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("<!DOCTYPE html><html></html>", {
-      status: 200, headers: { "content-type": "text/html; charset=utf-8" },
-    })));
-    await clickDocx();
-    await waitFor(() => {
-      expect(screen.getByTestId("esg-report-export-error").textContent)
-        .toContain("returned a web page instead of the document");
-    });
+  const stubObjectUrl = () =>
+    vi.stubGlobal("URL", { ...URL, createObjectURL: () => "blob:x", revokeObjectURL: () => {} });
+
+  it("generates a real Office package for Word", async () => {
+    stubObjectUrl();
+    clickExport("docx");
+    await waitFor(() => { expect(screen.queryByTestId("esg-report-export-error")).toBeNull(); }, { timeout: 8000 });
   });
 
-  it("accepts a real OOXML package", async () => {
-    // "PK" — the zip header every .docx and .pptx opens with.
-    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]);
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(zip, {
-      status: 200,
-      headers: { "content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document" },
-    })));
-    vi.stubGlobal("URL", { ...URL, createObjectURL: () => "blob:x", revokeObjectURL: () => {} });
-    await clickDocx();
-    await waitFor(() => {
-      expect(screen.queryByTestId("esg-report-export-error")).toBeNull();
-    });
+  it("generates a real Office package for PowerPoint", async () => {
+    stubObjectUrl();
+    clickExport("pptx");
+    await waitFor(() => { expect(screen.queryByTestId("esg-report-export-error")).toBeNull(); }, { timeout: 8000 });
+  });
+
+  it("refuses to hand over bytes that are not an Office package", async () => {
+    // A renderer that throws mid-way, or a zip that came back empty, must fail
+    // HERE rather than as Word refusing the file in front of a client. The
+    // guard is the PK zip header every OOXML package opens with.
+    stubObjectUrl();
+    const blobProto = Blob.prototype as unknown as { slice: Blob["slice"] };
+    const realSlice = blobProto.slice;
+    blobProto.slice = function patched(this: Blob) {
+      return new Blob([new Uint8Array([0x3c, 0x21])]); // "<!" — an HTML page
+    } as Blob["slice"];
+    try {
+      clickExport("docx");
+      await waitFor(() => {
+        expect(screen.getByTestId("esg-report-export-error").textContent)
+          .toContain("did not render as a valid Office document");
+      }, { timeout: 8000 });
+    } finally {
+      blobProto.slice = realSlice;
+    }
   });
 });

@@ -13,19 +13,21 @@
  * can see that 41 of 60 metrics are populated is not surprised by a document
  * that says so.
  *
- * WHAT THE BUTTONS CURRENTLY HAND OVER
+ * WHAT THE BUTTONS HAND OVER
  *
- * The two downloads are the Okiru report templates themselves — the Word
- * specification and the PowerPoint deck in `docs/Report`, shipped as static
- * assets under `/reports/`. This is deliberate and it is a DEMO SETTING: it
- * guarantees the client sees the exact documents that were signed off, in the
- * exact format, with no risk of a generated layout surprising anyone live.
+ * The client's own data, rendered into the Okiru format — two of the four
+ * renderings the specification describes at 4.1:
  *
- * The generator is built, tested and still in the tree
- * (`@/lib/esg/report/*`) — it renders the client's own data into that same
- * format. Switching the buttons back to it is a one-line change per handler,
- * marked below. Until then, be precise with clients about which of the two
- * they are being shown: these files are the template, not their data.
+ *   Word        Rendering A, the Disclosure Pack. The full record: front
+ *               matter, regulatory horizon, performance by pillar, the KPI
+ *               table, the gap register, the roadmap, appendices.
+ *   PowerPoint  Rendering B, the Board Strategy Pack. Twelve to eighteen
+ *               slides a board reads in five minutes, ending on the decisions
+ *               it is being asked to make.
+ *
+ * Both are built from one `buildEsgReportModel` call, so the deck and the
+ * document cannot quote different numbers, and the figures in the traceability
+ * strip above the buttons are the same figures that land in the files.
  */
 import { useMemo, useState } from "react";
 import {
@@ -39,6 +41,9 @@ import {
 } from "lucide-react";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { buildEsgReportModel, type EsgReportModel } from "@/lib/esg/report/esgReportModel";
+import { esgReportFilename } from "@/lib/esg/report/esgReportDocument";
+import { renderEsgReportDocx } from "@/lib/esg/report/esgReportDocx";
+import { renderEsgReportPptx } from "@/lib/esg/report/esgReportPptx";
 
 type Props = {
   workbook: EsgWorkbookData | null;
@@ -46,53 +51,47 @@ type Props = {
   companyId: string;
 };
 
-/**
- * The shipped templates. Served from `apps/web/public/reports/`, which Vite
- * copies into `dist/public` at build time, so these resolve in dev and in the
- * container identically.
- */
-const TEMPLATE_DOWNLOADS = [
+type ExportKind = "docx" | "pptx";
+
+const EXPORTS: {
+  key: ExportKind;
+  label: string;
+  rendering: string;
+  icon: typeof FileText;
+  primary: boolean;
+  render: (model: EsgReportModel) => Promise<Blob>;
+}[] = [
   {
-    key: "docx" as const,
+    key: "docx",
     label: "Word (.docx)",
-    href: "/reports/Okiru-ESG-Report-Template-Specification.docx",
+    rendering: "Disclosure Pack",
     icon: FileText,
     primary: true,
+    render: renderEsgReportDocx,
   },
   {
-    key: "pptx" as const,
+    key: "pptx",
     label: "PowerPoint (.pptx)",
-    href: "/reports/Okiru-ESG-Report-Template-Specification.pptx",
+    rendering: "Board Strategy Pack",
     icon: Presentation,
     primary: false,
+    render: renderEsgReportPptx,
   },
 ];
 
 /**
- * Fetch, VERIFY, then save — rather than a bare `<a download>`. A plain link to
- * a static asset can be hijacked by the SPA router or opened inline by the
- * browser's own Office viewer, and fetching to a Blob makes it deterministic.
- *
- * The verification is not defensive padding. This app's server answers every
- * unrecognised path with `200 text/html` — the SPA index — so a missing or
- * misdeployed asset does NOT 404. Checking `res.ok` alone would hand the
- * client an HTML page named `.docx`, the button would look like it worked, and
- * the failure would surface as Word refusing to open the file in front of
- * them. So the response is checked for the ZIP magic number that opens every
- * OOXML file, and a mismatch is reported here instead.
+ * Save a generated Blob. Verifying the bytes before handing them over is not
+ * defensive padding: a renderer that throws mid-way, or a zip that came back
+ * empty, would otherwise produce a file the client cannot open, and the failure
+ * would surface as Word or PowerPoint refusing it in front of them rather than
+ * as a message here. Every OOXML package is a zip, so the "PK" header is a
+ * cheap, exact check that we produced a real document.
  */
-async function downloadTemplate(href: string, filename: string): Promise<void> {
-  const res = await fetch(href, { credentials: "same-origin" });
-  if (!res.ok) throw new Error(`${filename} could not be fetched (${res.status}).`);
-  const buf = await res.arrayBuffer();
-  const sig = new Uint8Array(buf.slice(0, 2));
-  // "PK" — every .docx and .pptx is a zip archive.
-  if (sig[0] !== 0x50 || sig[1] !== 0x4b) {
-    throw new Error(
-      `${filename} is not on this server — the request returned a web page instead of the document. The report assets were not included in this build.`,
-    );
+async function saveGenerated(blob: Blob, filename: string): Promise<void> {
+  const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
+  if (head[0] !== 0x50 || head[1] !== 0x4b) {
+    throw new Error(`${filename} did not render as a valid Office document. Nothing was downloaded.`);
   }
-  const blob = new Blob([buf], { type: res.headers.get("content-type") ?? "application/octet-stream" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -107,7 +106,7 @@ async function downloadTemplate(href: string, filename: string): Promise<void> {
 const fmtPct = (v: number) => `${(v * 100).toFixed(1)}%`;
 
 export function EsgReportExportPanel({ workbook, companyName, companyId }: Props) {
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusy] = useState<ExportKind | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Rebuilt whenever the workbook changes — the same spine the generator uses,
@@ -121,16 +120,15 @@ export function EsgReportExportPanel({ workbook, companyName, companyId }: Props
     }
   }, [workbook, companyName, companyId]);
 
-  const handleDownload = async (key: string, href: string) => {
-    setBusy(key);
+  const handleExport = async (spec: (typeof EXPORTS)[number]) => {
+    if (!model) return;
+    setBusy(spec.key);
     setError(null);
     try {
-      // ── To ship the CLIENT'S OWN generated pack instead of the template,
-      //    replace this call with `renderEsgReportDocx(model)` (or the PDF
-      //    renderer) from `@/lib/esg/report/`. Everything else stays. ──
-      await downloadTemplate(href, href.split("/").pop() as string);
+      const blob = await spec.render(model);
+      await saveGenerated(blob, esgReportFilename(model, spec.key));
     } catch (e) {
-      setError(e instanceof Error ? e.message : "The download could not be completed.");
+      setError(e instanceof Error ? e.message : "The export could not be generated.");
     } finally {
       setBusy(null);
     }
@@ -138,14 +136,15 @@ export function EsgReportExportPanel({ workbook, companyName, companyId }: Props
 
   const downloads = (
     <div className="flex flex-wrap items-center gap-3 pt-1">
-      {TEMPLATE_DOWNLOADS.map((d) => {
+      {EXPORTS.map((d) => {
         const Icon = d.icon;
         return (
           <button
             key={d.key}
             type="button"
-            onClick={() => handleDownload(d.key, d.href)}
-            disabled={busy != null}
+            onClick={() => void handleExport(d)}
+            disabled={busy != null || !model}
+            title={`${d.rendering} — generated from this workbook`}
             className={
               d.primary
                 ? "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[var(--esg-acc-e)] text-[#080e14] font-semibold text-[14px] disabled:opacity-60"
@@ -171,8 +170,9 @@ export function EsgReportExportPanel({ workbook, companyName, companyId }: Props
           </span>
         </div>
         <p className="text-[13px] text-[var(--esg-text2)] max-w-[60ch]">
-          Capture workbook data to see how it translates into the report. The report format is
-          available below.
+          Capture workbook data first. Both packs are generated from the metric register — with
+          nothing captured there is nothing to trace, and the export would be a document of
+          omissions.
         </p>
         {downloads}
       </div>

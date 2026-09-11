@@ -595,12 +595,38 @@ export function buildDisclosurePack(model: EsgReportModel): EsgDocBlock[] {
     kind: "p",
     text: `Scores are computed against the Okiru ESG indicator ledger, transcribed from the pillar scorecards: Environmental ${model.scores.environmental.max} points, Social ${model.scores.social.max} points and Governance ${model.scores.governance.max} points. Data quality is derived from how a number was captured, not asserted: a monthly grid complete for the period rates 4; a partial grid rates 3; a lone totals cell rates 2. RAG status is derived from trajectory and data quality together, so a figure on trajectory but poorly evidenced cannot show green.`,
   });
-  b.push({ kind: "h2", text: "A.1 Generation rules applied to this report" });
+  /*
+   * The status column is not decoration. An earlier version of this appendix
+   * listed all eight rules as though each were enforced, while rule 7 — length
+   * control — was not: the pack ran past ninety pages because the Data Book it
+   * is supposed to shed detail into does not yet exist as a separate export.
+   * A methodology appendix that overstates its own controls is precisely the
+   * failure the rest of this specification is built to prevent, so each rule
+   * now states where it actually stands.
+   */
+  const registerIsLong = model.metrics.length > 40;
+  const ruleStatus: Record<number, string> = {
+    1: "Applied — every absent figure renders a reasoned omission",
+    2: model.meta.isDraft
+      ? "Applied — this report is unsigned and watermarked DRAFT throughout"
+      : "Satisfied — signed off, watermark released",
+    3: `Applied — ${model.claims.length} claims rendered, each tiered and evidence-bound`,
+    4: "Applied — omitted disclosures remain in the index with their reason",
+    5: "Applied — toolkit, cross-walk, extract date and version on every page",
+    6: restated.length
+      ? `Applied — ${restated.length} restatements footnoted and listed at Appendix E`
+      : "Applied — no prior-period figure has changed, so no footnote is due",
+    7: registerIsLong
+      ? "Partially applied — appendices C and D are condensed, but at this register size the pack still exceeds 60 pages. The Data Book (Rendering D) is not yet issued as a separate document; until it is, the detail has nowhere to move."
+      : "Applied — the pack is within the length at which detail moves to the Data Book",
+    8: "Applied — no chart renders without axis units and a source note",
+  };
+  b.push({ kind: "h2", text: "A.1 Generation rules, and where each one stands" });
   b.push({
     kind: "table",
-    head: ["#", "Rule", "What it prevents"],
-    rows: GENERATION_RULES.map((r) => [String(r.n), r.rule, r.prevents]),
-    widths: [5, 60, 35],
+    head: ["#", "Rule", "What it prevents", "Status in this report"],
+    rows: GENERATION_RULES.map((r) => [String(r.n), r.rule, r.prevents, ruleStatus[r.n] ?? "Applied"]),
+    widths: [4, 34, 26, 36],
   });
 
   b.push({ kind: "h1", text: "Appendix B — Emission factors and sources", pageBreakBefore: true });
@@ -615,40 +641,96 @@ export function buildDisclosurePack(model: EsgReportModel): EsgDocBlock[] {
     b.push({ kind: "p", text: "No emission factor was applied — no emissions activity was captured for the period." });
   }
 
-  b.push({ kind: "h1", text: "Appendix C — Full metric register (Data Book extract)", pageBreakBefore: true });
+  /*
+   * Generation rule 7 — length control. The full section-5 record runs to
+   * fourteen columns, and at a hundred-odd metrics it alone pushes the pack
+   * past the sixty pages the specification allows before detail must move to
+   * the Data Book. Appendix C is explicitly permitted to be "the Data Book, or
+   * a pointer to it" (7.13), so past the threshold it becomes the pointer plus
+   * the subset an assurance provider opens first: everything not fully
+   * reported, or rated below the level they will accept. Truncating silently
+   * would be worse than the length, so the omission is stated in the appendix.
+   */
+  const REGISTER_WIDE_LIMIT = 40;
+  const registerIsWide = model.metrics.length > REGISTER_WIDE_LIMIT;
+
+  b.push({ kind: "h1", text: "Appendix C — Metric register (Data Book extract)", pageBreakBefore: true });
   b.push({
     kind: "p",
-    text: `The complete section-5 record for every metric. This is what an assurance provider asks for first.`,
+    text: registerIsWide
+      ? `Every one of the ${model.metrics.length} metrics is listed, at the level of detail this pack can carry without the length itself becoming the problem. The remaining section-5 fields — boundary, calculation method, emission factor and its source, target, prior-year value and restatement status — are held per metric in the Data Book, and each is stated in full at the point of disclosure in sections 6 to 8. The disclosure index at the front names where every metric sits.`
+      : `The complete section-5 record for every metric. This is what an assurance provider asks for first.`,
   });
-  b.push({
-    kind: "table",
-    head: ["Metric ID", "Metric", "Value", "Unit", "Boundary", "Source system", "Owner", "Calculation method", "Factor", "Data quality", "Assurance", "Target", "RAG", "Evidence"],
-    rows: model.metrics.map((x) => [
-      x.metricId,
-      x.metricName,
-      x.value == null ? "Not reported" : String(x.value),
-      x.unit,
-      x.boundary,
-      x.sourceSystem,
-      x.sourceOwner,
-      x.calculationMethod,
-      x.emissionFactor != null ? `${x.emissionFactor}` : "—",
-      x.dataQualityScore == null ? "Not rated" : `${x.dataQualityScore}/5`,
-      x.assuranceStatus,
-      x.targetValue != null ? `${x.targetValue}` : "—",
-      x.ragStatus,
-      x.evidenceIds.join(", ") || "—",
-    ]),
-    widths: [7, 14, 7, 7, 7, 10, 8, 12, 5, 6, 7, 5, 4, 8],
-  });
+  b.push(
+    registerIsWide
+      ? {
+          kind: "table",
+          head: ["Metric ID", "Metric", "Value", "Owner", "Data quality", "Assurance", "RAG", "Evidence"],
+          rows: model.metrics.map((x) => [
+            x.metricId,
+            x.metricName,
+            x.value == null ? "Not reported" : `${x.value} ${x.unit}`,
+            x.sourceOwner,
+            x.dataQualityScore == null ? "Not rated" : `${x.dataQualityScore}/5`,
+            x.assuranceStatus,
+            x.ragStatus,
+            x.evidenceIds.join(", ") || "—",
+          ]),
+          widths: [9, 26, 15, 15, 9, 12, 6, 8],
+        }
+      : {
+          kind: "table",
+          head: ["Metric ID", "Metric", "Value", "Unit", "Boundary", "Source system", "Owner", "Calculation method", "Factor", "Data quality", "Assurance", "Target", "RAG", "Evidence"],
+          rows: model.metrics.map((x) => [
+            x.metricId,
+            x.metricName,
+            x.value == null ? "Not reported" : String(x.value),
+            x.unit,
+            x.boundary,
+            x.sourceSystem,
+            x.sourceOwner,
+            x.calculationMethod,
+            x.emissionFactor != null ? `${x.emissionFactor}` : "—",
+            x.dataQualityScore == null ? "Not rated" : `${x.dataQualityScore}/5`,
+            x.assuranceStatus,
+            x.targetValue != null ? `${x.targetValue}` : "—",
+            x.ragStatus,
+            x.evidenceIds.join(", ") || "—",
+          ]),
+          widths: [7, 14, 7, 7, 7, 10, 8, 12, 5, 6, 7, 5, 4, 8],
+        },
+  );
 
+  /*
+   * Indexed BY FRAMEWORK rather than one row per metric. A reader arrives here
+   * asking "what have you disclosed against IFRS S2?", not "what frameworks
+   * does metric E-GHG-004 touch" — and the per-metric view already exists twice
+   * over, in the disclosure index at the front and in Appendix C. Pivoting also
+   * keeps rule 7 honest: this appendix was reproducing the whole register a
+   * third time.
+   */
+  const byFramework = new Map<string, { reported: number; omitted: number; topics: Set<string> }>();
+  for (const x of model.metrics) {
+    for (const ref of x.frameworkRefs) {
+      const e = byFramework.get(ref) ?? { reported: 0, omitted: 0, topics: new Set<string>() };
+      if (x.value != null) e.reported += 1;
+      else e.omitted += 1;
+      e.topics.add(x.topic);
+      byFramework.set(ref, e);
+    }
+  }
   b.push({ kind: "h1", text: "Appendix D — Framework index", pageBreakBefore: true });
-  b.push({ kind: "p", text: `Cross-walk version ${m.crossWalkVersion}. Each metric records the version it was generated against.` });
+  b.push({
+    kind: "p",
+    text: `Cross-walk version ${m.crossWalkVersion}; every report records the version it was generated against, so a later standards update cannot silently change what a past report meant. Metric-level references are in the disclosure index at the front of this report.`,
+  });
   b.push({
     kind: "table",
-    head: ["Metric", "Topic", "Tier", "Framework references"],
-    rows: model.metrics.map((x) => [x.metricName, x.topic, x.tier, x.frameworkRefs.join(" · ")]),
-    widths: [32, 22, 10, 36],
+    head: ["Framework reference", "Metrics reported", "Metrics omitted", "Topics covered"],
+    rows: Array.from(byFramework.entries())
+      .sort((a, b2) => b2[1].reported + b2[1].omitted - (a[1].reported + a[1].omitted))
+      .map(([ref, e]) => [ref, String(e.reported), String(e.omitted), Array.from(e.topics).sort().join(", ")]),
+    widths: [24, 14, 14, 48],
   });
 
   b.push({ kind: "h1", text: "Appendix E — Restatements", pageBreakBefore: true });
@@ -727,4 +809,17 @@ export function buildDisclosurePack(model: EsgReportModel): EsgDocBlock[] {
 export function versionStamp(model: EsgReportModel): string {
   const m = model.meta;
   return `${m.toolkitVersion} · ${m.crossWalkVersion} · Report v${m.reportVersion} · Extract ${fmtDate(m.generatedAt)} · ${m.generationReference}`;
+}
+
+/**
+ * A stable, human-legible filename carrying the entity, the draft state and
+ * the generation reference. Lives here rather than in a renderer because every
+ * rendering names its file the same way -- that is what makes a Word pack and
+ * a PowerPoint pack recognisable as the same report.
+ */
+export function esgReportFilename(model: EsgReportModel, ext: "docx" | "pptx" | "pdf"): string {
+  const safe = model.meta.entityName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "Entity";
+  const state = model.meta.isDraft ? "DRAFT" : "FINAL";
+  const kind = ext === "pptx" ? "ESG-Board-Pack" : "ESG-Disclosure-Pack";
+  return `${safe}-${kind}-${state}-${model.meta.generationReference}.${ext}`;
 }
