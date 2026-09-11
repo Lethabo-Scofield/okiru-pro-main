@@ -1,0 +1,150 @@
+{
+  "stamp": "Okiru ESG Intelligence Toolkit  ·  Open methodology questions  ·  v1.0  ·  10 September 2026",
+  "sections": [
+    {
+      "kicker": "A · Targets",
+      "title": "The numbers we grade against",
+      "blurb": "Each of these is a pass mark the toolkit applies today that nobody outside this office has approved. Where a target should differ by sector or company size, please say so — that is the part we cannot guess.",
+      "questions": [
+        {
+          "question": "Which of our targets hold for any South African company, and which must change by sector or size?",
+          "context": "we grade every company against the same eight: 10% annual emissions reduction, 20% renewable electricity, 75% waste diverted from landfill, 60% Black employees, 16 training hours per employee, injury rate of 2.0, 1% of profit on community spend, 40% local procurement.",
+          "severity": "blocker",
+          "boxHeight": 76
+        },
+        {
+          "question": "Should a lost-time injury frequency rate be expressed per 200 000 or per 1 000 000 hours worked, and what rate marks genuinely good performance?",
+          "context": "we use 2.0 per 200 000 hours as the pass mark, for every industry.",
+          "severity": "important"
+        },
+        {
+          "question": "For a 60% Black representation target, is the percentage taken over the whole workforce, or over management only?",
+          "context": "we take it over the whole workforce, at all occupational levels.",
+          "severity": "important"
+        },
+        {
+          "question": "For a 30% Black-women-in-management target, which occupational levels count as management?",
+          "context": "we count the top three occupational levels.",
+          "severity": "important"
+        },
+        {
+          "question": "Should 80% mandatory grant recovery be measured against the full 1% skills development levy the company paid, or only against the portion it can actually claim back?",
+          "context": "we measure it against the full levy.",
+          "severity": "important"
+        }
+      ]
+    },
+    {
+      "kicker": "B · Emissions and carbon tax",
+      "title": "What stops us publishing a defensible figure",
+      "blurb": "These are the ones that block us outright: without them we cannot put an emissions number or a tax estimate in front of a bank, a customer or SARS and defend it.",
+      "questions": [
+        {
+          "question": "Which published emission-factor set — name, edition year and table — should we cite for diesel, petrol, LPG, grid electricity, on-site solar, municipal water and landfilled waste? For grid electricity specifically, what factor applies to a year ending in 2025 or 2026?",
+          "context": "the factors are in the system but not one carries a source or a version, so no emissions figure can be traced back to anything. Our grid figure is 0,82 kg CO₂e per kWh, origin unknown.",
+          "severity": "blocker",
+          "boxHeight": 76
+        },
+        {
+          "question": "Where a company generates and consumes its own solar power, should reported Scope 2 simply be the electricity bought from the grid, with the solar shown separately as renewable share or avoided emissions?",
+          "context": "we subtract solar as a negative line inside the emissions inventory itself.",
+          "severity": "blocker",
+          "boxHeight": 62
+        },
+        {
+          "question": "Under the Carbon Tax Act, is a company taxed only on the fuel it burns itself, or do the emissions from grid electricity it buys also form part of its taxable total?",
+          "context": "we tax direct and purchased-electricity emissions together.",
+          "severity": "blocker"
+        },
+        {
+          "question": "What minimum set of questions establishes whether a company is liable for carbon tax at all — and can a retailer, law firm or school that only buys electricity and runs a few vehicles ever be liable?",
+          "context": "we produce a tax estimate for every company, with no liability test at all.",
+          "severity": "blocker",
+          "boxHeight": 62
+        },
+        {
+          "question": "For a 2025/26 reporting year, which rand-per-tonne carbon tax rate applies — and what exactly is the R640 rate?",
+          "context": "we hold two rates, R236 and R640, without knowing which applies to which year or which emissions.",
+          "severity": "blocker"
+        },
+        {
+          "question": "Which value-chain emission categories must a report include before a bank, a listed customer or a tender reviewer accepts it as complete, and in what order should we add them?",
+          "context": "we capture one category — municipal water — out of fifteen, and label the total \"partial\".",
+          "severity": "important",
+          "boxHeight": 62
+        },
+        {
+          "question": "Which one or two intensity ratios should a South African company report alongside absolute tonnes, and which do lenders and tender evaluators here actually expect to see?",
+          "context": "we report absolute tonnes only. No intensity denominator — per rand, per tonne-kilometre, per employee — exists anywhere in the system.",
+          "severity": "important",
+          "boxHeight": 62
+        }
+      ]
+    },
+    {
+      "kicker": "C · Rules, not numbers",
+      "title": "What counts as proof, and what to do with a blank",
+      "blurb": "Each of these decides whether a company gets full marks, no marks, or is left out of the scoring entirely. Getting them wrong quietly moves a score by several points.",
+      "questions": [
+        {
+          "question": "For the governance questions answered Yes, Partial or No — Social and Ethics Committee, code of ethics and hotline, POPIA Information Officer, climate risk on the board agenda, ESG-linked executive pay — what single document would an assurance provider accept as proof for each, and what shortfall makes an answer Partial rather than Yes?",
+          "context": "the company self-rates each one and we award points on the rating alone. No evidence is requested or tested.",
+          "severity": "blocker",
+          "boxHeight": 90
+        },
+        {
+          "question": "A company that had no health-and-safety incidents at all during the year: full marks, no marks, or excluded with its weighting moved elsewhere?",
+          "context": "it scores zero — the same as a company that had incidents and investigated none of them.",
+          "severity": "important"
+        },
+        {
+          "question": "When a company marks a climate-disclosure requirement as not applicable to its business, should it be excluded from the readiness percentage, counted as not met, or counted as met?",
+          "context": "we count it as not met, which marks the company down for a requirement that does not apply to it.",
+          "severity": "important"
+        },
+        {
+          "question": "When an indicator cannot apply to a company at all — a food-safety supplier rating for a business with no food in its supply chain — should those points come out of its total, or be scored as zero?",
+          "context": "they score zero, so the company is marked down for something it could never have had.",
+          "severity": "blocker",
+          "boxHeight": 62
+        },
+        {
+          "question": "What makes a regulatory penalty \"material\" — a rand threshold, a share of revenue or profit? Which regulators are in scope, and over what period?",
+          "context": "the company decides for itself what counts as material, and we score its answer.",
+          "severity": "important"
+        }
+      ]
+    },
+    {
+      "kicker": "D · One toolkit, every company",
+      "title": "Where the workbook only fits a distributor",
+      "blurb": "The workbook was built around a road-freight FMCG distributor. These four decide what a bank, a mine, a school or a manufacturer does instead — we would rather code a rule than hardcode a client.",
+      "questions": [
+        {
+          "question": "For a bank, a hospital and a school, how should the environmental, social and governance pillars be weighted against one another?",
+          "context": "all fourteen sectors inherit one FMCG distributor's weighting and thresholds unchanged.",
+          "severity": "blocker",
+          "boxHeight": 62
+        },
+        {
+          "question": "Must energy, water, fuel and waste be broken down by individual operating site, or is a company-wide total acceptable? If a site breakdown is expected, what counts as a site?",
+          "context": "the workbook has five fixed depot rows and nine fixed months. A company with one site, or fifty, has nowhere correct to put its data.",
+          "severity": "blocker",
+          "boxHeight": 76
+        },
+        {
+          "question": "Must a company decide and state for itself which entities its emissions cover — everything it operates, everything it financially controls, or only its ownership share of each business it part-owns?",
+          "context": "we state \"operational control\" on every report without ever asking the client.",
+          "severity": "important",
+          "boxHeight": 62
+        },
+        {
+          "question": "Should every company follow the same fixed schedule of cuts — 5% by 2026, 20% by 2028, 50% by 2030, 90% by 2045 — or must the annual rate be worked out from each company's own baseline year and target year?",
+          "context": "one fixed calendar schedule is applied to every company, so a firm with a 2019 baseline gets no credit for cuts already made.",
+          "severity": "important",
+          "boxHeight": 62
+        }
+      ]
+    }
+  ]
+}
