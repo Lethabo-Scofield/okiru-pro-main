@@ -9,11 +9,11 @@ import certCardBg from '@assets/image_1779724907320.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles, Plus, LineChart, UserCog, ChevronDown, Gift,
+  Sparkles, Plus, LineChart, UserCog, ChevronDown, Gift, Grid3X3,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
-import { isSuperAdmin } from '@/lib/roles';
+import { hasAnyRole, isSuperAdmin } from '@/lib/roles';
 import { Crown } from 'lucide-react';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
 
@@ -623,6 +623,19 @@ export default function HubLanding() {
               No toolkits match "{searchQuery}".
             </p>
           </div>
+        )}
+
+        {hasAnyRole(user, 'admin', 'super_admin') && (
+          <footer className="mt-16 flex items-center justify-center border-t border-white/[0.06] pt-7">
+            <Link
+              href="/admin/activity"
+              className="inline-flex items-center gap-2 text-[12px] text-[#636366] transition-colors hover:text-white"
+              data-testid="link-activity-heatmap"
+            >
+              <Grid3X3 className="h-3.5 w-3.5" />
+              Activity heatmap
+            </Link>
+          </footer>
         )}
       </main>
     </div>

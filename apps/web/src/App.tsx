@@ -26,6 +26,7 @@ const DocumentProcessor = lazy(() => import("@/pages/DocumentProcessor"));
 import NotFound from "@/pages/NotFound";
 import AdminUsers from "@/pages/AdminUsers";
 import AdminAnalytics from "@/pages/AdminAnalytics";
+import ActivityHeatmap from "@/pages/ActivityHeatmap";
 import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
 import ParserDocumentLibrary from "@/pages/ParserDocumentLibrary";
@@ -43,7 +44,7 @@ import EsgScoreSummary from "@/pages/EsgScoreSummary";
 import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
 import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
-import { isSuperAdmin } from "@/lib/roles";
+import { hasAnyRole, isSuperAdmin } from "@/lib/roles";
 import { usePageViewTracking } from "@/lib/gaTracker";
 import { ScorecardAdviceChat } from "@toolkit/components/scorecard/ScorecardAdviceChat";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
@@ -68,6 +69,19 @@ function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
     );
   }
   if (!user || !isSuperAdmin(user)) return null;
+  return <>{children}</>;
+}
+
+function AdminOnlyRoute({ children }: { children: React.ReactNode }) {
+  const { user, isLoading } = useAuth();
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    if (!isLoading && user && !hasAnyRole(user, "admin", "super_admin")) {
+      navigate("/hub", { replace: true });
+    }
+  }, [user, isLoading, navigate]);
+  if (isLoading) return <div className="min-h-screen bg-white" />;
+  if (!user || !hasAnyRole(user, "admin", "super_admin")) return null;
   return <>{children}</>;
 }
 
@@ -264,6 +278,9 @@ function AppRouter() {
       </Route>
       <Route path="/admin/analytics">
         <ProtectedRoute><AdminAnalytics /></ProtectedRoute>
+      </Route>
+      <Route path="/admin/activity">
+        <ProtectedRoute><AdminOnlyRoute><ActivityHeatmap /></AdminOnlyRoute></ProtectedRoute>
       </Route>
       <Route path="/toolkit/auth">
         <ToolkitAuthRedirect />

@@ -45,6 +45,37 @@ import {
 
 const logger = createLogger("Routes");
 
+const activityEventSchema = new mongoose.Schema(
+  {
+    timestamp: { type: Date, default: Date.now, index: true },
+    userId: { type: String, required: true, index: true },
+    organizationId: { type: String, default: null, index: true },
+    path: { type: String, required: true, index: true },
+    eventType: { type: String, enum: ["page_view", "heartbeat"], default: "page_view", index: true },
+    durationSeconds: { type: Number, default: 0 },
+  },
+  { collection: "userActivityEvents", versionKey: false },
+);
+
+const ActivityEventModel =
+  mongoose.models.UserActivityEvent || mongoose.model("UserActivityEvent", activityEventSchema);
+
+const ACTIVITY_TOOLS = [
+  { id: "esg", name: "ESG Toolkit", matches: (path: string) => path.startsWith("/esg") },
+  { id: "bbbee", name: "B-BBEE Scorecards", matches: (path: string) => path.startsWith("/create-scorecard") || path.startsWith("/toolkit") || path === "/dashboard" },
+  { id: "documents", name: "Document Parser", matches: (path: string) => path.startsWith("/documents") || path === "/processor" },
+  { id: "requests", name: "Information Requests", matches: (path: string) => path.startsWith("/information-request") },
+  { id: "certificates", name: "Certificates", matches: (path: string) => path.startsWith("/certificates") },
+  { id: "workspace", name: "Workspace", matches: (path: string) => path === "/workspace" || path === "/builder" },
+  { id: "team", name: "Team Management", matches: (path: string) => path === "/team" || path.startsWith("/company-profile") },
+  { id: "admin", name: "Administration", matches: (path: string) => path.startsWith("/admin") || path === "/super-admin" },
+  { id: "hub", name: "Hub", matches: (path: string) => path === "/hub" },
+] as const;
+
+function classifyActivityPath(path: string) {
+  return ACTIVITY_TOOLS.find((tool) => tool.matches(path)) ?? { id: "other", name: "Other" };
+}
+
 function isMongoConnected(): boolean {
   return mongoose.connection.readyState === 1;
 }
@@ -1551,6 +1582,109 @@ export async function registerRoutes(
     (req as any).user = user;
     next();
   }
+
+  app.post("/api/activity/page-view", async (req, res) => {
+    const userId = String((req.session as any)?.userId || "");
+    const path = typeof req.body?.path === "string" ? req.body.path.trim() : "";
+    if (!userId) return res.status(204).end();
+    if (!path.startsWith("/") || path.length > 300) {
+      return res.status(400).json({ message: "Invalid activity event" });
+    }
+    if (!isMongoConnected()) return res.status(202).json({ recorded: false });
+
+    const user = (req as any).user ?? await storage.getUserById(userId);
+    const eventType = req.body?.eventType === "heartbeat" ? "heartbeat" : "page_view";
+    const requestedDuration = Number(req.body?.durationSeconds || 0);
+    const durationSeconds = eventType === "heartbeat" && Number.isFinite(requestedDuration)
+      ? Math.max(0, Math.min(30, requestedDuration))
+      : 0;
+    await ActivityEventModel.create({
+      timestamp: new Date(),
+      userId,
+      organizationId: user?.organizationId ?? null,
+      path: path.split("?")[0].split("#")[0],
+      eventType,
+      durationSeconds,
+    });
+    return res.status(201).json({ recorded: true });
+  });
+
+  app.get("/api/admin/activity-heatmap", requireAuth, requireAdmin, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.json({ days: 28, totalViews: 0, uniqueUsers: 0, activeMinutes: 0, cells: [], topPages: [], toolUsage: [] });
+    }
+
+    const requestedDays = Number(req.query.days || 28);
+    const days = [7, 28, 90].includes(requestedDays) ? requestedDays : 28;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const timezone = "Africa/Johannesburg";
+    const currentUser = (req as any).user as User;
+    const activityScope = hasAnyRole(currentUser, "super_admin")
+      ? { timestamp: { $gte: since } }
+      : { timestamp: { $gte: since }, organizationId: currentUser.organizationId };
+
+    const [cells, pageActivity, uniqueUsers] = await Promise.all([
+      ActivityEventModel.aggregate([
+        { $match: activityScope },
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp", timezone } },
+              hour: { $hour: { date: "$timestamp", timezone } },
+            },
+            count: { $sum: { $cond: [{ $eq: [{ $ifNull: ["$eventType", "page_view"] }, "page_view"] }, 1, 0] } },
+            activeSeconds: { $sum: { $cond: [{ $eq: ["$eventType", "heartbeat"] }, "$durationSeconds", 0] } },
+            users: { $addToSet: "$userId" },
+          },
+        },
+        { $project: { _id: 0, date: "$_id.date", hour: "$_id.hour", count: 1, activeMinutes: { $divide: ["$activeSeconds", 60] }, users: { $size: "$users" } } },
+        { $sort: { date: 1, hour: 1 } },
+      ]),
+      ActivityEventModel.aggregate([
+        { $match: activityScope },
+        { $group: {
+          _id: "$path",
+          views: { $sum: { $cond: [{ $eq: [{ $ifNull: ["$eventType", "page_view"] }, "page_view"] }, 1, 0] } },
+          activeSeconds: { $sum: { $cond: [{ $eq: ["$eventType", "heartbeat"] }, "$durationSeconds", 0] } },
+          users: { $addToSet: "$userId" },
+          lastUsed: { $max: "$timestamp" },
+        } },
+        { $project: { _id: 0, path: "$_id", views: 1, activeSeconds: 1, users: 1, lastUsed: 1 } },
+      ]),
+      ActivityEventModel.distinct("userId", activityScope),
+    ]);
+
+    const tools = new Map<string, { id: string; name: string; visits: number; activeSeconds: number; users: Set<string>; lastUsed: Date }>();
+    for (const page of pageActivity) {
+      const classification = classifyActivityPath(page.path);
+      const tool = tools.get(classification.id) ?? { ...classification, visits: 0, activeSeconds: 0, users: new Set<string>(), lastUsed: page.lastUsed };
+      tool.visits += page.views;
+      tool.activeSeconds += page.activeSeconds;
+      for (const userId of page.users) tool.users.add(userId);
+      if (page.lastUsed > tool.lastUsed) tool.lastUsed = page.lastUsed;
+      tools.set(classification.id, tool);
+    }
+    const totalActiveSeconds = pageActivity.reduce((sum, page) => sum + page.activeSeconds, 0);
+    const totalViews = pageActivity.reduce((sum, page) => sum + page.views, 0);
+    const shareTotal = totalActiveSeconds || totalViews || 1;
+    const toolUsage = [...tools.values()]
+      .map((tool) => ({
+        id: tool.id,
+        name: tool.name,
+        visits: tool.visits,
+        activeMinutes: Math.round(tool.activeSeconds / 60),
+        users: tool.users.size,
+        lastUsed: tool.lastUsed,
+        usageShare: Math.round(((totalActiveSeconds ? tool.activeSeconds : tool.visits) / shareTotal) * 100),
+      }))
+      .filter((tool) => tool.visits > 0 || tool.activeMinutes > 0)
+      .sort((a, b) => b.activeMinutes - a.activeMinutes || b.visits - a.visits);
+    const topPages = pageActivity
+      .map((page) => ({ ...page, activeMinutes: Math.round(page.activeSeconds / 60), users: page.users.length }))
+      .sort((a, b) => b.activeSeconds - a.activeSeconds || b.views - a.views)
+      .slice(0, 8);
+    return res.json({ days, totalViews, uniqueUsers: uniqueUsers.length, activeMinutes: Math.round(totalActiveSeconds / 60), cells, topPages, toolUsage });
+  });
 
   // ==========================================================================
   // Organization / company team management (org-scoped multitenancy).
