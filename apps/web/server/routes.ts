@@ -897,8 +897,11 @@ export async function registerRoutes(
     }
   });
 
-  const ONBOARDING_SKIPPED_COMPANY_NAME_WEB =
-    "ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Company profile skipped (add details anytime ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â open the menu under your name)";
+  const ONBOARDING_SKIPPED_COMPANY_NAME_WEB = "Company profile skipped";
+
+  function isSkippedWorkspaceName(name: string | null | undefined): boolean {
+    return typeof name === "string" && (/company profile skipped/i.test(name) || name.includes("Ã"));
+  }
 
   app.post("/api/onboarding/skip", requireAuth, async (req, res) => {
     try {
@@ -927,11 +930,20 @@ export async function registerRoutes(
 
   async function ensureDefaultWorkspace(userId: string): Promise<void> {
     const list = await storage.listWorkspacesForUser(userId);
-    if (list.length > 0) return;
     const user = await storage.getUserById(userId);
+    if (list.length > 0) {
+      const replacementName =
+        (user as { organizationName?: string } | undefined)?.organizationName?.trim() || "My team";
+      await Promise.all(
+        list
+          .filter((workspace) => workspace.ownerUserId === userId && isSkippedWorkspaceName(workspace.name))
+          .map((workspace) => storage.renameWorkspace(workspace.id, replacementName)),
+      );
+      return;
+    }
     const profile = await storage.getCompanyProfileByUserId(userId);
     const name =
-      profile?.companyName?.trim() ||
+      (!isSkippedWorkspaceName(profile?.companyName) ? profile?.companyName?.trim() : "") ||
       (user as { organizationName?: string } | undefined)?.organizationName?.trim() ||
       "My team";
     await storage.createWorkspace(name, userId);
