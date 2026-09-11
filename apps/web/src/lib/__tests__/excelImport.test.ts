@@ -157,7 +157,10 @@ const lakeTradingPath = resolve(process.cwd(), "../../docs/Lake Trading Test.xls
 const hasThandanani = existsSync(fixturePath);
 const hasLakeTrading = existsSync(lakeTradingPath);
 
-describe.skipIf(!hasThandanani)("excelImport — Thandanani Transport fixture", () => {
+// Every case here re-reads and re-parses a real .xlsm; five seconds is not
+// enough for that under a loaded worker pool, and the suite was failing on
+// machine speed rather than on behaviour.
+describe.skipIf(!hasThandanani)("excelImport — Thandanani Transport fixture", { timeout: 60_000 }, () => {
   // Collection still executes this body even when skipped, so the read must
   // not throw on a machine without the private fixture.
   const buffer = hasThandanani ? readFileSync(fixturePath).buffer : new ArrayBuffer(0);

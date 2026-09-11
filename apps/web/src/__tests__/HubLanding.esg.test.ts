@@ -8,18 +8,25 @@ const HUB_TSX = readFileSync(
 );
 
 /**
- * Both hub entries point at `/esg`, the three-step start flow, NOT at
- * `/esg/clients`.
+ * There is ONE ESG entry on the hub and it points at `/esg`, the three-step
+ * start flow, NOT at `/esg/clients`.
  *
- * They used to point at the company picker, which made "name a company" the
+ * It used to point at the company picker, which made "name a company" the
  * first thing anyone did on ESG — before the documents that actually know the
  * registered name had been read. `/esg/clients` is still routed and still
  * linked from step 1, but it is the way back to an EXISTING scorecard, not the
  * way into a new one.
+ *
+ * There were two doors until b315c324 ("one ESG door not two") collapsed them.
+ * This file went on asserting the second one — a card object carrying
+ * `id: 'esg'` — after it was deliberately deleted, so the suite read red on a
+ * finished change. The assertion now pins the property that change was made to
+ * establish: exactly one ESG destination, and it is the start flow.
  */
 describe("HubLanding ESG card (Phase 1 preview gate)", () => {
-  it("links the ESG toolkit card to the start flow when allowed", () => {
-    expect(HUB_TSX).toMatch(/id:\s*'esg'[\s\S]*?link:\s*'\/esg'/);
+  it("offers exactly one ESG entry, and it is the start flow", () => {
+    const esgHrefs = HUB_TSX.match(/href="\/esg[^"]*"/g) ?? [];
+    expect(esgHrefs).toEqual(['href="/esg"']);
   });
 
   it("gates hero ESG CTA behind esgAllowed and sends it to the start flow", () => {
