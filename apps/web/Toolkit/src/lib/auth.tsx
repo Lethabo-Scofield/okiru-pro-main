@@ -88,6 +88,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (!res.ok) {
       const data = await res.json().catch(() => null);
+      // Do not report a routing failure as a credential failure. A 404 here
+      // means the request never reached a server that implements /api/auth/login
+      // (missing Vite dev-proxy entry, or an ingress rule that does not cover
+      // the path) — telling the user their password is wrong sends them to
+      // reset a password that was never the problem.
+      if (!data?.message && res.status === 404) {
+        throw new Error('Sign-in is unavailable: the auth endpoint was not found (404). This is a server routing problem, not your password.');
+      }
       throw new Error(data?.message || 'Invalid username or password');
     }
     const data = await res.json().catch(() => null);

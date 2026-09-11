@@ -45,6 +45,13 @@ export default defineConfig({
       // mode (i.e. without the Express wrapper in apps/web/server/index.ts).
       // The Express wrapper already handles this via apiProxy.ts, so these
       // entries are only active for `vite dev --port 5173` standalone runs.
+      // Auth. Without this entry a pure-Vite dev run answers every
+      // /api/auth/* call with an empty 404, which the sign-in screen reported
+      // as "Invalid username or password" — a correct password looked wrong.
+      "/api/auth": {
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        changeOrigin: true,
+      },
       "/api/sectors": {
         target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
         changeOrigin: true,
