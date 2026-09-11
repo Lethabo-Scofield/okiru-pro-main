@@ -32,8 +32,20 @@ export function hasDataScopeRole(user: RoleCarrier | null | undefined, ...roles:
   return roles.some((r) => scope.includes(r));
 }
 
+/**
+ * Platform admin = Okiru staff, the only role allowed to cross an organisation
+ * boundary.
+ *
+ * `admin` is deliberately NOT one. It is the TENANT administrator (full
+ * control *within* one org - see DEFAULT_ROLE_PERMISSIONS in
+ * apps/api/src/security/permissions.ts), and every registrant is made one for
+ * the company they sign up (auth.ts /register). Accepting `admin` here is what
+ * turned every customer into a platform admin who could see every other
+ * company. Company-scoped administration is the org's adminUserId pointer,
+ * enforced by requireOrgAdmin.
+ */
 export function isPlatformAdmin(user: RoleCarrier | null | undefined): boolean {
-  return hasAnyRole(user, "admin", "super_admin");
+  return hasAnyRole(user, "super_admin");
 }
 
 /** Mongo filter for clients visible to this user (org + own creations). */

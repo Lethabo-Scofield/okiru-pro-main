@@ -798,7 +798,8 @@ export default function AdminAnalytics() {
   const [, navigate] = useLocation();
   const [range, setRange] = useState<DateRangeKey>("30d");
 
-  const isAdmin = hasAnyRole(user, "admin", "super_admin");
+  // Platform-wide GA4 / Search Console traffic - staff only, not tenant admins.
+  const isAdmin = hasAnyRole(user, "super_admin");
 
   if (!isAdmin) {
     return (

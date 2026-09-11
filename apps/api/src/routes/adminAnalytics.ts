@@ -101,7 +101,7 @@ async function requireAdminOrSuperAdmin(
     | { id: string; role: string }
     | undefined;
   if (demo) {
-    if (!hasAnyRole(demo, "admin", "super_admin")) {
+    if (!hasAnyRole(demo, "super_admin")) {
       return res.status(403).json({ message: "Admin access required" });
     }
     return next();
@@ -110,7 +110,7 @@ async function requireAdminOrSuperAdmin(
     return res.status(401).json({ message: "Not authenticated" });
   }
   const user = await storage.getUser(req.session.userId);
-  if (!user || !hasAnyRole(user, "admin", "super_admin")) {
+  if (!user || !hasAnyRole(user, "super_admin")) {
     return res.status(403).json({ message: "Admin access required" });
   }
   next();

@@ -2,8 +2,8 @@
  * Super-admin / admin user management endpoints.
  *
  * Role hierarchy enforced here:
- *   super_admin → can do everything, assign any role
- *   admin       → can list users, toggle 2FA; cannot elevate roles
+ *   super_admin → platform staff; the only role with cross-organisation reach
+ *   admin       → TENANT administrator (their own org only) - no access here
  *   user        → no access
  *
  * These routes live at /api/admin/users and are mounted in routes/index.ts.
@@ -30,16 +30,6 @@ function hasAnyRole(user: any, ...roles: string[]): boolean {
   const primary: string = user?.role ?? "";
   const secondary: string[] = user?.secondaryRoles ?? [];
   return roles.some(r => r === primary || secondary.includes(r));
-}
-
-/** Requires the caller to be an admin or super_admin. */
-async function requireAdminOrSuperAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session.userId) return res.status(401).json({ message: "Not authenticated" });
-  const user = await storage.getUser(req.session.userId);
-  if (!user || !hasAnyRole(user, "admin", "super_admin")) {
-    return res.status(403).json({ message: "Admin access required" });
-  }
-  next();
 }
 
 /** Requires the caller to be a super_admin specifically. */
@@ -197,13 +187,15 @@ router.patch(
 
 /**
  * PATCH /api/admin/users/:id/2fa
- * Enables or disables 2FA for a user (admin or super_admin).
+ * Enables or disables 2FA for any user, in any organisation - so super_admin
+ * only. A tenant `admin` reaching this could have stripped 2FA off another
+ * company's accounts.
  * Body: { enabled: boolean }
  */
 router.patch(
   "/:id/2fa",
   requireAuth,
-  requireAdminOrSuperAdmin,
+  requireSuperAdmin,
   async (req: Request, res: Response) => {
     const { id } = req.params;
     const { enabled } = req.body ?? {};

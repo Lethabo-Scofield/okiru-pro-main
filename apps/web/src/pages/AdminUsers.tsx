@@ -8,6 +8,7 @@ import { Button } from "@toolkit/components/ui/button";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Input } from "@toolkit/components/ui/input";
 import { useToast } from "@toolkit/hooks/use-toast";
+import { isSuperAdmin } from "@/lib/roles";
 import {
   Users,
   Shield,
@@ -43,7 +44,7 @@ export default function AdminUsers() {
 
   const { data: users = [], isLoading } = useQuery<AdminUser[]>({
     queryKey: ["/api/admin/users"],
-    enabled: user?.role === "admin",
+    enabled: isSuperAdmin(user),
   });
 
   const toggle2FAMutation = useMutation({
@@ -59,7 +60,9 @@ export default function AdminUsers() {
     },
   });
 
-  if (user?.role !== "admin") {
+  // Cross-company directory: platform staff only. A tenant `admin` (every
+  // customer is one for their own org) manages their people on /team.
+  if (!isSuperAdmin(user)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md w-full">

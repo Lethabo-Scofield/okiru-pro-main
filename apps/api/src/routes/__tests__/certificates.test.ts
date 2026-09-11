@@ -13,7 +13,9 @@
  * Auth model:
  *   - No header → requireAuth returns 401 (matches production).
  *   - x-test-auth: "<userId>|<role>"  → session.userId + userData.role set.
- *   - role of "admin" or "super_admin" passes isAdminSession().
+ *   - only role "super_admin" passes isAdminSession(). A tenant "admin"
+ *     (the role every registrant gets for their own company) must NOT:
+ *     these routes read and mutate the platform-wide certificate registry.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest';
 import express from 'express';
@@ -665,7 +667,7 @@ describe('Secure certificate file access', () => {
   it('protects storage sync', async () => {
     const unauthenticated = await call('POST', '/api/certificates/sync-storage');
     expect(unauthenticated.status).toBe(401);
-    const authenticated = await call('POST', '/api/certificates/sync-storage', { auth: 'admin-1|admin' });
+    const authenticated = await call('POST', '/api/certificates/sync-storage', { auth: 'admin-1|super_admin' });
     expect(authenticated.status).toBe(200);
     expect(authenticated.body.data).toMatchObject({ scanned: 2, created: 1 });
   });
@@ -742,8 +744,22 @@ describe('Admin endpoints — auth + role gating', () => {
     });
   });
 
+  // Regression: `admin` is the TENANT administrator role handed to every
+  // registrant for their own company (auth.ts /register). It once passed
+  // isAdminSession(), which put the platform-wide certificate registry --
+  // every other company's certificates -- behind a gate every customer held.
+  it.each([
+    ['GET', '/api/certificates/admin/reports'],
+    ['GET', '/api/certificates/admin/analytics'],
+    ['GET', '/api/certificates/admin/duplicates'],
+  ])('%s %s returns 403 for a tenant admin (not platform staff)', async (method, route) => {
+    const r = await call(method, route, { auth: 'tenant-admin-1|admin' });
+    expect(r.status).toBe(403);
+    expect(r.body).toMatchObject({ success: false, error: { code: 'FORBIDDEN' } });
+  });
+
   it('GET /admin/analytics returns the summary envelope for an admin', async () => {
-    const r = await call('GET', '/api/certificates/admin/analytics', { auth: 'admin-1|admin|Alice' });
+    const r = await call('GET', '/api/certificates/admin/analytics', { auth: 'admin-1|super_admin|Alice' });
     expect(r.status).toBe(200);
     expect(r.body.success).toBe(true);
     expect(r.body.data).toHaveProperty('totals');
@@ -758,7 +774,7 @@ describe('Admin endpoints — auth + role gating', () => {
     seedCert({ companyName: 'Acme B', vatNumber: '4123456789' });
     seedCert({ companyName: 'Different Co', vatNumber: '9999999999' });
 
-    const r = await call('GET', '/api/certificates/admin/duplicates', { auth: 'admin-1|admin' });
+    const r = await call('GET', '/api/certificates/admin/duplicates', { auth: 'admin-1|super_admin' });
     expect(r.status).toBe(200);
     expect(r.body.success).toBe(true);
     expect(r.body.data.totalClusters).toBe(1);
@@ -780,7 +796,7 @@ describe('Admin endpoints — auth + role gating', () => {
       ipAddress: null,
       userAgent: null,
     });
-    const r = await call('GET', '/api/certificates/admin/reports', { auth: 'admin-1|admin' });
+    const r = await call('GET', '/api/certificates/admin/reports', { auth: 'admin-1|super_admin' });
     expect(r.status).toBe(200);
     expect(r.body.data).toMatchObject({ total: 1, limit: 50, offset: 0 });
     expect(r.body.data.items).toHaveLength(1);
@@ -803,7 +819,7 @@ describe('Verify / unverify roundtrip', () => {
     expect(user.body.error.code).toBe('FORBIDDEN');
 
     // Admin → success envelope, flag is set in store
-    const admin = await call('POST', `/api/certificates/${rec.id}/verify`, { auth: 'admin-1|admin|Alice' });
+    const admin = await call('POST', `/api/certificates/${rec.id}/verify`, { auth: 'admin-1|super_admin|Alice' });
     expect(admin.status).toBe(200);
     expect(admin.body).toMatchObject({
       success: true,
@@ -812,14 +828,14 @@ describe('Verify / unverify roundtrip', () => {
     expect(storeMod.certificateStore.getById(rec.id)?.verified).toBe(true);
 
     // Unverify clears the flag
-    const unverify = await call('POST', `/api/certificates/${rec.id}/unverify`, { auth: 'admin-1|admin' });
+    const unverify = await call('POST', `/api/certificates/${rec.id}/unverify`, { auth: 'admin-1|super_admin' });
     expect(unverify.status).toBe(200);
     expect(unverify.body.data).toMatchObject({ id: rec.id, verified: false });
     expect(storeMod.certificateStore.getById(rec.id)?.verified).toBe(false);
   });
 
   it('POST /:id/verify returns 404 envelope for unknown id', async () => {
-    const r = await call('POST', '/api/certificates/no-such-id/verify', { auth: 'admin-1|admin' });
+    const r = await call('POST', '/api/certificates/no-such-id/verify', { auth: 'admin-1|super_admin' });
     expect(r.status).toBe(404);
     expect(r.body.error.code).toBe('NOT_FOUND');
   });
@@ -912,19 +928,19 @@ describe('GET /stats and GET /seo/list', () => {
 
 describe('Internal extraction coverage/retry endpoints', () => {
   it('rejects extraction coverage without a valid API key', async () => {
-    const r = await call('GET', '/api/certificates/extraction-coverage', { auth: 'admin-1|admin' });
+    const r = await call('GET', '/api/certificates/extraction-coverage', { auth: 'admin-1|super_admin' });
 
     expect(r.status).toBe(401);
   });
 
   it('rejects retry extraction without a valid API key', async () => {
-    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin', body: { limit: 20 } });
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|super_admin', body: { limit: 20 } });
 
     expect(r.status).toBe(401);
   });
 
   it('defaults retry extraction to dryRun=true', async () => {
-    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: { limit: 20 },
     });
@@ -938,7 +954,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('passes safe retry filters and controls to the extraction job', async () => {
-    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 999,
@@ -971,7 +987,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   it('manual retry endpoint still works when startup extraction is disabled', async () => {
     process.env.DISABLE_CERTIFICATE_STARTUP_EXTRACTION = 'true';
 
-    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/retry-extraction', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 10,
@@ -995,7 +1011,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('rejects usable-text enrichment without a valid API key', async () => {
-    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|super_admin',
       body: { limit: 100, dryRun: true },
     });
 
@@ -1004,7 +1020,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('runs enrichment only for usable-text records without triggering text extraction', async () => {
-    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 100,
@@ -1033,7 +1049,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('defaults usable-text enrichment to production-critical fields only', async () => {
-    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/enrich-usable-text', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: {
         dryRun: true,
@@ -1063,7 +1079,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('returns focused production coverage for the seven MVP fields', async () => {
-    const r = await call('GET', '/api/certificates/production-coverage', { auth: 'admin-1|admin',
+    const r = await call('GET', '/api/certificates/production-coverage', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1086,7 +1102,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('runs VAT recovery as a dry run by default', async () => {
-    const r = await call('POST', '/api/certificates/recover-vat', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/recover-vat', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: { limit: 25 },
     });
@@ -1142,7 +1158,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
     certificateFindMock.mockReturnValue(chain);
     certificateCountDocumentsMock.mockResolvedValue(1);
 
-    const r = await call('GET', '/api/certificates/vat-review-queue?limit=5', { auth: 'admin-1|admin',
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=5', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1190,7 +1206,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
       })),
     });
 
-    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: '412 345 6789', note: 'Checked against certificate preview' },
     });
@@ -1234,7 +1250,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   it('rejects invalid manual VAT confirmation values', async () => {
     mongoConnectedMock.mockReturnValue(true);
 
-    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: 'registration 2019/123456/07' },
     });
@@ -1246,7 +1262,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   it('rejects manual VAT confirmation for numbers that do not start with 4', async () => {
     mongoConnectedMock.mockReturnValue(true);
 
-    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/cert-vat-1/confirm-vat', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: '5123456789' },
     });
@@ -1269,7 +1285,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
       })),
     });
 
-    const r = await call('POST', '/api/certificates/cert-vat-2/confirm-vat', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/cert-vat-2/confirm-vat', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: { vatNumber: '412-345-6789', source: 'manual_review' },
     });
@@ -1317,7 +1333,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
     certificateFindMock.mockReturnValue(chain);
     certificateCountDocumentsMock.mockResolvedValue(7);
 
-    const r = await call('GET', '/api/certificates/vat-review-queue?limit=2&offset=4', { auth: 'admin-1|admin',
+    const r = await call('GET', '/api/certificates/vat-review-queue?limit=2&offset=4', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1376,7 +1392,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
       .mockResolvedValueOnce(1)
       .mockResolvedValue(0);
 
-    const r = await call('GET', '/api/certificates/review-queue?limit=5', { auth: 'admin-1|admin',
+    const r = await call('GET', '/api/certificates/review-queue?limit=5', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
     });
 
@@ -1396,7 +1412,7 @@ describe('Internal extraction coverage/retry endpoints', () => {
   });
 
   it('passes usable-text mode through enrich-missing when requested', async () => {
-    const r = await call('POST', '/api/certificates/enrich-missing', { auth: 'admin-1|admin',
+    const r = await call('POST', '/api/certificates/enrich-missing', { auth: 'admin-1|super_admin',
       apiKey: 'test-internal-key',
       body: {
         limit: 25,
@@ -1540,7 +1556,7 @@ describe('POST /:id/reports — additional validation', () => {
 describe('Analytics events from certificate routes', () => {
   it('records a verify event after admin verification', async () => {
     const rec = seedCert({ companyName: 'Analytics Verify Co' });
-    await call('POST', `/api/certificates/${rec.id}/verify`, { auth: 'admin-1|admin' });
+    await call('POST', `/api/certificates/${rec.id}/verify`, { auth: 'admin-1|super_admin' });
 
     const eventsPath = path.join(tmpDir, 'uploads', 'certificates', '_events.json');
     expect(fs.existsSync(eventsPath)).toBe(true);

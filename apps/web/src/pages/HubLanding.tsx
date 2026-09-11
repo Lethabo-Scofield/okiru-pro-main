@@ -21,6 +21,7 @@ import { readFlowSnapshot } from '@/components/scorecard/flowSnapshot';
 import { readEsgFlowSnapshot } from '@/components/esg/esgFlowSnapshot';
 import { Crown } from 'lucide-react';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
+import { isSuperAdmin } from '@/lib/roles';
 
 interface CompanyProfile {
   companyName?: string;
@@ -278,7 +279,7 @@ export default function HubLanding() {
                         <div className="text-[11px] text-[#8e8e93]">Invite people, manage your team</div>
                       </div>
                     </button>
-                    {user?.role === 'admin' && (
+                    {isSuperAdmin(user) && (
                       <Link
                         href="/admin/users"
                         onClick={() => setTeamMenuOpen(false)}
@@ -294,7 +295,7 @@ export default function HubLanding() {
                         </div>
                       </Link>
                     )}
-                    {(user?.role === 'admin' || user?.role === 'super_admin') && (
+                    {isSuperAdmin(user) && (
                       <Link
                         href="/admin/analytics"
                         onClick={() => setTeamMenuOpen(false)}

@@ -169,6 +169,27 @@ function sanitizeUser(user: any) {
   return safe;
 }
 
+/**
+ * Establish an authenticated session.
+ *
+ * `organizationId` matters as much as `userId`. apps/web and apps/api share one
+ * session store and one cookie, and 24 call sites in apps/api scope tenant reads
+ * and writes by `req.session.organizationId` — clients.ts asserts it non-null. A
+ * session minted here without it makes every org-scoped API query behave as if
+ * the user belonged to no tenant, which is why this is set in one place rather
+ * than repeated at each sign-in path.
+ */
+function establishSession(
+  req: { session: any },
+  account: { id: string; organizationId?: string | null },
+  safeUser: unknown,
+): void {
+  req.session.userId = account.id;
+  req.session.userData = safeUser;
+  req.session.otpVerified = true;
+  req.session.organizationId = account.organizationId || '';
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -401,9 +422,7 @@ export async function registerRoutes(
         await storage.setLastLogin(user.id);
         const updatedUser = await storage.getUserById(user.id);
         const safeUser = sanitizeUser(updatedUser || user);
-        (req.session as any).userId = user.id;
-        (req.session as any).userData = safeUser;
-        (req.session as any).otpVerified = true;
+        establishSession(req, (updatedUser || user) as any, safeUser);
         logger.info('User registered', { userId: user.id, durationMs: Date.now() - start });
         return res.json({
           user: safeUser,
@@ -463,9 +482,7 @@ export async function registerRoutes(
       if (!isMongoConnected() && isOfflineDemoCredentials(loginId, password)) {
         const demoUser = getOfflineDemoUser();
         const safeUser = sanitizeUser(demoUser);
-        (req.session as any).userId = demoUser.id;
-        (req.session as any).userData = safeUser;
-        (req.session as any).otpVerified = true;
+        establishSession(req, demoUser as any, safeUser);
         logger.warn("Offline demo login used while MongoDB is unavailable", {
           userId: demoUser.id,
           durationMs: Date.now() - start,
@@ -508,9 +525,7 @@ export async function registerRoutes(
       }
 
       const safeUser = sanitizeUser(user);
-      (req.session as any).userId = user.id;
-      (req.session as any).userData = safeUser;
-      (req.session as any).otpVerified = true;
+      establishSession(req, user as any, safeUser);
       await storage.setLastLogin(user.id);
       logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
       res.json({ user: safeUser });
@@ -579,9 +594,7 @@ export async function registerRoutes(
 
       const updatedUser = await storage.getUserById(user.id);
       const safeUser = sanitizeUser(updatedUser || user);
-      (req.session as any).userId = user.id;
-      (req.session as any).userData = safeUser;
-      (req.session as any).otpVerified = true;
+      establishSession(req, (updatedUser || user) as any, safeUser);
       res.json({ user: safeUser });
 
       sendLoginNotification(
@@ -1494,12 +1507,27 @@ export async function registerRoutes(
     }
   });
 
-  async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  /**
+   * Gate for PLATFORM routes - the ones that read or write ACROSS tenant
+   * boundaries (the all-users directory, another user's role, another user's
+   * 2FA, platform infra health). Only `super_admin` passes.
+   *
+   * It must never accept `admin`: that is the tenant-administrator role every
+   * registrant receives for the company they sign up (auth.ts /register) and
+   * that resolveOrgAdminUserId back-fills onto legacy founders. While this
+   * gate accepted it, every customer could list, re-role, and disable 2FA on
+   * every user of every other company through /api/admin/users.
+   *
+   * Company-scoped member management is a different thing entirely and lives
+   * on /api/organization/* behind requireOrgAdmin (the org.adminUserId
+   * pointer), which is scoped to the caller's own organisation.
+   */
+  async function requirePlatformAdmin(req: Request, res: Response, next: NextFunction) {
     const userId = (req.session as any)?.userId;
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
     const user = await storage.getUserById(userId);
-    if (!user || user.role !== "admin") {
-      return res.status(403).json({ message: "Admin access required" });
+    if (!hasAnyRole(user, "super_admin")) {
+      return res.status(403).json({ message: "Platform administrator access required" });
     }
     next();
   }
@@ -1731,7 +1759,7 @@ export async function registerRoutes(
   // depth, gave-up count, oldest entry timestamp, and the last 5 entries so
   // operators can spot drift recovery without DB shell access. Mounted here
   // (not on apps/api) because the ingress sends /api/admin/* to web.
-  app.get("/api/admin/workbook-backsync/health", requireAuth, requireAdmin, async (_req, res) => {
+  app.get("/api/admin/workbook-backsync/health", requireAuth, requirePlatformAdmin, async (_req, res) => {
     try {
       const { getOutboxHealth } = await import("./workbookBackSync");
       const health = await getOutboxHealth();
@@ -1742,7 +1770,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users", requireAuth, requireAdmin, async (_req, res) => {
+  app.get("/api/admin/users", requireAuth, requirePlatformAdmin, async (_req, res) => {
     try {
       const users = await storage.getAllUsers();
       const safeUsers = users.map((u) => sanitizeUser(u));
@@ -1753,7 +1781,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/users/:userId/2fa", requireAuth, requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:userId/2fa", requireAuth, requirePlatformAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
       const { enabled } = req.body;
@@ -1791,7 +1819,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/users/:userId/role", requireAuth, requireAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:userId/role", requireAuth, requirePlatformAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
       const { role } = req.body;
