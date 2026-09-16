@@ -214,8 +214,40 @@ export function scoreSocial(
    * MTIs, near-misses, vehicle or property incidents scored 0 for having an
    * investigation process.
    */
+  /*
+   * A company with no incidents and a company that does not track incidents
+   * look identical in a spreadsheet, and this indicator was scoring them the
+   * same: zero. Asked about it, the expert turned the question back on us —
+   * "No incidents because they are a company that does not report on health and
+   * safety, or because they are required to and have been a model company and
+   * have had no issues?" (Q14) — which is exactly the distinction the data
+   * could not make.
+   *
+   * So the company says which it is. A clean year with the process in place is
+   * full marks; not tracking at all is zero; and an undeclared blank is neither
+   * scored nor charged — it leaves the total until somebody answers.
+   */
   const incidents = INCIDENT_ROWS.reduce((a, ref) => a + num(workbook, ref), 0);
-  const d20 = incidents > 0 ? 4 : 0;
+  const hsTracking = str(workbook, "_hsTracking", "s-data").trim().toLowerCase();
+  const tracksIncidents = hsTracking.startsWith("yes");
+  const declaredNoTracking = hsTracking.startsWith("no");
+
+  let d20: number;
+  if (incidents > 0) {
+    d20 = 4; // Incidents recorded, so the register is demonstrably in use.
+  } else if (tracksIncidents) {
+    d20 = 4; // A declared clean year against a live register.
+  } else {
+    d20 = 0; // Not tracked, or not yet declared.
+  }
+  if (mode !== "workbook-parity" && incidents === 0 && !tracksIncidents && !declaredNoTracking) {
+    const x = exclude(
+      "social",
+      "d20",
+      "No health-and-safety incidents are recorded and the company has not said whether it tracks them. A clean year and an untracked year are different facts, and this indicator cannot tell them apart until one is declared.",
+    );
+    if (x) targetExclusions.push(x);
+  }
 
   /* ---------------------------- Community -------------------------- */
 

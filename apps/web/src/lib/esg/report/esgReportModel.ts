@@ -44,6 +44,8 @@ import {
   computeGhgInventory,
   computeNetZeroRoadmap,
   computeCarbonTax,
+  computeEsgIntensity,
+  type EsgIntensityResult,
   type EsgScorecardResult,
   type GhgInventoryResult,
   type GhgLine,
@@ -271,6 +273,8 @@ export type EsgReportModel = {
   ghg: GhgInventoryResult;
   netZero: NetZeroRoadmapResult | null;
   carbonTax: CarbonTaxResult | null;
+  /** Emissions per unit of business activity — the ratio a lender asks for. */
+  intensity: EsgIntensityResult;
   scorecard: EsgScorecardResult | null;
   /** Section 5.1 RULE — the report-level weighted data-quality index. */
   dataQualityIndex: number | null;
@@ -434,6 +438,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
   const scope = readReportScopeFromCells(workbook.sections?.assumptions?.cells);
   const scorecard = computeEsgScorecard(workbook);
   const ghg = computeGhgInventory(workbook);
+  const intensity = computeEsgIntensity(workbook);
   let netZero: NetZeroRoadmapResult | null = null;
   let carbonTax: CarbonTaxResult | null = null;
   try {
@@ -1235,6 +1240,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
     ghg,
     netZero,
     carbonTax,
+    intensity,
     scorecard,
     dataQualityIndex,
     dataQualityDistribution,

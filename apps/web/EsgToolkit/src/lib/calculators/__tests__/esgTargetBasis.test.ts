@@ -115,7 +115,12 @@ describe("scoring the Social pillar", () => {
     const grant = s.excluded.find((x) => x.key === "d15");
     expect(grant).toBeTruthy();
     expect(grant?.reason).toContain("Not an ESG measure");
-    expect(s.scoringDenominator).toBe(ESG_D9_PILLAR_DIVISOR - 5);
+    // This fixture records no incidents and does not say whether it tracks
+    // them, so the incident-investigation indicator is excluded too (Q14).
+    // The denominator is the divisor less exactly what left it.
+    const removed = s.excluded.reduce((a, x) => a + x.maxPoints, 0);
+    expect(s.scoringDenominator).toBe(ESG_D9_PILLAR_DIVISOR - removed);
+    expect(s.excluded.map((x) => x.key)).toContain("d20");
   });
 
   it("leaves parity mode alone — the spreadsheet has no notion of a basis", () => {

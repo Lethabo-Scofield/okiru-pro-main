@@ -244,6 +244,27 @@ export function buildDisclosurePack(model: EsgReportModel): EsgDocBlock[] {
       ["Scope 2 emissions (net of solar)", model.ghg.hasData ? `${n(model.ghg.scope2, 2)} tCO2e` : "Not reported", "Purchased electricity, location-based"],
       ["Scope 1 + 2 emissions", model.ghg.hasData ? `${n(model.ghg.scope1And2, 2)} tCO2e` : "Not reported", "The figure a tender or lender asks for first"],
       ["Scope 3 (partial — water only)", model.ghg.hasData ? `${n(model.ghg.scope3, 2)} tCO2e` : "Not reported", "Municipal water supply and treatment only"],
+      // The ratio a lender or a tender evaluator looks for first: absolute
+      // tonnes can fall because the business had a bad year; intensity falling
+      // is the only signal that it is actually getting cleaner per rand earned.
+      [
+        "Emissions intensity — revenue",
+        model.intensity.revenue.value != null
+          ? `${n(model.intensity.revenue.value, 2)} tCO₂e per R million`
+          : "Not computed",
+        model.intensity.revenue.value != null
+          ? model.intensity.revenue.basis
+          : model.intensity.revenue.unavailableReason,
+      ],
+      [
+        "Emissions intensity — per employee",
+        model.intensity.perEmployee.value != null
+          ? `${n(model.intensity.perEmployee.value, 2)} tCO₂e per employee`
+          : "Not computed",
+        model.intensity.perEmployee.value != null
+          ? model.intensity.perEmployee.basis
+          : model.intensity.perEmployee.unavailableReason,
+      ],
       ["Weighted data quality index", model.dataQualityIndex != null ? `${model.dataQualityIndex} of 5` : "Not rated", "Mean data quality across all rated metrics"],
       ["Metrics populated", `${model.coverage.populated} of ${model.coverage.total}`, "Unpopulated metrics render an omission and a gap"],
       ["Gaps on the register", String(model.gaps.length), "Every omission and every data quality of 3 or below"],

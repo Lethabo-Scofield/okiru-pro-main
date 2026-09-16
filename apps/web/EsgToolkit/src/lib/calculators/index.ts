@@ -66,6 +66,20 @@ export {
   type GhgInventoryResult,
   type GhgLine,
 } from "./ghgInventory";
+export {
+  computeEsgIntensity,
+  type EsgIntensityRatio,
+  type EsgIntensityResult,
+} from "./esgIntensity";
+export {
+  readTargetBasis,
+  type EsgTargetBasis,
+  ESG_TARGET_BASIS_OPTIONS,
+} from "./esgTargets";
+export {
+  type EsgExclusion,
+  type EsgPillarResult,
+} from "./esgApplicability";
 export { scoreEnvironmental } from "./environmental";
 export { scoreSocial } from "./social";
 export { scoreGovernance } from "./governance";

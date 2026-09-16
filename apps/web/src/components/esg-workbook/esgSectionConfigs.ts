@@ -334,6 +334,13 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
    * leave the total with the reason stated.
    */
   {
+    cell: "_revenueZar",
+    label: "Revenue / turnover for the period (R)",
+    type: "number",
+    helpText:
+      "The denominator for emissions intensity. Tonnes of CO₂e per R million of revenue is the ratio that appears in CDP questionnaires, sustainability-linked loan terms and tender ESG scorecards, because it shows whether emissions are decoupling from growth — falling absolute tonnes can just mean a bad year. Without it we report absolute tonnes only and say the ratio could not be computed.",
+  },
+  {
     cell: "_targetBasis",
     label: "How this company's targets are set",
     type: "select",
@@ -386,6 +393,22 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
 ];
 
 export const S_DATA_HS_FIELDS: EsgFieldDef[] = [
+  /*
+   * A clean year and an untracked year look identical in a spreadsheet — both
+   * are zero — and the scorecard was treating them the same. Asked about it the
+   * expert put the question back to us: "No incidents because they are a
+   * company that does not report on health and safety, or because they are
+   * required to and have been a model company and have had no issues?" (Q14).
+   * This is the field that tells them apart.
+   */
+  {
+    cell: "_hsTracking",
+    label: "Does the company record health-and-safety incidents?",
+    type: "select",
+    options: ["Yes — incidents are recorded in a register", "No — incidents are not tracked"],
+    helpText:
+      "Answer Yes if there is a live incident register, even where no incidents occurred during the period. A year with no incidents and a year nobody recorded are different facts, and a zero on its own cannot tell them apart.",
+  },
   { cell: "C26", label: "Total employees Q1 (Jul-Sep)", type: "number" },
   { cell: "D26", label: "Total employees Q2 (Oct-Dec)", type: "number" },
   { cell: "E26", label: "Total employees Q3 (Jan-Mar)", type: "number" },
