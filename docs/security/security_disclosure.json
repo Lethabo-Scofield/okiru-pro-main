@@ -1,0 +1,277 @@
+{
+  "title": "Security, hosting and POPIA disclosure",
+  "subtitle": "Okiru ESG Intelligence Platform — vendor due-diligence pack",
+  "meta": "Prepared for Super Group IT  ·  Version 1.0  ·  16 September 2026",
+  "stamp": "Okiru ESG Intelligence Platform · Security, hosting and POPIA disclosure · v1.0 · 16 September 2026 · Commercial in confidence",
+  "intro": [
+    "This document describes how the Okiru ESG Intelligence Platform is hosted, how client data is encrypted, which artificial-intelligence services process it and where, how it is backed up, how access is controlled and logged, and how the platform sits against the Protection of Personal Information Act.",
+    "It is written for an IT function performing vendor due diligence, so it states what is not in place as plainly as what is. A reader who finds an unlisted weakness is entitled to assume there are others; the open items in section 9 are listed with an owner and a date so they can be assessed rather than discovered."
+  ],
+  "verification": {
+    "label": "Basis of this disclosure",
+    "body": "Every statement was read off the running production system on 16 September 2026 — the Azure resource configuration, the Kubernetes cluster, the deployed configuration key names, the backup store and the source repository. Nothing here is aspirational. Where a control is planned rather than live, it appears in section 9 and nowhere else."
+  },
+  "sections": [
+    {
+      "kicker": "1 · Hosting",
+      "title": "Where the platform runs, and where the data sits",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "The platform runs on Microsoft Azure in the South Africa North region (Johannesburg). All primary client data — the operational database, the cache, the document store and the backup store — is created and held in that region."
+        },
+        {
+          "kind": "table",
+          "head": ["Component", "Service", "Region", "Notes"],
+          "widths": [22, 26, 20, 32],
+          "rows": [
+            ["Application platform", "Azure Kubernetes Service", "South Africa North", "Managed Kubernetes 1.35, Azure RBAC enabled"],
+            ["Operational database", "MongoDB 7.0 on managed disk", "South Africa North", "10 GiB StandardSSD, in-cluster"],
+            ["Cache / session store", "Redis on managed disk", "South Africa North", "5 GiB StandardSSD"],
+            ["Document and backup store", "Azure Blob Storage", "South Africa North", "HTTPS enforced, TLS 1.2 minimum, public blob access disabled"],
+            ["Container images", "Azure Container Registry", "South Africa North", "Private registry, pull credentials held in-cluster"],
+            ["Public entry point", "NGINX ingress, single public IP", "South Africa North", "TLS terminated at the ingress"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "The platform is a multi-tenant application. Client records are separated logically by organisation, enforced in the application's authorisation layer, rather than by a separate database per client."
+        }
+      ]
+    },
+    {
+      "kicker": "2 · Encryption",
+      "title": "Data at rest and in transit",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Layer", "Control", "Status"],
+          "widths": [26, 52, 22],
+          "rows": [
+            ["Disks (database, cache, backups)", "Azure Storage Service Encryption, AES-256, platform-managed keys", "In place"],
+            ["Blob storage", "AES-256 at rest; HTTPS enforced; TLS 1.2 minimum; anonymous access disabled", "In place"],
+            ["Public traffic", "TLS via Let's Encrypt certificates, renewed automatically by cert-manager", "In place"],
+            ["Passwords", "bcrypt hashing; never stored or logged in plain text", "In place"],
+            ["Secrets", "Held as Kubernetes secrets, injected as environment variables at runtime; never committed to source control", "In place"],
+            ["Customer-managed encryption keys", "Disks use Microsoft-managed keys; no customer-managed key vault is configured", "Open"],
+            ["Host-level encryption", "Encryption-at-host is not enabled on the node pool, so the VM cache and temporary disk are not separately encrypted", "Open"],
+            ["Traffic between pods", "Not encrypted; no service mesh or mutual TLS inside the cluster", "Open"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "Encryption at rest is therefore present everywhere client data is stored, using Microsoft-managed keys. Customer-managed keys — where Super Group would hold and could revoke the key — are not configured today and are listed as an open item."
+        }
+      ]
+    },
+    {
+      "kicker": "3 · Artificial intelligence",
+      "title": "Which models process client data, and where",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "The platform uses artificial intelligence in two places: reading uploaded documents (optical character recognition and layout extraction) and interpreting their contents against the ESG and B-BBEE data model. These run on different services, in different countries, and the distinction matters for data residency."
+        },
+        {
+          "kind": "table",
+          "head": ["Purpose", "Service and model", "Processing region", "Training on our data"],
+          "widths": [24, 30, 22, 24],
+          "rows": [
+            ["Document reading / OCR", "Azure AI Document Intelligence", "South Africa North", "No"],
+            ["Interpretation and mapping", "Azure OpenAI — GPT-5 mini class", "United States (East US)", "No"],
+            ["Semantic search", "Azure OpenAI — text-embedding-ada-002", "United States (East US)", "No"]
+          ]
+        },
+        {
+          "kind": "callout",
+          "tone": "alert",
+          "label": "Cross-border processing — disclose and address",
+          "text": "Document reading stays in South Africa. Interpretation does not: the Azure OpenAI resource is provisioned in East US on a Global Standard deployment, which permits Microsoft to process a request in any Azure region worldwide. Content sent for interpretation therefore leaves South Africa. This is a transfer of personal information outside the Republic under section 72 of POPIA and requires a lawful basis. Remediating it by moving to a South African or contractually region-pinned deployment is open item 1 in section 9."
+        },
+        {
+          "kind": "bullets",
+          "items": [
+            "Both services are Microsoft first-party Azure services consumed under the Azure enterprise agreement, not third-party AI vendors.",
+            "Microsoft does not use Azure OpenAI customer data to train its models, and prompts are not shared with other customers.",
+            "No open-weight, self-hosted or consumer AI service processes client data. A key for one third-party inference provider exists in configuration but is empty and no traffic is sent to it.",
+            "Extracted figures are always presented for human review before they are scored or published; the platform does not act on a model's output without a person seeing it."
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "4 · Backup and recovery",
+      "title": "What is kept, where, and for how long",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Aspect", "Position"],
+          "widths": [28, 72],
+          "rows": [
+            ["Schedule", "Nightly at 02:00 SAST, automated"],
+            ["Method", "Full compressed database dump"],
+            ["First copy", "Encrypted managed disk in the cluster, 7-day rolling retention"],
+            ["Second copy", "Copied off-cluster to Azure Blob Storage in the same region, dated folder per night"],
+            ["Verified currency", "Nightly folders present and complete for every night in the current retention window as at 16 September 2026"],
+            ["Restore rehearsal", "Not yet performed — see open item 4"],
+            ["Recovery objectives", "Not yet formally agreed with the client — see open item 4"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "Backups are held in the same Azure region as the production data, which keeps them inside South Africa but means a region-wide failure would affect both. Geo-redundant backup storage is an open item."
+        }
+      ]
+    },
+    {
+      "kicker": "5 · Access control",
+      "title": "Who can reach the data, and how they prove who they are",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Control", "Position", "Status"],
+          "widths": [26, 52, 22],
+          "rows": [
+            ["Authentication", "Email and password; passwords hashed with bcrypt", "In place"],
+            ["Two-factor authentication", "Email one-time codes available; enabled per user, not enforced for all", "Partial"],
+            ["Sessions", "Server-side session store; cookies HTTP-only, secure and same-site restricted; 7-day lifetime", "In place"],
+            ["Role-based access", "Roles and assignments enforced server-side on every request", "In place"],
+            ["Tenant separation", "Records scoped to an organisation and filtered on every read and write", "In place"],
+            ["Administrative access to infrastructure", "Azure role-based access control; cluster administration restricted to named Okiru staff", "In place"],
+            ["Brute-force and rate limiting", "No rate limiting on authentication endpoints", "Open"],
+            ["Web application firewall", "None in front of the public ingress", "Open"],
+            ["Password strength policy", "bcrypt work factor below current guidance", "Open"]
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "6 · Audit logging",
+      "title": "What is recorded when someone acts on client data",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "The platform writes a unified audit record for security-relevant actions across both application servers. Each entry carries the timestamp, the acting user, the organisation, the action, the resource type and identifier, whether it succeeded or failed, the source IP address, the user agent, the request identifier and the HTTP method and path."
+        },
+        {
+          "kind": "table",
+          "head": ["Aspect", "Position", "Status"],
+          "widths": [26, 52, 22],
+          "rows": [
+            ["Coverage", "Authentication, authorisation decisions, and record creation, change and export", "In place"],
+            ["Storage", "Dedicated collection in the operational database, included in the nightly backup", "In place"],
+            ["Tamper resistance", "Stored alongside application data; not written to append-only or immutable storage", "Open"],
+            ["Retention policy", "No defined retention or archival period", "Open"],
+            ["Export to client", "No facility for a client to retrieve its own audit trail", "Open"],
+            ["Infrastructure-level logging", "Azure platform logs available; not centralised or retained to a defined policy", "Open"]
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "7 · POPIA",
+      "title": "Position against the Act",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "In POPIA terms Super Group is the responsible party for its own employee and operational data, and Okiru is an operator processing that data on its instruction. The following is our position condition by condition."
+        },
+        {
+          "kind": "table",
+          "head": ["Condition", "Position", "Status"],
+          "widths": [24, 54, 22],
+          "rows": [
+            ["Accountability", "Information Officer registration with the Information Regulator to be confirmed", "Open"],
+            ["Processing limitation", "Data processed only to produce the client's ESG and B-BBEE outputs; no secondary use, no resale, no profiling", "In place"],
+            ["Purpose specification", "Purpose set by the engagement; retention period not yet formally defined", "Partial"],
+            ["Further processing", "No further processing beyond the stated purpose", "In place"],
+            ["Information quality", "Extracted values are shown for human correction before scoring; provenance recorded per figure", "In place"],
+            ["Openness", "This document; a processing register per client is an open item", "Partial"],
+            ["Security safeguards", "Encryption, access control and audit logging as set out above, with the gaps listed", "Partial"],
+            ["Data subject participation", "Access and correction handled on request through the client; no self-service facility", "Partial"],
+            ["Transborder flow (s72)", "Interpretation processing occurs outside South Africa — see section 3", "Open"],
+            ["Security compromise notification", "Contactable breach process; no written, tested incident-response plan", "Open"]
+          ]
+        },
+        {
+          "kind": "callout",
+          "tone": "amber",
+          "label": "Operator agreement",
+          "text": "Section 21 of POPIA requires a written agreement between a responsible party and its operator obliging the operator to maintain the security safeguards in section 19. We recommend this disclosure be attached to such an agreement rather than standing alone, and we will sign one on Super Group's paper."
+        }
+      ]
+    },
+    {
+      "kicker": "8 · Integration",
+      "title": "How Super Group's systems would connect",
+      "blocks": [
+        {
+          "kind": "bullets",
+          "items": [
+            "Traffic is HTTPS only, TLS 1.2 or better, to a single named host with a publicly verifiable certificate.",
+            "Super Group would allow-list our egress addresses; we would allow-list theirs. Both are static.",
+            "Authentication for a system-to-system integration would be a per-client credential with least-privilege scope, rotatable on request and revocable immediately.",
+            "We accept data being pushed to us or exposed for us to pull. We do not require access to any Super Group system beyond the agreed endpoint and fields.",
+            "The field list Super Group's IT function would need to expose is issued separately as an interface specification, derived from the ESG data model rather than from any one company's spreadsheet."
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "9 · Open items",
+      "title": "What is not in place, and when it will be",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "These are listed in the order we intend to close them. Items 1 to 4 we consider prerequisites to holding Super Group production data."
+        },
+        {
+          "kind": "table",
+          "head": ["#", "Open item", "Risk", "Remediation"],
+          "widths": [5, 38, 12, 45],
+          "rows": [
+            ["1", "Interpretation processing occurs outside South Africa", "High", "Move to a South African or region-pinned deployment; until then, obtain a section 72 basis and disclose it in the operator agreement"],
+            ["2", "Single application node; platform on a tier without an uptime commitment", "High", "Move to a multi-node pool with an uptime SLA and run the database with redundancy"],
+            ["3", "No rate limiting or web application firewall on public endpoints", "High", "Add request rate limiting to authentication endpoints and place a managed WAF in front of the ingress"],
+            ["4", "Restore has never been rehearsed; no agreed recovery objectives", "High", "Rehearse a full restore into an isolated environment and agree recovery point and time objectives in writing"],
+            ["5", "Two-factor authentication is optional rather than enforced", "Medium", "Enforce for every account with access to client data"],
+            ["6", "Password hashing work factor below current guidance", "Medium", "Raise the work factor and re-hash on next sign-in"],
+            ["7", "Audit log is not immutable and has no retention policy", "Medium", "Ship to append-only storage, set a retention period, and give clients a way to retrieve their own trail"],
+            ["8", "No network segmentation between workloads in the cluster", "Medium", "Apply network policies so each component reaches only what it must"],
+            ["9", "No automated build, test or dependency-vulnerability pipeline", "Medium", "Introduce continuous integration with tests and dependency scanning as a merge gate"],
+            ["10", "Encryption uses Microsoft-managed keys; host-level encryption off", "Low", "Enable host encryption; offer customer-managed keys where a client requires them"],
+            ["11", "No written, tested incident-response and breach-notification plan", "Medium", "Document, assign owners and test annually"],
+            ["12", "No independent penetration test or third-party security assessment", "Medium", "Commission an external test and share the summary and remediation"]
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "10 · Services",
+      "title": "What we would put in place to protect Super Group's data",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "Asked what additional services would be needed, these are the ones we would add. They are listed with what each one actually buys, so the spend can be judged against the risk it removes rather than accepted as a list."
+        },
+        {
+          "kind": "table",
+          "head": ["Service", "What it protects against", "Priority"],
+          "widths": [26, 54, 20],
+          "rows": [
+            ["Azure Web Application Firewall (Front Door or Application Gateway)", "Automated attacks, injection attempts and volumetric abuse reaching the application at all; also terminates TLS and absorbs denial-of-service traffic", "High"],
+            ["Azure Key Vault with customer-managed keys", "Key custody: Super Group could hold and revoke the key protecting its data at rest", "High"],
+            ["Managed database with geo-redundant backup", "Loss of the region, and the single-instance failure mode of a self-managed database", "High"],
+            ["Microsoft Defender for Cloud (and for Containers)", "Misconfiguration, vulnerable images and runtime threats going unnoticed", "High"],
+            ["Azure Monitor / Log Analytics with retention", "An incident that cannot be reconstructed afterwards because the logs had rotated away", "Medium"],
+            ["Azure Private Link and private cluster endpoint", "Exposure of management and data-plane endpoints to the public internet", "Medium"],
+            ["Independent penetration test, annually", "Weaknesses we cannot see ourselves; also the evidence a client's auditor asks for", "Medium"],
+            ["Azure OpenAI in a South African or pinned region", "The transborder flow described in section 3", "High"],
+            ["Dependency and secret scanning in the build pipeline", "A vulnerable library or a committed credential reaching production", "Medium"],
+            ["Cyber-liability insurance", "The financial consequence of a breach, which no control removes entirely", "Medium"]
+          ]
+        }
+      ]
+    }
+  ]
+}
