@@ -105,8 +105,8 @@ describe.each([
     const tax = computeCarbonTax(derived);
     expect(tax.ytdTco2e).toBe(0);
     expect(tax.taxableTco2e).toBe(0);
-    expect(tax.tier1Liability).toBe(0);
-    expect(tax.tier2Liability).toBe(0);
+    expect(tax.liabilityZar).toBe(0);
+    expect(tax.liable).toBe(false);
   });
 
   it("the net-zero roadmap reports unavailable rather than a gap of 0", () => {

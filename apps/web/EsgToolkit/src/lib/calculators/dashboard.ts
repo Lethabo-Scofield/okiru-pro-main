@@ -120,9 +120,20 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
     },
     {
       id: "carbon-tax",
-      label: "Carbon tax (Tier 1)",
-      value: `R ${Math.round(tax.tier1Liability).toLocaleString("en-ZA")}`,
-      sub: `${Math.round(tax.taxableTco2e).toLocaleString("en-ZA")} tCO₂e taxable`,
+      label: "Carbon tax",
+      // Most companies this toolkit serves are not carbon taxpayers at all, so
+      // the KPI says so rather than showing a rand figure the Act does not
+      // support. The Schedule 2 screen lives in `carbonTax.ts`.
+      value: tax.screenIncomplete
+        ? "Not assessed"
+        : tax.liable
+          ? `R ${Math.round(tax.liabilityZar).toLocaleString("en-ZA")}`
+          : "Not liable",
+      sub: tax.screenIncomplete
+        ? "Schedule 2 screen unanswered"
+        : tax.liable
+          ? `${Math.round(tax.taxableTco2e).toLocaleString("en-ZA")} tCO₂e taxable at R${tax.rateZar}/t`
+          : "No Schedule 2 activity",
     },
     {
       id: "nz-gap",
@@ -161,7 +172,7 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
     waterKl: water,
     wasteDiversionPct: wasteDiv,
     ltifr: ltifr as number | string | undefined,
-    carbonTaxTier1: tax.tier1Liability,
+    carbonTaxTier1: tax.liable ? tax.liabilityZar : 0,
     kpis,
     pillarRows: {
       environmental: pillarRows(e.rows, "environmental"),

@@ -44,6 +44,33 @@
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { getEsgSectorConfig } from "../esgConfig";
 
+/**
+ * How a line is treated under the Carbon Tax Act's Schedule 2.
+ *
+ * Emitting a tonne and owing tax on it are different questions, and the Act
+ * answers the second one by ACTIVITY, not by scope. Road transport is listed at
+ * a threshold of "N/A" — it can never on its own create liability, because the
+ * fuel levy already prices it, and taxing it again would be the double taxation
+ * the Act is written to avoid. Purchased electricity is Eskom's Scope 1 at the
+ * generation end, never the buyer's Schedule 2 activity. So the tax base is a
+ * subset of Scope 1, and the inventory has to say which subset.
+ *
+ * (Expert ruling, Z. Mnanzana, 14 September 2026.)
+ */
+export type CarbonTaxTreatment =
+  /** Listed at threshold "N/A" — already priced through the fuel levy. */
+  | "road-transport"
+  /** Boilers, furnaces, generators, turbines — taxable at or above 10 MW(th). */
+  | "stationary-combustion"
+  /** Cement, lime, glass, ammonia, nitric acid, iron and steel, aluminium. */
+  | "industrial-process"
+  /** Coal mining, oil and gas extraction, venting and flaring. */
+  | "fugitive"
+  /** Not the reporter's own Schedule 2 activity at all. */
+  | "out-of-scope"
+  /** Genuinely unsettled — neither road transport nor a listed stationary source. */
+  | "unclassified";
+
 /** One line of the inventory, with everything needed to defend it. */
 export type GhgLine = {
   /** e.g. "Scope 1A — Road-freight fleet diesel". */
@@ -57,6 +84,8 @@ export type GhgLine = {
   factorUnit: string;
   /** activity × factor, in tonnes CO₂e. Negative for the solar credit. */
   tco2e: number;
+  /** Carbon Tax Act treatment. Emissions reporting and tax liability differ. */
+  carbonTax: CarbonTaxTreatment;
 };
 
 export type GhgInventoryResult = {
@@ -122,30 +151,38 @@ export function computeGhgInventory(workbook: EsgWorkbookData): GhgInventoryResu
       scope: 1, activity: fleetDiesel, unit: "litres",
       factor: ef.dieselScope1, factorUnit: "kgCO₂e/L",
       tco2e: (fleetDiesel * ef.dieselScope1) / 1000,
+      carbonTax: "road-transport",
     },
     {
       label: "Scope 1B — Generator diesel",
       scope: 1, activity: genDiesel, unit: "litres",
       factor: ef.dieselScope1, factorUnit: "kgCO₂e/L",
       tco2e: (genDiesel * ef.dieselScope1) / 1000,
+      carbonTax: "stationary-combustion",
     },
     {
       label: "Scope 1C — LPG forklifts",
       scope: 1, activity: lpg, unit: "kg",
       factor: ef.lpg, factorUnit: "kgCO₂e/kg",
       tco2e: (lpg * ef.lpg) / 1000,
+      // Off-road mobile plant: neither road transportation nor a stationary
+      // source at or above 10 MW(th). Left unclassified rather than silently
+      // taxed or silently dropped.
+      carbonTax: "unclassified",
     },
     {
       label: "Scope 1D — Business road travel (petrol)",
       scope: 1, activity: carPetrol, unit: "litres",
       factor: ef.petrolBusinessCars, factorUnit: "kgCO₂e/L",
       tco2e: (carPetrol * ef.petrolBusinessCars) / 1000,
+      carbonTax: "road-transport",
     },
     {
       label: "Scope 2 — Purchased grid electricity",
       scope: 2, activity: electricity, unit: "kWh",
       factor: ef.electricityScope2, factorUnit: "kgCO₂e/kWh",
       tco2e: (electricity * ef.electricityScope2) / 1000,
+      carbonTax: "out-of-scope",
     },
   ];
 
@@ -158,6 +195,7 @@ export function computeGhgInventory(workbook: EsgWorkbookData): GhgInventoryResu
       scope: 2, activity: solar, unit: "kWh",
       factor: ef.electricityScope2 - ef.solarOnsite, factorUnit: "kgCO₂e/kWh avoided",
       tco2e: -(solar * (ef.electricityScope2 - ef.solarOnsite)) / 1000,
+      carbonTax: "out-of-scope",
     });
   }
 
@@ -166,6 +204,7 @@ export function computeGhgInventory(workbook: EsgWorkbookData): GhgInventoryResu
     scope: 3, activity: water, unit: "kL",
     factor: ef.waterTco2ePerKl, factorUnit: "tCO₂e/kL",
     tco2e: water * ef.waterTco2ePerKl,
+    carbonTax: "out-of-scope",
   });
 
   const sumScope = (n: 1 | 2 | 3) =>

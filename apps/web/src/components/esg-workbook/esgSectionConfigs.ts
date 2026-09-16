@@ -277,6 +277,52 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
     helpText:
       "Target year for net-zero greenhouse gas (GHG) emissions under Science Based Targets initiative (SBTi) Corporate Net-Zero Standard (CNZS) 2.0 (typically 2050).",
   },
+
+  /*
+   * CARBON TAX — the Schedule 2 liability screen.
+   *
+   * Liability under the Carbon Tax Act is decided by ACTIVITY, not by how much
+   * a company emits. Until this pass the toolkit asked none of this and quoted
+   * a rand liability to every company that opened it, including road-freight
+   * distributors, retailers and schools that can never be liable at all.
+   *
+   * Three questions settle it: if all three are No, the entity has no Schedule 2
+   * activity and there is nothing to register or file, however large it is and
+   * however much fuel or electricity it uses. Road transport is listed at a
+   * threshold of N/A (the fuel levy already prices it) and purchased electricity
+   * is the generator's liability, so neither can ever create it on its own.
+   */
+  {
+    cell: "_ctCombustion10MW",
+    label: "Carbon tax — stationary combustion at or above 10 MW(th)?",
+    type: "select",
+    options: ["No", "Yes"],
+    helpText:
+      "Does the company operate a boiler, furnace, generator, gas turbine or similar with a design thermal capacity of 10 megawatts thermal or more? This is the threshold for most Schedule 2 combustion categories; below it the activity falls outside the Act entirely.",
+  },
+  {
+    cell: "_ctListedProcess",
+    label: "Carbon tax — a listed industrial process?",
+    type: "select",
+    options: ["No", "Yes"],
+    helpText:
+      "Cement, lime, glass, ammonia, nitric acid, iron and steel, or aluminium production, among others. These carry a threshold of none, meaning any output at all creates liability with no minimum size to sit under.",
+  },
+  {
+    cell: "_ctFugitive",
+    label: "Carbon tax — fugitive emissions?",
+    type: "select",
+    options: ["No", "Yes"],
+    helpText:
+      "Emissions from activities such as coal mining, oil and gas extraction, or venting and flaring.",
+  },
+  {
+    cell: "_ctTaxPeriodYear",
+    label: "Carbon tax period (calendar year)",
+    type: "number",
+    helpText:
+      "The carbon tax period runs on the calendar year, not the financial year, and the rate moves with it: R236 for 2025, then Phase 2 opens at R308 in 2026. An unstated period is not priced, because choosing a rate on the company's behalf is not something a report can defend.",
+  },
 ];
 
 export const S_DATA_HS_FIELDS: EsgFieldDef[] = [

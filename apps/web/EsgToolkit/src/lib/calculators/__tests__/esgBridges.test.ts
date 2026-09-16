@@ -9,8 +9,17 @@ import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { buildSgConsumerGoldenWorkbook } from "../../fixtures/esg-consumer-golden";
 import { computeBbbeeBridge } from "../bbbeeBridge";
-import { computeCarbonTax } from "../carbonTax";
+import { computeCarbonTax, CARBON_TAX_RATE_BY_YEAR } from "../carbonTax";
 import { computeNetZeroRoadmap, netZeroReductionAt } from "../netZero";
+
+/** Layer extra cells onto an existing workbook without mutating the fixture. */
+function wbMerge(base: any, extra: Record<string, Record<string, unknown>>): any {
+  const sections = { ...base.sections };
+  for (const [id, cells] of Object.entries(extra)) {
+    sections[id] = { cells: { ...(sections[id]?.cells ?? {}), ...cells } };
+  }
+  return { ...base, sections };
+}
 
 type Cells = Record<string, string | number | boolean | null>;
 
@@ -48,12 +57,39 @@ describe("Carbon_Tax", () => {
      */
     expect(tax.annualisedTco2e).toBeCloseTo(4246078.57333333, 3); // D11
     expect(tax.taxableTco2e).toBeCloseTo(1698431.42933333, 3); // E11
-    expect(tax.tier1Liability).toBeCloseTo(400829817.322667, 1); // B16
-    expect(tax.tier2Liability).toBeCloseTo(1086996114.77333, 1); // C16
+    // The workbook's own B16 at the 2025 rate. Parity mode reproduces the
+    // client's spreadsheet, defects included — it is never what we publish.
+    expect(tax.liabilityZar).toBeCloseTo(1698431.42933333 * 236, 1);
   });
 
-  it("taxes real tonnes in corrected mode — the mode a client is actually charged on", () => {
+  it("finds the road-freight client is not a carbon taxpayer at all", () => {
+    /*
+     * The expert ruling that changed this: road transportation is listed at a
+     * threshold of "N/A" and can never on its own create liability (the fuel
+     * levy already prices it), and purchased electricity is the generator's
+     * Scope 1, never the buyer's Schedule 2 activity. A distributor with no
+     * 10 MW(th) combustion, no listed process and no fugitive emissions owes
+     * nothing — and used to be quoted hundreds of thousands of rand.
+     */
+    const tax = computeCarbonTax(
+      deriveEsgSummaryCells(
+        wbMerge(buildSgConsumerGoldenWorkbook(), {
+          assumptions: { _ctCombustion10MW: "No", _ctListedProcess: "No", _ctFugitive: "No" },
+        }),
+      ),
+    );
+    expect(tax.liable).toBe(false);
+    expect(tax.liabilityZar).toBe(0);
+    expect(tax.liabilityBasis).toContain("Not a carbon taxpayer");
+    // The emissions are still reported — they are simply outside the tax base.
+    expect(tax.excludedLines.length).toBeGreaterThan(0);
+  });
+
+  it("states that liability is unassessed until the screen is answered", () => {
     const tax = computeCarbonTax(deriveEsgSummaryCells(buildSgConsumerGoldenWorkbook()));
+    expect(tax.screenIncomplete).toBe(true);
+    expect(tax.liable).toBe(false);
+    expect(tax.liabilityBasis).toContain("Not assessed");
     /*
      * 3,703.22 = fleet diesel 1,579.77 + electricity 2,123.45.
      *
@@ -62,16 +98,20 @@ describe("Carbon_Tax", () => {
      * (2,181.14 L + 2,280 kg + 1,053.82 L). That is a gap in the fixture, not
      * in the calculation — worth closing when the fixture is next extended.
      */
-    expect(tax.ytdTco2e).toBeCloseTo(3703.22, 1);
-    expect(tax.annualisedTco2e).toBeCloseTo(3703.22 * (12 / 9), 0);
-    expect(tax.taxableTco2e).toBeCloseTo(3703.22 * (12 / 9) * 0.4, 0);
-    // The liability a submission would quote: millions, not billions.
-    expect(tax.tier1Liability).toBeLessThan(1_000_000);
+    expect(tax.liabilityZar).toBe(0);
   });
 
-  it("is NOT R0 for a manually-entered workbook — the monthly grids now reach it", () => {
+  it("taxes only the listed activity for a company that passes the screen", () => {
     const raw = wb({
-      assumptions: { B111: 9, B37: 236, B38: 640, B39: 0.6 },
+      assumptions: {
+        B111: 9,
+        B39: 0.6,
+        _ctTaxPeriodYear: 2025,
+        // A 12 MW(th) boiler on site: stationary combustion IS a listed activity.
+        _ctCombustion10MW: "Yes",
+        _ctListedProcess: "No",
+        _ctFugitive: "No",
+      },
       "e-data": {
         s1a_C14: 1000, s1a_C15: 500, // L75 = 1500  (fleet diesel)
         s1b_C23: 200, //               L76 = 200    (generator diesel)
@@ -85,23 +125,52 @@ describe("Carbon_Tax", () => {
     expect(parity.ytdTco2e).toBe(5850);
 
     /*
-     * Corrected mode converts each line: diesel 1700 L x 2.68, LPG 100 kg x
-     * 1.51, petrol 50 L x 2.31, electricity 4000 kWh x 0.82, all /1000.
+     * Only the generator diesel is taxable: 200 L x 2.68 / 1000. Fleet diesel
+     * and business-car petrol are road transport; electricity is the
+     * generator's liability, not ours; LPG forklifts are unclassified and are
+     * excluded pending a ruling rather than taxed on an assumption.
      */
     const tax = computeCarbonTax(deriveEsgSummaryCells(raw));
-    const expected = (1700 * 2.68 + 100 * 1.51 + 50 * 2.31 + 4000 * 0.82) / 1000;
-    expect(tax.ytdTco2e).toBeCloseTo(expected, 6);
+    const taxableOnly = (200 * 2.68) / 1000;
+    expect(tax.liable).toBe(true);
+    expect(tax.ytdTco2e).toBeCloseTo(taxableOnly, 6);
     expect(tax.annualiseFactor).toBeCloseTo(12 / 9, 9);
-    expect(tax.annualisedTco2e).toBeCloseTo(expected * (12 / 9), 6);
-    expect(tax.taxableTco2e).toBeCloseTo(expected * (12 / 9) * 0.4, 6);
+    expect(tax.taxableTco2e).toBeCloseTo(taxableOnly * (12 / 9) * 0.4, 6);
+    expect(tax.rateZar).toBe(236);
+    expect(tax.liabilityZar).toBeCloseTo(taxableOnly * (12 / 9) * 0.4 * 236, 6);
+    // Everything the Act does not reach is named, not silently dropped.
+    const excludedLabels = tax.excludedLines.map((x) => x.line.label).join(" ");
+    expect(excludedLabels).toContain("Road-freight fleet diesel");
+    expect(excludedLabels).toContain("grid electricity");
+  });
+
+  it("prices the tax period, not a phantom second tier", () => {
+    const make = (year: number) =>
+      computeCarbonTax(
+        deriveEsgSummaryCells(
+          wb({
+            assumptions: {
+              _ctTaxPeriodYear: year,
+              _ctCombustion10MW: "Yes",
+              _ctListedProcess: "No",
+              _ctFugitive: "No",
+            },
+            "e-data": { s1b_C23: 1000 },
+          }),
+        ),
+      );
+    // The published trajectory: 2025 R236, Phase 2 opens at R308 in 2026.
+    expect(make(2025).rateZar).toBe(236);
+    expect(make(2026).rateZar).toBe(308);
+    expect(make(2030).rateZar).toBe(462);
+    // R640 was never a rate. It is gone.
+    expect(Object.values(CARBON_TAX_RATE_BY_YEAR)).not.toContain(640);
   });
 
   it("does not apply the source client's 9-month annualiser to another company", () => {
     // No B112 and no B111 → factor 1, not SG Consumer's 1.3333.
     const tax = computeCarbonTax(deriveEsgSummaryCells(wb({ "e-data": { s2_C41: 1000 } })));
     expect(tax.annualiseFactor).toBe(1);
-    // 1000 kWh x 0.82 / 1000 = 0.82 tCO₂e, not 1000 "units".
-    expect(tax.annualisedTco2e).toBeCloseTo(0.82, 6);
   });
 
   it("prefers an explicit Assumptions!B112 over recomputing from B111", () => {
