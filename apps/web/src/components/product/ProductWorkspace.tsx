@@ -1,9 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'wouter';
-import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { Loader2, Search, Plus, Building2, FolderOpen } from 'lucide-react';
-import { AppNavBack } from '@/components/AppNavBack';
-import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { DeleteCompanyButton } from '@/components/DeleteCompanyButton';
 import { API_BASE } from '@toolkit/lib/config';
 import {
@@ -179,31 +176,10 @@ export function ProductWorkspace({ product }: { product: Product }) {
     'inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white/[0.08] hover:bg-white/[0.14] text-[#e5e5e7] text-[12px] font-medium transition-colors';
 
   return (
-    <div
-      className="font-sans min-h-screen bg-black"
-      style={{ letterSpacing: '-0.011em', color: '#f5f5f7' }}
-      data-testid={`workspace-${product}`}
-    >
-      <header
-        className="h-14 shrink-0 z-20 sticky top-0 bg-black"
-        style={{ borderBottom: '1px solid #2c2c2e' }}
-      >
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" className="shrink-0" />
-            <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block" />
-            <div className="flex items-center gap-3">
-              <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-[8px]" />
-              <span className="text-[17px] font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">
-                {copy.title}
-              </span>
-            </div>
-          </div>
-          <UserAccountMenu variant="dashboard" />
-        </div>
-      </header>
-
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-6 py-7">
+    // The shell draws the rail, the breadcrumbs and the account menu; this page
+    // draws what is underneath them.
+    <div className="font-sans" data-testid={`workspace-${product}`}>
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-7">
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wider text-[#636366]">
@@ -376,7 +352,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
             </div>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -20,6 +20,7 @@ import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
 import Dashboard from "@/pages/Dashboard";
 import BbbeeWorkspace from "@/pages/BbbeeWorkspace";
+import { AppShell } from "@/components/shell/AppShell";
 import EsgWorkspace from "@/pages/EsgWorkspace";
 // Super-admin-only giants (7k + 1.7k lines) — lazy so every ordinary user
 // stops downloading flows they can never open.
@@ -441,7 +442,12 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <AppRouter />
+            {/* Above the router on purpose: the toolkits run nested routers
+                that rebase every path, so the shell has to sit outside them to
+                read absolute paths and link to absolute paths. */}
+            <AppShell>
+              <AppRouter />
+            </AppShell>
             <GlobalScorecardAdvisor />
             <GlobalFeedbackWidget />
           </TooltipProvider>
