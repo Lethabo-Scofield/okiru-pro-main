@@ -120,25 +120,41 @@ describeApi('Auth API - unauthenticated', () => {
   });
 });
 
+/**
+ * Signing up asks for a work email, a name and a password — never a username.
+ * The username and the company are derived from the email domain, so the
+ * fields these tests used to send (username, organization) no longer exist and
+ * the password floor moved from 4 characters to 8.
+ */
 describeApi('Auth API - registration validation', () => {
-  it('rejects missing username', async () => {
+  it('rejects a password shorter than 8 characters', async () => {
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ password: 'test123', email: 'x@x.com', fullName: 'X', organization: 'test', subscriptionId: 'sub_001' }),
+      body: JSON.stringify({ password: 'test123', email: 'x@okiru.co.za', fullName: 'X' }),
+    });
+
+    expect(status).toBe(400);
+    expect(body.message).toContain('8 characters');
+  });
+
+  it('rejects a personal email address', async () => {
+    const { status, body } = await client.request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ password: 'testpass123', email: 'someone@gmail.com', fullName: 'Y' }),
+    });
+
+    expect(status).toBe(400);
+    expect(body.message).toBeDefined();
+  });
+
+  it('rejects a missing full name', async () => {
+    const { status, body } = await client.request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ password: 'testpass123', email: 'z@okiru.co.za' }),
     });
 
     expect(status).toBe(400);
     expect(body.message).toContain('required');
-  });
-
-  it('rejects short password (< 4 chars)', async () => {
-    const { status, body } = await client.request('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ username: 'shortpw', password: '12', email: 'y@y.com', fullName: 'Y', organization: 'test', subscriptionId: 'sub_001' }),
-    });
-
-    expect(status).toBe(400);
-    expect(body.message).toContain('4 characters');
   });
 
   it('rejects empty username on login', async () => {
@@ -153,6 +169,9 @@ describeApi('Auth API - registration validation', () => {
 
 describeApi('Auth API - registration + OTP flow', () => {
   it('creates a new user and sends OTP', async () => {
+    // Registering writes a user, so it answers 503 with no database behind it.
+    // The rest of this file already skips the same way.
+    if (!MONGO_URI) return;
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(TEST_USER),
@@ -165,6 +184,7 @@ describeApi('Auth API - registration + OTP flow', () => {
   });
 
   it('rejects duplicate username', async () => {
+    if (!MONGO_URI) return;
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify(TEST_USER),
@@ -218,6 +238,9 @@ describeApi('Auth API - registration + OTP flow', () => {
 
 describeApi('Auth API - login', () => {
   it('rejects invalid credentials', async () => {
+    // Login looks the user up, so without a database it answers 503 "use
+    // demo/demo" rather than 401 — a different question from the one asked here.
+    if (!MONGO_URI) return;
     const { status } = await client.request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username: TEST_USER.username, password: 'wrongpassword' }),
@@ -227,6 +250,7 @@ describeApi('Auth API - login', () => {
   });
 
   it('login with valid credentials returns 200', async () => {
+    if (!MONGO_URI) return;
     const { status, body } = await client.request('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username: TEST_USER.username, password: TEST_USER.password }),
