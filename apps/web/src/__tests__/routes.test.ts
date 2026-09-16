@@ -70,8 +70,14 @@ describe("App.tsx route declarations", () => {
     expect(APP_TSX).toMatch(/EsgPreviewRoute/);
   });
 
-  it("exports companies href for toolkit back navigation", () => {
+  /**
+   * The toolkit's "back to companies" link now lands on the ESG workspace.
+   * `/esg/clients` is still routed, so old links keep resolving, but it is no
+   * longer a second company list to keep in step with the first.
+   */
+  it("sends toolkit back-navigation to the ESG workspace", () => {
     expect(ESG_CLIENTS_PATH).toBe("/esg/clients");
-    expect(esgClientsHref()).toBe("/esg/clients");
+    expect(esgClientsHref()).toBe("/esg");
+    expect(hasRoute("/esg/clients")).toBe(true);
   });
 });

@@ -21,7 +21,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { AppNavBack } from "@/components/AppNavBack";
-import { isSuperAdmin } from "@/lib/roles";
 
 interface AdminUser {
   id: string;

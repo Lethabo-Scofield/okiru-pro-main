@@ -159,7 +159,9 @@ describe("the ESG front door opens on the choice, not on a name", () => {
     render(<EsgCreateFlow />);
 
     await user.click(screen.getByTestId("esg-open-existing"));
-    expect(window.location.pathname).toBe("/esg/clients");
+    // The company list is the ESG workspace now, so reopening lands there
+    // rather than on a second list kept only for this link.
+    expect(window.location.pathname).toBe("/esg");
   });
 });
 
@@ -318,9 +320,14 @@ describe("Excel route — reviewed before a company exists", () => {
 });
 
 describe("routing and the doors that must stay open", () => {
-  it("points /esg at the create flow and keeps /esg/clients mounted", () => {
-    expect(APP_SRC).toMatch(/path="\/esg">\s*<ProtectedRoute><EsgPreviewRoute><EsgCreateFlow/);
-    expect(APP_SRC).toMatch(/path="\/esg\/clients">\s*<ProtectedRoute><EsgPreviewRoute><EsgClientSelector/);
+  it("opens the workspace at /esg, starts a scorecard at /esg/new", () => {
+    // `/esg` is the ESG workspace, mirroring `/bbbee`: the consultant's
+    // companies first, with creating one as an action inside. The create flow
+    // moved to `/esg/new`. `/esg/clients` still resolves, to the same
+    // workspace, so older links and the toolkit's back button keep working.
+    expect(APP_SRC).toMatch(/path="\/esg">\s*<ProtectedRoute><EsgPreviewRoute><EsgWorkspace/);
+    expect(APP_SRC).toMatch(/path="\/esg\/new">\s*<ProtectedRoute><EsgPreviewRoute><EsgCreateFlow/);
+    expect(APP_SRC).toMatch(/path="\/esg\/clients">\s*<ProtectedRoute><EsgPreviewRoute><EsgWorkspace/);
     // Deep links into an existing company are untouched.
     expect(APP_SRC).toMatch(/path="\/esg\/create\/:companyId\/start"/);
     expect(APP_SRC).toMatch(/path="\/esg\/create\/:companyId"/);

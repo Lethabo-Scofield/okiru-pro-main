@@ -19,6 +19,8 @@ import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
 import Dashboard from "@/pages/Dashboard";
+import BbbeeWorkspace from "@/pages/BbbeeWorkspace";
+import EsgWorkspace from "@/pages/EsgWorkspace";
 // Super-admin-only giants (7k + 1.7k lines) — lazy so every ordinary user
 // stops downloading flows they can never open.
 const EntityBuilder = lazy(() => import("@/pages/EntityBuilder"));
@@ -38,7 +40,6 @@ import Settings from "@/pages/Settings";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
-import EsgClientSelector from "@/pages/EsgClientSelector";
 import EsgInformationRequest from "@/pages/EsgInformationRequest";
 import EsgScoreSummary from "@/pages/EsgScoreSummary";
 import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
@@ -237,8 +238,11 @@ function AppRouter() {
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>
       <Route path="/bbbee">
-        <ProtectedRoute><Dashboard /></ProtectedRoute>
+        <ProtectedRoute><BbbeeWorkspace /></ProtectedRoute>
       </Route>
+      {/* The old mixed list, kept so existing links and bookmarks still land
+          somewhere real. It shows both products behind a dropdown, which is
+          what the product workspaces replace. */}
       <Route path="/dashboard">
         <ProtectedRoute><Dashboard /></ProtectedRoute>
       </Route>
@@ -299,19 +303,23 @@ function AppRouter() {
       {/* The ESG front door: choose → provide → review, with NO company up
           front. It used to redirect here to the company picker, which forced a
           name out of the user before the documents that know it had been read. */}
-      {/* `/esg/new` is where creating an ESG scorecard is moving, so that `/esg`
-          can become the ESG workspace and match `/bbbee`. Both render the flow
-          until the workspace page lands. */}
+      {/* Creating an ESG scorecard now lives at `/esg/new`, which frees `/esg`
+          to be the ESG workspace and match `/bbbee`. This is the one semantic
+          change in the redesign: a product's path opens that product's
+          companies, and creating is an action inside it. */}
       <Route path="/esg/new">
         <ProtectedRoute><EsgPreviewRoute><EsgCreateFlow /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg">
-        <ProtectedRoute><EsgPreviewRoute><EsgCreateFlow /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgWorkspace /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       {/* Still here, still reachable — this is how an EXISTING ESG scorecard is
           reopened (step 1 links to it). It is no longer the way IN. */}
+      {/* The old name for the ESG company list. It now resolves to the same
+          workspace `/esg` shows, so existing links and the toolkit's back
+          button keep working without a second list to maintain. */}
       <Route path="/esg/clients">
-        <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgWorkspace /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId/summary">
         <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>

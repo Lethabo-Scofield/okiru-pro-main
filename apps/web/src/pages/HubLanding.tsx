@@ -550,7 +550,7 @@ export default function HubLanding() {
             {esgAllowed && continueEsg && (
               <button
                 type="button"
-                onClick={() => navigate('/esg')}
+                onClick={() => navigate('/esg/new')}
                 className="group flex items-center justify-between gap-4 rounded-2xl border border-emerald-400/25 bg-emerald-500/[0.07] px-5 py-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-300/50 hover:bg-emerald-500/[0.12]"
                 data-testid="continue-esg"
               >
