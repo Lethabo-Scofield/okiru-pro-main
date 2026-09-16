@@ -5,6 +5,28 @@ import { ESG_DEFAULT_DEPOTS } from "./esgDefaults";
 export const COVER_FIELDS: EsgFieldDef[] = [
   { cell: "entity", label: "Entity" },
   { cell: "period", label: "Reporting period" },
+  /*
+   * The organisational boundary is MANDATORY and the company's to declare.
+   *
+   * "This isn't optional. The GHG Protocol Corporate Standard, which underpins
+   * virtually every framework, treats the choice of organisational boundary as
+   * a mandatory reporting principle: a company must select one of three defined
+   * approaches, apply it consistently, and state which one it used. A report
+   * that reports absolute tonnes without saying which boundary produced them is
+   * functionally unreviewable." — Z. Mnanzana, Q20, 14 September 2026.
+   *
+   * Every report we generated asserted "operational control" on the client's
+   * behalf without ever asking. For a group with joint ventures that is not a
+   * formatting detail: it decides which emissions are in the number at all.
+   */
+  {
+    cell: "boundary",
+    label: "Organisational boundary",
+    type: "select",
+    options: ["Operational control", "Financial control", "Equity share"],
+    helpText:
+      "Operational control: all emissions from anything the company has authority to set operating policy for. Financial control: all emissions from anything it can direct for economic benefit, broadly matching the consolidation test the accountants already use; a minority stake or a genuine joint venture is excluded entirely rather than pro-rated. Equity share: emissions in proportion to the ownership stake in each operation, whether or not it is controlled.",
+  },
   { cell: "baselineYear", label: "Baseline year", type: "number" },
   { cell: "netZeroTargetYear", label: "Net-zero target year", type: "number" },
   {
@@ -108,7 +130,11 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
     cell: "B10",
     label: "Sector",
     type: "select",
-    options: COVER_FIELDS[4].options,
+    // Looked up by cell, not by position. This was `COVER_FIELDS[4]`, which
+    // silently pointed at a different field the moment one was inserted above
+    // it — and the sector list is what the parser and the importer match
+    // against, so the breakage surfaced as unrecognised sectors, not as an error.
+    options: COVER_FIELDS.find((f) => f.cell === "sector")?.options,
     helpText:
       "Industry sector for sector-specific norms (e.g. fleet litres per 100 km, International Organization for Standardization (ISO) trackers).",
   },
@@ -292,6 +318,13 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
    * threshold of N/A (the fuel levy already prices it) and purchased electricity
    * is the generator's liability, so neither can ever create it on its own.
    */
+  {
+    cell: "_nzBaselineYear",
+    label: "Emissions base year (calendar year)",
+    type: "number",
+    helpText:
+      "The year the company measures its reductions FROM. SBTi requires each company to choose its own base year and target year and to be measured against that pathway — so a business that has been cutting since 2019 is credited for it, rather than held to a schedule somebody else set.",
+  },
   {
     cell: "_ctCombustion10MW",
     label: "Carbon tax — stationary combustion at or above 10 MW(th)?",

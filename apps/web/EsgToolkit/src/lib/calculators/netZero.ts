@@ -61,6 +61,15 @@ export type NetZeroRoadmapResult = {
   levers: NetZeroLever[];
   /** False when `E_Data!B90` carries no baseline — nothing can be computed. */
   available: boolean;
+  /**
+   * True when the milestones were computed from the company's own base year and
+   * target year. False means they fall back to the source client's fixed
+   * calendar ladder, which is nobody else's schedule — say so wherever this
+   * roadmap is shown.
+   */
+  pathwayIsOwn: boolean;
+  /** The company's base year. 0 when it has not set one. */
+  baselineYear: number;
 };
 
 /**
@@ -80,6 +89,13 @@ const SCOPE12_TRAJECTORY: ReadonlyArray<readonly [year: number, reduction: numbe
   [2050, 0.95],
 ];
 
+/**
+ * The reduction a net-zero target must reach before residual emissions may be
+ * neutralised, under the SBTi Corporate Net-Zero Standard. Not a threshold we
+ * picked: it is the standard the company is claiming alignment with.
+ */
+const TERMINAL_REDUCTION = 0.9;
+
 /** `NetZero_Roadmap!A13:C16` — the OER tier table, verbatim. */
 const OER_TIERS: ReadonlyArray<{ tier: string; year: number; requirement: string; terminal?: boolean }> = [
   { tier: "Pre-Recognised (Current)", year: 2025, requirement: "Commit to SBTi near-term target" },
@@ -93,10 +109,45 @@ const OER_TIERS: ReadonlyArray<{ tier: string; year: number; requirement: string
 ];
 
 /**
- * Reduction required by `year`, read off the workbook's published trajectory.
- * Between two published points the trajectory is interpolated linearly (SBTi's
- * own linear-annual-reduction convention); outside the published range it is
- * clamped to the nearest endpoint. No new reduction target is invented.
+ * The company's OWN pathway: reduction required by `year`, measured from its
+ * own baseline year to its own target year.
+ *
+ * "SBTi is clear that companies must determine their own baseline year, own
+ * target year, and the reduction pathway, and then measure against that.
+ * Companies should be free to choose their own path determined by their own
+ * operational changes and what they can afford."
+ * — Z. Mnanzana, Q21, 14 September 2026.
+ *
+ * The fixed calendar ladder below (`netZeroReductionAt`) is the SG Consumer
+ * workbook's own schedule and applies to nobody else. Held to it, a company
+ * with a 2019 baseline got no credit for the reductions it had already made,
+ * and a company targeting 2040 was measured against 2050's curve.
+ *
+ * This is SBTi's linear annual reduction between the two years the company
+ * chose. It invents nothing: with no baseline year or no target year there is
+ * no pathway, and the caller is told so rather than handed a curve.
+ */
+export function companyReductionAt(
+  year: number,
+  baselineYear: number,
+  targetYear: number,
+  terminalReduction: number,
+): number | null {
+  if (!Number.isFinite(baselineYear) || !Number.isFinite(targetYear)) return null;
+  if (targetYear <= baselineYear) return null;
+  if (year <= baselineYear) return 0;
+  if (year >= targetYear) return terminalReduction;
+  return (terminalReduction * (year - baselineYear)) / (targetYear - baselineYear);
+}
+
+/**
+ * Reduction required by `year` on the SG Consumer workbook's published calendar
+ * trajectory.
+ *
+ * RETAINED FOR PARITY ONLY. This is one client's schedule, not a standard, and
+ * applying it to another company is the defect `companyReductionAt` above
+ * exists to fix. Between two published points it interpolates linearly; outside
+ * the range it clamps to the nearest endpoint.
  */
 export function netZeroReductionAt(year: number): number {
   const points = SCOPE12_TRAJECTORY;
@@ -144,9 +195,32 @@ export function computeNetZeroRoadmap(
    */
   const targetYear = readEsgCell(workbook, "assumptions", "B107") ?? 0;
 
+  /*
+   * The company's own base year. Without it there is no pathway — SBTi measures
+   * reductions from the year the company chose, and a firm that has been cutting
+   * since 2019 must be credited for that rather than started again at today.
+   */
+  const baselineYear =
+    readEsgCell(workbook, "assumptions", "_nzBaselineYear") ??
+    readEsgCell(workbook, "company-reporting-setup", "baselineYear") ??
+    0;
+
+  const pathwayAvailable =
+    mode !== "workbook-parity" && baselineYear > 0 && targetYear > baselineYear;
+
   const milestones: NetZeroMilestone[] = OER_TIERS.map((t) => {
     const year = t.terminal && targetYear > 0 ? targetYear : t.year;
-    const reductionRequired = netZeroReductionAt(year);
+    /*
+     * Corrected mode reads the company's own linear pathway; parity mode keeps
+     * the workbook's fixed calendar ladder. Where the company has not set a
+     * base year and a target year, corrected mode falls back to the ladder AND
+     * reports `pathwayIsOwn: false`, so a reader is never shown another
+     * company's schedule as though it were theirs.
+     */
+    const reductionRequired = pathwayAvailable
+      ? companyReductionAt(year, baselineYear, targetYear, TERMINAL_REDUCTION) ??
+        netZeroReductionAt(year)
+      : netZeroReductionAt(year);
     const targetTco2e = baseline > 0 ? baseline * (1 - reductionRequired) : 0;
     return {
       tier: t.tier,
@@ -166,6 +240,8 @@ export function computeNetZeroRoadmap(
     currentTco2e: current,
     gapTco2e: terminal?.gapTco2e ?? 0,
     targetYear,
+    pathwayIsOwn: pathwayAvailable,
+    baselineYear,
     milestones,
     levers: readLevers(workbook),
     available: baselineCell != null && baselineCell > 0,

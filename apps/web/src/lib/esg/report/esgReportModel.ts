@@ -53,7 +53,12 @@ import {
 
 /* ─────────────────────────── section 5: metric schema ──────────────────── */
 
-export type EsgBoundary = "Operational control" | "Financial control" | "Equity share";
+export type EsgBoundary =
+  | "Operational control"
+  | "Financial control"
+  | "Equity share"
+  /** The company has not made the declaration the GHG Protocol requires. */
+  | "Not declared";
 export type EsgAssuranceStatus =
   | "Unassured"
   | "Internally reviewed"
@@ -411,6 +416,20 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
   const reportingStandard = readEsgText(workbook, "assumptions", "B11") || "King V + IFRS S1/S2";
   const materialityApproach = readEsgText(workbook, "assumptions", "B12") || "Single (financial — IFRS)";
   const dataMonths = readEsgCell(workbook, "assumptions", "B111");
+  /*
+   * The organisational boundary is the company’s declaration, not ours. The
+   * GHG Protocol treats the choice as a mandatory reporting principle, and a
+   * report that states absolute tonnes without saying which boundary produced
+   * them is unreviewable — a reader cannot tell whether a joint venture or a
+   * controlled subsidiary is in or out. Where it has not been declared the
+   * report says so rather than asserting one on the client’s behalf.
+   */
+  const declaredBoundary = readEsgText(workbook, "company-reporting-setup", "boundary");
+  const boundary = (["Operational control", "Financial control", "Equity share"].includes(
+    declaredBoundary,
+  )
+    ? declaredBoundary
+    : "Not declared") as EsgBoundary;
 
   const scope = readReportScopeFromCells(workbook.sections?.assumptions?.cells);
   const scorecard = computeEsgScorecard(workbook);
@@ -446,7 +465,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
     sector,
     baselineYear,
     netZeroTargetYear,
-    boundary: "Operational control",
+    boundary,
     entitiesIncluded: [entityName],
     preparedBy: input.preparedBy ?? "Okiru",
     generationReference,
@@ -510,7 +529,18 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
   };
 
   // ── E: the GHG inventory, one metric per line (the 6.1 "anatomy") ──────
-  const factorSource = `Sector emission-factor set for "${sector}" (mirrors Assumptions!B30:B35)`;
+  /*
+   * Provenance for the factors. "The Department of Forestry, Fisheries and the
+   * Environment (DFFE) publishes South Africa's grid emission factors."
+   * — Z. Mnanzana, Q6, 14 September 2026.
+   *
+   * Until the sector configs carry a citation per factor, this names the
+   * publisher and admits the set is not yet versioned, rather than implying a
+   * traceability the numbers do not have. An assurance provider asks for the
+   * edition and the table; the publisher is what we can give today.
+   */
+  const factorSource =
+    `Sector emission-factor set for "${sector}" (Assumptions!B30:B35). Grid electricity follows the South African grid emission factors published by the Department of Forestry, Fisheries and the Environment (DFFE). Edition and table not yet recorded per factor.`;
   const scopeEvidence: Record<number, (string | null)[]> = {
     1: [evGhgActivity, evFleet, evAssumptions],
     2: [evElectricity, evAssumptions],
@@ -536,7 +566,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
       unit: "tCO2e",
       periodStart: meta.periodStart,
       periodEnd: meta.periodEnd,
-      boundary: "Operational control",
+      boundary,
       entitiesIncluded: meta.entitiesIncluded,
       sourceSystem: line.scope === 2 ? "Utility meter portal / municipal account" : "Fuel card ledger and monthly returns",
       sourceOwner: "Group Operations Manager",
@@ -577,7 +607,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
     unit: "tCO2e",
     periodStart: meta.periodStart,
     periodEnd: meta.periodEnd,
-    boundary: "Operational control",
+    boundary,
     entitiesIncluded: meta.entitiesIncluded,
     sourceSystem: "GHG inventory — activity x emission factor",
     sourceOwner: "Group Operations Manager",
@@ -643,7 +673,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
       unit,
       periodStart: meta.periodStart,
       periodEnd: meta.periodEnd,
-      boundary: "Operational control",
+      boundary,
       entitiesIncluded: meta.entitiesIncluded,
       sourceSystem: system,
       sourceOwner: owner,
@@ -771,7 +801,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
         unit: `points of ${def.maxPoints}`,
         periodStart: meta.periodStart,
         periodEnd: meta.periodEnd,
-        boundary: "Operational control",
+        boundary,
         entitiesIncluded: meta.entitiesIncluded,
         sourceSystem: `Okiru ESG Toolkit — ${pillar[0].toUpperCase()}_Scorecard row ${def.row}`,
         sourceOwner:
