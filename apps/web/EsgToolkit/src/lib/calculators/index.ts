@@ -28,7 +28,11 @@ export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgSco
   const s = scoreSocial(workbook);
   const g = scoreGovernance(workbook);
   const dash = computeEsgDashboard(workbook);
-  const pillars = esgScoresFromPillars(e.score, s.score, g.score);
+  const pillars = esgScoresFromPillars(e.score, s.score, g.score, {
+    environmental: e.scoringDenominator,
+    social: s.scoringDenominator,
+    governance: g.scoringDenominator,
+  });
 
   return {
     ...dash,

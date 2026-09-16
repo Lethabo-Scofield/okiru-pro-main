@@ -79,7 +79,11 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
   const e = scoreEnvironmental(workbook);
   const s = scoreSocial(workbook);
   const g = scoreGovernance(workbook);
-  const overallPercent = esgOverallPercent(e.score, s.score, g.score);
+  const overallPercent = esgOverallPercent(e.score, s.score, g.score, {
+    environmental: e.scoringDenominator,
+    social: s.scoringDenominator,
+    governance: g.scoringDenominator,
+  });
   const tax = computeCarbonTax(workbook);
 
   const scope1 = (workbook.sections?.["e-data"]?.cells?.["L75"] as number) ?? undefined;

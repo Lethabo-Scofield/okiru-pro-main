@@ -671,7 +671,15 @@ describe("King5_Scorecard E21 / E22 / F21", () => {
 });
 
 describe("IFRS_S1_S2 E29 / E30", () => {
-  it("E29 = Σ per-row score (Disclosed 5 / Partially 3 / N/A 5 / else 0)", () => {
+  it("scores Disclosed 5 and Partially 3, and takes N/A out of both sides", () => {
+    /*
+     * `N/A` used to score 5 — the same as a fully disclosed requirement — while
+     * the denominator stayed at 22. Marking requirements not applicable was
+     * therefore the cheapest way to raise a score anywhere in the toolkit, and
+     * a company that marked all 22 scored 100% readiness for disclosing
+     * nothing. The expert ruling (Q15) is that it is excluded, so it leaves the
+     * numerator and the denominator together.
+     */
     const d = derive({
       ifrs: {
         A5: "Board oversight", C5: "Disclosed",
@@ -680,9 +688,33 @@ describe("IFRS_S1_S2 E29 / E30", () => {
         A8: "Internal carbon price", C8: "N/A",
       },
     });
-    expect(cells(d, "ifrs").E29).toBe(13);
-    expect(cells(d, "ifrs")._max_score).toBe(110); // 22 requirements × 5
-    expect(cells(d, "ifrs").E30).toBeCloseTo(13 / 110, 10);
+    expect(cells(d, "ifrs").E29).toBe(8); // 5 + 3; the N/A row scores nothing
+    expect(cells(d, "ifrs")._max_score).toBe(105); // 21 applicable × 5, not 22
+    expect(cells(d, "ifrs")._not_applicable_count).toBe(1);
+    expect(cells(d, "ifrs").E30).toBeCloseTo(8 / 105, 10);
+  });
+
+  it("does not let a company raise readiness by assessing fewer requirements", () => {
+    // Four requirements assessed out of 22. The other 18 are unassessed, which
+    // is a gap — not an exemption — so the denominator stays at the full set.
+    const d = derive({
+      ifrs: { A5: "Board oversight", C5: "Disclosed" },
+    });
+    expect(cells(d, "ifrs")._max_score).toBe(110);
+    expect(cells(d, "ifrs").E30).toBeCloseTo(5 / 110, 10);
+  });
+
+  it("leaves nothing to score when every requirement is not applicable", () => {
+    const d = derive({
+      ifrs: {
+        A5: "Board oversight", C5: "N/A",
+        A6: "Management role", C6: "N/A",
+      },
+    });
+    expect(cells(d, "ifrs")._applicable_count).toBe(0);
+    // 22 requirements less 2 declared inapplicable — the rest are still unassessed.
+    expect(cells(d, "ifrs")._max_score).toBe(100);
+    expect(cells(d, "ifrs").E29).toBe(0);
   });
 
   it("reproduces the live workbook's 18 / 0.1636 from 8 partial + 4 not-disclosed", () => {

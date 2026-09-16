@@ -1,3 +1,4 @@
+import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
 /**
  * `G_Scorecard` rows 5–25 — Governance pillar.
  *
@@ -16,12 +17,15 @@ import {
   scoringMode,
   type EsgScoringOptions,
 } from "./shared";
+import {
+  applicableMaxFor,
+  exclude,
+  mergeExclusions,
+  readDeclaredExclusions,
+  type EsgPillarResult,
+} from "./esgApplicability";
 
-export type GovernanceScoreResult = {
-  score: number;
-  max: number;
-  rows: Record<string, number>;
-};
+export type GovernanceScoreResult = EsgPillarResult;
 
 function fCell(wb: EsgWorkbookData, ref: string): number {
   return readEsgCell(wb, "g-data", ref) ?? 0;
@@ -120,7 +124,44 @@ export function scoreGovernance(
 
   const rows = { d5, d6, d7, d9, d10, d12, d14, d16, d17, d19, d20, d22, d24, d25 };
   const score = Object.values(rows).reduce((a, b) => a + b, 0);
-  return { score: minCap(score, PILLAR_MAX_GOVERNANCE), max: PILLAR_MAX_GOVERNANCE, rows };
+
+  const ifrsApplicable = readEsgCell(workbook, "ifrs", "_applicable_count");
+  const ifrsStated = readEsgCell(workbook, "ifrs", "_not_applicable_count");
+  const derivedExclusions =
+    ifrsApplicable === 0 && (ifrsStated ?? 0) > 0
+      ? [
+          exclude(
+            "governance",
+            "d9",
+            "Every IFRS S1/S2 disclosure requirement is marked not applicable to this business, so there is nothing to assess readiness against.",
+          ),
+        ]
+      : [];
+
+  /*
+   * Exclusions leave the numerator and the denominator together. Parity mode
+   * takes none: it reproduces the client's spreadsheet, which has no concept of
+   * an indicator that does not apply.
+   */
+  const excluded =
+    mode === "workbook-parity"
+      ? []
+      : mergeExclusions(readDeclaredExclusions(workbook, "governance"), derivedExclusions);
+  const scored = Object.entries(rows)
+    .filter(([key]) => !excluded.some((x) => x.key === key))
+    .reduce((a, [, v]) => a + v, 0);
+  const scoringDenominator =
+    mode === "workbook-parity"
+      ? ESG_D9_PILLAR_DIVISOR
+      : applicableMaxFor(ESG_D9_PILLAR_DIVISOR, excluded);
+
+  return {
+    score: minCap(mode === "workbook-parity" ? score : scored, PILLAR_MAX_GOVERNANCE),
+    max: PILLAR_MAX_GOVERNANCE,
+    scoringDenominator,
+    rows,
+    excluded,
+  };
 }
 
 /** `IF(B25="",5,IF(B25=0,5,0))` verbatim — blank earns the points. */

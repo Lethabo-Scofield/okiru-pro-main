@@ -39,9 +39,34 @@ export const ESG_THR_LTIFR = 2.0;
 /** ISO_14083 is reporting-only; excluded from E_Data GHG totals until product says otherwise. */
 export const ESG_ISO_14083_REPORTING_ONLY = true;
 
-export function esgOverallPercent(ePoints: number, sPoints: number, gPoints: number): number {
-  const parts = [ePoints, sPoints, gPoints].map((p) => p / ESG_D9_PILLAR_DIVISOR);
-  return parts.reduce((a, b) => a + b, 0) / parts.length;
+/**
+ * The overall score.
+ *
+ * `denominators` is what each pillar can actually be scored out of once
+ * indicators that do not apply to the company have been excluded — "should not
+ * form part of total" (Z. Mnanzana, Q16, 14 September 2026). Omit it and every
+ * pillar divides by the workbook's flat 100, which is the parity behaviour the
+ * golden fixture asserts and must keep.
+ *
+ * A pillar whose applicable maximum is 0 has no applicable indicators at all.
+ * It is dropped from the average rather than counted as 0%, because scoring a
+ * company zero on a pillar it was never required to report is the same mistake
+ * at the level of the pillar instead of the indicator.
+ */
+export function esgOverallPercent(
+  ePoints: number,
+  sPoints: number,
+  gPoints: number,
+  denominators?: { environmental: number; social: number; governance: number },
+): number {
+  const pairs: [number, number][] = [
+    [ePoints, denominators?.environmental ?? ESG_D9_PILLAR_DIVISOR],
+    [sPoints, denominators?.social ?? ESG_D9_PILLAR_DIVISOR],
+    [gPoints, denominators?.governance ?? ESG_D9_PILLAR_DIVISOR],
+  ];
+  const scored = pairs.filter(([, max]) => max > 0);
+  if (scored.length === 0) return 0;
+  return scored.reduce((a, [p, max]) => a + p / max, 0) / scored.length;
 }
 
 /**
@@ -73,11 +98,12 @@ export function esgScoresFromPillars(
   ePoints: number,
   sPoints: number,
   gPoints: number,
+  denominators?: { environmental: number; social: number; governance: number },
 ): EsgPillarScores {
   return {
     environmental: ePoints,
     social: sPoints,
     governance: gPoints,
-    overallPercent: esgOverallPercent(ePoints, sPoints, gPoints),
+    overallPercent: esgOverallPercent(ePoints, sPoints, gPoints, denominators),
   };
 }

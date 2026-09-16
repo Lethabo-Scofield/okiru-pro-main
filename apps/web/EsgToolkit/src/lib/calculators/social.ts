@@ -1,3 +1,4 @@
+import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
 /**
  * `S_Scorecard` rows 5–27 — Social pillar.
  *
@@ -23,12 +24,15 @@ import {
   yesPartialNo,
   type EsgScoringOptions,
 } from "./shared";
+import {
+  applicableMaxFor,
+  exclude,
+  mergeExclusions,
+  readDeclaredExclusions,
+  type EsgPillarResult,
+} from "./esgApplicability";
 
-export type SocialScoreResult = {
-  score: number;
-  max: number;
-  rows: Record<string, number>;
-};
+export type SocialScoreResult = EsgPillarResult;
 
 const THRESHOLDS = ESG_CONSUMER_GOODS_CONFIG.thresholds;
 
@@ -222,5 +226,29 @@ export function scoreSocial(
     d17, d18, d19, d20, d22, d23, d24, d26, d27,
   };
   const score = Object.values(rows).reduce((a, b) => a + b, 0);
-  return { score: minCap(score, PILLAR_MAX_SOCIAL), max: PILLAR_MAX_SOCIAL, rows };
+
+  /*
+   * Exclusions leave the numerator and the denominator together. Parity mode
+   * takes none: it reproduces the client's spreadsheet, which has no concept of
+   * an indicator that does not apply.
+   */
+  const excluded =
+    mode === "workbook-parity"
+      ? []
+      : mergeExclusions(readDeclaredExclusions(workbook, "social"), []);
+  const scored = Object.entries(rows)
+    .filter(([key]) => !excluded.some((x) => x.key === key))
+    .reduce((a, [, v]) => a + v, 0);
+  const scoringDenominator =
+    mode === "workbook-parity"
+      ? ESG_D9_PILLAR_DIVISOR
+      : applicableMaxFor(ESG_D9_PILLAR_DIVISOR, excluded);
+
+  return {
+    score: minCap(mode === "workbook-parity" ? score : scored, PILLAR_MAX_SOCIAL),
+    max: PILLAR_MAX_SOCIAL,
+    scoringDenominator,
+    rows,
+    excluded,
+  };
 }

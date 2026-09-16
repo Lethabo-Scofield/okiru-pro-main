@@ -1075,22 +1075,62 @@ function king5Score(status: string): number {
  * status=D, score=E). Per-row `E` cells are not written — that is the grid's
  * `action` text column. `esgSectionConfigs.ts` owns realigning the columns.
  */
+/**
+ * "Not applicable" leaves the calculation — it is not a pass.
+ *
+ * This used to score `N/A` as 5 of 5, the same as a fully disclosed
+ * requirement, while keeping the denominator at 22. A company that marked
+ * every requirement not applicable therefore scored 110/110 — 100% climate
+ * disclosure readiness, and the full 10 governance points, for disclosing
+ * nothing at all. Marking a requirement N/A was the cheapest way to raise
+ * the score in the whole toolkit.
+ *
+ * The expert ruling (Q15, Z. Mnanzana, 14 September 2026) is "excluded": a
+ * requirement that does not apply comes out of BOTH the numerator and the
+ * denominator, so readiness is measured across what the company actually has
+ * to disclose. `_applicable_count` is published so a caller can tell "0%
+ * because nothing is disclosed" from "no applicable requirements at all",
+ * which are different facts and must not render as the same number.
+ */
 function deriveIfrs(d: Draft): void {
-  const rows = gridRows(d.cells("ifrs"), "ifrs").filter((r) => text(r.values.status) !== "");
-  if (rows.length === 0) return;
+  const stated = gridRows(d.cells("ifrs"), "ifrs").filter((r) => text(r.values.status) !== "");
+  if (stated.length === 0) return;
 
-  const total = rows.reduce((a, r) => a + ifrsScore(text(r.values.status)), 0);
-  const max = IFRS_POINTS_PER_REQUIREMENT * Math.max(IFRS_REQUIREMENT_COUNT, rows.length);
+  const applicable = stated.filter((r) => !isNotApplicable(text(r.values.status)));
+  const total = applicable.reduce((a, r) => a + ifrsScore(text(r.values.status)), 0);
+  /*
+   * The denominator is every requirement that APPLIES — not every requirement
+   * the company got round to assessing. A requirement left blank is unassessed,
+   * which is a gap; only one explicitly marked not applicable comes out. Sizing
+   * the denominator to the rows entered would let a company raise its readiness
+   * score by assessing fewer requirements, which is precisely backwards.
+   */
+  const requirements = Math.max(IFRS_REQUIREMENT_COUNT, stated.length);
+  const notApplicable = stated.length - applicable.length;
+  const max = IFRS_POINTS_PER_REQUIREMENT * Math.max(0, requirements - notApplicable);
 
   d.fill("ifrs", "E29", total);
   d.fill("ifrs", "E30", safeDiv(total, max));
   d.fill("ifrs", "_max_score", max);
+  d.fill("ifrs", "_applicable_count", applicable.length);
+  d.fill("ifrs", "_not_applicable_count", stated.length - applicable.length);
 }
 
+/** The grid's own "N/A", however a user or an importer spells it. */
+function isNotApplicable(status: string): boolean {
+  const s = status.trim().toLowerCase().replace(/[\s.]/g, "");
+  return s === "na" || s === "n/a" || s === "notapplicable";
+}
+
+/**
+ * Points for one requirement. `N/A` is deliberately absent: an inapplicable
+ * requirement is filtered out before this is called, rather than being scored
+ * as though it had been disclosed. Anything unrecognised scores 0 — an
+ * unreadable status is not evidence of disclosure.
+ */
 function ifrsScore(status: string): number {
-  const s = status.toLowerCase();
+  const s = status.trim().toLowerCase();
   if (s === "disclosed") return 5;
   if (s === "partially disclosed") return 3;
-  if (s === "n/a") return 5;
   return 0;
 }
