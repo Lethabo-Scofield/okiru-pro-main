@@ -24,6 +24,24 @@ describe("App.tsx route declarations", () => {
     expect(hasRoute("/dashboard")).toBe(true);
   });
 
+  /**
+   * Each product gets a door of its own, and behind it a workspace: the
+   * consultant's companies for that product, with "create scorecard" inside.
+   * `/bbbee` and `/esg` are aliases of the existing pages while the real
+   * workspace pages are built; the old paths keep working throughout.
+   */
+  it("declares a door per product, and a create route behind each", () => {
+    expect(hasRoute("/bbbee")).toBe(true);
+    expect(hasRoute("/bbbee/new")).toBe(true);
+    expect(hasRoute("/esg")).toBe(true);
+    expect(hasRoute("/esg/new")).toBe(true);
+  });
+
+  it("declares /access alongside /workspace for people and permissions", () => {
+    expect(hasRoute("/access")).toBe(true);
+    expect(hasRoute("/workspace")).toBe(true);
+  });
+
   it("declares /certificates", () => {
     expect(hasRoute("/certificates")).toBe(true);
   });

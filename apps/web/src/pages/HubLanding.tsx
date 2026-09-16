@@ -8,7 +8,7 @@ import hubBackground from '@assets/image_1779723521128.png';
 import certCardBg from '@assets/image_1779724907320.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
-  Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
+  Award, Leaf, Users, ShieldCheck,
   Sparkles, Plus, LineChart, UserCog, ChevronDown, Gift, Grid3X3,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
@@ -120,10 +120,6 @@ export default function HubLanding() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  const handleComingSoon = () => {
-    toast({ title: 'Coming Soon', description: 'This toolkit is currently in development.' });
-  };
-
   /** A short "saved 10:42" label, or empty when the timestamp is unreadable. */
   const savedLabel = (iso: string | undefined): string => {
     if (!iso) return '';
@@ -171,21 +167,12 @@ export default function HubLanding() {
     // ESG deliberately NOT listed here — the primary-actions grid above already
     // carries the ESG Toolkit card, and showing it twice (once next to the
     // Certificate Hub) read as two different products.
-    {
-      id: 'employment-equity', title: 'Employment Equity', tag: 'HR & PEOPLE', aiBadge: 'AI-Analytics',
-      icon: <Users className="w-4 h-4" />, action: handleComingSoon,
-      description: 'EEA2/EEA4 reports, demographic profiling and 5-year equity plans.',
-    },
-    {
-      id: 'wsp-atr', title: 'WSP/ATR Reporting', tag: 'HR & PEOPLE', aiBadge: 'AI-Assisted',
-      icon: <BookOpen className="w-4 h-4" />, action: handleComingSoon,
-      description: 'Annual SETA submissions with automated training-needs analysis.',
-    },
-    {
-      id: 'financial-audit', title: 'Financial Audit', tag: 'FINANCE', aiBadge: 'AI-Reviewed',
-      icon: <Briefcase className="w-4 h-4" />, action: handleComingSoon,
-      description: 'Audit evidence repository, finding tracker and risk-based planning.',
-    },
+    //
+    // Employment Equity, WSP/ATR and Financial Audit used to sit here as
+    // "Coming Soon" tiles. They never rendered: the `active` filter below keeps
+    // only entries with a `link`, so all three were dropped on every pass and
+    // their toast was unreachable. Advertising unbuilt products to a client
+    // measuring their own compliance is not what this page is for.
   ];
     return items;
   // eslint-disable-next-line react-hooks/exhaustive-deps

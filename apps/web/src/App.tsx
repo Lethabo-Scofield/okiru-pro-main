@@ -197,6 +197,12 @@ function AppRouter() {
       <Route path="/hub">
         <ProtectedRoute><HubLanding /></ProtectedRoute>
       </Route>
+      {/* People, companies and pillars. `/access` is the name this surface is
+          getting — it answers "who can open which company, and which pillars
+          inside it". `/workspace` stays as the alias its links already use. */}
+      <Route path="/access">
+        <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
       </Route>
@@ -218,6 +224,20 @@ function AppRouter() {
       </Route>
       <Route path="/invite/:token">
         <AcceptInvite />
+      </Route>
+      {/* The two products get a door each, and behind each door a workspace:
+          the consultant's list of companies for THAT product, with "create
+          scorecard" as the action inside it. Consultants carry many companies,
+          so one mixed list filtered by a dropdown (what /dashboard is) reads as
+          one product with a filter rather than two products.
+
+          These are aliases today and become the real pages in the steps that
+          follow; /dashboard and /create-scorecard keep working throughout. */}
+      <Route path="/bbbee/new">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
+      <Route path="/bbbee">
+        <ProtectedRoute><Dashboard /></ProtectedRoute>
       </Route>
       <Route path="/dashboard">
         <ProtectedRoute><Dashboard /></ProtectedRoute>
@@ -279,6 +299,12 @@ function AppRouter() {
       {/* The ESG front door: choose → provide → review, with NO company up
           front. It used to redirect here to the company picker, which forced a
           name out of the user before the documents that know it had been read. */}
+      {/* `/esg/new` is where creating an ESG scorecard is moving, so that `/esg`
+          can become the ESG workspace and match `/bbbee`. Both render the flow
+          until the workspace page lands. */}
+      <Route path="/esg/new">
+        <ProtectedRoute><EsgPreviewRoute><EsgCreateFlow /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
       <Route path="/esg">
         <ProtectedRoute><EsgPreviewRoute><EsgCreateFlow /></EsgPreviewRoute></ProtectedRoute>
       </Route>

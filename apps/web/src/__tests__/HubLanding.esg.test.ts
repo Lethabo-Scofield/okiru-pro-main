@@ -29,6 +29,20 @@ describe("HubLanding ESG card (Phase 1 preview gate)", () => {
     expect(esgHrefs).toEqual(['href="/esg"']);
   });
 
+  /**
+   * Nothing on the hub advertises a product that does not exist. Employment
+   * Equity, WSP/ATR and Financial Audit sat here as "Coming Soon" tiles that
+   * never rendered — the catalogue filter drops any entry without a `link`, so
+   * all three were discarded on every pass and their toast was unreachable.
+   */
+  it("advertises no unbuilt toolkits", () => {
+    expect(HUB_TSX).not.toMatch(/handleComingSoon/);
+    expect(HUB_TSX).not.toMatch(/title: 'Coming Soon'/);
+    for (const gone of ['Employment Equity', 'WSP/ATR', 'Financial Audit']) {
+      expect(HUB_TSX).not.toMatch(new RegExp(`title: '${gone.replace('/', '\\/')}'`));
+    }
+  });
+
   it("gates hero ESG CTA behind esgAllowed and sends it to the start flow", () => {
     expect(HUB_TSX).toMatch(/esgAllowed/);
     expect(HUB_TSX).toMatch(/data-testid="action-create-esg"/);
