@@ -1,3 +1,5 @@
+import { isSkippedCompanyProfileName } from "@/lib/profilePlaceholder";
+
 /**
  * Company onboarding is stored in Mongo (GET /api/onboarding/me).
  * We only treat the user as "onboarded" when the response is JSON with a non-empty companyName.
@@ -28,7 +30,11 @@ function delay(ms: number): Promise<void> {
 export function isCompleteOnboardingProfile(profile: unknown): profile is { companyName: string } {
   if (!profile || typeof profile !== "object") return false;
   const name = (profile as { companyName?: unknown }).companyName;
-  return typeof name === "string" && name.trim().length > 0;
+  return (
+    typeof name === "string" &&
+    name.trim().length > 0 &&
+    !isSkippedCompanyProfileName(name)
+  );
 }
 
 export type OnboardingGateResult =

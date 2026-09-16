@@ -28,6 +28,10 @@ function wb(sections: Record<string, Cells>): EsgWorkbookData {
 
 /** Workbook thresholds every band below is measured against (Assumptions block 2). */
 const ASSUMPTIONS: Cells = {
+  // These ARE the B-BBEE / Employment Equity targets, so the fixture declares
+  // that basis. Targets are no longer assumed: without a declared basis an
+  // indicator has nothing to be scored against and leaves the total.
+  _targetBasis: "B-BBEE / Employment Equity targets",
   B8: "Standard",
   B9: 0.5, // stance floor
   B43: 0.1, // THR_GHG_YOY

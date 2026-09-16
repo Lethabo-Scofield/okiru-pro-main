@@ -21,6 +21,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { AppNavBack } from "@/components/AppNavBack";
+import { isSuperAdmin } from "@/lib/roles";
 
 interface AdminUser {
   id: string;
@@ -69,7 +70,7 @@ export default function AdminUsers() {
           <CardContent className="p-8 text-center">
             <Shield className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h2 className="text-lg font-semibold mb-2" data-testid="text-access-denied">Access Denied</h2>
-            <p className="text-sm text-muted-foreground mb-4">You need administrator privileges to view this page.</p>
+            <p className="text-sm text-muted-foreground mb-4">You need super-admin privileges to view this page.</p>
             <Button onClick={() => navigate("/hub")} data-testid="btn-go-hub">Go to Hub</Button>
           </CardContent>
         </Card>

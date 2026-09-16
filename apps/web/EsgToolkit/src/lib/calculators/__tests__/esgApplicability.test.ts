@@ -42,15 +42,17 @@ describe("a declared exclusion", () => {
   });
 
   it("takes its points out of the denominator, not out of the company's hide", () => {
-    const base = scoreSocial(deriveEsgSummaryCells(wb({})));
+    // Declare a target basis so the comparison isolates THIS exclusion: an
+    // undeclared basis excludes every target-based indicator as well.
+    const basis = { assumptions: { _targetBasis: "B-BBEE / Employment Equity targets" } };
+    const base = scoreSocial(deriveEsgSummaryCells(wb(basis)));
     const excluded = scoreSocial(
-      deriveEsgSummaryCells(wb({ applicability: { [`s:${FOOD_SAFETY}`]: reason } })),
+      deriveEsgSummaryCells(wb({ ...basis, applicability: { [`s:${FOOD_SAFETY}`]: reason } })),
     );
     const points = esgIndicatorMaxPoints("social", FOOD_SAFETY);
 
-    expect(base.scoringDenominator).toBe(ESG_D9_PILLAR_DIVISOR);
-    expect(excluded.scoringDenominator).toBe(ESG_D9_PILLAR_DIVISOR - points);
-    expect(excluded.excluded.map((x) => x.key)).toEqual([FOOD_SAFETY]);
+    expect(excluded.scoringDenominator).toBe(base.scoringDenominator - points);
+    expect(excluded.excluded.map((x) => x.key)).toContain(FOOD_SAFETY);
   });
 
   it("raises the percentage for a company that could never have earned the points", () => {
@@ -67,9 +69,13 @@ describe("a declared exclusion", () => {
   });
 
   it("is ignored when no reason is given — silence never moves the denominator", () => {
-    const blank = scoreSocial(deriveEsgSummaryCells(wb({ applicability: { [`s:${FOOD_SAFETY}`]: "  " } })));
-    expect(blank.excluded).toHaveLength(0);
-    expect(blank.scoringDenominator).toBe(ESG_D9_PILLAR_DIVISOR);
+    const basis = { assumptions: { _targetBasis: "B-BBEE / Employment Equity targets" } };
+    const base = scoreSocial(deriveEsgSummaryCells(wb(basis)));
+    const blank = scoreSocial(
+      deriveEsgSummaryCells(wb({ ...basis, applicability: { [`s:${FOOD_SAFETY}`]: "  " } })),
+    );
+    expect(blank.excluded.map((x) => x.key)).not.toContain(FOOD_SAFETY);
+    expect(blank.scoringDenominator).toBe(base.scoringDenominator);
   });
 
   it("never applies in parity mode, which reproduces a sheet that has no such concept", () => {

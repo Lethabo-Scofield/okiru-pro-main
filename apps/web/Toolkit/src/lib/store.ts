@@ -8,6 +8,7 @@ import {
 import { toBreakdownLines, eapDetailRows, skillsCategoryRows, type EapDetailCell } from './calculators/breakdown';
 import { v4 as uuidv4 } from "uuid";
 import { api, invalidateClientData } from './api';
+import { toast } from 'sonner';
 import { API_BASE } from './config';
 import type { CalculatorConfig } from '../../../shared/schema';
 import {
@@ -352,6 +353,14 @@ interface BbeeState extends PillarState {
   ignoreSubMinimum: boolean;
 
   loadClientData: (clientId: string) => Promise<void>;
+  // DATA-001: persistence-failure state so failed saves are visible, not silent.
+  saveError: string | null;
+  pendingWrites: number;
+  _lastFailedSave: (() => Promise<unknown>) | null;
+  _recordSaveError: (error: unknown, op?: () => Promise<unknown>) => void;
+  _persistSave: (op: () => Promise<unknown>) => Promise<unknown>;
+  _retrySave: () => void;
+  clearSaveError: () => void;
   clearData: () => void;
   startNewSession: () => void;
 
@@ -1203,7 +1212,53 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   baseSnapshot: null,
   ignoreSubMinimum: false,
 
+  saveError: null,
+  pendingWrites: 0,
+  _lastFailedSave: null,
+  clearSaveError: () => set({ saveError: null }),
+  // DATA-001: a persistence call failed. Surface it (toast + held error state)
+  // and keep the failed op so the user can retry it in one tap. The optimistic
+  // local update stays; the user is told the server did not accept the change.
+  _recordSaveError: (error: unknown, op?: () => Promise<unknown>) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[save-failed]', error);
+    set(op ? { saveError: message, _lastFailedSave: op } : { saveError: message });
+    toast.error("Your last change wasn't saved", {
+      description: 'The server rejected the update.',
+      duration: 10000,
+      action: op ? { label: 'Retry', onClick: () => get()._retrySave() } : undefined,
+    });
+  },
+  // DATA-001: run a save with in-flight tracking (so re-hydration can defer while
+  // writes are pending) and failure capture (for Retry). The caller has already
+  // applied the optimistic local state; this owns only the server round-trip.
+  _persistSave: (op: () => Promise<unknown>) => {
+    set((s) => ({ pendingWrites: s.pendingWrites + 1 }));
+    return op()
+      .then((r) => {
+        set((s) => ({ pendingWrites: Math.max(0, s.pendingWrites - 1) }));
+        return r;
+      })
+      .catch((e) => {
+        set((s) => ({ pendingWrites: Math.max(0, s.pendingWrites - 1) }));
+        get()._recordSaveError(e, op);
+      });
+  },
+  _retrySave: () => {
+    const op = get()._lastFailedSave;
+    if (!op) return;
+    set({ saveError: null, _lastFailedSave: null });
+    void get()._persistSave(op);
+  },
+
   loadClientData: async (clientId: string) => {
+    // DATA-001: don't let a background re-hydration clobber unsaved/pending edits
+    // for the client currently being edited. Initial loads (no pending writes,
+    // no error) and switches to a different client proceed normally.
+    if (clientId === get().activeClientId && (get().pendingWrites > 0 || get().saveError)) {
+      console.warn('[loadClientData] skipped re-hydration: writes pending / unsaved error for the active client');
+      return;
+    }
     try {
       const data = await api.getClientData(clientId);
       
@@ -1548,7 +1603,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const clientId = get().activeClientId;
     if (clientId) {
-      api.updateClient(clientId, { pipelineOverrides: overrides }).catch(console.error);
+      get()._persistSave(() => api.updateClient(clientId, { pipelineOverrides: overrides }));
     }
   },
 
@@ -1569,7 +1624,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     };
 
     if (state.activeClientId) {
-      api.addScenario(state.activeClientId, { name, snapshot: newScenario }).catch(console.error);
+      get()._persistSave(() => api.addScenario(state.activeClientId!, { name, snapshot: newScenario }));
     }
 
     set({ scenarios: [...state.scenarios, newScenario], baseSnapshot: baseToSave });
@@ -1612,7 +1667,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeScenarioId === id) get().switchScenario(null);
     set((state) => ({ scenarios: state.scenarios.filter(s => s.id !== id) }));
-    api.deleteScenario(id).catch(console.error);
+    get()._persistSave(() => api.deleteScenario(id));
   },
 
   loadCalculatorConfig: async (clientId: string) => {
@@ -1773,16 +1828,16 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     set((state) => ({ client: { ...state.client, financialHistory: [...state.client.financialHistory, year] } }));
     const state = get();
     if (state.activeClientId) {
-      api.addFinancialYear(state.activeClientId, { id: year.id, year: year.year, revenue: year.revenue, npat: year.npat, indicativeNpat: year.indicativeNpat, notes: year.notes }).catch(console.error);
+      get()._persistSave(() => api.addFinancialYear(state.activeClientId!, { id: year.id, year: year.year, revenue: year.revenue, npat: year.npat, indicativeNpat: year.indicativeNpat, notes: year.notes }));
     }
   },
   updateFinancialYear: (id, data) => {
     set((state) => ({ client: { ...state.client, financialHistory: state.client.financialHistory.map(y => y.id === id ? { ...y, ...data } : y) } }));
-    api.updateFinancialYear(id, data).catch(console.error);
+    get()._persistSave(() => api.updateFinancialYear(id, data));
   },
   removeFinancialYear: (id) => {
     set((state) => ({ client: { ...state.client, financialHistory: state.client.financialHistory.filter(y => y.id !== id) } }));
-    api.deleteFinancialYear(id).catch(console.error);
+    get()._persistSave(() => api.deleteFinancialYear(id));
   },
 
   addShareholder: (shareholder) => {
@@ -1795,25 +1850,25 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // row persists under the SAME id the store holds — otherwise a later
       // updateShareholder(localId) hits PATCH /api/shareholders/<localId> which
       // 404s because the server minted its own id ("edit doesn't save at all").
-      api.addShareholder(state.activeClientId, shareholder).catch(console.error);
+      get()._persistSave(() => api.addShareholder(state.activeClientId!, shareholder));
     }
   },
   updateShareholder: (id, data) => {
     set((state) => ({ ownership: { ...state.ownership, shareholders: state.ownership.shareholders.map(sh => sh.id === id ? { ...sh, ...data } : sh) } }));
     get()._recalculateAll();
-    api.updateShareholder(id, data).catch(console.error);
+    get()._persistSave(() => api.updateShareholder(id, data));
   },
   removeShareholder: (id) => {
     set((state) => ({ ownership: { ...state.ownership, shareholders: state.ownership.shareholders.filter(sh => sh.id !== id) } }));
     get()._recalculateAll();
-    api.deleteShareholder(id).catch(console.error);
+    get()._persistSave(() => api.deleteShareholder(id));
   },
   updateCompanyValue: (companyValue, outstandingDebt) => {
     set((state) => ({ ownership: { ...state.ownership, companyValue, outstandingDebt } }));
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.updateOwnership(state.activeClientId, { companyValue, outstandingDebt }).catch(console.error);
+      get()._persistSave(() => api.updateOwnership(state.activeClientId!, { companyValue, outstandingDebt }));
     }
   },
 
@@ -1822,7 +1877,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.addEmployee(state.activeClientId, {
+      get()._persistSave(() => api.addEmployee(state.activeClientId!, {
         // Persist under the store's local id so a later updateEmployee(localId)
         // resolves server-side (the create respects a provided id). Without this
         // the edit PATCHes an id the server never had → 404 → silently dropped.
@@ -1832,7 +1887,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         annualSalary: employee.annualSalary, votingRightsPercent: employee.votingRightsPercent,
         idNumber: employee.idNumber, isForeign: employee.isForeign, province: employee.province,
         hireDate: employee.hireDate, terminationDate: employee.terminationDate,
-      }).catch(console.error);
+      }));
     }
   },
   updateEmployee: (id, data) => {
@@ -1843,12 +1898,12 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       }
     }));
     get()._recalculateAll();
-    api.updateEmployee(id, data).catch(console.error);
+    get()._persistSave(() => api.updateEmployee(id, data));
   },
   removeEmployee: (id) => {
     set((state) => ({ management: { ...state.management, employees: state.management.employees.filter(e => e.id !== id) } }));
     get()._recalculateAll();
-    api.deleteEmployee(id).catch(console.error);
+    get()._persistSave(() => api.deleteEmployee(id));
   },
   addEmployeesBulk: (employees) => {
     set((state) => ({ management: { ...state.management, employees: [...state.management.employees, ...employees] } }));
@@ -1858,7 +1913,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // Single round-trip via the bulk endpoint (insertMany). Keep the local
       // ids so bulk-added rows are editable immediately (create preserves a
       // provided id; without it updateEmployee(localId) 404s).
-      api.bulkAddEmployees(state.activeClientId, employees).catch(console.error);
+      get()._persistSave(() => api.bulkAddEmployees(state.activeClientId!, employees));
     }
   },
 
@@ -1872,18 +1927,18 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // (else PATCH /api/training-programs/<localId> 404s). Also carries
       // programName/categoryCode/learnerName/employmentStatus/dates/*Cost/
       // isYesEmployee/isCompleted/isAbsorbed (audit B6).
-      api.addTrainingProgram(state.activeClientId, program).catch(console.error);
+      get()._persistSave(() => api.addTrainingProgram(state.activeClientId!, program));
     }
   },
   updateTrainingProgram: (id, data) => {
     set((state) => ({ skills: { ...state.skills, trainingPrograms: state.skills.trainingPrograms.map(p => p.id === id ? { ...p, ...data } : p) } }));
     get()._recalculateAll();
-    api.updateTrainingProgram(id, data).catch(console.error);
+    get()._persistSave(() => api.updateTrainingProgram(id, data));
   },
   removeTrainingProgram: (id) => {
     set((state) => ({ skills: { ...state.skills, trainingPrograms: state.skills.trainingPrograms.filter(p => p.id !== id) } }));
     get()._recalculateAll();
-    api.deleteTrainingProgram(id).catch(console.error);
+    get()._persistSave(() => api.deleteTrainingProgram(id));
   },
 
   addSupplier: (supplier) => {
@@ -1902,7 +1957,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // /api/suppliers/<localId> 404s → "edit doesn't save"). Also carries
       // isEmpoweringSupplier, isSupplierDevRecipient, hasThreeYearContract,
       // isForeignSupplier, certificateExpiryDate, vatNumber, etc. (audit P2 #6).
-      api.addSupplier(state.activeClientId, supplier).catch(console.error);
+      get()._persistSave(() => api.addSupplier(state.activeClientId!, supplier));
     }
   },
   updateSupplier: (id, data) => {
@@ -1914,7 +1969,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();
-    api.updateSupplier(id, data).catch(console.error);
+    get()._persistSave(() => api.updateSupplier(id, data));
   },
   removeSupplier: (id) => {
     set((state) => {
@@ -1925,7 +1980,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();
-    api.deleteSupplier(id).catch(console.error);
+    get()._persistSave(() => api.deleteSupplier(id));
   },
 
   addEsdContribution: (contribution) => {
@@ -1938,13 +1993,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // misses the server row). Also carries construction flags
       // (isBlackWomenOwnedBeneficiary, supplierDevProgramme), blackBenefitPercent,
       // contributionType, descriptions, and dates (audit P2 #7).
-      api.addEsdContribution(state.activeClientId, contribution).catch(console.error);
+      get()._persistSave(() => api.addEsdContribution(state.activeClientId!, contribution));
     }
   },
   removeEsdContribution: (id) => {
     set((state) => ({ esd: { ...state.esd, contributions: state.esd.contributions.filter(c => c.id !== id) } }));
     get()._recalculateAll();
-    api.deleteEsdContribution(id).catch(console.error);
+    get()._persistSave(() => api.deleteEsdContribution(id));
   },
 
   addSedContribution: (contribution) => {
@@ -1956,13 +2011,13 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
       // addEsdContribution). Also carries isStructuredProject +
       // isLimitedServicesCommunity (construction SED indicators),
       // blackBenefitPercent, descriptionOfSpend, and dates (audit P2 #8).
-      api.addSedContribution(state.activeClientId, contribution).catch(console.error);
+      get()._persistSave(() => api.addSedContribution(state.activeClientId!, contribution));
     }
   },
   removeSedContribution: (id) => {
     set((state) => ({ sed: { ...state.sed, contributions: state.sed.contributions.filter(c => c.id !== id) } }));
     get()._recalculateAll();
-    api.deleteSedContribution(id).catch(console.error);
+    get()._persistSave(() => api.deleteSedContribution(id));
   },
 
   updateAfs: (data) => {
@@ -1970,7 +2025,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const clientId = get().activeClientId;
     if (clientId) {
-      api.updateClient(clientId, { afs: get().afs }).catch(console.error);
+      get()._persistSave(() => api.updateClient(clientId, { afs: get().afs }));
     }
   },
 
@@ -1979,7 +2034,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     set((state) => ({ client: { ...state.client, fscSubSector: normalized } }));
     const clientId = get().activeClientId;
     if (clientId) {
-      api.updateClient(clientId, { fscSubSector: normalized }).catch(console.error);
+      get()._persistSave(() => api.updateClient(clientId, { fscSubSector: normalized }));
     }
     get().loadCalculatorConfig(clientId || '');
   },
@@ -1993,7 +2048,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const clientId = get().activeClientId;
     if (clientId) {
-      api.updateClient(clientId, { graduationBonus, jobsCreatedBonus, jobsCreatedCount, graduationEvidence, jobsCreatedEvidence }).catch(console.error);
+      get()._persistSave(() => api.updateClient(clientId, { graduationBonus, jobsCreatedBonus, jobsCreatedCount, graduationEvidence, jobsCreatedEvidence }));
     }
   },
 
@@ -2005,7 +2060,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.updateClient(state.activeClientId, { revenue, npat, leviableAmount, industryNorm }).catch(console.error);
+      get()._persistSave(() => api.updateClient(state.activeClientId!, { revenue, npat, leviableAmount, industryNorm }));
     }
   },
 
@@ -2015,7 +2070,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     const state = get();
     if (state.activeClientId) {
       const { ceSpend, ceBonusSpend, fundisaSpend } = state.sed;
-      api.updateClient(state.activeClientId, { ceSpend, ceBonusSpend, fundisaSpend }).catch(console.error);
+      get()._persistSave(() => api.updateClient(state.activeClientId!, { ceSpend, ceBonusSpend, fundisaSpend }));
     }
   },
   
@@ -2026,7 +2081,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.updateProcurement(state.activeClientId, tmps).catch(console.error);
+      get()._persistSave(() => api.updateProcurement(state.activeClientId!, tmps));
     }
   },
   
@@ -2043,7 +2098,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      api.updateClient(state.activeClientId, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }).catch(console.error);
+      get()._persistSave(() => api.updateClient(state.activeClientId!, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }));
     }
   },
 
@@ -2052,7 +2107,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll(); // industryNorm lookup uses client.industry → Skills/PP can shift
     const state = get();
     if (state.activeClientId) {
-      api.updateClient(state.activeClientId, { industry }).catch(console.error);
+      get()._persistSave(() => api.updateClient(state.activeClientId!, { industry }));
     }
   },
 
@@ -2061,7 +2116,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     get()._recalculateAll(); // MC + Skills EAP bands score against the selected CEE vintage
     const state = get();
     if (state.activeClientId) {
-      api.updateClient(state.activeClientId, { eapYear: eapYear ?? null }).catch(console.error);
+      get()._persistSave(() => api.updateClient(state.activeClientId!, { eapYear: eapYear ?? null }));
     }
   },
 

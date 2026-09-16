@@ -1326,7 +1326,7 @@ router.post('/infer-tables', requireAuth, async (req, res) => {
     res.json({ tables });
   } catch (error: any) {
     logger.error('Table inference failed', error);
-    res.status(500).json({ error: 'Table inference failed', message: error.message || String(error) });
+    res.status(500).json({ error: 'Table inference failed' });
   }
 });
 

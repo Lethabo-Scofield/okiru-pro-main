@@ -3,15 +3,13 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { useToast } from '@/hooks/use-toast';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
-import { gatedAuthPath } from '@/lib/authRoutes';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import hubBackground from '@assets/image_1779723521128.png';
 import certCardBg from '@assets/image_1779724907320.png';
 import {
   ChevronRight, Search, X, ArrowUpRight, Building2,
   Award, Leaf, Users, BookOpen, Briefcase, ShieldCheck,
-  Sparkles, Plus, LineChart, UserCog, ChevronDown,
-  Files,
+  Sparkles, Plus, LineChart, UserCog, ChevronDown, Gift, Grid3X3,
 } from 'lucide-react';
 import { UserAccountMenu, companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
@@ -19,9 +17,10 @@ import { useEsgAccess } from '@/hooks/useEsgAccess';
 // paid extraction completes, and the Hub offers the way back to them.
 import { readFlowSnapshot } from '@/components/scorecard/flowSnapshot';
 import { readEsgFlowSnapshot } from '@/components/esg/esgFlowSnapshot';
+import { gatedAuthPath } from '@/lib/authRoutes';
 import { Crown } from 'lucide-react';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
-import { isSuperAdmin } from '@/lib/roles';
+import { hasAnyRole, isSuperAdmin } from '@/lib/roles';
 
 interface CompanyProfile {
   companyName?: string;
@@ -54,6 +53,14 @@ export default function HubLanding() {
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [needsProfile, setNeedsProfile] = useState(false);
+  const [profileReminderVisible, setProfileReminderVisible] = useState(() => {
+    try {
+      return sessionStorage.getItem('okiru:profile-reminder-hidden') !== '1';
+    } catch {
+      return true;
+    }
+  });
 
   // Cmd/Ctrl+K opens search.
   useEffect(() => {
@@ -69,7 +76,7 @@ export default function HubLanding() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Load company profile (for personalized welcome) and force onboarding if incomplete.
+  // Load company profile for personalization. An incomplete profile never blocks the Hub.
   useEffect(() => {
     if (!user?.id) return;
     let cancelled = false;
@@ -78,7 +85,9 @@ export default function HubLanding() {
       try {
         const gate = await checkOnboardingGate();
         if (cancelled) return;
-        if (gate.status === "unauthenticated" || gate.status === "needs-onboarding") {
+        // Not signed in (expired session, or a cookie bound to another host):
+        // the Hub cannot render for this user, so send them to sign in.
+        if (gate.status === "unauthenticated") {
           const safe =
             location.startsWith('/') && !location.startsWith('//') && location !== '/onboarding' && location !== '/auth'
               ? location
@@ -86,6 +95,14 @@ export default function HubLanding() {
           navigate(gatedAuthPath({ redirect: safe }), { replace: true });
           return;
         }
+        // The company profile is optional: an incomplete one shows a reminder,
+        // it never blocks the Hub.
+        if (gate.status === "needs-onboarding") {
+          setProfile(null);
+          setNeedsProfile(true);
+          return;
+        }
+        setNeedsProfile(false);
         const p = gate.profile;
         setProfile({
           companyName: typeof p?.companyName === "string" ? p.companyName : undefined,
@@ -101,7 +118,7 @@ export default function HubLanding() {
       }
     })();
     return () => { cancelled = true; };
-  }, [user?.id, location, navigate]);
+  }, [user?.id]);
 
   const handleComingSoon = () => {
     toast({ title: 'Coming Soon', description: 'This toolkit is currently in development.' });
@@ -172,7 +189,7 @@ export default function HubLanding() {
   ];
     return items;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [esgAllowed]);
+  }, []);
 
   const active = toolkits.filter((t) => 'link' in t && t.link);
 
@@ -393,6 +410,68 @@ export default function HubLanding() {
       </header>
 
       <main className="relative z-10 max-w-[1280px] mx-auto px-4 sm:px-6 pt-12 pb-20">
+        {!profileLoading && needsProfile && profileReminderVisible && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-reward-title"
+            data-testid="company-profile-reward-prompt"
+          >
+            <div className="relative w-full max-w-[470px] overflow-hidden rounded-lg bg-white text-[#171719] shadow-[0_28px_90px_rgba(0,0,0,0.45)]">
+              <button
+                type="button"
+                onClick={() => {
+                  setProfileReminderVisible(false);
+                  try { sessionStorage.setItem('okiru:profile-reminder-hidden', '1'); } catch { /* empty */ }
+                }}
+                className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-[#71717a] transition-colors hover:bg-[#f1f1f3] hover:text-black"
+                aria-label="Close"
+                data-testid="btn-close-profile-reward"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="px-7 pb-7 pt-8 sm:px-9 sm:pb-9 sm:pt-10">
+                <div className="mb-6 grid h-12 w-12 place-items-center rounded-lg bg-violet-100 text-violet-700">
+                  <Gift className="h-6 w-6" />
+                </div>
+                <p className="mb-2 text-[12px] font-semibold uppercase text-violet-700">
+                  Welcome reward
+                </p>
+                <h2 id="profile-reward-title" className="pr-8 text-[27px] font-semibold leading-tight text-[#171719]">
+                  Complete your profile. Get 500 free tokens.
+                </h2>
+                <p className="mt-3 text-[14px] leading-relaxed text-[#626269]">
+                  Add a few details about your company so Okiru can prepare the right workspace for your team.
+                </p>
+
+                <div className="mt-7 flex flex-col gap-2.5 sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={() => navigate(companyProfilePath('/hub'))}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#171719] px-4 text-[13px] font-semibold text-white transition-colors hover:bg-black"
+                    data-testid="btn-complete-company-profile"
+                  >
+                    Complete profile <ChevronRight className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileReminderVisible(false);
+                      try { sessionStorage.setItem('okiru:profile-reminder-hidden', '1'); } catch { /* empty */ }
+                    }}
+                    className="h-11 px-4 text-[13px] font-medium text-[#626269] transition-colors hover:text-black"
+                    data-testid="btn-remind-profile-later"
+                  >
+                    Remind me later
+                  </button>
+                </div>
+              </div>
+              <div className="h-1.5 bg-violet-600" />
+            </div>
+          </div>
+        )}
         {/* HERO - personalized */}
         <section className="mb-12 fade-in" data-testid="hero-welcome">
           <div className="flex items-center gap-2 mb-5 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
@@ -541,7 +620,7 @@ export default function HubLanding() {
                 Create Scorecard
               </h3>
               <p className="mt-2 text-[13.5px] text-[#d1d1d6]/90 leading-relaxed max-w-md">
-                Start a new B-BBEE scorecard — enter your company information and complete the assessment workbook.
+                Start a new B-BBEE scorecard, enter your company information and complete the assessment workbook.
               </p>
               <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-white">
                 New workbook
@@ -576,30 +655,6 @@ export default function HubLanding() {
               <span className="mt-auto pt-5 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#d1d1d6] group-hover:text-white transition-colors">
                 Saved companies
                 <ArrowUpRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
-              </span>
-            </div>
-          </Link>
-
-          <Link
-            href="/documents"
-            className="card-rise group relative block min-h-[200px] rounded-2xl border border-white/[0.08] bg-white/[0.03] p-6 backdrop-blur-md transition-all duration-300 hover:-translate-y-0.5 hover:border-white/[0.20] hover:bg-white/[0.05] sm:p-7"
-            data-testid="action-document-library"
-          >
-            <div className="flex h-full flex-col">
-              <div className="mb-5 flex items-center justify-between">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.14] bg-white/[0.06] text-white">
-                  <Files className="h-5 w-5" strokeWidth={2.2} />
-                </div>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#8e8e93]">Evidence</span>
-              </div>
-              <h3 className="text-[24px] font-semibold leading-[1.1] text-white sm:text-[26px]" style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}>
-                Document Library
-              </h3>
-              <p className="mt-2 max-w-md text-[13.5px] leading-relaxed text-[#a1a1a6]">
-                Reopen uploaded evidence, see what was extracted, and review anything the parser could not read.
-              </p>
-              <span className="mt-auto inline-flex items-center gap-1.5 pt-5 text-[13px] font-medium text-[#d1d1d6] transition-colors group-hover:text-white">
-                Browse documents <ArrowUpRight className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
               </span>
             </div>
           </Link>
@@ -672,6 +727,19 @@ export default function HubLanding() {
               No toolkits match "{searchQuery}".
             </p>
           </div>
+        )}
+
+        {hasAnyRole(user, 'admin', 'super_admin') && (
+          <footer className="mt-16 flex items-center justify-center border-t border-white/[0.06] pt-7">
+            <Link
+              href="/admin/activity"
+              className="inline-flex items-center gap-2 text-[12px] text-[#636366] transition-colors hover:text-white"
+              data-testid="link-activity-heatmap"
+            >
+              <Grid3X3 className="h-3.5 w-3.5" />
+              Activity heatmap
+            </Link>
+          </footer>
         )}
       </main>
     </div>

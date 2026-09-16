@@ -318,6 +318,33 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
    * threshold of N/A (the fuel levy already prices it) and purchased electricity
    * is the generator's liability, so neither can ever create it on its own.
    */
+  /*
+   * HOW THIS COMPANY'S TARGETS ARE SET.
+   *
+   * "ESG does not have targets. This means we either allow the client to set
+   * their own targets, which could be the EE/B-BBEE targets, or they could want
+   * to track employees over time as opposed to meeting targets."
+   * — Z. Mnanzana, Q1, 14 September 2026.
+   *
+   * Until this pass the toolkit graded every company against eight numbers
+   * nobody outside the office had approved, applied identically to a bank, a
+   * school and a road-freight distributor. Several were B-BBEE targets borrowed
+   * into a framework that sets none. This is the declaration that replaces them:
+   * without it, target-based indicators have nothing to be scored against and
+   * leave the total with the reason stated.
+   */
+  {
+    cell: "_targetBasis",
+    label: "How this company's targets are set",
+    type: "select",
+    options: [
+      "Company's own targets",
+      "B-BBEE / Employment Equity targets",
+      "Trend only — track movement, do not score against targets",
+    ],
+    helpText:
+      "ESG frameworks do not prescribe targets. A company sets its own, elects to be measured against the B-BBEE and Employment Equity targets, or tracks movement over time instead of scoring against a target. Where it has not chosen, we do not score against a target we invented — those indicators come out of the total and the report says why.",
+  },
   {
     cell: "_nzBaselineYear",
     label: "Emissions base year (calendar year)",

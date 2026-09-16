@@ -2,6 +2,7 @@ import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@toolkit/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@toolkit/components/ui/sonner";
 import { TooltipProvider } from "@toolkit/components/ui/tooltip";
 import { ThemeProvider } from "@toolkit/components/theme-provider";
 import { AuthProvider, useAuth } from "@toolkit/lib/auth";
@@ -190,6 +191,7 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
+            <SonnerToaster />
             <AuthenticatedApp />
           </TooltipProvider>
         </AuthProvider>

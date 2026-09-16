@@ -5,6 +5,7 @@ import {
 } from "@/lib/esg/esgScorecardDefinitions";
 import { esgOverallPercent } from "@/lib/esgScoringDefaults";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import type { EsgExclusion, EsgPillarResult } from "./esgApplicability";
 import { computeCarbonTax } from "./carbonTax";
 import { scoreEnvironmental } from "./environmental";
 import { scoreGovernance } from "./governance";
@@ -26,10 +27,26 @@ export type EsgPillarRow = {
   achievementPct: number;
 };
 
+/**
+ * A pillar as the dashboard and the report see it.
+ *
+ * `scoringDenominator` and `excluded` travel with the score because a total
+ * that has moved needs to say why. An assurance provider asked to accept 25/95
+ * will want to know what left the denominator, and the answer has to be on the
+ * page rather than buried in a calculator.
+ */
+export type EsgDashboardPillar = {
+  score: number;
+  max: number;
+  percent: number;
+  scoringDenominator: number;
+  excluded: EsgExclusion[];
+};
+
 export type EsgDashboardKpis = {
-  environmental: { score: number; max: number; percent: number };
-  social: { score: number; max: number; percent: number };
-  governance: { score: number; max: number; percent: number };
+  environmental: EsgDashboardPillar;
+  social: EsgDashboardPillar;
+  governance: EsgDashboardPillar;
   overallPercent: number;
   scope1Tco2e?: number;
   scope2Tco2e?: number;
@@ -73,6 +90,18 @@ function pillarRows(
       achievementPct: maxPoints > 0 ? (score / maxPoints) * 100 : 0,
     };
   });
+}
+
+/** Project a scorer result into the shape the dashboard and report consume. */
+function pillar(r: EsgPillarResult): EsgDashboardPillar {
+  return {
+    score: r.score,
+    max: r.max,
+    // Percent against what the company could actually be scored out of.
+    percent: r.scoringDenominator > 0 ? r.score / r.scoringDenominator : 0,
+    scoringDenominator: r.scoringDenominator,
+    excluded: r.excluded,
+  };
 }
 
 export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis {
@@ -167,9 +196,9 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
   ];
 
   return {
-    environmental: { score: e.score, max: e.max, percent: e.score / e.max },
-    social: { score: s.score, max: s.max, percent: s.score / s.max },
-    governance: { score: g.score, max: g.max, percent: g.score / g.max },
+    environmental: pillar(e),
+    social: pillar(s),
+    governance: pillar(g),
     overallPercent,
     scope1Tco2e: scope1,
     scope2Tco2e: scope2,

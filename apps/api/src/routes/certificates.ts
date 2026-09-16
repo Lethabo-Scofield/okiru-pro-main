@@ -623,7 +623,7 @@ router.get(
   },
 );
 
-router.get('/download', async (req: Request, res: Response) => {
+router.get('/download', requireAuth, async (req: Request, res: Response) => {
   try {
     const file = req.query.file as string;
     if (!file || file.trim() === '') {
@@ -631,6 +631,18 @@ router.get('/download', async (req: Request, res: Response) => {
     }
 
     const trimmed = file.trim();
+
+    // SEC-001: authentication + organization-ownership gate. A certificate file is
+    // served only to the owning organization (or an admin). Anonymous or cross-tenant
+    // callers get 404 — never an existence oracle. Reuses canAccessCertificateFile.
+    const ownerRecord = (await CertificateMetadataModel.findOne(
+      { blobName: trimmed },
+      { _id: 0, organizationId: 1, uploadedByUserId: 1 },
+    ).lean()) as Record<string, any> | null;
+    if (!ownerRecord || !canAccessCertificateFile(req, ownerRecord)) {
+      return res.status(404).json({ message: 'File not found' });
+    }
+
     recordEvent({
       type: 'download',
       metadata: { blobName: trimmed, mode: req.query.mode || null },
@@ -1258,7 +1270,9 @@ router.get('/seo/list', async (_req: Request, res: Response) => {
         certificateNumber: doc.certificateNumber ?? null,
         expiryDate: dateOnly(doc.expiryDate),
         issueDate: dateOnly(doc.issueDate),
-        blobName: doc.blobName ?? null,
+        // SEC-001: never expose the raw storage blob name in the PUBLIC listing —
+        // it is the path an attacker would feed to /download. Files are fetched
+        // server-side by slug/id behind the ownership gate instead.
         status: doc.status ?? 'unknown',
         updatedAt: dateOnly(doc.updatedAt) ?? '',
         vatNumber: doc.vatNumber ?? null,
@@ -1399,7 +1413,7 @@ router.post('/process', requireAuth, async (req: Request, res: Response) => {
     invalidateDerivedCaches();
   } catch (err: any) {
     logger.error('Bulk certificate extraction failed', err);
-    sendEvent({ type: 'error', message: err.message });
+    sendEvent({ type: 'error', message: 'Extraction failed' });
   }
 
   res.end();
@@ -1478,7 +1492,7 @@ async function runCertificateEnrichmentEndpoint(
     return res.json(result);
   } catch (err: any) {
     logger.error('Certificate enrichment job failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate enrichment failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate enrichment failed' });
   }
 }
 
@@ -1507,7 +1521,7 @@ router.post('/recover-vat', requireAuth, async (req: Request, res: Response) => 
     return res.json(result);
   } catch (err: any) {
     logger.error('Certificate VAT recovery failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate VAT recovery failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate VAT recovery failed' });
   }
 });
 
@@ -1634,7 +1648,7 @@ router.get('/vat-review-queue', requireAuth, async (req: Request, res: Response)
     });
   } catch (err: any) {
     logger.error('Certificate VAT review queue failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate VAT review queue failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate VAT review queue failed' });
   }
 });
 
@@ -1713,7 +1727,7 @@ router.post('/:id/confirm-vat', requireAuth, async (req: Request, res: Response)
     });
   } catch (err: any) {
     logger.error('Certificate VAT confirmation failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate VAT confirmation failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate VAT confirmation failed' });
   }
 });
 
@@ -1724,7 +1738,7 @@ router.get('/production-coverage', requireAuth, async (req: Request, res: Respon
     return res.json(await getProductionCertificateCoverage());
   } catch (err: any) {
     logger.error('Certificate production coverage failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate production coverage failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate production coverage failed' });
   }
 });
 
@@ -1736,7 +1750,7 @@ router.get('/extraction-coverage', requireAuth, async (req: Request, res: Respon
     return res.json(coverage);
   } catch (err: any) {
     logger.error('Certificate extraction coverage failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate extraction coverage failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate extraction coverage failed' });
   }
 });
 
@@ -1865,7 +1879,7 @@ router.get('/review-queue', requireAuth, async (req: Request, res: Response) => 
     });
   } catch (err: any) {
     logger.error('Certificate review queue failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate review queue failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate review queue failed' });
   }
 });
 
@@ -1907,7 +1921,7 @@ router.post('/retry-extraction', requireAuth, async (req: Request, res: Response
     return res.json(result);
   } catch (err: any) {
     logger.error('Certificate extraction retry failed', err instanceof Error ? err : new Error(String(err)));
-    return res.status(500).json({ message: 'Certificate extraction retry failed', error: err.message });
+    return res.status(500).json({ message: 'Certificate extraction retry failed' });
   }
 });
 
@@ -2512,19 +2526,15 @@ router.get('/:id/history', async (req: Request, res: Response) => {
       certificateId: doc.id,
       slug: doc.slug || null,
       latest: {
-        blobName: doc.blobName,
         fileName: doc.fileName,
         expiryDate: doc.expiryDate ? new Date(doc.expiryDate).toISOString().slice(0, 10) : null,
         uploadedAt: doc.updatedAt ? new Date(doc.updatedAt).toISOString() : null,
-        uploadedByUserId: doc.uploadedByUserId || null,
       },
       versions: versions.map((v: any) => ({
-        blobName: v.blobName,
         fileName: v.fileName,
         expiryDate: v.expiryDate ? new Date(v.expiryDate).toISOString().slice(0, 10) : null,
         uploadedAt: v.uploadedAt ? new Date(v.uploadedAt).toISOString() : null,
         replacedAt: v.replacedAt ? new Date(v.replacedAt).toISOString() : null,
-        uploadedByUserId: v.uploadedByUserId || null,
       })),
     }));
   }
@@ -2534,19 +2544,15 @@ router.get('/:id/history', async (req: Request, res: Response) => {
     certificateId: rec.id,
     slug: buildCertSlug(rec.companyName, rec.id),
     latest: {
-      blobName: rec.blobName,
       fileName: rec.fileName,
       expiryDate: rec.expiryDate,
       uploadedAt: rec.updatedAt,
-      uploadedByUserId: rec.uploadedByUserId,
     },
     versions: (rec.versions || []).map((v) => ({
-      blobName: v.blobName,
       fileName: v.fileName,
       expiryDate: v.expiryDate,
       uploadedAt: v.uploadedAt,
       replacedAt: v.replacedAt,
-      uploadedByUserId: v.uploadedByUserId,
     })),
   }));
 });

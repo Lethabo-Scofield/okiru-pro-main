@@ -29,9 +29,12 @@ import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
 import { registerPlacementTelemetryRoutes } from "./placementTelemetry";
 import { registerVocabularyRoutes } from "./vocabularyRoutes";
+import { creditTokens } from "./tokenWallet";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
+import { companyNameFromWorkEmail, isWorkEmail, usernameFromWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from "../shared/workEmail";
 import { deleteWorkbookForClient } from "./workbookRoutes";
+import { answerScorecardQuestionWithAi } from "./bbbeeKnowledge";
 import {
   listClientsForTenant as memListClients,
   getClient as memGetClient,
@@ -44,14 +47,50 @@ import {
 
 const logger = createLogger("Routes");
 
+const activityEventSchema = new mongoose.Schema(
+  {
+    timestamp: { type: Date, default: Date.now, index: true },
+    userId: { type: String, required: true, index: true },
+    organizationId: { type: String, default: null, index: true },
+    path: { type: String, required: true, index: true },
+    eventType: { type: String, enum: ["page_view", "heartbeat"], default: "page_view", index: true },
+    durationSeconds: { type: Number, default: 0 },
+  },
+  { collection: "userActivityEvents", versionKey: false },
+);
+
+const ActivityEventModel =
+  mongoose.models.UserActivityEvent || mongoose.model("UserActivityEvent", activityEventSchema);
+
+const ACTIVITY_TOOLS = [
+  { id: "esg", name: "ESG Toolkit", matches: (path: string) => path.startsWith("/esg") },
+  { id: "bbbee", name: "B-BBEE Scorecards", matches: (path: string) => path.startsWith("/create-scorecard") || path.startsWith("/toolkit") || path === "/dashboard" },
+  { id: "documents", name: "Document Parser", matches: (path: string) => path.startsWith("/documents") || path === "/processor" },
+  { id: "requests", name: "Information Requests", matches: (path: string) => path.startsWith("/information-request") },
+  { id: "certificates", name: "Certificates", matches: (path: string) => path.startsWith("/certificates") },
+  { id: "workspace", name: "Workspace", matches: (path: string) => path === "/workspace" || path === "/builder" },
+  { id: "team", name: "Team Management", matches: (path: string) => path === "/team" || path.startsWith("/company-profile") },
+  { id: "admin", name: "Administration", matches: (path: string) => path.startsWith("/admin") || path === "/super-admin" },
+  { id: "hub", name: "Hub", matches: (path: string) => path === "/hub" },
+] as const;
+
+function classifyActivityPath(path: string) {
+  return ACTIVITY_TOOLS.find((tool) => tool.matches(path)) ?? { id: "other", name: "Other" };
+}
+
 function isMongoConnected(): boolean {
   return mongoose.connection.readyState === 1;
 }
 
 const DEMO_USER_ID = "demo-offline-user";
 
-function isOfflineDemoCredentials(loginId: unknown, password: unknown): boolean {
+function isDemoLoginEnabled(): boolean {
+  return process.env.ENABLE_DEMO_LOGIN === "true" || process.env.NODE_ENV !== "production";
+}
+
+function isDemoCredentials(loginId: unknown, password: unknown): boolean {
   return (
+    isDemoLoginEnabled() &&
     typeof loginId === "string" &&
     typeof password === "string" &&
     loginId.trim().toLowerCase() === "demo" &&
@@ -86,9 +125,8 @@ function getOfflineDemoUser(): User {
 }
 
 function getSessionDemoUser(req: Request): User | null {
-  if (isMongoConnected()) return null;
   const userData = (req.session as any)?.userData;
-  if ((req.session as any)?.userId === DEMO_USER_ID && userData?.username === "demo") {
+  if (isDemoLoginEnabled() && (req.session as any)?.userId === DEMO_USER_ID && userData?.username === "demo") {
     return { ...getOfflineDemoUser(), ...userData };
   }
   return null;
@@ -217,6 +255,36 @@ export async function registerRoutes(
     });
   });
 
+  app.post('/api/scorecards/:scorecardId/advice/chat', requireAuth, async (req: Request, res: Response) => {
+    const scorecardId = String(req.params.scorecardId || '').trim();
+    const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
+    if (!scorecardId) return res.status(400).json({ message: 'scorecardId is required' });
+    if (!message) return res.status(400).json({ message: 'Message is required' });
+    if (message.length > 2000) return res.status(400).json({ message: 'Message is too long' });
+    if (req.body?.toolkitId && req.body.toolkitId !== 'bbbee') {
+      return res.status(400).json({ message: 'Only the B-BBEE toolkit assistant is supported right now.' });
+    }
+
+    const result = await answerScorecardQuestionWithAi(message, req.body?.runtimeSnapshot);
+    return res.json({
+      answer: result.answer,
+      conversationId: typeof req.body?.conversationId === 'string' && req.body.conversationId.trim()
+        ? req.body.conversationId.trim()
+        : randomUUID(),
+      sources: result.sources.map((source) => ({ type: 'ontology', id: source.id, label: `${source.section}: ${source.title}` })),
+      tables: [],
+      actions: [],
+      suggestedQuestions: [
+        'Why did we receive this B-BBEE level?',
+        'Which pillar is reducing our score most?',
+        'Did we fail any priority-element subminimum?',
+        'What should we prioritise before verification?',
+      ],
+      warnings: result.answerMode === 'ontology' ? ['AI explanation is unavailable; showing grounded scorecard and ontology facts.'] : [],
+      answerMode: result.answerMode,
+    });
+  });
+
   app.post('/api/demo-request', async (req: Request, res: Response) => {
     const { name, company, email, phone, message } = req.body || {};
     if (!name || !company || !email) {
@@ -274,6 +342,7 @@ export async function registerRoutes(
       const trimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
       if (!trimmed) return res.json({ available: false, message: "Email is required" });
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return res.json({ available: false, message: "Enter a valid email address" });
+      if (!isWorkEmail(trimmed)) return res.json({ available: false, message: WORK_EMAIL_REQUIRED_MESSAGE });
       const existing = await storage.getUserByUsernameOrEmail(trimmed);
       if (existing && existing.isVerified) return res.json({ available: false, message: "This email is not available" });
       return res.json({ available: true, message: "Email is available" });
@@ -301,24 +370,18 @@ export async function registerRoutes(
   app.post("/api/auth/register", async (req, res) => {
     const start = Date.now();
     try {
-      const { username, password, fullName, email, organizationName, role } = req.body;
+      const { password, fullName, email } = req.body;
 
-      const trimmedUsername = typeof username === 'string' ? username.trim() : '';
       const trimmedFullName = typeof fullName === 'string' ? fullName.trim() : '';
       const trimmedEmail = typeof email === 'string' ? email.trim().toLowerCase() : '';
-      const trimmedOrgName = typeof organizationName === 'string' ? organizationName.trim() : '';
+      const trimmedUsername = usernameFromWorkEmail(trimmedEmail);
+      const trimmedOrgName = companyNameFromWorkEmail(trimmedEmail) ?? '';
 
-      if (!trimmedUsername || !password) {
-        return res.status(400).json({ message: "Username and password are required" });
+      if (!password) {
+        return res.status(400).json({ message: "Password is required" });
       }
-      if (trimmedUsername.length < 3 || trimmedUsername.length > 50) {
-        return res.status(400).json({ message: "Username must be between 3 and 50 characters" });
-      }
-      if (!/^[a-zA-Z0-9_.-]+$/.test(trimmedUsername)) {
-        return res.status(400).json({ message: "Username can only contain letters, numbers, dots, hyphens, and underscores" });
-      }
-      if (password.length < 4) {
-        return res.status(400).json({ message: "Password must be at least 4 characters" });
+      if (password.length < 8) {
+        return res.status(400).json({ message: "Password must be at least 8 characters" });
       }
       if (password.length > 128) {
         return res.status(400).json({ message: "Password must not exceed 128 characters" });
@@ -332,8 +395,11 @@ export async function registerRoutes(
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
         return res.status(400).json({ message: "Invalid email address" });
       }
+      if (!isWorkEmail(trimmedEmail)) {
+        return res.status(400).json({ message: WORK_EMAIL_REQUIRED_MESSAGE });
+      }
       if (!trimmedOrgName) {
-        return res.status(400).json({ message: "Company name is required" });
+        return res.status(400).json({ message: "Could not determine a company from this work email" });
       }
       if (trimmedOrgName.length < 2 || trimmedOrgName.length > 200) {
         return res.status(400).json({ message: "Company name must be between 2 and 200 characters" });
@@ -479,15 +545,16 @@ export async function registerRoutes(
         attempts.count++;
       }
 
-      if (!isMongoConnected() && isOfflineDemoCredentials(loginId, password)) {
+      if (isDemoCredentials(loginId, password)) {
         const demoUser = getOfflineDemoUser();
         const safeUser = sanitizeUser(demoUser);
         establishSession(req, demoUser as any, safeUser);
-        logger.warn("Offline demo login used while MongoDB is unavailable", {
+        logger.warn("Demo login used", {
           userId: demoUser.id,
+          mongoConnected: isMongoConnected(),
           durationMs: Date.now() - start,
         });
-        return res.json({ user: safeUser, offlineDemo: true });
+        return res.json({ user: safeUser, demo: true });
       }
 
       if (!isMongoConnected()) {
@@ -825,7 +892,20 @@ export async function registerRoutes(
         biggestChallenge: onboardSanitizeStr(body.biggestChallenge, 2000),
       };
       const profile = await storage.upsertCompanyProfile(data);
-      return res.json({ profile });
+      const user = await storage.getUserById(userId);
+      let reward: { tokens: number; alreadyApplied: boolean } | null = null;
+      if (user?.organizationId) {
+        const credited = await creditTokens({
+          organizationId: user.organizationId,
+          userId,
+          amount: 500,
+          reference: `onboarding-profile:${userId}`,
+          description: "Company profile completion reward",
+          kind: "grant",
+        });
+        reward = { tokens: 500, alreadyApplied: credited.alreadyApplied };
+      }
+      return res.json({ profile, reward });
     } catch (error: any) {
       logger.error("POST /api/onboarding failed", error);
       return res.status(500).json({ message: "Failed to save onboarding profile" });
@@ -845,6 +925,15 @@ export async function registerRoutes(
    * Storage now records that nothing was given; the UI owns the empty state.
    */
   const ONBOARDING_SKIPPED_COMPANY_NAME_WEB = null;
+
+  /**
+   * Older records (and apps/api, which still writes a placeholder string)
+   * carry either the current "Company profile skipped" sentence or the
+   * mis-encoded one described above. Neither is a company name.
+   */
+  function isSkippedWorkspaceName(name: string | null | undefined): boolean {
+    return typeof name === "string" && (/company profile skipped/i.test(name) || name.includes("Ã"));
+  }
 
   app.post("/api/onboarding/skip", requireAuth, async (req, res) => {
     try {
@@ -873,11 +962,20 @@ export async function registerRoutes(
 
   async function ensureDefaultWorkspace(userId: string): Promise<void> {
     const list = await storage.listWorkspacesForUser(userId);
-    if (list.length > 0) return;
     const user = await storage.getUserById(userId);
+    if (list.length > 0) {
+      const replacementName =
+        (user as { organizationName?: string } | undefined)?.organizationName?.trim() || "My team";
+      await Promise.all(
+        list
+          .filter((workspace) => workspace.ownerUserId === userId && isSkippedWorkspaceName(workspace.name))
+          .map((workspace) => storage.renameWorkspace(workspace.id, replacementName)),
+      );
+      return;
+    }
     const profile = await storage.getCompanyProfileByUserId(userId);
     const name =
-      profile?.companyName?.trim() ||
+      (!isSkippedWorkspaceName(profile?.companyName) ? profile?.companyName?.trim() : "") ||
       (user as { organizationName?: string } | undefined)?.organizationName?.trim() ||
       "My team";
     await storage.createWorkspace(name, userId);
@@ -1529,8 +1627,113 @@ export async function registerRoutes(
     if (!hasAnyRole(user, "super_admin")) {
       return res.status(403).json({ message: "Platform administrator access required" });
     }
+    (req as any).user = user;
     next();
   }
+
+  app.post("/api/activity/page-view", async (req, res) => {
+    const userId = String((req.session as any)?.userId || "");
+    const path = typeof req.body?.path === "string" ? req.body.path.trim() : "";
+    if (!userId) return res.status(204).end();
+    if (!path.startsWith("/") || path.length > 300) {
+      return res.status(400).json({ message: "Invalid activity event" });
+    }
+    if (!isMongoConnected()) return res.status(202).json({ recorded: false });
+
+    const user = (req as any).user ?? await storage.getUserById(userId);
+    const eventType = req.body?.eventType === "heartbeat" ? "heartbeat" : "page_view";
+    const requestedDuration = Number(req.body?.durationSeconds || 0);
+    const durationSeconds = eventType === "heartbeat" && Number.isFinite(requestedDuration)
+      ? Math.max(0, Math.min(30, requestedDuration))
+      : 0;
+    await ActivityEventModel.create({
+      timestamp: new Date(),
+      userId,
+      organizationId: user?.organizationId ?? null,
+      path: path.split("?")[0].split("#")[0],
+      eventType,
+      durationSeconds,
+    });
+    return res.status(201).json({ recorded: true });
+  });
+
+  // Activity across every organisation is a platform view, gated like the user directory.
+  app.get("/api/admin/activity-heatmap", requireAuth, requirePlatformAdmin, async (req, res) => {
+    if (!isMongoConnected()) {
+      return res.json({ days: 28, totalViews: 0, uniqueUsers: 0, activeMinutes: 0, cells: [], topPages: [], toolUsage: [] });
+    }
+
+    const requestedDays = Number(req.query.days || 28);
+    const days = [7, 28, 90].includes(requestedDays) ? requestedDays : 28;
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const timezone = "Africa/Johannesburg";
+    const currentUser = (req as any).user as User;
+    const activityScope = hasAnyRole(currentUser, "super_admin")
+      ? { timestamp: { $gte: since } }
+      : { timestamp: { $gte: since }, organizationId: currentUser.organizationId };
+
+    const [cells, pageActivity, uniqueUsers] = await Promise.all([
+      ActivityEventModel.aggregate([
+        { $match: activityScope },
+        {
+          $group: {
+            _id: {
+              date: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp", timezone } },
+              hour: { $hour: { date: "$timestamp", timezone } },
+            },
+            count: { $sum: { $cond: [{ $eq: [{ $ifNull: ["$eventType", "page_view"] }, "page_view"] }, 1, 0] } },
+            activeSeconds: { $sum: { $cond: [{ $eq: ["$eventType", "heartbeat"] }, "$durationSeconds", 0] } },
+            users: { $addToSet: "$userId" },
+          },
+        },
+        { $project: { _id: 0, date: "$_id.date", hour: "$_id.hour", count: 1, activeMinutes: { $divide: ["$activeSeconds", 60] }, users: { $size: "$users" } } },
+        { $sort: { date: 1, hour: 1 } },
+      ]),
+      ActivityEventModel.aggregate([
+        { $match: activityScope },
+        { $group: {
+          _id: "$path",
+          views: { $sum: { $cond: [{ $eq: [{ $ifNull: ["$eventType", "page_view"] }, "page_view"] }, 1, 0] } },
+          activeSeconds: { $sum: { $cond: [{ $eq: ["$eventType", "heartbeat"] }, "$durationSeconds", 0] } },
+          users: { $addToSet: "$userId" },
+          lastUsed: { $max: "$timestamp" },
+        } },
+        { $project: { _id: 0, path: "$_id", views: 1, activeSeconds: 1, users: 1, lastUsed: 1 } },
+      ]),
+      ActivityEventModel.distinct("userId", activityScope),
+    ]);
+
+    const tools = new Map<string, { id: string; name: string; visits: number; activeSeconds: number; users: Set<string>; lastUsed: Date }>();
+    for (const page of pageActivity) {
+      const classification = classifyActivityPath(page.path);
+      const tool = tools.get(classification.id) ?? { ...classification, visits: 0, activeSeconds: 0, users: new Set<string>(), lastUsed: page.lastUsed };
+      tool.visits += page.views;
+      tool.activeSeconds += page.activeSeconds;
+      for (const userId of page.users) tool.users.add(userId);
+      if (page.lastUsed > tool.lastUsed) tool.lastUsed = page.lastUsed;
+      tools.set(classification.id, tool);
+    }
+    const totalActiveSeconds = pageActivity.reduce((sum, page) => sum + page.activeSeconds, 0);
+    const totalViews = pageActivity.reduce((sum, page) => sum + page.views, 0);
+    const shareTotal = totalActiveSeconds || totalViews || 1;
+    const toolUsage = [...tools.values()]
+      .map((tool) => ({
+        id: tool.id,
+        name: tool.name,
+        visits: tool.visits,
+        activeMinutes: Math.round(tool.activeSeconds / 60),
+        users: tool.users.size,
+        lastUsed: tool.lastUsed,
+        usageShare: Math.round(((totalActiveSeconds ? tool.activeSeconds : tool.visits) / shareTotal) * 100),
+      }))
+      .filter((tool) => tool.visits > 0 || tool.activeMinutes > 0)
+      .sort((a, b) => b.activeMinutes - a.activeMinutes || b.visits - a.visits);
+    const topPages = pageActivity
+      .map((page) => ({ ...page, activeMinutes: Math.round(page.activeSeconds / 60), users: page.users.length }))
+      .sort((a, b) => b.activeSeconds - a.activeSeconds || b.views - a.views)
+      .slice(0, 8);
+    return res.json({ days, totalViews, uniqueUsers: uniqueUsers.length, activeMinutes: Math.round(totalActiveSeconds / 60), cells, topPages, toolUsage });
+  });
 
   // ==========================================================================
   // Organization / company team management (org-scoped multitenancy).

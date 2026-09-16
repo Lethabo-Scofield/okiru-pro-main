@@ -188,6 +188,8 @@ export interface OnboardingProps {
   mode?: "default" | "edit";
   /** Used with `mode="edit"` after save or back. */
   returnTo?: string;
+  /** New accounts can start with the only optional setup step. */
+  startAtTeam?: boolean;
 }
 
 export default function Onboarding({
@@ -195,6 +197,7 @@ export default function Onboarding({
   onFullyDone,
   mode = "default",
   returnTo = "/hub",
+  startAtTeam = false,
 }: OnboardingProps = {}) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
@@ -211,8 +214,10 @@ export default function Onboarding({
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [flowPhase, setFlowPhase] = useState<"profile" | "team">("profile");
+  const [checking, setChecking] = useState(!startAtTeam);
+  const [flowPhase, setFlowPhase] = useState<"profile" | "team">(
+    startAtTeam ? "team" : "profile",
+  );
 
   const resolvePostOnboardingDest = useMemo(() => {
     if (mode === "edit") return returnTo;
@@ -231,6 +236,11 @@ export default function Onboarding({
   };
 
   useEffect(() => {
+    if (startAtTeam) {
+      setFlowPhase("team");
+      setChecking(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
@@ -319,7 +329,7 @@ export default function Onboarding({
     return () => {
       cancelled = true;
     };
-  }, [user, mode]);
+  }, [user, mode, startAtTeam]);
 
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -482,8 +492,8 @@ export default function Onboarding({
 
   if (flowPhase === "team") {
     return authShell(
-      <Card className="border border-border/50 shadow-lg bg-card overflow-hidden" data-testid="onboarding-team-step">
-        <CardContent className="px-6 sm:px-8 py-8 space-y-5">
+      <Card className="border border-border/60 shadow-sm bg-card overflow-hidden max-w-2xl mx-auto" data-testid="onboarding-team-step">
+        <CardContent className="px-6 sm:px-10 py-10 space-y-6">
           <div className="flex justify-center">
             <div className="h-12 w-12 rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center">
               <Users className="h-6 w-6 text-primary" />
@@ -491,13 +501,10 @@ export default function Onboarding({
           </div>
           <div className="text-center space-y-2">
             <h1 id="team-step-title" className="text-xl font-semibold tracking-tight">
-              Add a team member?
+              Bring someone with you
             </h1>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
-              Right after sign-up is the best time to invite a colleague—they’ll get their own login and share
-              this workspace with you. If you prefer, skip for now; you can always add people later from the Hub
-              under <span className="text-foreground font-medium">Your team</span>{" "}
-              (<span className="text-foreground font-medium">/workspace</span>).
+              Invite a teammate to share your workspace, or head straight to the Hub. You can add people later at any time.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
@@ -522,7 +529,7 @@ export default function Onboarding({
               }}
               data-testid="btn-skip-team-invite"
             >
-              Not now — continue
+              Go to Hub
             </Button>
           </div>
         </CardContent>
@@ -539,8 +546,8 @@ export default function Onboarding({
         <p className="text-[13px] text-muted-foreground/60 mt-1 flex items-center justify-center gap-1.5">
           <Building2 className="h-3.5 w-3.5" />
           {mode === "edit"
-            ? "Update your company details — same as onboarding"
-            : "Final step after sign-up — tell us about your company"}
+            ? "Update your company details from one place"
+            : "Tell us a little about your company"}
         </p>
         <div className="flex items-center gap-1 mt-4 max-w-xs mx-auto">
           <div className="h-1.5 flex-1 rounded-full bg-primary" />
@@ -797,7 +804,7 @@ export default function Onboarding({
                 onClick={handleSkipProfile}
                 data-testid="btn-skip-company-profile"
               >
-                Skip for now — I&apos;ll add this later
+                Skip for now, I&apos;ll add this later
               </Button>
             ) : (
               <div />
@@ -805,7 +812,7 @@ export default function Onboarding({
             <div className="flex flex-col sm:items-end gap-2">
               <p className="text-[11px] text-muted-foreground sm:text-right">
                 {mode === "edit"
-                  ? "This screen is the same flow as after sign-up — without a separate Settings page."
+                  ? "Your company details stay together in this profile."
                   : "You can update these details any time from the menu under your name."}
               </p>
               <Button

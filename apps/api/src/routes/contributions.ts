@@ -1,3 +1,4 @@
+import { stripServerControlledFields } from '../middleware/sanitizeBody.js';
 import { Router, type Request as ExpressRequest, type Response } from 'express';
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
@@ -28,7 +29,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   const pillarKey = sed ? 'sed' : 'esd';
   if (!(await verifyPillarAccess(req, res, pillarKey))) return;
   const clientId = String(req.params.clientId);
-  const payload = { ...req.body, clientId };
+  const payload = { ...stripServerControlledFields(req.body), clientId };
   const result = sed
     ? await storage.createSedContribution(payload)
     : await storage.createEsdContribution(payload);

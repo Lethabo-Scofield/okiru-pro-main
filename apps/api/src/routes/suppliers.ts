@@ -1,3 +1,4 @@
+import { stripServerControlledFields } from '../middleware/sanitizeBody.js';
 import { Router, type Request as ExpressRequest, type Response } from 'express';
 
 type Request = ExpressRequest<Record<string, string>, any, any, Record<string, string>>;
@@ -17,7 +18,7 @@ router.post('/', requireAuth, async (req: Request, res: Response) => {
   if (!(await verifyClientAccess(req, res))) return;
   if (!(await verifyPillarAccess(req, res, 'procurement'))) return;
   const clientId = String(req.params.clientId);
-  const result = await storage.createSupplier({ ...req.body, clientId });
+  const result = await storage.createSupplier({ ...stripServerControlledFields(req.body), clientId });
   fanOutBackSync({ companyId: clientId, entityType: 'supplier', entity: result, op: 'upsert' });
   return res.json(result);
 });

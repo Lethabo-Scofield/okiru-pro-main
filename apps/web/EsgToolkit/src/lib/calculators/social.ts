@@ -31,6 +31,13 @@ import {
   readDeclaredExclusions,
   type EsgPillarResult,
 } from "./esgApplicability";
+import {
+  readTargetBasis,
+  resolveTarget,
+  targetNotSetReason,
+  TARGET_BASIS_REASON,
+} from "./esgTargets";
+import type { EsgExclusion } from "./esgApplicability";
 
 export type SocialScoreResult = EsgPillarResult;
 
@@ -57,6 +64,17 @@ function str(wb: EsgWorkbookData, ref: string, section: string): string {
   return v == null ? "" : String(v);
 }
 
+/**
+ * The workbook's band, guarded for a target the company has not set.
+ *
+ * A null target is not a target of zero — it means the indicator cannot be
+ * scored at all, and it is excluded from the denominator elsewhere. This only
+ * keeps the arithmetic from running against a target that is not there.
+ */
+function prT(actual: number, target: number | null, max: number, floor: number): number {
+  return target == null ? 0 : pr(actual, target, max, floor);
+}
+
 export function scoreSocial(
   workbook: EsgWorkbookData,
   options?: EsgScoringOptions,
@@ -64,23 +82,47 @@ export function scoreSocial(
   const mode = scoringMode(options);
 
   const floor = readEsgCell(workbook, "assumptions", "B9") ?? 0.5;
-  const thrBlack = readEsgCell(workbook, "assumptions", "B50") ?? THR_BLACK_EE;
-  const thrBfm =
-    readEsgCell(workbook, "assumptions", "B51") ?? THRESHOLDS.blackFemaleManagement;
-  const thrPwd = readEsgCell(workbook, "assumptions", "B52") ?? THR_PWD;
-  const thrTraining = readEsgCell(workbook, "assumptions", "B53") ?? THR_TRAINING_HOURS;
-  const thrGrant = readEsgCell(workbook, "assumptions", "B54") ?? THR_LEVY_SPEND;
-  const thrLtifr = readEsgCell(workbook, "assumptions", "B55") ?? THR_LTIFR;
-  const thrCsiSpend = readEsgCell(workbook, "assumptions", "B56") ?? THRESHOLDS.csiSpendOfNpat;
-  const thrLocal =
-    readEsgCell(workbook, "assumptions", "B57") ?? THRESHOLDS.localLabourProcurement;
+
+  /*
+   * Targets are the company's, not ours. ESG frameworks do not prescribe them,
+   * so each of these resolves to `null` unless the company has declared a basis
+   * — its own numbers, the B-BBEE/EE targets, or trend-only. An indicator with
+   * no target cannot be scored against one, so it leaves the total with the
+   * reason stated rather than being graded against a number we invented.
+   *
+   * Parity mode keeps the workbook's own constants, because reproducing that
+   * spreadsheet is what it is for.
+   */
+  const basis = mode === "workbook-parity" ? "bbbee" : readTargetBasis(workbook);
+  const targetExclusions: EsgExclusion[] = [];
+  const target = (key: string, cell: string, bbbeeDefault: number, label: string): number | null => {
+    const resolved = resolveTarget(workbook, cell, bbbeeDefault, basis);
+    if (resolved == null) {
+      const reason =
+        basis === "own"
+          ? targetNotSetReason(label)
+          : TARGET_BASIS_REASON[basis as "undeclared" | "trend"];
+      const x = exclude("social", key, reason);
+      if (x) targetExclusions.push(x);
+    }
+    return resolved;
+  };
+
+  const thrBlack = target("d5", "B50", THR_BLACK_EE, "black employee representation");
+  const thrBfm = target("d6", "B51", THRESHOLDS.blackFemaleManagement, "black women in management");
+  const thrPwd = target("d8", "B52", THR_PWD, "employees with disabilities");
+  const thrTraining = target("d14", "B53", THR_TRAINING_HOURS, "training hours per employee");
+  const thrGrant = target("d15", "B54", THR_LEVY_SPEND, "mandatory grant recovery");
+  const thrLtifr = target("d17", "B55", THR_LTIFR, "lost-time injury frequency rate");
+  const thrCsiSpend = target("d22", "B56", THRESHOLDS.csiSpendOfNpat, "community investment");
+  const thrLocal = target("d24", "B57", THRESHOLDS.localLabourProcurement, "local procurement");
 
   /* -------------------------- Employment Equity -------------------- */
 
   // C5 = =IFERROR(IF(EE!B5>=B50,8,IF(EE!B5>=B50*B9,8*EE!B5/B50,0)),0)
   // `EE_Scorecard!B5` is now derived from the S_Data headcount matrix
   // (`=(B5+C5+D5+F5+G5+H5)/L5`) instead of being hand-typed.
-  const d5 = pr(readEsgCell(workbook, "ee", "B5") ?? 0, thrBlack, 8, floor);
+  const d5 = prT(readEsgCell(workbook, "ee", "B5") ?? 0, thrBlack, 8, floor);
 
   /*
    * C6 = =IFERROR(IF((L5+L6)=0,0,
@@ -93,12 +135,12 @@ export function scoreSocial(
    */
   const blackFemaleMgmt = BLACK_FEMALE_MGMT_CELLS.reduce((a, ref) => a + num(workbook, ref), 0);
   const mgmtHeadcount = MGMT_HEADCOUNT_CELLS.reduce((a, ref) => a + num(workbook, ref), 0);
-  const d6 = mgmtHeadcount > 0 ? pr(blackFemaleMgmt / mgmtHeadcount, thrBfm, 6, floor) : 0;
+  const d6 = mgmtHeadcount > 0 ? prT(blackFemaleMgmt / mgmtHeadcount, thrBfm, 6, floor) : 0;
 
   // C7 = =IF(EE!B9="Yes",5,IF(EE!B9="Partial",2.5,0))
   const d7 = yesPartialNo(str(workbook, "B9", "ee"), 5);
   // C8 = =IFERROR(IF(EE!B8>=B52,5,IF(EE!B8>=B52*B9,5*EE!B8/B52,0)),0)
-  const d8 = pr(readEsgCell(workbook, "ee", "B8") ?? 0, thrPwd, 5, floor);
+  const d8 = prT(readEsgCell(workbook, "ee", "B8") ?? 0, thrPwd, 5, floor);
   // C9 = =IF(EE!B10="Yes",3,IF(EE!B10="Partial",1.5,0))
   const d9 = yesPartialNo(str(workbook, "B10", "ee"), 3);
   // C10 = =IF(EE!B12="Yes",3,IF(EE!B12="Partial",1.5,0))
@@ -113,13 +155,13 @@ export function scoreSocial(
 
   // C14 = =IFERROR(IF(L12=0,0,IF(B49/L12>=B53,5,IF(B49/L12>=B53*B9,5*(B49/L12)/B53,0))),0)
   const headcount = num(workbook, "L12");
-  const d14 = headcount > 0 ? pr(num(workbook, "B49") / headcount, thrTraining, 5, floor) : 0;
+  const d14 = headcount > 0 ? prT(num(workbook, "B49") / headcount, thrTraining, 5, floor) : 0;
 
   // C15 = =IFERROR(IF(B44=0,0,IF(B47/B44>=B54,5,IF(B47/B44>=B54*B9,5*(B47/B44)/B54,0))),0)
   // `B44` is the SDL levy (`=B43*0.01`), now DERIVED-ONLY so a mislabelled
   // "NPAT" input can no longer corrupt this denominator.
   const levy = num(workbook, "B44");
-  const d15 = levy > 0 ? pr(num(workbook, "B47") / levy, thrGrant, 5, floor) : 0;
+  const d15 = levy > 0 ? prT(num(workbook, "B47") / levy, thrGrant, 5, floor) : 0;
 
   /* ---------------------------- Health & Safety -------------------- */
 
@@ -128,7 +170,7 @@ export function scoreSocial(
   // `S_Data!G35` is derived from hours worked and LTIs
   // (`=SUM(C29:F29)*1000000/SUM(C27:F27)`); absent hours leave it non-numeric,
   // which reads as null and scores 0.
-  const d17 = prLtifr(readEsgCell(workbook, "s-data", "G35"), thrLtifr, 8, floor);
+  const d17 = thrLtifr == null ? 0 : prLtifr(readEsgCell(workbook, "s-data", "G35"), thrLtifr, 8, floor);
 
   /*
    * C18 = =IFERROR(IF(OR(G28=0,G28="—",G28=""),8,0),0)
@@ -191,7 +233,7 @@ export function scoreSocial(
   const npat = num(workbook, "B84");
   const csiSpend = num(workbook, "D82");
   const d22 =
-    mode === "workbook-parity" || npat <= 0 ? 0 : pr(csiSpend / npat, thrCsiSpend, 5, floor);
+    mode === "workbook-parity" || npat <= 0 ? 0 : prT(csiSpend / npat, thrCsiSpend, 5, floor);
 
   /*
    * C23 = =IFERROR(IF(COUNTA(A72:A79)>=6,5,
@@ -213,7 +255,7 @@ export function scoreSocial(
   const d24 =
     mode === "workbook-parity" || procurementTotal <= 0
       ? 0
-      : pr(procurementLocal / procurementTotal, thrLocal, 5, floor);
+      : prT(procurementLocal / procurementTotal, thrLocal, 5, floor);
 
   /* ---------------------------- Suppliers -------------------------- */
 
@@ -232,10 +274,33 @@ export function scoreSocial(
    * takes none: it reproduces the client's spreadsheet, which has no concept of
    * an indicator that does not apply.
    */
+  /*
+   * Mandatory grant recovery is not an ESG measure. Asked what it was doing in
+   * an ESG scorecard, the expert's answer was "I do not understand this
+   * question and how it links to ESG" (Q5) — it is a Skills Development
+   * mechanic borrowed from B-BBEE. It is excluded from the total rather than
+   * deleted, so the points come out of the denominator and the reason is on
+   * the report instead of the indicator quietly disappearing.
+   */
+  const notEsgExclusions =
+    mode === "workbook-parity"
+      ? []
+      : [
+          exclude(
+            "social",
+            "d15",
+            "Not an ESG measure. Mandatory grant recovery is a Skills Development mechanic under B-BBEE and does not belong in an ESG score.",
+          ),
+        ];
+
   const excluded =
     mode === "workbook-parity"
       ? []
-      : mergeExclusions(readDeclaredExclusions(workbook, "social"), []);
+      : mergeExclusions(
+          readDeclaredExclusions(workbook, "social"),
+          targetExclusions,
+          notEsgExclusions,
+        );
   const scored = Object.entries(rows)
     .filter(([key]) => !excluded.some((x) => x.key === key))
     .reduce((a, [, v]) => a + v, 0);

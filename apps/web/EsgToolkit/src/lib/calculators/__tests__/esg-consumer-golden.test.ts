@@ -98,8 +98,23 @@ describe("LIVE — corrected baseline (the regression gate)", () => {
     expect(result.governanceRows.d25).toBe(0);
   });
 
-  it("overall drops 0.4461764706 → 0.4028431373", () => {
-    expect(result.overallPercent).toBeCloseTo(0.4028431373, 8);
+  it("overall moves 0.4461764706 → 0.4072291022", () => {
+    /*
+     * 0.4461764706 is the workbook's own figure; 0.4028431373 was the corrected
+     * figure before mandatory grant recovery left the Social denominator.
+     *
+     * The expert does not recognise grant recovery as an ESG measure at all —
+     * "I do not understand this question and how it links to ESG" (Q5) — so its
+     * 5 points come out of the total rather than being scored. Social is now
+     * 25/95 instead of 25/100, and the overall rises accordingly:
+     *
+     *     (36/100 + 25/95 + 59.8529411765/100) / 3 = 0.4072291022
+     *
+     * The company did not improve. We stopped charging it for something that
+     * was never an ESG measure.
+     */
+    expect(result.overallPercent).toBeCloseTo(0.4072291022, 8);
+    expect(result.social.scoringDenominator).toBe(95);
   });
 
   it("asserts every indicator individually", () => {
