@@ -103,13 +103,12 @@ function pillarHasSelectedTopic(pillar: EsgToolkitPillarScoreKey, selected: stri
 
 /**
  * Nav visibility in topic mode. Mirrors the handover's rules at this app's
- * granularity: the named-standard cross-reference (B-BBEE Bridge) is hidden
+ * granularity: routes without a matching topic are hidden
  * outright; Net-Zero and Carbon Tax ride along with GHG the way "levers"
  * rode along with "climate"; Dashboard and Import are never topic-specific.
  */
 export function topicNavVisibility(id: string, mode: EsgReportMode, selected: string[]): boolean {
   if (mode !== "topic") return true;
-  if (id === "bbbee-bridge") return false;
   if (id === "net-zero" || id === "carbon-tax") return selected.includes("e-ghg");
   if (id === "environmental") return pillarHasSelectedTopic("environmental", selected);
   if (id === "social") return pillarHasSelectedTopic("social", selected);

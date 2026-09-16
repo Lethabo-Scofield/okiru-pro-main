@@ -349,7 +349,7 @@ export default function Onboarding({
     if (!form.companyName.trim()) {
       toast({
         title: "Company name is required",
-        description: "Tell us which company this profile belongs to.",
+        description: "Enter the company name for this profile.",
         variant: "destructive",
       });
       return;
@@ -501,10 +501,10 @@ export default function Onboarding({
           </div>
           <div className="text-center space-y-2">
             <h1 id="team-step-title" className="text-xl font-semibold tracking-tight">
-              Bring someone with you
+              Team access
             </h1>
             <p className="text-[13px] text-muted-foreground leading-relaxed">
-              Invite a teammate to share your workspace, or head straight to the Hub. You can add people later at any time.
+              Invite a team member now, or continue to the workspace. Team access can be managed later.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
@@ -541,13 +541,13 @@ export default function Onboarding({
     <Card className="border border-border/50 shadow-lg bg-card overflow-hidden" data-testid="onboarding-popup">
       <div className="text-center pt-8 pb-3 px-6 border-b border-border/40">
         <h2 className="text-lg font-heading font-semibold tracking-tight" id="onboarding-title" data-testid="text-onboarding-title">
-          {mode === "edit" ? "Company & B-BBEE profile" : "Company profile"}
+          Company details
         </h2>
         <p className="text-[13px] text-muted-foreground/60 mt-1 flex items-center justify-center gap-1.5">
           <Building2 className="h-3.5 w-3.5" />
           {mode === "edit"
             ? "Update your company details from one place"
-            : "Tell us a little about your company"}
+            : "Enter company details"}
         </p>
         <div className="flex items-center gap-1 mt-4 max-w-xs mx-auto">
           <div className="h-1.5 flex-1 rounded-full bg-primary" />
@@ -561,9 +561,8 @@ export default function Onboarding({
             </>
           ) : (
             <>
-              We use this to tailor B-BBEE scorecards and recommendations. Only{" "}
-              <span className="text-foreground font-medium">company name</span> is required; everything else is optional
-              and editable later from your profile.
+              <span className="text-foreground font-medium">Company name</span> is required. Other details are optional
+              and can be updated later.
             </>
           )}
         </p>
@@ -804,7 +803,7 @@ export default function Onboarding({
                 onClick={handleSkipProfile}
                 data-testid="btn-skip-company-profile"
               >
-                Skip for now, I&apos;ll add this later
+                Skip for now
               </Button>
             ) : (
               <div />

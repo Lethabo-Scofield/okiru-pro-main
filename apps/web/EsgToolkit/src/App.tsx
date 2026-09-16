@@ -21,7 +21,6 @@ import EsgNetZero from "./pages/EsgNetZero";
 import EsgEnvironmental from "./pages/EsgEnvironmental";
 import EsgSocial from "./pages/EsgSocial";
 import EsgGovernance from "./pages/EsgGovernance";
-import EsgBbbeeBridge from "./pages/EsgBbbeeBridge";
 import EsgToolkitSectionPage from "./pages/EsgToolkitSectionPage";
 import EsgImport from "./pages/EsgImport";
 import { useEsgStore, type EsgStanceLabel } from "./lib/esgStore";
@@ -205,7 +204,6 @@ export function EsgAppRoutes() {
             <Route path="/" component={EsgDashboard} />
             <Route path="/net-zero" component={EsgNetZero} />
             <Route path="/carbon-tax" component={EsgCarbonTax} />
-            <Route path="/bbbee-bridge" component={EsgBbbeeBridge} />
             <Route path="/environmental" component={EsgEnvironmental} />
             <Route path="/environmental/ghg" component={EsgToolkitSectionPage} />
             <Route path="/environmental/energy" component={EsgToolkitSectionPage} />
