@@ -1479,7 +1479,9 @@ describe('POST /upload', () => {
 
   it('adds a new version when ?action=update with the same VAT', async () => {
     const original = seedCert({ companyName: 'Versioned Co', vatNumber: '4988776655', bbbeeLevel: 4 });
+    // `original` is the live store record; the update below mutates it in place.
     const originalBlobName = original.blobName;
+    const originalFileName = original.fileName;
     const r = await upload('?action=update', {
       vatNumber: '4988776655',
       companyName: 'Versioned Co',
@@ -1490,9 +1492,14 @@ describe('POST /upload', () => {
 
     const history = await call('GET', `/api/certificates/${original.id}/history`);
     expect(history.body.data.versions).toHaveLength(1);
-    expect(history.body.data.versions[0].blobName).toBe(originalBlobName);
-    expect(history.body.data.latest.blobName).not.toBe(originalBlobName);
+    // SEC-001: history is public and must never carry a storage path — the
+    // blob name is the exact string an attacker would feed to /download.
+    expect(history.body.data.versions[0]).not.toHaveProperty('blobName');
+    expect(history.body.data.latest).not.toHaveProperty('blobName');
+    expect(JSON.stringify(history.body)).not.toContain(originalBlobName);
+    expect(history.body.data.versions[0].fileName).toBe(originalFileName);
     expect(history.body.data.latest.fileName).toMatch(/v2\.pdf$/i);
+    expect(history.body.data.latest.fileName).not.toBe(originalFileName);
   });
 
   it('nulls ownership values outside 0–100 instead of storing invalid numbers', async () => {
