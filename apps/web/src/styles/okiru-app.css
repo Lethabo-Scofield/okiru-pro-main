@@ -71,11 +71,17 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 
   color: var(--body);
-  /* Ambient pools in the brand hues, low enough to be atmosphere not colour. */
+  /**
+   * Neutral light, no colour.
+   *
+   * These pools were tinted with the brand hues, which cast the whole page
+   * purple-blue — the opposite of "black and grey". Depth does not need a hue:
+   * plain white at a few percent lifts the top of the page and lets the base
+   * fall away, and the brand stays where it belongs, on the controls.
+   */
   background:
-    radial-gradient(ellipse 70% 48% at 10% 0%, rgba(147, 51, 234, 0.075), transparent 62%),
-    radial-gradient(ellipse 62% 45% at 94% 34%, rgba(6, 182, 212, 0.055), transparent 60%),
-    radial-gradient(ellipse 58% 42% at 46% 104%, rgba(232, 68, 26, 0.05), transparent 64%),
+    radial-gradient(ellipse 80% 50% at 50% -8%, rgba(255, 255, 255, 0.045), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 96% 30%, rgba(255, 255, 255, 0.022), transparent 60%),
     var(--ink);
   background-attachment: fixed;
   min-height: 100vh;
@@ -203,9 +209,11 @@
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  /* A label that wraps mid-button reads as broken, whatever the layout does. */
+  white-space: nowrap;
   color: #fff;
   background: var(--grad);
-  box-shadow: 0 2px 10px -2px rgba(147, 51, 234, 0.45),
+  box-shadow: 0 2px 10px -3px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(255, 255, 255, 0.22);
   transition: filter 0.2s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
@@ -213,7 +221,7 @@
 }
 .okiru-app .ok-btn-primary:hover {
   filter: brightness(1.1);
-  box-shadow: 0 4px 18px -2px rgba(147, 51, 234, 0.6),
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.7),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
 }
 .okiru-app .ok-btn-primary:active {
@@ -236,6 +244,7 @@
   cursor: pointer;
   font-size: 12.5px;
   font-weight: 500;
+  white-space: nowrap;
   color: var(--hi);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.04));
   border: 1px solid var(--rule);
