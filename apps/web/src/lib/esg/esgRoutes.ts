@@ -1,8 +1,6 @@
-/** Canonical ESG paths — inputs → summary → toolkit. */
+/** Canonical ESG paths — clients → inputs → summary → toolkit. */
 
-import { getStoredActiveCompanyId, persistActiveCompany } from "@/lib/activeCompany";
-
-export const ESG_ACTIVE_COMPANY_KEY = "okiru-active-company";
+export const ESG_ACTIVE_COMPANY_KEY = "okiru-esg-active-company";
 
 export const ESG_CLIENTS_PATH = "/esg/clients";
 
@@ -45,12 +43,16 @@ export function esgToolkitHref(companyId?: string): string {
 }
 
 export function setEsgActiveCompany(companyId: string): void {
-  persistActiveCompany({ id: companyId, name: "" });
+  try {
+    localStorage.setItem(ESG_ACTIVE_COMPANY_KEY, companyId);
+  } catch {
+    // ignore quota / private mode
+  }
 }
 
 export function getEsgActiveCompany(): string {
   try {
-    return getStoredActiveCompanyId();
+    return localStorage.getItem(ESG_ACTIVE_COMPANY_KEY) || "";
   } catch {
     return "";
   }

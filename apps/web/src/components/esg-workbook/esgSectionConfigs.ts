@@ -178,7 +178,7 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
     label: "CSI / SED spend minimum (THR_CSI)",
     type: "number",
     helpText:
-      "Corporate social investment spend as a percentage of Net Profit After Tax (THR_CSI).",
+      "Minimum Corporate Social Investment (CSI) / Socio-Economic Development (SED) spend as % of Net Profit After Tax (NPAT) — B-BBEE target 1% (THR_CSI).",
   },
   {
     cell: "B58",

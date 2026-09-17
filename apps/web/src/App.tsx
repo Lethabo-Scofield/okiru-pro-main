@@ -18,7 +18,6 @@ import PrivacyWrapper from "@/pages/PrivacyWrapper";
 import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
-import CompanySelector from "@/pages/CompanySelector";
 import Dashboard from "@/pages/Dashboard";
 // Super-admin-only giants (7k + 1.7k lines) — lazy so every ordinary user
 // stops downloading flows they can never open.
@@ -39,6 +38,7 @@ import Settings from "@/pages/Settings";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
+import EsgClientSelector from "@/pages/EsgClientSelector";
 import EsgInformationRequest from "@/pages/EsgInformationRequest";
 import EsgScoreSummary from "@/pages/EsgScoreSummary";
 import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
@@ -46,7 +46,6 @@ import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { hasAnyRole, isSuperAdmin } from "@/lib/roles";
 import { usePageViewTracking } from "@/lib/gaTracker";
-import { ActiveCompanyProvider, useActiveCompany } from "@/lib/activeCompany";
 import { ScorecardAdviceChat } from "@toolkit/components/scorecard/ScorecardAdviceChat";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 
@@ -154,13 +153,12 @@ function EsgToolkitLoader() {
   );
 }
 
-/** ESG always opens in the selected company's workspace. */
+/** /esg → company picker */
 function EsgHubRedirect() {
   const [, navigate] = useLocation();
-  const { activeCompany, loading } = useActiveCompany();
   useEffect(() => {
-    if (!loading) navigate(activeCompany ? `/esg/create/${encodeURIComponent(activeCompany.id)}` : "/companies", { replace: true });
-  }, [activeCompany, loading, navigate]);
+    navigate("/esg/clients", { replace: true });
+  }, [navigate]);
   return (
     <div className="min-h-screen bg-black flex items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
@@ -210,9 +208,6 @@ function AppRouter() {
       </Route>
       <Route path="/hub">
         <ProtectedRoute><HubLanding /></ProtectedRoute>
-      </Route>
-      <Route path="/companies">
-        <ProtectedRoute><CompanySelector /></ProtectedRoute>
       </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
@@ -297,7 +292,7 @@ function AppRouter() {
         <ProtectedRoute><EsgPreviewRoute><EsgHubRedirect /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/clients">
-        <ProtectedRoute><EsgPreviewRoute><EsgHubRedirect /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId/summary">
         <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>
@@ -411,14 +406,12 @@ function App() {
     <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ActiveCompanyProvider>
           <TooltipProvider>
             <Toaster />
             <AppRouter />
             <GlobalScorecardAdvisor />
             <GlobalFeedbackWidget />
           </TooltipProvider>
-          </ActiveCompanyProvider>
         </AuthProvider>
       </QueryClientProvider>
     </ThemeProvider>

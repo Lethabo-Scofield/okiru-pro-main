@@ -120,8 +120,9 @@ export function EsgReportScopePanel() {
             {topicCounterLine(selectedTopics)}
           </p>
           <p className="text-[10px] text-[var(--esg-text3)]">
-            Deselected topics disappear from navigation and scoring. Your underlying data is never
-            deleted.
+            Deselected topics disappear from navigation and scoring. The B-BBEE Bridge is hidden in
+            topic mode — it exists to map onto a named standard, which this scope opts out of. Your
+            underlying data is never deleted.
           </p>
         </div>
       ) : (

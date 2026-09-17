@@ -49,6 +49,7 @@ export const ESG_TOOLKIT_OVERVIEW_NAV: EsgToolkitNavItem[] = [
   { id: "dashboard", label: "ESG Dashboard", href: "/", pillar: "overview", overview: true },
   { id: "net-zero", label: "Net-Zero Roadmap", href: "/net-zero", pillar: "overview", overview: true },
   { id: "carbon-tax", label: "Carbon Tax", href: "/carbon-tax", pillar: "overview", overview: true },
+  { id: "bbbee-bridge", label: "B-BBEE Bridge", href: "/bbbee-bridge", pillar: "overview", overview: true },
 ];
 
 /** Pillar groups with sub-navigation (glass HTML order). */
@@ -134,7 +135,7 @@ export const ESG_TOOLKIT_PILLAR_NAV: EsgToolkitNavItem[] = [
         sectionKey: "ee",
         sheet: "EE_Scorecard",
         scoreGroup: { pillar: "social", keys: ["d5", "d6", "d7", "d8", "d9", "d10"], max: 30 },
-        description: "Workforce representation and management indicators.",
+        description: "EE scorecard bridge — EEA2 headcount and MC indicators.",
       },
       {
         id: "s-wsp",

@@ -13,7 +13,7 @@ const STARTERS = [
   "What evidence should we collect next?",
   "What is double materiality?",
   "Which reporting framework fits us?",
-  "How should we prioritise ESG actions?",
+  "How do B-BBEE and ESG overlap?",
 ];
 
 function runtimeSnapshot() {
