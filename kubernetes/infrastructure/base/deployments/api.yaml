@@ -115,6 +115,14 @@ spec:
             # Internal URL apps/api uses to reach apps/web (cluster DNS).
             - name: WEB_INTERNAL_URL
               value: "http://web:5001"
+            # Must match the web service: both write into one auditLogs
+            # collection and the daily seal verifies every record in it.
+            - name: AUDIT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: AUDIT_SIGNING_KEY
+                  optional: true
             - name: AZURE_OPENAI_ENDPOINT
               valueFrom:
                 secretKeyRef:
