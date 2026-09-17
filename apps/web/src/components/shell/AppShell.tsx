@@ -41,10 +41,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header
         className="relative z-20 h-12 sticky top-0 flex items-center justify-between gap-4 px-4 sm:px-6"
         style={{
-          background: 'rgba(11,15,26,0.82)',
-          backdropFilter: 'blur(18px) saturate(1.4)',
-          WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+          background: 'rgba(8,9,11,0.78)',
+          backdropFilter: 'blur(20px) saturate(1.3)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
           borderBottom: '1px solid var(--rule)',
+          boxShadow: '0 1px 0 rgba(255,255,255,0.03), 0 8px 24px -16px rgba(0,0,0,0.9)',
         }}
         data-testid="shell-topbar"
       >

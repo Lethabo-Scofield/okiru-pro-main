@@ -93,40 +93,42 @@
 }
 
 /**
- * The toolkit's dark theme, moved onto the marketing site's ink.
+ * The toolkit's dark theme: black and grey, matching the shell.
  *
- * It was pure black with neutral greys, which made the toolkit read as a
- * different application from the pages either side of it. These are the same
- * navy surfaces the shell and the landing page use, expressed as HSL because
- * shadcn's tokens are channel triplets: 222 41% 7% is #0b0f1a.
+ * These are the shell's greys as HSL, because shadcn's tokens are channel
+ * triplets: 220 11% 4% is #08090b. Not pure black — black gives a shadow
+ * nothing to fall on, so every surface reads flat.
+ *
+ * Purple stays the B-BBEE hue and cyan the focus ring, so the toolkit carries
+ * Okiru's colours rather than a generic violet.
  */
 .dark {
-  --background: 222 41% 7%;
+  --background: 220 11% 4%;
   --foreground: 0 0% 96%;
 
-  --card: 223 38% 9%;
+  --card: 222 10% 7%;
   --card-foreground: 0 0% 96%;
 
-  --popover: 223 38% 9%;
+  --popover: 222 10% 7%;
   --popover-foreground: 0 0% 96%;
 
   --primary: 271 81% 56%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 223 32% 12%;
+  --secondary: 220 9% 11%;
   --secondary-foreground: 0 0% 84%;
 
-  --muted: 223 32% 12%;
+  --muted: 220 9% 11%;
   --muted-foreground: 0 0% 58%;
 
-  --accent: 223 30% 15%;
+  --accent: 222 9% 14%;
   --accent-foreground: 0 0% 96%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 223 25% 18%;
-  --input: 223 25% 18%;
+  --border: 220 8% 17%;
+  --input: 220 8% 17%;
   --ring: 188 94% 43%;
 
   --chart-1: 265 90% 66%;
@@ -135,13 +137,13 @@
   --chart-4: 200 80% 58%;
   --chart-5: 340 65% 58%;
 
-  --sidebar: 224 43% 6%;
+  --sidebar: 220 12% 3%;
   --sidebar-foreground: 0 0% 58%;
   --sidebar-primary: 271 81% 56%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 223 32% 12%;
+  --sidebar-accent: 220 9% 11%;
   --sidebar-accent-foreground: 0 0% 86%;
-  --sidebar-border: 223 25% 16%;
+  --sidebar-border: 220 8% 15%;
   --sidebar-ring: 188 94% 43%;
 }
 
