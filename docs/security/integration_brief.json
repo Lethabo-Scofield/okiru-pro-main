@@ -1,0 +1,263 @@
+{
+  "outputFile": "Okiru_SuperGroup_Integration_Brief.pdf",
+  "title": "System access and integration brief",
+  "subtitle": "Okiru ESG Intelligence Platform — prepared for Super Group IT",
+  "meta": "Technical brief  ·  Version 1.0  ·  17 September 2026",
+  "stamp": "Okiru ESG Intelligence Platform · System access and integration brief · v1.0 · 17 September 2026 · Commercial in confidence",
+  "intro": [
+    "Okiru produces Super Group's ESG reporting. The operational figures behind it — fuel, fleet, energy, waste, headcount, incidents — currently reach us as spreadsheets and are re-keyed by hand. Super Group already holds them in a system of record, and reading them from that system removes the re-keying and the errors that come with it.",
+    "This brief sets out what we would need enabled, what your firewall would need to allow, and how the data is protected once it reaches us. It is written for an IT function deciding whether to open an interface, so it is short and specific. The field-level list of what we read is issued separately; the full security and POPIA position is in the disclosure that accompanies this document."
+  ],
+  "verification": {
+    "label": "In one paragraph",
+    "body": "We would like a read-only interface to the transport data you already hold. We initiate the connection; you never need to reach us. One static address to allow, one service account, no write access of any kind, monthly or quarterly rather than continuous. Everything we hold sits in Azure in South Africa North, encrypted, behind a firewall, with a tamper-evident audit trail and backups that have been restored and verified."
+  },
+  "sections": [
+    {
+      "kicker": "1 · The connection",
+      "title": "What we are asking for, in shape",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Aspect", "What we propose"],
+          "widths": [28, 72],
+          "rows": [
+            ["Direction", "Outbound from Okiru to Super Group. We call you"],
+            ["Who initiates", "Okiru, on a schedule. Nothing of ours listens for you"],
+            ["Access type", "Read-only. No create, update or delete, on any endpoint"],
+            ["Protocol", "HTTPS, TLS 1.2 or better, port 443 only"],
+            ["Frequency", "Monthly or quarterly, aligned to the reporting cycle — not continuous polling"],
+            ["Volume", "Small. Aggregated operational figures, not transaction-level traffic"],
+            ["Scope", "Named datasets only, agreed in writing before anything is enabled"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "We have deliberately specified a pull rather than a push. A pull means Super Group opens nothing inbound, holds no credential of ours, and can revoke ours at any moment without coordinating a change on our side. If your architecture favours a push instead we can receive one — see section 8 — but we would not ask for it first."
+        }
+      ]
+    },
+    {
+      "kicker": "2 · Whitelisting",
+      "title": "The addresses, and which direction each one matters in",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Purpose", "Value", "Notes"],
+          "widths": [26, 26, 48],
+          "rows": [
+            ["Our outbound address", "4.253.169.85 / 32", "The only address to allow. Static, dedicated to our platform, South Africa North"],
+            ["Our public hostname", "okiru.pro", "Only needed if you later push to us"],
+            ["Our inbound address", "4.253.195.45", "As above. Static"],
+            ["Ports", "443 only", "No other port, no other protocol"]
+          ]
+        },
+        {
+          "kind": "callout",
+          "tone": "amber",
+          "label": "The one entry that matters",
+          "text": "For a read-only pull, allowing 4.253.169.85/32 on port 443 is the whole firewall change. The address is statically assigned to our platform and does not rotate; if it ever had to change we would give notice in advance rather than after. We have confirmed from the running system that this is the address our traffic actually leaves from, rather than only the one that is provisioned."
+        },
+        {
+          "kind": "p",
+          "text": "We would in turn allow-list whatever addresses you give us, so the interface is restricted at both ends rather than resting on the credential alone."
+        }
+      ]
+    },
+    {
+      "kicker": "3 · Permissions to enable",
+      "title": "The smallest access that does the job",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Item", "Our ask"],
+          "widths": [30, 70],
+          "rows": [
+            ["Account", "One named service account, ours alone, not shared with another integration"],
+            ["Role", "Read-only on the agreed datasets. No administrative role"],
+            ["Scope", "The specific reports, views or endpoints agreed — not blanket read across the system"],
+            ["Authentication", "OAuth 2.0 client credentials preferred; an API key over TLS with our address allow-listed is acceptable; mutual TLS if that is your standard"],
+            ["User impersonation", "Not required. We do not need to act as any Super Group user"],
+            ["Personal data", "Only what the reporting standards require. Where a headcount or an incident count will do, we do not want the underlying record"],
+            ["Revocation", "Immediate, by you, without reference to us"],
+            ["Rotation", "On your schedule. We will rotate on request within one business day"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "We will take whatever authentication method you already operate. The preference order above is about what is easiest for you to revoke and audit, not about what is convenient for us."
+        }
+      ]
+    },
+    {
+      "kicker": "4 · What we need to read",
+      "title": "Categories, not fields",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "These are the areas the ESG report draws on. The field-level specification — exact names, units, periods and formats — is issued separately, so that this brief stays a security document and does not have to be reissued every time a field is added."
+        },
+        {
+          "kind": "table",
+          "head": ["Area", "What the report needs from it"],
+          "widths": [30, 70],
+          "rows": [
+            ["Fleet and fuel", "Litres by fuel type and period, by depot or operating unit; distance travelled where available"],
+            ["Energy", "Purchased electricity in kWh by site and period; any generation or renewable supply"],
+            ["Waste and water", "Volumes by stream and disposal route; water withdrawn and discharged"],
+            ["People", "Headcount by category and period. Counts, not personnel records"],
+            ["Health and safety", "Injury and incident counts, and hours worked, for the standard rates"],
+            ["Training and development", "Spend and participation counts by category"],
+            ["Procurement and suppliers", "Supplier spend by category, and B-BBEE status where already held"]
+          ]
+        },
+        {
+          "kind": "callout",
+          "tone": "amber",
+          "label": "Period boundaries are what usually breaks",
+          "text": "Every figure must carry the period it belongs to and the site or operating unit it belongs to. A number without a period cannot be used in a report that has to reconcile year on year, and correcting it afterwards costs far more than agreeing it now. This is the single most useful thing to settle in the first exchange."
+        }
+      ]
+    },
+    {
+      "kicker": "5 · How the data is protected once we hold it",
+      "title": "Our side of the interface",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Layer", "Position"],
+          "widths": [28, 72],
+          "rows": [
+            ["Hosting", "Microsoft Azure, South Africa North (Johannesburg). Managed Kubernetes with role-based access control"],
+            ["Database", "MongoDB 7.0 on an encrypted Azure managed disk, private to the cluster. Not a shared database service"],
+            ["Document store", "Azure Blob Storage, same region. Public access disabled, HTTPS enforced, TLS 1.2 minimum"],
+            ["Encryption at rest", "AES-256 on every disk and blob holding client data"],
+            ["Encryption in transit", "TLS 1.2 and 1.3 only; certificates renewed automatically"],
+            ["Edge protection", "Cloudflare in front of the public hostname, then ModSecurity with the OWASP Core Rule Set at our ingress, in blocking mode"],
+            ["Brute-force protection", "Rate limits on every authentication path, and a lockout on the account itself so a spray from many addresses is also stopped"],
+            ["Authentication", "Second factor required for every account that can reach client data. Passwords hashed with bcrypt at work factor 12"],
+            ["Separation", "Each client's records are scoped to their organisation and filtered on every read and write"],
+            ["Audit trail", "Every security-relevant action recorded with actor, organisation, action, result and source address. Each record signed, each day sealed, and copied to storage under a 730-day immutability policy so it cannot be altered or removed — including by us"],
+            ["Backups", "Nightly, held twice: in-cluster and off-cluster in the same region. Restored and verified end to end on 17 September 2026"]
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "6 · Services and sub-processors",
+      "title": "Everything that touches the data",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Service", "Used for", "Region"],
+          "widths": [30, 44, 26],
+          "rows": [
+            ["Microsoft Azure", "Compute, database disks, document and backup storage, private container registry", "South Africa North"],
+            ["Azure AI Document Intelligence", "Reading uploaded documents — text and layout", "South Africa North"],
+            ["Azure OpenAI", "Interpreting extracted content against the ESG data model", "South Africa North"],
+            ["Cloudflare", "Public edge, TLS and denial-of-service protection", "Global edge"],
+            ["Azure Communication Services", "Transactional email — sign-in codes and notifications", "South Africa North"],
+            ["Let's Encrypt", "Public TLS certificates", "Not applicable"]
+          ]
+        },
+        {
+          "kind": "bullets",
+          "items": [
+            "That list is exhaustive. No third-party or consumer AI service is in the path, and no analytics or advertising service receives client data.",
+            "Microsoft does not use Azure OpenAI customer content to train its models, and prompts are not shared with other customers.",
+            "One caveat we disclose rather than leave to be found: Microsoft offers the model class we use in South Africa North only on a deployment type that permits inference to be processed in another region. Data at rest stays in South Africa, and document text sent for indexing stays in South Africa, but prompt content may transit another region during interpretation. Section 3 of the accompanying disclosure sets this out in full.",
+            "No model has the last word. Every extracted figure is shown to a person for review before it is scored or published."
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "7 · What we will not do",
+      "title": "Commitments, so they can be held against us",
+      "blocks": [
+        {
+          "kind": "bullets",
+          "items": [
+            "We will not write to, modify or delete anything in a Super Group system. The credential we hold should not be capable of it.",
+            "We will not read outside the datasets agreed in writing. If we need more we will ask, rather than widen scope quietly.",
+            "We will not copy Super Group data to any system outside the services listed in section 6.",
+            "We will not share, resell, or use the data for any purpose other than producing Super Group's own reporting.",
+            "We will not hold credentials in source control, in a container image, or in a browser. They live in the platform's secret store and reach the application only at runtime.",
+            "We will not sit on a security incident. Where client data is confirmed or likely to be exposed we commit to telling you within 24 hours, including when the picture is still incomplete."
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "8 · If the interface does not exist",
+      "title": "Alternatives, in the order we would suggest them",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "If the system has no API, or exposing one is a project rather than a configuration change, these are the alternatives. All of them keep the same read-only, one-direction shape."
+        },
+        {
+          "kind": "table",
+          "head": ["Option", "What it involves", "Effort on your side"],
+          "widths": [24, 50, 26],
+          "rows": [
+            ["Scheduled export", "The system writes a dated file to SFTP or a storage container on a schedule; we collect it", "Low — usually a built-in report schedule"],
+            ["Read-only replica or view", "A database view restricted to the agreed columns, reachable from our address only", "Medium — needs a DBA and a firewall rule"],
+            ["Push to us", "Super Group posts to an endpoint we provide, with a credential we issue and rotate", "Medium — you would then hold a credential and reach outward"],
+            ["Manual upload, as today", "A person exports and uploads. This is the current arrangement", "None, and it is what we are trying to replace"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "Where a figure the report needs is simply not captured anywhere, that is a gap worth naming rather than working around. We would rather show it as not reported than derive it from something that does not mean the same thing. Those gaps can be scoped once we have seen what the system holds."
+        }
+      ]
+    },
+    {
+      "kicker": "9 · What we need to start",
+      "title": "A short list, so this can move in one exchange",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["#", "What we need", "From"],
+          "widths": [6, 68, 26],
+          "rows": [
+            ["1", "The base URL of the interface, and whatever documentation exists — however rough", "Super Group IT"],
+            ["2", "Which authentication method you want us to use, and a non-production credential to test with first", "Super Group IT"],
+            ["3", "Confirmation of which of the areas in section 4 the system actually holds", "Super Group IT and operations"],
+            ["4", "4.253.169.85/32 allowed on port 443", "Super Group network"],
+            ["5", "Your outbound addresses, so we can restrict our end too", "Super Group network"],
+            ["6", "A named technical contact for the integration", "Super Group IT"],
+            ["7", "A test environment if one exists — we would rather fail against test than against production", "Super Group IT"]
+          ]
+        },
+        {
+          "kind": "callout",
+          "tone": "amber",
+          "label": "Known limitations, stated up front",
+          "text": "Two things about our platform are worth knowing before you decide. It currently runs on a single application node on a tier without a formal uptime commitment, and the workloads inside the cluster are not yet segmented from one another. Neither affects the confidentiality of the interface described here, both are remediation items with owners and dates, and both are listed in section 9 of the accompanying security disclosure. We would rather you had them from us than found them later."
+        }
+      ]
+    },
+    {
+      "kicker": "10 · Accompanying documents",
+      "title": "What else has been issued",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Document", "Audience", "What it covers"],
+          "widths": [32, 22, 46],
+          "rows": [
+            ["Security, hosting and POPIA disclosure v1.1", "Governance, legal", "Hosting, encryption, AI and its regions, backups, access control, audit logging, the POPIA position condition by condition, and every open item with a risk and a remediation"],
+            ["ESG interface field specification", "IT, operations", "The field-level list: names, units, periods and formats for everything in section 4"],
+            ["This brief", "IT", "Access model, whitelisting, permissions, and how the data is protected once we hold it"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "Nothing in this brief is intended to bind either party commercially. Where it becomes contractual it should sit behind an operator agreement under section 21 of POPIA, which we will sign on Super Group's paper."
+        }
+      ]
+    }
+  ]
+}
