@@ -661,6 +661,18 @@ const clientSchema = new Schema({
   companyValue: { type: Number, default: 0 },
   outstandingDebt: { type: Number, default: 0 },
   organizationId: { type: String, default: null, index: true },
+  /**
+   * The team this company belongs to, and therefore the team whose roles
+   * decide who may open it and which pillars they may edit.
+   *
+   * Without it, permissions were recorded and never applied. The only link
+   * between a company and a workspace was a ProcessorSession, written by one
+   * super-admin-only screen, so a company created the normal way had no
+   * workspace, the resolver found nothing, and every recorded scope was
+   * ignored. Null still means "no team overlay" for companies made before
+   * this existed — the creator and organisation checks stand on their own.
+   */
+  workspaceId: { type: String, default: null, index: true },
   createdByUserId: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

@@ -981,6 +981,30 @@ export async function registerRoutes(
     await storage.createWorkspace(name, userId);
   }
 
+  /**
+   * The workspace a newly created company should belong to.
+   *
+   * Prefers a team this user owns, so a member of someone else's team does not
+   * quietly file a company under it; falls back to whichever team they are in.
+   * Returns null rather than throwing — a company is still worth creating when
+   * the team lookup fails, and null simply means no team overlay applies.
+   */
+  async function resolveCreationWorkspaceId(userId: string): Promise<string | null> {
+    try {
+      await ensureDefaultWorkspace(userId);
+      const list = await storage.listWorkspacesForUser(userId);
+      if (list.length === 0) return null;
+      const owned = list.find((w) => w.ownerUserId === userId);
+      return String((owned ?? list[0]).id);
+    } catch (err) {
+      logger.warn("Could not resolve a workspace for a new company (non-fatal)", {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   async function enrichWorkspaceMembers(workspaceId: string) {
     const members = await storage.listMembers(workspaceId);
     if (members.length === 0) return [];
@@ -2121,17 +2145,33 @@ export async function registerRoutes(
   } | null> {
     if (!isMongoConnected()) return null;
     try {
-      const session = await ProcessorSessionModel.findOne({
-        clientId,
-        workspaceId: { $nin: [null, ""] },
-      })
-        .sort({ updatedAt: -1 })
-        .lean();
-      const sessionAny = session as any;
-      if (!sessionAny?.workspaceId) return null;
-      const ownerId = sessionAny.createdBy ?? sessionAny.createdByUserId ?? null;
+      // The company's own binding is the authority. Falling back to a
+      // workspace-bound ProcessorSession keeps companies made through the
+      // super-admin processor working, but it can no longer be the ONLY way a
+      // company is bound — that is what left every scope unenforced.
+      const client = (await ClientModel.findOne(
+        { $or: [{ clientId }, { id: clientId }] },
+        { _id: 0, workspaceId: 1, createdByUserId: 1 },
+      ).lean()) as { workspaceId?: string | null; createdByUserId?: string | null } | null;
+
+      let workspaceId = client?.workspaceId ? String(client.workspaceId) : "";
+      let ownerId: string | null = client?.createdByUserId ?? null;
+
+      if (!workspaceId) {
+        const session = await ProcessorSessionModel.findOne({
+          clientId,
+          workspaceId: { $nin: [null, ""] },
+        })
+          .sort({ updatedAt: -1 })
+          .lean();
+        const sessionAny = session as any;
+        if (!sessionAny?.workspaceId) return null;
+        workspaceId = String(sessionAny.workspaceId);
+        ownerId = sessionAny.createdBy ?? sessionAny.createdByUserId ?? ownerId;
+      }
+
       if (ownerId && ownerId === userId) return { mode: "full" };
-      const member = await storage.getMember(String(sessionAny.workspaceId), userId);
+      const member = await storage.getMember(workspaceId, userId);
       if (!member) return { mode: "scoped", scopes: [] }; // not a member of the bound workspace → deny pillars
       if (member.role === "owner") return { mode: "owner_override" };
       if (member.role === "viewer") return { mode: "readOnly" };
@@ -2139,11 +2179,15 @@ export async function registerRoutes(
       if (scopes.length === 0) return { mode: "full" };
       return { mode: "scoped", scopes };
     } catch (err) {
-      logger.warn("resolveClientPillarAccess failed (non-fatal)", {
+      // A failed lookup is not permission. It used to return null, which meant
+      // "no overlay" and therefore full access — so a database hiccup handed
+      // out exactly the access the scopes exist to withhold. Read-only is the
+      // safe reading of "we could not establish what you may do".
+      logger.warn("resolveClientPillarAccess failed — falling back to read-only", {
         clientId,
         error: err instanceof Error ? err.message : String(err),
       });
-      return null;
+      return { mode: "readOnly" };
     }
   }
 
@@ -2282,6 +2326,11 @@ export async function registerRoutes(
         : null;
 
       if (isMongoConnected()) {
+        // Bind the company to the creator's team as it is made. This is what
+        // makes roles mean anything: every permission check starts by asking
+        // which workspace a company belongs to, and until now the answer for
+        // a normally-created company was "none".
+        const workspaceId = await resolveCreationWorkspaceId(userId);
         const client = await ClientModel.create({
           id: clientId,
           clientId,
@@ -2294,6 +2343,7 @@ export async function registerRoutes(
           npat: npat || 0,
           leviableAmount: leviableAmount || 0,
           organizationId: userOrgId,
+          workspaceId,
           createdByUserId: userId,
           product: normalizedProduct,
         });

@@ -114,6 +114,13 @@ export default function HubLanding() {
       ? profile.companyName.trim()
       : '';
 
+  /**
+   * Each product keeps its own colour, used the way a bank uses colour: to tell
+   * two products apart at a glance, on the icon and a hairline, against a
+   * neutral surface. Not as a wash, a gradient or a glow — that is what read as
+   * unserious before. Violet has been B-BBEE's colour and teal ESG's throughout
+   * the toolkits, so the Hub now agrees with them instead of being grey.
+   */
   const products = [
     {
       id: 'bbbee',
@@ -123,6 +130,8 @@ export default function HubLanding() {
         'Measure a company against its sector scorecard, from evidence through to a verified level.',
       workspace: '/bbbee',
       create: '/bbbee/new',
+      accent: 'bg-violet-500/[0.12] text-violet-300 ring-1 ring-inset ring-violet-400/25',
+      rule: 'bg-violet-400/60',
       show: true,
     },
     {
@@ -133,6 +142,8 @@ export default function HubLanding() {
         'Report environmental, social and governance performance against the frameworks you follow.',
       workspace: '/esg',
       create: '/esg/new',
+      accent: 'bg-teal-500/[0.12] text-teal-300 ring-1 ring-inset ring-teal-400/25',
+      rule: 'bg-teal-400/60',
       show: esgAllowed,
     },
   ].filter((p) => p.show);
@@ -249,14 +260,17 @@ export default function HubLanding() {
           {products.map((p) => (
             <section
               key={p.id}
-              className="rounded-xl border border-[#2c2c2e] bg-[#1c1c1e] p-5 flex flex-col"
+              className="relative overflow-hidden rounded-xl border border-[#2c2c2e] bg-[#1c1c1e] p-5 flex flex-col"
               data-testid={`product-${p.id}`}
             >
-              <div className="flex items-center gap-2.5 text-white">
-                {p.icon}
-                <h2 className="text-[16px] font-semibold tracking-[-0.01em]">{p.title}</h2>
+              <span className={`absolute inset-x-0 top-0 h-px ${p.rule}`} aria-hidden />
+              <div className="flex items-center gap-2.5">
+                <span className={`grid h-8 w-8 place-items-center rounded-lg ${p.accent}`}>
+                  {p.icon}
+                </span>
+                <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-white">{p.title}</h2>
               </div>
-              <p className="text-[13px] text-[#98989f] mt-2 flex-1">{p.description}</p>
+              <p className="text-[13px] text-[#98989f] mt-3 flex-1">{p.description}</p>
               <div className="flex items-center gap-2 mt-5">
                 <Link
                   href={p.workspace}

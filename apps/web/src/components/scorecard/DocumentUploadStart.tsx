@@ -2068,18 +2068,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             >
               <CloudUpload className="w-5 h-5 text-[#d1d1d6]" />
             </div>
-            <h3
-              className="text-[18px] text-white mb-1"
-            >
-              Upload documents
-            </h3>
-            <p className="hidden">
-              Certificates, affidavits, spend schedules, EE reports — PDF, Word, Excel or scans.
-              We read them, extract the real values, and build your scorecard.
-            </p>
+            {/* No heading here. The step above already says "Add your
+                documents"; repeating it, then labelling the button with the
+                same words a third time, is what made choosing "upload" and
+                then being asked to upload feel like being asked twice. */}
             <p className="text-[13px] text-[#98989f] mb-4 max-w-sm mx-auto leading-5">
-              Certificates, affidavits, spend schedules, payroll and EE reports. Add
-              them together, or a pillar at a time using the batches below.
+              Certificates, affidavits, spend schedules, payroll and EE reports.
+              PDF, Word, Excel or scans.
             </p>
             <button
               type="button"

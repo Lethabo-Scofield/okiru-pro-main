@@ -8,6 +8,9 @@ import {
   FileUp,
   FileSpreadsheet,
   PencilLine,
+  Users,
+  Award,
+  Leaf,
 } from 'lucide-react';
 import { DeleteCompanyButton } from '@/components/DeleteCompanyButton';
 import { API_BASE } from '@toolkit/lib/config';
@@ -115,6 +118,17 @@ export function ProductWorkspace({ product }: { product: Product }) {
   const isEsg = product === 'esg';
   const copy = COPY[product];
   const createHref = isEsg ? '/esg/new' : '/bbbee/new';
+  // Each product keeps the colour it already has in its toolkit, used to mark
+  // which workspace you are in rather than to decorate it.
+  const accent = isEsg
+    ? {
+        chip: 'bg-teal-500/[0.12] text-teal-300 ring-1 ring-inset ring-teal-400/25',
+        rule: 'bg-teal-400/60',
+      }
+    : {
+        chip: 'bg-violet-500/[0.12] text-violet-300 ring-1 ring-inset ring-violet-400/25',
+        rule: 'bg-violet-400/60',
+      };
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -216,11 +230,41 @@ export function ProductWorkspace({ product }: { product: Product }) {
     // draws what is underneath them.
     <div className="font-sans" data-testid={`workspace-${product}`}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-7">
-        <div className="mb-6">
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-            {copy.title} workspace
-          </h1>
-          <p className="text-[13px] text-[#98989f] mt-1">{copy.lead}</p>
+        <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className={`grid h-8 w-8 place-items-center rounded-lg ${accent.chip}`}>
+                {isEsg ? <Leaf className="h-4 w-4" /> : <Award className="h-4 w-4" />}
+              </span>
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
+                {copy.title} workspace
+              </h1>
+            </div>
+            <p className="text-[13px] text-[#98989f] mt-2">{copy.lead}</p>
+          </div>
+
+          {/* A workspace is a team's, so the people in it and the evidence they
+              have gathered belong here rather than in a menu somewhere else. */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate('/access')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#2c2c2e] bg-[#1c1c1e] px-3 py-1.5 text-[12px] font-medium text-[#e5e5e7] hover:border-[#48484a] transition-colors"
+              data-testid="workspace-team"
+            >
+              <Users className="h-3.5 w-3.5" />
+              Team &amp; access
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/documents')}
+              className="inline-flex items-center gap-1.5 rounded-md border border-[#2c2c2e] bg-[#1c1c1e] px-3 py-1.5 text-[12px] font-medium text-[#e5e5e7] hover:border-[#48484a] transition-colors"
+              data-testid="workspace-documents"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              Documents
+            </button>
+          </div>
         </div>
 
         {/*

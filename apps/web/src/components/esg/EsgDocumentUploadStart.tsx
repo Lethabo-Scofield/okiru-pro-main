@@ -1361,14 +1361,12 @@ export function EsgDocumentUploadStart({
                 >
                   <CloudUpload className="h-5 w-5 text-[#d1d1d6]" />
                 </div>
-                <h3
-                  className="mb-1 text-[18px] text-[var(--esg-text,#fff)]"
-                >
-                  Upload documents
-                </h3>
+                {/* No heading: the step above already says "Add your ESG
+                    evidence", and the button says upload. Saying it three
+                    times is what made the step feel like a second request. */}
                 <p className="mx-auto mb-4 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
-                  Utility bills, fuel statements, waste manifests and registers. Add them together, or an element at
-                  a time.
+                  Utility bills, fuel statements, waste manifests and registers.
+                  PDF, Word, Excel or scans.
                 </p>
                 <button
                   type="button"
