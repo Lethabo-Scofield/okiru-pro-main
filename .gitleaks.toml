@@ -1,0 +1,81 @@
+# Secret scanning configuration.
+#
+# The default rule set catches recognisable key shapes — sk-…, gsk_…, ghp_…,
+# AKIA…, AccountKey=… . That is what a previous scan of this repository used,
+# and it MISSED a live Azure Container Registry admin password committed in a
+# tracked `.aks_env` file, because an ACR password matches none of those shapes:
+# it is just a long opaque string after `PASSWORD=`.
+#
+# So the default rules are kept and a set of assignment-shaped rules is added
+# underneath them: anything that looks like a credential being assigned to a
+# variable, regardless of what the value looks like.
+
+title = "Okiru secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "okiru-credential-assignment"
+description = "A password, secret or token assigned to a variable"
+# Deliberately broad on the value: the point is the NAME, not the shape.
+regex = '''(?i)\b(password|passwd|secret|token|api_?key|access_?key|private_?key|client_?secret|connection_?string)\b\s*[=:]\s*["']?([A-Za-z0-9/+_.~=-]{16,})["']?'''
+secretGroup = 2
+keywords = [
+  "password",
+  "passwd",
+  "secret",
+  "token",
+  "apikey",
+  "api_key",
+  "accesskey",
+  "access_key",
+  "privatekey",
+  "private_key",
+  "client_secret",
+  "connection_string",
+]
+
+[[rules]]
+id = "okiru-acr-credentials"
+description = "Azure Container Registry credentials"
+regex = '''(?i)ACR_(PASSWORD|USERNAME|NAME)\s*=\s*\S{8,}'''
+keywords = ["acr_password", "acr_username", "acr_name"]
+
+[[rules]]
+id = "okiru-mongo-uri"
+description = "MongoDB connection string with embedded credentials"
+regex = '''mongodb(\+srv)?:\/\/[^\s:@\/]+:[^\s:@\/]+@'''
+keywords = ["mongodb://", "mongodb+srv://"]
+
+[[rules]]
+id = "okiru-azure-storage-key"
+description = "Azure Storage account key"
+regex = '''(?i)(AccountKey|SharedAccessSignature)\s*=\s*[A-Za-z0-9+\/=]{40,}'''
+keywords = ["accountkey", "sharedaccesssignature"]
+
+[[rules]]
+id = "okiru-kubeconfig-token"
+description = "Embedded kubeconfig client certificate or token"
+regex = '''(?i)(client-key-data|client-certificate-data|token)\s*:\s*[A-Za-z0-9+\/=]{40,}'''
+keywords = ["client-key-data", "client-certificate-data"]
+
+[allowlist]
+description = "Paths and values that are not credentials"
+paths = [
+  '''(^|/)pnpm-lock\.yaml$''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)uv\.lock$''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.gitleaks\.toml$''',
+  # Fixtures and documentation that describe the shape of a secret without
+  # being one. Keep this list short and specific.
+  '''(^|/)kubernetes/templates/secrets-template\.yaml$''',
+  '''(^|/)docs/security/''',
+]
+regexes = [
+  # Obvious placeholders.
+  '''(?i)(your[-_]?|my[-_]?|example[-_]?|placeholder|changeme|replace[-_]?me|xxx+|<[^>]+>|\$\{[^}]+\})''',
+  '''(?i)=\s*["']?(test|dummy|fake|sample|redacted|none|null|undefined|localhost)["']?\s*$''',
+]
