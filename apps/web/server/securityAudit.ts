@@ -12,6 +12,7 @@ import mongoose, { Schema } from "mongoose";
 import { v4 as uuid } from "uuid";
 import type { Request } from "express";
 import { createLogger } from "./logger.js";
+import { signAuditRecord } from "./auditRetention.js";
 
 const logger = createLogger("SecurityAudit");
 
@@ -31,12 +32,19 @@ const auditLogSchema = new Schema(
     method: { type: String, default: null },
     path: { type: String, default: null },
     metadata: { type: Schema.Types.Mixed, default: {} },
+    // Tamper evidence. An HMAC over the record's own contents, so altering any
+    // field in the database invalidates it. See auditRetention.ts for the daily
+    // seal that makes deletions detectable too.
+    signature: { type: String, default: null },
   },
   { collection: "auditLogs" },
 );
 
 const AuditLogModel =
   mongoose.models.AuditLog || mongoose.model("AuditLog", auditLogSchema);
+
+/** See the note at the write site — keeps a slow database off the login path. */
+const AUDIT_WRITE_TIMEOUT_MS = Number(process.env.AUDIT_WRITE_TIMEOUT_MS || 2000);
 
 export interface WebAuditEvent {
   action: string;
@@ -50,7 +58,7 @@ export interface WebAuditEvent {
 
 export async function recordAudit(req: Request, event: WebAuditEvent): Promise<void> {
   const session = (req.session as { userId?: string; organizationId?: string } | undefined) || {};
-  const row = {
+  const row: Record<string, any> = {
     id: uuid(),
     timestamp: new Date(),
     actorUserId: event.actorUserId !== undefined ? event.actorUserId : session.userId ?? null,
@@ -67,6 +75,7 @@ export async function recordAudit(req: Request, event: WebAuditEvent): Promise<v
     path: req.originalUrl || req.path,
     metadata: event.metadata ?? {},
   };
+  row.signature = signAuditRecord(row);
 
   // Always log structurally — captures the event even when MongoDB is down.
   logger.info(`audit:${row.action}`, {
@@ -83,7 +92,16 @@ export async function recordAudit(req: Request, event: WebAuditEvent): Promise<v
   if (mongoose.connection.readyState !== 1) return;
 
   try {
-    await AuditLogModel.create(row);
+    // Hard ceiling on how long an audit write may hold up the caller. Mongoose
+    // buffers operations for ten seconds when the driver cannot reach a server,
+    // and a sign-in must not inherit that: the structured log line above has
+    // already captured the event either way.
+    await Promise.race([
+      AuditLogModel.create(row),
+      new Promise((_resolve, reject) =>
+        setTimeout(() => reject(new Error("audit write timed out")), AUDIT_WRITE_TIMEOUT_MS).unref?.(),
+      ),
+    ]);
   } catch (err) {
     logger.error("Failed to persist web audit event", err as Error, {
       action: row.action,

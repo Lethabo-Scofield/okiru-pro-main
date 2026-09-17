@@ -11,6 +11,7 @@
  * error log for the operator to investigate.
  */
 import type { Request, Response, NextFunction } from "express";
+import crypto from "crypto";
 import mongoose, { Schema } from "mongoose";
 import { v4 as uuid } from "uuid";
 import { createLogger } from "../logger.js";
@@ -48,9 +49,45 @@ const auditLogSchema = new Schema(
     method: { type: String, default: null },
     path: { type: String, default: null },
     metadata: { type: Schema.Types.Mixed, default: {} },
+    // Tamper evidence, shared with the web writer. Both services derive the
+    // signature the same way from the same key, so a record written by either
+    // verifies against the daily seal the web service takes.
+    signature: { type: String, default: null },
   },
   { collection: "auditLogs" },
 );
+
+/**
+ * Canonical form for signing. Field order is fixed here rather than read off
+ * object key order, so a record that round-trips through JSON or a different
+ * driver still produces the same signature.
+ *
+ * MUST stay identical to `canonicalAuditPayload` in
+ * apps/web/server/auditRetention.ts — the two services sign into one collection.
+ */
+function canonicalAuditPayload(row: Record<string, unknown>): string {
+  const ts =
+    row.timestamp instanceof Date ? row.timestamp.toISOString() : String(row.timestamp ?? "");
+  return [
+    row.id ?? "",
+    ts,
+    row.actorUserId ?? "",
+    row.organizationId ?? "",
+    row.action ?? "",
+    row.resourceType ?? "",
+    row.resourceId ?? "",
+    row.result ?? "",
+    row.ip ?? "",
+    row.method ?? "",
+    row.path ?? "",
+    JSON.stringify(row.metadata ?? {}),
+  ].join("\u001f");
+}
+
+export function signAuditRecord(row: Record<string, unknown>): string {
+  const key = process.env.AUDIT_SIGNING_KEY || process.env.SESSION_SECRET || "okiru-audit-unsigned";
+  return crypto.createHmac("sha256", key).update(canonicalAuditPayload(row)).digest("hex");
+}
 
 // --- Append-only enforcement ---------------------------------------------
 // Block any attempt to mutate or delete an audit row through the Mongoose
@@ -86,7 +123,7 @@ export const AuditLogModel =
 /** Synchronously build the row that would be written for a request+event. */
 export function buildAuditRow(req: Request, event: AuditEventInput) {
   const session = (req.session as { userId?: string; organizationId?: string } | undefined) || {};
-  return {
+  const row = {
     id: uuid(),
     timestamp: new Date(),
     actorUserId: event.actorUserId !== undefined ? event.actorUserId : session.userId ?? null,
@@ -103,6 +140,7 @@ export function buildAuditRow(req: Request, event: AuditEventInput) {
     path: req.originalUrl || req.path,
     metadata: event.metadata ?? {},
   };
+  return { ...row, signature: signAuditRecord(row) };
 }
 
 /** Fire-and-log audit writer. Never throws. */

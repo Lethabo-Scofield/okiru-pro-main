@@ -20,12 +20,32 @@ import { randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
+import {
+  authNamespaceLimiter,
+  availabilityLimiter,
+  clearLoginFailures,
+  isAccountLocked,
+  loginLimiter,
+  otpLimiter,
+  passwordResetLimiter,
+  passwordResetRequestLimiter,
+  recordLoginFailure,
+  registerLimiter,
+} from "./rateLimit.js";
+import {
+  checkPasswordStrength,
+  hashOtp,
+  hashPassword,
+  verifyOtp,
+  verifyPassword,
+} from "./passwords.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
 import { registerEsgWorkbookRoutes } from "./esgWorkbookRoutes";
 import { registerExcelImportRoutes } from "./excelImportRoute";
 import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { registerAuditRoutes } from "./auditRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
 import { registerPlacementTelemetryRoutes } from "./placementTelemetry";
 import { registerVocabularyRoutes } from "./vocabularyRoutes";
@@ -92,6 +112,39 @@ const DEMO_USER_ID = "demo-offline-user";
 
 function isDemoLoginEnabled(): boolean {
   return process.env.ENABLE_DEMO_LOGIN === "true" || process.env.NODE_ENV !== "production";
+}
+
+/**
+ * Whether this account must complete a second factor, regardless of the
+ * per-user toggle.
+ *
+ * Two-factor authentication used to be opt-in, which meant the control existed
+ * but protected almost nobody. It is now required for every account that can
+ * reach client data. Two deliberate carve-outs:
+ *  - the offline demo identity, which holds no client data; and
+ *  - environments with no mail transport, where enforcing it would lock
+ *    everyone out with no way to receive a code. That case is logged loudly
+ *    rather than silently downgraded.
+ */
+let warnedAboutUnenforceable2fa = false;
+function twoFactorRequiredFor(user: { id?: string; username?: string } | null | undefined): boolean {
+  if (!user) return false;
+  if (user.id === DEMO_USER_ID) return false;
+
+  const setting = (process.env.ENFORCE_2FA || "").toLowerCase();
+  const enforce = setting === "true" ? true : setting === "false" ? false : process.env.NODE_ENV === "production";
+  if (!enforce) return false;
+
+  if (!isSmtpConfigured()) {
+    if (!warnedAboutUnenforceable2fa) {
+      warnedAboutUnenforceable2fa = true;
+      logger.error(
+        "ENFORCE_2FA is on but no mail transport is configured — second factor cannot be delivered and is therefore NOT being enforced. Configure SMTP.",
+      );
+    }
+    return false;
+  }
+  return true;
 }
 
 function isDemoCredentials(loginId: unknown, password: unknown): boolean {
@@ -175,7 +228,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.session.destroy(() => {});
     return res.status(401).json({ message: "User no longer exists" });
   }
-  if (user.twofaEnabled && (req.session as any).otpVerified !== true) {
+  if ((user.twofaEnabled || twoFactorRequiredFor(user)) && (req.session as any).otpVerified !== true) {
     return res.status(403).json({ message: "2FA verification required", requires2FA: true });
   }
   (req as any).user = user;
@@ -223,6 +276,45 @@ function sanitizeUser(user: any) {
  * the user belonged to no tenant, which is why this is set in one place rather
  * than repeated at each sign-in path.
  */
+/**
+ * End every stored session belonging to a user, optionally keeping one.
+ *
+ * Used after a password reset and after an account is disabled. connect-mongo
+ * writes the session payload as a JSON string, so this handles both that and
+ * the object form rather than assuming one.
+ *
+ * Returns how many sessions were revoked, which the audit entry records.
+ */
+async function destroySessionsForUser(userId: string, keepSessionId?: string): Promise<number> {
+  if (mongoose.connection.readyState !== 1) return 0;
+  try {
+    const col = mongoose.connection.db!.collection("sessions");
+    const docs = await col.find({}, { projection: { session: 1 } }).toArray();
+    const doomed: unknown[] = [];
+    for (const doc of docs) {
+      if (keepSessionId && doc._id === keepSessionId) continue;
+      const raw = (doc as any).session;
+      let payload: any = raw;
+      if (typeof raw === "string") {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+      }
+      if (payload && payload.userId === userId) doomed.push(doc._id);
+    }
+    if (!doomed.length) return 0;
+    await col.deleteMany({ _id: { $in: doomed as any } });
+    return doomed.length;
+  } catch (err) {
+    logger.warn("Could not revoke sessions for user", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
+}
+
 function establishSession(
   req: { session: any },
   account: { id: string; organizationId?: string | null },
@@ -312,21 +404,13 @@ export async function registerRoutes(
     res.json(REGISTERED_ORGANIZATIONS.map(o => ({ id: o.id, name: o.name, emailDomain: o.emailDomain })));
   });
 
-  const checkRateLimits = new Map<string, { count: number; resetAt: number }>();
-  function rateLimitCheck(ip: string, limit = 30, windowMs = 60000): boolean {
-    const now = Date.now();
-    const entry = checkRateLimits.get(ip);
-    if (!entry || now > entry.resetAt) {
-      checkRateLimits.set(ip, { count: 1, resetAt: now + windowMs });
-      return true;
-    }
-    entry.count++;
-    return entry.count <= limit;
-  }
+  // Every authentication path shares one durable ceiling, then each route adds
+  // its own tighter limit below. Mounted here rather than in index.ts so it sits
+  // after the session middleware and can see `req.ip` with the proxy hop applied.
+  app.use("/api/auth", authNamespaceLimiter);
 
-  app.post("/api/auth/check-username", async (req, res) => {
+  app.post("/api/auth/check-username", availabilityLimiter, async (req, res) => {
     try {
-      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ available: false, message: "Too many requests, try again shortly" });
       const { username } = req.body;
       const trimmed = typeof username === 'string' ? username.trim() : '';
       if (!trimmed) return res.json({ available: false, message: "Username is required" });
@@ -341,9 +425,8 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/check-email", async (req, res) => {
+  app.post("/api/auth/check-email", availabilityLimiter, async (req, res) => {
     try {
-      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ available: false, message: "Too many requests, try again shortly" });
       const { email } = req.body;
       const trimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
       if (!trimmed) return res.json({ available: false, message: "Email is required" });
@@ -357,9 +440,8 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/check-subscription", async (req, res) => {
+  app.post("/api/auth/check-subscription", availabilityLimiter, async (req, res) => {
     try {
-      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ valid: false, message: "Too many requests, try again shortly" });
       const { organizationId, subscriptionId } = req.body;
       if (!organizationId) return res.json({ valid: false, message: "Select an organization" });
       const org = REGISTERED_ORGANIZATIONS.find(o => o.id === organizationId);
@@ -373,7 +455,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", registerLimiter, async (req, res) => {
     const start = Date.now();
     try {
       const { password, fullName, email } = req.body;
@@ -383,14 +465,9 @@ export async function registerRoutes(
       const trimmedUsername = usernameFromWorkEmail(trimmedEmail);
       const trimmedOrgName = companyNameFromWorkEmail(trimmedEmail) ?? '';
 
-      if (!password) {
-        return res.status(400).json({ message: "Password is required" });
-      }
-      if (password.length < 8) {
-        return res.status(400).json({ message: "Password must be at least 8 characters" });
-      }
-      if (password.length > 128) {
-        return res.status(400).json({ message: "Password must not exceed 128 characters" });
+      const strength = checkPasswordStrength(password, [trimmedEmail, trimmedFullName, trimmedOrgName]);
+      if (!strength.ok) {
+        return res.status(400).json({ message: strength.message });
       }
       if (!trimmedFullName) {
         return res.status(400).json({ message: "Full name is required" });
@@ -445,7 +522,7 @@ export async function registerRoutes(
 
       let user: any;
       if (existingEmail && !existingEmail.isVerified) {
-        const hashedPassword = await bcrypt.hash(password, 8);
+        const hashedPassword = await hashPassword(password);
         user = await storage.updateUser(existingEmail.id, {
           username: trimmedUsername,
           password: hashedPassword,
@@ -455,7 +532,7 @@ export async function registerRoutes(
           role: founderRole,
         } as any);
       } else if (existing && !existing.isVerified) {
-        const hashedPassword = await bcrypt.hash(password, 8);
+        const hashedPassword = await hashPassword(password);
         user = await storage.updateUser(existing.id, {
           password: hashedPassword,
           fullName: trimmedFullName,
@@ -465,7 +542,7 @@ export async function registerRoutes(
           role: founderRole,
         } as any);
       } else {
-        const hashedPassword = await bcrypt.hash(password, 8);
+        const hashedPassword = await hashPassword(password);
         user = await storage.createUser({
           username: trimmedUsername,
           password: hashedPassword,
@@ -505,7 +582,7 @@ export async function registerRoutes(
       const otp = generateOtp();
       const expiryMinutes = getOtpExpiryMinutes();
       const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-      await storage.setUserOtp(user.id, otp, expiry);
+      await storage.setUserOtp(user.id, hashOtp(otp), expiry);
       const sent = await sendOtpEmail(trimmedEmail, otp, trimmedFullName);
 
       (req.session as any).pendingUserId = user.id;
@@ -526,11 +603,7 @@ export async function registerRoutes(
     }
   });
 
-  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-  const LOGIN_RATE_LIMIT = 10;
-  const LOGIN_RATE_WINDOW = 15 * 60 * 1000;
-
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const start = Date.now();
     try {
       const { username, email, password } = req.body;
@@ -539,16 +612,22 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Username/email and password are required" });
       }
 
-      const ip = req.ip || "unknown";
-      const now = Date.now();
-      const attempts = loginAttempts.get(ip);
-      if (attempts && attempts.resetAt > now && attempts.count >= LOGIN_RATE_LIMIT) {
-        return res.status(429).json({ message: "Too many login attempts. Please try again later." });
-      }
-      if (!attempts || attempts.resetAt <= now) {
-        loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_RATE_WINDOW });
-      } else {
-        attempts.count++;
+      // Per-address limiting is handled by `loginLimiter`. This is the other
+      // half: a lock on the account itself, so a spray coming from many
+      // addresses at one mailbox is stopped too.
+      const lockedFor = await isAccountLocked(String(loginId));
+      if (lockedFor > 0) {
+        await recordAudit(req, {
+          action: "user.login.blocked",
+          resourceType: "user",
+          resourceId: String(loginId).toLowerCase(),
+          result: "failure",
+          actorUserId: null,
+          metadata: { reason: "account_locked", secondsRemaining: lockedFor },
+        });
+        return res.status(429).json({
+          message: `Too many failed attempts for this account. Try again in ${Math.ceil(lockedFor / 60)} minute(s).`,
+        });
       }
 
       if (isDemoCredentials(loginId, password)) {
@@ -570,19 +649,48 @@ export async function registerRoutes(
       }
 
       const user = await storage.getUserByUsernameOrEmail(loginId);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
-      }
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
+      // Verify even when there is no such account, so the response time does not
+      // distinguish "wrong password" from "no such user".
+      const { ok: valid, needsRehash } = await verifyPassword(password, user?.password);
+      if (!user || !valid) {
+        await recordLoginFailure(String(loginId));
+        await recordAudit(req, {
+          action: "user.login.failed",
+          resourceType: "user",
+          resourceId: user?.id ?? String(loginId).toLowerCase(),
+          result: "failure",
+          actorUserId: user?.id ?? null,
+          organizationId: user?.organizationId ?? null,
+          metadata: { reason: user ? "bad_password" : "no_such_user" },
+        });
         return res.status(401).json({ message: "Invalid username or password" });
       }
 
-      if (user.twofaEnabled) {
+      await clearLoginFailures(String(loginId));
+
+      // Transparent work-factor upgrade: the password was just proved correct,
+      // so re-hash it at the current cost instead of asking anyone to reset.
+      //
+      // Deliberately not awaited. Hashing at the current factor takes about a
+      // second by design, and the person signing in should not wait for an
+      // upgrade their session does not depend on. If it fails they simply get
+      // offered it again next time.
+      if (needsRehash) {
+        void hashPassword(password)
+          .then((upgraded) => storage.updateUser(user.id, { password: upgraded } as any))
+          .then(() => logger.info("Password hash upgraded to current work factor", { userId: user.id }))
+          .catch((err) =>
+            logger.warn("Could not upgrade password hash (sign-in unaffected)", {
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+      }
+
+      if (user.twofaEnabled || twoFactorRequiredFor(user)) {
         const otp = generateOtp();
         const expiryMinutes = getOtpExpiryMinutes();
         const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-        await storage.setUserOtp(user.id, otp, expiry);
+        await storage.setUserOtp(user.id, hashOtp(otp), expiry);
 
         const emailTarget = user.email || loginId;
         const sent = await sendOtpEmail(emailTarget, otp, user.fullName);
@@ -592,6 +700,7 @@ export async function registerRoutes(
 
         return res.json({
           requires2FA: true,
+          enforced: !user.twofaEnabled,
           message: sent ? "Verification code sent to your email" : "Could not send verification code. Please try again.",
           emailHint: emailTarget.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
         });
@@ -601,6 +710,15 @@ export async function registerRoutes(
       establishSession(req, user as any, safeUser);
       await storage.setLastLogin(user.id);
       logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
+      await recordAudit(req, {
+        action: "user.login",
+        resourceType: "user",
+        resourceId: user.id,
+        result: "success",
+        actorUserId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { method: "password", twoFactor: false },
+      });
       res.json({ user: safeUser });
 
       sendLoginNotification(
@@ -614,7 +732,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/verify-otp", async (req, res) => {
+  app.post("/api/auth/verify-otp", otpLimiter, async (req, res) => {
     try {
       const pendingUserId = (req.session as any)?.pendingUserId;
       if (!pendingUserId) {
@@ -648,9 +766,18 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Verification code has expired. Please log in again." });
       }
 
-      if (otp.trim() !== user.otpCode) {
+      if (!verifyOtp(otp, user.otpCode)) {
         const attempts = await storage.incrementOtpAttempts(user.id);
         const remaining = maxAttempts - attempts;
+        await recordAudit(req, {
+          action: "user.2fa.failed",
+          resourceType: "user",
+          resourceId: user.id,
+          result: "failure",
+          actorUserId: user.id,
+          organizationId: user.organizationId ?? null,
+          metadata: { attempt: attempts },
+        });
         return res.status(401).json({
           message: remaining > 0
             ? `Invalid code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
@@ -660,14 +787,29 @@ export async function registerRoutes(
 
       await storage.clearUserOtp(user.id);
       await storage.setLastLogin(user.id);
-      if (!user.isVerified) {
-        await storage.updateUser(user.id, { isVerified: true } as any);
+      const becomesVerified = !user.isVerified;
+      // Completing a code proves the mailbox, so a policy-enforced second factor
+      // is recorded on the account rather than re-prompted as if it were new.
+      const patch: Record<string, unknown> = {};
+      if (becomesVerified) patch.isVerified = true;
+      if (!user.twofaEnabled && twoFactorRequiredFor(user)) patch.twofaEnabled = true;
+      if (Object.keys(patch).length) {
+        await storage.updateUser(user.id, patch as any);
       }
       delete (req.session as any).pendingUserId;
 
       const updatedUser = await storage.getUserById(user.id);
       const safeUser = sanitizeUser(updatedUser || user);
       establishSession(req, (updatedUser || user) as any, safeUser);
+      await recordAudit(req, {
+        action: "user.login",
+        resourceType: "user",
+        resourceId: user.id,
+        result: "success",
+        actorUserId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { method: "password+otp", twoFactor: true },
+      });
       res.json({ user: safeUser });
 
       sendLoginNotification(
@@ -684,7 +826,7 @@ export async function registerRoutes(
   const resendCooldowns = new Map<string, number>();
   const RESEND_COOLDOWN_MS = 30 * 1000;
 
-  app.post("/api/auth/resend-otp", async (req, res) => {
+  app.post("/api/auth/resend-otp", otpLimiter, async (req, res) => {
     try {
       const pendingUserId = (req.session as any)?.pendingUserId;
       if (!pendingUserId) {
@@ -705,7 +847,7 @@ export async function registerRoutes(
       const otp = generateOtp();
       const expiryMinutes = getOtpExpiryMinutes();
       const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-      await storage.setUserOtp(user.id, otp, expiry);
+      await storage.setUserOtp(user.id, hashOtp(otp), expiry);
 
       const sent = await sendOtpEmail(user.email, otp, user.fullName);
       if (!sent) {
@@ -721,6 +863,18 @@ export async function registerRoutes(
   });
 
   app.post("/api/auth/logout", async (req, res) => {
+    const actorUserId = (req.session as any)?.userId ?? null;
+    const organizationId = (req.session as any)?.organizationId ?? null;
+    if (actorUserId) {
+      await recordAudit(req, {
+        action: "user.logout",
+        resourceType: "user",
+        resourceId: actorUserId,
+        result: "success",
+        actorUserId,
+        organizationId,
+      });
+    }
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ message: "Logout failed" });
@@ -735,7 +889,7 @@ export async function registerRoutes(
     });
   });
 
-  app.post("/api/auth/forgot-password", async (req, res) => {
+  app.post("/api/auth/forgot-password", passwordResetRequestLimiter, async (req, res) => {
     try {
       const { email } = req.body;
       if (!email || typeof email !== "string") {
@@ -745,11 +899,21 @@ export async function registerRoutes(
       const user = await storage.getUserByUsernameOrEmail(email.trim());
       res.json({ message: "If an account with that email exists, a reset code has been sent." });
 
+      await recordAudit(req, {
+        action: "user.password.reset.requested",
+        resourceType: "user",
+        resourceId: user?.id ?? email.trim().toLowerCase(),
+        result: user ? "success" : "failure",
+        actorUserId: user?.id ?? null,
+        organizationId: user?.organizationId ?? null,
+      });
+
       if (!user || !user.email) return;
 
       const resetToken = generateOtp(6);
       const expiry = new Date(Date.now() + 15 * 60 * 1000);
-      await storage.setPasswordResetToken(user.id, resetToken, expiry);
+      // Stored hashed: a database or backup copy must not yield a usable code.
+      await storage.setPasswordResetToken(user.id, hashOtp(resetToken), expiry);
       await sendPasswordResetEmail(user.email, resetToken, user.fullName);
     } catch (error: any) {
       logger.error("Forgot password failed", error);
@@ -757,35 +921,11 @@ export async function registerRoutes(
     }
   });
 
-  const resetAttempts = new Map<string, { count: number; firstAttempt: number }>();
-
-  app.post("/api/auth/reset-password", async (req, res) => {
+  app.post("/api/auth/reset-password", passwordResetLimiter, async (req, res) => {
     try {
       const { email, token, newPassword } = req.body;
       if (!email || !token || !newPassword) {
         return res.status(400).json({ message: "Email, reset code, and new password are required" });
-      }
-      if (typeof newPassword !== "string" || newPassword.length < 4) {
-        return res.status(400).json({ message: "Password must be at least 4 characters" });
-      }
-      if (newPassword.length > 128) {
-        return res.status(400).json({ message: "Password must not exceed 128 characters" });
-      }
-
-      const ip = req.ip || "unknown";
-      const attemptKey = `${ip}:${email.trim().toLowerCase()}`;
-      const now = Date.now();
-      const existing = resetAttempts.get(attemptKey);
-      if (existing) {
-        if (now - existing.firstAttempt > 15 * 60 * 1000) {
-          resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
-        } else if (existing.count >= 5) {
-          return res.status(429).json({ message: "Too many attempts. Please wait before trying again." });
-        } else {
-          existing.count++;
-        }
-      } else {
-        resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
       }
 
       const user = await storage.getUserByUsernameOrEmail(email.trim());
@@ -793,8 +933,28 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid reset code or email" });
       }
 
+      // Checked against the same policy as sign-up. This route used to accept
+      // four characters, which made password reset a way to weaken an account
+      // below what registration would allow.
+      const strength = checkPasswordStrength(newPassword, [
+        String(email),
+        user.fullName ?? "",
+        user.organizationName ?? "",
+      ]);
+      if (!strength.ok) {
+        return res.status(400).json({ message: strength.message });
+      }
+
       const stored = await storage.getPasswordResetToken(user.id);
-      if (!stored || stored.token !== token.trim()) {
+      if (!stored || !verifyOtp(token, stored.token)) {
+        await recordAudit(req, {
+          action: "user.password.reset.failed",
+          resourceType: "user",
+          resourceId: user.id,
+          result: "failure",
+          actorUserId: user.id,
+          organizationId: user.organizationId ?? null,
+        });
         return res.status(400).json({ message: "Invalid reset code" });
       }
       if (new Date() > stored.expiry) {
@@ -802,10 +962,22 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Reset code has expired. Please request a new one." });
       }
 
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const hashedPassword = await hashPassword(newPassword);
       await storage.updateUser(user.id, { password: hashedPassword });
       await storage.clearPasswordResetToken(user.id);
-      resetAttempts.delete(attemptKey);
+
+      // A reset is what someone does when they think the account is compromised,
+      // so every other session for this user is ended rather than left running.
+      const destroyed = await destroySessionsForUser(user.id, req.sessionID);
+      await recordAudit(req, {
+        action: "user.password.reset",
+        resourceType: "user",
+        resourceId: user.id,
+        result: "success",
+        actorUserId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { sessionsRevoked: destroyed },
+      });
 
       res.json({ message: "Password has been reset successfully. You can now sign in." });
     } catch (error: any) {
@@ -1600,7 +1772,7 @@ export async function registerRoutes(
         const otp = generateOtp();
         const expiryMinutes = getOtpExpiryMinutes();
         const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-        await storage.setUserOtp(userId, otp, expiry);
+        await storage.setUserOtp(userId, hashOtp(otp), expiry);
         const sent = await sendOtpEmail(user.email, otp, user.fullName);
         if (!sent) {
           return res.status(500).json({ message: "Failed to send verification email. 2FA not enabled." });
@@ -1649,7 +1821,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Verification code expired. Please try again." });
       }
 
-      if (otp.trim() !== user.otpCode) {
+      if (!verifyOtp(otp, user.otpCode)) {
         await storage.incrementOtpAttempts(userId);
         return res.status(401).json({ message: "Invalid verification code." });
       }
@@ -4180,6 +4352,7 @@ Respond ONLY with a valid JSON array.`;
   registerExcelImportRoutes(app, requireAuth);
   registerAiMappingRoutes(app, requireAuth);
   registerFeedbackRoutes(app, requireAuth);
+  registerAuditRoutes(app, requireAuth);
   registerAdminRollbackRoutes(app, requireAuth);
   registerTokenRoutes(app);
   registerPlacementTelemetryRoutes(app);
