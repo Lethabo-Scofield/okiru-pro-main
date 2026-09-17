@@ -1,35 +1,25 @@
 # Network segmentation between workloads.
 #
-# Open item 8 of the security disclosure. Today any pod in the namespace can
-# open a connection to any other: a compromised parser could talk straight to
-# MongoDB, and nothing in the cluster would object.
+# Open item 3 of the security disclosure. Any pod in the namespace could open a
+# connection to any other: a compromised parser could talk straight to MongoDB,
+# and nothing in the cluster would object.
 #
-# READ THIS BEFORE APPLYING.
+# LIVE as of 17 September 2026. The cluster ran --network-policy none until then,
+# which meant the API server accepted NetworkPolicy objects, stored them, and
+# enforced nothing — a cluster that looked segmented to anyone running
+#  and was not. The engine is now .
 #
-# These policies are INERT until the cluster has a network policy engine. The
-# cluster is `--network-policy none`, which means the API server accepts
-# NetworkPolicy objects and stores them and nothing enforces them. Applying this
-# file on its own changes nothing and — worse — makes the cluster look segmented
-# to anyone who runs `kubectl get networkpolicy`. That is why the previous
-# version of this file shipped with its default-deny rule commented out: it was
-# never going to work, and commenting it out hid the reason.
+# Enabling it reimages the node pool, so it was sequenced after the move to three
+# zonal nodes and went through as a rolling change with a surge node and no
+# downtime. On the single node it replaced it would have been a ten to twenty
+# minute outage.
 #
-# Turning the engine on:
+# PORTS ARE READ OFF THE LIVE SERVICES, NOT ASSUMED. The parser listens on 3200,
+# not the 8080 this file first guessed; a default-deny with the wrong port here
+# takes the document upload path down and says nothing about why.
 #
-#   az aks update -g okiru-pro-rg -n okiru-pro-aks --network-policy azure
-#
-# That reimages the node pool. On a single-node cluster it is a full outage of
-# roughly ten to twenty minutes. Add the second node FIRST (open item 2) and the
-# same change becomes a rolling one with no downtime. Sequence:
-#
-#   1. az aks nodepool scale -g okiru-pro-rg -n nodepool1 --cluster-name okiru-pro-aks --node-count 2
-#   2. az aks update -g okiru-pro-rg -n okiru-pro-aks --network-policy azure
-#   3. kubectl apply -f kubernetes/infrastructure/base/network-policies.yaml
-#   4. Verify, with the commands at the end of this file.
-#
-# The default-deny rule below is first on purpose: with the engine running,
-# anything not explicitly allowed underneath it is refused.
-
+# The default-deny rule is first on purpose: anything not explicitly allowed
+# underneath it is refused.
 ---
 # Nothing may reach any pod unless a rule below says so.
 apiVersion: networking.k8s.io/v1
@@ -43,9 +33,17 @@ spec:
     - Ingress
 
 ---
-# DNS, for everything. Without this rule the default-deny above breaks every
-# service in the namespace, because nothing can resolve a name. It is the rule
-# people forget, and the outage that follows is always blamed on something else.
+# Egress for the whole namespace.
+#
+# Egress and ingress are separate gates. The moment a pod is covered by ANY
+# egress policy, everything not listed here is denied — which is how the first
+# version of this rule, allowing 0.0.0.0/0 EXCEPT the cluster ranges, cut every
+# service off from the database. Already-open connections kept serving, so the
+# site looked healthy while nothing new could connect.
+#
+# In-namespace egress is allowed wholesale and the per-workload INGRESS rules
+# below decide who may actually be reached. One place to read, rather than two
+# that have to agree.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -56,33 +54,28 @@ spec:
   policyTypes:
     - Egress
   egress:
+    # DNS. Without this the whole namespace stops resolving names, and the
+    # outage that follows always gets blamed on something else.
     - to:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: kube-system
-          podSelector:
-            matchLabels:
-              k8s-app: kube-dns
       ports:
         - protocol: UDP
           port: 53
         - protocol: TCP
           port: 53
-    # Everything else the application legitimately reaches is outside the
-    # cluster: Azure OpenAI, Document Intelligence, blob storage, SMTP, PayFast.
-    # Egress to the internet stays open; this file is about what one workload
-    # can reach INSIDE the cluster.
+    - to:
+        - podSelector: {}
+    # Everything the application legitimately reaches is outside the cluster:
+    # Azure OpenAI, Document Intelligence, blob storage, SMTP, PayFast.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
             except:
-              # Not the cluster's own pod and service ranges — that is what the
-              # ingress rules below are for — and not the cloud metadata
-              # endpoint, which hands out node identity tokens.
-              - 10.224.0.0/16
-              - 10.0.0.0/16
+              # Not the cloud metadata endpoint, which hands node identity
+              # tokens to anything that can reach it.
               - 169.254.169.254/32
-
 ---
 # The database is reachable only from the services that hold a connection
 # string, plus the backup job.
@@ -108,9 +101,6 @@ spec:
         - podSelector:
             matchLabels:
               app: compute
-        - podSelector:
-            matchLabels:
-              app: parser
         - podSelector:
             matchLabels:
               app: mongodb-backup
@@ -223,7 +213,7 @@ spec:
               app: api
       ports:
         - protocol: TCP
-          port: 8080
+          port: 3200
 
 ---
 apiVersion: networking.k8s.io/v1

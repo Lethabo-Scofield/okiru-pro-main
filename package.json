@@ -68,7 +68,8 @@
       "fast-uri": ">=3.1.4 <4",
       "esbuild": ">=0.28.1 <0.29",
       "@babel/core": ">=7.29.6 <8",
-      "body-parser": ">=2.3.0 <3"
+      "body-parser": ">=2.3.0 <3",
+      "image-size": ">=2.0.4 <3"
     }
   }
 }
