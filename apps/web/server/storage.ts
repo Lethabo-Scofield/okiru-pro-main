@@ -191,7 +191,12 @@ export interface IStorage {
   updateWorkspaceMember(
     workspaceId: string,
     userId: string,
-    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null; displayRole?: string | null },
+    patch: {
+      role?: WorkspaceRole;
+      pillarScopes?: string[] | null;
+      clientScopes?: string[] | null;
+      displayRole?: string | null;
+    },
   ): Promise<WorkspaceMember | undefined>;
   removeMember(workspaceId: string, userId: string): Promise<boolean>;
 
@@ -660,13 +665,16 @@ export class MemoryStorage implements IStorage {
   async updateWorkspaceMember(
     workspaceId: string,
     userId: string,
-    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null },
+    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null; clientScopes?: string[] | null },
   ): Promise<WorkspaceMember | undefined> {
     const m = this.workspaceMembers.get(`${workspaceId}:${userId}`);
     if (!m) return undefined;
     if (patch.role !== undefined) m.role = patch.role;
     if (patch.pillarScopes === null) delete m.pillarScopes;
     else if (patch.pillarScopes !== undefined) m.pillarScopes = patch.pillarScopes;
+    // Null clears the limit, which is how a member is given every company back.
+    if (patch.clientScopes === null) delete m.clientScopes;
+    else if (patch.clientScopes !== undefined) m.clientScopes = patch.clientScopes;
     return m;
   }
 
@@ -1312,6 +1320,7 @@ export class DatabaseStorage implements IStorage {
       userId: obj.userId,
       role: obj.role,
       pillarScopes: Array.isArray(obj.pillarScopes) ? obj.pillarScopes : undefined,
+      clientScopes: Array.isArray(obj.clientScopes) ? obj.clientScopes : undefined,
       joinedAt: obj.joinedAt,
     };
   }
@@ -1364,13 +1373,16 @@ export class DatabaseStorage implements IStorage {
   async updateWorkspaceMember(
     workspaceId: string,
     userId: string,
-    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null },
+    patch: { role?: WorkspaceRole; pillarScopes?: string[] | null; clientScopes?: string[] | null },
   ): Promise<WorkspaceMember | undefined> {
     const $set: Record<string, unknown> = {};
     const $unset: Record<string, 1> = {};
     if (patch.role !== undefined) $set.role = patch.role;
     if (patch.pillarScopes === null) $unset.pillarScopes = 1;
     else if (patch.pillarScopes !== undefined) $set.pillarScopes = patch.pillarScopes;
+    // Unsetting is how the limit is lifted: absent means every company.
+    if (patch.clientScopes === null) $unset.clientScopes = 1;
+    else if (patch.clientScopes !== undefined) $set.clientScopes = patch.clientScopes;
 
     const updatePayload: Record<string, unknown> = {};
     if (Object.keys($set).length) updatePayload.$set = $set;
@@ -1388,6 +1400,7 @@ export class DatabaseStorage implements IStorage {
       userId: obj.userId,
       role: obj.role,
       pillarScopes: Array.isArray(obj.pillarScopes) ? obj.pillarScopes : undefined,
+      clientScopes: Array.isArray(obj.clientScopes) ? obj.clientScopes : undefined,
       joinedAt: obj.joinedAt,
     };
   }

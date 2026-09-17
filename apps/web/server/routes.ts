@@ -32,6 +32,12 @@ import { registerVocabularyRoutes } from "./vocabularyRoutes";
 import { creditTokens } from "./tokenWallet";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
+import {
+  applyClientScopeFilter,
+  isClientInScope,
+  normalizeClientScopes,
+  resolveClientScopeIds,
+} from "./clientScopes";
 import { companyNameFromWorkEmail, isWorkEmail, usernameFromWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from "../shared/workEmail";
 import { deleteWorkbookForClient } from "./workbookRoutes";
 import { answerScorecardQuestionWithAi } from "./bbbeeKnowledge";
@@ -1020,6 +1026,7 @@ export async function registerRoutes(
         userId: m.userId,
         role: m.role,
         pillarScopes: m.pillarScopes ?? null,
+        clientScopes: m.clientScopes ?? null,
         joinedAt: m.joinedAt,
         username: u?.username ?? null,
         fullName: u?.fullName ?? null,
@@ -1123,12 +1130,26 @@ export async function registerRoutes(
 
       const role = req.body?.role as WorkspaceRole | undefined;
       const pillarScopesBody = req.body?.pillarScopes;
+      const clientScopesBody = req.body?.clientScopes;
 
-      if (role === undefined && pillarScopesBody === undefined) {
+      if (role === undefined && pillarScopesBody === undefined && clientScopesBody === undefined) {
         return res.status(400).json({ message: "Nothing to update" });
       }
 
-      const patch: { role?: WorkspaceRole; pillarScopes?: string[] | null } = {};
+      const patch: {
+        role?: WorkspaceRole;
+        pillarScopes?: string[] | null;
+        clientScopes?: string[] | null;
+      } = {};
+
+      if (clientScopesBody !== undefined) {
+        if (!Array.isArray(clientScopesBody)) {
+          return res.status(400).json({ message: "clientScopes must be an array of company ids" });
+        }
+        // An empty list means every company, matching how pillar scopes read.
+        const normalized = normalizeClientScopes(clientScopesBody);
+        patch.clientScopes = normalized.length === 0 ? null : normalized;
+      }
 
       if (role !== undefined) {
         if (role !== "collaborator" && role !== "viewer") {
@@ -2231,6 +2252,14 @@ export async function registerRoutes(
         res.status(404).json({ error: "Client not found" });
         return null;
       }
+      // Out of company scope reads as not found, not as forbidden: a member
+      // limited to three companies should not be able to learn which other
+      // companies exist by watching the status code change.
+      const scopedIds = await resolveClientScopeIds(userId);
+      if (!isClientInScope(c, scopedIds, userId)) {
+        res.status(404).json({ error: "Client not found" });
+        return null;
+      }
       return c;
     }
 
@@ -2263,7 +2292,16 @@ export async function registerRoutes(
       const userOrgId: string | null = user?.organizationId ?? null;
 
       if (isMongoConnected()) {
-        const filter = buildClientVisibilityFilter(userId, user);
+        // Company scope is ANDed onto the org/creator filter rather than
+        // replacing it. That ordering matters: accepting an invite puts you in
+        // the inviter's organisation, which widens the OR — the AND is what
+        // stops that quietly handing a scoped member every company again.
+        const scopedIds = await resolveClientScopeIds(userId);
+        const filter = applyClientScopeFilter(
+          buildClientVisibilityFilter(userId, user),
+          scopedIds,
+          userId,
+        );
         const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
         const rows = clients.map((c: any) => c.toJSON());
         // Companies created before `product` existed carry no marker, yet the

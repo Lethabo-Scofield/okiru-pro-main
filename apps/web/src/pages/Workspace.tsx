@@ -34,6 +34,8 @@ interface WorkspaceMember {
   displayRole?: DisplayRole | null;
   joinedAt: string;
   pillarScopes: string[] | null;
+  /** Company ids this member is limited to. Null or empty = all of them. */
+  clientScopes: string[] | null;
   username: string | null;
   fullName: string | null;
   email: string | null;
@@ -106,6 +108,8 @@ export default function WorkspacePage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  /** The team's companies, so access can be granted per company by name. */
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -168,12 +172,24 @@ export default function WorkspacePage() {
 
   async function loadDetails(id: string) {
     try {
-      const [m, i] = await Promise.all([
+      const [m, i, c] = await Promise.all([
         fetchJson(`/api/workspaces/${id}/members`),
         fetchJson(`/api/workspaces/${id}/invites`).catch(() => ({ invites: [] })),
+        // Companies are needed by name to grant access per company. A failure
+        // here must not take the team list down with it.
+        fetchJson(`/api/clients`).catch(() => []),
       ]);
       setMembers(m.members || []);
       setInvites(i.invites || []);
+      setCompanies(
+        (Array.isArray(c) ? c : [])
+          .map((row: any) => ({
+            id: String(row.clientId ?? row.id ?? ""),
+            name: String(row.name ?? "Unnamed company"),
+          }))
+          .filter((row: { id: string }) => row.id)
+          .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)),
+      );
     } catch (err: any) {
       toast({ title: "Could not load team details", description: err.message, variant: "destructive" });
     }
@@ -329,6 +345,34 @@ export default function WorkspacePage() {
     if (checked) cur.add(pillarKey);
     else cur.delete(pillarKey);
     void setMemberPillarScopes(memberUserId, Array.from(cur));
+  }
+
+  /** Which companies this editor may open. Empty means all of them. */
+  async function setMemberClientScopes(memberUserId: string, scopes: string[]) {
+    if (!active) return;
+    setBusy(true);
+    try {
+      await fetchJson(`/api/workspaces/${active.id}/members/${memberUserId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientScopes: scopes }),
+      });
+      await loadDetails(active.id);
+      toast({ title: "Company access updated" });
+    } catch (err: any) {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onClientScopeToggle(memberUserId: string, clientId: string, checked: boolean) {
+    const m = members.find((x) => x.userId === memberUserId);
+    if (!m || m.role !== "collaborator") return;
+    const cur = new Set<string>(m.clientScopes ?? []);
+    if (checked) cur.add(clientId);
+    else cur.delete(clientId);
+    void setMemberClientScopes(memberUserId, Array.from(cur));
   }
 
   async function removeMember(memberUserId: string) {
@@ -550,6 +594,42 @@ export default function WorkspacePage() {
                                   <span>{label}</span>
                                 </label>
                               ))}
+                            </div>
+
+                            {/* Which COMPANIES, before which pillars inside one.
+                                A consultancy carrying twenty clients needs to
+                                put an analyst on three of them; team membership
+                                used to mean every company the team held. */}
+                            <div className="pt-2 mt-2 border-t border-border/30 space-y-2">
+                              <p className="text-[11px] text-muted-foreground leading-snug">
+                                <span className="text-foreground font-medium">Companies:</span>{" "}
+                                leave all unchecked for every company in this team. Check
+                                specific ones to limit this editor to those only.
+                              </p>
+                              {companies.length === 0 ? (
+                                <p className="text-[11px] text-muted-foreground/70">
+                                  No companies in this team yet.
+                                </p>
+                              ) : (
+                                <div className="flex flex-wrap gap-x-3 gap-y-2">
+                                  {companies.map((c) => (
+                                    <label
+                                      key={c.id}
+                                      className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                    >
+                                      <Checkbox
+                                        checked={(m.clientScopes ?? []).includes(c.id)}
+                                        disabled={busy}
+                                        onCheckedChange={(ch) =>
+                                          onClientScopeToggle(m.userId, c.id, ch === true)
+                                        }
+                                        data-testid={`scope-company-${m.userId}-${c.id}`}
+                                      />
+                                      <span>{c.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
