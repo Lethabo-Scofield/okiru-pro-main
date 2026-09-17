@@ -44,6 +44,7 @@ export const TRUSTED_SECTOR_CODES = [
   'AGRI',
   'TRANSPORT',
   'CONSTRUCTION',
+  'MAC',
 ] as const;
 
 export type TrustedSectorCode = (typeof TRUSTED_SECTOR_CODES)[number];
@@ -60,7 +61,7 @@ export const UNTRUSTED_SECTOR_TOKENS = [
   'PROPERTY',
   'CAS',
   'FORESTRY',
-  'MAC',
+  // 'MAC' moved to TRUSTED_SECTOR_CODES on 2026-08-13 when the sector shipped.
 ] as const;
 
 /** Strict check — unknown or untrusted tokens (incl. GENERIC) return false. */
@@ -140,6 +141,10 @@ export type ScorecardPillarKey =
   | 'supplierDevelopment'
   | 'enterpriseDevelopment'
   | 'socioEconomicDevelopment'
+  // MAC (GG 39887) scores Responsible Social Marketing as its own 5-point pillar.
+  // The MAC_GENERIC/MAC_QSE pillarPoints below already carry it, and their totals
+  // only reconcile with it (25+27+0+30+29+10+7+5+5+0 = 138 = totalMaxPoints).
+  | 'responsibleSocialMarketing'
   | 'yesInitiative'
   | 'empowermentFinancing'
   | 'accessToFinancialServices'
@@ -202,6 +207,7 @@ export const PILLAR_PARSER_MAPPING: Record<
     parserPillars: ['SED'],
     notes: 'SED confirmation yields contribution amount + beneficiary. Missing: NPAT denominator and % black beneficiaries.',
   },
+  responsibleSocialMarketing: { level: 'not_covered', parserPillars: [], notes: 'MAC-only pillar (GG 39887); no calculator and no evidence document type yet, so a MAC entity cannot reach its full total.' },
   yesInitiative: { level: 'not_covered', parserPillars: [], notes: 'No YES initiative evidence document type.' },
   empowermentFinancing: { level: 'not_covered', parserPillars: [], notes: 'FSC-only pillar; no parser coverage.' },
   accessToFinancialServices: { level: 'not_covered', parserPillars: [], notes: 'FSC-only pillar; no parser coverage.' },
@@ -376,9 +382,9 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     sectorCode: 'AGRI',
     scorecardType: 'Generic',
     sectorName: 'AgriBEE Sector Code (Generic)',
-    totalMaxPoints: 128, // gazette shapes (audit 2026-07-26, docs/calculator-audit-2026-07-26.md items 7-11)
+    totalMaxPoints: 132, // MC 23 per Zoleka Mnanzana 2026-08-13 (supersedes audit item 11)
     pillarPoints: {
-      ownership: 25, managementControl: 19, employmentEquity: 0, skillsDevelopment: 25,
+      ownership: 25, managementControl: 23, employmentEquity: 0, skillsDevelopment: 25,
       preferentialProcurement: 27, supplierDevelopment: 10, enterpriseDevelopment: 7,
       socioEconomicDevelopment: 15, yesInitiative: 0,
     },
@@ -392,7 +398,7 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     configId: 'TRANSPORT_GENERIC',
     sectorCode: 'TRANSPORT',
     scorecardType: 'Generic',
-    sectorName: 'Transport Sector Code (Large Enterprise)',
+    sectorName: 'Transport Sector Code - Road Freight (Large Enterprise)',
     totalMaxPoints: 108,
     pillarPoints: {
       ownership: 24, managementControl: 11, employmentEquity: 18, skillsDevelopment: 15,
@@ -441,7 +447,7 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     configId: 'TRANSPORT_QSE',
     sectorCode: 'TRANSPORT',
     scorecardType: 'QSE',
-    sectorName: 'Transport Sector Code (QSE)',
+    sectorName: 'Transport Sector Code - Road Freight (QSE)',
     // Any four of the seven elements × 25. pillarPoints below are each element's
     // bonus-inclusive maximum, which is why they do not sum to this total.
     totalMaxPoints: 100,
@@ -502,6 +508,42 @@ export const SECTOR_PILLAR_COVERAGE: readonly SectorCoverageEntry[] = [
     readinessReasons: [
       ADVISORY_ONLY_REASON,
       'Indicator-based scorecard with Preferential Procurement carrying 0 points; supplier evidence does not map onto the scored SD indicators.',
+    ],
+  },
+  {
+    configId: 'MAC_GENERIC',
+    sectorCode: 'MAC',
+    scorecardType: 'Generic',
+    sectorName: 'Marketing, Advertising and Communication Sector Code (Generic)',
+    totalMaxPoints: 138, // 124 weighting + 14 bonus (GG 39887, 1 April 2016)
+    pillarPoints: {
+      ownership: 25, managementControl: 27, employmentEquity: 0, skillsDevelopment: 30,
+      preferentialProcurement: 29, supplierDevelopment: 10, enterpriseDevelopment: 7,
+      socioEconomicDevelopment: 5, responsibleSocialMarketing: 5, yesInitiative: 0,
+    },
+    readiness: 'shadow_mode',
+    readinessReasons: [
+      ADVISORY_ONLY_REASON,
+      'Responsible Social Marketing (5 pts) has no calculator - a MAC entity cannot reach its full total until that element is scored.',
+      'Level ladder, priority elements and sub-minimums are assumed from the Amended Codes; the gazette extract states none.',
+    ],
+  },
+  {
+    configId: 'MAC_QSE',
+    sectorCode: 'MAC',
+    scorecardType: 'QSE',
+    sectorName: 'Marketing, Advertising and Communication Sector Code (QSE)',
+    totalMaxPoints: 115, // 105 weighting + 10 bonus
+    pillarPoints: {
+      ownership: 25, managementControl: 15, employmentEquity: 0, skillsDevelopment: 35,
+      preferentialProcurement: 20, supplierDevelopment: 5, enterpriseDevelopment: 5,
+      socioEconomicDevelopment: 5, responsibleSocialMarketing: 5, yesInitiative: 0,
+    },
+    readiness: 'shadow_mode',
+    readinessReasons: [
+      ADVISORY_ONLY_REASON,
+      'Responsible Social Marketing (3 + 2 pts) has no calculator.',
+      'Level ladder and sub-minimums assumed from the Amended Codes.',
     ],
   },
 ] as const;

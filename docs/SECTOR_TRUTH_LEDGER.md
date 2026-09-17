@@ -10,17 +10,18 @@
 > with the gazette itself, `docs/calculator-audit-2026-07-26.md` — a first-hand gazette text extraction with
 > page citations — is the authority, and `apps/api/pipeline/sectorConfig.ts` follows it, not this document.
 >
-> **Do not "fix" the engine to match the cells below marked `[SUPERSEDED]`.** Doing so awards points the
-> gazette does not. This is not hypothetical: aligning the config to this ledger's AgriBEE MC on 2026-08-11
-> gave every AgriBEE client +4 points and every FSC-Others client +1, and was reverted.
+> **Do not "fix" the engine to match the cells below marked `[SUPERSEDED]`** without an expert instruction.
+> Doing so awards points the gazette does not: the trap is that this ledger,
+> `docs/SCORECARD_GROUND_TRUTH.md` and the toolkits look like three independent sources agreeing against the
+> config, when all three derive from the same vendor template and only the audit read the gazette.
 >
-> The trap is that this ledger, `docs/SCORECARD_GROUND_TRUTH.md` and the toolkits appear to be three
-> independent sources agreeing against the config. They are not — all three derive from the same vendor
-> template. Only the audit read the gazette.
+> **AgriBEE is the exception, and it is now settled the other way.** On 2026-08-13 Zoleka Mnanzana instructed
+> that MC is 23 (total 132) — the toolkit figure — and the engine was changed to match, superseding audit
+> item 11. Every AgriBEE client gained 4 points. Only the FSC-Others row below remains a live divergence.
 >
 > | Cell | This ledger | Engine (gazette) | Authority |
 > |---|---|---|---|
-> | AgriBEE MC / grand total | 23 / 132 | **19 / 128** | GG 41306 pp.33-34 — audit item 11 |
+> | ~~AgriBEE MC / grand total~~ | 23 / 132 | **23 / 132 — matches** | RESOLVED 2026-08-13: engine now follows the toolkit on Zoleka Mnanzana's instruction, superseding audit item 11 |
 > | FSC Others MC / grand total | 21 / 120 | **20 / 119** | FS200 §3.4.1 — audit item 9 |
 >
 > **Transport QSE is NOT in this list.** Its 107 is correct. The engine's `totalMaxPoints: 100` is the
@@ -58,7 +59,7 @@ The answer is **sector-dependent**. The training pack explicitly defines this fo
 | **ICT Generic** | **ONE pillar — "Management Control" (23 pts)** including EAP-banded staff rows and disabled. | `docs/SCORECARD_GROUND_TRUTH.md` §4 ("MC Total 23 = board 3+2, exec 2+1, other exec 3+2, EE via EAP, disabled 2") |
 | **ICT QSE** | **ONE pillar — "Management Control" (15 pts)** mirroring RCOGP QSE. | `docs/SCORECARD_GROUND_TRUTH.md` §7 |
 | **FSC Generic (Others)** | **ONE pillar — "Management Control" (21 pts)** with board 3, exec 3, other exec **14**, disabled 1. `[SUPERSEDED]` — gazette board black = 1 not 2, so MC = **20**. | `docs/SCORECARD_GROUND_TRUTH.md` §5; overridden by FS200 §3.4.1 (audit item 9) |
-| **AGRI Generic** | **ONE pillar — "Management Control" (23 pts)** same shape as ICT MC. `[SUPERSEDED]` — gazette board 2+1 and other exec 2+1, so MC = **19**. | `docs/SCORECARD_GROUND_TRUTH.md` §6; overridden by GG 41306 pp.33-34 (audit item 11) |
+| **AGRI Generic** | **ONE pillar — "Management Control" (23 pts)** same shape as ICT MC. ✓ Engine matches (Exco 13 + EE bands 10). | `docs/SCORECARD_GROUND_TRUTH.md` §6; expert-confirmed 2026-08-13 |
 | **Transport Sector (Road Freight Large)** | **TWO separate pillars — "Management Control" (11 pts) and "Employment Equity" (18 pts)** on the gazetted toolkit. | `docs/Transport Codes.xlsx`, sheet "Road Freight Large" (rows 17–29 split element column) |
 | **Transport Sector QSE (Road Freight QSE)** | **TWO separate compulsory pillars — "Management Control" (27 pts) and "Employment Equity" (27 pts)**. | `docs/Transport Codes.xlsx`, sheet "Road Freight QSE" (rows 9–17) |
 | **Construction QSE** | **ONE pillar — "Management Control" (20 pts)** that covers exec + senior/middle/junior representation (no separate EE element in the QSE scorecard). | `apps/api/pipeline/constructionIndicators.ts` line 1282–1293; primary docx "CONSTRUCTION_QUALIFYING_SMALL_ENTERPRISE_(QSE)_SCORECARD" referenced in source comments but not present in workspace — `[UNVERIFIED]` against original. |
@@ -76,7 +77,7 @@ This is the authoritative pillar header table. Every cell is cited against a can
 | Pillar | RCOGP Gen | RCOGP QSE | ICT Gen | ICT QSE | FSC Gen (Others) | AGRI Gen | Transport Large | Transport QSE | Construction QSE | Construction Contractor | Construction BEP |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Ownership | **25** | 25 | 25 | 25 | 25 | 25 | **24** | **28** | **30** | **31** | **31** |
-| Management Control | **19** | 15 | 23 | 15 | 21 `[SUPERSEDED]`→20 | 23 `[SUPERSEDED]`→19 | **11** | **27** | **20** | **22** | **22** |
+| Management Control | **19** | 15 | 23 | 15 | 21 `[SUPERSEDED]`→20 | **23** ✓ | **11** | **27** | **20** | **22** | **22** |
 | Employment Equity | merged into MC | merged into MC | merged into MC | merged into MC | merged into MC | merged into MC | **18** | **27** | merged into MC | merged into MC | merged into MC |
 | Skills Development | 25 | 30 | 25 | 30 | 23 | 25 | **15** | 25 (elective) | **26** | **26** | **34** |
 | Preferential Procurement | 29 | 21 | 27 | 21 | 24 | 27 | **20** | 25 (elective) | n/a (combined into ESD) | n/a (combined into ESD) | n/a (combined into ESD) |
@@ -85,7 +86,7 @@ This is the authoritative pillar header table. Every cell is cited against a can
 | Enterprise & Supplier Development (combined) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | **29** | **38** | **30** |
 | Socio-Economic Development | 5 | 5 | 12 | 12 | 8 | 15 | **5** | 25 (elective) | **5** | **6** | **6** |
 | YES Initiative | 0 (level boost) | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **Grand Total** | **120** | **108** | **140** | **116** | **120** `[SUPERSEDED]`→119 | **132** `[SUPERSEDED]`→128 | **108** | **107** ✓ (100 base + 7 bonus; see §10) | **110** | **123** | **123** |
+| **Grand Total** | **120** | **108** | **140** | **116** | **120** `[SUPERSEDED]`→119 | **132** ✓ | **108** | **107** ✓ (100 base + 7 bonus; see §10) | **110** | **123** | **123** |
 
 **Sources per column**:
 - RCOGP Gen / RCOGP QSE / ICT Gen / ICT QSE / FSC Gen / AGRI Gen — `docs/SCORECARD_GROUND_TRUTH.md` §1, §2 and per-sector tables; verified against `docs/toolkits/BBBEE Toolkit (...).xlsx`
@@ -312,12 +313,11 @@ FSC sub-sector variants exist (Banks, Long-Term Insurers, Short-Term Insurers, O
 
 ---
 
-## 8. AGRI Generic — full ledger (132 pts) `[SUPERSEDED]` → 128
+## 8. AGRI Generic — full ledger (132 pts) ✓
 
-> The MC row below (23) is template-derived. GG 41306 pp.33-34 gives the generic 19-pt MC structure —
-> board 2+1 (not 3+2) and other exec 2+1 (not 3+2) — so MC = **19** and the grand total is **128**, what
-> `sectorConfig.ts` implements. The audit's words: *"+4 phantom MC points also inflate `totalMaxPoints`
-> 132 → gazette-consistent max incl. bonuses is 128."* See `docs/calculator-audit-2026-07-26.md` item 11.
+> MC 23 (Exco 13 + EE bands 10) is what the engine implements, confirmed by Zoleka Mnanzana on
+> 2026-08-13. This REVERSES audit item 11, which read GG 41306 pp.33-34 as the generic 19-pt
+> structure. If the gazette is re-read, that is the item to revisit.
 
 Source: `docs/SCORECARD_GROUND_TRUTH.md` §6; `docs/toolkits/BBBEE Toolkit (Agri Generic)_Master_v.1.0.1.xlsx`; `docs/toolkits/extracted_AGRI_Generic.json`.
 

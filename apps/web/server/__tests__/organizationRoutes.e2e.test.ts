@@ -1,6 +1,8 @@
 /**
  * End-to-end Supertest coverage for the /api/organization endpoints
- * (company-admin membership: roster, invite gating, admin transfer, remove).
+ * (company-admin membership: roster, invite gating, admin transfer, remove),
+ * plus the boundary between a COMPANY admin and a PLATFORM admin: the two are
+ * different things and the /api/admin/* routes belong only to the latter.
  *
  * Mirrors clientsRoutes.e2e.test.ts: boots the real Express app with the
  * in-memory MemoryStorage (MONGODB_URI unset) and authenticates via
@@ -26,6 +28,7 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import { storage, MemoryStorage } from "../storage";
 import { registerRoutes } from "../routes";
+import { withStorageReportedAvailable } from "./memoryStorageSession";
 
 interface SeededUser {
   id: string;
@@ -58,7 +61,9 @@ async function seedVerifiedUser(opts: {
 
 async function loginAgent(baseUrl: string, user: SeededUser) {
   const agent = request.agent(baseUrl);
-  const res = await agent.post("/api/auth/login").send({ username: user.username, password: user.password });
+  const res = await withStorageReportedAvailable(() =>
+    agent.post("/api/auth/login").send({ username: user.username, password: user.password }),
+  );
   if (res.status !== 200) {
     throw new Error(`Login failed for ${user.username}: ${res.status} ${JSON.stringify(res.body)}`);
   }
@@ -75,11 +80,13 @@ let member: SeededUser;
 let member2: SeededUser;
 let removable: SeededUser;
 let stranger: SeededUser;
+let staff: SeededUser;
 
 let founderAgent: request.Agent;
 let memberAgent: request.Agent;
 let member2Agent: request.Agent;
 let strangerAgent: request.Agent;
+let staffAgent: request.Agent;
 
 beforeAll(async () => {
   if (storage instanceof MemoryStorage) {
@@ -102,11 +109,14 @@ beforeAll(async () => {
   member2 = await seedVerifiedUser({ username: "member2_a", password: "member2pass", email: "member2@a.com", organizationId: "org-A", role: "analyst" });
   removable = await seedVerifiedUser({ username: "removable_a", password: "removablepass", email: "removable@a.com", organizationId: "org-A", role: "analyst" });
   stranger = await seedVerifiedUser({ username: "stranger_b", password: "strangerpass", email: "stranger@b.com", organizationId: "org-B", role: "admin" });
+  // Okiru staff: the only role with cross-organisation reach.
+  staff = await seedVerifiedUser({ username: "okiru_staff", password: "staffpass", email: "staff@okiru.pro", organizationId: "org-staff", role: "super_admin" });
 
   founderAgent = await loginAgent(baseUrl, founder);
   memberAgent = await loginAgent(baseUrl, member);
   member2Agent = await loginAgent(baseUrl, member2);
   strangerAgent = await loginAgent(baseUrl, stranger);
+  staffAgent = await loginAgent(baseUrl, staff);
 });
 
 afterAll(async () => {
@@ -238,5 +248,80 @@ describe("DELETE /api/organization/members/:userId — remove", () => {
     const ids = roster.body.members.map((m: any) => m.id);
     expect(ids).not.toContain(removable.id);
     expect(roster.body.memberCount ?? roster.body.members.length).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Company admin vs platform admin.
+//
+// Every registrant becomes `role: "admin"` for the company they sign up
+// (apps/api/src/routes/auth.ts /register) -- that is the TENANT administrator.
+// The /api/admin/* routes are PLATFORM routes: an all-tenant user directory
+// and per-user role/2FA writes with no org filter. While they accepted
+// `role === "admin"`, every customer could enumerate every other company's
+// staff and rewrite their roles. These tests pin the boundary shut.
+// ---------------------------------------------------------------------------
+describe("/api/admin/* — platform routes are closed to company admins", () => {
+  it("refuses the all-users directory to a company admin (403)", async () => {
+    const res = await founderAgent.get("/api/admin/users");
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses it to a company admin in another tenant too (403)", async () => {
+    const res = await strangerAgent.get("/api/admin/users");
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses it to an ordinary member (403)", async () => {
+    const res = await memberAgent.get("/api/admin/users");
+    expect(res.status).toBe(403);
+  });
+
+  it("refuses it when unauthenticated (401)", async () => {
+    const res = await request(app).get("/api/admin/users");
+    expect(res.status).toBe(401);
+  });
+
+  it("stops a company admin re-roling a member of ANOTHER company", async () => {
+    const res = await founderAgent
+      .patch(`/api/admin/users/${stranger.id}/role`)
+      .send({ role: "auditor" });
+    expect(res.status).toBe(403);
+
+    const unchanged = await storage.getUserById(stranger.id);
+    expect(unchanged?.role).toBe("admin");
+  });
+
+  it("stops a company admin disabling 2FA on another company's account", async () => {
+    const res = await founderAgent
+      .patch(`/api/admin/users/${stranger.id}/2fa`)
+      .send({ enabled: false });
+    expect(res.status).toBe(403);
+  });
+
+  it("still lets platform staff (super_admin) read the directory", async () => {
+    const res = await staffAgent.get("/api/admin/users");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    const ids = res.body.map((u: any) => u.id);
+    expect(ids).toContain(founder.id);
+    expect(ids).toContain(stranger.id);
+  });
+
+  it("never returns password hashes to staff either", async () => {
+    const res = await staffAgent.get("/api/admin/users");
+    expect(res.status).toBe(200);
+    for (const u of res.body) {
+      expect(u).not.toHaveProperty("password");
+    }
+  });
+
+  it("leaves company-scoped administration working for the company admin", async () => {
+    // The point of the fix: the org lead keeps their own house, and only that.
+    const res = await founderAgent.get("/api/organization/members");
+    expect(res.status).toBe(200);
+    expect(res.body.isAdmin).toBe(true);
+    const orgIds = res.body.members.map((m: any) => m.id);
+    expect(orgIds).not.toContain(stranger.id);
   });
 });

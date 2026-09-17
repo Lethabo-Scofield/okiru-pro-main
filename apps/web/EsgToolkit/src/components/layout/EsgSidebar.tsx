@@ -2,6 +2,7 @@ import type React from "react";
 import { useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { cn } from "@toolkit/lib/utils";
+import { formatEsgPercent } from "@/lib/esgCalculators";
 import {
   ESG_TOOLKIT_DATA_NAV,
   ESG_TOOLKIT_OVERVIEW_NAV,
@@ -275,8 +276,8 @@ export function EsgSidebar() {
           </div>
           <div className="text-[11px] text-[var(--esg-text2)] tabular-nums">
             {scoped
-              ? `In scope ${scoped.overallPercent.toFixed(0)}%`
-              : `Overall ${scorecard.overallPercent.toFixed(0)}%`}
+              ? `In scope ${formatEsgPercent(scoped.overallPercent)}`
+              : `Overall ${formatEsgPercent(scorecard.overallPercent)}`}
           </div>
           {scoped ? (
             <div

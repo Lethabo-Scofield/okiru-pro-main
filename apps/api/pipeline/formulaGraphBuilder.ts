@@ -14,6 +14,7 @@
  */
 
 import * as XLSX from 'xlsx';
+import { toFractionOrZero } from './units/percentage.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -883,7 +884,7 @@ export function extractScorecardStructure(
           name: indName.substring(0, 80),
           code: slugify(indName),
           maxPoints: pts,
-          targetValue: val > 1 ? val / 100 : val,
+          targetValue: toFractionOrZero(val),
           targetUnit: inferTargetUnit(val),
           targetBase: inferTargetBase(indName, pillarKey),
           sourceCells: [ic.address],

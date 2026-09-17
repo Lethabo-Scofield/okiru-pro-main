@@ -14,8 +14,6 @@ import { buildManifest } from '../../pipeline/extraction/entityManifest.js';
 const logger = createLogger("ScorecardBuilder");
 import { calculateScorecard } from '../../pipeline/rules/calculationEngine.js';
 import type { EntityValue, EmployeeInput, ShareholderInput, SupplierInput, ContributionInput } from '../../pipeline/rules/calculationEngine.js';
-import { ScoreResultRepository } from '../../arango/repositories/scoreResultRepository.js';
-import { EvidenceRepository } from '../../arango/repositories/evidenceRepository.js';
 import { mapToUCSPayload } from '../../pipeline/extraction/aiEntityMapper.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
@@ -282,99 +280,6 @@ router.post('/calculate', requireAuth, async (req, res) => {
       financials: calcFinancials,
     });
 
-    try {
-      const scoreRepo = new ScoreResultRepository();
-      
-      const run = await scoreRepo.startCalculationRun({
-        assessmentId,
-        sectorCode,
-        scorecardType,
-        triggeredBy: 'manual_entry',
-        totalPoints: result.totalPoints,
-        maxPoints: result.maxPoints,
-        overallPercentage: result.overallPercentage,
-        beeLevel: result.beeLevel,
-        recognitionLevel: result.recognitionLevel,
-        subMinimumsMet: result.subMinimums,
-      });
-
-      const scoreResults = [];
-      
-      for (const pillar of result.pillars) {
-        scoreResults.push({
-          assessmentId,
-          calculationRunId: run._key!,
-          sectorCode,
-          scorecardType,
-          type: 'pillar' as const,
-          pillarCode: pillar.pillarCode,
-          actualValue: pillar.points,
-          targetValue: pillar.maxPoints,
-          achievementPercentage: pillar.percentage,
-          pointsAchieved: pillar.points,
-          maxPoints: pillar.maxPoints,
-          weightedScore: pillar.points,
-          subMinimumMet: pillar.subMinimumMet,
-          isBonus: false,
-          formulaUsed: 'aggregate',
-          inputs: {},
-        });
-
-        for (const criterion of pillar.criteria) {
-          scoreResults.push({
-            assessmentId,
-            calculationRunId: run._key!,
-            sectorCode,
-            scorecardType,
-            type: 'criterion' as const,
-            pillarCode: pillar.pillarCode,
-            criterionCode: criterion.criterionCode,
-            actualValue: criterion.points,
-            targetValue: criterion.maxPoints,
-            achievementPercentage: criterion.percentage,
-            pointsAchieved: criterion.points,
-            maxPoints: criterion.maxPoints,
-            weightedScore: criterion.points,
-            subMinimumMet: criterion.subMinimumMet,
-            isBonus: criterion.formulaId === 'bonus_flag',
-            formulaUsed: criterion.formulaId,
-            inputs: criterion.inputs,
-            intermediateSteps: criterion.intermediateValues,
-          });
-        }
-      }
-
-      scoreResults.push({
-        assessmentId,
-        calculationRunId: run._key!,
-        sectorCode,
-        scorecardType,
-        type: 'overall' as const,
-        actualValue: result.totalPoints,
-        targetValue: result.maxPoints,
-        achievementPercentage: result.overallPercentage,
-        pointsAchieved: result.totalPoints,
-        maxPoints: result.maxPoints,
-        weightedScore: result.totalPoints,
-        subMinimumMet: Object.values(result.subMinimums).every(Boolean),
-        isBonus: false,
-        formulaUsed: 'aggregate',
-        inputs: {},
-      });
-
-      await scoreRepo.storeScoreResults(scoreResults as Array<Omit<import('../../arango/repositories/scoreResultRepository.js').StoredScoreResult, '_key' | 'calculatedAt'>>);
-      await scoreRepo.completeCalculationRun(run._key!, {
-        totalPoints: result.totalPoints,
-        maxPoints: result.maxPoints,
-        overallPercentage: result.overallPercentage,
-        beeLevel: result.beeLevel,
-        recognitionLevel: result.recognitionLevel,
-        subMinimumsMet: result.subMinimums,
-        ontologySnapshot: result.ontologySnapshot as unknown as Record<string, unknown>,
-      });
-    } catch (arangoErr) {
-      logger.warn('ArangoDB storage failed (non-fatal)', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });
-    }
 
     logger.info('Scorecard calculated', { sessionId: assessmentId, sector: sectorCode, durationMs: Date.now() - start });
 
@@ -435,24 +340,6 @@ router.post('/calculate-from-extraction', requireAuth, async (req, res) => {
       financials: payload.financials,
     });
 
-    // Store in ArangoDB (non-fatal)
-    try {
-      const scoreRepo = new ScoreResultRepository();
-      await scoreRepo.startCalculationRun({
-        assessmentId,
-        sectorCode,
-        scorecardType,
-        triggeredBy: 'extraction',
-        totalPoints: result.totalPoints,
-        maxPoints: result.maxPoints,
-        overallPercentage: result.overallPercentage,
-        beeLevel: result.beeLevel,
-        recognitionLevel: result.recognitionLevel,
-        subMinimumsMet: result.subMinimums,
-      });
-    } catch (arangoErr) {
-      logger.warn('ArangoDB storage failed (non-fatal)', { error: arangoErr instanceof Error ? arangoErr.message : String(arangoErr) });
-    }
 
     res.json({
       success: true,
@@ -489,30 +376,6 @@ router.post('/assessments', requireAuth, async (req, res) => {
     const scorecardType = body.scorecardType || 'Generic';
     const values = body.values || {};
 
-    if (values && typeof values === 'object' && Object.keys(values).length > 0) {
-      try {
-        const evidenceRepo = new EvidenceRepository();
-        const evidences = [];
-        for (const [entityId, value] of Object.entries(values)) {
-          if (value !== undefined && value !== null) {
-            evidences.push({
-              assessmentId,
-              entityFieldId: entityId,
-              sectorCode,
-              scorecardType,
-              documentType: 'manual_input' as const,
-              normalizedValue: value,
-              confidence: 1.0,
-            });
-          }
-        }
-        if (evidences.length > 0) {
-          await evidenceRepo.storeEvidences(evidences);
-        }
-      } catch (evidenceErr) {
-        logger.warn('Evidence storage failed (non-fatal)', { error: evidenceErr instanceof Error ? evidenceErr.message : String(evidenceErr) });
-      }
-    }
 
     const clientId = body.clientId || null;
     const clientInfo = body.clientInfo || {};

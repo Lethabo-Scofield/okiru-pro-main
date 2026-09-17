@@ -19,6 +19,13 @@ __pycache__/
 .venv/
 *.pptx
 *.pdf
+
+# ...except the ESG report templates the app ships and serves as downloads.
+# These are product assets the web build copies into dist/public, not stray
+# working files, so the blanket *.pptx / *.pdf rules above must not eat them.
+!apps/web/public/reports/*.pptx
+!apps/web/public/reports/*.pdf
+!docs/Report/*.pptx
 bee-execution-plan-extracted.txt
 assets/
 scripts/set-secrets.js
@@ -69,3 +76,27 @@ kubernetes/infrastructure/overlays/*/secrets/secrets.yaml
 # The authoritative copies live in the okirubackups2026 storage account.
 docs/Certificates/
 docs/Test Data/
+
+# Written by deploy/aks-deploy.sh and contains a LIVE ACR admin password.
+# It was tracked once and reached a public repo; never track it again.
+.aks_env
+
+# Client-confidential data — PURGED from history 2026-08-24. The canonical
+# copies live outside the repo (Documents/okiru-private-data). This repo is
+# public: client workbooks, certificates and raw operational data never get
+# committed, full stop.
+docs/esg/Okiru_ESG_Toolkit_v1_7_SG_Consumer_LiveData.xlsx
+docs/esg/extracted/
+docs/BEE Information Gathering File - Thandanani Transport.xlsm
+docs/testdocs/
+docs/Demo - Kagiso Facilities Services (RCOGP)/
+docs/Lake Trading*.xlsx
+
+# Super Group client documents added 2026-08-25 — same rule as above: this
+# repo is public, real client ESG data / proposals / reports never get
+# committed. Canonical copies live outside the repo.
+docs/2026 ESG Data/
+docs/ESG Toolkit/
+docs/Proposals/
+docs/Reports/
+docs/Super Group Upload Pack/

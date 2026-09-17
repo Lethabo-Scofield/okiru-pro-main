@@ -17,41 +17,33 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - okiru.20.164.101.114.nip.io
+        - okiru-compute.4.253.195.45.nip.io
       secretName: okiru-pro-tls
   rules:
-    - host: okiru.20.164.101.114.nip.io
+    - host: okiru-compute.4.253.195.45.nip.io
       http:
         paths:
-          # API auth routes (MUST come before web routes)
-          - path: /api/auth/login
-            pathType: Exact
+          # Auth — the WHOLE namespace goes to web.
+          #
+          # apps/web implements the complete auth surface: login, register, me,
+          # logout, 2FA enrolment (toggle-2fa / confirm-2fa), the OTP step
+          # (verify-otp / resend-otp) and password reset (forgot-password /
+          # reset-password). apps/api implements only a subset — no reset, no
+          # OTP — and has neither the password-reset storage methods nor an
+          # email transport.
+          #
+          # Pinning four paths to `api` while every other /api/auth path fell
+          # through the /api catch-all — also to `api` — is what made password
+          # reset answer 404 in production. Keep the namespace on ONE service.
+          # Do not add Exact rules for individual /api/auth paths: Exact
+          # outranks Prefix and would split the namespace again.
+          - path: /api/auth
+            pathType: Prefix
             backend:
               service:
-                name: api
+                name: web
                 port:
-                  number: 5000
-          - path: /api/auth/me
-            pathType: Exact
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
-          - path: /api/auth/logout
-            pathType: Exact
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
-          - path: /api/auth/register
-            pathType: Exact
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
+                  number: 5001
           # Company onboarding (Mongo — must hit API; web also registered these for legacy dev)
           - path: /api/onboarding/me
             pathType: Prefix
@@ -141,11 +133,61 @@ spec:
                 name: web
                 port:
                   number: 5001
+          # The credit-token wallet lives on web (only web knows the session's
+          # organisation). Without this entry the /api catch-all sent every
+          # /api/tokens/* call to apps/api, which has no such routes — the
+          # whole wallet 404'd in production while working perfectly in dev.
+          - path: /api/tokens
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Placement telemetry (what the parser read but could not place) —
+          # lives on web like the wallet, and like the wallet it is invisible
+          # in prod unless routed past the /api catch-all.
+          - path: /api/telemetry
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Closed-vocabulary resolution (dropdown values for any client, cached
+          # once for all) — lives on web with the injection layer it serves.
+          - path: /api/vocabulary
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
           # okiru-ai-parser document→calculator routes. The web Express server
           # proxies /api/parser/* to the parser service (apiProxy.ts); routing
           # this to `api` (the catch-all below) 404s since apps/api has no
           # parser proxy. Longer prefix than /api so nginx picks it first.
           - path: /api/parser
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # First-party activity tracking (page views + heartbeats behind the
+          # admin activity heatmap) — recorded by web, which owns the session.
+          - path: /api/activity
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Ask Okiru on a B-BBEE scorecard (/api/scorecards/:id/advice/chat)
+          # is answered by web. Every other /api/scorecards/* request is
+          # forwarded by web's apiProxy to apps/api, so routing the whole
+          # prefix here loses nothing.
+          - path: /api/scorecards
             pathType: Prefix
             backend:
               service:
@@ -162,13 +204,6 @@ spec:
                   number: 5000
           # Web-specific API routes (served by web Express server)
           - path: /api/organizations
-            pathType: Exact
-            backend:
-              service:
-                name: web
-                port:
-                  number: 5001
-          - path: /api/auth/check-username
             pathType: Exact
             backend:
               service:
@@ -206,10 +241,10 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - okiru.20.164.101.114.nip.io
+        - okiru-compute.4.253.195.45.nip.io
       secretName: okiru-pro-tls
   rules:
-    - host: okiru.20.164.101.114.nip.io
+    - host: okiru-compute.4.253.195.45.nip.io
       http:
         paths:
           # Compute routes - strip /compute prefix

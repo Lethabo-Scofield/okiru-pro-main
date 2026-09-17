@@ -28,8 +28,9 @@ describe("missingIssuesForEsgSection", () => {
 describe("EsgInformationRequest section hints UI", () => {
   it("renders section missing panel and tab badges", () => {
     expect(PAGE).toMatch(/EsgSectionMissingPanel/);
-    expect(PAGE).toMatch(/EsgSectionMissingPanel/);
     expect(PAGE).toMatch(/tab-missing-/);
-    expect(PAGE).not.toMatch(/EsgValidationPanel/);
+    // The validation box now renders alongside the hints — reversed on explicit
+    // user request (2026-08-28); see EsgInformationRequest.test.ts.
+    expect(PAGE).toMatch(/EsgValidationPanel/);
   });
 });

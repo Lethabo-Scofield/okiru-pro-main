@@ -14,7 +14,16 @@ export interface PillarSummaryRow {
   code: string;
   label: string;
   score: number;
+  /**
+   * The element WEIGHTING — the denominator the entity is measured against.
+   * NOT the bonus-inclusive cap: an entity on full base points must read 100%,
+   * not 25/28 = 89%.
+   */
   maxPoints: number;
+  /** Bonus points earnable ON TOP of maxPoints, stated separately per the Codes. */
+  bonusAvailable?: number;
+  /** Bonus actually earned, included in `score`. */
+  bonusEarned?: number;
   color?: string;
   subMinimumMet?: boolean;
   /** Honest methodology notes shown under the bar (e.g. a bonus that scored 0). */
@@ -86,6 +95,15 @@ export function ScorecardPillarSummary({ pillar, className }: ScorecardPillarSum
               {typeof pillar.score === 'number' ? pillar.score.toFixed(2) : pillar.score}
               {' '}
               <span style={{ color: '#8e8e93', fontWeight: 400 }}>/ {pillar.maxPoints}</span>
+              {(pillar.bonusAvailable ?? 0) > 0 && (
+                <span
+                  className="ml-1.5 text-[10px] font-semibold"
+                  style={{ color: (pillar.bonusEarned ?? 0) > 0 ? '#f59e0b' : '#636366' }}
+                  title={`Bonus points are earned on top of the ${pillar.maxPoints}-point weighting, so a pillar can exceed 100%.`}
+                >
+                  +{(pillar.bonusEarned ?? 0).toFixed(2)}/{pillar.bonusAvailable} bonus
+                </span>
+              )}
             </span>
           </div>
         </div>

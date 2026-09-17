@@ -138,17 +138,22 @@ export async function listCertificateRegistry(query: CertificateRegistryQuery) {
   if (certificateNumber) filter.certificateNumber = new RegExp(escapeRegExp(certificateNumber), 'i');
   const certificateType = cleanString(query.certificateType);
   if (certificateType) filter.certificateType = new RegExp(escapeRegExp(certificateType), 'i');
+  // The Hub lists certificates and affidavits together and only sends this when
+  // the user explicitly narrows. Matching on certificateType alone was the flaw
+  // in the old tabbed view: almost nothing writes that field, so "affidavits"
+  // returned an empty list while the tab beside it advertised a count taken from
+  // the file name. Both sources are consulted here, so the filter returns what
+  // it claims to.
   const documentKind = cleanString(query.documentKind).toLowerCase();
-  if (documentKind === 'affidavits') filter.certificateType = /affidavit/i;
-  else if (documentKind === 'certificates') {
-    filter.$and = [
-      ...(filter.$and ?? []),
-      { $or: [
-        { certificateType: { $not: /affidavit/i } },
-        { certificateType: null },
-        { certificateType: { $exists: false } },
-      ] },
-    ];
+  const affidavitMatch = [
+    { certificateType: /affidavit/i },
+    { fileName: /affidavit/i },
+    { blobName: /affidavit/i },
+  ];
+  if (documentKind === 'affidavits') {
+    filter.$and = [...(filter.$and ?? []), { $or: affidavitMatch }];
+  } else if (documentKind === 'certificates') {
+    filter.$and = [...(filter.$and ?? []), { $nor: affidavitMatch }];
   }
   const companySize = cleanString(query.companySize);
   if (companySize) filter.companySize = new RegExp(`^${escapeRegExp(companySize)}$`, 'i');

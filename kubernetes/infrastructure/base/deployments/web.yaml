@@ -92,6 +92,19 @@ spec:
             # defaults to 127.0.0.1:3200 (local only) and document upload 502s.
             - name: PARSER_SERVICE_URL
               value: "http://parser:3200"
+            # Wallet → parser settle handshake. /api/tokens/authorize debits
+            # the organisation's token wallet, then marks the parser quote paid
+            # with this shared secret. Unset, every authorize fails (and is
+            # refunded), so uploads dead-end — it MUST equal the parser
+            # Deployment's PARSER_INTERNAL_SECRET. optional only so a cluster
+            # missing the key still schedules pods; the wallet itself fails
+            # closed without it.
+            - name: PARSER_INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: PARSER_INTERNAL_SECRET
+                  optional: true
             - name: MONGODB_URI
               valueFrom:
                 secretKeyRef:
@@ -111,31 +124,6 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: INTERNAL_BACKSYNC_TOKEN
-            - name: ARANGO_URL
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_URL
-            - name: ARANGO_DB
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_DB
-            - name: ARANGO_USER
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_USER
-            - name: ARANGO_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_PASSWORD
-            - name: ARANGO_VERIFY_SSL
-              valueFrom:
-                secretKeyRef:
-                  name: arangodb-credentials
-                  key: ARANGO_VERIFY_SSL
             - name: GROQ_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -159,6 +147,15 @@ spec:
                 secretKeyRef:
                   name: external-api-keys
                   key: AZURE_OPENAI_DEPLOYMENT
+                  optional: true
+            # The toolkit chat and the Excel/booklet AI mapping prefer the FAST
+            # deployment and only fall back to AZURE_OPENAI_DEPLOYMENT. Without
+            # this, chat ran on the 400K-TPM deployment instead of the 100K one.
+            - name: AZURE_OPENAI_FAST_DEPLOYMENT
+              valueFrom:
+                secretKeyRef:
+                  name: external-api-keys
+                  key: AZURE_OPENAI_FAST_DEPLOYMENT
                   optional: true
             - name: AZURE_OPENAI_API_VERSION
               valueFrom:

@@ -174,13 +174,13 @@ export function sectorConfigToTransportGenericCalculatorConfig(sc: SectorConfig)
       recognition: lt.recognition,
     })),
     pillarConfigs: {
-      ownership: { maxPoints: pc.ownership.maxPoints, subMinimumPercent: pc.ownership.subMinimumPercent },       // 24
-      managementControl: { maxPoints: pc.managementControl.maxPoints, subMinimumPercent: pc.managementControl.subMinimumPercent }, // 11
-      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 18 },                                     // 18
-      skillsDevelopment: { maxPoints: pc.skillsDevelopment.maxPoints, subMinimumPercent: pc.skillsDevelopment.subMinimumPercent }, // 15
-      preferentialProcurement: { maxPoints: pc.preferentialProcurement.maxPoints, subMinimumPercent: pc.preferentialProcurement.subMinimumPercent }, // 20
-      supplierDevelopment: { maxPoints: pc.supplierDevelopment.maxPoints, subMinimumPercent: pc.supplierDevelopment.subMinimumPercent }, // 15
-      enterpriseDevelopment: { maxPoints: pc.enterpriseDevelopment.maxPoints, subMinimumPercent: pc.enterpriseDevelopment.subMinimumPercent }, // 0
+      ownership: { maxPoints: pc.ownership.maxPoints, basePoints: pc.ownership.basePoints, subMinimumPercent: pc.ownership.subMinimumPercent },       // 24
+      managementControl: { maxPoints: pc.managementControl.maxPoints, basePoints: pc.managementControl.basePoints, subMinimumPercent: pc.managementControl.subMinimumPercent }, // 11
+      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 18, basePoints: pc.employmentEquity?.basePoints }, // 18 = 15 base + 3 EAP bonus
+      skillsDevelopment: { maxPoints: pc.skillsDevelopment.maxPoints, basePoints: pc.skillsDevelopment.basePoints, subMinimumPercent: pc.skillsDevelopment.subMinimumPercent }, // 15
+      preferentialProcurement: { maxPoints: pc.preferentialProcurement.maxPoints, basePoints: pc.preferentialProcurement.basePoints, subMinimumPercent: pc.preferentialProcurement.subMinimumPercent }, // 20
+      supplierDevelopment: { maxPoints: pc.supplierDevelopment.maxPoints, basePoints: pc.supplierDevelopment.basePoints, subMinimumPercent: pc.supplierDevelopment.subMinimumPercent }, // 15
+      enterpriseDevelopment: { maxPoints: pc.enterpriseDevelopment.maxPoints, basePoints: pc.enterpriseDevelopment.basePoints, subMinimumPercent: pc.enterpriseDevelopment.subMinimumPercent }, // 0
       socioEconomicDevelopment: { maxPoints: pc.socioEconomicDevelopment.maxPoints },                            // 5
       yesInitiative: { maxPoints: pc.yesInitiative?.maxPoints ?? 0 },                                            // 0
     },

@@ -28,7 +28,11 @@ export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgSco
   const s = scoreSocial(workbook);
   const g = scoreGovernance(workbook);
   const dash = computeEsgDashboard(workbook);
-  const pillars = esgScoresFromPillars(e.score, s.score, g.score);
+  const pillars = esgScoresFromPillars(e.score, s.score, g.score, {
+    environmental: e.scoringDenominator,
+    social: s.scoringDenominator,
+    governance: g.scoringDenominator,
+  });
 
   return {
     ...dash,
@@ -42,7 +46,41 @@ export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgSco
   };
 }
 
-export { computeCarbonTax } from "./carbonTax";
-export { computeNetZeroRoadmap } from "./netZero";
-export { computeBbbeeBridge } from "./bbbeeBridge";
+export { computeCarbonTax, type CarbonTaxResult } from "./carbonTax";
+export {
+  computeNetZeroRoadmap,
+  netZeroReductionAt,
+  type NetZeroLever,
+  type NetZeroMilestone,
+  type NetZeroRoadmapResult,
+} from "./netZero";
+export {
+  computeBbbeeBridge,
+  BBBEE_ELEMENT_WEIGHTS,
+  type BbbeeBridgeResult,
+  type BbbeeElement,
+  type BbbeeElementId,
+} from "./bbbeeBridge";
+export {
+  computeGhgInventory,
+  type GhgInventoryResult,
+  type GhgLine,
+} from "./ghgInventory";
+export {
+  computeEsgIntensity,
+  type EsgIntensityRatio,
+  type EsgIntensityResult,
+} from "./esgIntensity";
+export {
+  readTargetBasis,
+  type EsgTargetBasis,
+  ESG_TARGET_BASIS_OPTIONS,
+} from "./esgTargets";
+export {
+  type EsgExclusion,
+  type EsgPillarResult,
+} from "./esgApplicability";
+export { scoreEnvironmental } from "./environmental";
+export { scoreSocial } from "./social";
+export { scoreGovernance } from "./governance";
 export * from "./shared";

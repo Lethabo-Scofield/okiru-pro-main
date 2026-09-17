@@ -22,7 +22,7 @@
  */
 import type { RequiredDocumentGroup } from './case_parser_service.js';
 
-export type SectorCode = 'Generic' | 'ICT' | 'AGRI' | 'TRANSPORT' | 'CONSTRUCTION' | 'FSC';
+export type SectorCode = 'Generic' | 'ICT' | 'AGRI' | 'TRANSPORT' | 'CONSTRUCTION' | 'FSC' | 'MAC';
 export type EntitySize = 'Generic' | 'QSE' | 'EME';
 export type ConstructionSubSector = 'Contractor' | 'BEP';
 export type FscSubSector = 'Banks' | 'LTI' | 'STI';
@@ -249,7 +249,19 @@ export function getRequiredDocumentGroups(query: SectorDocumentQuery = {}): Requ
 }
 
 /** All sectors the catalog understands, for the UI selector. */
-export const SECTOR_OPTIONS: Array<{ code: SectorCode; label: string; subSectors?: Array<{ value: string; label: string }> }> = [
+export const SECTOR_OPTIONS: Array<{
+  code: SectorCode;
+  label: string;
+  subSectors?: Array<{ value: string; label: string }>;
+  /**
+   * The scorecard runs, but some part of it was applied by analogy rather than
+   * transcribed from the gazette. The UI must say so wherever the sector is
+   * chosen — a level nobody flagged is a level someone will certify.
+   */
+  provisional?: boolean;
+  /** What specifically is unconfirmed. Shown to the user verbatim. */
+  provisionalNote?: string;
+}> = [
   { code: 'Generic', label: 'Generic (all industries)' },
   {
     code: 'CONSTRUCTION',
@@ -271,4 +283,20 @@ export const SECTOR_OPTIONS: Array<{ code: SectorCode; label: string; subSectors
   { code: 'TRANSPORT', label: 'Transport' },
   { code: 'ICT', label: 'ICT' },
   { code: 'AGRI', label: 'AgriBEE' },
+  {
+    // MAC_GENERIC / MAC_QSE are implemented and score, but the gazette extract
+    // they were built from (GG 39887, via Zoleka Mnanzana 2026-08-13) gives
+    // indicator weightings and targets ONLY. The level ladder, the priority
+    // elements and the 40% sub-minimums were applied by analogy with the
+    // Amended Codes. That is a defensible reading and it is still an
+    // assumption, so the sector is offered and labelled rather than withheld or
+    // passed off as verified.
+    code: 'MAC',
+    label: 'Marketing, Advertising and Communication (MAC)',
+    provisional: true,
+    provisionalNote:
+      'Provisional — element weightings and targets are from the gazette, but the '
+      + 'level ladder and sub-minimums are applied by analogy with the Amended Codes '
+      + 'and are not yet confirmed. Treat the score as indicative, not as a level to certify.',
+  },
 ];

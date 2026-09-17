@@ -68,20 +68,3 @@ spec:
             limits:
               memory: "3Gi"
               cpu: "1000m"
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: arangodb
-spec:
-  template:
-    spec:
-      containers:
-        - name: arangodb
-          resources:
-            requests:
-              memory: "384Mi"
-              cpu: "150m"
-            limits:
-              memory: "1536Mi"
-              cpu: "800m"

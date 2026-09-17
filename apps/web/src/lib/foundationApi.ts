@@ -10,6 +10,7 @@
 import type { ClientInformationData } from '@/components/build/ClientInformationForm';
 import type { FinancialsData } from '@/components/build/FinancialsForm';
 import { calculateFinancials } from '@/components/build/FinancialsForm';
+import { toFractionOrZero } from '../../../api/pipeline/units/percentage';
 import { lookupIndustryNormPercent } from '@/lib/industryNormLookup';
 import type { FoundationData } from '@/components/build/FoundationStep';
 import type { BuildPillarsData } from '@/components/build/BuildPillarsStep';
@@ -679,8 +680,10 @@ export async function populateAndScore(
       disabledOwnership: s.disabledOwnership || 0,
       enterpriseType: String(s.enterpriseType).toLowerCase() === 'large' ? 'generic' : s.enterpriseType,
       isDesignatedGroup: (s.designatedGroupOwnership ?? 0) > 0,
-      isBlackOwned51: s.blackOwnership > 1 ? s.blackOwnership >= 51 : s.blackOwnership >= 0.51,
-      isBlackWomanOwned30: s.blackWomenOwnership > 1 ? s.blackWomenOwnership >= 30 : s.blackWomenOwnership >= 0.30,
+      // The 51% / 30% gates compare on ONE convention rather than branching on
+      // magnitude, so a supplier at exactly 1 is not silently promoted to 100%.
+      isBlackOwned51: toFractionOrZero(s.blackOwnership) >= 0.51,
+      isBlackWomanOwned30: toFractionOrZero(s.blackWomenOwnership) >= 0.30,
       isEME: s.enterpriseType === 'eme',
       isQSE: s.enterpriseType === 'qse',
       isForeignSupplier: s.isForeignSupplier,

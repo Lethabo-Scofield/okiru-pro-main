@@ -208,28 +208,28 @@ export function sectorConfigToCalculatorConfig(sc: SectorConfig): CalculatorConf
     })),
     pillarConfigs: {
       ownership: {
-        maxPoints: pOwn.maxPoints,
+        maxPoints: pOwn.maxPoints, basePoints: pOwn.basePoints,
         subMinimumPercent: pOwn.subMinimumPercent,
       },
       managementControl: {
-        maxPoints: pMc.maxPoints,
+        maxPoints: pMc.maxPoints, basePoints: pMc.basePoints,
         subMinimumPercent: pMc.subMinimumPercent,
       },
       employmentEquity: { maxPoints: pEe.maxPoints },
       skillsDevelopment: {
-        maxPoints: pSk.maxPoints,
+        maxPoints: pSk.maxPoints, basePoints: pSk.basePoints,
         subMinimumPercent: pSk.subMinimumPercent,
       },
       preferentialProcurement: {
-        maxPoints: pPp.maxPoints,
+        maxPoints: pPp.maxPoints, basePoints: pPp.basePoints,
         subMinimumPercent: pPp.subMinimumPercent,
       },
       supplierDevelopment: {
-        maxPoints: pSd.maxPoints,
+        maxPoints: pSd.maxPoints, basePoints: pSd.basePoints,
         subMinimumPercent: pSd.subMinimumPercent,
       },
       enterpriseDevelopment: {
-        maxPoints: pEd.maxPoints,
+        maxPoints: pEd.maxPoints, basePoints: pEd.basePoints,
         subMinimumPercent: pEd.subMinimumPercent,
       },
       socioEconomicDevelopment: { maxPoints: pSed.maxPoints },

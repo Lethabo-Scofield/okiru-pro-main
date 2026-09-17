@@ -17,7 +17,9 @@ describe("esgOverallPercent (D9 formula)", () => {
     expect(pct).toBeCloseTo(ESG_GOLDEN_SG_CONSUMER.overallPercent, 4);
     expect(ESG_PILLAR_MAX.environmental).toBe(108);
     expect(ESG_PILLAR_MAX.social).toBe(100);
-    expect(ESG_PILLAR_MAX.governance).toBe(92);
+    // Sum of G_Scorecard column B (25+5+5+10+5+8+5+5+5+8+5+4+5+5), and the
+    // value the workbook hardcodes at ESG_Dashboard!C8.
+    expect(ESG_PILLAR_MAX.governance).toBe(100);
   });
 });
 

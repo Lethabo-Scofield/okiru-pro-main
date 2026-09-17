@@ -29,10 +29,15 @@
 const MAX_HEADER_SCAN_ROWS = 15;
 const MAX_HEADER_CELL_LEN = 60;
 
-type Region = { start: number; end: number };
+export type Region = { start: number; end: number };
 
 function isBlank(cell: string): boolean {
   return cell.trim() === '';
+}
+
+/** "0", "0.00", "R 0", "0%" — what an empty template row's formula cells show. */
+function isZeroResidue(cell: string): boolean {
+  return /^[R$€£]?\s*-?0+([.,]0+)?\s*%?$/.test(cell.trim());
 }
 
 function isNumericish(cell: string): boolean {
@@ -46,7 +51,7 @@ function isNumericish(cell: string): boolean {
 }
 
 /** Contiguous ranges of columns that hold ANY content, split on blank columns. */
-function columnRegions(grid: string[][]): Region[] {
+export function columnRegions(grid: string[][]): Region[] {
   const width = Math.max(0, ...grid.map((r) => r.length));
   const colHasContent: boolean[] = Array.from({ length: width }, (_, c) =>
     grid.some((row) => !isBlank(row[c] ?? '')),
@@ -71,6 +76,25 @@ function regionCells(grid: string[][], region: Region): string[][] {
 
 function filledCount(rows: string[][]): number {
   return rows.reduce((sum, r) => sum + r.filter((c) => !isBlank(c)).length, 0);
+}
+
+/**
+ * The column region holding the data table — the one with the most content.
+ * Side regions (dropdown legends, category keys) are what the extractor must
+ * NOT read as data; the structured-rows path uses this so a "Category F |
+ * Bursaries…" key sitting beside the learner table never becomes a learner's
+ * category. Null when the grid has no content at all.
+ */
+export function mainColumnRegion(grid: string[][]): Region | null {
+  const regions = columnRegions(grid);
+  if (regions.length === 0) return null;
+  let best = regions[0];
+  let bestFill = filledCount(regionCells(grid, best));
+  for (const region of regions.slice(1)) {
+    const fill = filledCount(regionCells(grid, region));
+    if (fill > bestFill) { best = region; bestFill = fill; }
+  }
+  return best;
 }
 
 /**
@@ -110,7 +134,7 @@ function textDominantColumns(body: string[][], width: number): boolean[] {
  * an earlier one's location or type. Numeric/date columns are never filled —
  * a blank amount is genuinely blank.
  */
-function dittoFill(body: string[][], width: number): string[][] {
+export function dittoFill(body: string[][], width: number): string[][] {
   const textCol = textDominantColumns(body, width);
   const identityCol = textCol.findIndex(Boolean);
   if (identityCol === -1) return body;
@@ -120,6 +144,14 @@ function dittoFill(body: string[][], width: number): string[][] {
     const out = [...row];
     while (out.length < width) out.push('');
     if (out.every((c) => isBlank(c))) return out;
+    // A continuation row carries something REAL of its own — a name, a date,
+    // an amount. A row whose only content is zero residue (a formula column
+    // evaluating to 0 down 2,000 empty template rows) is not a row at all, and
+    // filling it would clone the last real learner into every one of them.
+    // Zero is the test, not "text": an SED ledger's continuation rows carry
+    // only a date and a non-zero amount, and those are genuine.
+    const meaningful = out.some((c) => !isBlank(c) && !isZeroResidue(c));
+    if (!meaningful) return out;
 
     if (!isBlank(out[identityCol]) && out[identityCol] !== memory[identityCol]) {
       for (let c = 0; c < width; c++) if (c !== identityCol) memory[c] = '';

@@ -21,7 +21,10 @@ export type EsgValidationIssue = {
 export type EsgValidationAggregate = {
   ok: boolean;
   issues: EsgValidationIssue[];
+  /** Failing `error` rules — these and only these disable submit. */
   blockers: EsgValidationIssue[];
+  /** Failing `warning` rules — real gaps, but the workbook is still submittable. */
+  warnings: EsgValidationIssue[];
 };
 
 function toIssue(ev: EsgRuleEvaluation): EsgValidationIssue {
@@ -52,17 +55,28 @@ export function validateEsgWorkbook(
   return evaluateEsgRules(derived, touched ?? {}, mode).map(toIssue);
 }
 
-/** Submit gate — King5 + legacy critical checks. */
+/**
+ * Submit gate.
+ *
+ * Only `critical` rules block: the three computed pillar totals (E/S/G must
+ * actually score something) plus the King V assessment. Everything else is a
+ * warning — a real gap the panel surfaces, but not a reason to refuse a
+ * submission. A partially-complete workbook is a legitimate ESG baseline; the
+ * previous behaviour promoted every warning to a blocker on submit, so no
+ * workbook in existence could be submitted.
+ */
 export function validateEsgWorkbookForSubmit(
   workbook: EsgWorkbookData | null,
   touched?: EsgTouchedState,
 ): EsgValidationAggregate {
   const issues = validateEsgWorkbook(workbook, touched, "submit");
-  const blockers = issues.filter((i) => !i.pass && i.severity === "critical");
+  const failing = issues.filter((i) => !i.pass && !i.pending);
+  const blockers = failing.filter((i) => i.severity === "critical");
   return {
     ok: blockers.length === 0,
     issues,
     blockers,
+    warnings: failing.filter((i) => i.severity === "warning"),
   };
 }
 

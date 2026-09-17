@@ -22,7 +22,6 @@ import {
   FolderOpen,
   ArrowRight,
   Check,
-  ChevronDown,
   ChevronLeft,
   CloudUpload,
   CreditCard,
@@ -39,6 +38,8 @@ import {
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
 import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
+import { vocabularyDecisionKey, type VocabularyDecisions } from "@/lib/workbookInjection";
+import { getSection } from "@/components/workbook/sections";
 import PillarDocumentBatches, { batchLabel, type UploadOrigin } from "./PillarDocumentBatches";
 import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
@@ -156,6 +157,7 @@ function collectEntityAliases(data: any): string[] {
   return Array.from(out);
 }
 import ExtractionConfidence from "./ExtractionConfidence";
+import ReviewSection from "./ReviewSection";
 
 interface RequiredGroup {
   key: string;
@@ -171,6 +173,13 @@ interface SectorOption {
   code: string;
   label: string;
   subSectors?: Array<{ value: string; label: string }>;
+  /**
+   * The sector scores, but some part of its scorecard was applied by analogy
+   * rather than transcribed from the gazette. Surfaced next to the Build
+   * button, never left implicit.
+   */
+  provisional?: boolean;
+  provisionalNote?: string;
 }
 
 interface ExpectedDocsCatalog {
@@ -228,9 +237,26 @@ interface ParserQuote {
  * the same call, so the number shown here and the number charged are the same
  * number — there is no client-side arithmetic to drift.
  */
+interface TokenCostFile {
+  filename: string;
+  tokens: number;
+  /** Which pricing rule the server put this document under. */
+  effort: "standard" | "high" | "workbook";
+  requiresOcr: boolean;
+  pages: number | null;
+  sheets: number | null;
+  rows: number | null;
+}
+
 interface TokenCost {
   quoteId: string;
   tokens: number;
+  /** Per-document itemisation — each file priced under its effort rule. */
+  files?: TokenCostFile[];
+  /** Tokens the batch minimum adds beyond the itemised documents. */
+  minimumTopUp?: number;
+  /** The effort rules themselves, served so the UI never restates them wrong. */
+  effortRules?: Array<{ tier: string; label: string; rule: string }>;
   balance: number;
   balanceAfter: number;
   sufficient: boolean;
@@ -239,6 +265,12 @@ interface TokenCost {
 }
 
 const tokenText = (value: number): string => value.toLocaleString("en-ZA");
+
+const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workbook", standard: "Standard" };
+
+// The flow snapshot — how a paid extraction survives navigation. Shared with
+// the Hub's "continue where you left off" strip, so it lives in its own module.
+import { clearFlowSnapshot, readFlowSnapshot, writeFlowSnapshot } from "./flowSnapshot";
 
 /**
  * Fold a newly-read case into what we already had.
@@ -347,7 +379,16 @@ export interface DocumentUploadStartProps {
   onCreate: (
     companyName: string,
     sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>,
-    extras?: { verdicts?: VerdictReport; reconcile?: ReconcileResult },
+    extras?: {
+      verdicts?: VerdictReport;
+      reconcile?: ReconcileResult;
+      /**
+       * Library ids of every document this run persisted. The host files them
+       * under the created company, so the document library is organised per
+       * company instead of one flat, unowned list.
+       */
+      documentIds?: string[];
+    },
   ) => Promise<void>;
   creating: boolean;
 }
@@ -360,6 +401,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
   const persistedDocumentsRef = useRef<Map<string, string>>(new Map());
+  /**
+   * The phase banner that reports the paid read.
+   *
+   * It renders below a staged list that is often long enough to push it off the
+   * screen, so starting extraction changed nothing the user could see and the
+   * work looked like it had not begun. We carry them to it instead.
+   */
+  const extractionPhaseRef = useRef<HTMLDivElement | null>(null);
   // Per-file extraction progress, keyed by the file's name (the streaming parser
   // reports fileName, and the create-scorecard list is de-duped by name).
   const [docProgress, setDocProgress] = useState<Record<string, 'parsing' | 'done' | 'error'>>({});
@@ -371,7 +420,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // The "what we read / still needed / didn't reconcile" detail is long; keep it
   // collapsed so it never pushes the Build button off-screen. The pillar rack
   // above it is the at-a-glance summary.
-  const [showReadDetails, setShowReadDetails] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [dragActive, setDragActive] = useState(false);
   // Deliberately UNSET: the sector/size choice decides which scorecard rules
@@ -414,6 +462,29 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    * must never lose or re-charge these — they carry straight through.
    */
   const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
+  /**
+   * Closed-vocabulary decisions from the server (model-backed, remembered).
+   * A dropdown value the local maps cannot place is asked about ONCE, and the
+   * answer is applied on the next mapping pass, exactly like a synonym.
+   */
+  const [vocabulary, setVocabulary] = useState<VocabularyDecisions>({});
+  /** Wordings already asked about in this mount, so a "none" is not re-asked every render. */
+  const vocabularyAskedRef = useRef<Set<string>>(new Set());
+  /**
+   * Set when this mount rehydrated a previous run's paid extraction. The
+   * reveal renders from the restored case even though no File objects survive
+   * navigation, and a banner says where the data came from.
+   */
+  const [restoredAt, setRestoredAt] = useState<string | null>(null);
+  /** Library ids carried by a restored snapshot — the File objects are gone
+      but the uploads still exist and must still be filed under the company. */
+  const restoredDocumentIdsRef = useRef<string[]>([]);
+
+  /** Every library id this run owns: restored ones plus this mount's uploads. */
+  const allDocumentIds = () =>
+    Array.from(
+      new Set(restoredDocumentIdsRef.current.concat(Array.from(persistedDocumentsRef.current.values()))),
+    );
   const inputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   /** Files a folder upload could not read — shown as a warning, not an error. */
@@ -441,6 +512,36 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
    */
   const quoteRequestRef = useRef(0);
   const MAX_UPLOAD_FILES = 100; // a full verification evidence pack is ~70 files
+
+  // Rehydrate a previous run's paid extraction. Runs once, on mount, before
+  // any interaction — so it can never clobber work done in this mount.
+  useEffect(() => {
+    const snap = readFlowSnapshot();
+    if (!snap) return;
+    setParserCase(snap.parserCase);
+    setKeptCase(snap.parserCase);
+    setCompanyName((prev) => prev.trim() || snap.companyName);
+    if (snap.sector) setSector(snap.sector);
+    if (snap.subSector) setSubSector(snap.subSector);
+    if (snap.size) setSize(snap.size);
+    setFiledBatchByFile(snap.filedBatchByFile ?? {});
+    restoredDocumentIdsRef.current = snap.documentIds ?? [];
+    setRestoredAt(snap.savedAt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the snapshot's profile fields (name, sector, size) current while a
+  // restored/extracted case is on screen, so leaving again loses nothing.
+  // Debounced: the case JSON can be large and the name is typed key by key.
+  useEffect(() => {
+    if (!parserCase) return;
+    const timer = window.setTimeout(() => {
+      const snap = readFlowSnapshot();
+      if (!snap) return;
+      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size });
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [parserCase, companyName, sector, subSector, size]);
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.
@@ -492,9 +593,61 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         element: e.element,
         values: e.values ?? [],
       })),
-      { sectorCode: sector || "Generic", scorecardType: size || "Generic" },
+      { sectorCode: sector || "Generic", scorecardType: size || "Generic", vocabulary },
     );
-  }, [parserCase, sector, size]);
+  }, [parserCase, sector, size, vocabulary]);
+
+  /**
+   * THE GENERAL MECHANISM behind every dropdown. Values the deterministic maps
+   * rejected as "not one of" are sent, in one batch, to the vocabulary
+   * resolver: the model places them by meaning onto the column's own options
+   * (or says none), the server remembers the answer for every customer, and
+   * the mapping memo re-runs with the decisions. A value it cannot place stays
+   * in review, as before. Nothing here guesses; it only stops the lists from
+   * being the ceiling.
+   */
+  useEffect(() => {
+    if (!injected) return;
+    const items: Array<{ column: string; value: string; options: string[] }> = [];
+    const seen = new Set<string>();
+    for (const r of injected.rejected) {
+      if (r.reason !== "no_matching_option" || !r.section) continue;
+      const value = String(r.value ?? "").trim();
+      if (!value) continue;
+      const key = vocabularyDecisionKey(r.field, value);
+      if (seen.has(key) || vocabularyAskedRef.current.has(key) || vocabulary[key]) continue;
+      const section = getSection(r.section, SECTOR_TO_WORKBOOK[sector] ?? "Generic", size || "Generic");
+      const column = section?.columns?.find((c) => c.key === r.field) ?? section?.meta?.find((c) => c.key === r.field);
+      const options = column?.options ?? [];
+      if (options.length === 0) continue;
+      seen.add(key);
+      items.push({ column: r.field, value, options });
+    }
+    if (items.length === 0) return;
+    for (const it of items) vocabularyAskedRef.current.add(vocabularyDecisionKey(it.column, it.value));
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/vocabulary/resolve", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+        });
+        if (!res.ok || cancelled) return;
+        const body = (await res.json()) as { decisions?: Array<{ column: string; value: string; option: string | null }> };
+        const next: VocabularyDecisions = {};
+        for (const d of body.decisions ?? []) {
+          if (d.option) next[vocabularyDecisionKey(d.column, d.value)] = d.option;
+        }
+        if (!cancelled && Object.keys(next).length > 0) setVocabulary((prev) => ({ ...prev, ...next }));
+      } catch {
+        // No resolver reachable: the rejections stand, honestly.
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [injected]);
 
   /**
    * The procurement rows as they will actually be created — the same merge
@@ -540,6 +693,51 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       setCertificateFillRunning(false);
     })();
   }, [mergedProcurementRows]);
+
+  /**
+   * Placement telemetry — the honest not-placed list is the improvement
+   * backlog. Fired once per extracted case (identity-deduped), after the
+   * mapping memos settle, so what the user sees in the rejection panel is
+   * exactly what lands in the backlog. Fire-and-forget: telemetry never
+   * blocks or fails the flow.
+   */
+  const telemetrySentForCaseRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!parserCase || !injected) return;
+    if (telemetrySentForCaseRef.current === parserCase) return;
+    telemetrySentForCaseRef.current = parserCase;
+    try {
+      const byKey = new Map<string, { field: string; context: string | null; reason: string; count: number }>();
+      for (const r of injected.rejected) {
+        const key = `${r.field}::${r.detail}`;
+        const row = byKey.get(key) ?? { field: r.field, context: null, reason: r.detail, count: 0 };
+        row.count += 1;
+        byKey.set(key, row);
+      }
+      const placedRows = Object.values(injected.rows).reduce(
+        (n, sectionRows) => n + (sectionRows?.length ?? 0),
+        0,
+      );
+      void Promise.resolve(
+        fetch("/api/telemetry/placement", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain: "bbbee",
+            caseId: (parserCase as { case_id?: string }).case_id ?? null,
+            fileCount: (parserCase.documents_detected ?? []).length,
+            placedCount: placedRows,
+            unplacedCount: injected.rejected.length,
+            unplaced: Array.from(byKey.values()),
+            unmapped: injected.coverage?.unmapped ?? [],
+          }),
+        }),
+      ).catch(() => {});
+    } catch {
+      // telemetry must never cost a user their extraction
+    }
+  }, [parserCase, injected]);
 
   /**
    * Reconciliation findings from the deterministic table read — a sheet whose
@@ -708,6 +906,22 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
     return () => { cancelled = true; };
   }, [quote?.quoteId]);
 
+  /**
+   * Take the user to the phase banner the moment the paid read starts.
+   *
+   * Pressing process swaps a panel that sits below the staged documents, so on
+   * any real evidence pack the only visible change was a button going quiet —
+   * indistinguishable from a click that did nothing. Runs on the rising edge
+   * only, so the banner's own updates never yank the page around while reading.
+   */
+  useEffect(() => {
+    if (!parsing) return;
+    const frame = requestAnimationFrame(() => {
+      extractionPhaseRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [parsing]);
+
   const filePersistenceKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 
   /** Persist the original file before any paid parser work begins. */
@@ -738,10 +952,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
   const prepareAndQuote = async (list: File[]): Promise<void> => {
     setLibraryWarning(null);
+    // The WHOLE pipeline is "checking" — saving to the library and then
+    // pricing. `quoting` used to flip on only when pricing began, so during
+    // the save the Done button sat enabled next to whatever quote the
+    // PREVIOUS batch had left behind, and clicking it opened a checkout
+    // priced for a different set of files. Claim the checking state and drop
+    // the stale quote before anything async happens.
+    const requestId = ++quoteRequestRef.current;
+    setQuoting(true);
+    setQuote(null);
     try {
       await persistSelectedDocuments(list);
+      // A newer batch started while these files were saving — its pipeline
+      // owns the quote now, and pricing this older list would race it.
+      if (quoteRequestRef.current !== requestId) return;
       await runQuote(list);
     } catch (error) {
+      if (quoteRequestRef.current !== requestId) return; // superseded
       setQuote(null);
       setQuoting(false);
       setParseError(error instanceof Error ? error.message : "Could not save these documents");
@@ -905,6 +1132,20 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       // crucially, gives reconciliation the registered name it needs.
       const entity = pickEntityName(mergedCase);
       if (entity) setCompanyName((prev) => prev.trim() || entity);
+      // Tokens have just been spent on this result — make it survive leaving
+      // the flow. Restored on the next mount, cleared when the scorecard is
+      // created or the run is discarded.
+      writeFlowSnapshot({
+        savedAt: new Date().toISOString(),
+        companyName: companyName.trim() || entity,
+        sector,
+        subSector,
+        size,
+        fileNames: list.map((f) => f.name),
+        filedBatchByFile,
+        documentIds: allDocumentIds(),
+        parserCase: mergedCase,
+      });
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not read the documents");
     } finally {
@@ -1101,6 +1342,28 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   );
   const totalMappedRows = (mapped?.mappedRowCount ?? 0) + injectedRowCount;
 
+  /**
+   * Required document groups we still have nothing for, split by whether the
+   * parser could read one if the user supplied it. An evidence-only group is
+   * guidance for the verifier, never something we could have detected, so the
+   * two are never presented as the same kind of gap.
+   */
+  const missingDocGroups = useMemo(() => {
+    const groups = catalog?.required_groups ?? [];
+    return {
+      detectable: groups.filter((g) => g.required !== false && g.autoExtract && !groupSatisfied(g)),
+      evidenceOnly: groups.filter((g) => g.required !== false && !g.autoExtract),
+    };
+    // groupSatisfied reads the current parser case, which `parserCase` covers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalog, parserCase]);
+
+  /** Pillars where a figure was read but cannot score without per-person rows. */
+  const needsDetailPillars = useMemo(
+    () => (mapped?.coverage ?? []).filter((c) => c.status === "needs-detail" && c.extractedValue),
+    [mapped],
+  );
+
   // Suppliers + spend come from whichever path actually read the procurement
   // schedule: the AI-entity path is authoritative where it has rows (it is what
   // scores), the legacy supplier_rows are the fallback. Reading only the legacy
@@ -1121,7 +1384,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   const suppliersUp = useCountUp(supplierCount);
   const spendUp = useCountUp(spendCaptured, 1100);
 
-  const revealed = Boolean((mapped || injected) && !parsing && files.length > 0);
+  // `files.length` OR a restore: File objects never survive navigation, so a
+  // rehydrated run must reveal from the case alone.
+  const revealed = Boolean((mapped || injected) && !parsing && (files.length > 0 || restoredAt));
   // Requires `doneStaging`: this flag collapses the stage into the checkout
   // layout, and doing that the moment a quote landed is what left people with
   // "files appear but there is nowhere to carry on".
@@ -1198,7 +1463,36 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       parserCase || Object.values(finalSections).some((s) => (s.rows?.length ?? 0) > 0)
         ? assessDocuments(parserCase ?? {}, finalSections as Record<string, { rows?: unknown[] }>)
         : undefined;
-    void onCreate(companyName.trim(), finalSections, { verdicts, reconcile: reconciled });
+    try {
+      await onCreate(companyName.trim(), finalSections, {
+        verdicts,
+        reconcile: reconciled,
+        // Everything this run put in the document library, restored ids
+        // included — so the host can file the uploads under the company.
+        documentIds: allDocumentIds(),
+      });
+      // The run is now a company; the snapshot has served its purpose. Cleared
+      // only after create resolves so a failure leaves the restore intact.
+      clearFlowSnapshot();
+    } catch {
+      // The host surfaces its own create errors; keeping the snapshot means
+      // the paid extraction survives to try again.
+    }
+  };
+
+  /** Throw the restored (or just-extracted) run away and start clean. */
+  const discardRun = () => {
+    clearFlowSnapshot();
+    setParserCase(null);
+    setKeptCase(null);
+    setRestoredAt(null);
+    restoredDocumentIdsRef.current = [];
+    setFiles([]);
+    setFiledBatchByFile({});
+    setQuote(null);
+    setTokenCost(null);
+    setDoneStaging(false);
+    setCompanyName("");
   };
 
   /**
@@ -1285,6 +1579,41 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             : "Upload what you have. We will identify what is present, missing or needs review."}
         </p>
       </div>
+
+      {/* A restored run announces itself. Without this, coming back to data
+          you don't remember paying for looks like a glitch — and the only way
+          out of a restore you don't want would be a hard refresh. */}
+      {restoredAt && parserCase && (
+        <div
+          className="mb-4 flex flex-col gap-3 rounded-[18px] border border-emerald-400/25 bg-emerald-500/[0.06] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="restored-run-banner"
+        >
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-[13px] font-semibold text-emerald-200">
+              <Check className="h-4 w-4 shrink-0" />
+              Your processed documents were saved
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[#a1a1a6]">
+              We restored the extraction you already paid for
+              {(() => {
+                const at = new Date(restoredAt);
+                return Number.isNaN(at.getTime())
+                  ? ""
+                  : ` from ${at.toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+              })()}
+              . Review it below and create the scorecard — no tokens were spent again.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={discardRun}
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/[0.10] px-4 py-2 text-[12px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+            data-testid="button-discard-restored-run"
+          >
+            Discard and start over
+          </button>
+        </div>
+      )}
 
       {/* Sector selector — drives the sector-aware document checklist and the
           scorecard's calculator. B-BBEE evidence differs by sector + size. */}
@@ -1544,15 +1873,19 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               {/* One "tokens" in this UI, and it is the credit kind. The
                   model's own token estimate is an internal cost input — showing
                   it beside a credit cost invited people to read one as the
-                  other. Size is what they can actually verify. */}
+                  other. Each document shows the credit tokens IT costs, under
+                  the effort rule that priced it, so the total is explained
+                  line by line rather than asserted. */}
               <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.07]">
                 <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#636366] max-md:hidden">
                   <span>Document</span>
                   <span>Effort</span>
-                  <span className="text-right">Size</span>
+                  <span className="text-right">{charging ? "Tokens" : "Size"}</span>
                 </div>
                 {quote.files.map((file) => {
                   const units = fileUnits(file);
+                  const priced = tokenCost?.files?.find((f) => f.filename === file.filename);
+                  const effort = priced ? EFFORT_LABELS[priced.effort] ?? "Standard" : file.requiresOcr ? "High" : "Standard";
                   return (
                     <div
                       key={file.filename}
@@ -1560,17 +1893,38 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     >
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
-                        <p className="mt-0.5 text-[11px] text-[#636366] md:hidden">
-                          {file.requiresOcr ? "High effort — scan" : "Standard"} · {units}
+                        <p className="mt-0.5 text-[11px] text-[#636366]">
+                          <span className="md:hidden">{effort} effort · </span>
+                          {units}
+                          {charging && priced ? (
+                            <span className="md:hidden"> · {tokenText(priced.tokens)} tokens</span>
+                          ) : null}
                         </p>
                       </div>
-                      <span className="hidden text-[12px] text-[#a1a1a6] md:block">
-                        {file.requiresOcr ? "High" : "Standard"}
+                      <span className="hidden text-[12px] text-[#a1a1a6] md:block">{effort}</span>
+                      <span className="hidden text-[12px] tabular-nums text-[#a1a1a6] md:block md:text-right">
+                        {charging && priced ? `${tokenText(priced.tokens)} tokens` : units}
                       </span>
-                      <span className="hidden text-[12px] text-[#a1a1a6] md:block md:text-right">{units}</span>
                     </div>
                   );
                 })}
+                {charging && (tokenCost?.minimumTopUp ?? 0) > 0 && (
+                  <div
+                    className="grid gap-2 border-b border-white/[0.05] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
+                    data-testid="quote-minimum-charge"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-[#a1a1a6]">Small-batch minimum</p>
+                      <p className="mt-0.5 text-[11px] text-[#636366]">
+                        Batches this small are topped up to the minimum processing charge.
+                      </p>
+                    </div>
+                    <span className="hidden md:block" />
+                    <span className="text-[12px] tabular-nums text-[#a1a1a6] md:text-right">
+                      {tokenText(tokenCost!.minimumTopUp!)} tokens
+                    </span>
+                  </div>
+                )}
                 <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
                   <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8e8e93]">
                     {charging ? "Total" : "This batch"}
@@ -1583,6 +1937,22 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   </span>
                 </div>
               </div>
+
+              {/* The rules the prices above came from — served by the same
+                  endpoint that priced them, so the explanation cannot drift
+                  from the charge. */}
+              {charging && (tokenCost?.effortRules?.length ?? 0) > 0 && (
+                <div className="mt-3 rounded-2xl border border-white/[0.06] bg-[#111113] p-4" data-testid="effort-rules">
+                  <p className="text-[12px] font-semibold text-white">How effort sets the token cost</p>
+                  <div className="mt-2 space-y-1.5">
+                    {tokenCost!.effortRules!.map((rule) => (
+                      <p key={rule.tier} className="text-[11.5px] leading-5 text-[#a1a1a6]">
+                        <span className="font-semibold text-[#d1d1d6]">{rule.label}</span> — {rule.rule}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {!charging && (
                 <p className="mt-3 text-[11px] text-[#636366]">
@@ -1780,6 +2150,80 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
+      {/* The way ON from staging — kept at the TOP, directly under the drop
+          zone. It used to sit below the pillar batches, which on any real
+          screen put the one button that advances the flow beneath a long grid:
+          you staged files and then had to go hunting for how to continue.
+          Whether the documents arrived through the main button or a pillar
+          batch is irrelevant here: both stage into the same list, so both end
+          at the same control. */}
+      {!parserCase && !doneStaging && files.length > 0 && (
+        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[#141416] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-white">
+              {files.length} document{files.length === 1 ? "" : "s"} staged
+              {quoting ? " · checking" : ""}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[#8e8e93]">
+              Keep adding — the buttons above, or any pillar batch below. Nothing is read, and
+              nothing is charged, until you review the cost on the next step.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={quoting}
+            onClick={() => setDoneStaging(true)}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
+            data-testid="button-done-staging"
+          >
+            {quoting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Done adding — review cost
+          </button>
+        </div>
+      )}
+
+      {/* The dead end. "Done adding" hides the staging bar above, and the review
+          panel below only renders once a quote exists — so when pricing failed
+          the button appeared to do nothing at all: the way ON vanished and
+          nothing replaced it. The only escape was adding or removing a file
+          (which resets doneStaging), and the only clue was a red line far below
+          the fold. Say what went wrong where the button was, and offer both
+          ways forward. */}
+      {!parserCase && doneStaging && !quote && !quoting && files.length > 0 && (
+        <div
+          className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+          data-testid="quote-unavailable"
+        >
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-amber-100">
+              We could not work out the cost of these {files.length} document{files.length === 1 ? "" : "s"}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[#a1a1aa]">
+              {parseError ?? "Pricing did not finish, so there is nothing to review yet."} Nothing has
+              been read and nothing has been charged.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDoneStaging(false)}
+              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[#8e8e93] transition-colors hover:text-white"
+              data-testid="button-back-to-staging"
+            >
+              Back to adding
+            </button>
+            <button
+              type="button"
+              onClick={() => void prepareAndQuote(files)}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
+              data-testid="button-retry-quote"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* The upload surface itself, one batch per pillar plus the whole-file
           uploads. Shown before processing so the user can go and fetch what is
           missing rather than spending tokens to be told their score is low.
@@ -1804,37 +2248,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
-      {/* The way ON from staging. Without this there was no affirmative step
-          between "files are listed" and the checkout panel, so the checkout had
-          to appear by itself — which is what made adding one pillar feel like
-          being marched to payment. Whether the documents arrived through the
-          main button or a pillar batch is irrelevant here: both stage into the
-          same list, so both end at the same control. */}
-      {!parserCase && !doneStaging && files.length > 0 && (
-        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[#141416] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-white">
-              {files.length} document{files.length === 1 ? "" : "s"} staged
-              {quoting ? " · checking" : ""}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[#8e8e93]">
-              Keep adding — from any pillar, or the buttons above. Nothing is read, and nothing is
-              charged, until you review the cost on the next step.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={quoting}
-            onClick={() => setDoneStaging(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
-            data-testid="button-done-staging"
-          >
-            {quoting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Done adding — review cost
-          </button>
-        </div>
-      )}
-
       {/* Double-check before anything is staged. */}
       <ConfirmUploadDialog
         pending={pendingUpload}
@@ -1847,7 +2260,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       {/* Phase banner — names where we are (Reading → Reconciling → Scoring) so
           the multi-minute paid wait shows movement, not a frozen spinner. */}
       {parsing && (
-        <div className="mt-3 flex items-center gap-3 rounded-xl border border-violet-300/20 bg-[#17151d] px-4 py-3" data-testid="extraction-phase">
+        <div ref={extractionPhaseRef} className="mt-3 flex items-center gap-3 rounded-xl border border-violet-300/20 bg-[#17151d] px-4 py-3" data-testid="extraction-phase">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-300" />
           <div className="min-w-0 flex-1">
             <div className="text-[13px] font-semibold text-violet-100">
@@ -2036,136 +2449,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         </div>
       )}
 
-      {/* Missing required docs nudge — only for docs the parser can detect
-          (auto-extractable). Evidence-only docs are guidance, not detectable. */}
-      {(() => {
-        if (!revealed || !catalog) return null;
-        const detectableMissing = catalog.required_groups.filter(
-          (g) => g.required !== false && g.autoExtract && !groupSatisfied(g),
-        );
-        const evidenceOnly = catalog.required_groups.filter((g) => g.required !== false && !g.autoExtract);
-        if (detectableMissing.length === 0 && evidenceOnly.length === 0) return null;
-        return (
-          <div className="dus-fade-up mt-3 rounded-xl px-3.5 py-2.5 flex items-start gap-2.5" style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.18)" }}>
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-[12px] text-amber-200/80 text-left">
-              {detectableMissing.length > 0 && (
-                <>Still missing: {detectableMissing.map((g) => g.label).join("; ")}. </>
-              )}
-              {evidenceOnly.length > 0 && (
-                <>Have ready for your verifier: {evidenceOnly.map((g) => g.label).join("; ")}. </>
-              )}
-              You can add these now or in the workbook.
-            </p>
-          </div>
-        );
-      })()}
-
-      {/* Figures the documents disagree on.
-          NOT collapsed like the rest of the detail: a withheld entity-level
-          figure leaves a hole in the score, and the person who can close it is
-          standing here with the documents open. Buried in an accordion it
-          would be found after the scorecard looked wrong, not before. */}
-      {revealed && (injected?.metaConflicts.length ?? 0) > 0 && (
-        <div
-          className="dus-fade-up mt-4 rounded-xl px-4 py-3 text-left"
-          style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.22)" }}
-          data-testid="meta-conflicts"
-        >
-          <p className="text-[12.5px] font-medium text-amber-200/90 flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-            {injected!.metaConflicts.length} figure
-            {injected!.metaConflicts.length === 1 ? "" : "s"} your documents disagree on
-          </p>
-          <p className="mt-1 text-[11.5px] text-[#a1a1a6]">
-            Left blank rather than guessed — pick the right one in the workbook and the
-            score follows.
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {injected!.metaConflicts.map((c) => (
-              <li key={`${c.section}.${c.column}`} className="text-[11.5px] text-[#d1d1d6]">
-                <span className="text-[#8e8e93]">{c.column}:</span>{" "}
-                {c.candidates
-                  .map((cand) => `${String(cand.value)} (${cand.sources.join(", ") || "unknown source"})`)
-                  .join("  vs  ")}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* Figures more than one document confirms. Corroboration is the cheapest
-          evidence there is, and showing it stops every extracted number reading
-          with the same weight. */}
-      {revealed && (injected?.metaCorroboration.length ?? 0) > 0 && (
-        <div
-          className="dus-fade-up mt-3 rounded-xl px-4 py-2.5 text-left"
-          style={{ background: "rgba(48,209,88,0.05)", border: "1px solid rgba(48,209,88,0.18)" }}
-          data-testid="meta-corroboration"
-        >
-          <p className="text-[12px] text-emerald-200/90 flex items-center gap-1.5">
-            <Check className="w-3.5 h-3.5 shrink-0" />
-            {injected!.metaCorroboration.length} figure
-            {injected!.metaCorroboration.length === 1 ? "" : "s"} confirmed by more than one
-            document
-          </p>
-          <ul className="mt-1.5 space-y-1">
-            {injected!.metaCorroboration.map((c) => (
-              <li key={`${c.section}.${c.column}`} className="text-[11.5px] text-[#a1a1a6]">
-                <span className="text-[#d1d1d6]">{c.column}</span> — {String(c.value)}, agreed by{" "}
-                {c.agreementCount} documents ({c.sources.join(", ")})
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* ACT 3 — the reveal */}
-      {/* Confidence + gaps: what we read, what could not be placed, what is
-          still needed — COLLAPSED by default so it never pushes the Build
-          button off-screen. The pillar rack below is the at-a-glance summary;
-          this is the detail for anyone who wants it. */}
-      {revealed && (injected || reconciliationFlags.length > 0) && (
-        <div className="mt-4">
-          <button
-            type="button"
-            onClick={() => setShowReadDetails((s) => !s)}
-            className="w-full flex items-center gap-2 rounded-xl px-4 py-3 text-left border border-white/[0.07] bg-[#0e0e10]"
-            data-testid="toggle-read-details"
-          >
-            <ChevronDown className={`h-4 w-4 shrink-0 text-[#636366] transition-transform ${showReadDetails ? "rotate-180" : ""}`} />
-            <span className="text-[13px] font-medium text-[#e5e5ea]">What we read from your documents</span>
-            <span className="ml-auto text-[12px] text-[#8e8e93]">
-              {totalMappedRows} placed{reconciliationFlags.length > 0 ? ` · ${reconciliationFlags.length} to check` : ""}
-            </span>
-          </button>
-          {showReadDetails && (
-            <div className="mt-3">
-              {injected && <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />}
-              {reconciliationFlags.length > 0 && (
-                <div
-                  className="dus-fade-up mt-3 rounded-lg px-3 py-2.5"
-                  style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.25)" }}
-                  data-testid="reconciliation-flags"
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    <span className="text-[11px] font-medium text-amber-200/90 uppercase tracking-wider">
-                      Evidence that didn&apos;t reconcile
-                    </span>
-                  </div>
-                  {reconciliationFlags.map((flag, i) => (
-                    <p key={i} className="text-[11px] text-[#8e8e93] text-left">
-                      <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {revealed && mapped && (
         <div className="mt-4">
           {/* Pillar rack — status tiles light up */}
@@ -2221,83 +2504,67 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </div>
           </div>
 
-          {/* What the certificate registry added to Procurement.
-              Shown before Create so the registry's contribution is visible and
-              questionable, never a silent edit to the user's data. */}
-          {(certificateFillRunning || certificateFill) && (
+          {/* ── THE ONE THING THAT NEEDS A DECISION ────────────────────────
+              Figures the documents disagree on stay ABOVE the Build button and
+              are never collapsed. A withheld entity-level figure leaves a hole
+              in the score, and the person who can close it is standing here
+              with the documents open — inside an accordion it gets found after
+              the scorecard looks wrong, not before. Everything else is detail
+              and lives below the button. */}
+          {(injected?.metaConflicts.length ?? 0) > 0 && (
             <div
-              className="dus-fade-up mb-4 rounded-lg px-3 py-2.5 text-left"
-              style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: "660ms" }}
-              data-testid="certificate-autofill-summary"
+              className="dus-fade-up mb-4 rounded-xl px-4 py-3 text-left"
+              style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.22)" }}
+              data-testid="meta-conflicts"
             >
-              {certificateFillRunning ? (
-                <p className="text-[11px] text-[#8e8e93] flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Checking suppliers against the certificate database…
-                </p>
-              ) : certificateFill && certificateFill.report.cellsFilled > 0 ? (
-                <>
-                  <p className="text-[11px] text-emerald-200/90">
-                    <Check className="inline h-3 w-3 mr-1" />
-                    Certificate database filled {certificateFill.report.cellsFilled} field
-                    {certificateFill.report.cellsFilled === 1 ? "" : "s"} across{" "}
-                    {certificateFill.report.rowsChanged} supplier
-                    {certificateFill.report.rowsChanged === 1 ? "" : "s"} — blanks only, nothing your
-                    documents stated was changed.
-                  </p>
-                  {/* The financial period is not known yet at upload — it is
-                      entered on the workbook — so validity was judged against
-                      today. Most certificates on file expire within the current
-                      year, so this is expected rather than a data problem, and
-                      the levels fill once the period is set. Saying so here
-                      stops it reading as "we hold nothing for these suppliers". */}
-                  {certificateFill.report.notValid.length > 0 && (
-                    <p className="mt-1 text-[11px] text-amber-200/80">
-                      {certificateFill.report.notValid.length} matched certificate
-                      {certificateFill.report.notValid.length === 1 ? " is" : "s are"} not current
-                      today, so their B-BBEE levels were left blank. Set the financial period on the
-                      workbook and re-run “Fill from certificates” — a certificate that was live
-                      during the measured period still counts.
-                    </p>
-                  )}
-                  {certificateFill.report.conflicts.length > 0 && (
-                    <p className="mt-1 text-[11px] text-amber-200/80">
-                      {certificateFill.report.conflicts.length} supplier
-                      {certificateFill.report.conflicts.length === 1 ? "" : "s"} on file disagree with the
-                      uploaded figures — your figures were kept.
-                    </p>
-                  )}
-                  {certificateFill.report.ambiguous.length > 0 && (
-                    <p className="mt-1 text-[11px] text-[#8e8e93]">
-                      {certificateFill.report.ambiguous.length} name
-                      {certificateFill.report.ambiguous.length === 1 ? "" : "s"} matched more than one
-                      company — left for you to pick in the workbook.
-                    </p>
-                  )}
-                </>
-              ) : certificateFill?.report.registryUnavailable ? (
-                <p className="text-[11px] text-[#8e8e93]">
-                  Certificate database unavailable — procurement was left exactly as extracted.
-                </p>
-              ) : (
-                <p className="text-[11px] text-[#8e8e93]">
-                  No new supplier details found in the certificate database.
-                </p>
-              )}
+              <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-amber-200/90">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                {injected!.metaConflicts.length} figure
+                {injected!.metaConflicts.length === 1 ? "" : "s"} your documents disagree on
+              </p>
+              <p className="mt-1 text-[11.5px] text-[#a1a1a6]">
+                Left blank rather than guessed — pick the right one in the workbook and the score
+                follows.
+              </p>
+              {/* One candidate per line. Joining them into `a (src) vs b (src)`
+                  produced a wrapping run of text at exactly the moment the user
+                  had to compare two numbers. */}
+              <div className="mt-2 space-y-2">
+                {injected!.metaConflicts.map((c) => (
+                  <div
+                    key={`${c.section}.${c.column}`}
+                    className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2"
+                  >
+                    <p className="text-[11.5px] font-medium text-[#d1d1d6]">{c.column}</p>
+                    <ul className="mt-1 space-y-0.5">
+                      {c.candidates.map((cand, i) => (
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[11.5px] leading-5">
+                          <span className="tabular-nums text-white">{String(cand.value)}</span>
+                          <span className="text-[11px] text-[#636366]">
+                            {cand.sources.join(", ") || "unknown source"}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Detail lines for the amber tiles (extracted-but-needs-detail) */}
-          {mapped.coverage.some((c) => c.status === "needs-detail" && c.extractedValue) && (
-            <div className="dus-fade-up mb-4 space-y-1" style={{ animationDelay: "700ms" }}>
-              {mapped.coverage
-                .filter((c) => c.status === "needs-detail" && c.extractedValue)
-                .map((c) => (
-                  <p key={c.pillar} className="text-[11px] text-[#8e8e93] text-left">
-                    <span className="text-amber-300/80">{c.pillar}:</span> we extracted {c.extractedValue} — it needs
-                    per-person rows in the workbook to score.
-                  </p>
-                ))}
+          {/* What the certificate registry added to Procurement.
+              Shown before Create so the registry's contribution is visible and
+              questionable, never a silent edit to the user's data. */}
+          {certificateFillRunning && (
+            <div
+              className="dus-fade-up mb-4 rounded-lg px-3 py-2.5 text-left"
+              style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: "660ms" }}
+              data-testid="certificate-autofill-running"
+            >
+              <p className="text-[11px] text-[#8e8e93] flex items-center gap-1.5">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Checking suppliers against the certificate database…
+              </p>
             </div>
           )}
 
@@ -2311,7 +2578,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <p className="mb-2 text-[12px] text-[#8e8e93]" data-testid="scoring-as-line">
                 Scoring as:{" "}
                 <span className="text-emerald-300/90 font-medium">
-                  {sectorOptions.find((s) => s.code === sector)?.label ?? sector}
+                  {activeSector?.label ?? sector}
                   {subSector ? ` · ${subSector}` : ""} · {sizeOptions.find((o) => o.value === size)?.label ?? size}
                 </span>
               </p>
@@ -2319,6 +2586,20 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <p className="mb-2 text-[12px] text-amber-300/90" data-testid="scoring-as-line">
                 Choose your sector and organisation size in the Company profile panel — they decide
                 which scorecard rules your documents are scored against.
+              </p>
+            )}
+            {/* A sector whose ladder was applied by analogy rather than
+                transcribed says so HERE, next to the button that builds the
+                scorecard — not in a footnote. A level nobody flagged is a level
+                someone will certify. */}
+            {activeSector?.provisional && (
+              <p
+                className="mb-2.5 flex items-start gap-1.5 rounded-lg px-3 py-2 text-[11.5px] leading-5 text-amber-200/80"
+                style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.2)" }}
+                data-testid="sector-provisional-note"
+              >
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                <span>{activeSector.provisionalNote}</span>
               </p>
             )}
             <input
@@ -2358,6 +2639,186 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
                 : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
             </p>
+          </div>
+
+          {/* ── THE DETAIL, BELOW THE BUTTON ───────────────────────────────
+              Everything here is worth reading and none of it blocks building.
+              As six always-open sibling panels it pushed the Build button off
+              the bottom of the screen on any real evidence pack; as counted,
+              collapsible groups it is a summary someone will actually open. */}
+          <div className="mt-4 space-y-1.5" data-testid="extraction-review">
+            {missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length > 0 && (
+              <ReviewSection
+                title="Documents still worth adding"
+                meta={`${missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length}`}
+                tone="check"
+                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                summary="You can add these now or in the workbook — neither blocks you from continuing."
+                testId="missing-docs-review"
+              >
+                {missingDocGroups.detectable.length > 0 && (
+                  <>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-[#636366]">
+                      We can read these automatically
+                    </p>
+                    <ul className="mb-2 mt-1 space-y-0.5">
+                      {missingDocGroups.detectable.map((g) => (
+                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[#d1d1d6]">
+                          {g.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+                {missingDocGroups.evidenceOnly.length > 0 && (
+                  <>
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-[#636366]">
+                      Have ready for your verifier
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {missingDocGroups.evidenceOnly.map((g) => (
+                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                          {g.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </ReviewSection>
+            )}
+
+            {needsDetailPillars.length > 0 && (
+              <ReviewSection
+                title="Extracted, but needs per-person rows to score"
+                meta={`${needsDetailPillars.length}`}
+                tone="check"
+                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                testId="needs-detail-review"
+              >
+                <ul className="space-y-1">
+                  {needsDetailPillars.map((c) => (
+                    <li key={c.pillar} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                      <span className="text-amber-300/80">{c.pillar}:</span> we extracted{" "}
+                      {c.extractedValue} — it needs per-person rows in the workbook to score.
+                    </li>
+                  ))}
+                </ul>
+              </ReviewSection>
+            )}
+
+            {reconciliationFlags.length > 0 && (
+              <ReviewSection
+                title="Evidence that didn’t reconcile"
+                meta={`${reconciliationFlags.length}`}
+                tone="check"
+                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                summary="A total the rows don’t sum to is the first thing a verifier asks about."
+                testId="reconciliation-flags"
+              >
+                <ul className="space-y-1">
+                  {reconciliationFlags.map((flag, i) => (
+                    <li key={i} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                      <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
+                    </li>
+                  ))}
+                </ul>
+              </ReviewSection>
+            )}
+
+            {(injected?.metaCorroboration.length ?? 0) > 0 && (
+              <ReviewSection
+                title="Confirmed by more than one document"
+                meta={`${injected!.metaCorroboration.length}`}
+                tone="good"
+                icon={<Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
+                summary="Corroboration is the cheapest evidence there is — these figures agreed across files."
+                testId="meta-corroboration"
+              >
+                <ul className="space-y-1">
+                  {injected!.metaCorroboration.map((c) => (
+                    <li key={`${c.section}.${c.column}`} className="text-[11.5px] leading-5 text-[#a1a1a6]">
+                      <span className="text-[#d1d1d6]">{c.column}</span> — {String(c.value)}, agreed
+                      by {c.agreementCount} documents ({c.sources.join(", ")})
+                    </li>
+                  ))}
+                </ul>
+              </ReviewSection>
+            )}
+
+            {injected && (
+              <ReviewSection
+                title="What we read from your documents"
+                meta={`${totalMappedRows} placed`}
+                tone="neutral"
+                icon={<FileText className="h-3.5 w-3.5 shrink-0 text-[#636366]" />}
+                testId="toggle-read-details"
+              >
+                <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
+              </ReviewSection>
+            )}
+
+            {certificateFill && (
+              <ReviewSection
+                title="Certificate database"
+                meta={
+                  certificateFill.report.cellsFilled > 0
+                    ? `${certificateFill.report.cellsFilled} filled`
+                    : "nothing added"
+                }
+                tone={certificateFill.report.cellsFilled > 0 ? "good" : "neutral"}
+                icon={<Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
+                testId="certificate-autofill-summary"
+              >
+                {certificateFill.report.cellsFilled > 0 ? (
+                  <>
+                    <p className="text-[11.5px] leading-5 text-emerald-200/90">
+                      Filled {certificateFill.report.cellsFilled} field
+                      {certificateFill.report.cellsFilled === 1 ? "" : "s"} across{" "}
+                      {certificateFill.report.rowsChanged} supplier
+                      {certificateFill.report.rowsChanged === 1 ? "" : "s"} — blanks only, nothing
+                      your documents stated was changed.
+                    </p>
+                    {/* The financial period is not known yet at upload — it is
+                        entered on the workbook — so validity was judged against
+                        today. Most certificates on file expire within the current
+                        year, so this is expected rather than a data problem, and
+                        the levels fill once the period is set. Saying so here
+                        stops it reading as "we hold nothing for these suppliers". */}
+                    {certificateFill.report.notValid.length > 0 && (
+                      <p className="mt-1 text-[11.5px] leading-5 text-amber-200/80">
+                        {certificateFill.report.notValid.length} matched certificate
+                        {certificateFill.report.notValid.length === 1 ? " is" : "s are"} not current
+                        today, so their B-BBEE levels were left blank. Set the financial period on
+                        the workbook and re-run “Fill from certificates” — a certificate that was
+                        live during the measured period still counts.
+                      </p>
+                    )}
+                    {certificateFill.report.conflicts.length > 0 && (
+                      <p className="mt-1 text-[11.5px] leading-5 text-amber-200/80">
+                        {certificateFill.report.conflicts.length} supplier
+                        {certificateFill.report.conflicts.length === 1 ? "" : "s"} on file disagree
+                        with the uploaded figures — your figures were kept.
+                      </p>
+                    )}
+                    {certificateFill.report.ambiguous.length > 0 && (
+                      <p className="mt-1 text-[11.5px] leading-5 text-[#8e8e93]">
+                        {certificateFill.report.ambiguous.length} name
+                        {certificateFill.report.ambiguous.length === 1 ? "" : "s"} matched more than
+                        one company — left for you to pick in the workbook.
+                      </p>
+                    )}
+                  </>
+                ) : certificateFill.report.registryUnavailable ? (
+                  <p className="text-[11.5px] leading-5 text-[#8e8e93]">
+                    Certificate database unavailable — procurement was left exactly as extracted.
+                  </p>
+                ) : (
+                  <p className="text-[11.5px] leading-5 text-[#8e8e93]">
+                    No new supplier details found in the certificate database.
+                  </p>
+                )}
+              </ReviewSection>
+            )}
           </div>
         </div>
       )}

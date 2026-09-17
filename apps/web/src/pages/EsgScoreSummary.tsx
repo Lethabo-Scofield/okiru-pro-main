@@ -13,6 +13,7 @@ import {
 } from "@/lib/esg/esgTopicScope";
 import { esgCreateHref, esgToolkitHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import { fetchEsgWorkbook, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { EsgReportExportPanel } from "@/components/esg/EsgReportExportPanel";
 import { computeEsgScorecard } from "../../EsgToolkit/src/lib/calculators";
 import "@/styles/esg-glass.css";
 
@@ -235,6 +236,12 @@ export default function EsgScoreSummary() {
                   </p>
                 </div>
               ) : null}
+
+              <EsgReportExportPanel
+                workbook={workbook}
+                companyName={companyName}
+                companyId={companyId}
+              />
 
               <div className="flex flex-wrap gap-3 pt-2">
                 <button

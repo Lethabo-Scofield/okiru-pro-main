@@ -1,13 +1,6 @@
 import { computeNetZeroRoadmap } from "../lib/calculators/netZero";
 import { useEsgStore } from "../lib/esgStore";
 
-const LEVERS = [
-  { lever: "EV Fleet", action: "20% EV by 2030", owner: "Fleet Mgr" },
-  { lever: "Solar", action: "50% renewable by 2030", owner: "Ops" },
-  { lever: "Eco-driving", action: "−10% L/100km", owner: "WSP" },
-  { lever: "Waste", action: "≥75% diversion all depots", owner: "SHEQ" },
-];
-
 export default function EsgNetZero() {
   const workbook = useEsgStore((s) => s.workbook);
   const nz = workbook ? computeNetZeroRoadmap(workbook) : null;
@@ -43,6 +36,8 @@ export default function EsgNetZero() {
               <th className="pb-2">Tier</th>
               <th className="pb-2">Year</th>
               <th className="pb-2">Requirement</th>
+              <th className="pb-2">Reduction</th>
+              <th className="pb-2">Target tCO₂e</th>
               <th className="pb-2">Gap tCO₂e</th>
               <th className="pb-2">Status</th>
             </tr>
@@ -53,23 +48,43 @@ export default function EsgNetZero() {
                 <td className="py-2 text-[var(--esg-text)]">{m.tier}</td>
                 <td className="py-2">{m.year}</td>
                 <td className="py-2 text-[var(--esg-text2)]">{m.requirement}</td>
-                <td className="py-2 tabular-nums">{m.gapTco2e.toLocaleString("en-ZA")}</td>
-                <td className="py-2">{m.onTrack ? "On track" : "Behind"}</td>
+                <td className="py-2 tabular-nums">{(m.reductionRequired * 100).toFixed(0)}%</td>
+                <td className="py-2 tabular-nums">
+                  {nz?.available ? Math.round(m.targetTco2e).toLocaleString("en-ZA") : "—"}
+                </td>
+                <td className="py-2 tabular-nums">
+                  {nz?.available ? Math.round(m.gapTco2e).toLocaleString("en-ZA") : "—"}
+                </td>
+                <td className="py-2">
+                  {!nz?.available ? "No baseline" : m.onTrack ? "On track" : "Behind"}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {nz && !nz.available ? (
+          <p className="text-[11px] text-[var(--esg-text3)] mt-3">
+            Enter the net-zero baseline (E_Data B90) to compute milestone targets and gaps.
+          </p>
+        ) : null}
       </div>
       <div className="esg-glass p-5">
         <h2 className="text-[11px] font-bold uppercase text-[var(--esg-text3)] mb-3">Key levers</h2>
-        <ul className="space-y-2 text-[12px] text-[var(--esg-text2)]">
-          {LEVERS.map((l) => (
-            <li key={l.lever}>
-              <span className="text-[var(--esg-acc-e)] font-medium">{l.lever}</span> — {l.action} (
-              {l.owner})
-            </li>
-          ))}
-        </ul>
+        {nz && nz.levers.length > 0 ? (
+          <ul className="space-y-2 text-[12px] text-[var(--esg-text2)]">
+            {nz.levers.map((l) => (
+              <li key={l.lever}>
+                <span className="text-[var(--esg-acc-e)] font-medium">{l.lever}</span> — {l.action}
+                {l.target ? ` (${l.target})` : ""}
+                {l.owner ? ` — ${l.owner}` : ""}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[12px] text-[var(--esg-text3)]">
+            No net-zero levers captured for this company yet.
+          </p>
+        )}
       </div>
     </div>
   );

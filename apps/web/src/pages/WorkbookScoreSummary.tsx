@@ -1,6 +1,7 @@
+import { EsgAppLink } from "@/components/EsgAppLink";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { Award, ChevronRight, FileText, Loader2, ScanLine, Sparkles } from "lucide-react";
+import { Award, ChevronRight, FileText, Leaf, Loader2, ScanLine, Sparkles } from "lucide-react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
@@ -8,6 +9,7 @@ import { ReconciliationReview } from "@/components/scorecard/ReconciliationRevie
 import type { ReconcileResult } from "@/lib/reconciliation/types";
 import type { VerdictReport, EntityVerdict } from "@/lib/documentVerdicts";
 import { fscSubSectorDisplayLabel, normalizeFscSubSector } from "@toolkit/lib/sectors/fsc-utils";
+import { pillarBonusSplit } from "@toolkit/lib/sectors/sector-labels";
 
 const PILLAR_META: { key: string; label: string; color: string }[] = [
   { key: "ownership", label: "Ownership", color: "#5e9bff" },
@@ -118,20 +120,31 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
 
     return PILLAR_META.map((meta) => {
       const pillar = scorecard[meta.key as keyof typeof scorecard] as
-        | { score?: number; weighting?: number; subMinimumMet?: boolean; isElectiveNotChosen?: boolean; isChosenElective?: boolean; coverageNotes?: string[] }
+        | {
+            score?: number; weighting?: number; subMinimumMet?: boolean;
+            isElectiveNotChosen?: boolean; isChosenElective?: boolean; coverageNotes?: string[];
+            subLines?: Array<{ weighting: number; score: number; isBonus?: boolean }>;
+          }
         | undefined;
       const score = typeof pillar?.score === "number" ? pillar.score : 0;
-      let maxPoints = typeof pillar?.weighting === "number" ? pillar.weighting : 0;
+      const weighting = typeof pillar?.weighting === "number" ? pillar.weighting : 0;
       let label = meta.label;
       if (pillar?.isChosenElective) label = `${meta.label} (chosen elective)`;
       if (pillar?.isElectiveNotChosen) return null;
-      if (maxPoints <= 0 && !transportQse) return null;
-      if (maxPoints <= 0) return null;
+      if (weighting <= 0 && !transportQse) return null;
+      if (weighting <= 0) return null;
+      // The denominator is the element WEIGHTING, not the bonus-inclusive cap.
+      // Showing the merged cap here made an entity on full base points look
+      // short of target (Transport QSE ownership 25/28 = 89%).
+      const split = pillarBonusSplit(weighting, score, pillar?.subLines);
       return {
         code: meta.key,
         label,
         score,
-        maxPoints,
+        maxPoints: split.baseWeight,
+        bonusAvailable: split.bonusAvailable,
+        bonusEarned: split.bonusEarned,
+        baseScore: split.baseScore,
         color: meta.color,
         subMinimumMet: pillar?.subMinimumMet,
         coverageNotes: pillar?.coverageNotes ?? [],
@@ -141,11 +154,27 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
       label: string;
       score: number;
       maxPoints: number;
+      bonusAvailable: number;
+      bonusEarned: number;
+      baseScore: number;
       color: string;
       subMinimumMet?: boolean;
       coverageNotes: string[];
     }>;
   }, [scorecard, client.sectorCode, client.scorecardType]);
+
+  /** Bonus available and earned across the whole scorecard, for the total tile. */
+  const totals = useMemo(
+    () =>
+      pillarRows.reduce(
+        (acc, r) => ({
+          bonusAvailable: acc.bonusAvailable + (r.bonusAvailable || 0),
+          bonusEarned: acc.bonusEarned + (r.bonusEarned || 0),
+        }),
+        { bonusAvailable: 0, bonusEarned: 0 },
+      ),
+    [pillarRows],
+  );
 
   const goToScorecard = () => {
     localStorage.setItem("okiru-pro-active-client", companyId);
@@ -203,6 +232,25 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
           {provisional ? <FileText className="w-4 h-4" /> : <ScanLine className="w-4 h-4" />}
           {provisional ? "Open workbook to refine" : "View Scorecard"}
         </button>
+        {/* Same company, other scorecard. ESG lives in its own micro-app with
+            its own router, so these are native anchors (EsgAppLink) rather
+            than wouter links. */}
+        <EsgAppLink
+          href={`/esg/create/${encodeURIComponent(companyId)}`}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[#d1d1d6] hover:text-white hover:bg-white/[0.08]"
+          data-testid="link-esg-workbook"
+        >
+          <Leaf className="w-4 h-4" />
+          ESG workbook
+        </EsgAppLink>
+        <EsgAppLink
+          href={`/esg/toolkit/${encodeURIComponent(companyId)}`}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[#d1d1d6] hover:text-white hover:bg-white/[0.08]"
+          data-testid="link-esg-toolkit"
+        >
+          <Leaf className="w-4 h-4" />
+          ESG toolkit
+        </EsgAppLink>
       </div>
 
       {/* Provisional framing — the score is real (same calculator) but not the
@@ -238,7 +286,23 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
               <span className="text-[28px] font-bold text-white leading-none tabular-nums">
                 {scorecard.total.score.toFixed(2)}
               </span>
-              <span className="text-[12px] text-[#636366]">of {scorecard.total.weighting} pts</span>
+              <span className="text-[12px] text-[#636366]">
+                of {scorecard.total.weighting} pts
+                {totals.bonusAvailable > 0 && (
+                  <>
+                    {' · '}
+                    <span className={totals.bonusEarned > 0 ? 'text-amber-400' : undefined}>
+                      {totals.bonusEarned.toFixed(2)}/{totals.bonusAvailable} bonus
+                    </span>
+                  </>
+                )}
+              </span>
+              {totals.bonusAvailable > 0 && (
+                <span className="text-[11px] text-[#636366]">
+                  Max reachable {(scorecard.total.weighting + totals.bonusAvailable).toFixed(0)} — bonus is
+                  earned on top of the target, so a score can exceed it.
+                </span>
+              )}
             </div>
             <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
               <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">B-BBEE Level</span>

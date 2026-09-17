@@ -36,6 +36,7 @@ import request from "supertest";
 import bcrypt from "bcryptjs";
 import { storage, MemoryStorage } from "../storage";
 import { registerRoutes } from "../routes";
+import { withStorageReportedAvailable } from "./memoryStorageSession";
 
 interface SeededUser {
   id: string;
@@ -71,9 +72,9 @@ async function seedVerifiedUser(opts: {
 
 async function loginAgent(baseUrl: string, user: SeededUser) {
   const agent = request.agent(baseUrl);
-  const res = await agent
-    .post("/api/auth/login")
-    .send({ username: user.username, password: user.password });
+  const res = await withStorageReportedAvailable(() =>
+    agent.post("/api/auth/login").send({ username: user.username, password: user.password }),
+  );
   if (res.status !== 200) {
     throw new Error(`Login failed for ${user.username}: ${res.status} ${JSON.stringify(res.body)}`);
   }

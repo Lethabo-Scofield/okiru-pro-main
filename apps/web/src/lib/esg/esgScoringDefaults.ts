@@ -3,10 +3,23 @@
  * ESG_Dashboard!D9 = avg(E_pts/100, S_pts/100, G_pts/100).
  */
 
-/** Pillar scorecard maxima (display); overall D9 divides each pillar by 100, not by these maxima. */
-export const ESG_PILLAR_MAX = { environmental: 108, social: 100, governance: 92 } as const;
+/**
+ * Pillar scorecard maxima (display) — the sum of column B on each scorecard sheet.
+ * Cross-checked against ESG_Dashboard!C6/C7/C8, which the workbook hardcodes to
+ * 108 / 100 / 100. Governance was previously 92 here, which made the governance
+ * page render 64.85/92 = 70.5% instead of the workbook's D8 = 64.85%.
+ */
+export const ESG_PILLAR_MAX = { environmental: 108, social: 100, governance: 100 } as const;
 
-/** ESG_Dashboard D9 divisor per pillar — not HTML 40/30/30, not ÷292. */
+/**
+ * ESG_Dashboard!D9 = (E_Scorecard!D30/100 + S_Scorecard!D28/100 + G_Scorecard!D26/100)/3.
+ *
+ * The workbook divides every pillar by a flat 100 — including Environmental,
+ * whose scorecard maximum is 108. That is the workbook's own definition of the
+ * overall score, not an error on our side, so we reproduce it exactly rather
+ * than "correcting" it to ÷ESG_PILLAR_MAX. Changing this divisor would break
+ * parity with ESG_GOLDEN_SG_CONSUMER.overallPercent below.
+ */
 export const ESG_D9_PILLAR_DIVISOR = 100;
 
 /** Workbook v1.7 SG Consumer live golden values (E_Scorecard D30, S_Scorecard D28, G_Scorecard D26). */
@@ -26,13 +39,35 @@ export const ESG_THR_LTIFR = 2.0;
 /** ISO_14083 is reporting-only; excluded from E_Data GHG totals until product says otherwise. */
 export const ESG_ISO_14083_REPORTING_ONLY = true;
 
-export function esgOverallPercent(ePoints: number, sPoints: number, gPoints: number): number {
-  const parts = [ePoints, sPoints, gPoints].map((p) => p / ESG_D9_PILLAR_DIVISOR);
-  return parts.reduce((a, b) => a + b, 0) / parts.length;
+/**
+ * The overall score.
+ *
+ * `denominators` is what each pillar can actually be scored out of once
+ * indicators that do not apply to the company have been excluded — "should not
+ * form part of total" (Z. Mnanzana, Q16, 14 September 2026). Omit it and every
+ * pillar divides by the workbook's flat 100, which is the parity behaviour the
+ * golden fixture asserts and must keep.
+ *
+ * A pillar whose applicable maximum is 0 has no applicable indicators at all.
+ * It is dropped from the average rather than counted as 0%, because scoring a
+ * company zero on a pillar it was never required to report is the same mistake
+ * at the level of the pillar instead of the indicator.
+ */
+export function esgOverallPercent(
+  ePoints: number,
+  sPoints: number,
+  gPoints: number,
+  denominators?: { environmental: number; social: number; governance: number },
+): number {
+  const pairs: [number, number][] = [
+    [ePoints, denominators?.environmental ?? ESG_D9_PILLAR_DIVISOR],
+    [sPoints, denominators?.social ?? ESG_D9_PILLAR_DIVISOR],
+    [gPoints, denominators?.governance ?? ESG_D9_PILLAR_DIVISOR],
+  ];
+  const scored = pairs.filter(([, max]) => max > 0);
+  if (scored.length === 0) return 0;
+  return scored.reduce((a, [p, max]) => a + p / max, 0) / scored.length;
 }
-
-/** @deprecated use esgOverallPercent */
-export const esgOverallPercentPlaceholder = esgOverallPercent;
 
 /**
  * S_Scorecard row 17 — LTIFR points.
@@ -63,11 +98,12 @@ export function esgScoresFromPillars(
   ePoints: number,
   sPoints: number,
   gPoints: number,
+  denominators?: { environmental: number; social: number; governance: number },
 ): EsgPillarScores {
   return {
     environmental: ePoints,
     social: sPoints,
     governance: gPoints,
-    overallPercent: esgOverallPercent(ePoints, sPoints, gPoints),
+    overallPercent: esgOverallPercent(ePoints, sPoints, gPoints, denominators),
   };
 }

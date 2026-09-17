@@ -29,42 +29,60 @@ function inferDataType(text: string): FieldKnowledge['field']['data_type'] {
   return 'string';
 }
 
+/**
+ * Instruction words that are never a field. The expert's prompts are prose
+ * ("Inspect the certificate… Reconcile against… Flag if…"), and mining that
+ * prose for field names produced "inspect", "reconcile", "supporting",
+ * "underlying" and "flag" as EXPECTED FIELDS — which then showed up in every
+ * user's missing-field list as things the document "did not contain".
+ */
+const INSTRUCTION_WORDS = new Set([
+  'return', 'json', 'object', 'fields', 'list', 'bool', 'date', 'amount', 'with',
+  'inspect', 'reconcile', 'compare', 'confirm', 'verify', 'check', 'ensure', 'flag',
+  'extract', 'read', 'note', 'record', 'supporting', 'underlying', 'against', 'then',
+  'also', 'plus', 'each', 'all', 'any', 'the', 'and', 'for', 'per', 'from', 'into',
+  'absent', 'expired', 'present', 'missing', 'where', 'when', 'must', 'should',
+]);
+
+/**
+ * Field names ONLY from an explicit JSON list ("Return JSON: a, b, c"). A prompt
+ * with no such list yields nothing — prose is not a schema, and an invented
+ * field is worse than none: it becomes a "missing" line in the user's review.
+ * The list ends at the first sentence break, so trailing instructions
+ * ("If absent or expired, flag — zero points") do not leak in.
+ */
 function extractJsonFieldNames(instruction: string): string[] {
   const matches = [
     ...instruction.matchAll(/Return\s+(?:a\s+)?JSON(?:\s+object)?(?:\s+with(?:\s+fields)?)?\s*:\s*([\s\S]+)/gi),
     ...instruction.matchAll(/Extract\s+(?:and\s+return\s+)?JSON\s*:\s*([\s\S]+)/gi),
     ...instruction.matchAll(/with\s+columns\s*:\s*([\s\S]+)/gi),
-    ...instruction.matchAll(/with\s*:\s*([\s\S]+)/gi),
   ];
-  const source = matches[0]?.[1] || instruction;
-  const cleaned = source
+  const source = matches[0]?.[1];
+  if (!source) return [];
+  const list = source
+    .split(/\.\s+[A-Z]|\n\n|\bIf\b|\bFlag\b|\bThen\b/)[0]
     .replace(/\([^)]*\)/g, '')
     .replace(/\[[^\]]*\]/g, '')
     .replace(/\bwith fields\b/gi, '')
     .replace(/\bper\b.*$/gi, '');
 
-  const fields = cleaned
+  const fields = list
     .split(/,|;|\band\b|\n/)
     .map((part) => part.trim())
     .map((part) => part.match(/[a-z][a-z0-9_]*(?:\s*→\s*[a-z0-9_]+)?/i)?.[0] || '')
     .map((part) => part.replace(/\s*→\s*/g, '_').toLowerCase())
     .filter((part) => /^[a-z][a-z0-9_]{2,64}$/.test(part))
-    .filter((part) => !['return', 'json', 'object', 'fields', 'list', 'bool', 'date', 'amount'].includes(part));
+    .filter((part) => !INSTRUCTION_WORDS.has(part));
 
   return Array.from(new Set(fields));
 }
 
-function splitExpectedFields(expectedData: string, auditorChecks: string, instruction: string): string[] {
+function splitExpectedFields(_expectedData: string, _auditorChecks: string, instruction: string): string[] {
   const jsonFields = extractJsonFieldNames(instruction);
-  if (jsonFields.length > 0) return jsonFields;
-
-  const source = [expectedData, auditorChecks, instruction].filter(Boolean).join('\n');
-  const candidates = source
-    .split(/\n|;|\u2022|, (?=[A-Z])/)
-    .map((part) => part.replace(/^[\-\d.)\s]+/, '').trim())
-    .filter((part) => part.length > 2 && part.length < 100)
-    .map(fieldNameFromLabel);
-  return Array.from(new Set(candidates.length > 0 ? candidates.slice(0, 8) : ['primary_evidence']));
+  // No declared schema \u2192 one honest placeholder, never prose mined into
+  // fields. (The AI extraction path reads these documents from the matrix's
+  // own prompt; the deterministic path has nothing real to look for here.)
+  return jsonFields.length > 0 ? jsonFields : ['primary_evidence'];
 }
 
 function fieldNameFromLabel(label: string): string {

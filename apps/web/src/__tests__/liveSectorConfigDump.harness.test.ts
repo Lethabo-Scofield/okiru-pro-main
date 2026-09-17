@@ -26,6 +26,8 @@ const PILLARS = [
   'supplierDevelopment',
   'enterpriseDevelopment',
   'socioEconomicDevelopment',
+  // MAC only - the sixth gazetted element.
+  'responsibleSocialMarketing',
   'yesInitiative',
 ] as const;
 
@@ -34,20 +36,41 @@ suite('live sector config dump', () => {
     const out: Record<string, unknown> = {};
 
     for (const [name, value] of Object.entries(configs)) {
-      const sc = value as SectorConfig;
-      if (!sc || typeof sc !== 'object' || !('pillarConfigs' in sc) || !('sectorCode' in sc)) continue;
+      const raw = value as SectorConfig;
+      if (!raw || typeof raw !== 'object' || !('pillarConfigs' in raw) || !('sectorCode' in raw)) continue;
+      // Read the ENRICHED config, not the raw export: attachSubElements() runs
+      // when ALL_CONFIGS is built, so the exported const carries no subElements
+      // and every pillar would be reported as having no indicator breakdown.
+      const sc = configs.getSectorConfig(raw.sectorCode, raw.scorecardType);
 
-      const pillars: Record<string, { max: number; base: number | null; bonus: number }> = {};
+      const pillars: Record<string, {
+        max: number; base: number | null; bonus: number;
+        breakdownRows: number; breakdownSum: number;
+        subMinPercent: number | null; elective: string | null;
+      }> = {};
       for (const p of PILLARS) {
-        const pc = (sc.pillarConfigs as Record<string, { maxPoints: number; basePoints?: number } | undefined>)[p];
+        const pc = (sc.pillarConfigs as Record<string, {
+          maxPoints: number; basePoints?: number; hasSubMinimum?: boolean;
+          subMinimumPercent?: number; chooseOneGroup?: string;
+          subElements?: Array<{ criteria: string; points: number }>;
+          indicators?: Array<{ weight: number }>;
+        } | undefined>)[p];
         if (!pc) continue;
         const base = pc.basePoints ?? null;
+        // Itemised indicator detail, for the "what breakdowns are we missing"
+        // report. Construction carries `indicators` instead of `subElements`.
+        const rows = pc.subElements ?? [];
+        const rowSum = rows.reduce((n, r) => n + (r.points || 0), 0);
         pillars[p] = {
           max: pc.maxPoints,
           base,
+          breakdownRows: rows.length,
+          breakdownSum: Number(rowSum.toFixed(2)),
           // Bonus is only KNOWN where the config declares basePoints. Elsewhere
           // it is reported as 0 = "not declared", never guessed.
           bonus: base == null ? 0 : Math.max(0, pc.maxPoints - base),
+          subMinPercent: pc.hasSubMinimum ? (pc.subMinimumPercent ?? null) : null,
+          elective: pc.chooseOneGroup ?? null,
         };
       }
 
@@ -59,10 +82,60 @@ suite('live sector config dump', () => {
       const pr = t?.procurement ?? {};
       const esd = t?.esd ?? {};
 
+      /**
+       * Target vs maximum reachable.
+       *
+       * `totalMaxPoints` is the DENOMINATOR the level thresholds are read
+       * against. `reachable` is the highest score actually attainable once bonus
+       * points are added — they are earned ON TOP of the weighting, which is why
+       * a real certificate can report 102 out of 100.
+       *
+       * Elective sectors complicate the sum: Transport QSE measures any FOUR of
+       * seven elements, so its reachable max is the four highest CAPS
+       * (28+27+27+25 = 107), not the sum of all seven.
+       */
+      const groupSizes = (sc as { electiveGroupSizes?: Record<string, number> }).electiveGroupSizes ?? {};
+      const grouped = new Map<string, number[]>();
+      let ungroupedMax = 0;
+      let ungroupedBase = 0;
+      // Iterate the config's OWN keys, not the fixed PILLARS list — FSC
+      // sub-sectors add empowermentFinancing and accessToFinancialServices, and
+      // omitting them understated FSC Banks' reachable max as 105 against a
+      // 132-point scorecard.
+      const allPillarKeys = Object.keys(sc.pillarConfigs ?? {});
+      for (const p of allPillarKeys) {
+        const pc = (sc.pillarConfigs as Record<string, { maxPoints: number; basePoints?: number; chooseOneGroup?: string } | undefined>)[p];
+        if (!pc || pc.maxPoints <= 0) continue;
+        if (pc.chooseOneGroup) {
+          if (!grouped.has(pc.chooseOneGroup)) grouped.set(pc.chooseOneGroup, []);
+          grouped.get(pc.chooseOneGroup)!.push(pc.maxPoints);
+        } else {
+          ungroupedMax += pc.maxPoints;
+          ungroupedBase += pc.basePoints ?? pc.maxPoints;
+        }
+      }
+      let reachable = ungroupedMax;
+      for (const [group, caps] of grouped) {
+        const take = groupSizes[group] ?? 1;
+        reachable += caps.sort((a, b) => b - a).slice(0, take).reduce((n, c) => n + c, 0);
+      }
+      const bonusAvailable = Object.values(pillars).reduce((n, p) => n + p.bonus, 0);
+
       out[name] = {
         sectorCode: sc.sectorCode,
         scorecardType: sc.scorecardType,
+        sectorName: (sc as { sectorName?: string }).sectorName ?? name,
+        /** Level ladder — minimum points per B-BBEE level, best first. */
+        levels: (sc.levelThresholds ?? []).map((l) => ({ level: l.level, min: l.minPoints })),
+        /** How many members of each elective group are measured. */
+        electiveGroupSizes: (sc as { electiveGroupSizes?: Record<string, number> }).electiveGroupSizes ?? {},
         totalMaxPoints: sc.totalMaxPoints,
+        /** Highest attainable score including bonus. */
+        reachableMax: reachable,
+        /** Bonus declared across pillars (only where basePoints is set). */
+        bonusAvailable,
+        /** Sum of element weightings for pillars outside any elective group. */
+        ungroupedBase,
         pillarSum: Object.values(pillars).reduce((n, p) => n + p.max, 0),
         pillars,
         // Flat view keyed exactly as docs/toolkits/compare_all.py expects, so the

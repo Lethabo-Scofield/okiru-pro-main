@@ -1,5 +1,4 @@
 import { Router, type Request as ExpressRequest, type Response } from 'express';
-import { checkArangoHealth } from '../../arango/connection.js';
 import { mongoose } from '../../db.js';
 import { checkCertificateBlobStorage } from '../services/azureCertStorage.js';
 
@@ -10,7 +9,7 @@ const isProd = process.env.NODE_ENV === "production";
 
 // Liveness probe — returns 200 unless the process is misbehaving. Used by k8s
 // liveness probes, which restart the pod on failure. We deliberately DON'T fail
-// liveness on Mongo/Arango outages (restarting the pod won't fix downstream).
+// liveness on MongoDB outages (restarting the pod won't fix downstream).
 router.get('/health', (_req: Request, res: Response) => {
   return res.json({
     status: 'ok',
@@ -41,7 +40,6 @@ router.get('/ready', async (_req: Request, res: Response) => {
       });
     }
   }
-  const arangoHealth = await checkArangoHealth().catch(() => ({ status: 'error' }));
   const blobStorage = await checkCertificateBlobStorage();
 
   const body = {
@@ -50,7 +48,6 @@ router.get('/ready', async (_req: Request, res: Response) => {
     uptime: process.uptime(),
     environment: isProd ? 'production' : 'development',
     mongo: { connected: mongoOk, readyState: mongoState, pingMs: mongoPingMs },
-    arangodb: arangoHealth,
     blob_storage: blobStorage,
   };
   return res.status(mongoOk ? 200 : 503).json(body);

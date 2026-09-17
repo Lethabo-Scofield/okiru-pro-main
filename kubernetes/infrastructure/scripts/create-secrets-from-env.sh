@@ -44,21 +44,6 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "Environment Variables Mapping:"
       echo "  MONGO_*             -> mongodb-credentials"
-      echo "  ARANGO_*            -> arangodb-credentials"
-      echo "  REDIS_*             -> redis-credentials"
-      echo "  JWT_SECRET          -> session-secrets"
-      echo "  SESSION_SECRET      -> session-secrets"
-      echo "  API_INTERNAL_KEY    -> session-secrets"
-      echo "  ACR_*               -> acr-pull-secret"
-      exit 0
-      ;;
-    *)
-      echo "Unknown option: $1"
-      exit 1
-      ;;
-  esac
-done
-
 if [[ -z "$ENV_FILE" ]]; then
   echo "Error: --env-file is required"
   echo "Run with --help for usage information"
@@ -120,12 +105,6 @@ MONGO_SECRET=$(create_secret_manifest "mongodb-credentials" \
   "MONGODB_DB_NAME")
 
 # Generate arangodb-credentials secret
-echo "Generating arangodb-credentials secret..."
-ARANGO_SECRET=$(create_secret_manifest "arangodb-credentials" \
-  "ARANGO_ROOT_PASSWORD" \
-  "ARANGO_URL" \
-  "ARANGO_DB_NAME")
-
 # Generate redis-credentials secret
 echo "Generating redis-credentials secret..."
 REDIS_SECRET=$(create_secret_manifest "redis-credentials" \
@@ -149,7 +128,6 @@ EXTERNAL_SECRET=$(create_secret_manifest "external-api-keys" \
   "SMTP_PASSWORD")
 
 # Combine all secrets
-ALL_SECRETS="${MONGO_SECRET}${ARANGO_SECRET}${REDIS_SECRET}${SESSION_SECRET}${EXTERNAL_SECRET}"
 
 # Output or apply
 if [[ "$DRY_RUN" == true ]]; then

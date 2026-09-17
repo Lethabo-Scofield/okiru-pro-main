@@ -237,6 +237,28 @@ export interface AnalyseOptions {
  * failed document must not be recorded as "no data", which would be
  * indistinguishable from a certificate that genuinely lacks the field.
  */
+/**
+ * Content type from the BYTES, not from an assumption.
+ *
+ * The call used to declare every upload `application/pdf`. Roughly 18 of the
+ * archived certificates are .png/.jpg scans, and Document Intelligence answers
+ * a mislabelled image with `400 UnsupportedContent` — which the caller then
+ * records as a permanent failure, so those certificates could never be read at
+ * any price.
+ */
+function sniffContentType(buffer: Buffer): string {
+  if (buffer.length >= 4 && buffer.toString('latin1', 0, 4) === '%PDF') return 'application/pdf';
+  if (buffer.length >= 8 && buffer.toString('hex', 0, 8) === '89504e470d0a1a0a') return 'image/png';
+  if (buffer.length >= 3 && buffer.toString('hex', 0, 3) === 'ffd8ff') return 'image/jpeg';
+  if (buffer.length >= 12 && buffer.toString('latin1', 8, 12) === 'WEBP') return 'image/webp';
+  if (buffer.length >= 4) {
+    const h = buffer.toString('hex', 0, 4);
+    if (h === '49492a00' || h === '4d4d002a') return 'image/tiff';
+  }
+  // Unknown: let the service decide rather than asserting a type it will reject.
+  return 'application/octet-stream';
+}
+
 export async function analyseCertificate(
   buffer: Buffer,
   opts: AnalyseOptions,
@@ -249,7 +271,7 @@ export async function analyseCertificate(
     `${endpoint}/formrecognizer/documentModels/prebuilt-document:analyze?api-version=${API_VERSION}`,
     {
       method: 'POST',
-      headers: { 'Ocp-Apim-Subscription-Key': opts.apiKey, 'Content-Type': 'application/pdf' },
+      headers: { 'Ocp-Apim-Subscription-Key': opts.apiKey, 'Content-Type': sniffContentType(buffer) },
       body: new Uint8Array(buffer),
     },
   );

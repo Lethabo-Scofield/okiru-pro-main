@@ -71,12 +71,15 @@ async function main() {
     projection: { _id: 0, id: 1, blobName: 1, supplierName: 1, fileSize: 1, ...Object.fromEntries(GAP_FIELDS.map((f) => [f, 1])) },
   }).limit(Number.isFinite(LIMIT) ? LIMIT : 0).toArray() as Record<string, any>[];
 
-  // Real page counts are only known after analysis; 1.8 is the measured mean.
-  const estPages = Math.round(targets.length * 1.8);
+  // Real page counts are only known after analysis. 2.2 is the mean measured
+  // across ALL 2,913 readable PDFs in docs/Certificates (6,423 pages), not a
+  // head-of-list sample: the 1.8 that used to sit here under-quoted the August
+  // run by 22% because affidavits run 2-4 pages and a small pilot missed them.
+  const estPages = Math.round(targets.length * 2.2);
   console.log(`\n${'='.repeat(66)}\nTARGETED DOC INTELLIGENCE BACKFILL\n${'='.repeat(66)}`);
   console.log(`  registry total          : ${total}`);
   console.log(`  missing >=1 key field   : ${targets.length}`);
-  console.log(`  estimated pages         : ~${estPages} (at the measured 1.8 pages/cert)`);
+  console.log(`  estimated pages         : ~${estPages} (at the measured 2.2 pages/cert)`);
   console.log(`  ESTIMATED COST          : ~$${(estPages * USD_PER_PAGE).toFixed(2)}`);
   for (const f of GAP_FIELDS) {
     const n = targets.filter((d) => !d[f]).length;

@@ -31,7 +31,7 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { cn, formatRand } from "@toolkit/lib/utils";
-import { pillarBreakdownSubtitle, summarizeSubLines } from "@toolkit/lib/sectors/sector-labels";
+import { activeSectorDisplayLabel, pillarBreakdownSubtitle, summarizeSubLines } from "@toolkit/lib/sectors/sector-labels";
 import type { Employee } from "@toolkit/lib/types";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import * as XLSX from "xlsx";
@@ -813,11 +813,27 @@ export default function ManagementControl() {
         </div>
       </div>
 
-      {smjNotAvailable && (
+      {/*
+        Gated on `!transportMc` and labelled from the live config.
+        `smjNotAvailable` is a STRUCTURAL test (Senior/Middle/Junior all zero), and
+        it is true for eight configs — the four FSC ones, Transport QSE and all
+        three Construction. Hardcoding "FSC" therefore told every Transport and
+        Construction client they were being measured under the Financial Sector
+        Code. Transport is excluded outright: it does not use this page's generic
+        MC calculator at all (see `transportMc`), so the banner described a
+        scorecard that was not being applied.
+        The Other-Exec targets are read from the config rather than the old
+        literal "75% / 38%", which is FSC Others' shape and not every sector's.
+      */}
+      {smjNotAvailable && !transportMc && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-100">
-          <strong>FSC Management Control:</strong> Senior, Middle, and Junior bands are permanently{" "}
-          <strong>NOT AVAILABLE</strong> (0 pts each). Scoring applies to Board, Executive Directors,
-          Other Executive Management (75% / 38% targets), and Employees with Disabilities only.
+          <strong>{activeSectorDisplayLabel(client, calculatorConfig)} Management Control:</strong>{" "}
+          Senior, Middle, and Junior bands are <strong>NOT AVAILABLE</strong> (0 pts each) on this
+          scorecard. Scoring applies to Board, Executive Directors, Other Executive Management
+          {typeof mcCfg?.otherExecBlackTarget === "number" && typeof mcCfg?.otherExecBWTarget === "number"
+            ? ` (${(mcCfg.otherExecBlackTarget * 100).toFixed(0)}% / ${(mcCfg.otherExecBWTarget * 100).toFixed(0)}% targets)`
+            : ""}
+          , and Employees with Disabilities only.
         </div>
       )}
 

@@ -35,7 +35,13 @@ export function hasDataScopeRole(user: RoleCarrier | null | undefined, ...roles:
   return roles.some((r) => scope.includes(r));
 }
 
-/** Platform admin: primary or secondary admin/super_admin. */
+/**
+ * Platform admin: cross-ORGANISATION reach - `super_admin` only.
+ *
+ * `admin` is the tenant administrator (ALL_PERMISSIONS *inside* one org, see
+ * permissions.ts) and is handed to every registrant for their own company, so
+ * it must never gate a cross-tenant surface. Mirrors apps/web/server/roles.ts.
+ */
 export function isPlatformAdmin(user: RoleCarrier | null | undefined): boolean {
-  return hasAnyRole(user, "admin", "super_admin");
+  return hasAnyRole(user, "super_admin");
 }

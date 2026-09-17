@@ -83,7 +83,12 @@ export interface ContributionInput {
   beneficiary: string;
   type: string;
   amount: number;
-  category: 'sd' | 'ed' | 'sed';
+  /**
+   * 'unclassified' is counted by NO pillar — the SD/ED/SED loops skip it.
+   * Upstream used to default an unknown category to 'ed', so a row whose
+   * SD-vs-ED split nobody stated quietly scored as Enterprise Development.
+   */
+  category: 'sd' | 'ed' | 'sed' | 'unclassified';
   benefitFactor?: number;
 }
 
@@ -145,6 +150,18 @@ export interface AllPillarScores {
   recognitionLevel: number;
   isDiscounted: boolean;
   discountedLevel: number;
+  /**
+   * Facts about the INPUT that a score alone cannot carry.
+   *
+   * `unrecognisedContributionTypes` are contribution types no factor table
+   * knows. They scored zero — correct arithmetic, but indistinguishable in the
+   * total from contributions that were never made. Anything presenting this
+   * scorecard should show them, because they are the difference between "you
+   * did not qualify" and "we could not read your evidence".
+   */
+  dataQuality: {
+    unrecognisedContributionTypes: string[];
+  };
 }
 
 /** Which Transport QSE scorecard elements are measured (exactly four). Maps to toolkit sheet2 elements. */
@@ -484,35 +501,16 @@ function getEAP(province: string, level: string): EAPValues {
 // Benefit factors for ESD/SED
 // ---------------------------------------------------------------------------
 
-const DEFAULT_BENEFIT_FACTORS_SD: Record<string, number> = {
-  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
-  overhead_costs: 1.0, interest_free_loan: 1.0,
-  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
-  minority_investment: 1.0, professional_services_free: 1.0,
-  professional_services_discounted: 0.8, professional_services_discount: 0.8,
-  employee_time: 1.0, shorter_payment_periods: 0.7, shorter_payment_terms: 0.7,
-  equity_investment: 0.0,
-};
-
-const DEFAULT_BENEFIT_FACTORS_ED: Record<string, number> = {
-  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
-  overhead_costs: 1.0, interest_free_loan: 1.0,
-  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
-  minority_investment: 1.0, professional_services_free: 1.0,
-  professional_services_discounted: 0.8, professional_services_discount: 0.8,
-  employee_time: 1.0, shorter_payment_periods: 0.0, shorter_payment_terms: 0.0,
-  equity_investment: 1.0,
-};
-
-const DEFAULT_BENEFIT_FACTORS_SED: Record<string, number> = {
-  grant: 1.0, direct_cost: 1.0, cost_covering: 1.0, discounts: 1.0,
-  overhead_costs: 0.8, interest_free_loan: 1.0,
-  standard_loan: 0.7, guarantees: 0.03, lower_interest_rate: 0.7, lower_interest_loan: 0.7,
-  minority_investment: 1.0, professional_services_free: 1.0,
-  professional_services_discounted: 0.8, professional_services_discount: 0.8,
-  employee_time: 0.8, shorter_payment_periods: 0.7, shorter_payment_terms: 0.7,
-  equity_investment: 1.0,
-};
+// The tables themselves now live in ./benefitFactors.ts alongside the toolkit's
+// competing set, because the two disagree on real numbers and that
+// disagreement needs to be visible rather than spread across two files.
+import {
+  benefitFactorFor,
+  UnrecognisedTypeLog,
+  PIPELINE_BENEFIT_FACTORS_SD as DEFAULT_BENEFIT_FACTORS_SD,
+  PIPELINE_BENEFIT_FACTORS_ED as DEFAULT_BENEFIT_FACTORS_ED,
+  PIPELINE_BENEFIT_FACTORS_SED as DEFAULT_BENEFIT_FACTORS_SED,
+} from './benefitFactors.js';
 
 // ---------------------------------------------------------------------------
 // Recognition table
@@ -579,45 +577,66 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
     }
   }
 
-  const fullOwnership = totalBlackVoting >= ot.votingRightsTarget && hasShares;
+  // EVERY indicator scores on its own measure (Statement 100; Annexe 100).
+  //
+  // The old fast path awarded FULL economic interest, FULL black-women EI,
+  // a hardcoded `dg = 3` and FULL net value the moment black VOTING crossed
+  // 25% — inventing points for indicators the entity never evidenced. A
+  // 26%-black-voting entity with zero black women collected the black-women
+  // EI maximum. Removed per docs/calculator-audit-2026-07-26.md item 12(a),
+  // and to match what docs/Okiru-Sector-Configuration-Reference.pdf (sent to
+  // the sector expert 2026-08-13) already states this engine does:
+  // "points = (actual / target) x weighting".
+  //
+  // The web calculator (Toolkit/src/lib/calculators/ownership.ts) was fixed on
+  // 2026-07-26; this server copy is the one /api/calculate actually runs, so
+  // the fix had to land here too.
+  const vrBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
+  const vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
 
-  let vrBlack: number, vrBWO: number, eiBlack: number, eiBWO: number;
-  let dg: number, ne: number, nv: number;
+  // Economic interest is a PLAIN ratio to target. The time-graduation factor
+  // previously sat here inside a max() that always selected the graduated
+  // formula (factor <= 1 makes it the larger), inflating EI for young deals.
+  // Annexe 100(E) graduates the NET VALUE target, not EI. (Audit item 12(b).)
+  const eiBlack = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.economicInterestMaxPts), ot.economicInterestMaxPts);
+  const eiBWO = clampScore(safeRatio(totalEIBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
+  const dg = clampScore(safeRatio(totalDG, 0.10, 3), 3);
+  const ne = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
 
-  if (fullOwnership) {
-    vrBlack = ot.votingRightsMaxPts;
-    vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
-    eiBlack = ot.economicInterestMaxPts;
-    eiBWO = ot.womenEIMaxPts;
-    dg = 3;
-    ne = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
-    nv = ot.netValueMaxPts;
-  } else {
-    vrBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
-    vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
-
+  let nv: number;
+  const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
+  if (hasNetValue) {
+    // Annexe 100(E): the net-value target phases in over ten years, so a young
+    // deal is measured against the SMALLER target.
+    // Annexe 100(C)/(E): net-value POINTS = (achieved net-value % / target) x
+    // maxPts, where the target is the EI target graduated over the first ten
+    // years. `netValueAgg` is a FRACTION (a debt-free 100% black owner gives
+    // 1.0), so it must be scored against that target — clamping the raw
+    // fraction against an 8-point maximum awarded 1 of 8 and made providing a
+    // valuation score WORSE than omitting one. This branch was unreachable
+    // before the fast path above was removed, which is why it went unnoticed.
     const gradFactor = getGraduationFactor(yearsHeld);
-    const formulaA = gradFactor > 0 ? totalEI * (1 / (ot.economicInterestTarget * gradFactor)) * ot.economicInterestMaxPts : 0;
-    const formulaB = (totalEI / ot.economicInterestTarget) * ot.economicInterestMaxPts;
-    eiBlack = clampScore(Math.max(formulaA, formulaB), ot.economicInterestMaxPts);
-
-    eiBWO = clampScore(safeRatio(totalEIBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
-    dg = clampScore(safeRatio(totalDG, 0.10, 3), 3);
-    ne = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
-
-    const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
-    if (hasNetValue) {
-      nv = clampScore(netValueAgg, ot.netValueMaxPts);
-    } else {
-      nv = totalBlackVoting >= 1.0
-        ? ot.netValueMaxPts
-        : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
-    }
+    const nvTarget = ot.economicInterestTarget * (gradFactor > 0 ? gradFactor : 1);
+    nv = clampScore(safeRatio(netValueAgg, nvTarget, ot.netValueMaxPts), ot.netValueMaxPts);
+  } else if (outstandingDebt > 0) {
+    // Recorded acquisition debt with NO valuation cannot be netted — Annexe
+    // 100(C) needs the equity value to weigh the debt against. Award nothing
+    // rather than invent a figure; the points wait for a valuation.
+    nv = 0;
+  } else {
+    // No valuation AND no debt: Annexe 100(C) reduces to black ECONOMIC
+    // INTEREST, because debt = 0 cancels the valuation out of the formula.
+    // The old fallback scored this from VOTING — the wrong measure entirely.
+    const gradFactor = getGraduationFactor(yearsHeld);
+    const graduatedTarget = ot.economicInterestTarget * (gradFactor > 0 ? gradFactor : 1);
+    nv = clampScore(safeRatio(totalEI, graduatedTarget, ot.netValueMaxPts), ot.netValueMaxPts);
   }
 
   const total = clampScore(vrBlack + vrBWO + eiBlack + eiBWO + dg + ne + nv, maxTotal);
   const netValueSubMinThreshold = ot.netValueMaxPts * (cfg.pillarConfigs.ownership.subMinimumPercent / 100);
-  const subMinimumMet = fullOwnership || nv >= netValueSubMinThreshold;
+  // Was `fullOwnership || nv >= threshold` — the deleted fast path also spared
+  // the entity its one-level discount. The sub-minimum is now measured, only.
+  const subMinimumMet = nv >= netValueSubMinThreshold;
 
   return { score: r2(total), maxPoints: maxTotal, subMinimumMet };
 }
@@ -779,6 +798,19 @@ function mapCategory(cat?: string): string {
 // ===========================================================================================
 
 function calcProcurement(suppliers: SupplierInput[], tmps: number, cfg: SectorConfig): PillarScore {
+  // A TMPS smaller than its own supplier schedule is a misplaced or mis-scaled
+  // figure (Thandanani: a 23-row count landed here and every line clamped to
+  // full marks off spend/23). Treated as missing — targets go to 0 and
+  // safeRatio scores nothing — mirroring the web calculator, which also flags
+  // it to the user.
+  // A schedule's SUM may legitimately exceed TMPS (Codes-excluded rows sit in
+  // schedules but not in the measured total — Lake Trading runs 1.6% over), so
+  // only the single-supplier test applies, with a 2x margin: a real
+  // misplacement is orders of magnitude off.
+  if (tmps > 0 && suppliers.length > 0) {
+    const largest = suppliers.reduce((m, s) => Math.max(m, Number(s.spend) || 0), 0);
+    if (largest > tmps * 2) tmps = 0;
+  }
   const pc = cfg.targets.procurement;
   const maxPoints = cfg.pillarConfigs.preferentialProcurement.maxPoints;
   const subMinPct = cfg.pillarConfigs.preferentialProcurement.subMinimumPercent;
@@ -844,6 +876,7 @@ function calcEsd(
   graduationBonus: boolean,
   jobsCreatedBonus: boolean,
   cfg: SectorConfig,
+  unrecognised: UnrecognisedTypeLog = new UnrecognisedTypeLog(),
 ): { sd: PillarScore; ed: PillarScore } {
   const et = cfg.targets.esd;
   const sdMaxPts = cfg.pillarConfigs.supplierDevelopment.maxPoints;
@@ -857,14 +890,22 @@ function calcEsd(
 
   const factors = buildBenefitLookup(cfg);
   let sdSpend = 0, edSpend = 0;
+  // An unrecognised contribution type contributes NOTHING — it used to fall
+  // through to 1.0, so a misread type was rewarded rather than flagged (a
+  // guarantees row carries 0.03; misread it scored 1.0, a 33x overstatement).
+  // Zero is the right arithmetic, but zero ALONE is the mirror-image defect:
+  // a real contribution vanishes from the score with nothing said. The log
+  // travels out with the result so the caller can say it.
   for (const c of contributions) {
-    if (c.category === 'sd') {
-      const factor = factors.sd[c.type] ?? c.benefitFactor ?? 1.0;
-      sdSpend += c.amount * factor;
-    } else if (c.category === 'ed') {
-      const factor = factors.ed[c.type] ?? c.benefitFactor ?? 1.0;
-      edSpend += c.amount * factor;
+    if (c.category !== 'sd' && c.category !== 'ed') continue;
+    const table = c.category === 'sd' ? factors.sd : factors.ed;
+    const declared = benefitFactorFor(c.type, table);
+    if (!declared.recognised && (c.benefitFactor === undefined || c.benefitFactor === null)) {
+      unrecognised.record(c.type);
     }
+    const factor = declared.recognised ? declared.factor : (c.benefitFactor ?? 0);
+    if (c.category === 'sd') sdSpend += c.amount * factor;
+    else edSpend += c.amount * factor;
   }
 
   const sdScore = safeRatio(sdSpend, sdTarget, et.sdMaxPts);
@@ -885,7 +926,12 @@ function calcEsd(
 // SED (ported from frontend esd-sed.ts)
 // ===========================================================================================
 
-function calcSed(contributions: ContributionInput[], npat: number, cfg: SectorConfig): PillarScore {
+function calcSed(
+  contributions: ContributionInput[],
+  npat: number,
+  cfg: SectorConfig,
+  unrecognised: UnrecognisedTypeLog = new UnrecognisedTypeLog(),
+): PillarScore {
   const maxPoints = cfg.pillarConfigs.socioEconomicDevelopment.maxPoints;
   const effectiveNpat = Math.max(npat, 0);
   const target = effectiveNpat * (cfg.targets.sed.spendPercent / 100);
@@ -893,7 +939,13 @@ function calcSed(contributions: ContributionInput[], npat: number, cfg: SectorCo
   let totalSpend = 0;
   for (const c of contributions) {
     if (c.category !== 'sed') continue;
-    const factor = DEFAULT_BENEFIT_FACTORS_SED[c.type] ?? c.benefitFactor ?? 1.0;
+    // Unrecognised type -> no recognition, and it is REPORTED. See the SD/ED
+    // note above: silent zero is the mirror image of the generous default.
+    const declared = benefitFactorFor(c.type, DEFAULT_BENEFIT_FACTORS_SED);
+    if (!declared.recognised && (c.benefitFactor === undefined || c.benefitFactor === null)) {
+      unrecognised.record(c.type);
+    }
+    const factor = declared.recognised ? declared.factor : (c.benefitFactor ?? 0);
     totalSpend += c.amount * factor;
   }
 
@@ -988,8 +1040,6 @@ function calcTransportLargeOwnership(
     }
   }
 
-  const fullOwnership = totalBlackVoting >= ot.votingRightsTarget && hasShares;
-
   const vrBlack = clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.votingRightsMaxPts), ot.votingRightsMaxPts);
   const vrBWO = clampScore(safeRatio(totalBlackWomenVoting, ot.womenVotingTarget, ot.womenVotingMaxPts), ot.womenVotingMaxPts);
   const eiBlack = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.economicInterestMaxPts), ot.economicInterestMaxPts);
@@ -1003,10 +1053,15 @@ function calcTransportLargeOwnership(
   const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
   if (hasNetValue) {
     nv = clampScore(netValueAgg, ot.netValueMaxPts);
+  } else if (outstandingDebt > 0) {
+    // Recorded acquisition debt with no valuation cannot be netted — award
+    // nothing rather than invent a figure. (Audit item 12, net-value measure.)
+    nv = 0;
   } else {
-    nv = totalBlackVoting >= 1.0
-      ? ot.netValueMaxPts
-      : clampScore(safeRatio(totalBlackVoting, ot.votingRightsTarget, ot.netValueMaxPts), ot.netValueMaxPts);
+    // No valuation and no debt: net value reduces to black ECONOMIC INTEREST.
+    // This previously scored from VOTING against the VOTING target — a
+    // different measure, so 25% voting paid full net value on no evidence.
+    nv = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.netValueMaxPts), ot.netValueMaxPts);
   }
 
   const fulfil = totalBlackVoting >= ot.votingRightsTarget && totalEI >= ot.economicInterestTarget ? 1 : 0;
@@ -1017,7 +1072,7 @@ function calcTransportLargeOwnership(
   const netValueSubMinThreshold = ot.netValueMaxPts * (cfg.pillarConfigs.ownership.subMinimumPercent / 100);
   const subMinimumMet = cfg.pillarConfigs.ownership.subMinimumPercent <= 0
     ? true
-    : (fullOwnership || nv >= netValueSubMinThreshold);
+    : nv >= netValueSubMinThreshold;
 
   return { score: r2(total), maxPoints: maxTotal, subMinimumMet };
 }
@@ -1273,8 +1328,9 @@ export function calculateAllPillars(
       : calcProcurement(suppliers, financials.tmps, config);
   }
 
-  const { sd, ed } = calcEsd(contributions, effectiveNpat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, cfgEffective);
-  const sed = calcSed(contributions, effectiveNpat, cfgEffective);
+  const unrecognised = new UnrecognisedTypeLog();
+  const { sd, ed } = calcEsd(contributions, effectiveNpat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, cfgEffective, unrecognised);
+  const sed = calcSed(contributions, effectiveNpat, cfgEffective, unrecognised);
   const yes = calcYes(trainingPrograms, employees.length);
 
   const totalPoints = ownership.score + management.score + employmentEquity.score + skills.score + procurement.score +
@@ -1322,6 +1378,9 @@ export function calculateAllPillars(
     recognitionLevel: finalRecognition,
     isDiscounted,
     discountedLevel,
+    dataQuality: {
+      unrecognisedContributionTypes: unrecognised.types,
+    },
   };
 }
 

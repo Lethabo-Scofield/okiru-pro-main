@@ -165,15 +165,15 @@ export function sectorConfigToTransportQseCalculatorConfig(sc: SectorConfig): Ca
       // ownership/MC/EE as well, or the store's elective selector never lets them
       // into the best-four total and they silently score 0 (Thandanani: Ownership
       // 25 + MC 27 dropped → 50 instead of 102).
-      ownership: { maxPoints: pc.ownership.maxPoints, chooseOneGroup: pc.ownership.chooseOneGroup },                       // 28
-      managementControl: { maxPoints: pc.managementControl.maxPoints, chooseOneGroup: pc.managementControl.chooseOneGroup }, // 27
-      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 27, chooseOneGroup: pc.employmentEquity?.chooseOneGroup }, // 27
+      ownership: { maxPoints: pc.ownership.maxPoints, basePoints: pc.ownership.basePoints, chooseOneGroup: pc.ownership.chooseOneGroup },                       // 28
+      managementControl: { maxPoints: pc.managementControl.maxPoints, basePoints: pc.managementControl.basePoints, chooseOneGroup: pc.managementControl.chooseOneGroup }, // 27
+      employmentEquity: { maxPoints: pc.employmentEquity?.maxPoints ?? 0, basePoints: pc.employmentEquity?.basePoints, chooseOneGroup: pc.employmentEquity?.chooseOneGroup }, // 27
       // Electives — the store's resolveChooseOneElectives keeps the best one.
-      skillsDevelopment: { maxPoints: pc.skillsDevelopment.maxPoints, chooseOneGroup: pc.skillsDevelopment.chooseOneGroup },                 // 25
-      preferentialProcurement: { maxPoints: pc.preferentialProcurement.maxPoints, chooseOneGroup: pc.preferentialProcurement.chooseOneGroup }, // 25
+      skillsDevelopment: { maxPoints: pc.skillsDevelopment.maxPoints, basePoints: pc.skillsDevelopment.basePoints, chooseOneGroup: pc.skillsDevelopment.chooseOneGroup },                 // 25
+      preferentialProcurement: { maxPoints: pc.preferentialProcurement.maxPoints, basePoints: pc.preferentialProcurement.basePoints, chooseOneGroup: pc.preferentialProcurement.chooseOneGroup }, // 25
       supplierDevelopment: { maxPoints: pc.supplierDevelopment.maxPoints },    // 0
-      enterpriseDevelopment: { maxPoints: pc.enterpriseDevelopment.maxPoints, chooseOneGroup: pc.enterpriseDevelopment.chooseOneGroup },     // 25
-      socioEconomicDevelopment: { maxPoints: pc.socioEconomicDevelopment.maxPoints, chooseOneGroup: pc.socioEconomicDevelopment.chooseOneGroup }, // 25
+      enterpriseDevelopment: { maxPoints: pc.enterpriseDevelopment.maxPoints, basePoints: pc.enterpriseDevelopment.basePoints, chooseOneGroup: pc.enterpriseDevelopment.chooseOneGroup },     // 25
+      socioEconomicDevelopment: { maxPoints: pc.socioEconomicDevelopment.maxPoints, basePoints: pc.socioEconomicDevelopment.basePoints, chooseOneGroup: pc.socioEconomicDevelopment.chooseOneGroup }, // 25
       yesInitiative: { maxPoints: pc.yesInitiative?.maxPoints ?? 0 },          // 0
     },
     benefitFactors: sc.benefitFactors.map((bf) => ({

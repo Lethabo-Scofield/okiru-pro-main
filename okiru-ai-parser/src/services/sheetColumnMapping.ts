@@ -146,7 +146,10 @@ export async function mapSheetColumns(
     decision = await rememberDecision<Record<string, string>>('cols', fingerprint, async () => {
       // A throw is transient and stays uncached; a reply that maps nothing is a
       // real decision and is remembered rather than re-rolled.
-      const reply = await model.complete(MAPPING_SYSTEM_PROMPT, user);
+      // Which column means which field is a judgment question — worth the
+      // reasoning tier. Cached, so the case pays it once per template.
+      const think = model.completeHard?.bind(model) ?? model.complete.bind(model);
+      const reply = await think(MAPPING_SYSTEM_PROMPT, user);
       const parsed = parseMappingReply(reply);
       if (!parsed) return null;
       const mapping = validateMapping(parsed, headers, shape.columns);

@@ -54,20 +54,6 @@ spec:
     matchLabels:
       app: mongodb
 ---
-# ArangoDB PDB - protects database during node drains
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: arangodb-pdb
-  labels:
-    app: arangodb
-    component: database
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: arangodb
----
 # Redis PDB - protects cache during node drains
 # Cache can be rebuilt, so minAvailable: 0 is acceptable
 # Change to 1 if cache warming is expensive

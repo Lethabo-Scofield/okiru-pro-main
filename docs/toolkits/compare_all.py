@@ -5,6 +5,7 @@ Outputs a concise markdown-ready comparison for all 6 sectors.
 import json
 import os
 import re
+import sys
 
 TOOLKIT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -188,19 +189,6 @@ LIVE_CONFIG_NAMES = {
 #
 # Keyed (sector, table, criterion) → why.
 TEMPLATE_TENSION = {
-    ("AGRI_Generic", "summary", "Grand Total"):
-        "GG 41306 pp.33-34: MC is the generic 19-pt structure, so the total is 128. "
-        "The toolkit's 132 carries +4 phantom MC points (audit item 11).",
-    ("AGRI_Generic", "summary", "Management Control"):
-        "GG 41306 pp.33-34: 19 pts, not the toolkit's 23 (audit item 11).",
-    ("AGRI_Generic", "mc", "Board Black"):
-        "GG 41306: board black = 2, not the toolkit's 3 (audit item 11).",
-    ("AGRI_Generic", "mc", "Board BW"):
-        "GG 41306: board BW = 1, not the toolkit's 2 (audit item 11).",
-    ("AGRI_Generic", "mc", "Other Exec Black"):
-        "GG 41306: other exec black = 2, not the toolkit's 3 (audit item 11).",
-    ("AGRI_Generic", "mc", "Other Exec BW"):
-        "GG 41306: other exec BW = 1, not the toolkit's 2 (audit item 11).",
     ("FSC_Generic", "summary", "Grand Total"):
         "FS200: MC is 20, so the total is 119, not the toolkit's 120 (audit item 9).",
     ("FSC_Generic", "summary", "Management Control"):
@@ -956,8 +944,43 @@ def compare_sector(sector_key):
     return "\n".join(lines)
 
 
+def reachable_table():
+    """Per-sector element weighting vs bonus vs maximum reachable score.
+
+    The Codes state an element's weighting and its bonus points separately, and
+    bonus is earned ON TOP of the weighting — so the highest attainable score can
+    exceed the target. Transport QSE is the clearest case: target 100, reachable
+    107, which is how a certificate reports 102 out of 100.
+    """
+    live = load_live_dump()
+    if not live:
+        return ""
+    rows = [
+        "## Target vs maximum reachable (live `sectorConfig.ts`)",
+        "",
+        "| Sector | Target (denominator) | Bonus available | Max reachable |",
+        "|--------|---------------------:|----------------:|--------------:|",
+    ]
+    for name, v in live.items():
+        target = v.get("totalMaxPoints")
+        reach = v.get("reachableMax")
+        bonus = v.get("bonusAvailable", 0)
+        flag = " **← bonus lifts above target**" if isinstance(reach, (int, float)) and isinstance(target, (int, float)) and reach > target else ""
+        rows.append(f"| {name} | {target} | {bonus} | {reach}{flag} |")
+    rows += [
+        "",
+        "Where target == reachable the sector's `totalMaxPoints` already includes its "
+        "bonus points; the split still matters per element, because an entity on full "
+        "base points must read 100% of that element rather than short of a merged cap.",
+        "",
+        "---",
+        "",
+    ]
+    return "\n".join(rows)
+
+
 def main():
-    output = []
+    output = [reachable_table()]
     for sector_key in SECTORS:
         output.append(compare_sector(sector_key))
 
@@ -966,7 +989,12 @@ def main():
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(result)
     print(f"Wrote comparison to: {out_path}")
-    print(result[:5000])
+    # The console on this machine is cp1252; any non-latin-1 char in the report
+    # (e.g. the "<-" arrow, en dashes) raises UnicodeEncodeError and exits 1 even
+    # though the file wrote correctly as UTF-8. Echo defensively.
+    enc = sys.stdout.encoding or "utf-8"
+    sys.stdout.write(result[:5000].encode(enc, errors="replace").decode(enc))
+    sys.stdout.write("\n")
 
 
 if __name__ == "__main__":

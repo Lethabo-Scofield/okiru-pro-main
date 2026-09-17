@@ -384,6 +384,10 @@ router.get('/', async (req: Request, res: Response) => {
   // Documents filed against one saved company — the library's per-client view.
   if (typeof req.query.entityId === 'string' && req.query.entityId.trim()) {
     filter.entityId = req.query.entityId.trim();
+  } else if (req.query.unassigned === 'true') {
+    // Documents not yet filed under any company. {entityId: null} matches both
+    // an explicit null and a missing field, which is exactly the legacy set.
+    filter.entityId = null;
   }
   const search = String(req.query.search || '').trim();
   if (search) filter.filename = { $regex: escapeRegex(search), $options: 'i' };

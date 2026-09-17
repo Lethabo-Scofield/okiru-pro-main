@@ -3,19 +3,11 @@ import { parseClipboardMatrix } from "@/lib/workbookGridParse";
 import { applyPasteToCells, sumRow } from "@/lib/esg/esgGridPaste";
 import { ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
 
-export const ESG_DEFAULT_MONTHS = [
-  "Jul-25",
-  "Aug-25",
-  "Sep-25",
-  "Oct-25",
-  "Nov-25",
-  "Dec-25",
-  "Jan-26",
-  "Feb-26",
-  "Mar-26",
-];
+// Moved to lib so the data layer (grid dropdowns, import translation) can use
+// them without depending on a component; re-exported here for existing callers.
+import { ESG_DEFAULT_DEPOTS, ESG_DEFAULT_MONTHS } from "@/lib/esg/esgAxes";
 
-export const ESG_DEFAULT_DEPOTS = ["BLOEM", "CPT", "DBN", "ISANDO", "PE"];
+export { ESG_DEFAULT_DEPOTS, ESG_DEFAULT_MONTHS };
 
 export type MonthlyRow = { depot: string; months: (number | "")[]; source?: string };
 

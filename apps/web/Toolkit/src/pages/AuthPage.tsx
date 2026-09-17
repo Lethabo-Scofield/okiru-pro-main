@@ -107,6 +107,33 @@ function OtpInput({ value, onChange, length = 6 }: { value: string; onChange: (v
   );
 }
 
+/**
+ * Read a JSON body without assuming there is one.
+ *
+ * An auth call that is not routed to a server implementing it answers with an
+ * empty body (Vite dev, no proxy entry) or an HTML 404 page (ingress catch-all).
+ * `res.json()` then throws a SyntaxError, and the reset screen reported
+ * "Unexpected end of JSON input" — which says nothing about the real fault.
+ */
+async function readJsonBody(res: Response): Promise<any> {
+  const text = await res.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/** Message for a response whose body carried no usable error text. */
+function transportError(res: Response, fallback: string): string {
+  if (res.status === 404) {
+    return "This server has no password-reset endpoint (404). The request was not routed to the auth service.";
+  }
+  if (res.status >= 500) return `Server error (${res.status}). Please try again.`;
+  return fallback;
+}
+
 export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'login' | 'register' } = {}) {
   const [mode, setMode] = useState<'login' | 'register' | 'otp' | 'forgot' | 'reset'>(defaultMode);
   const [isLoading, setIsLoading] = useState(false);
@@ -329,9 +356,9 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail.trim() }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Something went wrong");
-      toast({ title: "Check Your Email", description: data.message });
+      const data = await readJsonBody(res);
+      if (!res.ok) throw new Error(data?.message || transportError(res, "Something went wrong"));
+      toast({ title: "Check Your Email", description: data?.message ?? "If that email exists, a reset code has been sent." });
       setMode('reset');
     } catch (error: any) {
       toast({ title: "Error", description: error.message || "Something went wrong", variant: "destructive" });
@@ -356,9 +383,9 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail.trim(), token: resetToken.trim(), newPassword: resetNewPassword }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-      toast({ title: "Password Reset", description: data.message });
+      const data = await readJsonBody(res);
+      if (!res.ok) throw new Error(data?.message || transportError(res, "Could not reset the password."));
+      toast({ title: "Password Reset", description: data?.message ?? "Password reset. You can now sign in." });
       setMode('login');
       setFieldErrors({});
       setResetEmail('');

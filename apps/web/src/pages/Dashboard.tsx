@@ -5,6 +5,7 @@ import { AppNavBack } from '@/components/AppNavBack';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { DeleteCompanyButton } from '@/components/DeleteCompanyButton';
 import { API_BASE } from '@toolkit/lib/config';
+import { esgCreateHref, esgSummaryHref, esgToolkitHref, setEsgActiveCompany } from '@/lib/esgRoutes';
 
 interface ClientRow {
   clientId: string;
@@ -15,12 +16,17 @@ interface ClientRow {
   scorecardType?: string;
   updatedAt?: string;
   createdByUserId?: string | null;
+  /** "bbbee" | "esg" — which product created the company (server-classified). */
+  product?: string;
 }
 
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [companySearch, setCompanySearch] = useState('');
   const [industryFilter, setIndustryFilter] = useState('all');
+  // B-BBEE and ESG companies share one list but not one product — the filter
+  // (and per-row badges/actions) keep the two visibly separate.
+  const [productFilter, setProductFilter] = useState<'all' | 'bbbee' | 'esg'>('all');
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
 
@@ -44,18 +50,24 @@ export default function Dashboard() {
   }, [fetchClients]);
 
   const allCompanies = useMemo(() => {
-    return clients.map((c) => ({
-      id: c.clientId || c.id || '',
-      name: c.name || 'Unknown',
-      industry: c.industrySector || c.sectorCode || 'Other',
-      scorecardType: c.scorecardType || 'â€”',
-      updatedAt: c.updatedAt,
-      createdByUserId: c.createdByUserId,
-    }));
+    return clients.map((c) => {
+      const isEsg = c.product === 'esg';
+      return {
+        id: c.clientId || c.id || '',
+        name: c.name || 'Unknown',
+        // An ESG company's sectorCode is the B-BBEE creation default (RCOGP),
+        // not a fact anyone chose — showing it here misfiled the company.
+        industry: isEsg ? 'â€”' : c.industrySector || c.sectorCode || 'Other',
+        scorecardType: isEsg ? 'ESG' : c.scorecardType || 'â€”',
+        updatedAt: c.updatedAt,
+        createdByUserId: c.createdByUserId,
+        isEsg,
+      };
+    });
   }, [clients]);
 
   const industries = useMemo(
-    () => Array.from(new Set(allCompanies.map((c) => c.industry))).sort(),
+    () => Array.from(new Set(allCompanies.filter((c) => !c.isEsg).map((c) => c.industry))).sort(),
     [allCompanies],
   );
 
@@ -70,8 +82,11 @@ export default function Dashboard() {
     if (industryFilter !== 'all') {
       result = result.filter((c) => c.industry === industryFilter);
     }
+    if (productFilter !== 'all') {
+      result = result.filter((c) => (productFilter === 'esg' ? c.isEsg : !c.isEsg));
+    }
     return result;
-  }, [allCompanies, companySearch, industryFilter]);
+  }, [allCompanies, companySearch, industryFilter, productFilter]);
 
   const stats = useMemo(
     () => ({
@@ -160,6 +175,20 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div>
+                  <label className="text-[10px] font-semibold text-[#98989f] uppercase tracking-wider" htmlFor="productFilter">Product</label>
+                  <select
+                    id="productFilter"
+                    className="mt-1.5 block rounded-xl bg-[#2c2c2e] px-3 py-2.5 text-[13px] text-[#d1d1d6] outline-none focus:ring-2 focus:ring-white/[0.15] smooth"
+                    value={productFilter}
+                    onChange={(e) => setProductFilter(e.target.value as 'all' | 'bbbee' | 'esg')}
+                    data-testid="select-product"
+                  >
+                    <option value="all">All</option>
+                    <option value="bbbee">B-BBEE</option>
+                    <option value="esg">ESG</option>
+                  </select>
+                </div>
+                <div>
                   <label className="text-[10px] font-semibold text-[#98989f] uppercase tracking-wider" htmlFor="industryFilter">Industry</label>
                   <select
                     id="industryFilter"
@@ -205,7 +234,21 @@ export default function Dashboard() {
                       {filteredCompanies.map((c) => (
                         <tr key={c.id} className="hover:bg-white/[0.03] smooth" data-testid={`company-row-${c.id}`}>
                           <td className="px-5 py-3.5">
-                            <div className="font-semibold text-white">{c.name}</div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-white">{c.name}</span>
+                              {/* The badge is the separation: an ESG company must never
+                                  read as a B-BBEE scorecard waiting to be edited. */}
+                              <span
+                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                  c.isEsg
+                                    ? 'bg-teal-500/[0.15] text-teal-300 border border-teal-400/25'
+                                    : 'bg-white/[0.08] text-[#a1a1a6] border border-white/[0.08]'
+                                }`}
+                                data-testid={`badge-product-${c.id}`}
+                              >
+                                {c.isEsg ? 'ESG' : 'B-BBEE'}
+                              </span>
+                            </div>
                             <div className="text-[10px] text-[#636366] mt-0.5">{c.id}</div>
                           </td>
                           <td className="px-5 py-3.5 text-[#8e8e93]">{c.industry}</td>
@@ -220,6 +263,11 @@ export default function Dashboard() {
                               />
                               <button
                                 onClick={() => {
+                                  if (c.isEsg) {
+                                    setEsgActiveCompany(c.id);
+                                    navigate(esgSummaryHref(c.id));
+                                    return;
+                                  }
                                   localStorage.setItem('okiru-pro-active-client', c.id);
                                   navigate(`/create-scorecard/${encodeURIComponent(c.id)}/summary`);
                                 }}
@@ -230,14 +278,26 @@ export default function Dashboard() {
                                 Summary
                               </button>
                               <button
-                                onClick={() => openScorecard(c.id)}
+                                onClick={() => {
+                                  if (c.isEsg) {
+                                    setEsgActiveCompany(c.id);
+                                    navigate(esgToolkitHref(c.id));
+                                    return;
+                                  }
+                                  openScorecard(c.id);
+                                }}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.12] hover:bg-white/[0.18] text-white text-[12px] font-semibold smooth press-sm"
                                 data-testid={`button-scorecard-${c.id}`}
                               >
-                                View Scorecard
+                                {c.isEsg ? 'Open ESG Toolkit' : 'View Scorecard'}
                               </button>
                               <button
                                 onClick={() => {
+                                  if (c.isEsg) {
+                                    setEsgActiveCompany(c.id);
+                                    navigate(esgCreateHref(c.id));
+                                    return;
+                                  }
                                   sessionStorage.setItem('okiru-workbook-from', 'saved-companies');
                                   navigate(`/create-scorecard/${encodeURIComponent(c.id)}`);
                                 }}

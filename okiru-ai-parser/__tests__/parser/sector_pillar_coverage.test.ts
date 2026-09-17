@@ -14,9 +14,9 @@ import { CALCULATOR_KEY_ALLOWLIST, isAllowedCalculatorKey } from '../../schemas/
 import { InMemoryOntologyRepository } from '../../graph/ontology_queries.js';
 
 describe('trusted sector codes', () => {
-  it('knows exactly the six sector codes that have scoring configs', () => {
+  it('knows exactly the seven sector codes that have scoring configs', () => {
     expect([...TRUSTED_SECTOR_CODES].sort()).toEqual(
-      ['AGRI', 'CONSTRUCTION', 'FSC', 'ICT', 'RCOGP', 'TRANSPORT'].sort(),
+      ['AGRI', 'CONSTRUCTION', 'FSC', 'ICT', 'MAC', 'RCOGP', 'TRANSPORT'].sort(),
     );
     for (const code of TRUSTED_SECTOR_CODES) {
       expect(isTrustedSectorCode(code)).toBe(true);
@@ -189,8 +189,8 @@ describe('readiness rules', () => {
 });
 
 describe('matrix shape', () => {
-  it('has 15 configs with unique configIds and positive totals', () => {
-    expect(SECTOR_PILLAR_COVERAGE).toHaveLength(15) // +FSC QSFI (shipped 2026-07-26);
+  it('has 17 configs with unique configIds and positive totals', () => {
+    expect(SECTOR_PILLAR_COVERAGE).toHaveLength(17) // +FSC QSFI (shipped 2026-07-26);
     const ids = SECTOR_PILLAR_COVERAGE.map((e) => e.configId);
     expect(new Set(ids).size).toBe(ids.length);
     for (const entry of SECTOR_PILLAR_COVERAGE) {

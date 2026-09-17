@@ -28,8 +28,12 @@ import { elementFromHint } from './specRetrieval.js';
 import {
   fieldElementIndex,
   mapEntitiesToCalculator,
+  mapEntitiesToCalculatorWithSemantics,
+  unfilledCalculatorKeys,
   type CalculatorMappingResult,
 } from './entityCalculatorMapping.js';
+import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
+import { reviewCase } from './caseReview.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -67,7 +71,7 @@ function structuredRows(tables: unknown[] | undefined): Array<Record<string, unk
  * workbook. Reported, never auto-resolved — which revision is authoritative is
  * the client's call, not ours.
  */
-function duplicateWorkbookException(inputs: RawExtractionInput[]): string | null {
+export function duplicateWorkbookException(inputs: RawExtractionInput[]): string | null {
   const workbooksBySheet = new Map<string, Set<string>>();
   for (const input of inputs) {
     const name = input.filename ?? '';
@@ -287,7 +291,14 @@ export async function extractCaseEntities(
     }
   }
 
-  const calculator = mapEntitiesToCalculator(resolved, fieldElementIndex(extractions));
+  // Declared mappings first, then one semantic pass over whatever they did not
+  // cover — a field the table never anticipated reaches its pillar instead of
+  // being reported as read-but-unused. Same coercion, same allowlist.
+  const calculator = await mapEntitiesToCalculatorWithSemantics(
+    resolved,
+    fieldElementIndex(extractions),
+    model,
+  );
 
   // Would this evidence survive verification? Extraction says what a document
   // contains; the auditor tests say whether it counts. Advisory only — it never
@@ -309,6 +320,55 @@ export async function extractCaseEntities(
       )
     : { documents: [], failures: [], unresolved: [] };
 
+  // ── PLAUSIBILITY ────────────────────────────────────────────────────────
+  // Grounding checks each value against its own document; nothing above checks
+  // the values against EACH OTHER. That is where Thandanani's tmps=23 lived —
+  // a row count in a Rand field, grounded perfectly, wrong by four orders of
+  // magnitude. The invariants are arithmetic and always on; when a model is
+  // present it adds what the figure probably is, read from the source excerpt.
+  // Findings attach to the document that supplied the figure, so the upload
+  // reveal shows them with provenance — and never edit the payload.
+  for (const finding of payloadInvariantFindings(calculator.entries, extractions)) {
+    const source = inputs.find((input) => input.filename === finding.sourceFile);
+    const figure = Number(calculator.entries.find((e) => e.key === finding.key)?.value);
+    const suggestion = source && Number.isFinite(figure)
+      ? await explainImplausibleFigure(model, {
+          key: finding.key,
+          figure,
+          excerpt: excerptAround(source.markdown || source.raw_text || '', figure),
+        })
+      : null;
+    const target = extractions.find((extraction) => extraction.sourceFile === finding.sourceFile)
+      ?? extractions[0];
+    target?.exceptions.push(finding.message + (suggestion ?? ''));
+    logger.warn('Calculator payload failed a plausibility invariant', {
+      key: finding.key,
+      sourceFile: finding.sourceFile,
+      suggested: Boolean(suggestion),
+    });
+  }
+
+  // ── THE ANALYST'S READ ──────────────────────────────────────────────────
+  // One chain-of-thought call over the ASSEMBLED case, at the strongest
+  // reasoning tier — the altitude every narrow check above lacks. Advisory
+  // only: findings become exceptions a reviewer sees; not one payload value
+  // can move because of it.
+  const reviewFindings = await reviewCase(model, {
+    payloadEntries: calculator.entries.map((entry) => ({
+      key: entry.key, value: entry.value, sourceFiles: entry.sourceFiles,
+    })),
+    unmapped: calculator.unmapped,
+    needsReview: calculator.needsReview.map((item) => ({ field: item.field, values: item.values })),
+    unfilledKeys: unfilledCalculatorKeys(calculator.payload),
+    files: inputs.map((input) => input.filename),
+  });
+  for (const finding of reviewFindings) {
+    extractions[0]?.exceptions.push(
+      `${finding.severity === 'error' ? 'Analyst review' : 'Analyst note'}: ${finding.finding}`
+      + (finding.fix ? ` Fix: ${finding.fix}` : ''),
+    );
+  }
+
   logger.info('Case extraction complete', {
     files: inputs.length,
     documents: resolved.documentsExtracted,
@@ -316,6 +376,7 @@ export async function extractCaseEntities(
     conflicts: resolved.conflicts.length,
     calculatorKeys: Object.keys(calculator.payload).length,
     heldForReview: calculator.needsReview.length,
+    analystFindings: reviewFindings.length,
   });
 
   return { ...resolved, model: model.name, extractions, calculator, validation };

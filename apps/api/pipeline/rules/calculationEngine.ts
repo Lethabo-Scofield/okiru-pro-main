@@ -24,6 +24,14 @@ import {
   type FormulaResult,
 } from './formulaRegistry.js';
 import { createLogger } from '../../src/logger.js';
+import { readPercent, toFractionOrZero } from '../units/percentage.js';
+import {
+  benefitFactorFor,
+  UnrecognisedTypeLog,
+  PIPELINE_BENEFIT_FACTORS_SD,
+  PIPELINE_BENEFIT_FACTORS_ED,
+  PIPELINE_BENEFIT_FACTORS_SED,
+} from './benefitFactors.js';
 
 const logger = createLogger('CalculationEngine');
 import type {
@@ -34,7 +42,6 @@ import type {
 } from '../extraction/entityManifest.js';
 import type { SectorConfig } from '../sectorConfig.js';
 import { getSectorConfig } from '../sectorConfig.js';
-import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 import {
   calculateAllPillars,
   type PillarScore,
@@ -149,7 +156,9 @@ export interface ContributionInput {
   beneficiary: string;
   type: string;
   amount: number;
-  category: 'sd' | 'ed' | 'sed';
+  // 'unclassified' is counted by no pillar — an unknown SD-vs-ED split is
+  // reported, never guessed.
+  category: 'sd' | 'ed' | 'sed' | 'unclassified';
   benefitFactor?: number;
 }
 
@@ -182,7 +191,7 @@ export interface OntologySnapshot {
   calculatedAt: string;
   sectorCode: string;
   scorecardType: string;
-  configSource: 'arango' | 'hardcoded';
+  configSource: 'hardcoded';
 
   sectorConfig: {
     pillarConfigs: Record<string, { maxPoints: number; hasSubMinimum: boolean; subMinimumPercent: number }>;
@@ -222,7 +231,7 @@ export interface CalculationContext {
   assessmentId: string;
   manifest: EntityManifest;
   sectorConfig: SectorConfig;
-  configSource: 'arango' | 'hardcoded';
+  configSource: 'hardcoded';
   entityValues: Map<string, EntityValue>;
   crossPillarValues: Map<string, number>; // NPAT, TMPS, leviableAmount, etc.
   employees: EmployeeInput[];
@@ -378,8 +387,8 @@ function preAggregateEntityArrays(ctx: CalculationContext, trainingPrograms?: an
 
     for (const sh of shareholders) {
       const pct = hasShares ? sh.shares / totalShares : 1 / shareholders.length;
-      const normBO = sh.blackOwnership > 1 ? sh.blackOwnership / 100 : sh.blackOwnership;
-      const normBWO = sh.blackWomenOwnership > 1 ? sh.blackWomenOwnership / 100 : sh.blackWomenOwnership;
+      const normBO = toFractionOrZero(sh.blackOwnership);
+      const normBWO = toFractionOrZero(sh.blackWomenOwnership);
       blackVoting += pct * normBO;
       blackWomenVoting += pct * normBWO;
       economicInterest += pct * normBO;
@@ -430,8 +439,8 @@ function preAggregateEntityArrays(ctx: CalculationContext, trainingPrograms?: an
 
       if (s.isQSE || s.enterpriseType === 'qse') qseSpend += s.spend || 0;
       if (s.isEME || s.enterpriseType === 'eme') emeSpend += s.spend || 0;
-      const normBO = s.blackOwnership > 1 ? s.blackOwnership / 100 : s.blackOwnership;
-      const normBWO = s.blackWomenOwnership > 1 ? s.blackWomenOwnership / 100 : s.blackWomenOwnership;
+      const normBO = toFractionOrZero(s.blackOwnership);
+      const normBWO = toFractionOrZero(s.blackWomenOwnership);
       if (s.isBlackOwned51 || normBO >= 0.51) bo51Spend += s.spend || 0;
       if (s.isBlackWomanOwned30 || normBWO >= 0.30) bwo30Spend += s.spend || 0;
       if (s.isDesignatedGroup) dgSpend += s.spend || 0;
@@ -452,8 +461,22 @@ function preAggregateEntityArrays(ctx: CalculationContext, trainingPrograms?: an
   if (contributions.length > 0) {
     let sdSpend = 0, edSpend = 0, sedSpend = 0;
 
+    // This loop used to read `c.benefitFactor ?? 1.0` — the generous default
+    // that `pillarCalculators` had already been fixed away from, still live
+    // here because the two copies were never diffed. `sdSpend`/`sedSpend` are
+    // not display values: they are `inputKey`s for the construction indicators,
+    // so an unrecognised type was scoring at full recognition on a real path.
     for (const c of contributions) {
-      const factor = c.benefitFactor ?? 1.0;
+      const table = c.category === 'sd'
+        ? PIPELINE_BENEFIT_FACTORS_SD
+        : c.category === 'ed'
+          ? PIPELINE_BENEFIT_FACTORS_ED
+          : PIPELINE_BENEFIT_FACTORS_SED;
+      const declared = benefitFactorFor(c.type, table);
+      // A per-row factor supplied by extraction is evidence; the table is the
+      // default. Neither existing means the row is not scored, not that it is
+      // scored fully.
+      const factor = declared.recognised ? declared.factor : (c.benefitFactor ?? 0);
       const weighted = c.amount * factor;
 
       switch (c.category) {
@@ -538,11 +561,120 @@ function validateInputData(ctx: CalculationContext): ValidationResult {
     warnings.push({ pillar: 'enterpriseSupplierDevelopment', field: 'contributions', message: 'No contribution data provided — ESD/SED scores will be zero' });
   }
 
+  reportAmbiguousOwnership(warnings, shareholders, suppliers);
+  reportUnrecognisedContributionTypes(warnings, contributions);
+
   return {
     isValid: missing.length === 0,
     missingEntities: missing,
     warnings,
   };
+}
+
+/**
+ * Report contributions whose TYPE no factor table recognises.
+ *
+ * These score zero, which is the right arithmetic — never pay for evidence you
+ * cannot read. But zero-because-unreadable and zero-because-absent are
+ * different facts, and only one of them is fixable by the person uploading. The
+ * calculation stays silent; the validation says so.
+ */
+function reportUnrecognisedContributionTypes(
+  warnings: ValidationResult['warnings'],
+  contributions: CalculationContext['contributions'],
+): void {
+  const byPillar: Array<{
+    pillar: string;
+    label: string;
+    categories: string[];
+    table: Record<string, number>;
+  }> = [
+    { pillar: 'enterpriseSupplierDevelopment', label: 'Supplier Development', categories: ['sd'], table: PIPELINE_BENEFIT_FACTORS_SD },
+    { pillar: 'enterpriseSupplierDevelopment', label: 'Enterprise Development', categories: ['ed'], table: PIPELINE_BENEFIT_FACTORS_ED },
+    { pillar: 'socioEconomicDevelopment', label: 'Socio-Economic Development', categories: ['sed'], table: PIPELINE_BENEFIT_FACTORS_SED },
+  ];
+
+  for (const group of byPillar) {
+    const log = new UnrecognisedTypeLog();
+    for (const c of contributions) {
+      if (!group.categories.includes(c.category)) continue;
+      // A per-row factor from extraction still counts as knowing the value.
+      if (benefitFactorFor(c.type, group.table).recognised) continue;
+      if (c.benefitFactor !== undefined && c.benefitFactor !== null) continue;
+      log.record(c.type);
+    }
+    const message = log.message(group.label);
+    if (message) {
+      warnings.push({ pillar: group.pillar, field: 'contributions', message });
+    }
+  }
+}
+
+/**
+ * Report ownership percentages whose UNIT nobody stated.
+ *
+ * A value strictly between 0 and 1 reads as either a fraction (`0.51` = 51%) or
+ * a percentage (`0.51` = half a percent), and the source said which. We keep
+ * reading it as a fraction, because that is what this engine has always done
+ * and a scoring change must not ride in on a refactor — but a hundred-fold
+ * error in a field that decides the 51%-black-owned procurement bucket is not
+ * something to resolve in silence with a ternary.
+ *
+ * Warnings are aggregated per field: one line naming the count and an example,
+ * not one line per shareholder, so a register of forty holders written in
+ * fractions produces a warning a human will actually read.
+ */
+function reportAmbiguousOwnership(
+  warnings: ValidationResult['warnings'],
+  shareholders: CalculationContext['shareholders'],
+  suppliers: CalculationContext['suppliers'],
+): void {
+  const groups: Array<{
+    pillar: string;
+    field: string;
+    label: string;
+    rows: Array<{ name?: string; value: unknown }>;
+  }> = [
+    {
+      pillar: 'ownership',
+      field: 'blackOwnership',
+      label: 'Shareholder black ownership',
+      rows: shareholders.map((sh) => ({ name: sh.name, value: sh.blackOwnership })),
+    },
+    {
+      pillar: 'ownership',
+      field: 'blackWomenOwnership',
+      label: 'Shareholder black women ownership',
+      rows: shareholders.map((sh) => ({ name: sh.name, value: sh.blackWomenOwnership })),
+    },
+    {
+      pillar: 'preferentialProcurement',
+      field: 'blackOwnership',
+      label: 'Supplier black ownership',
+      rows: suppliers.map((s) => ({ name: s.name, value: s.blackOwnership })),
+    },
+    {
+      pillar: 'preferentialProcurement',
+      field: 'blackWomenOwnership',
+      label: 'Supplier black women ownership',
+      rows: suppliers.map((s) => ({ name: s.name, value: s.blackWomenOwnership })),
+    },
+  ];
+
+  for (const group of groups) {
+    const unstated = group.rows.filter((r) => readPercent(r.value).ambiguous);
+    if (unstated.length === 0) continue;
+    const example = unstated[0];
+    const named = example.name ? ` (e.g. ${example.name}: ${example.value})` : ` (e.g. ${example.value})`;
+    warnings.push({
+      pillar: group.pillar,
+      field: group.field,
+      message:
+        `${group.label}: ${unstated.length} value${unstated.length === 1 ? '' : 's'} between 0 and 1 ` +
+        `with no unit stated${named}. Read as a fraction — 0.51 means 51%, not 0.51%. ` +
+        `If the source meant percent, these are 100x too low; confirm the unit before certifying.`,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1245,7 +1377,7 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
   const { buildManifest } = await import('../extraction/entityManifest.js');
   const manifest = await buildManifest(options.sectorCode, options.scorecardType);
   
-  const { config: sectorConfig, source: configSource } = await resolveSectorConfig(
+  const { config: sectorConfig, source: configSource } = resolveSectorConfig(
     options.sectorCode, options.scorecardType
   );
 
@@ -1283,114 +1415,22 @@ export async function createCalculationEngine(options: CalculationOptions): Prom
 }
 
 // ---------------------------------------------------------------------------
-// Sector Config Resolution — ArangoDB first, fallback to hardcoded
+// Sector Config Resolution
 // ---------------------------------------------------------------------------
 
 /**
- * Convert StoredSectorRule from ArangoDB to SectorConfig interface.
+ * Resolve a sector's config.
+ *
+ * This used to try ArangoDB first and fall back to the hardcoded configs. The
+ * Arango branch never ran: sector_rules held zero documents in every
+ * environment, so every call took the catch and returned the hardcoded config.
+ * The `source` field is kept on the result because the ontology snapshot
+ * reports it, and it now says the only thing that was ever true.
  */
-function storedRuleToSectorConfig(stored: import('../../arango/repositories/sectorRuleRepository.js').StoredSectorRule): SectorConfig {
-  // Defaults are intentionally empty — every pillar MUST come from ArangoDB.
-  // These only apply for any pillar code not present in stored.pillarConfigs.
-  const pillarConfigs: SectorConfig['pillarConfigs'] = {
-    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-  };
-  
-  for (const spc of stored.pillarConfigs) {
-    const keyMap: Record<string, keyof SectorConfig['pillarConfigs']> = {
-      'ownership': 'ownership',
-      'managementControl': 'managementControl',
-      'employmentEquity': 'employmentEquity',
-      'skillsDevelopment': 'skillsDevelopment',
-      'preferentialProcurement': 'preferentialProcurement',
-      'supplierDevelopment': 'supplierDevelopment',
-      'enterpriseDevelopment': 'enterpriseDevelopment',
-      'socioEconomicDevelopment': 'socioEconomicDevelopment',
-      'yesInitiative': 'yesInitiative',
-    };
-    const key = keyMap[spc.code];
-    if (key) {
-      pillarConfigs[key] = {
-        maxPoints: spc.maxPoints,
-        hasSubMinimum: spc.hasSubMinimum,
-        subMinimumPercent: spc.subMinimumThreshold,
-      };
-    }
-  }
-  
-  const targets = stored.targets as SectorConfig['targets'];
-  
-  // Use the verified totalMaxPoints from ArangoDB (source of truth from Excel).
-  // YES Initiative is a level boost, not scored points, so we exclude it from the sum.
-  const NON_SCORING_KEYS = ['yesInitiative', 'employmentEquity'];
-  const computedTotal = Object.entries(pillarConfigs)
-    .filter(([key]) => !NON_SCORING_KEYS.includes(key) || (key === 'employmentEquity' && pillarConfigs.employmentEquity?.maxPoints))
-    .reduce((sum, [, pc]) => sum + pc.maxPoints, 0);
-  const totalMaxPoints = stored.totalMaxPoints || computedTotal;
-  
-  return {
-    sectorCode: stored.sectorCode,
-    sectorName: stored.sectorName,
-    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME',
-    totalMaxPoints,
-    pillarConfigs,
-    targets,
-    levelThresholds: stored.levelThresholds.map(lt => ({
-      level: lt.level,
-      minPoints: lt.minPoints,
-      recognition: lt.recognition,
-    })),
-    recognitionTable: stored.recognitionTable?.map(rt => ({
-      beeLevel: rt.beeLevel,
-      recognitionPercent: rt.recognitionPercent,
-      multiplier: rt.multiplier,
-    })) ?? [],
-    benefitFactors: stored.benefitFactors?.map(bf => ({
-      contributionType: bf.contributionType,
-      sdFactor: bf.sdFactor,
-      edFactor: bf.edFactor,
-    })) ?? [],
-    categoryWeightings: stored.categoryWeightings?.map(cw => ({
-      code: cw.code,
-      name: cw.name,
-      weighting: cw.weighting,
-      cap: cw.cap,
-    })) ?? [],
-    industryNorms: stored.industryNorms?.map(ind => ({
-      industry: ind.industry,
-      normPercent: ind.normPercent,
-      quarterThresholdPercent: ind.quarterThresholdPercent,
-    })) ?? [],
-  };
-}
-
-/**
- * Resolve sector config from ArangoDB or fallback to hardcoded.
- * Returns both the config and its source for ontology tracking.
- */
-async function resolveSectorConfig(
+function resolveSectorConfig(
   sectorCode: string,
   scorecardType: string
-): Promise<{ config: SectorConfig; source: 'arango' | 'hardcoded' }> {
-  const repo = new SectorRuleRepository();
-  
-  try {
-    const stored = await repo.getSectorRule(sectorCode, scorecardType);
-    if (stored) {
-      return { config: storedRuleToSectorConfig(stored), source: 'arango' };
-    }
-  } catch (err) {
-    // ArangoDB query failed, fall through to hardcoded config
-  }
-  
+): { config: SectorConfig; source: 'hardcoded' } {
   return { config: getSectorConfig(sectorCode, scorecardType), source: 'hardcoded' };
 }
 
@@ -1427,7 +1467,7 @@ function toPillarResult(code: string, name: string, score: PillarScore): PillarR
 export async function calculateScorecard(
   options: CalculationOptions
 ): Promise<ScorecardResult> {
-  const { config: sectorConfig, source: configSource } = await resolveSectorConfig(
+  const { config: sectorConfig, source: configSource } = resolveSectorConfig(
     options.sectorCode, options.scorecardType
   );
 

@@ -11,6 +11,20 @@ export function buildSgConsumerGoldenWorkbook(): EsgWorkbookData {
     if (id === "cover") continue;
     sections[id] = { cells };
   }
+  /*
+   * The workbook's `Assumptions!B50:B57` ARE the B-BBEE / Employment Equity
+   * targets, so the fixture declares that basis explicitly. Targets are no
+   * longer assumed: without a declared basis an indicator has nothing to be
+   * scored against and leaves the total. Saying so here keeps this fixture
+   * doing what it exists to do — reproduce the documented figures — instead of
+   * silently reproducing the old assume-a-target behaviour.
+   */
+  sections.assumptions = {
+    cells: {
+      ...(sections.assumptions?.cells ?? {}),
+      _targetBasis: "B-BBEE / Employment Equity targets",
+    },
+  };
   return {
     companyId: "golden-sg-consumer",
     sections,

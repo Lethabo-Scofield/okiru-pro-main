@@ -27,6 +27,8 @@ import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
+import { registerPlacementTelemetryRoutes } from "./placementTelemetry";
+import { registerVocabularyRoutes } from "./vocabularyRoutes";
 import { creditTokens } from "./tokenWallet";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
@@ -203,6 +205,27 @@ async function llmGenerate(systemPrompt: string, userPrompt: string, options?: {
 function sanitizeUser(user: any) {
   const { password, otpCode, otpExpiry, otpAttempts, ...safe } = user;
   return safe;
+}
+
+/**
+ * Establish an authenticated session.
+ *
+ * `organizationId` matters as much as `userId`. apps/web and apps/api share one
+ * session store and one cookie, and 24 call sites in apps/api scope tenant reads
+ * and writes by `req.session.organizationId` — clients.ts asserts it non-null. A
+ * session minted here without it makes every org-scoped API query behave as if
+ * the user belonged to no tenant, which is why this is set in one place rather
+ * than repeated at each sign-in path.
+ */
+function establishSession(
+  req: { session: any },
+  account: { id: string; organizationId?: string | null },
+  safeUser: unknown,
+): void {
+  req.session.userId = account.id;
+  req.session.userData = safeUser;
+  req.session.otpVerified = true;
+  req.session.organizationId = account.organizationId || '';
 }
 
 export async function registerRoutes(
@@ -465,9 +488,7 @@ export async function registerRoutes(
         await storage.setLastLogin(user.id);
         const updatedUser = await storage.getUserById(user.id);
         const safeUser = sanitizeUser(updatedUser || user);
-        (req.session as any).userId = user.id;
-        (req.session as any).userData = safeUser;
-        (req.session as any).otpVerified = true;
+        establishSession(req, (updatedUser || user) as any, safeUser);
         logger.info('User registered', { userId: user.id, durationMs: Date.now() - start });
         return res.json({
           user: safeUser,
@@ -527,9 +548,7 @@ export async function registerRoutes(
       if (isDemoCredentials(loginId, password)) {
         const demoUser = getOfflineDemoUser();
         const safeUser = sanitizeUser(demoUser);
-        (req.session as any).userId = demoUser.id;
-        (req.session as any).userData = safeUser;
-        (req.session as any).otpVerified = true;
+        establishSession(req, demoUser as any, safeUser);
         logger.warn("Demo login used", {
           userId: demoUser.id,
           mongoConnected: isMongoConnected(),
@@ -573,9 +592,7 @@ export async function registerRoutes(
       }
 
       const safeUser = sanitizeUser(user);
-      (req.session as any).userId = user.id;
-      (req.session as any).userData = safeUser;
-      (req.session as any).otpVerified = true;
+      establishSession(req, user as any, safeUser);
       await storage.setLastLogin(user.id);
       logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
       res.json({ user: safeUser });
@@ -644,9 +661,7 @@ export async function registerRoutes(
 
       const updatedUser = await storage.getUserById(user.id);
       const safeUser = sanitizeUser(updatedUser || user);
-      (req.session as any).userId = user.id;
-      (req.session as any).userData = safeUser;
-      (req.session as any).otpVerified = true;
+      establishSession(req, (updatedUser || user) as any, safeUser);
       res.json({ user: safeUser });
 
       sendLoginNotification(
@@ -897,8 +912,25 @@ export async function registerRoutes(
     }
   });
 
-  const ONBOARDING_SKIPPED_COMPANY_NAME_WEB = "Company profile skipped";
+  /**
+   * Skipping onboarding leaves the company name UNSET.
+   *
+   * It used to persist a sentence -- "Company profile skipped (add details
+   * anytime, open the menu under your name)" -- into companyName, which then
+   * rendered verbatim as the team name on /team. Two faults in one: a note
+   * addressed to the user was stored as data, and the literal was itself
+   * multiply mis-encoded (an em dash round-tripped through cp1252), so it came
+   * out as a run of accented gibberish on screen.
+   *
+   * Storage now records that nothing was given; the UI owns the empty state.
+   */
+  const ONBOARDING_SKIPPED_COMPANY_NAME_WEB = null;
 
+  /**
+   * Older records (and apps/api, which still writes a placeholder string)
+   * carry either the current "Company profile skipped" sentence or the
+   * mis-encoded one described above. Neither is a company name.
+   */
   function isSkippedWorkspaceName(name: string | null | undefined): boolean {
     return typeof name === "string" && (/company profile skipped/i.test(name) || name.includes("Ã"));
   }
@@ -1573,23 +1605,27 @@ export async function registerRoutes(
     }
   });
 
-  async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  /**
+   * Gate for PLATFORM routes - the ones that read or write ACROSS tenant
+   * boundaries (the all-users directory, another user's role, another user's
+   * 2FA, platform infra health). Only `super_admin` passes.
+   *
+   * It must never accept `admin`: that is the tenant-administrator role every
+   * registrant receives for the company they sign up (auth.ts /register) and
+   * that resolveOrgAdminUserId back-fills onto legacy founders. While this
+   * gate accepted it, every customer could list, re-role, and disable 2FA on
+   * every user of every other company through /api/admin/users.
+   *
+   * Company-scoped member management is a different thing entirely and lives
+   * on /api/organization/* behind requireOrgAdmin (the org.adminUserId
+   * pointer), which is scoped to the caller's own organisation.
+   */
+  async function requirePlatformAdmin(req: Request, res: Response, next: NextFunction) {
     const userId = (req.session as any)?.userId;
     if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const user = (req as any).user ?? await storage.getUserById(userId);
-    if (!user || !hasAnyRole(user, "admin", "super_admin")) {
-      return res.status(403).json({ message: "Admin access required" });
-    }
-    (req as any).user = user;
-    next();
-  }
-
-  async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
-    const userId = (req.session as any)?.userId;
-    if (!userId) return res.status(401).json({ message: "Not authenticated" });
-    const user = (req as any).user ?? await storage.getUserById(userId);
-    if (!user || !hasAnyRole(user, "super_admin")) {
-      return res.status(403).json({ message: "Super-admin access required" });
+    const user = await storage.getUserById(userId);
+    if (!hasAnyRole(user, "super_admin")) {
+      return res.status(403).json({ message: "Platform administrator access required" });
     }
     (req as any).user = user;
     next();
@@ -1621,7 +1657,8 @@ export async function registerRoutes(
     return res.status(201).json({ recorded: true });
   });
 
-  app.get("/api/admin/activity-heatmap", requireAuth, requireAdmin, async (req, res) => {
+  // Activity across every organisation is a platform view, gated like the user directory.
+  app.get("/api/admin/activity-heatmap", requireAuth, requirePlatformAdmin, async (req, res) => {
     if (!isMongoConnected()) {
       return res.json({ days: 28, totalViews: 0, uniqueUsers: 0, activeMinutes: 0, cells: [], topPages: [], toolUsage: [] });
     }
@@ -1925,7 +1962,7 @@ export async function registerRoutes(
   // depth, gave-up count, oldest entry timestamp, and the last 5 entries so
   // operators can spot drift recovery without DB shell access. Mounted here
   // (not on apps/api) because the ingress sends /api/admin/* to web.
-  app.get("/api/admin/workbook-backsync/health", requireAuth, requireAdmin, async (_req, res) => {
+  app.get("/api/admin/workbook-backsync/health", requireAuth, requirePlatformAdmin, async (_req, res) => {
     try {
       const { getOutboxHealth } = await import("./workbookBackSync");
       const health = await getOutboxHealth();
@@ -1936,7 +1973,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/users", requireAuth, requireSuperAdmin, async (_req, res) => {
+  app.get("/api/admin/users", requireAuth, requirePlatformAdmin, async (_req, res) => {
     try {
       const users = await storage.getAllUsers();
       const safeUsers = users.map((u) => sanitizeUser(u));
@@ -1947,7 +1984,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/users/:userId/2fa", requireAuth, requireSuperAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:userId/2fa", requireAuth, requirePlatformAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
       const { enabled } = req.body;
@@ -1985,7 +2022,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/users/:userId/role", requireAuth, requireSuperAdmin, async (req, res) => {
+  app.patch("/api/admin/users/:userId/role", requireAuth, requirePlatformAdmin, async (req, res) => {
     try {
       const { userId } = req.params;
       const { role } = req.body;
@@ -2184,11 +2221,32 @@ export async function registerRoutes(
       if (isMongoConnected()) {
         const filter = buildClientVisibilityFilter(userId, user);
         const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
-        return res.json(clients.map((c: any) => c.toJSON()));
+        const rows = clients.map((c: any) => c.toJSON());
+        // Companies created before `product` existed carry no marker, yet the
+        // ESG ones must not surface with B-BBEE actions. The one durable trace
+        // of ESG-ness for a legacy company is its esg_workbooks document, so
+        // classify the unmarked rows by that in a single $in lookup.
+        const unmarked = rows.filter((r: any) => !r.product).map((r: any) => String(r.clientId ?? r.id));
+        const db = mongoose.connection.db;
+        if (unmarked.length > 0 && db) {
+          try {
+            const esgIds = new Set<string>(
+              (await db
+                .collection("esg_workbooks")
+                .distinct("companyId", { companyId: { $in: unmarked } })) as string[],
+            );
+            for (const r of rows as any[]) {
+              if (!r.product) r.product = esgIds.has(String(r.clientId ?? r.id)) ? "esg" : "bbbee";
+            }
+          } catch (lookupError) {
+            logger.warn("Could not classify legacy clients against esg_workbooks", { error: String(lookupError) });
+          }
+        }
+        return res.json(rows);
       }
 
       const clients = memListClients(userId, userOrgId);
-      res.json(clients);
+      res.json(clients.map((c) => ({ ...c, product: c.product ?? "bbbee" })));
     } catch (error: any) {
       logger.error("Error fetching clients", error);
       res.status(500).json({ error: "Failed to fetch clients" });
@@ -2196,8 +2254,16 @@ export async function registerRoutes(
   });
   app.post("/api/clients", requireAuth, async (req, res) => {
     try {
-      const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount } = req.body;
+      const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount, product } = req.body;
       if (!name) return res.status(400).json({ error: "Client name is required" });
+      // Which product this company belongs to. The ESG create flow stamps
+      // "esg"; everything else defaults to B-BBEE. Anything unrecognised is a
+      // 400, not a silent default — a mislabelled company surfaces in the
+      // wrong list with the wrong actions.
+      const normalizedProduct = product == null ? "bbbee" : String(product).trim().toLowerCase();
+      if (normalizedProduct !== "bbbee" && normalizedProduct !== "esg") {
+        return res.status(400).json({ error: 'Invalid product. Use "bbbee" or "esg".' });
+      }
       if (industrySector) {
         const sector = String(industrySector).trim().toUpperCase();
         if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
@@ -2229,6 +2295,7 @@ export async function registerRoutes(
           leviableAmount: leviableAmount || 0,
           organizationId: userOrgId,
           createdByUserId: userId,
+          product: normalizedProduct,
         });
         return res.json(client.toJSON());
       }
@@ -2245,6 +2312,7 @@ export async function registerRoutes(
         leviableAmount: leviableAmount || 0,
         organizationId: userOrgId,
         createdByUserId: userId,
+        product: normalizedProduct,
         createdAt: now,
         updatedAt: now,
       };
@@ -4008,6 +4076,8 @@ Respond ONLY with a valid JSON array.`;
   registerFeedbackRoutes(app, requireAuth);
   registerAdminRollbackRoutes(app, requireAuth);
   registerTokenRoutes(app);
+  registerPlacementTelemetryRoutes(app);
+  registerVocabularyRoutes(app);
 
   logger.info("Route registration completed");
   return httpServer;

@@ -121,7 +121,8 @@ describe("computeScopedSummary", () => {
     expect(summary!.pillars.governance).toEqual({ score: 0, max: 0 });
     expect(summary!.overallScore).toBe(5);
     expect(summary!.overallMax).toBe(33);
-    expect(summary!.overallPercent).toBeCloseTo((5 / 33) * 100, 5);
+    // 0–1 fraction, same convention as EsgScorecardResult.overallPercent.
+    expect(summary!.overallPercent).toBeCloseTo(5 / 33, 5);
   });
 
   it("covers every scored group at full selection (board has no score group)", () => {

@@ -15,6 +15,7 @@
 import { chatCompletion, fastChatCompletion, isAzureOpenAIConfigured as isLLMAvailable } from './azureOpenAIClient.js';
 import type { EmployeeInput, ShareholderInput, SupplierInput, ContributionInput, FinancialsInput } from '../rules/calculationEngine.js';
 import { createLogger } from '../../src/logger.js';
+import { toPercentOrZero } from '../units/percentage.js';
 
 const logger = createLogger('AIEntityMapper');
 
@@ -139,9 +140,17 @@ function normalizeNumber(raw: any): number {
   return isNaN(num) ? 0 : num;
 }
 
+/**
+ * A percentage in the 0–100 convention the UCS engine's inputs use.
+ *
+ * This was `num > 1 ? num : num * 100` — the MIRROR IMAGE of the guess the
+ * other thirteen sites made, so one ambiguous cell was normalised in opposite
+ * directions depending on which path happened to read it. Both directions now
+ * come from one reading of one module, and an explicit `%` in the value is
+ * honoured instead of being stripped away first.
+ */
 function normalizePercent(raw: any): number {
-  const num = normalizeNumber(raw);
-  return num > 1 ? num : num * 100;
+  return toPercentOrZero(raw);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -207,7 +216,9 @@ function normalizeSuppliers(raw: any[]): SupplierInput[] {
 
 function normalizeContributions(raw: any[]): ContributionInput[] {
   return raw.map(c => {
-    let category: 'sd' | 'ed' | 'sed' = 'ed';
+    // Unknown stays unknown. 'ed' as the default meant an uncategorised row
+    // scored as Enterprise Development on a guess.
+    let category: 'sd' | 'ed' | 'sed' | 'unclassified' = 'unclassified';
     const rawCat = String(c.category || '').toLowerCase();
     if (rawCat === 'sd' || rawCat === 'supplier_development' || rawCat.includes('supplier dev')) category = 'sd';
     else if (rawCat === 'sed' || rawCat === 'socio_economic' || rawCat.includes('socio')) category = 'sed';
@@ -217,15 +228,28 @@ function normalizeContributions(raw: any[]): ContributionInput[] {
     else if (rawCat.includes('sd')) category = 'sd';
     else if (rawCat.includes('ed')) category = 'ed';
 
-    const contribType = String(c.type || c.contributionType || 'direct_cost').toLowerCase()
-      .replace(/\s+/g, '_');
+    // Three inventions used to live here, and each one flattered the score:
+    //   - a missing type became 'direct_cost', whose benefit factor is 1.0;
+    //   - a missing benefit factor became 1.0 outright;
+    //   - a missing beneficiary became the word "Beneficiary".
+    // Extraction rarely carries an explicit benefitFactor, so that middle
+    // default was the common case, not the edge case. Absent data is now
+    // absent: the type stays unclassified and scores nothing until someone
+    // classifies it, the factor is left for the sector's own table to supply,
+    // and a nameless row stays nameless rather than acquiring a placeholder
+    // that reads like a real beneficiary.
+    const rawType = String(c.type || c.contributionType || '').toLowerCase().replace(/\s+/g, '_');
+    const contribType = rawType || 'unclassified';
+    const rawFactor = c.benefitFactor ?? c.benefit_factor;
 
     return {
-      beneficiary: c.beneficiary || c.name || 'Beneficiary',
+      beneficiary: c.beneficiary || c.name || '',
       type: contribType,
       amount: normalizeNumber(c.amount || c.value || 0),
       category,
-      benefitFactor: normalizeNumber(c.benefitFactor || c.benefit_factor || 1.0),
+      ...(rawFactor === undefined || rawFactor === null
+        ? {}
+        : { benefitFactor: normalizeNumber(rawFactor) }),
     };
   });
 }

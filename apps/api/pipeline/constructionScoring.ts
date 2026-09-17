@@ -58,6 +58,7 @@ import {
   type ConstructionIndicator,
   type ConstructionScorecardConfig,
 } from './constructionIndicators.js';
+import { toFractionOrZero } from './units/percentage.js';
 
 export type IndicatorStatus = 'met' | 'partial' | 'failed' | 'missing_data';
 
@@ -256,8 +257,7 @@ function scoreIndicator(
       // Simplified Net Value: realisation factor in [0, 1] applied to the weight.
       // Detailed Annex CSC 100 calc requires inputs we don't model yet ΓÇö this
       // accepts a precomputed realisation value (0..1 or 0..100) from upstream.
-      const v = Number(actual);
-      const factor = v > 1 ? v / 100 : v;
+      const factor = toFractionOrZero(actual);
       achieved = Math.max(0, Math.min(indicator.weight, factor * indicator.weight));
       break;
     }

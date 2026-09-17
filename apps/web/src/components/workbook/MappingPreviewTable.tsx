@@ -128,6 +128,22 @@ export function MappingPreviewTable({
                           {meta.ai && <Sparkles className="h-2.5 w-2.5" />}
                           {meta.text}
                         </span>
+                        {/* The column name fit more than one field. The pick was
+                            made, but not earned — say so, and say what else it
+                            could have been, so a reviewer can settle it. */}
+                        {entry.ambiguous && (
+                          <span
+                            className="text-amber-400 shrink-0"
+                            data-testid={`mapping-ambiguous-${col.key}`}
+                            title={
+                              `"${entry.sourceHeader}" also matches ` +
+                              `${(entry.alternatives ?? []).map((a) => a.targetKey).join(", ")}. ` +
+                              `Check this column before importing.`
+                            }
+                          >
+                            ?
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span className="text-[10px] text-[#636366] italic">not imported</span>

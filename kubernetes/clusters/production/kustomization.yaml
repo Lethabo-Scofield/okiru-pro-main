@@ -19,7 +19,6 @@ resources:
   # - ../../external-secrets/secretstore-template.yaml
   # Uncomment to enable backup automation
   # - ../../infrastructure/base/backups/mongodb-backup.yaml
-  # - ../../infrastructure/base/backups/arangodb-backup.yaml
   # Uncomment to enable network policies
   # - ../../infrastructure/base/network-policies.yaml
   # Uncomment to enable pod disruption budgets

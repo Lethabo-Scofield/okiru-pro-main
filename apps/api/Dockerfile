@@ -18,6 +18,9 @@ RUN npm install -g pnpm@10.26.1 --no-fund --no-update-notifier --quiet \
 
 COPY packages/types/ packages/types/
 COPY apps/api/ apps/api/
+# auth.ts shares the work-email rules with the web app (apps/web/shared/workEmail.ts);
+# esbuild bundles it into dist, so the builder needs the source but the runtime does not.
+COPY apps/web/shared/ apps/web/shared/
 
 RUN pnpm --filter @okiru/types build \
     && cd apps/api && node build.js

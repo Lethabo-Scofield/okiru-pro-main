@@ -1,0 +1,12 @@
+import * as fs from 'fs';
+import * as cfg from '@/components/esg-workbook/esgSectionConfigs';
+import { ESG_GRID_SECTIONS } from '@/lib/esg/esgGridSections';
+import { SCORECARD_INDICATORS as ESG_SCORECARD_DEFINITIONS } from '@/lib/esg/esgScorecardDefinitions';
+const out = process.argv[2];
+const scalars: Record<string, unknown> = {};
+for (const [k, v] of Object.entries(cfg)) if (Array.isArray(v)) scalars[k] = v;
+fs.writeFileSync(out + '/esg_section_configs.json', JSON.stringify(scalars, null, 1));
+fs.writeFileSync(out + '/esg_grid_sections.json', JSON.stringify(ESG_GRID_SECTIONS, null, 1));
+fs.writeFileSync(out + '/esg_scorecard_defs.json', JSON.stringify(ESG_SCORECARD_DEFINITIONS, null, 1));
+console.log('scalar groups', Object.keys(scalars).join(', '));
+console.log('grids', Object.keys(ESG_GRID_SECTIONS).join(', '));

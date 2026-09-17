@@ -1,12 +1,17 @@
 import { Router, type Request, type Response } from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
-import multer from 'multer';
 import { z } from 'zod';
 import { createLogger } from '../logger.js';
 import { requireAdminToken } from '../middleware/adminAuth.js';
 import { fail, ok } from '../utils/apiResponse.js';
-import { extractionInputsFromUpload, isSupportedUpload, rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
+import { extractionInputsFromUpload, rawExtractionInputFromUpload, SUPPORTED_UPLOAD_MIME_TYPES } from '../services/fileExtraction.js';
+import {
+  MAX_UPLOAD_BATCH_BYTES,
+  skippedUploadSummary,
+  skippedUploads,
+  upload,
+} from '../services/uploadPolicy.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
 import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
 import {
@@ -24,8 +29,13 @@ import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_d
 import { ParserService } from '../../parser/parser_service.js';
 import { documentsByElement } from '../../schemas/verification_document_matrix.js';
 import { extractCaseEntities } from '../services/caseExtraction.js';
+// The reader behind the lexical classifier: settles low-confidence / too-close
+// document types by purpose and layout. Undefined without a model, in which
+// case the lexical decision stands and extraction still runs under it.
+import { modelTypeAdjudicator } from '../services/documentTypeAdjudication.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
+import esgRouter from './esgParser.js';
 
 const logger = createLogger('ParserRoutes');
 const router = Router();
@@ -38,18 +48,20 @@ const router = Router();
 function extractionRequiresPayment(): boolean {
   return process.env.PARSER_REQUIRE_PAYMENT !== 'false';
 }
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 100 }, // a full verification evidence pack is ~70 files; 25 rejected real client folders with a 413
-  fileFilter: (_req, file, cb) => {
-    // Judge on type OR extension: a correct .xlsm arrives as
-    // application/octet-stream often enough that MIME alone rejected real
-    // client workbooks.
-    if (isSupportedUpload(file.mimetype, file.originalname)) cb(null, true);
-    else cb(new Error(`Unsupported file type ${file.mimetype} (${file.originalname})`));
-  },
-});
-const MAX_UPLOAD_BATCH_BYTES = 500 * 1024 * 1024; // matches the certificates route; a real evidence pack of scans runs to hundreds of MB
+/**
+ * The 400 for "nothing usable arrived" — see `noUsableFiles` in esgParser.ts.
+ * No files at all is a client bug; every file skipped by the upload filter is a
+ * user problem, and only one of those is worth naming the files for.
+ */
+function noUsableFiles(req: Request) {
+  const summary = skippedUploadSummary(req);
+  return summary
+    ? fail(
+      `None of the uploaded files are a type we can read: ${summary}. Remove them and upload the documents on their own.`,
+      'UNSUPPORTED_FILES_ONLY',
+    )
+    : fail('Upload files using multipart field name "files"', 'FILES_REQUIRED');
+}
 
 function batchTooLarge(files: Express.Multer.File[]): boolean {
   return files.reduce((sum, file) => sum + file.size, 0) > MAX_UPLOAD_BATCH_BYTES;
@@ -179,7 +191,7 @@ router.get('/required-documents', (_req: Request, res: Response) => {
 router.post('/resolve', async (req: Request, res: Response) => {
   const repository = await getParserRepository();
   try {
-    const service = new ParserService(repository);
+    const service = new ParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const result = await service.resolve(req.body);
     return res.status(result.status === 'failed' ? 422 : 200).json(result);
   } catch (err) {
@@ -197,11 +209,16 @@ router.post('/resolve-file', upload.single('file'), async (req: Request, res: Re
   const repository = await getParserRepository();
   try {
     if (!req.file) {
-      return res.status(400).json(fail('Upload a file using multipart field name "file"', 'FILE_REQUIRED'));
+      // An unsupported file is now skipped rather than fatal, so "no file" and
+      // "the only file was the wrong type" both land here and need telling apart.
+      const summary = skippedUploadSummary(req);
+      return res.status(400).json(summary
+        ? fail(`That file is not a type we can read: ${summary}.`, 'UNSUPPORTED_FILES_ONLY')
+        : fail('Upload a file using multipart field name "file"', 'FILE_REQUIRED'));
     }
 
     const rawInput = await rawExtractionInputFromUpload(req.file);
-    const service = new ParserService(repository);
+    const service = new ParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const result = await service.resolve(rawInput);
     return res.status(result.status === 'failed' ? 422 : 200).json(result);
   } catch (err) {
@@ -220,7 +237,7 @@ router.post('/resolve-case', async (req: Request, res: Response) => {
       return res.status(400).json(fail('Body must include documents[]', 'DOCUMENTS_REQUIRED'));
     }
 
-    const service = new CaseParserService(repository);
+    const service = new CaseParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(documents, caseId);
     return res.status(result.status === 'failed' ? 422 : 200).json(result);
@@ -244,7 +261,7 @@ router.post('/resolve-case', async (req: Request, res: Response) => {
 router.post('/resolve-case-files', upload.array('files', 100), async (req: Request, res: Response) => {
   const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
   if (files.length === 0) {
-    return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+    return res.status(400).json(noUsableFiles(req));
   }
   if (batchTooLarge(files)) {
     return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
@@ -291,16 +308,22 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
       }),
     );
     const rawInputs = settled.filter((s) => s.ok).flatMap((s) => (s as { inputs: Awaited<ReturnType<typeof extractionInputsFromUpload>> }).inputs);
-    const unreadableFiles = settled
-      .filter((s) => !s.ok)
-      .map((s) => ({ file_name: (s as { fileName: string }).fileName, reason: (s as { message: string }).message }));
+    const unreadableFiles = [
+      // Skipped by the upload filter (wrong type) and failed while being read
+      // are different causes with the same consequence: the user uploaded it
+      // and got nothing back. Report them together so neither disappears.
+      ...skippedUploads(req),
+      ...settled
+        .filter((s) => !s.ok)
+        .map((s) => ({ file_name: (s as { fileName: string }).fileName, reason: (s as { message: string }).message })),
+    ];
     if (rawInputs.length === 0) {
       return res.status(400).json(fail(
         `None of the uploaded files could be read (${unreadableFiles.map((u) => u.file_name).join(', ')})`,
         'CASE_FILE_PARSE_FAILED',
       ));
     }
-    const service = new CaseParserService(repository);
+    const service = new CaseParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
 
@@ -342,7 +365,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
 router.post('/resolve-case-files-stream', upload.array('files', 100), async (req: Request, res: Response) => {
   const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
   if (files.length === 0) {
-    return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+    return res.status(400).json(noUsableFiles(req));
   }
   if (batchTooLarge(files)) {
     return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
@@ -382,6 +405,18 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
 
   const repository = await getParserRepository();
   try {
+    // Files the upload filter dropped never reach `files`, so without this they
+    // would be silently absent from a stream the client uses as the record of
+    // what happened. Same event the per-file reader failures use, so the UI
+    // marks them without knowing the difference.
+    skippedUploads(req).forEach((skipped, i) => {
+      send('doc-error', {
+        index: -1 - i,
+        fileName: skipped.file_name,
+        message: `Skipped — ${skipped.reason}`,
+      });
+    });
+
     // Files parse with BOUNDED CONCURRENCY, not one at a time — a 17-file pack
     // was as slow as the sum of its parts because each scan's OCR/vision wait
     // blocked every file behind it. Events still fire per file as each worker
@@ -408,7 +443,7 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       .flatMap((r) => r.value as Awaited<ReturnType<typeof extractionInputsFromUpload>>);
 
     send('resolving', { total: rawInputs.length });
-    const service = new CaseParserService(repository);
+    const service = new CaseParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const result = await service.resolveCase(rawInputs, caseId);
     // Sub-progress through the slow, rate-limited AI resolve phase, so the wait
@@ -436,7 +471,7 @@ router.post('/quote-files', upload.array('files', 100), async (req: Request, res
   try {
     const files = Array.isArray(req.files) ? req.files as Express.Multer.File[] : [];
     if (files.length === 0) {
-      return res.status(400).json(fail('Upload files using multipart field name "files"', 'FILES_REQUIRED'));
+      return res.status(400).json(noUsableFiles(req));
     }
     if (batchTooLarge(files)) {
       return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
@@ -456,7 +491,14 @@ router.post('/quote-files', upload.array('files', 100), async (req: Request, res
     // The client must not guess whether money is involved: if the gate is off
     // (no payment provider wired yet), it shows a review step instead of a
     // pay button rather than sending the user to a checkout that cannot settle.
-    return res.json(ok({ ...quote, paymentRequired: extractionRequiresPayment() }));
+    // `skippedFiles` is named at QUOTE time, which is free and comes before
+    // payment, so "we can't read your .eml" is something the user learns while
+    // they can still do something about it.
+    return res.json(ok({
+      ...quote,
+      paymentRequired: extractionRequiresPayment(),
+      skippedFiles: skippedUploads(req),
+    }));
   } catch (err) {
     logger.error('Parser pricing quote failed', err as Error);
     return res.status(400).json(fail((err as Error).message, 'QUOTE_FAILED'));
@@ -661,5 +703,16 @@ router.post('/load-ontology', requireAdminToken, async (req: Request, res: Respo
     await repository.close?.();
   }
 });
+
+/**
+ * The ESG evidence pipeline, at `/api/parser/esg/*`.
+ *
+ * Mounted here rather than in server.ts so ESG inherits this router's path,
+ * proxy configuration and deployment surface unchanged — and so the payment
+ * routes above (`/quotes/:id/checkout`, `/quotes/:id/settle`, the PayFast
+ * webhook) remain the ONLY payment path for both domains. No route above is
+ * touched: `/esg` collides with none of them.
+ */
+router.use('/esg', esgRouter);
 
 export default router;

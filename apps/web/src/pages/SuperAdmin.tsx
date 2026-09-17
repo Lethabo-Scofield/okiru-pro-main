@@ -84,7 +84,6 @@ interface HealthResponse {
   timestamp: string;
   uptime: number;
   environment: string;
-  arangodb?: { connected: boolean };
 }
 
 interface PillarConfig {
@@ -1312,19 +1311,6 @@ export default function SuperAdmin() {
                 <p className="text-xs text-muted-foreground mb-1">Uptime</p>
                 <p className="font-semibold text-sm">
                   {health ? `${Math.floor(health.uptime / 3600)}h ${Math.floor((health.uptime % 3600) / 60)}m` : "—"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <p className="text-xs text-muted-foreground mb-1">ArangoDB</p>
-                <p className="font-semibold text-sm flex items-center gap-1">
-                  {health?.arangodb ? (
-                    <>
-                      <span className={`h-2 w-2 rounded-full ${health.arangodb.connected ? "bg-green-500" : "bg-red-500"}`} />
-                      {health.arangodb.connected ? "Connected" : "Down"}
-                    </>
-                  ) : "—"}
                 </p>
               </CardContent>
             </Card>

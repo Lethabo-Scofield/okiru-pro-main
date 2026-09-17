@@ -34,7 +34,6 @@
     "@types/node": "^20.19.35",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.5.13",
-    "arangojs": "^9.2.0",
     "bcrypt": "^6.0.0",
     "canvas": "^3.2.3",
     "chromadb": "^3.0.0",

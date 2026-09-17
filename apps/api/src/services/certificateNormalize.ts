@@ -242,7 +242,11 @@ function readExtendedFields(doc: Record<string, unknown>) {
   const contactDetails = objectOrNull(doc.contactDetails);
   return {
     tradingName: strOrNull(doc.tradingName),
-    registrationNumber: strOrNull(doc.registrationNumber),
+    // Two writers, one field on the wire: the regex enrichment fills
+    // `registrationNumber`, Document Intelligence fills `companyRegistrationNumber`
+    // (nothing else does). Reading only the first made a paid-for DI field
+    // invisible to the API, the Hub and the procurement autofill.
+    registrationNumber: strOrNull(doc.registrationNumber) ?? strOrNull(doc.companyRegistrationNumber),
     taxNumber: strOrNull(doc.taxNumber),
     bbbeeLevelStatus: strOrNull(doc.bbbeeLevelStatus),
     certificateType: strOrNull(doc.certificateType),

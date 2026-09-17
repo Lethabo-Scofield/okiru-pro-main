@@ -102,6 +102,10 @@ const WORKBOOK_TO_DESIGNATION: Record<string, string> = {
   'Middle Manager': 'Middle',
   'Junior Manager': 'Junior',
   'Semi-skilled': 'Semi-skilled',
+  // The Occupational Level dropdown's own spellings, which the projection
+  // scores when Designation is blank.
+  'Semi-Skilled': 'Semi-skilled',
+  Skilled: 'Skilled Technical',
   Unskilled: 'Unskilled',
   Board: 'Board',
   Executive: 'Executive',

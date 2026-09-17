@@ -8,6 +8,7 @@ import { Button } from "@toolkit/components/ui/button";
 import { Badge } from "@toolkit/components/ui/badge";
 import { Input } from "@toolkit/components/ui/input";
 import { useToast } from "@toolkit/hooks/use-toast";
+import { isSuperAdmin } from "@/lib/roles";
 import {
   Users,
   Shield,
@@ -60,6 +61,8 @@ export default function AdminUsers() {
     },
   });
 
+  // Cross-company directory: platform staff only. A tenant `admin` (every
+  // customer is one for their own org) manages their people on /team.
   if (!isSuperAdmin(user)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">

@@ -8,6 +8,7 @@ import { CalculatorConfigBanner } from "@toolkit/components/layout/CalculatorCon
 import { useAuth } from "@toolkit/lib/auth";
 import { useActiveClient } from "@toolkit/lib/client-context";
 import type { BreakdownLine, PillarScore } from "@toolkit/lib/types";
+import { pillarBonusSplit } from "@toolkit/lib/sectors/sector-labels";
 import { cn } from "@toolkit/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -111,16 +112,12 @@ function bonusSplit(el: ScorecardElement): {
   hasBonus: boolean;
   unidentifiedPoints: number;
 } {
-  const bonusLines = el.subIndicators.filter((s) => s.isBonus);
-  const bonusAvailable = bonusLines.reduce((n, s) => n + (s.weighting || 0), 0);
-  const bonusEarned = bonusLines.reduce((n, s) => n + (s.score || 0), 0);
+  // Shared with both summary views via sector-labels, so the scorecard and the
+  // summaries can never state a different weighting for the same element.
+  const split = pillarBonusSplit(el.weighting, el.score, el.subIndicators);
   const lineSum = el.subIndicators.reduce((n, s) => n + (s.weighting || 0), 0);
   return {
-    baseWeight: Math.max(0, el.weighting - bonusAvailable),
-    baseScore: Math.max(0, el.score - bonusEarned),
-    bonusAvailable,
-    bonusEarned,
-    hasBonus: bonusLines.length > 0,
+    ...split,
     // Only meaningful when the pillar HAS sub-lines to reconcile against.
     unidentifiedPoints: lineSum > 0 ? Math.max(0, el.weighting - lineSum) : 0,
   };

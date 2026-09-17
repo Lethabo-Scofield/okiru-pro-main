@@ -10,7 +10,6 @@
  */
 
 import { getSectorConfig, type SectorConfig, STANDARD_RECOGNITION_TABLE } from '../sectorConfig.js';
-import { SectorRuleRepository } from '../../arango/repositories/sectorRuleRepository.js';
 import { createLogger } from '../../src/logger.js';
 
 const logger = createLogger('EntityManifest');
@@ -1820,87 +1819,15 @@ const SCORECARD_TYPES = [
 ] as const;
 
 /**
- * Normalise the ArangoDB StoredSectorRule (which stores pillarConfigs as an array)
- * into the keyed SectorConfig shape that all pack builders expect.
- * This mirrors storedRuleToSectorConfig in calculationEngine.ts.
+ * Resolve a sector's configuration.
+ *
+ * This used to query ArangoDB and fall back to the hardcoded configs. The
+ * Arango branch never ran: sector_rules held zero documents in every
+ * environment, so every call logged "ArangoDB unavailable" and returned the
+ * hardcoded config. The normalisation layer that mapped a stored rule back
+ * into SectorConfig went with it.
  */
-function normaliseStoredRule(stored: Awaited<ReturnType<SectorRuleRepository['getSectorRule']>>): SectorConfig {
-  if (!stored) throw new Error('normaliseStoredRule called with null');
-
-  // Start with safe defaults; Arango values will override everything they supply
-  const pillarConfigs: SectorConfig['pillarConfigs'] = {
-    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
-    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
-  };
-
-  const storedArray = Array.isArray(stored.pillarConfigs) ? stored.pillarConfigs : [];
-  for (const spc of storedArray) {
-    // spc.code matches pillarConfig keys directly
-    const key = spc.code as keyof SectorConfig['pillarConfigs'];
-    if (key && key in pillarConfigs) {
-      pillarConfigs[key] = {
-        maxPoints: spc.maxPoints,
-        hasSubMinimum: spc.hasSubMinimum,
-        subMinimumPercent: spc.subMinimumThreshold,
-      };
-    }
-  }
-
-  // Use stored totalMaxPoints if available and > 0, otherwise derive from pillar sum
-  const derivedTotal = Object.values(pillarConfigs).reduce((s, p) => s + p.maxPoints, 0);
-  const totalMaxPoints = (stored.totalMaxPoints && stored.totalMaxPoints > 0)
-    ? stored.totalMaxPoints
-    : derivedTotal;
-
-  return {
-    sectorCode: stored.sectorCode,
-    sectorName: stored.sectorName,
-    scorecardType: stored.scorecardType as 'Generic' | 'QSE' | 'EME' | 'Contractor' | 'BEP',
-    totalMaxPoints,
-    pillarConfigs,
-    targets: (stored.targets as SectorConfig['targets']) || {},
-    levelThresholds: (stored.levelThresholds || []).map((lt: any) => ({
-      level: lt.level, minPoints: lt.minPoints, recognition: lt.recognition,
-    })),
-    benefitFactors: (stored.benefitFactors || []).map((bf: any) => ({
-      contributionType: bf.contributionType, sdFactor: bf.sdFactor, edFactor: bf.edFactor,
-    })),
-    categoryWeightings: (stored.categoryWeightings || []).map((cw: any) => ({
-      code: cw.code, name: cw.name, weighting: cw.weighting, cap: cw.cap,
-    })),
-    industryNorms: (stored.industryNorms || []).map((ind: any) => ({
-      industry: ind.industry, normPercent: ind.normPercent, quarterThresholdPercent: ind.quarterThresholdPercent,
-    })),
-    recognitionTable: stored.recognitionTable?.length
-      ? (stored.recognitionTable as SectorConfig['recognitionTable'])
-      : STANDARD_RECOGNITION_TABLE,
-  };
-}
-
-/**
- * Resolve sector configuration from ArangoDB (single source of truth).
- * Falls back to hardcoded config only if ArangoDB is unavailable.
- */
-async function resolveSectorConfig(sectorCode: string, scorecardType: string): Promise<SectorConfig> {
-  const repo = new SectorRuleRepository();
-
-  try {
-    const storedRule = await repo.getSectorRule(sectorCode, scorecardType);
-
-    if (storedRule) {
-      return normaliseStoredRule(storedRule);
-    }
-  } catch (error) {
-    logger.warn('ArangoDB unavailable, using hardcoded config', { sectorCode, scorecardType, error: error instanceof Error ? error.message : String(error) });
-  }
-
-  // Fallback to hardcoded config
+function resolveSectorConfig(sectorCode: string, scorecardType: string): SectorConfig {
   return getSectorConfig(sectorCode, scorecardType);
 }
 
@@ -1910,7 +1837,7 @@ async function resolveSectorConfig(sectorCode: string, scorecardType: string): P
  */
 export async function buildManifest(sectorCode: string, scorecardType: string): Promise<EntityManifest> {
   const upper = sectorCode.toUpperCase();
-  const cfg = await resolveSectorConfig(upper, scorecardType);
+  const cfg = resolveSectorConfig(upper, scorecardType);
 
   const rootContext: RootContext = {
     sector: upper,

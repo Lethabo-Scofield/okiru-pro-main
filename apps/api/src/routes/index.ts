@@ -27,13 +27,11 @@ import exportRouter from './export.js';
 import accuracyRouter from './accuracy.js';
 import scorecardRouter from './scorecard.js';
 import scorecardAdviceRouter from './scorecardAdvice.js';
-import templatesRouter from './templates.js';
 import documentsRouter from './documents.js';
 import parserDocumentsRouter from './parserDocuments.js';
 import extractAndScoreRouter from './extractAndScore.js';
 import hybridExtractionRouter from './hybridExtraction.js';
 import entityTemplatesRouter from './entityTemplates.js';
-import entityMappingRouter from './entityMapping.js';
 import scorecardBuilderRouter from './scorecardBuilder.js';
 import sectorsRouter from './sectors.js';
 import constructionRouter from './construction.js';
@@ -183,7 +181,6 @@ export async function registerRoutes(
   app.use('/api/scorecards', scorecardAdviceRouter);
 
   // Template ingestion & graph inspection routes
-  app.use('/api/templates', templatesRouter);
 
   // Document upload & entity extraction routes
   app.use('/api/documents', documentsRouter);
@@ -199,7 +196,6 @@ export async function registerRoutes(
   app.use('/api/entity-templates', entityTemplatesRouter);
 
   // Entity-to-cell mappings (extracted entities → Excel cells)
-  app.use('/api/entity-mappings', entityMappingRouter);
 
   // Scorecard builder: manifest + calculate + save (Phase 4)
   app.use('/api', scorecardBuilderRouter);

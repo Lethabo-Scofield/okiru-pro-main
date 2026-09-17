@@ -3,6 +3,8 @@
  * Detects financial amounts (ZAR), percentages, dates, names, levels, races, genders.
  */
 
+import { toFraction } from './units/percentage.js';
+
 export interface ExtractedEntity {
   type: 'currency' | 'percentage' | 'date' | 'person_name' | 'company_name' | 'bee_level' | 'race' | 'gender' | 'designation' | 'number';
   value: string | number;
@@ -127,7 +129,7 @@ export function extractCurrency(value: unknown): number | null {
 
 export function extractPercentage(value: unknown): number | null {
   if (typeof value === 'number' && !isNaN(value)) {
-    return value > 1 ? value / 100 : value;
+    return toFraction(value);
   }
   const entity = extractEntity(value);
   if (entity && entity.type === 'percentage') return entity.value as number;

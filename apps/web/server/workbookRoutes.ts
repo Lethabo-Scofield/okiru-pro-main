@@ -22,6 +22,7 @@ import {
 import {
   SED_CONTRIBUTION_GUIDANCE,
   ESD_CONTRIBUTION_GUIDANCE,
+  CONTRIBUTION_TYPE_MAP,
   SECTIONS,
   type ColumnDef,
   type SectionDef,
@@ -30,6 +31,11 @@ import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbo
 import { coerceYesNo } from "../src/lib/yesNoValue";
 import { isBlackRace, isScoringDesignation, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import { createChatCompletion } from "./openaiCompat";
+import {
+  suggestValueFingerprint,
+  rememberDecision,
+  EmptyModelReplyError,
+} from "./mappingDecisionCache";
 import {
   getClient as memGetClient,
   canAccessClient as memCanAccessClient,
@@ -888,7 +894,25 @@ function mapDesignation(raw: string): string {
 
 // Lake Trading Fix Plan â”¬Âº1 Bug 4 + 5 (ESD/SED type)
 // Map human-friendly workbook contributionType labels Î“Ã¥Ã† calculator snake_case keys
-function mapContributionType(raw: string): string {
+/**
+ * The workbook's own dropdown labels → the calculator's benefit-factor keys.
+ *
+ * "Other Non-Monetary" is deliberately absent: no benefit-factor table carries
+ * a key for it, so which factor applies is a question for the Codes, not for
+ * this file. It abstains and is reported, like any other type we cannot price.
+ */
+const CANONICAL_CONTRIBUTION_KEY: Record<string, string> = {
+  "Grant Contribution": "grant",
+  "Loan": "standard_loan",
+  "Guarantee": "guarantees",
+  "Discount": "discounts",
+  "Payment Period Reduction": "shorter_payment_terms",
+  "Other Monetary": "direct_cost",
+  "Professional Services": "professional_services_free",
+  "Human Resource Capacity": "employee_time",
+};
+
+export function mapContributionType(raw: string): string {
   const t = (raw ?? "").toLowerCase().replace(/\s+/g, "_");
   if (t.includes("grant")) return "grant";
   if (t.includes("interest") && t.includes("free")) return "interest_free_loan";
@@ -899,16 +923,54 @@ function mapContributionType(raw: string): string {
   if (t.includes("professional")) return "professional_services_free";
   if (t.includes("human") || t.includes("employee_time")) return "employee_time";
   if (t.includes("direct")) return "direct_cost";
-  // "Other Monetary" / fallback Î“Ã‡Ã¶ Lake fixture uses this for direct-cost SD/ED
-  return "direct_cost";
+  // "Other Monetary" is a genuine direct cost, so it keeps its factor. The
+  // `non` guard is load-bearing: "Other Non-Monetary" is a separate dropdown
+  // option that also contains both words, and without the guard it was read as
+  // a direct cost — recognised at 100% — which is the same generous misread
+  // this function exists to prevent.
+  if (t.includes("other") && t.includes("monetary") && !t.includes("non")) return "direct_cost";
+
+  // Nothing above matched. Before abstaining, consult the workbook's OWN
+  // synonym map — the one the dropdown, the paste path and the AI importer all
+  // use. Keeping a second, hand-rolled keyword list here is what let "Early
+  // payment" (the label our export template writes for shorter payment terms,
+  // and a key the shared map already knows) fall through to unclassified and
+  // score nothing. The specific rules above still run first because they draw
+  // distinctions the dropdown cannot: an interest-free loan is a different
+  // benefit factor from a standard one, but the dropdown offers only "Loan".
+  const canonical = CONTRIBUTION_TYPE_MAP[(raw ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "")];
+  if (canonical && Object.prototype.hasOwnProperty.call(CANONICAL_CONTRIBUTION_KEY, canonical)) {
+    return CANONICAL_CONTRIBUTION_KEY[canonical];
+  }
+
+  // Everything else ABSTAINS. This used to return "direct_cost" for any
+  // unmatched string, and direct_cost is recognised at 100%, so a type we
+  // could not read was not flagged - it was scored in full. That fallback was
+  // chosen to make a fixture pass, then applied to every real client upload.
+  return "unclassified";
 }
 
-function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" {
-  const t = (raw ?? "").trim().toLowerCase().replace(/[^a-z]/g, "");
-  if (t === "ed" || t.startsWith("enterprise") || t.includes("enterprise development")) return "enterprise_development";
-  if (t === "sd" || t.startsWith("supplier")) return "supplier_development";
-  // Lake Trading Fix Plan §1 Bug 4: safe default → counts toward SD sub-min
-  return "supplier_development";
+export function mapEsdCategory(raw: string): "supplier_development" | "enterprise_development" | "unclassified" {
+  // Punctuation becomes a SPACE, it is not deleted. Deleting it welded
+  // "SD beneficiary (existing supplier…)" — the wording our own export template
+  // uses for every Supplier Development row — into
+  // "sdbeneficiaryexistingsupplier", which is neither "sd" nor a "supplier"
+  // prefix, so the row fell to unclassified and scored nothing. ED rows say
+  // "ENTERPRISE DEVELOPMENT (non-supplier…)" and matched the enterprise prefix
+  // by luck, which is why only the SD half of the sheet went missing.
+  const t = (raw ?? "").toLowerCase().replace(/[^a-z]+/g, " ").trim();
+  if (!t) return "unclassified";
+  // ED is tested FIRST and the order is load-bearing: the template's ED wording
+  // says "non-supplier", so it names suppliers in order to exclude them. An SD
+  // test that ran first and looked for "supplier" would claim every ED row.
+  if (/\b(ed|enterprise)\b/.test(t) || t.startsWith("enterprise")) return "enterprise_development";
+  if (/\b(sd|supplier)\b/.test(t) || t.startsWith("supplier")) return "supplier_development";
+  // Still no default. Unknown used to fall to supplier_development — "counts
+  // toward SD sub-min" — which decided a compliance sub-minimum on a guess.
+  // Unknown stays unclassified: the calculator excludes it AND flags it, and
+  // the workbook's category dropdown is where a person settles it. Reading a
+  // category the document states is not the same as inventing one it does not.
+  return "unclassified";
 }
 
 // Lake Trading Fix Plan â”¬Âº1 Bug 3 + 7: supplier size Î“Ã¥Ã† enterpriseType + unit normalisation
@@ -1877,26 +1939,73 @@ export function registerWorkbookRoutes(app: Express): void {
         `User typed: "${rawValue}"\n` +
         `What is the correct normalized value?`;
 
-      const response = await createChatCompletion(client, {
-        model,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
+      /*
+       * How a value normalises is a property of the QUESTION, not of the run.
+       *
+       * `temperature: 0` below is a request the gpt-5-family deployments reject
+       * outright, so every ask is sampled afresh: the same typo in the same
+       * field could be corrected on Tuesday and refused on Wednesday, and the
+       * corrected value is what gets scored. Decided once per (field, allowed
+       * values, rule, raw value) and replayed after that.
+       *
+       * The raw value belongs IN the fingerprint here — unlike a column mapping,
+       * where the question is about the template, this question IS "what does
+       * this particular string mean for this field".
+       */
+      const fingerprint = suggestValueFingerprint({
+        fieldKey,
+        fieldLabel,
+        fieldType,
+        allowedValues,
+        validationMessage,
+        dateFormat,
+        rawValue,
       });
-      const text = response.choices?.[0]?.message?.content;
-      if (!text) return res.json({ suggestion: null, explanation: "" });
 
-      const parsed = JSON.parse(text) as { suggestion?: string | null; explanation?: string };
-      const suggestion = typeof parsed.suggestion === "string" ? parsed.suggestion.trim() : null;
-      const validSuggestion =
-        suggestion && (allowedValues.length === 0 || allowedValues.includes(suggestion))
-          ? suggestion
-          : null;
+      type SuggestValueAnswer = { suggestion: string | null; explanation: string };
+      let answer: SuggestValueAnswer | null;
+      try {
+        const decision = await rememberDecision<SuggestValueAnswer>(
+          "suggest-value",
+          fingerprint,
+          async () => {
+            const response = await createChatCompletion(client, {
+              model,
+              temperature: 0,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: user },
+              ],
+            });
+            const text = response.choices?.[0]?.message?.content;
+            // Empty is a hiccup, not a verdict — never freeze it.
+            if (!text) throw new EmptyModelReplyError();
 
-      return res.json({ suggestion: validSuggestion, explanation: parsed.explanation ?? "" });
+            const parsed = JSON.parse(text) as { suggestion?: string | null; explanation?: string };
+            const suggestion = typeof parsed.suggestion === "string" ? parsed.suggestion.trim() : null;
+            // Validated BEFORE caching, and the allowed list is in the
+            // fingerprint, so a replayed answer can never be a value the field
+            // no longer permits.
+            const validSuggestion =
+              suggestion && (allowedValues.length === 0 || allowedValues.includes(suggestion))
+                ? suggestion
+                : null;
+            return { suggestion: validSuggestion, explanation: parsed.explanation ?? "" };
+          },
+        );
+        answer = decision.value;
+      } catch (err) {
+        if (err instanceof EmptyModelReplyError) {
+          return res.json({ suggestion: null, explanation: "" });
+        }
+        throw err;
+      }
+
+      return res.json({
+        suggestion: answer?.suggestion ?? null,
+        explanation: answer?.explanation ?? "",
+      });
     } catch (err) {
       logger.error("suggest-value failed", err);
       return res.status(500).json({ message: "suggest-value failed" });

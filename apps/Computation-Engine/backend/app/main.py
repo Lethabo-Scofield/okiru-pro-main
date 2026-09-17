@@ -36,8 +36,8 @@ async def startup_event():
     """Application startup hook."""
     logger.info("Okiru Computation Engine started")
 
-    if settings.ALLOW_IN_MEMORY_DB:
-        logger.warning("Running in in-memory DB mode (no ArangoDB persistence).")
+    if settings.use_in_memory_db:
+        logger.warning("Running on the in-memory store — compiled models are not persisted.")
     else:
         logger.info("Connected to ArangoDB and initialized collections")
 

@@ -131,7 +131,13 @@ const MINIMUM_CHARGE_CENTS = numEnv('PARSER_MINIMUM_CHARGE_CENTS', 200);
 // customer price is that cost × this multiplier. Applied here so the SHOWN
 // price and the ACTUAL charge are the same number (the checkout reads totalCents
 // from this quote). Tune with PARSER_SELL_MULTIPLIER without a code change.
-const SELL_MULTIPLIER = numEnv('PARSER_SELL_MULTIPLIER', 100);
+//
+// 2.5 = a 60% gross margin (price − cost = 60% of price). The old default of
+// 100 was a pre-pricing placeholder that survived into production and quoted a
+// real evidence pack at ~374,000 tokens (R3.7k) whose compute cost was ~R37 —
+// the default must be the commercial rule, because the default is what runs
+// when someone loses the env var.
+const SELL_MULTIPLIER = numEnv('PARSER_SELL_MULTIPLIER', 2.5);
 const sell = (costCents: number) => round2(costCents * SELL_MULTIPLIER);
 
 function numEnv(name: string, fallback: number): number {

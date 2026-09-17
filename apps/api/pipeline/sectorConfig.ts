@@ -80,6 +80,11 @@ export interface OwnershipTargets {
   womenEIMaxPts: number;
   netValueMaxPts: number;
   newEntrantsMaxPts: number;
+  /**
+   * Compliance target for the black-new-entrants economic-interest indicator.
+   * Optional because most codes use the generic 2%; MAC sets 4% (GG 39887 8.2.4).
+   */
+  newEntrantsTarget?: number;
   /** Transport Sector (Large): designated-group economic interest indicator row */
   economicInterestDesignatedGroupTarget?: number;
   economicInterestDesignatedGroupMaxPts?: number;
@@ -247,6 +252,13 @@ export interface SectorConfig {
     enterpriseDevelopment: PillarConfig;
     socioEconomicDevelopment: PillarConfig;
     yesInitiative?: PillarConfig; // YES points are included in totalMaxPoints for some sectors
+    /**
+     * MAC only — "Responsible Social Marketing and Communications" (GG 39887
+     * §13 / §20), a sixth gazetted element with no analogue in any other code.
+     * Large entities score 5 pts on sector-initiative contributions; QSE splits
+     * it 3 (no adverse RSM ruling) + 2 (attending sector RSM initiatives).
+     */
+    responsibleSocialMarketing?: PillarConfig;
     empowermentFinancing?: PillarConfig;
     accessToFinancialServices?: PillarConfig;
     consumerEducation?: PillarConfig;
@@ -474,10 +486,10 @@ export const RCOGP_GENERIC: SectorConfig = {
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 29, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 29, basePoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -572,13 +584,13 @@ export const ICT_GENERIC: SectorConfig = {
     managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // Skills: 8+4+4+4+5 = 25 (6% all-spend, no bursary, 2×headcount, absorption bonus)
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     // PP: 5+3+4+9+4 = 25 base + 2 DG bonus = 27
-    preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 27, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     // SD: 2% NPAT / 10 pts
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
     // ED: 15 base (3% NPAT) + 1 graduation + 2 jobs≥11% = 18 max
-    enterpriseDevelopment: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 18, basePoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     // SED: 1.5% NPAT / 12 pts (ICT Specific Initiatives)
     socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -692,10 +704,10 @@ export const FSC_GENERIC: SectorConfig = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined (Others: 2+1+2+1+10+4+1=21)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 }, // 2+2+3+4+4+1+4+3 = 23
-    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 }, // 5+3+2+7+3+2+2 = 24 (Others, no EF)
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 }, // 2+2+3+4+4+1+4+3 = 23
+    preferentialProcurement: { maxPoints: 24, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 }, // 5+3+2+7+3+2+2 = 24 (Others, no EF)
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 3 bonus
+    enterpriseDevelopment: { maxPoints: 9, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 3 bonus
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // SED 3 + CE 2 + bonus = 8
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -783,18 +795,23 @@ export const FSC_BANKS: SectorConfig = {
   sectorName: 'Financial Sector Code (Banks — FS701)',
   scorecardType: 'Generic',
   // Banks gazette shapes: 23+20+23+19+7(SD)+5(ED)+15(EF)+12(AFS)+8 = 132 (audit items 7-9)
+  // TODO(Zoleka 2026-08-13): ownership carries 5 BONUS points on top of the
+  //   23-pt weighting (-> 28). Not applied yet: the five bonus INDICATORS are
+  //   not specified anywhere we hold, and raising maxPoints alone made the
+  //   points unearnable - the calculator emits 23 pts of sub-lines, so every
+  //   client read 5 short. Needs the indicator list before it goes in.
   totalMaxPoints: 132,
   pillarConfigs: {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 19, basePoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },
     // Banks SD row on the EF & ESD scorecard = 7 pts (C17 =IF(D7="Banks",7,0),
     // FSC_Generic.md L15913) — the previous 10 was the Others ESD-scorecard value.
     supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
     // Banks ED: 3 base (C19, L15923) + 1 grad + 1 jobs = 5 (no stockbroker row on Banks EF sheet)
-    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 5, basePoints: 3, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // EF-proper: Targeted Investments 12 (C14 =IF(D7="Banks",12,0), L15893) +
@@ -891,18 +908,23 @@ export const FSC_LTI: SectorConfig = {
   sectorName: 'Financial Sector Code (Long-Term Insurers — FS702)',
   scorecardType: 'Generic',
   // 25+21+23+24+7(SD)+7(ED with stockbroker)+15(EF)+12(AFS)+8 = 142
+  // TODO(Zoleka 2026-08-13): ownership carries 5 BONUS points on top of the
+  //   23-pt weighting (-> 28). Not applied yet: the five bonus INDICATORS are
+  //   not specified anywhere we hold, and raising maxPoints alone made the
+  //   points unearnable - the calculator emits 23 pts of sub-lines, so every
+  //   client read 5 short. Needs the indicator list before it goes in.
   totalMaxPoints: 134, // LTI: 23+20+23+19+7+7+15(EF)+12(AFS)+8 = 134 (gazette shapes — audit items 7-9)
   pillarConfigs: {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 19, basePoints: 15, hasSubMinimum: true, subMinimumPercent: 40 },
     // LTI SD row on the EF & ESD scorecard = 7 pts (C16 =IF(LTI,7,0),
     // FSC_Generic.md L16040) — the previous 10 was the Others ESD-scorecard value.
     supplierDevelopment: { maxPoints: 7, hasSubMinimum: true, subMinimumPercent: 40 },
     // LTI ED: 3 base (C18, L16050) + 1 grad + 1 jobs + 2 stockbroker (C22, L16078) = 7
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 3, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // EF-proper: Targeted Investments 12 (C13 =IF(LTI,12,0), L16020) +
@@ -995,15 +1017,20 @@ export const FSC_STI: SectorConfig = {
   sectorName: 'Financial Sector Code (Short-Term Insurers — FS703)',
   scorecardType: 'Generic',
   // 25+21+23+24+10+9+12+8 = 132 (same as LTI, EF=N/A for STI)
+  // TODO(Zoleka 2026-08-13): ownership carries 5 BONUS points on top of the
+  //   23-pt weighting (-> 28). Not applied yet: the five bonus INDICATORS are
+  //   not specified anywhere we hold, and raising maxPoints alone made the
+  //   points unearnable - the calculator emits 23 pts of sub-lines, so every
+  //   client read 5 short. Needs the indicator list before it goes in.
   totalMaxPoints: 129, // STI: 23+20+... (own 23 + MC 20 per gazette — audit items 7,9)
   pillarConfigs: {
     ownership: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 23, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 24, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 23, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 24, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 9, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 9, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
     // No EF for STI (N/A per SLS §2)
@@ -1095,15 +1122,22 @@ export const AGRI_GENERIC: SectorConfig = {
   sectorCode: 'AGRI',
   sectorName: 'AgriBEE Sector Code (Generic)',
   scorecardType: 'Generic',
-  totalMaxPoints: 128, // AgriBEE gazette: 25+19+25+27+10+7+15 = 128 (MC 19 per GG 41306 — audit item 11)
+  // AgriBEE: 25+23+25+27+10+7+15 = 132.
+  // MC is 23 on Zoleka Mnanzana's instruction (2026-08-13): Exco sub-total 13
+  // (board 3+2, exec 2+1, other exec 3+2) + EE bands 10. This REVERSES audit
+  // item 11, which read GG 41306 pp.33-34 as the generic 19-pt structure and
+  // called the template's 23 "+4 phantom points". Adopted on the expert's
+  // authority over the audit; if the gazette is ever re-read, this is the line
+  // to revisit. Every AgriBEE client gains 4 points.
+  totalMaxPoints: 132,
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    managementControl: { maxPoints: 19, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined, 19 pts (GG 41306 — audit item 11)
+    managementControl: { maxPoints: 23, hasSubMinimum: false, subMinimumPercent: 0 }, // MC+EE combined: Exco 13 + EE bands 10 (expert-set 2026-08-13)
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // EE folded into MC
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 27, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + 1 jobs
     socioEconomicDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 }, // Agriculture-specific SED
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -1123,20 +1157,20 @@ export const AGRI_GENERIC: SectorConfig = {
       netValueMaxPts: 8, newEntrantsMaxPts: 2,
     },
     managementControl: {
-      // AGRI MC: AgriBEE gazette (GG 41306) Statement — 19-pt combined total.
-      // Exco sub-total: 9 — Board Black 2@50%, Board BW 1@25%, Exec Black 2@50%,
-      //   Exec BW 1@25%, Other Exec Black 2@60%, Other Exec BW 1@30%.
-      // The Agri Excel template carried 3+2 / 3+2 (= 23 total, +4 phantom
-      // points) — the gazette is unambiguous. (Audit 2026-07-26 item 11.)
+      // AGRI MC — 23-pt combined total, per Zoleka Mnanzana 2026-08-13.
+      // Exco sub-total: 13 — Board Black 3@50%, Board BW 2@25%, Exec Black 2@50%,
+      //   Exec BW 1@25%, Other Exec Black 3@60%, Other Exec BW 2@30%.
+      // Supersedes audit item 11 (which read the gazette as 2+1 / 2+1 = 9 and
+      // treated the template's 3+2 / 3+2 as phantom). Expert instruction wins.
       // EE bands sub-total: 10 — Senior Black 2@60%, Senior BW 1@30%,
       //   Middle Black 2@75%, Middle BW 1@38%, Junior Black 1@88%, Junior BW 1@44%,
       //   Disabled 2@2%
-      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
-      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      boardBlackTarget: 0.50, boardBlackMaxPts: 3,
+      boardBWTarget: 0.25, boardBWMaxPts: 2,
       execBlackTarget: 0.50, execBlackMaxPts: 2,
       execBWTarget: 0.25, execBWMaxPts: 1,   // 25% (NOT 30% — exec directors only)
-      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 2,
-      otherExecBWTarget: 0.30, otherExecBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
       seniorMaxPts: 2, seniorBWMaxPts: 1,    // EAP-based (60%/30%)
       middleMaxPts: 2, middleBWMaxPts: 1,    // EAP-based (75%/38%)
       juniorMaxPts: 1, juniorBWMaxPts: 1,    // EAP-based (88%/44%)
@@ -1214,10 +1248,10 @@ export const RCOGP_QSE: SectorConfig = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     // QSE MC: no board, no EAP bands, no disabled — 2-section flat-target scorecard
     managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 30, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 21, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 7, hasSubMinimum: false, subMinimumPercent: 0 },
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
   },
@@ -1303,10 +1337,10 @@ export const ICT_QSE: SectorConfig = {
   pillarConfigs: {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 30, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 21, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 30, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 21, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
-    enterpriseDevelopment: { maxPoints: 8, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + tiered jobs (1 or 2)
+    enterpriseDevelopment: { maxPoints: 8, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 }, // 5 base + 1 grad + tiered jobs (1 or 2)
     socioEconomicDevelopment: { maxPoints: 12, hasSubMinimum: false, subMinimumPercent: 0 }, // ICT-specific 12 pts
     yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 }, // Level boost only
   },
@@ -1421,8 +1455,8 @@ export const FSC_QSE: SectorConfig = {
     ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
     managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
-    skillsDevelopment: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
-    preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    skillsDevelopment: { maxPoints: 25, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 20, basePoints: 19, hasSubMinimum: true, subMinimumPercent: 40 },
     supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
     enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
     socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -1497,7 +1531,7 @@ export const FSC_QSE: SectorConfig = {
 
 export const TRANSPORT_GENERIC: SectorConfig = {
   sectorCode: 'TRANSPORT',
-  sectorName: 'Transport Sector Code (Large Enterprise)',
+  sectorName: 'Transport Sector Code - Road Freight (Large Enterprise)',
   scorecardType: 'Generic',
   totalMaxPoints: 108,
   // Super Admin Fix Plan §1.3 + §3.1 T1/T2 — Transport Large has two separate
@@ -1505,9 +1539,9 @@ export const TRANSPORT_GENERIC: SectorConfig = {
   // Previously they were merged into MC = 29 / EE = 0, leaving EE invisible
   // in Super Admin.
   pillarConfigs: {
-    ownership: { maxPoints: 24, hasSubMinimum: false, subMinimumPercent: 0 },
-    managementControl: { maxPoints: 11, hasSubMinimum: false, subMinimumPercent: 0 },
-    employmentEquity: { maxPoints: 18, hasSubMinimum: false, subMinimumPercent: 0 },
+    ownership: { maxPoints: 24, basePoints: 22, hasSubMinimum: false, subMinimumPercent: 0 },
+    managementControl: { maxPoints: 11, basePoints: 10, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 18, basePoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     skillsDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
     preferentialProcurement: { maxPoints: 20, hasSubMinimum: false, subMinimumPercent: 0 },
     supplierDevelopment: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
@@ -1642,7 +1676,7 @@ export const TRANSPORT_GENERIC: SectorConfig = {
 
 export const TRANSPORT_QSE: SectorConfig = {
   sectorCode: 'TRANSPORT',
-  sectorName: 'Transport Sector Code (QSE)',
+  sectorName: 'Transport Sector Code - Road Freight (QSE)',
   scorecardType: 'QSE',
   // Any four of the seven elements, 25 each → 100. Bonuses may exceed it.
   totalMaxPoints: 100,
@@ -1931,10 +1965,209 @@ function getEnrichedConfig(sectorCode: string, scorecardType: string = 'Generic'
 // Lookup
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// MAC - Marketing, Advertising and Communication Sector Code
+// Government Gazette No. 39887, 1 April 2016. Transcribed from
+// docs/toolkits/MAC Codes.xlsx (supplied via Zoleka Mnanzana, 2026-08-13).
+//
+// MAC has SIX elements: the usual five plus Responsible Social Marketing and
+// Communications. Its Skills absorption bonus is 10 points - the largest of any
+// code we implement.
+//
+// [UNVERIFIED] The extract gives indicator weightings and targets ONLY. It
+// states no level ladder, no priority elements and no sub-minimums. The QSE
+// sheet says the total is "capped per Amended Codes rules", so the standard
+// ladder, recognition table and 40% sub-minimums are applied by analogy. Those
+// three are ASSUMPTIONS, not transcriptions - confirm before relying on a MAC
+// level.
+// ---------------------------------------------------------------------------
+export const MAC_GENERIC: SectorConfig = {
+  sectorCode: 'MAC',
+  sectorName: 'Marketing, Advertising and Communication Sector Code (Generic)',
+  scorecardType: 'Generic',
+  // The gazette states 124 "excl. bonus" + 14 bonus. Every other config in this
+  // file declares the BONUS-INCLUSIVE total (RCOGP's 120 already contains its 9
+  // bonus points), and the integrity test enforces
+  // totalMaxPoints === sum(pillar maxPoints). So: 138 total, of which 124 is the
+  // element weighting and 14 is bonus (Skills 10, PP 2, ED 2).
+  totalMaxPoints: 138,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 27, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 30, basePoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 29, basePoints: 27, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 10, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 7, basePoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    responsibleSocialMarketing: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      // Section 8. MAC targets are HIGHER than the generic codes: 45% voting and
+      // economic interest rather than 25%, and 30% for black women rather 10%.
+      votingRightsTarget: 0.45, votingRightsMaxPts: 4,
+      womenVotingTarget: 0.30, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.45, economicInterestMaxPts: 4,
+      womenEITarget: 0.30, womenEIMaxPts: 2,
+      economicInterestDesignatedGroupTarget: 0.05, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 2, newEntrantsTarget: 0.04,
+    },
+    managementControl: {
+      // Section 9.1-9.6
+      boardBlackTarget: 0.50, boardBlackMaxPts: 2,
+      boardBWTarget: 0.25, boardBWMaxPts: 1,
+      execBlackTarget: 0.50, execBlackMaxPts: 2,
+      execBWTarget: 0.25, execBWMaxPts: 1,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 3,
+      otherExecBWTarget: 0.30, otherExecBWMaxPts: 2,
+      seniorMaxPts: 3, seniorBWMaxPts: 2,
+      middleMaxPts: 3, middleBWMaxPts: 2,
+      juniorMaxPts: 2, juniorBWMaxPts: 2,
+      seniorBlackTarget: 0.60, seniorBWTarget: 0.30,
+      middleBlackTarget: 0.75, middleBWTarget: 0.38,
+      juniorBlackTarget: 0.88, juniorBWTarget: 0.44,
+    },
+    employmentEquity: {
+      seniorMaxPts: 3, middleMaxPts: 3, juniorMaxPts: 2,
+      disabledMaxPts: 2, disabledTarget: 0.02,
+    },
+    skills: {
+      // Section 10. 8 pts at 6% of leviable, well above the generic 3.5%.
+      learningProgrammesMaxPts: 8,
+      bursaryMaxPts: 4,
+      disabledLearningMaxPts: 4,
+      learnershipsMaxPts: 4,
+      absorptionMaxPts: 10,
+      overallSpendPercent: 6.0,
+      bursarySpendPercent: 2.5,
+      disabledSpendPercent: 0.3,
+      learnershipTargetPercent: 2.5,
+      absorptionTargetPercent: 100,
+    },
+    procurement: {
+      // Section 11.1
+      allSuppliersTarget: 0.80, allSuppliersMaxPts: 5,
+      qseTarget: 0.20, qseMaxPts: 4,
+      emeTarget: 0.20, emeMaxPts: 5,
+      bo51Target: 0.40, bo51MaxPts: 9,
+      bwo30Target: 0.12, bwo30MaxPts: 4,
+      dgTarget: 0.02, dgMaxPts: 2,
+    },
+    esd: {
+      sdPercent: 2.0, sdMaxPts: 10,
+      edPercent: 1.0, edMaxPts: 5,
+      edGraduationBonus: 1,
+      edJobsBonus: 1,
+    },
+    sed: { spendPercent: 2.5, maxPts: 5 },
+  },
+  levelThresholds: STANDARD_LEVELS,             // [UNVERIFIED] - see header
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// Ownership: 4+2+4+2+3+2+8 = 25
+// MC: 2+1+2+1+3+2+3+2+3+2+2+2+2 = 27
+// Skills: 8+4+4+4 = 20 base (+10 bonus)
+// PP: 5+4+5+9+4 = 27 base (+2 bonus); ESD element = 27+10+5 = 42
+// Grand total: 25+27+20+42+5+5 = 124 base, 14 bonus
+
+export const MAC_QSE: SectorConfig = {
+  sectorCode: 'MAC',
+  sectorName: 'Marketing, Advertising and Communication Sector Code (QSE)',
+  scorecardType: 'QSE',
+  // Gazette states 105 "excl. bonus" + 10 bonus; declared bonus-inclusive to
+  // match every other config and the integrity test. Base weighting is 105.
+  totalMaxPoints: 115,
+  pillarConfigs: {
+    ownership: { maxPoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    managementControl: { maxPoints: 15, hasSubMinimum: false, subMinimumPercent: 0 },
+    employmentEquity: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+    skillsDevelopment: { maxPoints: 35, basePoints: 25, hasSubMinimum: true, subMinimumPercent: 40 },
+    preferentialProcurement: { maxPoints: 20, hasSubMinimum: true, subMinimumPercent: 40 },
+    supplierDevelopment: { maxPoints: 5, hasSubMinimum: true, subMinimumPercent: 40 },
+    enterpriseDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    socioEconomicDevelopment: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    responsibleSocialMarketing: { maxPoints: 5, hasSubMinimum: false, subMinimumPercent: 0 },
+    yesInitiative: { maxPoints: 0, hasSubMinimum: false, subMinimumPercent: 0 },
+  },
+  targets: {
+    ownership: {
+      // Section 15. QSE reverts to the familiar 25% + 1 vote / 25% EI targets.
+      votingRightsTarget: 0.25, votingRightsMaxPts: 5,
+      womenVotingTarget: 0.12, womenVotingMaxPts: 2,
+      economicInterestTarget: 0.25, economicInterestMaxPts: 5,
+      womenEITarget: 0.12, womenEIMaxPts: 2,
+      // 15.2.3 is a single combined "new entrants OR designated groups" row.
+      economicInterestDesignatedGroupTarget: 0.02, economicInterestDesignatedGroupMaxPts: 3,
+      netValueMaxPts: 8, newEntrantsMaxPts: 0,
+    },
+    managementControl: {
+      // Section 16 - only two bands: executive and non-executive management.
+      boardBlackTarget: 0, boardBlackMaxPts: 0,
+      boardBWTarget: 0, boardBWMaxPts: 0,
+      execBlackTarget: 0.50, execBlackMaxPts: 5,
+      execBWTarget: 0.30, execBWMaxPts: 2,
+      otherExecBlackTarget: 0.60, otherExecBlackMaxPts: 6,
+      otherExecBWTarget: 0.35, otherExecBWMaxPts: 2,
+      seniorMaxPts: 0, seniorBWMaxPts: 0,
+      middleMaxPts: 0, middleBWMaxPts: 0,
+      juniorMaxPts: 0, juniorBWMaxPts: 0,
+    },
+    employmentEquity: {
+      seniorMaxPts: 0, middleMaxPts: 0, juniorMaxPts: 0,
+      disabledMaxPts: 0, disabledTarget: 0,
+    },
+    skills: {
+      // Section 17. Two spend lines only, plus the absorption bonus.
+      learningProgrammesMaxPts: 20,
+      bursaryMaxPts: 5,
+      disabledLearningMaxPts: 0,
+      learnershipsMaxPts: 0,
+      absorptionMaxPts: 10,
+      overallSpendPercent: 4.0,
+      bursarySpendPercent: 3.0,
+      disabledSpendPercent: 0,
+      learnershipTargetPercent: 0,
+      absorptionTargetPercent: 100,
+    },
+    procurement: {
+      // Section 18.1 - two indicators only.
+      allSuppliersTarget: 0.60, allSuppliersMaxPts: 12,
+      qseTarget: 0, qseMaxPts: 0,
+      emeTarget: 0, emeMaxPts: 0,
+      bo51Target: 0.20, bo51MaxPts: 8,
+      bwo30Target: 0, bwo30MaxPts: 0,
+      dgTarget: 0, dgMaxPts: 0,
+    },
+    esd: {
+      sdPercent: 2.0, sdMaxPts: 5,
+      edPercent: 2.0, edMaxPts: 5,
+      edGraduationBonus: 0,
+      edJobsBonus: 0,
+    },
+    sed: { spendPercent: 2.0, maxPts: 5 },
+  },
+  levelThresholds: STANDARD_LEVELS,             // [UNVERIFIED] - see header
+  recognitionTable: STANDARD_RECOGNITION_TABLE,
+  benefitFactors: STANDARD_BENEFIT_FACTORS,
+  categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
+  industryNorms: STANDARD_INDUSTRY_NORMS,
+};
+// Ownership: 5+2+5+2+3+8 = 25
+// MC: 5+2+6+2 = 15
+// Skills: 20+5 = 25 base (+10 bonus)
+// PP: 12+8 = 20; ESD element = 20+5+5 = 30
+// Grand total: 25+15+25+30+5+5 = 105 base, 10 bonus
+
 const ALL_CONFIGS: SectorConfig[] = [
   RCOGP_GENERIC, ICT_GENERIC, FSC_GENERIC, FSC_BANKS, FSC_LTI, FSC_STI,
   FSC_QSE, AGRI_GENERIC, TRANSPORT_GENERIC, RCOGP_QSE, ICT_QSE, TRANSPORT_QSE,
   CONSTRUCTION_QSE, CONSTRUCTION_CONTRACTOR, CONSTRUCTION_BEP,
+  MAC_GENERIC, MAC_QSE,
 ].map(attachSubElements);
 
 export function getSectorConfig(sectorCode: string, scorecardType: string = 'Generic'): SectorConfig {

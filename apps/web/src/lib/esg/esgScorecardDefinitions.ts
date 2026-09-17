@@ -1,11 +1,52 @@
-/** Auto-aligned to docs/esg/extracted/*_Scorecard.json (v1.7) */
+/**
+ * ESG indicator ledger — THE SINGLE SOURCE OF TRUTH for ESG points allocation.
+ *
+ * Every value below is transcribed from the workbook
+ * `docs/esg/Okiru_ESG_Toolkit_v1_7_SG_Consumer_LiveData.xlsx`, extracted to
+ * `docs/esg/extracted/{E,S,G}_Scorecard.json` and tabulated in
+ * `docs/esg/ESG_FORMULA_LEDGER.md` Part 1:
+ *
+ *   `indicator` ← `<Pillar>_Scorecard!A{row}`  (verbatim column-A text)
+ *   `maxPoints` ← `<Pillar>_Scorecard!B{row}`  (column B, "Max Pts")
+ *
+ * So the `row` field IS the source-cell citation for each entry — `E d13` is
+ * `E_Scorecard!A13`/`E_Scorecard!B13`, and so on.
+ *
+ * Pillar totals (asserted in `__tests__/esgPointsSingleSourceOfTruth.test.ts`
+ * against the extracted JSON, not just against these literals):
+ *   E = 108  (E_Scorecard rows 5–29; `E_Scorecard!A30` label reads "108 pts max")
+ *   S = 100  (S_Scorecard rows 5–27)
+ *   G = 100  (G_Scorecard rows 5–25)
+ * These match `ESG_PILLAR_MAX` in `esgScoringDefaults.ts` and `PILLAR_MAX_*`
+ * in `EsgToolkit/src/lib/esgConfig/consumer-goods.ts`.
+ *
+ * DO NOT hand-copy these numbers into another module. Points allocation used to
+ * be maintained in four divergent places (this file, the dashboard pillar-row
+ * table, the nav `scoreGroup.max` literals, and the pillar-max constants), and
+ * they disagreed — the dashboard's private copy summed E to 106 and S to 93 and
+ * showed different labels for the same indicator. Derive from the exports at
+ * the bottom of this file instead (`sumIndicatorMaxPoints`,
+ * `ESG_SCORECARD_PILLAR_MAX`).
+ *
+ * Audit note (this pass): every `maxPoints` and every `indicator` label here was
+ * re-verified cell-by-cell against column A/B of the extracted workbook. None
+ * required correction — this file was already exact, which is why it was chosen
+ * as the source of truth. The divergent copies elsewhere were the defects.
+ */
 export type EsgScorecardIndicator = {
+  /** 1-based worksheet row on the pillar's `*_Scorecard` sheet. */
   row: number;
+  /** Stable calculator row id, `d{row}` — the key used in `EsgScorecardResult` rows. */
   key: string;
+  /** Verbatim `<Pillar>_Scorecard!A{row}` text. */
   indicator: string;
+  /** Verbatim `<Pillar>_Scorecard!B{row}` value. */
   maxPoints: number;
 };
 
+export type EsgScorecardPillar = "environmental" | "social" | "governance";
+
+/** `E_Scorecard!A5:B29` — 20 scored rows, Σ column B = 108. */
 export const E_SCORECARD_INDICATORS = [
   {
     "row": 5,
@@ -129,6 +170,7 @@ export const E_SCORECARD_INDICATORS = [
   }
 ] as EsgScorecardIndicator[];
 
+/** `S_Scorecard!A5:B27` — 19 scored rows, Σ column B = 100. */
 export const S_SCORECARD_INDICATORS = [
   {
     "row": 5,
@@ -246,6 +288,7 @@ export const S_SCORECARD_INDICATORS = [
   }
 ] as EsgScorecardIndicator[];
 
+/** `G_Scorecard!A5:B25` — 14 scored rows, Σ column B = 100. */
 export const G_SCORECARD_INDICATORS = [
   {
     "row": 5,
@@ -338,3 +381,61 @@ export const SCORECARD_INDICATORS = {
   social: S_SCORECARD_INDICATORS,
   governance: G_SCORECARD_INDICATORS,
 } as const;
+
+/* ------------------------------------------------------------------------- *
+ * Derived accessors — the only supported way to obtain ESG maxima.
+ * Nothing downstream should re-declare a points table; call these instead.
+ * ------------------------------------------------------------------------- */
+
+const INDICATOR_INDEX: Record<EsgScorecardPillar, Map<string, EsgScorecardIndicator>> = {
+  environmental: new Map(E_SCORECARD_INDICATORS.map((i) => [i.key, i])),
+  social: new Map(S_SCORECARD_INDICATORS.map((i) => [i.key, i])),
+  governance: new Map(G_SCORECARD_INDICATORS.map((i) => [i.key, i])),
+};
+
+/** Look up one indicator by pillar + row key (`"d13"`). `undefined` if unknown. */
+export function esgIndicator(
+  pillar: EsgScorecardPillar,
+  key: string,
+): EsgScorecardIndicator | undefined {
+  return INDICATOR_INDEX[pillar].get(key);
+}
+
+/**
+ * Column-B maximum for one indicator.
+ *
+ * Throws on an unknown key rather than returning 0: a typo in a nav score group
+ * or a calculator row must surface as a hard failure, not as a badge that
+ * silently under-reports its denominator.
+ */
+export function esgIndicatorMaxPoints(pillar: EsgScorecardPillar, key: string): number {
+  const found = esgIndicator(pillar, key);
+  if (!found) {
+    const valid = SCORECARD_INDICATORS[pillar].map((i) => i.key).join(", ");
+    throw new Error(
+      `Unknown ESG indicator "${key}" for pillar "${pillar}". Valid keys: ${valid}`,
+    );
+  }
+  return found.maxPoints;
+}
+
+/** Σ column B over the given indicator keys — for nav sub-section denominators. */
+export function sumIndicatorMaxPoints(pillar: EsgScorecardPillar, keys: readonly string[]): number {
+  return keys.reduce((sum, key) => sum + esgIndicatorMaxPoints(pillar, key), 0);
+}
+
+/** Σ column B over a whole pillar. Derived, never typed by hand: E=108, S=100, G=100. */
+export function esgPillarMaxPoints(pillar: EsgScorecardPillar): number {
+  return SCORECARD_INDICATORS[pillar].reduce((sum, i) => sum + i.maxPoints, 0);
+}
+
+/**
+ * Pillar maxima derived from column B. Must equal `ESG_PILLAR_MAX` in
+ * `esgScoringDefaults.ts` and `PILLAR_MAX_*` in `esgConfig/consumer-goods.ts`;
+ * `__tests__/esgPointsSingleSourceOfTruth.test.ts` asserts all three agree.
+ */
+export const ESG_SCORECARD_PILLAR_MAX: Record<EsgScorecardPillar, number> = {
+  environmental: esgPillarMaxPoints("environmental"),
+  social: esgPillarMaxPoints("social"),
+  governance: esgPillarMaxPoints("governance"),
+};

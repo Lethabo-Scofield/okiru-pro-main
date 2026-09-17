@@ -492,7 +492,7 @@ Source systems: Mariette Dashboard (fleet/generator), utility bills (electricity
 | EF_LPG | E_Data!B6 / Assumptions!B40 | 1.51 | kgCO₂e/kg | DEFRA 2024 | Scope 1C LPG forklifts |
 | EF_ELEC | E_Data!B7 / Assumptions!B41 | 0.82 | kgCO₂e/kWh | Eskom NERSA 2024 | Scope 2 electricity |
 | EF_SOLAR | E_Data!B8 / Assumptions!B42 | 0.025 | kgCO₂e/kWh | Solar PV lifecycle | Solar offset (negative) |
-| EF_WATER | E_Data!B9 / Assumptions!B43 | 0.000344 | tCO₂e/kL | GHG Protocol Scope 3 | Scope 3 water |
+| EF_WATER | E_Data!B9 / Assumptions!B35 | 0.000344 | tCO₂e/kL | GHG Protocol Scope 3 | Scope 3 water |
 | EF_LANDFILL | E_Data!B10 / Assumptions!B44 | 0.58 | tCO₂e/tonne | NEMWA waste hierarchy | Scope 3 landfill |
 
 ### 10.2 Scoring stance

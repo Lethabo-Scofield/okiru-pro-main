@@ -130,7 +130,10 @@ async function findCertificateForFileAccess(id: string) {
 
 function canAccessCertificateFile(req: Request, certificate: Record<string, any>): boolean {
   const role = (req.session as any)?.userData?.role;
-  if (role === 'admin' || role === 'super_admin') return true;
+  // super_admin only: `admin` is the tenant administrator every registrant
+  // gets, so honouring it here handed every customer every other company's
+  // certificate files.
+  if (role === 'super_admin') return true;
   const certificateOrg = typeof certificate.organizationId === 'string' ? certificate.organizationId : null;
   if (!certificateOrg) return true;
   return certificateOrg === req.session.organizationId
@@ -2006,7 +2009,7 @@ function isAdminSession(req: Request): boolean {
   const roles = new Set<string>();
   if (userData?.role) roles.add(userData.role);
   for (const r of userData?.secondaryRoles ?? []) if (r) roles.add(r);
-  return roles.has('admin') || roles.has('super_admin');
+  return roles.has('super_admin');
 }
 
 // ============================================================================
@@ -2809,7 +2812,7 @@ router.patch('/:id', requireAuth, async (req: Request, res: Response) => {
 
   const sessionUserId = (req.session as any).userId as string | undefined;
   const sessionRole = (req.session as any).userData?.role as string | undefined;
-  const isAdmin = sessionRole === 'admin' || sessionRole === 'super_admin';
+  const isAdmin = sessionRole === 'super_admin';
 
   const PATCHABLE = [
     'supplierName', 'vatNumber', 'companySize',
@@ -2974,7 +2977,7 @@ router.get('/:userId', requireAuth, async (req: Request, res: Response) => {
     // Authorization: only the owner (or an admin) can list another user's certificates.
     const sessionUserId = (req.session as any).userId;
     const sessionRole = (req.session as any).userData?.role;
-    const isAdmin = sessionRole === 'admin' || sessionRole === 'super_admin';
+    const isAdmin = sessionRole === 'super_admin';
     if (!isAdmin && sessionUserId !== userId.trim()) {
       return res.status(403).json({ message: 'Not allowed to list certificates for this user' });
     }

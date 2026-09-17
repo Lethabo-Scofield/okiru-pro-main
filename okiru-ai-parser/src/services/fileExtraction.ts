@@ -11,6 +11,7 @@ import {
   worksheetToMarkdown,
 } from './markdownConversion.js';
 import { sheetGridToMarkdown } from './sheetRegions.js';
+import { sheetMatrix } from './sheetCellValues.js';
 import { convertWithDocling, doclingHandlesExtension, isDoclingEnabled } from './doclingClient.js';
 import { preprocessForOcr } from './imagePreprocessing.js';
 import { analyseWithDocumentIntelligence, documentIntelligenceConfigured } from './documentIntelligence.js';
@@ -161,15 +162,55 @@ export async function extractDocxMarkdown(buffer: Buffer): Promise<string> {
   return htmlToMarkdown(result.value);
 }
 
+/**
+ * `sheet_to_json(sheet, { defval: '' })` with the number format preserved:
+ * first row as headers, one object per data row, percentage cells carrying
+ * their percent sign. Duplicate headers are suffixed the way SheetJS does, so
+ * callers keyed on column names behave unchanged.
+ */
+function percentAwareRows(sheet: XLSX.WorkSheet): Array<Record<string, unknown>> {
+  const matrix = sheetMatrix(sheet);
+  if (matrix.length === 0) return [];
+
+  const seen = new Map<string, number>();
+  const headers = (matrix[0] ?? []).map((cell, index) => {
+    const base = String(cell ?? '').trim() || `__EMPTY${index > 0 ? `_${index}` : ''}`;
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    return count === 0 ? base : `${base}_${count}`;
+  });
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (let r = 1; r < matrix.length; r += 1) {
+    const cells = matrix[r] ?? [];
+    const row: Record<string, unknown> = {};
+    let hasContent = false;
+    for (let c = 0; c < headers.length; c += 1) {
+      const value = cells[c];
+      row[headers[c]] = value ?? '';
+      if (String(value ?? '').trim() !== '') hasContent = true;
+    }
+    // SheetJS omits fully-blank rows; keeping that behaviour avoids handing
+    // downstream readers a run of empty objects to filter out.
+    if (hasContent) rows.push(row);
+  }
+  return rows;
+}
+
 export function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[]; markdown: string } {
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  // cellNF keeps each cell's number format, which is the only thing that tells
+  // a stored 0.32 apart from a displayed "32%" (see sheetCellValues.ts).
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellNF: true });
   const tables: unknown[] = [];
   const parts: string[] = [];
   const markdownParts: string[] = [];
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
-    const allRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+    // Format-aware (sheetCellValues.ts): the deterministic readers that consume
+    // `tables` score these cells directly, so a percentage must arrive as
+    // "32%" rather than a bare 0.32 they would have to guess the unit of.
+    const allRows = percentAwareRows(sheet);
     const rows = allRows.slice(0, MAX_SHEET_ROWS);
     tables.push({ sheetName, rows });
     parts.push(`Sheet: ${sheetName}`);

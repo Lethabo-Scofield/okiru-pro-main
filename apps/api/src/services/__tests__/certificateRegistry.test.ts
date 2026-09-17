@@ -82,6 +82,51 @@ describe('certificate registry', () => {
     expect(chain.limit).toHaveBeenCalledWith(5);
   });
 
+  it('returns certificates and affidavits together when no document kind is given', async () => {
+    findMock.mockReturnValue(queryResult([]));
+
+    await listCertificateRegistry({ search: 'Acme' });
+
+    const filter = findMock.mock.calls[0][0];
+    // Nothing in the filter may narrow by document kind — the Hub's default
+    // view is one unified list, and a search has to reach both.
+    expect(JSON.stringify(filter)).not.toContain('affidavit');
+  });
+
+  it('matches affidavits by file name, not only by the certificateType nobody writes', async () => {
+    findMock.mockReturnValue(queryResult([]));
+
+    await listCertificateRegistry({ documentKind: 'affidavits' });
+
+    const filter = findMock.mock.calls[0][0];
+    const clause = filter.$and.find((entry: any) => entry.$or);
+    expect(clause.$or).toEqual([
+      { certificateType: /affidavit/i },
+      { fileName: /affidavit/i },
+      { blobName: /affidavit/i },
+    ]);
+  });
+
+  it('excludes every affidavit signal when narrowed to certificates', async () => {
+    findMock.mockReturnValue(queryResult([]));
+
+    await listCertificateRegistry({ documentKind: 'certificates' });
+
+    const filter = findMock.mock.calls[0][0];
+    const clause = filter.$and.find((entry: any) => entry.$nor);
+    expect(clause.$nor).toHaveLength(3);
+  });
+
+  it('does not clobber an explicit certificateType query', async () => {
+    findMock.mockReturnValue(queryResult([]));
+
+    await listCertificateRegistry({ certificateType: 'sworn', documentKind: 'affidavits' });
+
+    const filter = findMock.mock.calls[0][0];
+    expect(filter.certificateType).toEqual(/sworn/i);
+    expect(filter.$and).toHaveLength(1);
+  });
+
   it('follows Blob continuation tokens and creates minimal records without invented metadata', async () => {
     findMock.mockReturnValue({ lean: vi.fn(async () => []) });
     listBlobsMock
