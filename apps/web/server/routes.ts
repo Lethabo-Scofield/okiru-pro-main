@@ -1295,11 +1295,22 @@ export async function registerRoutes(
 
       // Validate pillar scopes for contributor role
       let pillarScopes: string[] | undefined;
+      let clientScopes: string[] | undefined;
       if (displayRole === "contributor") {
         if (!Array.isArray(rawPillarScopes) || rawPillarScopes.length === 0) {
           return res.status(400).json({ message: "Contributors must have at least one pillar selected." });
         }
         pillarScopes = (rawPillarScopes as string[]).filter((k) => typeof k === "string" && k.trim().length > 0);
+        // Which companies, before which pillars inside one. Absent means every
+        // company in the team, matching how pillar scopes read.
+        const rawClientScopes = req.body?.clientScopes;
+        if (rawClientScopes !== undefined) {
+          if (!Array.isArray(rawClientScopes)) {
+            return res.status(400).json({ message: "clientScopes must be an array of company ids" });
+          }
+          const normalized = normalizeClientScopes(rawClientScopes);
+          if (normalized.length > 0) clientScopes = normalized;
+        }
       }
 
       // Block self-invite
@@ -1352,6 +1363,7 @@ export async function registerRoutes(
         role,
         ...(displayRole ? { displayRole } : {}),
         ...(pillarScopes?.length ? { pillarScopes } : {}),
+        ...(clientScopes?.length ? { clientScopes } : {}),
         invitedByUserId: inviterId,
       });
 
@@ -1528,7 +1540,13 @@ export async function registerRoutes(
       // Idempotent: if already a member, just mark accepted.
       const existing = await storage.getMember(inv.workspaceId, userId);
       if (!existing) {
-        await storage.addMember(inv.workspaceId, userId, inv.role, { pillarScopes: inv.pillarScopes?.length ? inv.pillarScopes : undefined, displayRole: inv.displayRole });
+        await storage.addMember(inv.workspaceId, userId, inv.role, {
+          pillarScopes: inv.pillarScopes?.length ? inv.pillarScopes : undefined,
+          // The company limit the inviter drew travels with the invite; without
+          // this the membership was created unscoped and the limit was lost.
+          clientScopes: inv.clientScopes?.length ? inv.clientScopes : undefined,
+          displayRole: inv.displayRole,
+        });
       }
       await storage.acceptInvite(token);
       // Org membership: scorecard visibility is org-scoped (sameOrg || sameUser), so put the

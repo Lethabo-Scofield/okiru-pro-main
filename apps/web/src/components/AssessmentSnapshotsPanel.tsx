@@ -110,11 +110,11 @@ export function AssessmentSnapshotsPanel({
 
   return (
     <div
-      className="bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] overflow-hidden"
+      className="bg-[color:var(--ink-3)] rounded-2xl border border-[color:var(--rule)] overflow-hidden"
       data-testid="assessment-snapshots-panel"
     >
-      <div className="px-6 py-4 border-b border-[#2c2c2e] flex items-center gap-2">
-        <History className="w-4 h-4 text-[#8e8e93]" />
+      <div className="px-6 py-4 border-b border-[color:var(--rule)] flex items-center gap-2">
+        <History className="w-4 h-4 text-[color:var(--body)]" />
         <h3 className="text-sm font-semibold text-white uppercase tracking-wider">Scorecard versions</h3>
       </div>
 
@@ -124,14 +124,14 @@ export function AssessmentSnapshotsPanel({
         {canSave && (
           <div className="flex flex-wrap items-end gap-2">
             <div className="flex-1 min-w-[160px]">
-              <label className="text-[10px] uppercase tracking-wider text-[#8e8e93] block mb-1">
+              <label className="text-[10px] uppercase tracking-wider text-[color:var(--body)] block mb-1">
                 Label (optional)
               </label>
               <Input
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="e.g. Before procurement review"
-                className="bg-[#0d0d0d] border-[#2c2c2e] text-white text-sm h-9"
+                className="bg-[#0d0d0d] border-[color:var(--rule)] text-white text-sm h-9"
                 disabled={busyId !== null}
               />
             </div>
@@ -149,18 +149,18 @@ export function AssessmentSnapshotsPanel({
         )}
 
         {!canRestore && (
-          <p className="text-[11px] text-[#8e8e93]">
+          <p className="text-[11px] text-[color:var(--body)]">
             Only the team owner or an unrestricted editor can restore a saved version.
           </p>
         )}
 
         {loading ? (
-          <div className="flex items-center gap-2 text-[#8e8e93] text-sm py-4">
+          <div className="flex items-center gap-2 text-[color:var(--body)] text-sm py-4">
             <Loader2 className="w-4 h-4 animate-spin" />
             Loading versions…
           </div>
         ) : snapshots.length === 0 ? (
-          <p className="text-[13px] text-[#8e8e93]">No saved versions yet.</p>
+          <p className="text-[13px] text-[color:var(--body)]">No saved versions yet.</p>
         ) : (
           <ul className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {snapshots.map((s) => (
@@ -171,7 +171,7 @@ export function AssessmentSnapshotsPanel({
               >
                 <div className="min-w-0">
                   <p className="text-[13px] text-white truncate">{s.label || "Untitled snapshot"}</p>
-                  <p className="text-[10px] text-[#636366] tabular-nums">
+                  <p className="text-[10px] text-[color:var(--muted)] tabular-nums">
                     {new Date(s.createdAt).toLocaleString()} · {s.createdBy}
                   </p>
                 </div>
@@ -180,7 +180,7 @@ export function AssessmentSnapshotsPanel({
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="shrink-0 border-[#48484a] text-white hover:bg-white/10"
+                    className="shrink-0 border-[color:var(--rule-strong)] text-white hover:bg-white/10"
                     disabled={busyId !== null}
                     onClick={() => void restoreSnapshot(s.snapshotId)}
                     data-testid={`btn-restore-${s.snapshotId}`}

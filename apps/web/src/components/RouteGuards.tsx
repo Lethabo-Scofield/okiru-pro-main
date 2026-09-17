@@ -6,8 +6,8 @@ import { fetchOnboardingStatus } from "@/lib/onboardingStatus";
 
 function FullScreenSpinner() {
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-screen bg-[color:var(--ink)] flex items-center justify-center">
+      <div className="h-10 w-10 border-2 border-[rgba(255,255,255,0.32)] border-t-transparent rounded-full animate-spin" />
     </div>
   );
 }

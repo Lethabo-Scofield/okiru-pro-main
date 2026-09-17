@@ -146,19 +146,19 @@ export function PillarForm({
   const getCompletionColor = (percentage: number) => {
     if (percentage >= 80) return 'text-emerald-400';
     if (percentage >= 50) return 'text-amber-400';
-    return 'text-[#636366]';
+    return 'text-[color:var(--muted)]';
   };
 
   const getCompletionBg = (percentage: number) => {
     if (percentage >= 80) return 'bg-emerald-500';
     if (percentage >= 50) return 'bg-amber-500';
-    return 'bg-[#636366]';
+    return 'bg-[rgba(255,255,255,0.32)]';
   };
 
   return (
     <div className="space-y-4">
       {/* Pillar Header */}
-      <div className="flex items-center justify-between p-4 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e]">
+      <div className="flex items-center justify-between p-4 bg-[color:var(--ink-3)] rounded-2xl border border-[color:var(--rule)]">
         <div className="flex items-center gap-3">
           <div className={`
             w-10 h-10 rounded-xl flex items-center justify-center
@@ -168,12 +168,12 @@ export function PillarForm({
             {completionStats.isComplete ? (
               <CheckCircle2 className="w-5 h-5 text-emerald-400" />
             ) : (
-              <AlertCircle className="w-5 h-5 text-[#636366]" />
+              <AlertCircle className="w-5 h-5 text-[color:var(--muted)]" />
             )}
           </div>
           <div>
             <h3 className="text-[15px] font-semibold text-white">{pillar.pillarName}</h3>
-            <p className="text-[12px] text-[#636366]">
+            <p className="text-[12px] text-[color:var(--muted)]">
               {completionStats.requiredCompleted}/{completionStats.requiredTotal} required fields
               {pillar.maxPoints > 0 && ` · ${pillar.maxPoints} max points`}
             </p>
@@ -184,7 +184,7 @@ export function PillarForm({
           {/* Completion Ring */}
           <div className="flex items-center gap-2">
             <svg width="36" height="36" viewBox="0 0 36 36" className="-rotate-90">
-              <circle cx="18" cy="18" r="14" fill="none" stroke="#2c2c2e" strokeWidth="3" />
+              <circle cx="18" cy="18" r="14" fill="none" stroke="var(--rule)" strokeWidth="3" />
               <circle
                 cx="18"
                 cy="18"
@@ -208,7 +208,7 @@ export function PillarForm({
               <div className="text-[18px] font-bold font-mono text-white">
                 {criterionResults.reduce((sum, cr) => sum + cr.points, 0).toFixed(2)}
               </div>
-              <div className="text-[10px] text-[#636366] uppercase tracking-wider">Points</div>
+              <div className="text-[10px] text-[color:var(--muted)] uppercase tracking-wider">Points</div>
             </div>
           )}
         </div>
@@ -234,17 +234,17 @@ export function PillarForm({
               >
                 <div className="flex items-center gap-3">
                   {isExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-[#636366]" />
+                    <ChevronDown className="w-4 h-4 text-[color:var(--muted)]" />
                   ) : (
-                    <ChevronUp className="w-4 h-4 text-[#636366]" />
+                    <ChevronUp className="w-4 h-4 text-[color:var(--muted)]" />
                   )}
                   <span className="text-[14px] font-medium text-white">{group.name}</span>
-                  <span className="text-[12px] text-[#636366]">
+                  <span className="text-[12px] text-[color:var(--muted)]">
                     {group.completedCount}/{group.totalCount}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="w-20 h-1.5 rounded-full bg-[#2c2c2e] overflow-hidden">
+                  <div className="w-20 h-1.5 rounded-full bg-[rgba(255,255,255,0.06)] overflow-hidden">
                     <div 
                       className={`h-full rounded-full ${getCompletionBg(completionPct)} transition-all duration-300`}
                       style={{ width: `${completionPct}%` }}
@@ -266,7 +266,7 @@ export function PillarForm({
                     return (
                       <div key={field.id} className="space-y-1.5">
                         <div className="flex items-center justify-between">
-                          <label className="text-[13px] text-[#d1d1d6] flex items-center gap-1.5">
+                          <label className="text-[13px] text-[color:var(--body)] flex items-center gap-1.5">
                             {field.name}
                             {field.required && (
                               <span className="text-red-400">*</span>
@@ -283,7 +283,7 @@ export function PillarForm({
                                     text-[10px] px-1.5 py-0.5 rounded font-medium
                                     ${cr.points > 0 
                                       ? 'bg-emerald-500/10 text-emerald-400' 
-                                      : 'bg-[#2c2c2e] text-[#636366]'
+                                      : 'bg-[rgba(255,255,255,0.06)] text-[color:var(--muted)]'
                                     }
                                   `}
                                   title={cr.name}
@@ -313,7 +313,7 @@ export function PillarForm({
 
                         {/* Extraction hints */}
                         {field.extraction && (
-                          <div className="flex items-center gap-1 text-[10px] text-[#636366]">
+                          <div className="flex items-center gap-1 text-[10px] text-[color:var(--muted)]">
                             <HelpCircle className="w-3 h-3" />
                             <span>Look for: {field.extraction.aliases.slice(0, 3).join(', ')}</span>
                           </div>
@@ -330,28 +330,28 @@ export function PillarForm({
 
       {/* Criterion Results Summary */}
       {criterionResults && criterionResults.length > 0 && (
-        <div className="p-4 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e]">
+        <div className="p-4 bg-[color:var(--ink-3)] rounded-2xl border border-[color:var(--rule)]">
           <h4 className="text-[13px] font-medium text-white mb-3">Criterion Scores</h4>
           <div className="space-y-2">
             {criterionResults.map(cr => (
               <div 
                 key={cr.criterionCode}
-                className="flex items-center justify-between py-2 border-b border-[#2c2c2e] last:border-0"
+                className="flex items-center justify-between py-2 border-b border-[color:var(--rule)] last:border-0"
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-[12px] text-[#d1d1d6]">{cr.name}</span>
+                  <span className="text-[12px] text-[color:var(--body)]">{cr.name}</span>
                   {cr.targetMet && (
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   )}
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-[#636366]">{cr.percentage.toFixed(0)}%</span>
+                  <span className="text-[11px] text-[color:var(--muted)]">{cr.percentage.toFixed(0)}%</span>
                   <span className={`
                     text-[13px] font-mono font-medium
-                    ${cr.points > 0 ? 'text-emerald-400' : 'text-[#636366]'}
+                    ${cr.points > 0 ? 'text-emerald-400' : 'text-[color:var(--muted)]'}
                   `}>
                     {cr.points.toFixed(2)}
-                    <span className="text-[#636366]">/{cr.maxPoints}</span>
+                    <span className="text-[color:var(--muted)]">/{cr.maxPoints}</span>
                   </span>
                 </div>
               </div>

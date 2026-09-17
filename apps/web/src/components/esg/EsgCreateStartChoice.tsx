@@ -111,7 +111,7 @@ export function EsgCreateStartChoice({
         >
           Start the ESG workbook
         </h2>
-        <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,#8e8e93)]">
+        <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           {companyName ? `For ${companyName}. ` : ""}Choose how you would like to begin — every route
           ends in the same workbook and the same score.
         </p>
@@ -127,7 +127,7 @@ export function EsgCreateStartChoice({
             className={`group flex w-full items-center gap-4 rounded-[20px] border px-4 py-4 text-left transition-colors disabled:opacity-50 ${
               primary
                 ? "border-[var(--esg-acc-e,#1de9a0)]/35 bg-[#12191a] hover:border-[var(--esg-acc-e,#1de9a0)]/60 hover:bg-[#16201f]"
-                : "border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] hover:border-white/[0.16] hover:bg-[#1c1c1e]"
+                : "border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] hover:border-white/[0.16] hover:bg-[color:var(--ink-3)]"
             }`}
             data-testid={testId}
           >
@@ -135,7 +135,7 @@ export function EsgCreateStartChoice({
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
                 primary
                   ? "bg-[var(--esg-acc-e,#1de9a0)]/15 text-[var(--esg-acc-e,#1de9a0)]"
-                  : "bg-white/[0.06] text-[#d1d1d6]"
+                  : "bg-white/[0.06] text-[color:var(--body)]"
               }`}
             >
               {importing && key === "excel" ? (
@@ -153,19 +153,19 @@ export function EsgCreateStartChoice({
                   </span>
                 ) : null}
               </span>
-              <span className="mt-0.5 block text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+              <span className="mt-0.5 block text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                 {description}
               </span>
             </span>
-            <span className="hidden shrink-0 rounded-full border border-white/[0.10] bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-[var(--esg-text2,#8e8e93)] sm:inline-flex">
+            <span className="hidden shrink-0 rounded-full border border-white/[0.10] bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] sm:inline-flex">
               {badge}
             </span>
-            <ChevronRight className="h-5 w-5 text-[var(--esg-text3,#636366)] transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
+            <ChevronRight className="h-5 w-5 text-[var(--esg-text3,rgba(255,255,255,0.32))] transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
           </button>
         ))}
       </div>
 
-      <p className="mt-6 text-center text-[12px] text-[var(--esg-text3,#636366)]">
+      <p className="mt-6 text-center text-[12px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
         You can switch between these at any time — nothing is committed until you save.
       </p>
 
@@ -176,7 +176,7 @@ export function EsgCreateStartChoice({
           <button
             type="button"
             onClick={onOpenExisting}
-            className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--esg-text2,#8e8e93)] transition-colors hover:text-white"
+            className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
             data-testid="esg-open-existing"
           >
             <FolderOpen className="h-4 w-4" />

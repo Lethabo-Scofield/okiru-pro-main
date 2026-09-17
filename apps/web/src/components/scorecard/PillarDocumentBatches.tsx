@@ -263,7 +263,7 @@ export function PillarDocumentBatches({
   if (error) {
     // Guidance, not a gate: its failure must never block uploading.
     return (
-      <p className="text-[12px] text-[#636366]">
+      <p className="text-[12px] text-[color:var(--muted)]">
         {error}. You can still upload — we will tell you what is missing after reading your documents.
       </p>
     );
@@ -273,7 +273,7 @@ export function PillarDocumentBatches({
   const totalCovered = batches.reduce((sum, batch) => sum + batch.covered, 0);
 
   return (
-    <div className="rounded-[22px] border border-white/[0.08] bg-[#0e0e10] p-5" data-testid="pillar-upload-batches">
+    <div className="rounded-[22px] border border-white/[0.08] bg-[color:var(--ink-2)] p-5" data-testid="pillar-upload-batches">
       <input
         ref={fileInputRef}
         type="file"
@@ -295,7 +295,7 @@ export function PillarDocumentBatches({
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">Upload by pillar</p>
+          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Upload by pillar</p>
           <h4
             className="mt-2 text-[22px] font-semibold leading-none text-white"
           >
@@ -303,14 +303,14 @@ export function PillarDocumentBatches({
               ? `${totalCovered} of ${totalTypes} document types covered`
               : "Six batches, one at a time"}
           </h4>
-          <p className="mt-2 max-w-lg text-[13px] leading-5 text-[#a1a1a6]">
+          <p className="mt-2 max-w-lg text-[13px] leading-5 text-[color:var(--body)]">
             Send what you have for each pillar — files or a whole folder. You do not need all
             {totalTypes > 0 ? ` ${totalTypes}` : ""} document types, and it does not matter if something lands in
             the wrong batch: we read every document and file it where it actually belongs.
           </p>
         </div>
         {unfiledCount > 0 && (
-          <p className="rounded-xl border border-white/[0.07] bg-[#141416] px-3 py-2 text-[11.5px] text-[#8e8e93]">
+          <p className="rounded-xl border border-white/[0.07] bg-[color:var(--ink-3)] px-3 py-2 text-[11.5px] text-[color:var(--body)]">
             {unfiledCount} file{unfiledCount === 1 ? "" : "s"} added outside a batch
           </p>
         )}
@@ -344,22 +344,22 @@ export function PillarDocumentBatches({
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
                     {batch.holistic ? (
-                      <Layers className="h-4 w-4 text-[#a1a1a6]" />
+                      <Layers className="h-4 w-4 text-[color:var(--body)]" />
                     ) : (
-                      <Sparkles className="h-4 w-4 text-[#a1a1a6]" />
+                      <Sparkles className="h-4 w-4 text-[color:var(--body)]" />
                     )}
                   </span>
                   <span className="min-w-0">
                     <span className="flex items-center gap-2 text-[14px] font-medium text-white">
                       <span className="truncate">{batch.label}</span>
                       <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 text-[#8e8e93] transition-transform ${isOpen ? "rotate-180" : ""}`}
+                        className={`h-3.5 w-3.5 shrink-0 text-[color:var(--body)] transition-transform ${isOpen ? "rotate-180" : ""}`}
                       />
                     </span>
-                    <span className="mt-0.5 block truncate text-[11.5px] text-[#8e8e93]">
+                    <span className="mt-0.5 block truncate text-[11.5px] text-[color:var(--body)]">
                       {batch.blurb}
                     </span>
-                    <span className="mt-1 block text-[11px] text-[#636366]">
+                    <span className="mt-1 block text-[11px] text-[color:var(--muted)]">
                       {batch.holistic
                         ? `${batch.documentCount} kinds of upload`
                         : satisfiedDocumentIds.length > 0
@@ -385,7 +385,7 @@ export function PillarDocumentBatches({
                     type="button"
                     disabled={disabled}
                     onClick={() => openPicker(origin, "folder")}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
                     data-testid={`batch-upload-folder-${batch.id}`}
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
@@ -411,20 +411,20 @@ export function PillarDocumentBatches({
                               {have ? (
                                 <Check className="h-3.5 w-3.5 text-[#30d158]" />
                               ) : (
-                                <FileQuestion className="h-3.5 w-3.5 text-[#636366]" />
+                                <FileQuestion className="h-3.5 w-3.5 text-[color:var(--muted)]" />
                               )}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[13px] leading-5 text-[#d1d1d6]">
+                              <span className="block text-[13px] leading-5 text-[color:var(--body)]">
                                 {item.name}
                                 {/* Never colour alone — state is spelled out. */}
-                                <span className="ml-2 text-[10px] uppercase tracking-wide text-[#636366]">
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-[color:var(--muted)]">
                                   {have ? "supplied" : "not yet"}
                                 </span>
                               </span>
                               {item.hint && (
-                                <span className="mt-1 block text-[11.5px] leading-[1.45] text-[#8e8e93]">
-                                  <Info className="mr-1 inline h-3 w-3 align-[-1px] text-[#636366]" />
+                                <span className="mt-1 block text-[11.5px] leading-[1.45] text-[color:var(--body)]">
+                                  <Info className="mr-1 inline h-3 w-3 align-[-1px] text-[color:var(--muted)]" />
                                   {item.hint}
                                 </span>
                               )}
@@ -438,7 +438,7 @@ export function PillarDocumentBatches({
                                   "files",
                                 )
                               }
-                              className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.10] px-2.5 py-1 text-[11px] font-medium text-[#a1a1a6] transition-colors hover:bg-white/[0.06] hover:text-[#e5e5ea] disabled:opacity-40"
+                              className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.10] px-2.5 py-1 text-[11px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.06] hover:text-[#e5e5ea] disabled:opacity-40"
                               aria-label={`Upload ${item.name}`}
                               data-testid={`upload-doc-${item.id}`}
                             >
@@ -449,7 +449,7 @@ export function PillarDocumentBatches({
                         );
                       })}
                       {batch.items.length === 0 && (
-                        <li className="px-4 py-3 text-[12px] text-[#636366]">
+                        <li className="px-4 py-3 text-[12px] text-[color:var(--muted)]">
                           Loading the document list…
                         </li>
                       )}

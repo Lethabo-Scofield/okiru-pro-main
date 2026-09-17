@@ -45,10 +45,10 @@ export function ExtractionConfidence({ injected, rowCount }: Props) {
   const clean = gapCount === 0 && rejectedCount === 0;
 
   return (
-    <div className="rounded-[22px] border border-white/[0.08] bg-[#0e0e10] p-5" data-testid="extraction-confidence">
+    <div className="rounded-[22px] border border-white/[0.08] bg-[color:var(--ink-2)] p-5" data-testid="extraction-confidence">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">
+          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
             What we read from your documents
           </p>
           <h4
@@ -72,17 +72,17 @@ export function ExtractionConfidence({ injected, rowCount }: Props) {
           so the client can go and supply the specific thing. */}
       {gapCount > 0 && (
         <div className="mt-4">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[#d1d1d6]">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <HelpCircle className="h-4 w-4 text-amber-300" />
             Still needed to score these elements
           </p>
           <ul className="mt-2 space-y-1.5">
             {coverage.gaps.map((gap) => (
-              <li key={`${gap.section}.${gap.column}`} className="flex gap-2 text-[12.5px] leading-5 text-[#a1a1a6]">
+              <li key={`${gap.section}.${gap.column}`} className="flex gap-2 text-[12.5px] leading-5 text-[color:var(--body)]">
                 <span className="mt-[3px] h-1 w-1 shrink-0 rounded-full bg-amber-400" aria-hidden />
                 <span>
-                  <span className="text-[#d1d1d6]">{gap.label}</span>
-                  <span className="ml-1.5 text-[11px] text-[#636366]">
+                  <span className="text-[color:var(--body)]">{gap.label}</span>
+                  <span className="ml-1.5 text-[11px] text-[color:var(--muted)]">
                     · {SECTION_LABELS[gap.section] ?? gap.section}
                   </span>
                 </span>
@@ -97,22 +97,22 @@ export function ExtractionConfidence({ injected, rowCount }: Props) {
           so the user can correct it rather than wonder why a field is blank. */}
       {rejectedCount > 0 && (
         <div className="mt-4">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[#d1d1d6]">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <FileWarning className="h-4 w-4 text-amber-300" />
             Read, but could not be placed automatically
           </p>
           <ul className="mt-2 space-y-1.5">
             {rejected.slice(0, 8).map((r, i) => (
-              <li key={`${r.field}-${i}`} className="flex gap-2 text-[12.5px] leading-5 text-[#a1a1a6]">
-                <span className="mt-[3px] h-1 w-1 shrink-0 rounded-full bg-[#8e8e93]" aria-hidden />
+              <li key={`${r.field}-${i}`} className="flex gap-2 text-[12.5px] leading-5 text-[color:var(--body)]">
+                <span className="mt-[3px] h-1 w-1 shrink-0 rounded-full bg-[rgba(255,255,255,0.56)]" aria-hidden />
                 <span>
                   {r.detail}
-                  {r.sourceFile && <span className="ml-1.5 text-[11px] text-[#636366]">· {r.sourceFile}</span>}
+                  {r.sourceFile && <span className="ml-1.5 text-[11px] text-[color:var(--muted)]">· {r.sourceFile}</span>}
                 </span>
               </li>
             ))}
             {rejected.length > 8 && (
-              <li className="text-[11px] text-[#636366]">+{rejected.length - 8} more, editable in the workbook</li>
+              <li className="text-[11px] text-[color:var(--muted)]">+{rejected.length - 8} more, editable in the workbook</li>
             )}
           </ul>
         </div>
@@ -122,13 +122,13 @@ export function ExtractionConfidence({ injected, rowCount }: Props) {
           that no calculator consumes. Reported so it is never mistaken for
           something we missed. */}
       {coverage.unmapped.length > 0 && (
-        <p className="mt-4 text-[11.5px] leading-5 text-[#636366]">
+        <p className="mt-4 text-[11.5px] leading-5 text-[color:var(--muted)]">
           We also read {coverage.unmapped.length} field{coverage.unmapped.length === 1 ? "" : "s"} that
           the scorecard does not use directly (kept for your records, not scored).
         </p>
       )}
 
-      <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[#636366]">
+      <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[color:var(--muted)]">
         Everything above is editable in the workbook. A value we could not place is left blank rather
         than guessed — a wrong entry would score as nothing without telling you.
       </p>

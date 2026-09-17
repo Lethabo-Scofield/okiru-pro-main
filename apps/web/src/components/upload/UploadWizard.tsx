@@ -648,13 +648,13 @@ export function ToolkitSectorTemplateStep({
     <div className={cn('space-y-6', className)}>
       <div>
         <h3 className="text-lg font-semibold text-white mb-1">Sector &amp; toolkit template</h3>
-        <p className="text-sm" style={{ color: '#8e8e93' }}>
+        <p className="text-sm" style={{ color: 'var(--body)' }}>
           Pick your B-BBEE sector first — templates are filtered so layout expectations match how you compile.
         </p>
       </div>
 
       <div>
-        <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#636366] mb-2">Sector code</label>
+        <label className="block text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted)] mb-2">Sector code</label>
         <select
           value={selectedSectorCode || sectorOptions[0]?.code || ''}
           disabled={loadingSectors || sectorOptions.length === 0}
@@ -662,7 +662,7 @@ export function ToolkitSectorTemplateStep({
             const next = e.target.value;
             onSectorChange(next);
           }}
-          className="w-full bg-[#111] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[13px] text-white disabled:opacity-50"
+          className="w-full bg-[#111] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[13px] text-white disabled:opacity-50"
           data-testid="select-upload-toolkit-sector"
         >
           {sectorOptions.map((opt) => (
@@ -675,10 +675,10 @@ export function ToolkitSectorTemplateStep({
 
       <div>
         <div className="mb-3">
-          <label className="block text-[11px] font-semibold uppercase tracking-wide text-[#636366] mb-2">Template</label>
-          <p className="text-xs" style={{ color: '#48484a' }}>
+          <label className="block text-[11px] font-semibold uppercase tracking-wide text-[color:var(--muted)] mb-2">Template</label>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>
             Showing {visibleTemplates.length} layout{visibleTemplates.length === 1 ? '' : 's'} for{' '}
-            <span className="text-[#8e8e93]">{effectiveSector}</span>.
+            <span className="text-[color:var(--body)]">{effectiveSector}</span>.
           </p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -692,7 +692,7 @@ export function ToolkitSectorTemplateStep({
                 onClick={() => onSelectTemplateId(t.id)}
                 className={cn(
                   'p-4 rounded-xl border text-left transition-all',
-                  isSelected ? 'border-[#5e9bff]/60 bg-[#5e9bff]/8' : 'border-[#2c2c2e] bg-[#1c1c1e] hover:border-[#3c3c3e]',
+                  isSelected ? 'border-[#5e9bff]/60 bg-[#5e9bff]/8' : 'border-[color:var(--rule)] bg-[color:var(--ink-3)] hover:border-[#3c3c3e]',
                 )}
                 style={isSelected ? { background: 'rgba(94,155,255,0.06)' } : {}}
                 data-testid={`upload-template-${t.id}`}
@@ -709,17 +709,17 @@ export function ToolkitSectorTemplateStep({
                       <span className="text-sm font-medium text-white">{t.name}</span>
                       {isSelected && <Check className="w-3.5 h-3.5 shrink-0" style={{ color: '#5e9bff' }} />}
                     </div>
-                    <p className="text-xs mt-0.5" style={{ color: '#8e8e93' }}>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--body)' }}>
                       {t.description}
                     </p>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {(t.pillars || []).slice(0, 6).map((p: string) => (
-                        <span key={p} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: '#2c2c2e', color: '#636366' }}>
+                        <span key={p} className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--rule)', color: 'var(--muted)' }}>
                           {p}
                         </span>
                       ))}
                       {(t.pillars || []).length > 6 && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded text-[#48484a]">+{(t.pillars || []).length - 6}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded text-[color:var(--muted)]">+{(t.pillars || []).length - 6}</span>
                       )}
                     </div>
                   </div>
@@ -757,7 +757,7 @@ export function ToolkitRequirementsSummary({ template, pillarScopes, className }
     <div className={cn('space-y-4', className)}>
       <div>
         <h3 className="text-lg font-semibold text-white mb-1">What your file should include</h3>
-        <p className="text-sm" style={{ color: '#8e8e93' }}>
+        <p className="text-sm" style={{ color: 'var(--body)' }}>
           Your workbook should capture the pillars we will extract.
           {pillarScopes?.length ? ' Showing pillars available to your account.' : ''}
         </p>
@@ -768,7 +768,7 @@ export function ToolkitRequirementsSummary({ template, pillarScopes, className }
           const reqs = PILLAR_REQUIREMENTS[pillar];
           if (!reqs) return null;
           return (
-            <div key={pillar} className="rounded-xl p-4" style={{ background: '#161616', border: '1px solid #2c2c2e' }}>
+            <div key={pillar} className="rounded-xl p-4" style={{ background: '#161616', border: '1px solid var(--rule)' }}>
               <p className="text-sm font-medium text-white mb-2">{pillar}</p>
               {reqs.map((r, i) => (
                 <div key={i} className="space-y-1">
@@ -777,14 +777,14 @@ export function ToolkitRequirementsSummary({ template, pillarScopes, className }
                       <span
                         key={field}
                         className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
-                        style={{ background: '#2c2c2e', color: '#d1d1d6' }}
+                        style={{ background: 'var(--rule)', color: '#d1d1d6' }}
                       >
                         <Check className="w-2.5 h-2.5 shrink-0" style={{ color: '#5e9bff' }} />
                         {field}
                       </span>
                     ))}
                   </div>
-                  <p className="text-[11px] mt-1.5" style={{ color: '#636366' }}>
+                  <p className="text-[11px] mt-1.5" style={{ color: 'var(--muted)' }}>
                     Example: {r.examples}
                   </p>
                 </div>
@@ -798,7 +798,7 @@ export function ToolkitRequirementsSummary({ template, pillarScopes, className }
         type="button"
         onClick={handleDownloadTemplate}
         className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg transition-colors"
-        style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', color: '#5e9bff' }}
+        style={{ background: 'var(--ink-3)', border: '1px solid var(--rule)', color: '#5e9bff' }}
       >
         <Download className="w-4 h-4" />
         Download blank CSV header row
@@ -880,12 +880,12 @@ export function ToolkitIntegratedRequirementsSummary({
     <div className={cn('space-y-4', className)}>
       <div>
         <h3 className="text-lg font-semibold text-white mb-1">What your workbook should include</h3>
-        <p className="text-sm" style={{ color: '#8e8e93' }}>
+        <p className="text-sm" style={{ color: 'var(--body)' }}>
           Use one integrated B-BBEE toolkit / scorecard workbook — we map standard columns across pillars.
           {sectorLabel || code ? (
             <>
               {' '}
-              Sector: <span className="text-[#d1d1d6]">{sectorLabel || code}</span>.
+              Sector: <span className="text-[color:var(--body)]">{sectorLabel || code}</span>.
             </>
           ) : null}
           {pillarScopes?.length ? ' Showing pillars available to your account.' : ''}
@@ -897,7 +897,7 @@ export function ToolkitIntegratedRequirementsSummary({
           const reqs = PILLAR_REQUIREMENTS[pillar];
           if (!reqs) return null;
           return (
-            <div key={pillar} className="rounded-xl p-4" style={{ background: '#161616', border: '1px solid #2c2c2e' }}>
+            <div key={pillar} className="rounded-xl p-4" style={{ background: '#161616', border: '1px solid var(--rule)' }}>
               <p className="text-sm font-medium text-white mb-2">{pillar}</p>
               {reqs.map((r, i) => (
                 <div key={i} className="space-y-1">
@@ -906,14 +906,14 @@ export function ToolkitIntegratedRequirementsSummary({
                       <span
                         key={field}
                         className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full"
-                        style={{ background: '#2c2c2e', color: '#d1d1d6' }}
+                        style={{ background: 'var(--rule)', color: '#d1d1d6' }}
                       >
                         <Check className="w-2.5 h-2.5 shrink-0" style={{ color: '#5e9bff' }} />
                         {field}
                       </span>
                     ))}
                   </div>
-                  <p className="text-[11px] mt-1.5" style={{ color: '#636366' }}>
+                  <p className="text-[11px] mt-1.5" style={{ color: 'var(--muted)' }}>
                     Example: {r.examples}
                   </p>
                 </div>
@@ -927,7 +927,7 @@ export function ToolkitIntegratedRequirementsSummary({
         type="button"
         onClick={handleDownloadTemplate}
         className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg transition-colors"
-        style={{ background: '#1c1c1e', border: '1px solid #2c2c2e', color: '#5e9bff' }}
+        style={{ background: 'var(--ink-3)', border: '1px solid var(--rule)', color: '#5e9bff' }}
       >
         <Download className="w-4 h-4" />
         Download combined CSV header row
@@ -1140,14 +1140,14 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
   const fileIcon = (name: string) => {
     if (/\.pdf$/i.test(name)) return <FileText className="w-5 h-5" style={{ color: '#f59e0b' }} />;
     if (/\.(xlsx?|csv)$/i.test(name)) return <FileSpreadsheet className="w-5 h-5" style={{ color: '#34d399' }} />;
-    return <FileImage className="w-5 h-5" style={{ color: '#8e8e93' }} />;
+    return <FileImage className="w-5 h-5" style={{ color: 'var(--body)' }} />;
   };
 
   return (
     <div className={cn('space-y-4', className)}>
       <div>
         <h3 className="text-lg font-semibold text-white mb-1">Upload your B-BBEE toolkit workbook</h3>
-        <p className="text-sm" style={{ color: '#8e8e93' }}>
+        <p className="text-sm" style={{ color: 'var(--body)' }}>
           Choose a workbook, CSV, or PDF to price the paid extraction before any processing starts.
           {' '}Manual entry and Excel import from the main screen remain free.
         </p>
@@ -1157,7 +1157,7 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
         <div
           className="rounded-xl text-center cursor-pointer transition-all"
           style={{
-            border: `1.5px dashed ${isDragActive ? '#5e9bff' : '#2c2c2e'}`,
+            border: `1.5px dashed ${isDragActive ? '#5e9bff' : 'var(--rule)'}`,
             background: isDragActive ? 'rgba(94,155,255,0.04)' : '#111',
             padding: '48px 24px',
           }}
@@ -1180,27 +1180,27 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
               if (f0) handleFile(f0);
             }}
           />
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
-            <Upload className="w-6 h-6" style={{ color: '#636366' }} />
+          <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: 'var(--ink-3)', border: '1px solid var(--rule)' }}>
+            <Upload className="w-6 h-6" style={{ color: 'var(--muted)' }} />
           </div>
           <p className="text-sm font-medium text-white mb-1">Drop your file here</p>
-          <p className="text-xs" style={{ color: '#636366' }}>
+          <p className="text-xs" style={{ color: 'var(--muted)' }}>
             or click to browse
           </p>
           <div className="flex items-center justify-center gap-1.5 mt-4 text-[11px]">
             {['XLSX', 'XLS', 'CSV', 'PDF'].map((ext) => (
-              <span key={ext} className="px-2 py-0.5 rounded" style={{ background: '#1c1c1e', color: '#48484a' }}>
+              <span key={ext} className="px-2 py-0.5 rounded" style={{ background: 'var(--ink-3)', color: 'var(--muted)' }}>
                 {ext}
               </span>
             ))}
           </div>
         </div>
       ) : (
-        <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
+        <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: 'var(--ink-3)', border: '1px solid var(--rule)' }}>
           {fileIcon(file.name)}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">{file.name}</p>
-            <p className="text-xs" style={{ color: '#8e8e93' }}>
+            <p className="text-xs" style={{ color: 'var(--body)' }}>
               {(file.size / 1024).toFixed(1)} KB
             </p>
           </div>
@@ -1219,34 +1219,34 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
               className="p-1 rounded-lg hover:bg-white/5"
               aria-label="Clear file"
             >
-              <X className="w-4 h-4" style={{ color: '#8e8e93' }} />
+              <X className="w-4 h-4" style={{ color: 'var(--body)' }} />
             </button>
           )}
         </div>
       )}
 
       {file && (
-        <div className="rounded-xl overflow-hidden" style={{ background: '#111', border: '1px solid #2c2c2e' }}>
-          <div className="px-4 py-3 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid #1c1c1e' }}>
+        <div className="rounded-xl overflow-hidden" style={{ background: '#111', border: '1px solid var(--rule)' }}>
+          <div className="px-4 py-3 flex items-center justify-between gap-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: '#1c1c1e', border: '1px solid #2c2c2e' }}>
-                {quoteLoading ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: '#8e8e93' }} /> : <CreditCard className="w-4 h-4" style={{ color: '#8e8e93' }} />}
+              <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--ink-3)', border: '1px solid var(--rule)' }}>
+                {quoteLoading ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: 'var(--body)' }} /> : <CreditCard className="w-4 h-4" style={{ color: 'var(--body)' }} />}
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white">Paid upload quote</p>
-                <p className="text-xs" style={{ color: '#636366' }}>Generated only for upload extraction.</p>
+                <p className="text-xs" style={{ color: 'var(--muted)' }}>Generated only for upload extraction.</p>
               </div>
             </div>
             {quote && (
               <div className="text-right shrink-0">
                 <p className="text-base font-semibold text-white">{formatQuoteMoney(quote.totals.totalCents, quote.currency)}</p>
-                <p className="text-[11px]" style={{ color: '#636366' }}>{quote.files.length} file{quote.files.length === 1 ? '' : 's'}</p>
+                <p className="text-[11px]" style={{ color: 'var(--muted)' }}>{quote.files.length} file{quote.files.length === 1 ? '' : 's'}</p>
               </div>
             )}
           </div>
 
           {quoteLoading && (
-            <div className="px-4 py-4 text-sm flex items-center gap-2" style={{ color: '#8e8e93' }}>
+            <div className="px-4 py-4 text-sm flex items-center gap-2" style={{ color: 'var(--body)' }}>
               <Loader2 className="w-4 h-4 animate-spin" />
               Inspecting file structure before extraction...
             </div>
@@ -1257,7 +1257,7 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#f59e0b' }} />
               <div>
                 <p className="text-sm font-medium text-white">Quote could not be created</p>
-                <p className="text-xs mt-1" style={{ color: '#8e8e93' }}>{quoteError}</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--body)' }}>{quoteError}</p>
               </div>
             </div>
           )}
@@ -1265,17 +1265,17 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
           {quote && !quoteLoading && !quoteError && (
             <div className="px-4 py-4 space-y-3">
               {quote.files.map((quotedFile) => (
-                <div key={quotedFile.fileId} className="rounded-lg p-3" style={{ background: '#0b0b0c', border: '1px solid #1c1c1e' }}>
+                <div key={quotedFile.fileId} className="rounded-lg p-3" style={{ background: '#0b0b0c', border: '1px solid rgba(255,255,255,0.03)' }}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-white truncate">{quotedFile.filename}</p>
-                      <p className="text-xs mt-0.5" style={{ color: '#636366' }}>{quotedFile.detectedDocumentType}</p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--muted)' }}>{quotedFile.detectedDocumentType}</p>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase" style={{ background: '#1c1c1e', color: quotedFile.requiresOcr ? '#f59e0b' : '#8e8e93' }}>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase" style={{ background: 'var(--ink-3)', color: quotedFile.requiresOcr ? '#f59e0b' : 'var(--body)' }}>
                       {quotedFile.requiresOcr ? 'high' : 'standard'}
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]" style={{ color: '#8e8e93' }}>
+                  <div className="mt-2 flex flex-wrap gap-2 text-[11px]" style={{ color: 'var(--body)' }}>
                     <span>{quotedFile.kind.toUpperCase()}</span>
                     <span style={{ color: '#3a3a3c' }}>/</span>
                     <span>{formatQuoteStructure(quotedFile)}</span>
@@ -1286,10 +1286,10 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
                   </div>
                 </div>
               ))}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2" style={{ borderTop: '1px solid #1c1c1e' }}>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.03)' }}>
                 <div>
-                  <p className="text-xs" style={{ color: '#636366' }}>Quote expires {formatQuoteDate(quote.expiresAt)}</p>
-                  <p className="text-[11px] mt-0.5" style={{ color: '#48484a' }}>No extraction, scoring, OCR, or parser validation has run yet.</p>
+                  <p className="text-xs" style={{ color: 'var(--muted)' }}>Quote expires {formatQuoteDate(quote.expiresAt)}</p>
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--muted)' }}>No extraction, scoring, OCR, or parser validation has run yet.</p>
                 </div>
                 <Button
                   type="button"
@@ -1302,11 +1302,11 @@ export function ToolkitExcelDropZone({ onExtractionPayload, className }: Toolkit
                 </Button>
               </div>
               {paymentPlaceholderVisible && (
-                <div className="rounded-lg p-3 flex items-start gap-3" style={{ background: '#151515', border: '1px solid #2c2c2e' }}>
-                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#8e8e93' }} />
+                <div className="rounded-lg p-3 flex items-start gap-3" style={{ background: '#151515', border: '1px solid var(--rule)' }}>
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--body)' }} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white">Payment integration placeholder</p>
-                    <p className="text-xs mt-1" style={{ color: '#8e8e93' }}>Gateway connection is not enabled yet. This confirms the quote step before extraction.</p>
+                    <p className="text-xs mt-1" style={{ color: 'var(--body)' }}>Gateway connection is not enabled yet. This confirms the quote step before extraction.</p>
                     <Button
                       type="button"
                       size="sm"
@@ -1494,7 +1494,7 @@ export function ToolkitStructuredReview({ result, foundationPreview, pillarPrevi
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white mb-1">Review extracted rows</h3>
-          <p className="text-sm" style={{ color: '#8e8e93' }}>
+          <p className="text-sm" style={{ color: 'var(--body)' }}>
             {extractionSummaryLabel(result)}. Confirm totals before we calculate the provisional scorecard.
           </p>
         </div>
@@ -1535,17 +1535,17 @@ export function ToolkitStructuredReview({ result, foundationPreview, pillarPrevi
       )}
 
       {sections.length === 0 ? (
-        <div className="rounded-xl p-8 text-center" style={{ background: '#161616', border: '1px solid #2c2c2e' }}>
-          <AlertCircle className="w-8 h-8 mx-auto mb-3" style={{ color: '#636366' }} />
+        <div className="rounded-xl p-8 text-center" style={{ background: '#161616', border: '1px solid var(--rule)' }}>
+          <AlertCircle className="w-8 h-8 mx-auto mb-3" style={{ color: 'var(--muted)' }} />
           <p className="text-sm font-medium text-white">Nothing extracted</p>
-          <p className="text-xs mt-1" style={{ color: '#8e8e93' }}>
+          <p className="text-xs mt-1" style={{ color: 'var(--body)' }}>
             Try another layout or rerun manual entry if the workbook didn&apos;t match our column map.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {sections.map(({ label, icon: Icon, items }) => (
-            <div key={label} className="rounded-xl p-4" style={{ background: '#161616', border: '1px solid #2c2c2e' }}>
+            <div key={label} className="rounded-xl p-4" style={{ background: '#161616', border: '1px solid var(--rule)' }}>
               <div className="flex items-center gap-2 mb-3">
                 <Icon className="w-4 h-4" style={{ color: '#5e9bff' }} />
                 <span className="text-sm font-medium text-white">{label}</span>
@@ -1553,7 +1553,7 @@ export function ToolkitStructuredReview({ result, foundationPreview, pillarPrevi
               <div className="space-y-1">
                 {items.map(([key, val]) => (
                   <div key={`${label}-${key}`} className="flex items-center justify-between text-xs">
-                    <span style={{ color: '#8e8e93' }}>{key}</span>
+                    <span style={{ color: 'var(--body)' }}>{key}</span>
                     <span className="font-medium text-white">{val}</span>
                   </div>
                 ))}

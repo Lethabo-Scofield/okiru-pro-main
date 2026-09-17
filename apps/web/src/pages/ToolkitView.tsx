@@ -156,7 +156,7 @@ export default function ToolkitView() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="h-10 w-10 border-2 border-[rgba(255,255,255,0.32)] border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-muted-foreground text-sm">Loading scorecard data...</p>
         </div>
       </div>

@@ -120,6 +120,8 @@ export default function WorkspacePage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteDisplayRole, setInviteDisplayRole] = useState<DisplayRole>("admin");
   const [invitePillarScopes, setInvitePillarScopes] = useState<Set<string>>(new Set());
+  /** Companies the invitee will be limited to. Empty means every company. */
+  const [inviteClientScopes, setInviteClientScopes] = useState<Set<string>>(new Set());
   const inviteSectionRef = useRef<HTMLDivElement | null>(null);
 
   const active = useMemo(
@@ -268,6 +270,10 @@ export default function WorkspacePage() {
       };
       if (inviteDisplayRole === "contributor") {
         body.pillarScopes = Array.from(invitePillarScopes);
+        // Empty means every company, so only send a limit when one was drawn.
+        if (inviteClientScopes.size > 0) {
+          body.clientScopes = Array.from(inviteClientScopes);
+        }
       }
       const data = await fetchJson(`/api/workspaces/${active.id}/invites`, {
         method: "POST",
@@ -280,6 +286,7 @@ export default function WorkspacePage() {
       });
       setInviteEmail("");
       setInvitePillarScopes(new Set());
+      setInviteClientScopes(new Set());
       setInvites((prev) => [data.invite, ...prev]);
     } catch (err: any) {
       toast({ title: "Could not invite", description: err.message, variant: "destructive" });
@@ -708,36 +715,106 @@ export default function WorkspacePage() {
                           </div>
                         </div>
 
-                        {inviteDisplayRole === "contributor" && (
-                          <div className="rounded-lg border border-border/40 p-3 space-y-2">
+                        {/*
+                          Access reads in the order it is decided: which
+                          companies, then which pillars inside them.
+
+                          This block used to render only when the role radio
+                          said "Contributor", and the radio defaulted to Admin —
+                          so the first thing anyone saw on this page had no
+                          permissions in it at all, and most people never
+                          discovered the feature existed. It is always on screen
+                          now; for a role that is not scoped it explains why it
+                          is not asking, rather than disappearing.
+                        */}
+                        <div className="rounded-lg border border-border/40 p-3 space-y-3">
+                          <div>
                             <p className="text-[12px] font-medium">
-                              Scorecard pillars this contributor can access
-                              <span className="text-muted-foreground font-normal ml-1">(select at least one)</span>
+                              Which companies
+                              <span className="text-muted-foreground font-normal ml-1">
+                                {inviteDisplayRole === "contributor"
+                                  ? "(none selected means every company)"
+                                  : "— every company in this team"}
+                              </span>
                             </p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2">
-                              {PILLAR_SCOPE_OPTIONS.map(({ key, label }) => (
-                                <label
-                                  key={key}
-                                  className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
-                                >
-                                  <Checkbox
-                                    checked={invitePillarScopes.has(key)}
-                                    onCheckedChange={(checked) => {
-                                      setInvitePillarScopes((prev) => {
-                                        const next = new Set(prev);
-                                        if (checked) next.add(key);
-                                        else next.delete(key);
-                                        return next;
-                                      });
-                                    }}
-                                    data-testid={`invite-pillar-${key}`}
-                                  />
-                                  <span>{label}</span>
-                                </label>
-                              ))}
-                            </div>
+                            {inviteDisplayRole === "contributor" ? (
+                              companies.length === 0 ? (
+                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                  No companies in this team yet.
+                                </p>
+                              ) : (
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                  {companies.map((c) => (
+                                    <label
+                                      key={c.id}
+                                      className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                    >
+                                      <Checkbox
+                                        checked={inviteClientScopes.has(c.id)}
+                                        onCheckedChange={(checked) => {
+                                          setInviteClientScopes((prev) => {
+                                            const next = new Set(prev);
+                                            if (checked) next.add(c.id);
+                                            else next.delete(c.id);
+                                            return next;
+                                          });
+                                        }}
+                                        data-testid={`invite-company-${c.id}`}
+                                      />
+                                      <span>{c.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )
+                            ) : (
+                              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                Choose <span className="text-foreground">Contributor</span> to limit
+                                this person to particular companies.
+                              </p>
+                            )}
                           </div>
-                        )}
+
+                          <div className="border-t border-border/30 pt-3">
+                            <p className="text-[12px] font-medium">
+                              Which pillars, inside those companies
+                              <span className="text-muted-foreground font-normal ml-1">
+                                {inviteDisplayRole === "contributor"
+                                  ? "(select at least one)"
+                                  : "— the whole scorecard"}
+                              </span>
+                            </p>
+                            {inviteDisplayRole === "contributor" ? (
+                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                {PILLAR_SCOPE_OPTIONS.map(({ key, label }) => (
+                                  <label
+                                    key={key}
+                                    className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                  >
+                                    <Checkbox
+                                      checked={invitePillarScopes.has(key)}
+                                      onCheckedChange={(checked) => {
+                                        setInvitePillarScopes((prev) => {
+                                          const next = new Set(prev);
+                                          if (checked) next.add(key);
+                                          else next.delete(key);
+                                          return next;
+                                        });
+                                      }}
+                                      data-testid={`invite-pillar-${key}`}
+                                    />
+                                    <span>{label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                {inviteDisplayRole === "reviewer" || inviteDisplayRole === "viewer"
+                                  ? "Can read the whole scorecard, and change nothing."
+                                  : "Can work on the whole scorecard."}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {invites.length > 0 && (

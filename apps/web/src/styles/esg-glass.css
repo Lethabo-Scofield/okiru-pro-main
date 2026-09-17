@@ -1,25 +1,31 @@
 /**
- * ESG theme — aligned with B-BBEE hub / InformationRequest (bg-black, neutral chrome).
- * E/S/G accent tokens are for badges and charts only, not page wash.
+ * ESG theme — now on the same ink as the rest of the product.
+ *
+ * It was pure black with neutral greys, chosen to match a B-BBEE surface that
+ * has itself moved: the shell, the hub and the workspaces all use the
+ * marketing site's navy (#0b0f1a) with an opacity-based text ramp. Sharing
+ * those values is what stops ESG reading as a separate application.
+ *
+ * E/S/G accent tokens remain for badges and charts only, never a page wash.
  */
 .esg-theme {
   color-scheme: dark;
-  --esg-bg: #000000;
-  --esg-bg2: #0a0a0a;
-  --esg-glass: rgba(255, 255, 255, 0.03);
-  --esg-glass-hover: rgba(255, 255, 255, 0.06);
-  --esg-glass-border: #2c2c2e;
-  --esg-glass-border-hover: #3a3a3c;
+  --esg-bg: #0b0f1a;
+  --esg-bg2: #0d1220;
+  --esg-glass: rgba(255, 255, 255, 0.022);
+  --esg-glass-hover: rgba(255, 255, 255, 0.05);
+  --esg-glass-border: rgba(255, 255, 255, 0.07);
+  --esg-glass-border-hover: rgba(255, 255, 255, 0.14);
   --esg-glass-strong: rgba(255, 255, 255, 0.06);
-  --esg-text: #ffffff;
-  --esg-text2: #8e8e93;
-  --esg-text3: #636366;
-  --esg-acc-e: #1de9a0;
+  --esg-text: rgba(255, 255, 255, 0.92);
+  --esg-text2: rgba(255, 255, 255, 0.56);
+  --esg-text3: rgba(255, 255, 255, 0.32);
+  --esg-acc-e: #06b6d4;
   --esg-acc-s: #f5a623;
-  --esg-acc-g: #9b6bff;
-  --esg-section-bg: #141416;
-  --esg-input-bg: #0e0e10;
-  --esg-input-border: #2c2c2e;
+  --esg-acc-g: #9333ea;
+  --esg-section-bg: #111828;
+  --esg-input-bg: rgba(255, 255, 255, 0.03);
+  --esg-input-border: rgba(255, 255, 255, 0.07);
   --esg-nav-w: 220px;
   --esg-hdr-h: 52px;
   color: var(--esg-text);

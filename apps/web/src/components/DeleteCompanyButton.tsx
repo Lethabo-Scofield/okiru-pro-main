@@ -81,7 +81,7 @@ export function DeleteCompanyButton({
           e.stopPropagation();
           setOpen(true);
         }}
-        className={`p-2 rounded-lg text-[#636366] hover:text-red-400 hover:bg-red-500/10 smooth press-sm shrink-0 ${className}`}
+        className={`p-2 rounded-lg text-[color:var(--muted)] hover:text-red-400 hover:bg-red-500/10 smooth press-sm shrink-0 ${className}`}
         title={`Delete ${companyName}`}
         aria-label={`Delete ${companyName}`}
         data-testid={testId ?? `button-delete-company-${companyId}`}
@@ -90,12 +90,12 @@ export function DeleteCompanyButton({
       </button>
 
       <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent className="bg-[#1c1c1e] border-[#2c2c2e] text-white max-w-md">
+        <AlertDialogContent className="bg-[color:var(--ink-3)] border-[color:var(--rule)] text-white max-w-md">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-white">
               Delete {companyName}?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-[#98989f]">
+            <AlertDialogDescription className="text-[color:var(--body)]">
               This cannot be undone. The company record and its workbook data will be
               permanently removed.
             </AlertDialogDescription>
@@ -103,7 +103,7 @@ export function DeleteCompanyButton({
           <AlertDialogFooter>
             <AlertDialogCancel
               disabled={deleting}
-              className="border-[#2c2c2e] bg-transparent text-[#d1d1d6] hover:bg-[#2c2c2e]"
+              className="border-[color:var(--rule)] bg-transparent text-[color:var(--body)] hover:bg-[rgba(255,255,255,0.06)]"
             >
               Cancel
             </AlertDialogCancel>

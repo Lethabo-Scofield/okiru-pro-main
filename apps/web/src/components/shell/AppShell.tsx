@@ -5,6 +5,7 @@ import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { useAuth } from '@toolkit/lib/auth';
 import { isBareRoute, buildCrumbs } from './shellNav';
+import '@/styles/okiru-app.css';
 
 /**
  * One slim bar across the signed-in product. Nothing else.
@@ -33,11 +34,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const onHub = crumbs.length === 1;
 
   return (
-    <div className="min-h-screen bg-black text-[#f5f5f7]" style={{ letterSpacing: '-0.011em' }}>
+    <div className="okiru-app">
+      {/* The grain sits above the wash and below everything else, so the page
+          has the same surface the marketing site does. */}
+      <div className="okiru-app-grain" aria-hidden />
       <header
-        className="h-12 sticky top-0 z-30 bg-black border-b border-[#2c2c2e] flex items-center justify-between gap-4 px-4 sm:px-6"
+        className="relative z-20 h-12 sticky top-0 flex items-center justify-between gap-4 px-4 sm:px-6"
+        style={{
+          background: 'rgba(11,15,26,0.82)',
+          backdropFilter: 'blur(18px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(18px) saturate(1.4)',
+          borderBottom: '1px solid var(--rule)',
+        }}
         data-testid="shell-topbar"
       >
+        <span className="ok-rule-brand" aria-hidden />
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/hub"
@@ -46,32 +57,43 @@ export function AppShell({ children }: { children: ReactNode }) {
             data-testid="shell-home"
           >
             <img src={logoCircle} alt="" className="h-6 w-6 rounded-[6px]" />
-            <span className="text-[14px] font-semibold tracking-tight text-white">Okiru</span>
+            <span className="text-[14px] font-semibold tracking-tight" style={{ color: 'var(--hi)' }}>
+              Okiru
+            </span>
           </Link>
 
           {!onHub && (
             <>
-              <span className="h-4 w-px bg-[#2c2c2e] shrink-0" aria-hidden />
+              <span
+                className="h-4 w-px shrink-0"
+                style={{ background: 'var(--rule-strong)' }}
+                aria-hidden
+              />
               <nav aria-label="Breadcrumb" className="min-w-0">
-                <ol className="flex items-center gap-1.5 text-[12px] min-w-0">
+                <ol className="flex items-center gap-1.5 min-w-0">
                   {crumbs.map((c, i) => {
                     const last = i === crumbs.length - 1;
                     return (
                       <Fragment key={`${c.label}-${i}`}>
                         {i > 0 && (
-                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#48484a]" aria-hidden />
+                          <ChevronRight
+                            className="h-3 w-3 shrink-0"
+                            style={{ color: 'var(--muted)' }}
+                            aria-hidden
+                          />
                         )}
                         <li className="min-w-0">
                           {c.href && !last ? (
                             <Link
                               href={c.href}
-                              className="text-[#98989f] hover:text-white transition-colors truncate"
+                              className="ok-eyebrow truncate transition-colors hover:!text-[rgba(255,255,255,0.75)]"
                             >
                               {c.label}
                             </Link>
                           ) : (
                             <span
-                              className={last ? 'text-white font-medium truncate' : 'text-[#98989f] truncate'}
+                              className="ok-eyebrow truncate"
+                              style={last ? { color: 'var(--hi)' } : undefined}
                               aria-current={last ? 'page' : undefined}
                             >
                               {c.label}
@@ -90,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <UserAccountMenu variant="dashboard" />
       </header>
 
-      <main>{children}</main>
+      <main className="relative z-10">{children}</main>
     </div>
   );
 }

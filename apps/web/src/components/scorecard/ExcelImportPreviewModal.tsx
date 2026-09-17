@@ -51,7 +51,7 @@ function ConfidenceBadge({ confidence }: { confidence: FieldConfidence | undefin
   }
   if (confidence === "low") {
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-[#8e8e93]" title="Low confidence">
+      <span className="inline-flex items-center gap-1 text-[11px] text-[color:var(--body)]" title="Low confidence">
         <HelpCircle className="h-3.5 w-3.5" />
         Low
       </span>
@@ -63,7 +63,7 @@ function ConfidenceBadge({ confidence }: { confidence: FieldConfidence | undefin
 function StatusIcon({ status }: { status: FieldStatus | undefined }) {
   if (status === "mapped") return <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />;
   if (status === "warning") return <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />;
-  return <HelpCircle className="h-4 w-4 text-[#636366] shrink-0" />;
+  return <HelpCircle className="h-4 w-4 text-[color:var(--muted)] shrink-0" />;
 }
 
 export function ExcelImportPreviewModal({
@@ -105,15 +105,15 @@ export function ExcelImportPreviewModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color:var(--ink)]/70 backdrop-blur-sm">
       <div
-        className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-[#2c2c2e] bg-[#1c1c1e] shadow-2xl flex flex-col"
+        className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] shadow-2xl flex flex-col"
         data-testid="modal-excel-import-preview"
       >
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-[#2c2c2e]">
+        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-[color:var(--rule)]">
           <div>
             <h2 className="text-[16px] font-semibold text-white">Import Preview</h2>
-            <p className="text-[12px] text-[#8e8e93] mt-0.5 truncate max-w-md">{fileName}</p>
+            <p className="text-[12px] text-[color:var(--body)] mt-0.5 truncate max-w-md">{fileName}</p>
             {result?.isBeeGatheringFormat && (
               <p className="text-[11px] text-emerald-400/90 mt-1">
                 {extractedCount} fields extracted across {result.mappedSheets?.length ?? 0} sheets
@@ -124,7 +124,7 @@ export function ExcelImportPreviewModal({
             type="button"
             onClick={onClose}
             disabled={importing}
-            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[#8e8e93] hover:text-white smooth"
+            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[color:var(--body)] hover:text-white smooth"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -139,19 +139,19 @@ export function ExcelImportPreviewModal({
             </div>
           ) : (
             <>
-              <div className="text-[12px] text-[#8e8e93]">
+              <div className="text-[12px] text-[color:var(--body)]">
                 Sheets scanned: {result.mappedSheets?.join(", ") || "—"}
               </div>
 
               {(result.sectionSummary?.length ?? 0) > 0 && (
-                <div className="rounded-xl border border-[#2c2c2e] overflow-hidden">
-                  <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">
+                <div className="rounded-xl border border-[color:var(--rule)] overflow-hidden">
+                  <div className="px-3 py-2 bg-[color:var(--ink-2)] text-[12px] font-semibold text-[color:var(--body)] border-b border-[color:var(--rule)]">
                     Data extracted by section
                   </div>
                   <div className="px-3 py-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
                     {result.sectionSummary?.map((s) => (
                       <div key={s.key} className="flex items-center justify-between gap-2 text-[12px]">
-                        <span className="text-[#d1d1d6] truncate">{s.label}</span>
+                        <span className="text-[color:var(--body)] truncate">{s.label}</span>
                         <span className="tabular-nums text-emerald-400 font-medium shrink-0">
                           {s.rowCount > 0
                             ? `${s.rowCount} row${s.rowCount !== 1 ? "s" : ""}`
@@ -164,8 +164,8 @@ export function ExcelImportPreviewModal({
               )}
 
               {groupedRows.map((group) => (
-                <div key={group.id} className="rounded-xl border border-[#2c2c2e] overflow-hidden">
-                  <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">
+                <div key={group.id} className="rounded-xl border border-[color:var(--rule)] overflow-hidden">
+                  <div className="px-3 py-2 bg-[color:var(--ink-2)] text-[12px] font-semibold text-[color:var(--body)] border-b border-[color:var(--rule)]">
                     {group.label}
                   </div>
                   <table className="w-full text-[13px] table-fixed">
@@ -176,7 +176,7 @@ export function ExcelImportPreviewModal({
                       <col style={{ width: "32px" }} />
                     </colgroup>
                     <thead>
-                      <tr className="bg-[#0e0e10]/50 text-[#8e8e93] text-left">
+                      <tr className="bg-[color:var(--ink-2)]/50 text-[color:var(--body)] text-left">
                         <th className="px-3 py-2 font-medium">Field</th>
                         <th className="px-3 py-2 font-medium">Value</th>
                         <th className="px-3 py-2 font-medium">Conf.</th>
@@ -185,8 +185,8 @@ export function ExcelImportPreviewModal({
                     </thead>
                     <tbody>
                       {group.rows.map((row) => (
-                        <tr key={row.key} className="border-t border-[#2c2c2e]" title={row.source}>
-                          <td className="px-3 py-2 text-[#d1d1d6] truncate">{row.label}</td>
+                        <tr key={row.key} className="border-t border-[color:var(--rule)]" title={row.source}>
+                          <td className="px-3 py-2 text-[color:var(--body)] truncate">{row.label}</td>
                           <td className="px-3 py-2 text-white font-medium tabular-nums truncate">
                             {formatValue(row.key, row.value)}
                           </td>
@@ -204,14 +204,14 @@ export function ExcelImportPreviewModal({
               ))}
 
               {(result.ownershipChainTiers?.length ?? 0) > 0 && (
-                <div className="rounded-xl border border-[#2c2c2e] overflow-hidden">
-                  <div className="px-3 py-2 bg-[#0e0e10] text-[12px] font-semibold text-[#d1d1d6] border-b border-[#2c2c2e]">
+                <div className="rounded-xl border border-[color:var(--rule)] overflow-hidden">
+                  <div className="px-3 py-2 bg-[color:var(--ink-2)] text-[12px] font-semibold text-[color:var(--body)] border-b border-[color:var(--rule)]">
                     Ownership Chain Tiers ({result.ownershipChainTiers?.length ?? 0})
                   </div>
                   <div className="px-3 py-2 space-y-1">
                     {result.ownershipChainTiers?.slice(0, 5).map((tier) => (
-                      <div key={tier.tier} className="text-[12px] text-[#d1d1d6] flex gap-3">
-                        <span className="text-[#8e8e93] w-12">Tier {tier.tier}</span>
+                      <div key={tier.tier} className="text-[12px] text-[color:var(--body)] flex gap-3">
+                        <span className="text-[color:var(--body)] w-12">Tier {tier.tier}</span>
                         <span className="flex-1 truncate">{tier.entityName || "—"}</span>
                         {tier.blackVotingRights !== undefined && (
                           <span className="tabular-nums text-white">
@@ -244,12 +244,12 @@ export function ExcelImportPreviewModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[#2c2c2e]">
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[color:var(--rule)]">
           <button
             type="button"
             onClick={onClose}
             disabled={importing}
-            className="px-4 py-2 rounded-lg text-[13px] text-[#d1d1d6] hover:bg-white/[0.06] smooth press-sm disabled:opacity-60"
+            className="px-4 py-2 rounded-lg text-[13px] text-[color:var(--body)] hover:bg-white/[0.06] smooth press-sm disabled:opacity-60"
           >
             Cancel
           </button>

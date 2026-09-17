@@ -25,7 +25,7 @@ const variantStyles = {
     shell:
       "border-white/[0.10] bg-white/[0.045] shadow-sm shadow-black/25 hover:bg-white/[0.08] hover:border-white/[0.14] focus-visible:ring-white/25",
     iconWrap: "border-white/[0.10] bg-white/[0.06] text-[#a8a8ad] group-hover:text-white group-hover:border-white/[0.14]",
-    eyebrow: "text-[#636366] group-hover:text-[#8e8e93]",
+    eyebrow: "text-[color:var(--muted)] group-hover:text-[color:var(--body)]",
     label: "text-[#ececec] group-hover:text-white",
   },
   light: {

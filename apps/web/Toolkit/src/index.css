@@ -92,34 +92,42 @@
   --radius: 0.625rem;
 }
 
+/**
+ * The toolkit's dark theme, moved onto the marketing site's ink.
+ *
+ * It was pure black with neutral greys, which made the toolkit read as a
+ * different application from the pages either side of it. These are the same
+ * navy surfaces the shell and the landing page use, expressed as HSL because
+ * shadcn's tokens are channel triplets: 222 41% 7% is #0b0f1a.
+ */
 .dark {
-  --background: 0 0% 0%;
+  --background: 222 41% 7%;
   --foreground: 0 0% 96%;
 
-  --card: 0 0% 7%;
+  --card: 223 38% 9%;
   --card-foreground: 0 0% 96%;
 
-  --popover: 0 0% 7%;
+  --popover: 223 38% 9%;
   --popover-foreground: 0 0% 96%;
 
-  --primary: 265 90% 66%;
+  --primary: 271 81% 56%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 0 0% 10%;
+  --secondary: 223 32% 12%;
   --secondary-foreground: 0 0% 84%;
 
-  --muted: 0 0% 10%;
-  --muted-foreground: 0 0% 55%;
+  --muted: 223 32% 12%;
+  --muted-foreground: 0 0% 58%;
 
-  --accent: 0 0% 12%;
+  --accent: 223 30% 15%;
   --accent-foreground: 0 0% 96%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 0 0% 15%;
-  --input: 0 0% 15%;
-  --ring: 265 90% 66%;
+  --border: 223 25% 18%;
+  --input: 223 25% 18%;
+  --ring: 188 94% 43%;
 
   --chart-1: 265 90% 66%;
   --chart-2: 158 64% 52%;
@@ -127,14 +135,14 @@
   --chart-4: 200 80% 58%;
   --chart-5: 340 65% 58%;
 
-  --sidebar: 0 0% 4%;
-  --sidebar-foreground: 0 0% 55%;
-  --sidebar-primary: 265 90% 66%;
+  --sidebar: 224 43% 6%;
+  --sidebar-foreground: 0 0% 58%;
+  --sidebar-primary: 271 81% 56%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 0 0% 10%;
+  --sidebar-accent: 223 32% 12%;
   --sidebar-accent-foreground: 0 0% 86%;
-  --sidebar-border: 0 0% 12%;
-  --sidebar-ring: 265 90% 66%;
+  --sidebar-border: 223 25% 16%;
+  --sidebar-ring: 188 94% 43%;
 }
 
 @layer base {

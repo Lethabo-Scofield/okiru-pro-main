@@ -167,7 +167,7 @@ export function EsgMaturityGrid({ rows, values, onChange, onTouch, readOnly }: P
                     </span>
                   )}
                 </td>
-                <td className={`${ESG_TABLE_CELL} text-[#8e8e93]`}>
+                <td className={`${ESG_TABLE_CELL} text-[color:var(--body)]`}>
                   {score == null ? "—" : score}
                 </td>
               </tr>
@@ -186,7 +186,7 @@ export function EsgMaturityGrid({ rows, values, onChange, onTouch, readOnly }: P
           </div>
         ) : null}
         {quantityRows > 0 ? (
-          <p className="text-[11px] text-[#636366]">
+          <p className="text-[11px] text-[color:var(--muted)]">
             Quantities are scored against their targets when the scorecard is recalculated, so no
             score shows here until the workbook has been saved and recalculated.
           </p>

@@ -244,11 +244,18 @@ export interface EsgDocumentUploadStartProps {
    * columns instead of requiring its tab to be named correctly.
    */
   initialFiles?: File[];
+  /**
+   * Open on the dropzone alone — set when the user already chose "upload
+   * documents" in the workspace. The fifteen element batches appear the moment
+   * there is a file for them to organise.
+   */
+  focused?: boolean;
 }
 
 export function EsgDocumentUploadStart({
   companyId,
   companyName,
+  focused = false,
   onComplete,
   busy = false,
   onBack,
@@ -1002,7 +1009,7 @@ export function EsgDocumentUploadStart({
           <button
             type="button"
             onClick={onBack}
-            className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--esg-text2,#8e8e93)] transition-colors hover:text-white"
+            className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
             data-testid="esg-upload-back"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
@@ -1018,7 +1025,7 @@ export function EsgDocumentUploadStart({
               : "Review and process"
             : "Add your ESG evidence"}
         </h3>
-        <p className="mt-1.5 text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+        <p className="mt-1.5 text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           {quote && !parserCase
             ? quote.paymentRequired === false
               ? "Processing is free. Review the documents below, then continue."
@@ -1079,14 +1086,14 @@ export function EsgDocumentUploadStart({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: -24, scale: 0.985 }}
                 transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
-                className="mb-4 rounded-[22px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-input-bg,#0e0e10)] p-5"
+                className="mb-4 rounded-[22px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] p-5"
                 data-testid="esg-payment-summary"
               >
                 {/* Reviewing the cost is not a one-way door. */}
                 <button
                   type="button"
                   onClick={() => setDoneStaging(false)}
-                  className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--esg-text2,#8e8e93)] transition-colors hover:text-white"
+                  className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
                   data-testid="esg-button-add-more-documents"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
@@ -1094,7 +1101,7 @@ export function EsgDocumentUploadStart({
                 </button>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,#636366)]">
+                    <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                       {charging ? "This batch costs" : "Ready to process"}
                     </p>
                     <h4
@@ -1104,32 +1111,32 @@ export function EsgDocumentUploadStart({
                         ? `${tokenText(tokenCost.tokens)} tokens`
                         : `${quote!.files.length} document${quote!.files.length === 1 ? "" : "s"}`}
                     </h4>
-                    <p className="mt-2 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+                    <p className="mt-2 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                       {charging
                         ? "Longer documents and scans cost more to read. Nothing is spent until you start."
                         : "Check what we picked up before we read your documents."}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] px-4 py-3 text-right">
+                  <div className="rounded-2xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-4 py-3 text-right">
                     {charging && tokenCost ? (
                       <>
-                        <p className="text-[11px] text-[var(--esg-text3,#636366)]">Balance after</p>
+                        <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Balance after</p>
                         <p
                           className={`mt-1 text-[13px] font-medium tabular-nums ${
-                            tokenCost.sufficient ? "text-[#d1d1d6]" : "text-red-300"
+                            tokenCost.sufficient ? "text-[color:var(--body)]" : "text-red-300"
                           }`}
                           data-testid="esg-balance-after"
                         >
                           {tokenText(Math.max(0, tokenCost.balanceAfter))}
                         </p>
-                        <p className="mt-0.5 text-[10.5px] text-[var(--esg-text3,#636366)]">
+                        <p className="mt-0.5 text-[10.5px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                           of {tokenText(tokenCost.balance)} now
                         </p>
                       </>
                     ) : (
                       <>
-                        <p className="text-[11px] text-[var(--esg-text3,#636366)]">Expires</p>
-                        <p className="mt-1 text-[13px] font-medium text-[#d1d1d6]">{expiryLabel}</p>
+                        <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Expires</p>
+                        <p className="mt-1 text-[13px] font-medium text-[color:var(--body)]">{expiryLabel}</p>
                       </>
                     )}
                   </div>
@@ -1137,19 +1144,19 @@ export function EsgDocumentUploadStart({
 
                 <div className="mt-5 grid grid-cols-3 gap-2">
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                    <p className="text-[11px] text-[var(--esg-text3,#636366)]">Documents</p>
+                    <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Documents</p>
                     <p className="mt-1 text-[20px] font-semibold text-[var(--esg-text,#fff)]">
                       {quote!.files.length}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                    <p className="text-[11px] text-[var(--esg-text3,#636366)]">Pages</p>
+                    <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Pages</p>
                     <p className="mt-1 text-[20px] font-semibold text-[var(--esg-text,#fff)]">
                       {totalPages || "Auto"}
                     </p>
                   </div>
                   <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                    <p className="text-[11px] text-[var(--esg-text3,#636366)]">Workbooks</p>
+                    <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Workbooks</p>
                     <p className="mt-1 text-[20px] font-semibold text-[var(--esg-text,#fff)]">
                       {spreadsheetCount}
                     </p>
@@ -1159,8 +1166,8 @@ export function EsgDocumentUploadStart({
                 {/* Each document shows the credit tokens IT costs, under the
                     effort rule that priced it — the total is explained line by
                     line rather than asserted. */}
-                <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--esg-glass-border,#2c2c2e)]">
-                  <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--esg-text3,#636366)] max-md:hidden">
+                <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))]">
+                  <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--esg-text3,rgba(255,255,255,0.32))] max-md:hidden">
                     <span>Document</span>
                     <span>Effort</span>
                     <span className="text-right">{charging ? "Tokens" : "Size"}</span>
@@ -1180,7 +1187,7 @@ export function EsgDocumentUploadStart({
                       >
                         <div className="min-w-0">
                           <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
-                          <p className="mt-0.5 text-[11px] text-[var(--esg-text3,#636366)]">
+                          <p className="mt-0.5 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                             <span className="md:hidden">{effort} effort · </span>
                             {units}
                             {charging && priced ? (
@@ -1188,10 +1195,10 @@ export function EsgDocumentUploadStart({
                             ) : null}
                           </p>
                         </div>
-                        <span className="hidden text-[12px] text-[var(--esg-text2,#8e8e93)] md:block">
+                        <span className="hidden text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))] md:block">
                           {effort}
                         </span>
-                        <span className="hidden text-[12px] tabular-nums text-[var(--esg-text2,#8e8e93)] md:block md:text-right">
+                        <span className="hidden text-[12px] tabular-nums text-[var(--esg-text2,rgba(255,255,255,0.56))] md:block md:text-right">
                           {charging && priced ? `${tokenText(priced.tokens)} tokens` : units}
                         </span>
                       </div>
@@ -1203,19 +1210,19 @@ export function EsgDocumentUploadStart({
                       data-testid="esg-quote-minimum-charge"
                     >
                       <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-[var(--esg-text2,#8e8e93)]">Small-batch minimum</p>
-                        <p className="mt-0.5 text-[11px] text-[var(--esg-text3,#636366)]">
+                        <p className="text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))]">Small-batch minimum</p>
+                        <p className="mt-0.5 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                           Batches this small are topped up to the minimum processing charge.
                         </p>
                       </div>
                       <span className="hidden md:block" />
-                      <span className="text-[12px] tabular-nums text-[var(--esg-text2,#8e8e93)] md:text-right">
+                      <span className="text-[12px] tabular-nums text-[var(--esg-text2,rgba(255,255,255,0.56))] md:text-right">
                         {tokenText(tokenCost!.minimumTopUp!)} tokens
                       </span>
                     </div>
                   )}
                   <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
-                    <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text2,#8e8e93)]">
+                    <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                       {charging ? "Total" : "This batch"}
                     </span>
                     <span className="hidden md:block" />
@@ -1235,14 +1242,14 @@ export function EsgDocumentUploadStart({
                     from the charge. */}
                 {charging && (tokenCost?.effortRules?.length ?? 0) > 0 && (
                   <div
-                    className="mt-3 rounded-2xl border border-white/[0.06] bg-[#111113] p-4"
+                    className="mt-3 rounded-2xl border border-white/[0.06] bg-[color:var(--ink-2)] p-4"
                     data-testid="esg-effort-rules"
                   >
                     <p className="text-[12px] font-semibold text-[var(--esg-text,#fff)]">How effort sets the token cost</p>
                     <div className="mt-2 space-y-1.5">
                       {tokenCost!.effortRules!.map((rule) => (
-                        <p key={rule.tier} className="text-[11.5px] leading-5 text-[var(--esg-text2,#8e8e93)]">
-                          <span className="font-semibold text-[#d1d1d6]">{rule.label}</span> — {rule.rule}
+                        <p key={rule.tier} className="text-[11.5px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+                          <span className="font-semibold text-[color:var(--body)]">{rule.label}</span> — {rule.rule}
                         </p>
                       ))}
                     </div>
@@ -1250,7 +1257,7 @@ export function EsgDocumentUploadStart({
                 )}
 
                 {!charging && (
-                  <p className="mt-3 text-[11px] text-[var(--esg-text3,#636366)]">
+                  <p className="mt-3 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                     Processing is not being charged for this run.
                   </p>
                 )}
@@ -1265,7 +1272,7 @@ export function EsgDocumentUploadStart({
                       <AlertTriangle className="h-4 w-4" />
                       {tokenText(tokenCost.shortfall)} tokens short
                     </p>
-                    <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+                    <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                       This batch needs {tokenText(tokenCost.tokens)} tokens and you have{" "}
                       {tokenText(tokenCost.balance)}. Top up, or remove some documents and process the
                       rest first.
@@ -1281,7 +1288,7 @@ export function EsgDocumentUploadStart({
                 )}
 
                 {charging && quote!.totals.isUpperBound && (
-                  <p className="mt-3 text-[11px] text-[var(--esg-text3,#636366)]">
+                  <p className="mt-3 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                     Scanned documents are estimated conservatively. You will not be charged more than
                     this.
                   </p>
@@ -1309,7 +1316,7 @@ export function EsgDocumentUploadStart({
                   <button
                     type="button"
                     onClick={() => inputRef.current?.click()}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
                   >
                     Change documents
                   </button>
@@ -1359,12 +1366,12 @@ export function EsgDocumentUploadStart({
                     transform: dragActive ? "scale(1.1)" : "scale(1)",
                   }}
                 >
-                  <CloudUpload className="h-5 w-5 text-[#d1d1d6]" />
+                  <CloudUpload className="h-5 w-5 text-[color:var(--body)]" />
                 </div>
                 {/* No heading: the step above already says "Add your ESG
                     evidence", and the button says upload. Saying it three
                     times is what made the step feel like a second request. */}
-                <p className="mx-auto mb-4 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+                <p className="mx-auto mb-4 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                   Utility bills, fuel statements, waste manifests and registers.
                   PDF, Word, Excel or scans.
                 </p>
@@ -1382,7 +1389,7 @@ export function EsgDocumentUploadStart({
                 </button>
                 <button
                   type="button"
-                  className="ml-2 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-5 py-2.5 text-[14px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.06]"
+                  className="ml-2 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-5 py-2.5 text-[14px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.06]"
                   onClick={(e) => {
                     e.stopPropagation();
                     folderInputRef.current?.click();
@@ -1397,7 +1404,7 @@ export function EsgDocumentUploadStart({
                 </p>
               </>
             ) : (
-              <div className="flex items-center justify-center gap-2 text-[var(--esg-text2,#8e8e93)] transition-colors hover:text-[var(--esg-acc-e,#1de9a0)]">
+              <div className="flex items-center justify-center gap-2 text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-[var(--esg-acc-e,#1de9a0)]">
                 <Leaf className="h-3.5 w-3.5" />
                 <span className="text-[13px] font-medium">Add more documents</span>
               </div>
@@ -1419,11 +1426,11 @@ export function EsgDocumentUploadStart({
                 without a folder ever being involved. */}
             {skippedFiles.length} file{skippedFiles.length === 1 ? "" : "s"} could not be read
           </p>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             We only read PDFs, Word, Excel, PowerPoint, CSV and images. Everything else was left out —
             if one of these was evidence, convert it and add it.
           </p>
-          <p className="mt-2 truncate font-mono text-[11px] text-[var(--esg-text2,#8e8e93)]">
+          <p className="mt-2 truncate font-mono text-[11px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             {skippedFiles.slice(0, 6).join(", ")}
             {skippedFiles.length > 6 ? ` +${skippedFiles.length - 6} more` : ""}
           </p>
@@ -1435,13 +1442,13 @@ export function EsgDocumentUploadStart({
           button that advances the flow beneath a long grid: you staged files
           and then had to go hunting for how to continue. */}
       {!parserCase && !doneStaging && files.length > 0 && (
-        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-[var(--esg-text,#fff)]">
               {files.length} document{files.length === 1 ? "" : "s"} staged
               {quoting ? " · checking" : ""}
             </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
               Keep adding — the buttons above, or any element batch below. Nothing is read, and
               nothing is charged, until you review the cost on the next step.
             </p>
@@ -1483,7 +1490,7 @@ export function EsgDocumentUploadStart({
             <button
               type="button"
               onClick={() => setDoneStaging(false)}
-              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text2,#8e8e93)] transition-colors hover:text-white"
+              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
               data-testid="esg-button-back-to-staging"
             >
               Back to adding
@@ -1505,7 +1512,7 @@ export function EsgDocumentUploadStart({
           moment the first batch lands, and gating on it would tear the uploader
           off the screen mid-task. Extraction is the point of no return, so that
           is what closes the uploader. */}
-      {!parserCase && (
+      {!parserCase && !(focused && files.length === 0 && !quote) && (
         <div className="mt-3">
           <EsgElementDocumentBatches
             satisfiedDocumentIds={satisfiedDocumentIds}
@@ -1540,7 +1547,7 @@ export function EsgDocumentUploadStart({
             <div className="text-[13px] font-semibold text-[#d8fff0]">
               {resolving ? "Reconciling across your documents" : "Reading your documents"}
             </div>
-            <div className="text-[12px] text-[var(--esg-text2,#8e8e93)]">
+            <div className="text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
               {resolving
                 ? resolveProgress
                   ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking sites, periods and figures across every file`
@@ -1561,8 +1568,8 @@ export function EsgDocumentUploadStart({
 
       {/* The staged / scanning list. */}
       {files.length > 0 && !quoteReady && (
-        <div className="mt-3 overflow-hidden rounded-xl border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-input-bg,#0e0e10)]">
-          <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--esg-text3,#636366)] sm:grid">
+        <div className="mt-3 overflow-hidden rounded-xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)]">
+          <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--esg-text3,rgba(255,255,255,0.32))] sm:grid">
             <span>File</span>
             <span>Status</span>
             <span>Type</span>
@@ -1617,13 +1624,13 @@ export function EsgDocumentUploadStart({
                     />
                   )}
                   <div className="flex min-w-0 items-center gap-2 text-left">
-                    <FileText className="h-4 w-4 shrink-0 text-[var(--esg-text3,#636366)]" />
+                    <FileText className="h-4 w-4 shrink-0 text-[var(--esg-text3,rgba(255,255,255,0.32))]" />
                     <div className="min-w-0">
                       <div className="truncate text-[13px] font-medium text-[#e5e5ea]">{f.name}</div>
                       {/* Where the user filed it, and how big it is. What it
                           eventually counts as is the classifier's call. */}
                       {(quotedFile || filedBatchByFile[f.name]) && (
-                        <div className="mt-0.5 truncate text-[11px] text-[var(--esg-text3,#636366)]">
+                        <div className="mt-0.5 truncate text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                           {filedBatchByFile[f.name] ? esgBatchLabel(filedBatchByFile[f.name]) : null}
                           {filedBatchByFile[f.name] && quotedFile ? " · " : null}
                           {quotedFile ? fileUnits(quotedFile) : null}
@@ -1631,20 +1638,20 @@ export function EsgDocumentUploadStart({
                       )}
                     </div>
                   </div>
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1 text-[11px] text-[#d1d1d6]">
+                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1 text-[11px] text-[color:var(--body)]">
                     {isReadingThis && <Loader2 className="h-3 w-3 animate-spin" />}
                     {perFile === "done" && parsing && <Check className="h-3 w-3 text-emerald-400" />}
                     {perFile === "error" && <AlertTriangle className="h-3 w-3 text-red-400" />}
                     {statusLabel}
                   </span>
-                  <span className="text-[12px] text-[var(--esg-text2,#8e8e93)]">{fileType}</span>
+                  <span className="text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">{fileType}</span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       removeFile(f.name);
                     }}
                     disabled={parsing}
-                    className="justify-self-start p-1 text-[#48484a] transition-colors hover:text-[var(--esg-text2,#8e8e93)] disabled:opacity-30 sm:justify-self-end"
+                    className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[var(--esg-text2,rgba(255,255,255,0.56))] disabled:opacity-30 sm:justify-self-end"
                     aria-label={`Remove ${f.name}`}
                     data-testid={`esg-remove-${f.name}`}
                   >
@@ -1670,7 +1677,7 @@ export function EsgDocumentUploadStart({
             {failedDocuments.length} document{failedDocuments.length === 1 ? "" : "s"} could not be
             read
           </p>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             Everything else was read normally. These produced nothing, so nothing from them has been
             used: {failedDocuments.slice(0, 5).join(", ")}
             {failedDocuments.length > 5 ? ` +${failedDocuments.length - 5} more` : ""}.
@@ -1690,7 +1697,7 @@ export function EsgDocumentUploadStart({
       )}
 
       {quoting && (
-        <p className="mt-3 flex items-center gap-2 text-[12px] text-[var(--esg-text2,#8e8e93)]" role="status">
+        <p className="mt-3 flex items-center gap-2 text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]" role="status">
           <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--esg-acc-e,#1de9a0)]" />
           Checking size and format to price these documents — nothing is read yet.
         </p>
@@ -1720,7 +1727,7 @@ export function EsgDocumentUploadStart({
                 ? `Open the workbook with ${injection.placed.length} value${injection.placed.length === 1 ? "" : "s"} filled in`
                 : "Continue to the workbook"}
             </button>
-            <p className="mt-2 text-center text-[11px] text-[#48484a]">
+            <p className="mt-2 text-center text-[11px] text-[color:var(--muted)]">
               {injection.implemented && injection.placed.length > 0
                 ? "You’ll land in a pre-filled workbook — review, complete anything missing, then continue to Summary."
                 : "Nothing has been written into the workbook. You’ll land there to complete it, and your documents stay in your library."}

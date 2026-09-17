@@ -39,7 +39,7 @@ export function WorkbookValidationPanel({
   if (aggregate.totalIssues === 0) {
     return (
       <div
-        className="rounded-xl border border-white/[0.06] bg-[#141416] px-3 py-2.5 text-[12px] text-status-success"
+        className="rounded-xl border border-white/[0.06] bg-[color:var(--ink-3)] px-3 py-2.5 text-[12px] text-status-success"
         data-testid="workbook-validation-panel-empty"
       >
         All sections pass validation checks.
@@ -74,7 +74,7 @@ export function WorkbookValidationPanel({
             <div className="text-[12px] font-semibold text-amber-200">
               {aggregate.totalIssues} validation issue{aggregate.totalIssues === 1 ? "" : "s"}
             </div>
-            <div className="text-[10px] text-[#8e8e93] truncate">
+            <div className="text-[10px] text-[color:var(--body)] truncate">
               {aggregate.criticalCount > 0
                 ? `${aggregate.criticalCount} required · ${aggregate.advisoryCount} advisory`
                 : `${aggregate.advisoryCount} advisory across ${aggregate.sections.length} section(s)`}
@@ -84,9 +84,9 @@ export function WorkbookValidationPanel({
           </div>
         </div>
         {expanded ? (
-          <ChevronDown className="h-4 w-4 text-[#636366] shrink-0" />
+          <ChevronDown className="h-4 w-4 text-[color:var(--muted)] shrink-0" />
         ) : (
-          <ChevronRight className="h-4 w-4 text-[#636366] shrink-0" />
+          <ChevronRight className="h-4 w-4 text-[color:var(--muted)] shrink-0" />
         )}
       </button>
 
@@ -94,13 +94,13 @@ export function WorkbookValidationPanel({
         <div className="border-t border-amber-500/10">
           <div className="px-3 py-2">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[#636366]" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[color:var(--muted)]" />
               <input
                 type="search"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter by row, field, message…"
-                className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-lg pl-7 pr-2 py-1.5 text-[11px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a]"
+                className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-lg pl-7 pr-2 py-1.5 text-[11px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-[color:var(--rule-strong)]"
                 data-testid="workbook-validation-filter"
               />
             </div>
@@ -125,7 +125,7 @@ export function WorkbookValidationPanel({
                     }}
                     className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-white/[0.03] smooth"
                   >
-                    <span className="text-[11px] font-semibold text-[#d1d1d6] truncate">
+                    <span className="text-[11px] font-semibold text-[color:var(--body)] truncate">
                       {section.sectionLabel}
                     </span>
                     <span className="text-[10px] tabular-nums text-amber-300 shrink-0">
@@ -142,7 +142,7 @@ export function WorkbookValidationPanel({
                             type="button"
                             onClick={() => onSelectSection?.(issue.sectionKey)}
                             className={`w-full text-left text-[11px] leading-snug hover:text-white smooth ${
-                              isCriticalWorkbookIssue(issue) ? "text-amber-200" : "text-[#8e8e93]"
+                              isCriticalWorkbookIssue(issue) ? "text-amber-200" : "text-[color:var(--body)]"
                             }`}
                           >
                             {formatValidationIssueLine(issue)}

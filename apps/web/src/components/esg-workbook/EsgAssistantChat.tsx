@@ -84,7 +84,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-[var(--esg-glass-border,#2c2c2e)] bg-[#141416] px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text,#f2f2f7)] shadow-lg shadow-black/40 hover:bg-[#1c1c1e]"
+        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink-3)] px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text,#f2f2f7)] shadow-lg shadow-black/40 hover:bg-[color:var(--ink-3)]"
         data-testid="esg-assistant-open"
       >
         <Sparkles className="h-4 w-4 text-[var(--esg-acc-e,#1de9a0)]" />
@@ -95,7 +95,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
 
   return (
     <div
-      className="fixed bottom-5 right-5 z-40 flex h-[520px] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--esg-glass-border,#2c2c2e)] bg-[#141416] shadow-2xl shadow-black/60"
+      className="fixed bottom-5 right-5 z-40 flex h-[520px] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink-3)] shadow-2xl shadow-black/60"
       data-testid="esg-assistant-panel"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.06] px-4 py-3">
@@ -104,7 +104,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
           <p className="text-[13px] font-semibold text-[var(--esg-text,#f2f2f7)]">
             Workbook assistant
           </p>
-          <p className="truncate text-[10px] text-[var(--esg-text3,#636366)]">
+          <p className="truncate text-[10px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
             Answers from your saved data, scores and validation — it never invents figures.
           </p>
         </div>
@@ -112,7 +112,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
           type="button"
           onClick={() => setOpen(false)}
           aria-label="Close assistant"
-          className="rounded p-1 text-[var(--esg-text3,#636366)] hover:text-[var(--esg-text,#f2f2f7)]"
+          className="rounded p-1 text-[var(--esg-text3,rgba(255,255,255,0.32))] hover:text-[var(--esg-text,#f2f2f7)]"
           data-testid="esg-assistant-close"
         >
           <X className="h-4 w-4" />
@@ -122,7 +122,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
       <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {messages.length === 0 ? (
           <div className="space-y-2" data-testid="esg-assistant-suggestions">
-            <p className="flex items-center gap-1.5 text-[11px] text-[var(--esg-text3,#636366)]">
+            <p className="flex items-center gap-1.5 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
               <MessageCircleQuestion className="h-3.5 w-3.5 shrink-0" /> Try one of these:
             </p>
             {SUGGESTIONS.map((s) => (
@@ -130,7 +130,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
                 key={s}
                 type="button"
                 onClick={() => void send(s)}
-                className="block w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-left text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)] hover:bg-white/[0.06] hover:text-[var(--esg-text,#f2f2f7)]"
+                className="block w-full rounded-lg border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-left text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))] hover:bg-white/[0.06] hover:text-[var(--esg-text,#f2f2f7)]"
               >
                 {s}
               </button>
@@ -148,7 +148,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
               className={
                 m.role === "user"
                   ? "max-w-[85%] rounded-2xl rounded-br-sm bg-[var(--esg-acc-e,#1de9a0)]/[0.12] px-3 py-2 text-[12.5px] leading-5 text-[var(--esg-text,#f2f2f7)]"
-                  : "max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-[12.5px] leading-5 text-[#d1d1d6]"
+                  : "max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-bl-sm border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-[12.5px] leading-5 text-[color:var(--body)]"
               }
             >
               {m.content}
@@ -158,7 +158,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
 
         {busy ? (
           <p
-            className="flex items-center gap-2 text-[11px] text-[var(--esg-text3,#636366)]"
+            className="flex items-center gap-2 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]"
             data-testid="esg-assistant-busy"
           >
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Reading your workbook…
@@ -184,7 +184,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Ask about scores, gaps, duplicates…"
           disabled={busy}
-          className="min-w-0 flex-1 rounded-lg border border-[var(--esg-input-border,#2c2c2e)] bg-[var(--esg-input-bg,#0e0e10)] px-3 py-2 text-[12.5px] text-[var(--esg-text,#f2f2f7)] placeholder:text-[var(--esg-text3,#636366)] focus:outline-none focus:ring-1 focus:ring-[var(--esg-acc-e,#1de9a0)]/50"
+          className="min-w-0 flex-1 rounded-lg border border-[var(--esg-input-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] px-3 py-2 text-[12.5px] text-[var(--esg-text,#f2f2f7)] placeholder:text-[var(--esg-text3,rgba(255,255,255,0.32))] focus:outline-none focus:ring-1 focus:ring-[var(--esg-acc-e,#1de9a0)]/50"
           data-testid="esg-assistant-input"
         />
         <button

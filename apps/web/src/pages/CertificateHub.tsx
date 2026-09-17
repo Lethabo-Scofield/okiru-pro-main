@@ -252,7 +252,7 @@ function hasCandidate(cert: CertificateRow, field: string): boolean {
 function SuggestedValue({ value, title }: { value: string | null; title?: string }) {
   if (!value) {
     return (
-      <span className="text-[#48484a]" title={title || 'No safe value found; open review to verify'}>
+      <span className="text-[color:var(--muted)]" title={title || 'No safe value found; open review to verify'}>
         -
       </span>
     );
@@ -336,13 +336,13 @@ function StatusBadge({ status, expiryDate }: { status: CertificateRow['status'];
     valid:    { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', label: 'Valid' },
     expiring: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Expiring' },
     expired:  { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'Expired' },
-    unknown:  { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
+    unknown:  { color: 'var(--body)', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
     pending_verification: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Pending review' },
     extraction_incomplete: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Extraction incomplete' },
     processing: { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)', label: 'Processing' },
     failed: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'Failed' },
     file_missing: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'File missing' },
-    metadata_only: { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Metadata only' },
+    metadata_only: { color: 'var(--body)', bg: 'rgba(142,142,147,0.12)', label: 'Metadata only' },
   } as const;
   const cfg = map[status];
   return (
@@ -392,7 +392,7 @@ function FilterPill({
         className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] transition-colors ${
           active
             ? 'bg-white text-black'
-            : 'bg-[#1c1c1e] text-[#8e8e93] hover:text-white border border-[#2c2c2e]'
+            : 'bg-[color:var(--ink-3)] text-[color:var(--body)] hover:text-white border border-[color:var(--rule)]'
         }`}
       >
         {active && current ? current.label : label}
@@ -408,15 +408,15 @@ function FilterPill({
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute top-full left-0 mt-1 z-40 bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg overflow-hidden min-w-[160px] shadow-xl">
+          <div className="absolute top-full left-0 mt-1 z-40 bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg overflow-hidden min-w-[160px] shadow-xl">
             {options.map(opt => (
               <button
                 key={opt.value}
                 onClick={() => { onChange(opt.value); setOpen(false); }}
                 className={`w-full text-left px-3 py-2 text-[13px] transition-colors ${
                   value === opt.value
-                    ? 'bg-[#2c2c2e] text-white'
-                    : 'text-[#8e8e93] hover:bg-[#2c2c2e] hover:text-white'
+                    ? 'bg-[rgba(255,255,255,0.06)] text-white'
+                    : 'text-[color:var(--body)] hover:bg-[rgba(255,255,255,0.06)] hover:text-white'
                 }`}
               >
                 {opt.label}
@@ -439,7 +439,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[#1c1c1e] border border-[#2c2c2e]">
+    <div className="flex items-center gap-3 rounded-lg px-4 py-3 bg-[color:var(--ink-3)] border border-[color:var(--rule)]">
       <div
         className="shrink-0 flex items-center justify-center w-9 h-9 rounded-lg bg-white/[0.04]"
         style={{ color: iconColor }}
@@ -448,9 +448,9 @@ function KpiCard({
       </div>
       <div className="min-w-0 flex-1">
         <div className="text-[20px] font-semibold text-white leading-tight">{value}</div>
-        <div className="text-[11px] text-[#8e8e93] truncate font-medium">{title}</div>
+        <div className="text-[11px] text-[color:var(--body)] truncate font-medium">{title}</div>
         {subtitle && (
-          <div className="text-[10px] text-[#636366] truncate mt-0.5">{subtitle}</div>
+          <div className="text-[10px] text-[color:var(--muted)] truncate mt-0.5">{subtitle}</div>
         )}
       </div>
     </div>
@@ -748,25 +748,25 @@ export default function CertificateHub() {
           keeps only what belongs to the registry itself. Signed out there is
           no shell, so it keeps the wordmark and the sign-in actions too. */}
       <header
-        className={`sticky top-0 z-20 bg-black/90 backdrop-blur-md ${isAuthenticated ? 'border-b-0' : ''}`}
+        className={`sticky top-0 z-20 bg-[color:var(--ink)]/90 backdrop-blur-md ${isAuthenticated ? 'border-b-0' : ''}`}
         style={isAuthenticated ? undefined : { borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
         <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           {isAuthenticated ? (
-            <span className="text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate Registry</span>
+            <span className="text-[12px] text-[color:var(--muted)] tracking-wide uppercase">B-BBEE Certificate Registry</span>
           ) : (
             <Link href="/" className="flex items-center gap-2 text-[16px] font-semibold text-white">
               Okiru
             </Link>
           )}
           {!isAuthenticated && (
-            <span className="hidden sm:inline text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate Registry</span>
+            <span className="hidden sm:inline text-[12px] text-[color:var(--muted)] tracking-wide uppercase">B-BBEE Certificate Registry</span>
           )}
           <div className="flex items-center gap-2">
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="flex items-center gap-1 text-[13px] text-[#8e8e93] hover:text-white transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 text-[13px] text-[color:var(--body)] hover:text-white transition-colors disabled:opacity-50"
               aria-label="Refresh"
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
@@ -783,7 +783,7 @@ export default function CertificateHub() {
               <>
                 <Link
                   href={gatedAuthPath({ redirect: '/certificates' })}
-                  className="text-[13px] text-[#8e8e93] hover:text-white transition-colors px-3 py-1.5"
+                  className="text-[13px] text-[color:var(--body)] hover:text-white transition-colors px-3 py-1.5"
                 >
                   Sign in
                 </Link>
@@ -840,7 +840,7 @@ export default function CertificateHub() {
         </div>
 
         <div className="mb-5">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[#636366]">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-[color:var(--muted)]">
             <FileText className="h-3.5 w-3.5 text-[#818cf8]" />
             Certificate Hub
           </div>
@@ -848,23 +848,23 @@ export default function CertificateHub() {
             <h1 className="flex shrink-0 items-center gap-2 text-[24px] font-semibold tracking-tight text-white sm:text-[28px]">
               {loading && allCerts.length === 0 ? 'Loading documents' : `${headlineCount.toLocaleString()} certificates & affidavits`}
               {(loading || allCertsLoading) && (
-                <Loader2 className="h-4 w-4 animate-spin text-[#636366]" aria-label="Loading more certificates" />
+                <Loader2 className="h-4 w-4 animate-spin text-[color:var(--muted)]" aria-label="Loading more certificates" />
               )}
             </h1>
             <div className="relative min-w-0 flex-1 lg:ml-4">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[#636366]" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-[color:var(--muted)]" />
               <input
                 type="text"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search every certificate and affidavit by company, VAT number, or B-BBEE level…"
-                className="w-full rounded-lg border border-[#2c2c2e] bg-[#111114] py-2.5 pl-11 pr-11 text-[14px] text-white outline-none placeholder:text-[#55555a] focus:border-[#6366f1] transition-colors"
+                className="w-full rounded-lg border border-[color:var(--rule)] bg-[#111114] py-2.5 pl-11 pr-11 text-[14px] text-white outline-none placeholder:text-[#55555a] focus:border-[#6366f1] transition-colors"
                 autoComplete="off"
               />
               {search && (
                 <button
                   onClick={() => setSearch('')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#48484a] hover:text-white transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[color:var(--muted)] hover:text-white transition-colors"
                   aria-label="Clear search"
                 >
                   <X className="h-4 w-4" />
@@ -888,7 +888,7 @@ export default function CertificateHub() {
               </button>
             )}
           </div>
-          <div className="mt-2 text-[12px] text-[#636366]">
+          <div className="mt-2 text-[12px] text-[color:var(--muted)]">
             {stats
               ? <>South Africa&apos;s public B-BBEE registry · <span className="text-[#22c55e]">{stats.valid.toLocaleString()} valid</span> · <span className="text-[#f59e0b]">{stats.expiring.toLocaleString()} expiring soon</span></>
               : 'South Africa’s public B-BBEE registry'}
@@ -954,7 +954,7 @@ export default function CertificateHub() {
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span>{reviewCount.toLocaleString()} certificate{reviewCount === 1 ? '' : 's'} need metadata review</span>
                 </div>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#d1d1d6]">
+                <p className="mt-1 text-[12px] leading-relaxed text-[color:var(--body)]">
                   Open these records to preview the certificate and verify uncertain enrichment fields.
                 </p>
               </div>
@@ -963,7 +963,7 @@ export default function CertificateHub() {
                   <button
                     type="button"
                     onClick={() => setReviewOnly(false)}
-                    className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06] hover:text-white transition-colors"
+                    className="inline-flex items-center justify-center rounded-lg px-3 py-2 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] hover:text-white transition-colors"
                   >
                     Show all
                   </button>
@@ -1039,7 +1039,7 @@ export default function CertificateHub() {
               ]}
               onChange={setFileTypeFilter}
             />
-            <label className="inline-flex items-center gap-2 text-[12px] text-[#8e8e93]">
+            <label className="inline-flex items-center gap-2 text-[12px] text-[color:var(--body)]">
               Sort
               <select
                 value={`${sortBy}:${sortOrder}`}
@@ -1049,7 +1049,7 @@ export default function CertificateHub() {
                   setSortOrder(order as 'asc' | 'desc');
                   setPage(1);
                 }}
-                className="rounded-lg border border-[#2c2c2e] bg-[#111114] px-2.5 py-1.5 text-[12px] text-white outline-none"
+                className="rounded-lg border border-[color:var(--rule)] bg-[#111114] px-2.5 py-1.5 text-[12px] text-white outline-none"
               >
                 <option value="uploaded_at:desc">Newest uploaded</option>
                 <option value="uploaded_at:asc">Oldest uploaded</option>
@@ -1061,7 +1061,7 @@ export default function CertificateHub() {
             {hasActiveFilters && (
               <button
                 onClick={clearAllFilters}
-                className="text-[12px] text-[#636366] hover:text-white transition-colors"
+                className="text-[12px] text-[color:var(--muted)] hover:text-white transition-colors"
               >
                 Clear all
               </button>
@@ -1072,7 +1072,7 @@ export default function CertificateHub() {
         {/* ─── List ──────────────────────────────────────────── */}
 
         {!loading && (hasActiveFilters || reviewOnly) && (
-          <p className="mb-3 text-[13px] text-[#8e8e93]">
+          <p className="mb-3 text-[13px] text-[color:var(--body)]">
             {allCertsLoading
               ? 'Loading…'
               : `${filtered.length.toLocaleString()} result${filtered.length !== 1 ? 's' : ''}${search.trim() ? ` for "${search.trim()}"` : ''}${reviewOnly ? ' needing review' : ''}`}
@@ -1080,14 +1080,14 @@ export default function CertificateHub() {
         )}
 
         {loadError && !loading ? (
-          <div className="rounded-xl border border-[#2c2c2e] bg-[#0d0d10] px-6 py-14 text-center">
+          <div className="rounded-xl border border-[color:var(--rule)] bg-[#0d0d10] px-6 py-14 text-center">
             <AlertCircle className="mx-auto h-6 w-6 text-[#ef4444]" />
             <p className="mt-3 text-[14px] text-white">Could not load certificates</p>
-            <p className="mt-1 text-[12px] text-[#8e8e93]">{loadError}</p>
+            <p className="mt-1 text-[12px] text-[color:var(--body)]">{loadError}</p>
             <button onClick={handleRefresh} className="mt-4 rounded-lg bg-white px-3 py-2 text-[12px] font-medium text-black">Retry</button>
           </div>
         ) : (loading || allCertsLoading) && allCerts.length === 0 ? (
-          <div className="rounded-xl overflow-hidden border border-[#1c1c1e]">
+          <div className="rounded-xl overflow-hidden border border-[rgba(255,255,255,0.03)]">
             {Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
@@ -1099,8 +1099,8 @@ export default function CertificateHub() {
             isAuthenticated={isAuthenticated}
           />
         ) : (
-          <div className="rounded-xl border border-[#1c1c1e] bg-[#0d0d10]">
-            <div className="sticky top-14 z-10 hidden rounded-t-xl border-b border-white/[0.06] bg-[#0d0d10]/95 backdrop-blur-md md:grid grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(140px,0.9fr)_104px] items-center gap-4 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[#8e8e93] shadow-[0_8px_20px_rgba(0,0,0,0.28)]">
+          <div className="rounded-xl border border-[rgba(255,255,255,0.03)] bg-[#0d0d10]">
+            <div className="sticky top-14 z-10 hidden rounded-t-xl border-b border-white/[0.06] bg-[#0d0d10]/95 backdrop-blur-md md:grid grid-cols-[minmax(240px,2.2fr)_minmax(110px,1fr)_minmax(72px,0.55fr)_minmax(86px,0.7fr)_minmax(150px,1.15fr)_minmax(140px,0.9fr)_104px] items-center gap-4 px-4 py-2.5 text-[10px] uppercase tracking-wider text-[color:var(--body)] shadow-[0_8px_20px_rgba(0,0,0,0.28)]">
               <div>Company / sector</div>
               <div>VAT number</div>
               <div>Level</div>
@@ -1125,16 +1125,16 @@ export default function CertificateHub() {
 
         {!loadError && totalCertificates > 0 && (
           <div className="mt-4 flex flex-col gap-3 border-t border-white/[0.06] pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[12px] text-[#8e8e93]">
+            <p className="text-[12px] text-[color:var(--body)]">
               Showing {((page - 1) * pageSize + 1).toLocaleString()}-{Math.min(page * pageSize, totalCertificates).toLocaleString()} of {totalCertificates.toLocaleString()}
             </p>
             <div className="flex items-center gap-2">
-              <label className="text-[12px] text-[#8e8e93]">
+              <label className="text-[12px] text-[color:var(--body)]">
                 Rows
                 <select
                   value={pageSize}
                   onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}
-                  className="ml-2 rounded-lg border border-[#2c2c2e] bg-[#111114] px-2 py-1.5 text-white outline-none"
+                  className="ml-2 rounded-lg border border-[color:var(--rule)] bg-[#111114] px-2 py-1.5 text-white outline-none"
                 >
                   {[25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
                 </select>
@@ -1142,15 +1142,15 @@ export default function CertificateHub() {
               <button
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
                 disabled={page <= 1 || allCertsLoading}
-                className="rounded-lg border border-[#2c2c2e] px-3 py-1.5 text-[12px] text-white disabled:opacity-30"
+                className="rounded-lg border border-[color:var(--rule)] px-3 py-1.5 text-[12px] text-white disabled:opacity-30"
               >
                 Previous
               </button>
-              <span className="min-w-[88px] text-center text-[12px] text-[#8e8e93]">{page} of {totalPages}</span>
+              <span className="min-w-[88px] text-center text-[12px] text-[color:var(--body)]">{page} of {totalPages}</span>
               <button
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={page >= totalPages || allCertsLoading}
-                className="rounded-lg border border-[#2c2c2e] px-3 py-1.5 text-[12px] text-white disabled:opacity-30"
+                className="rounded-lg border border-[color:var(--rule)] px-3 py-1.5 text-[12px] text-white disabled:opacity-30"
               >
                 Next
               </button>
@@ -1233,10 +1233,10 @@ function CertRow({
             )}
         </div>
         <div
-          className="mt-1 flex items-start gap-1.5 text-[12px] leading-snug text-[#8e8e93]"
+          className="mt-1 flex items-start gap-1.5 text-[12px] leading-snug text-[color:var(--body)]"
           title={sectorDisplayLabel(cert.sectorCode, cert.sectorName)}
         >
-          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#636366]" />
+          <Building2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />
           <span className="min-w-0 truncate">
             {cert.sectorCode ? sectorDisplayLabel(cert.sectorCode, cert.sectorName) : 'Sector not captured'}
           </span>
@@ -1249,7 +1249,7 @@ function CertRow({
           {cert.blackWomenOwnership != null && <span>Women ownership: {formatPct(cert.blackWomenOwnership)}</span>}
           {(cert.expiryDate || hasCandidate(cert, 'expiryDate')) && <span>Expiry: {cert.expiryDate ? formatExpiry(cert.expiryDate) : `Suggested ${displayCandidate(cert, 'expiryDate')}`}</span>}
         </div>
-        <div className="md:hidden text-[11px] text-[#636366] mt-1 flex flex-wrap gap-x-3 gap-y-1">
+        <div className="md:hidden text-[11px] text-[color:var(--muted)] mt-1 flex flex-wrap gap-x-3 gap-y-1">
           {(cert.vatNumber || hasCandidate(cert, 'vatNumber')) && <span><Hash className="inline h-3 w-3 mr-0.5" /> {cert.vatNumber || displayCandidate(cert, 'vatNumber')}</span>}
           {(cert.bbbeeLevel != null || cert.bbbeeLevelStatus || hasCandidate(cert, 'bbbeeLevel')) && <span><Award className="inline h-3 w-3 mr-0.5" /> {cert.bbbeeLevelStatus || (cert.bbbeeLevel != null ? `Level ${cert.bbbeeLevel}` : displayCandidate(cert, 'bbbeeLevel'))}</span>}
           {cert.companySize && <span><Building2 className="inline h-3 w-3 mr-0.5" /> {cert.companySize}</span>}
@@ -1270,14 +1270,14 @@ function CertRow({
         )}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
-        {cert.companySize || <span className="text-[#48484a]">—</span>}
+        {cert.companySize || <span className="text-[color:var(--muted)]">—</span>}
       </div>
       <div className="hidden md:block text-[13px] text-[#a1a1aa]">
         {cert.blackOwnership != null ? (
           <span className="inline-flex flex-col gap-0.5">
             <span className="text-white">{formatPct(cert.blackOwnership)}</span>
             {cert.blackWomenOwnership != null && (
-              <span className="text-[#636366] text-[11px]">· {formatPct(cert.blackWomenOwnership)} women</span>
+              <span className="text-[color:var(--muted)] text-[11px]">· {formatPct(cert.blackWomenOwnership)} women</span>
             )}
           </span>
         ) : (
@@ -1304,7 +1304,7 @@ function CertRow({
           disabled={cert.hasFile === false}
           aria-label={`Preview ${cert.companyName}`}
           title={cert.hasFile === false ? 'File missing from storage' : cert.previewSupported === false ? 'Preview unavailable; download instead' : 'Preview'}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--body)] hover:text-white hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-30 transition-colors"
         >
           <Eye className="h-4 w-4" />
         </button>
@@ -1313,7 +1313,7 @@ function CertRow({
           disabled={isDownloading || cert.hasFile === false}
           aria-label={`Download ${cert.fileName}`}
           title="Download"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-[color:var(--body)] hover:text-white hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-30 transition-colors"
         >
           {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
         </button>
@@ -1333,7 +1333,7 @@ function CertRow({
         <button
           onClick={onPreview}
           aria-label={`Preview ${cert.companyName}`}
-          className="inline-flex min-w-[92px] items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] transition-colors text-[12px]"
+          className="inline-flex min-w-[92px] items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[color:var(--body)] hover:text-white hover:bg-[rgba(255,255,255,0.06)] transition-colors text-[12px]"
         >
           <Eye className="h-4 w-4" />
           <span>Preview</span>
@@ -1342,7 +1342,7 @@ function CertRow({
           onClick={onDownload}
           disabled={isDownloading}
           aria-label={`Download ${cert.fileName}`}
-          className="inline-flex min-w-[104px] items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[#8e8e93] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-30 transition-colors text-[12px]"
+          className="inline-flex min-w-[104px] items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[color:var(--body)] hover:text-white hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-30 transition-colors text-[12px]"
         >
           {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
           <span>Download</span>
@@ -1502,11 +1502,11 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
     valid:                 { color: '#22c55e', bg: 'rgba(34,197,94,0.12)',   label: 'Valid' },
     expiring:              { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  label: 'Expiring Soon' },
     expired:               { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   label: 'Expired' },
-    unknown:               { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
+    unknown:               { color: 'var(--body)', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
     processing:            { color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  label: 'Processing' },
     pending_verification:  { color: '#a5b4fc', bg: 'rgba(165,180,252,0.12)', label: 'Pending Verification' },
     extraction_incomplete: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)',  label: 'Partly Read' },
-    metadata_only:         { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Metadata Only' },
+    metadata_only:         { color: 'var(--body)', bg: 'rgba(142,142,147,0.12)', label: 'Metadata Only' },
     failed:                { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   label: 'Read Failed' },
     file_missing:          { color: '#ef4444', bg: 'rgba(239,68,68,0.12)',   label: 'File Missing' },
   };
@@ -1520,7 +1520,7 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl max-h-[90vh] rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-5xl max-h-[90vh] rounded-2xl bg-[color:var(--ink-3)] border border-[color:var(--rule)] shadow-2xl overflow-hidden flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -1539,26 +1539,26 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
                 Open <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
-            <button onClick={onClose} className="text-[#636366] hover:text-white transition-colors">
+            <button onClick={onClose} className="text-[color:var(--muted)] hover:text-white transition-colors">
               <X className="h-4 w-4" />
             </button>
           </div>
         </div>
 
         <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-hidden">
-          <div className="flex flex-col min-h-[240px] lg:min-h-0 lg:w-1/2 shrink-0 bg-[#0d0d0d] border-b lg:border-b-0 lg:border-r border-[#2c2c2e]">
-            <div className="px-4 py-2.5 flex items-center gap-2 shrink-0 border-b border-[#2c2c2e]">
+          <div className="flex flex-col min-h-[240px] lg:min-h-0 lg:w-1/2 shrink-0 bg-[#0d0d0d] border-b lg:border-b-0 lg:border-r border-[color:var(--rule)]">
+            <div className="px-4 py-2.5 flex items-center gap-2 shrink-0 border-b border-[color:var(--rule)]">
               <FileText className="w-4 h-4 text-amber-400 shrink-0" />
               <span className="text-sm font-medium text-white truncate">{displayName}</span>
             </div>
             <div className="flex-1 min-h-[280px] flex flex-col">
               {loadingDoc && (
                 <div className="flex-1 flex items-center justify-center">
-                  <Loader2 className="h-6 w-6 animate-spin text-[#636366]" />
+                  <Loader2 className="h-6 w-6 animate-spin text-[color:var(--muted)]" />
                 </div>
               )}
               {!loadingDoc && docError && (
-                <div className="flex-1 flex items-center justify-center p-6 text-center text-sm text-[#8e8e93]">
+                <div className="flex-1 flex items-center justify-center p-6 text-center text-sm text-[color:var(--body)]">
                   {docError}
                 </div>
               )}
@@ -1571,7 +1571,7 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
                 </div>
               )}
               {!loadingDoc && !docError && docUrl && kind === 'other' && (
-                <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-[#8e8e93]">
+                <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-[color:var(--body)]">
                   <p>Inline preview isn&apos;t available for this file type.</p>
                   <a href={docUrl} target="_blank" rel="noreferrer" className="text-[#5e9bff] font-medium hover:underline">
                     Open or download file
@@ -1584,7 +1584,7 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
           <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-[11px] text-[#636366] uppercase tracking-wider mb-1">Status</p>
+                <p className="text-[11px] text-[color:var(--muted)] uppercase tracking-wider mb-1">Status</p>
                 <span
                   className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium tracking-wide uppercase"
                   style={{ color: s.color, background: s.bg }}
@@ -1612,7 +1612,7 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
                   <AlertTriangle className="h-4 w-4" />
                   Needs metadata review
                 </div>
-                <p className="mt-1 text-[12px] leading-relaxed text-[#d1d1d6]">
+                <p className="mt-1 text-[12px] leading-relaxed text-[color:var(--body)]">
                   {cert.enrichmentStatus === 'failed'
                     ? 'The enrichment job could not safely process this certificate.'
                     : 'Check the document on the left, correct the fields below, then save confirmed values to clear the review alert.'}
@@ -1621,11 +1621,11 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
             )}
 
             {reviewFieldsToShow.length > 0 && (
-              <div className="rounded-xl border border-[#2c2c2e] bg-[#111114] p-3">
+              <div className="rounded-xl border border-[color:var(--rule)] bg-[#111114] p-3">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-[12px] font-semibold text-white">Verify fields</p>
-                    <p className="text-[11px] text-[#8e8e93]">Only these fields are currently flagged or missing.</p>
+                    <p className="text-[11px] text-[color:var(--body)]">Only these fields are currently flagged or missing.</p>
                   </div>
                   <button
                     onClick={saveReviewedFields}
@@ -1641,9 +1641,9 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
                   {reviewFieldsToShow.map(field => {
                     const candidate = cert.reviewCandidates?.[field.key];
                     return (
-                      <label key={field.key} className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2">
+                      <label key={field.key} className="rounded-lg border border-white/[0.06] bg-[color:var(--ink)]/20 px-3 py-2">
                         <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="text-[10px] uppercase tracking-wider text-[#8e8e93]">{field.label}</span>
+                          <span className="text-[10px] uppercase tracking-wider text-[color:var(--body)]">{field.label}</span>
                           {candidate?.confidence != null && (
                             <span className="text-[10px] text-[#fbbf24]">{Math.round(candidate.confidence * 100)}% confidence</span>
                           )}
@@ -1652,7 +1652,7 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
                           <select
                             value={reviewDraft[field.key] ?? ''}
                             onChange={e => setReviewDraft(prev => ({ ...prev, [field.key]: e.target.value }))}
-                            className="w-full rounded-md border border-[#2c2c2e] bg-[#0d0d10] px-2.5 py-2 text-[13px] text-white outline-none focus:border-[#f59e0b]/60"
+                            className="w-full rounded-md border border-[color:var(--rule)] bg-[#0d0d10] px-2.5 py-2 text-[13px] text-white outline-none focus:border-[#f59e0b]/60"
                           >
                             <option value="">Missing</option>
                             {COMPANY_SIZES.map(size => <option key={size} value={size}>{size}</option>)}
@@ -1665,11 +1665,11 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
                             min={field.type === 'number' ? '0' : undefined}
                             max={field.key === 'bbbeeLevel' ? '8' : field.type === 'number' ? '100' : undefined}
                             onChange={e => setReviewDraft(prev => ({ ...prev, [field.key]: e.target.value }))}
-                            className="w-full rounded-md border border-[#2c2c2e] bg-[#0d0d10] px-2.5 py-2 text-[13px] text-white outline-none focus:border-[#f59e0b]/60"
+                            className="w-full rounded-md border border-[color:var(--rule)] bg-[#0d0d10] px-2.5 py-2 text-[13px] text-white outline-none focus:border-[#f59e0b]/60"
                           />
                         )}
                         {(candidate?.reason || candidate?.evidence) && (
-                          <p className="mt-1.5 line-clamp-2 text-[11px] text-[#8e8e93]">
+                          <p className="mt-1.5 line-clamp-2 text-[11px] text-[color:var(--body)]">
                             {candidate.reason || candidate.evidence}
                           </p>
                         )}
@@ -1728,12 +1728,12 @@ function CertPreviewModal({ cert, onClose, onSaved }: { cert: CertificateRow; on
 
 function PreviewField({ label, value, icon, title }: { label: string; value: string; icon?: React.ReactNode; title?: string }) {
   return (
-    <div className="rounded-lg bg-[#0d0d10] border border-[#2c2c2e] px-3 py-2.5" title={title}>
-      <div className="flex items-center gap-1.5 text-[10px] text-[#636366] uppercase tracking-wider mb-1">
+    <div className="rounded-lg bg-[#0d0d10] border border-[color:var(--rule)] px-3 py-2.5" title={title}>
+      <div className="flex items-center gap-1.5 text-[10px] text-[color:var(--muted)] uppercase tracking-wider mb-1">
         {icon}
         {label}
       </div>
-      <div className={`text-[13px] font-medium truncate ${value === 'Missing' || value === 'Needs review' ? 'text-[#8e8e93]' : 'text-white'}`}>{value}</div>
+      <div className={`text-[13px] font-medium truncate ${value === 'Missing' || value === 'Needs review' ? 'text-[color:var(--body)]' : 'text-white'}`}>{value}</div>
     </div>
   );
 }
@@ -1749,9 +1749,9 @@ function EmptyState({
 }) {
   if (hasCertificates && hasActiveFilters) {
     return (
-      <div className="py-16 text-center rounded-xl border border-[#1c1c1e]">
-        <AlertCircle className="w-6 h-6 text-[#3a3a3c] mx-auto mb-3" />
-        <p className="text-[14px] text-[#8e8e93] mb-2">No certificates match your filters</p>
+      <div className="py-16 text-center rounded-xl border border-[rgba(255,255,255,0.03)]">
+        <AlertCircle className="w-6 h-6 text-[color:var(--muted)] mx-auto mb-3" />
+        <p className="text-[14px] text-[color:var(--body)] mb-2">No certificates match your filters</p>
         <button onClick={onClearFilters} className="text-[13px] text-[#a5b4fc] hover:text-white transition-colors">
           Clear all filters
         </button>
@@ -1759,10 +1759,10 @@ function EmptyState({
     );
   }
   return (
-    <div className="py-16 text-center rounded-xl border border-[#1c1c1e]">
+    <div className="py-16 text-center rounded-xl border border-[rgba(255,255,255,0.03)]">
       <img src={logoCircle} alt="" className="h-12 w-12 mx-auto mb-3 opacity-40" />
       <p className="text-[14px] text-[#a1a1aa] mb-1">The registry is empty for now</p>
-      <p className="text-[12px] text-[#636366] mb-4">Be the first to add a B-BBEE certificate.</p>
+      <p className="text-[12px] text-[color:var(--muted)] mb-4">Be the first to add a B-BBEE certificate.</p>
       <button
         onClick={onUpload}
         className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] transition-colors"

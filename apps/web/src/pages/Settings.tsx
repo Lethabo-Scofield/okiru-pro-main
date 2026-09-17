@@ -62,7 +62,7 @@ function Row({
     <div className="flex flex-col gap-3 border-b border-white/[0.06] px-5 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
       <div className="min-w-0">
         <p className="text-[13.5px] font-medium text-[#e5e5ea]">{label}</p>
-        {hint && <p className="mt-0.5 text-[12px] leading-5 text-[#8e8e93]">{hint}</p>}
+        {hint && <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">{hint}</p>}
       </div>
       {children && <div className="shrink-0">{children}</div>}
     </div>
@@ -71,10 +71,10 @@ function Row({
 
 function Panel({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-[18px] border border-white/[0.07] bg-[#0e0e10]">
+    <section className="overflow-hidden rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)]">
       <header className="border-b border-white/[0.06] px-5 py-4">
         <h2 className="text-[15px] font-semibold text-white">{title}</h2>
-        {description && <p className="mt-1 text-[12.5px] leading-5 text-[#8e8e93]">{description}</p>}
+        {description && <p className="mt-1 text-[12.5px] leading-5 text-[color:var(--body)]">{description}</p>}
       </header>
       {children}
     </section>
@@ -113,7 +113,7 @@ export default function Settings() {
                       "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13.5px] transition-colors",
                       active
                         ? "bg-white/[0.08] font-medium text-white"
-                        : "text-[#a1a1a6] hover:bg-white/[0.04] hover:text-[#e5e5ea]",
+                        : "text-[color:var(--body)] hover:bg-white/[0.04] hover:text-[#e5e5ea]",
                     )}
                     data-testid={`settings-tab-${id}`}
                   >
@@ -152,17 +152,17 @@ function AccountTab() {
           </span>
           <div className="min-w-0">
             <p className="truncate text-[15px] font-medium text-white">{display}</p>
-            <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12.5px] text-[#8e8e93]">
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12.5px] text-[color:var(--body)]">
               <Mail className="h-3.5 w-3.5" />
               {user?.email || "No email on file"}
             </p>
           </div>
         </div>
         <Row label="Username" hint="Used to sign in.">
-          <span className="font-mono text-[13px] text-[#d1d1d6]">{user?.username ?? "—"}</span>
+          <span className="font-mono text-[13px] text-[color:var(--body)]">{user?.username ?? "—"}</span>
         </Row>
         <Row label="Role" hint="What you are allowed to do in this workspace.">
-          <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[12px] capitalize text-[#d1d1d6]">
+          <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[12px] capitalize text-[color:var(--body)]">
             {String(user?.role ?? "user").replace(/_/g, " ")}
           </span>
         </Row>
@@ -176,7 +176,7 @@ function AccountTab() {
               await logout();
               navigate("/auth", { replace: true });
             }}
-            className="rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.05]"
+            className="rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.05]"
             data-testid="settings-sign-out"
           >
             Sign out
@@ -260,30 +260,30 @@ function BillingTab() {
 
   return (
     <>
-      <section className="overflow-hidden rounded-[18px] border border-white/[0.07] bg-[#0e0e10]">
+      <section className="overflow-hidden rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)]">
         <div className="flex flex-col gap-6 p-6 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-[#636366]">Token balance</p>
+            <p className="text-[11.5px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Token balance</p>
             <p className="mt-2 flex items-baseline gap-2">
               <span className="text-[42px] font-semibold leading-none tabular-nums text-white">
                 {isLoading ? "—" : formatTokens(wallet?.balance ?? 0)}
               </span>
-              <span className="text-[14px] text-[#8e8e93]">tokens</span>
+              <span className="text-[14px] text-[color:var(--body)]">tokens</span>
             </p>
-            <p className="mt-2 text-[12.5px] leading-5 text-[#8e8e93]">
+            <p className="mt-2 text-[12.5px] leading-5 text-[color:var(--body)]">
               {documentsLeft !== null
                 ? `Roughly ${formatTokens(documentsLeft)} more documents, depending on length and whether they are scans.`
                 : "Your organisation's shared balance."}
             </p>
           </div>
-          <div className="rounded-2xl border border-white/[0.07] bg-[#141416] px-4 py-3">
-            <p className="text-[11px] text-[#636366]">Plan</p>
+          <div className="rounded-2xl border border-white/[0.07] bg-[color:var(--ink-3)] px-4 py-3">
+            <p className="text-[11px] text-[color:var(--muted)]">Plan</p>
             <p className="mt-1 flex items-center gap-1.5 text-[14px] font-semibold text-white">
               {wallet?.plan === "pro" ? <ShieldCheck className="h-4 w-4 text-emerald-400" /> : null}
               {wallet?.plan === "pro" ? "Pro" : "Free"}
             </p>
             {wallet?.planRenewsAt && (
-              <p className="mt-1 text-[11px] text-[#8e8e93]">
+              <p className="mt-1 text-[11px] text-[color:var(--body)]">
                 Renews {new Date(wallet.planRenewsAt).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}
               </p>
             )}
@@ -301,27 +301,27 @@ function BillingTab() {
               key={pack.id}
               className={cn(
                 "flex flex-col rounded-2xl border p-4",
-                pack.highlight ? "border-white/[0.18] bg-white/[0.05]" : "border-white/[0.07] bg-[#141416]",
+                pack.highlight ? "border-white/[0.18] bg-white/[0.05]" : "border-white/[0.07] bg-[color:var(--ink-3)]",
               )}
               data-testid={`token-pack-${pack.id}`}
             >
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-[14px] font-semibold text-white">{pack.name}</p>
                 {pack.highlight && (
-                  <span className="rounded-full bg-white/[0.10] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[#d1d1d6]">
+                  <span className="rounded-full bg-white/[0.10] px-2 py-0.5 text-[10px] uppercase tracking-wide text-[color:var(--body)]">
                     Popular
                   </span>
                 )}
               </div>
               <p className="mt-1 text-[22px] font-semibold text-white">
                 {money(pack.amountCents)}
-                {pack.grantsPro && <span className="text-[12px] font-normal text-[#8e8e93]">/month</span>}
+                {pack.grantsPro && <span className="text-[12px] font-normal text-[color:var(--body)]">/month</span>}
               </p>
-              <p className="mt-1 text-[12px] leading-5 text-[#8e8e93]">{pack.blurb}</p>
+              <p className="mt-1 text-[12px] leading-5 text-[color:var(--body)]">{pack.blurb}</p>
               <ul className="mt-3 space-y-1.5">
                 {pack.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-[12px] leading-5 text-[#a1a1a6]">
-                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#8e8e93]" />
+                  <li key={feature} className="flex items-start gap-2 text-[12px] leading-5 text-[color:var(--body)]">
+                    <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--body)]" />
                     {feature}
                   </li>
                 ))}
@@ -344,14 +344,14 @@ function BillingTab() {
             </div>
           ))}
           {packs.length === 0 && (
-            <p className="text-[12.5px] text-[#8e8e93]">Token packs are unavailable right now.</p>
+            <p className="text-[12.5px] text-[color:var(--body)]">Token packs are unavailable right now.</p>
           )}
         </div>
       </Panel>
 
       <Panel title="Usage history" description="Every token in and out, newest first.">
         {entries.length === 0 ? (
-          <p className="px-5 py-6 text-[12.5px] text-[#8e8e93]">
+          <p className="px-5 py-6 text-[12.5px] text-[color:var(--body)]">
             Nothing yet. Movements appear here as soon as you process documents or buy tokens.
           </p>
         ) : (
@@ -360,7 +360,7 @@ function BillingTab() {
               <li key={entry.id} className="flex items-center justify-between gap-4 px-5 py-3">
                 <div className="min-w-0">
                   <p className="truncate text-[13px] text-[#e5e5ea]">{entry.description || entry.kind}</p>
-                  <p className="mt-0.5 text-[11.5px] text-[#636366]">
+                  <p className="mt-0.5 text-[11.5px] text-[color:var(--muted)]">
                     {new Date(entry.createdAt).toLocaleString("en-ZA", {
                       day: "2-digit",
                       month: "short",
@@ -376,7 +376,7 @@ function BillingTab() {
                 <span
                   className={cn(
                     "shrink-0 font-mono text-[13px] tabular-nums",
-                    entry.delta < 0 ? "text-[#d1d1d6]" : "text-emerald-300",
+                    entry.delta < 0 ? "text-[color:var(--body)]" : "text-emerald-300",
                   )}
                 >
                   {entry.delta < 0 ? "−" : "+"}
@@ -388,7 +388,7 @@ function BillingTab() {
         )}
       </Panel>
 
-      <p className="flex items-start gap-2 px-1 text-[11.5px] leading-5 text-[#636366]">
+      <p className="flex items-start gap-2 px-1 text-[11.5px] leading-5 text-[color:var(--muted)]">
         <Receipt className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         Payments are processed by PayFast. Okiru never sees or stores your card details.
       </p>
@@ -420,9 +420,9 @@ function TeamTab() {
         description="Everyone here shares one token balance and can see the organisation's scorecards."
       >
         {isLoading ? (
-          <p className="px-5 py-6 text-[12.5px] text-[#8e8e93]">Loading your team…</p>
+          <p className="px-5 py-6 text-[12.5px] text-[color:var(--body)]">Loading your team…</p>
         ) : members.length === 0 ? (
-          <p className="px-5 py-6 text-[12.5px] text-[#8e8e93]">You are the only member so far.</p>
+          <p className="px-5 py-6 text-[12.5px] text-[color:var(--body)]">You are the only member so far.</p>
         ) : (
           <ul className="divide-y divide-white/[0.05]">
             {members.map((member) => (
@@ -432,9 +432,9 @@ function TeamTab() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[13.5px] text-[#e5e5ea]">{member.fullName || member.username}</p>
-                  <p className="truncate text-[11.5px] text-[#8e8e93]">{member.email || "No email on file"}</p>
+                  <p className="truncate text-[11.5px] text-[color:var(--body)]">{member.email || "No email on file"}</p>
                 </div>
-                <span className="shrink-0 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11.5px] capitalize text-[#a1a1a6]">
+                <span className="shrink-0 rounded-full bg-white/[0.06] px-2.5 py-1 text-[11.5px] capitalize text-[color:var(--body)]">
                   {member.isAdmin ? "Admin" : String(member.role ?? "user").replace(/_/g, " ")}
                 </span>
               </li>
@@ -445,7 +445,7 @@ function TeamTab() {
           <button
             type="button"
             onClick={() => navigate("/workspace")}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.05]"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.05]"
           >
             Open workspace
             <ArrowUpRight className="h-3.5 w-3.5" />
@@ -469,13 +469,13 @@ function CompanyTab() {
       description="The company your scorecards are built for. Sector and size decide which codes apply, so these are worth getting right."
     >
       <Row label="Organisation" hint="Shown on scorecards and shared with your team.">
-        <span className="text-[13px] text-[#d1d1d6]">{data?.organization?.name ?? "—"}</span>
+        <span className="text-[13px] text-[color:var(--body)]">{data?.organization?.name ?? "—"}</span>
       </Row>
       <Row label="Company & B-BBEE profile" hint="Sector, size, financial year, ownership basics.">
         <button
           type="button"
           onClick={() => navigate(companyProfilePath("/settings/company"))}
-          className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.05]"
+          className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.10] px-4 py-2 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.05]"
           data-testid="settings-edit-company"
         >
           Edit profile

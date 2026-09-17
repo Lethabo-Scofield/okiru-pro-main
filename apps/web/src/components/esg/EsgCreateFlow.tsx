@@ -392,6 +392,8 @@ export function EsgCreateFlow() {
                 one, so this is the flow it already supported. */}
             <EsgDocumentUploadStart
               companyId=""
+              // Chose "upload documents" in the workspace: open on the dropzone.
+              focused={preChosen === "documents"}
               onBack={backToChoose}
               onComplete={handleParsedDocuments}
               initialFiles={excelHandover ?? undefined}
@@ -408,14 +410,14 @@ export function EsgCreateFlow() {
               >
                 What is the company called?
               </h2>
-              <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,#8e8e93)]">
+              <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                 You are completing this by hand, so there are no documents to read the name out of.
               </p>
             </div>
-            <div className="rounded-[20px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] p-5">
+            <div className="rounded-[20px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] p-5">
               <label
                 htmlFor="esg-manual-name"
-                className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text3,#636366)]"
+                className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text3,rgba(255,255,255,0.32))]"
               >
                 Company name
               </label>
@@ -433,7 +435,7 @@ export function EsgCreateFlow() {
                   }
                 }}
                 placeholder="Type the registered name"
-                className="mt-2 w-full rounded-xl border border-[var(--esg-glass-border,#2c2c2e)] bg-black/30 px-4 py-2.5 text-[15px] text-[var(--esg-text,#fff)] placeholder-[var(--esg-text3,#636366)] outline-none focus:border-[var(--esg-acc-e,#1de9a0)]/40"
+                className="mt-2 w-full rounded-xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink)]/30 px-4 py-2.5 text-[15px] text-[var(--esg-text,#fff)] placeholder-[var(--esg-text3,rgba(255,255,255,0.32))] outline-none focus:border-[var(--esg-acc-e,#1de9a0)]/40"
                 data-testid="esg-manual-name-input"
               />
             </div>
@@ -455,7 +457,7 @@ export function EsgCreateFlow() {
               <button
                 type="button"
                 onClick={backToChoose}
-                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
                 data-testid="esg-manual-name-back"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -473,7 +475,7 @@ export function EsgCreateFlow() {
             <p className="text-[13px] font-semibold text-[var(--esg-text,#fff)]">
               Your processed documents were saved
             </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
               We restored the extraction you already paid for
               {(() => {
                 const at = new Date(restoredAt);
@@ -503,7 +505,7 @@ export function EsgCreateFlow() {
 
         {importing ? (
           <p
-            className="mt-4 flex items-center justify-center gap-2 text-[12px] text-[var(--esg-text2,#8e8e93)]"
+            className="mt-4 flex items-center justify-center gap-2 text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]"
             role="status"
           >
             <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--esg-acc-e,#1de9a0)]" />

@@ -87,17 +87,17 @@ export function EsgCreateReview({
         >
           Check this before we create it
         </h2>
-        <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,#8e8e93)]">
+        <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           {route === "manual"
             ? "Nothing has been read yet — you will complete the workbook yourself."
             : "This is what we read. Nothing has been created and nothing has been scored yet."}
         </p>
       </div>
 
-      <div className="rounded-[20px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] p-5">
+      <div className="rounded-[20px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] p-5">
         <label
           htmlFor="esg-review-entity-name"
-          className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text3,#636366)]"
+          className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text3,rgba(255,255,255,0.32))]"
         >
           Company name
         </label>
@@ -107,10 +107,10 @@ export function EsgCreateReview({
           onChange={(event) => onEntityNameChange(event.target.value)}
           placeholder="Type the registered name"
           autoComplete="organization"
-          className="mt-2 w-full rounded-xl border border-[var(--esg-glass-border,#2c2c2e)] bg-black/30 px-4 py-2.5 text-[15px] text-[var(--esg-text,#fff)] placeholder-[var(--esg-text3,#636366)] outline-none focus:border-[var(--esg-acc-e,#1de9a0)]/40"
+          className="mt-2 w-full rounded-xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink)]/30 px-4 py-2.5 text-[15px] text-[var(--esg-text,#fff)] placeholder-[var(--esg-text3,rgba(255,255,255,0.32))] outline-none focus:border-[var(--esg-acc-e,#1de9a0)]/40"
           data-testid="esg-review-entity-name"
         />
-        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           {NAME_SOURCE_NOTE[nameSource]}
         </p>
         {!trimmed ? (
@@ -132,14 +132,14 @@ export function EsgCreateReview({
 
       {route === "excel" && excel ? (
         <div
-          className="mt-4 overflow-hidden rounded-[20px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-input-bg,#0e0e10)]"
+          className="mt-4 overflow-hidden rounded-[20px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)]"
           data-testid="esg-review-excel-summary"
         >
           <div className="flex items-center gap-2.5 border-b border-white/[0.06] px-4 py-3">
-            <FileSpreadsheet className="h-4 w-4 shrink-0 text-[var(--esg-text3,#636366)]" />
+            <FileSpreadsheet className="h-4 w-4 shrink-0 text-[var(--esg-text3,rgba(255,255,255,0.32))]" />
             <div className="min-w-0">
               <p className="truncate text-[13px] font-medium text-[#e5e5ea]">{excel.fileName}</p>
-              <p className="text-[11px] text-[var(--esg-text3,#636366)]">
+              <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                 {excelSections.length} section{excelSections.length === 1 ? "" : "s"} matched ·{" "}
                 {excelCells} value{excelCells === 1 ? "" : "s"} ready to import
               </p>
@@ -150,10 +150,10 @@ export function EsgCreateReview({
               key={sectionId}
               className="flex items-center justify-between gap-3 border-b border-white/[0.05] px-4 py-2.5 last:border-b-0"
             >
-              <span className="truncate text-[13px] text-[#d1d1d6]">
+              <span className="truncate text-[13px] text-[color:var(--body)]">
                 {SECTION_TITLES[sectionId] ?? sectionId}
               </span>
-              <span className="shrink-0 text-[12px] tabular-nums text-[var(--esg-text2,#8e8e93)]">
+              <span className="shrink-0 text-[12px] tabular-nums text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                 {cellCount(section.cells)}
               </span>
             </div>
@@ -173,7 +173,7 @@ export function EsgCreateReview({
 
       {route === "manual" ? (
         <p
-          className="mt-4 rounded-[20px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-input-bg,#0e0e10)] px-4 py-3.5 text-[13px] leading-6 text-[var(--esg-text2,#8e8e93)]"
+          className="mt-4 rounded-[20px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] px-4 py-3.5 text-[13px] leading-6 text-[var(--esg-text2,rgba(255,255,255,0.56))]"
           data-testid="esg-review-manual-note"
         >
           You will start with an empty workbook and complete each section yourself. If an evidence
@@ -201,7 +201,7 @@ export function EsgCreateReview({
           type="button"
           onClick={onBack}
           disabled={creating}
-          className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04] disabled:opacity-50"
+          className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04] disabled:opacity-50"
           data-testid="esg-review-back"
         >
           <ChevronLeft className="h-4 w-4" />

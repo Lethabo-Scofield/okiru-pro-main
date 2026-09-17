@@ -789,6 +789,8 @@ const workspaceMemberSchema = new Schema({
   role: { type: String, enum: ["owner", "collaborator", "viewer"], required: true },
   displayRole: { type: String, default: null },
   pillarScopes: { type: [String], default: undefined },
+  /** Company ids this member is limited to. Absent or empty = all of them. */
+  clientScopes: { type: [String], default: undefined },
   joinedAt: { type: Date, default: Date.now },
 }, { collection: "workspace_members" });
 workspaceMemberSchema.index({ workspaceId: 1, userId: 1 }, { unique: true });

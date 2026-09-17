@@ -34,32 +34,53 @@ export function normalizeClientScopes(value: unknown): string[] {
   );
 }
 
+export interface ClientScope {
+  /** Company ids granted explicitly by a scoped membership. */
+  clientIds: string[];
+  /** Teams where this user is unrestricted — every company in them is theirs. */
+  openWorkspaceIds: string[];
+}
+
 /**
- * The company ids this user is limited to, across every team they belong to.
+ * What this user may see, across every team they belong to.
  *
- * `null` means unrestricted — either they hold no scoped membership, or one of
- * their memberships is unscoped, in which case the unscoped one wins because
- * scopes narrow rather than subtract.
+ * `null` means unrestricted: they hold no scoped membership anywhere.
+ *
+ * Scopes are per team, so the answer has to be too. Owning one team does not
+ * lift a limit somebody placed on you in another — an earlier version returned
+ * "unrestricted" the moment it saw an owner row, which let anyone who owned a
+ * team of their own read every company in a team that had deliberately scoped
+ * them. Teams where you are an owner, or a member with no scope set,
+ * contribute all of their companies; scoped memberships contribute only the
+ * companies they name.
  */
-export async function resolveClientScopeIds(userId: string): Promise<string[] | null> {
+export async function resolveClientScopeIds(userId: string): Promise<ClientScope | null> {
   if (mongoose.connection.readyState !== 1) return null;
   try {
     const memberships = (await WorkspaceMemberModel.find(
       { userId },
-      { _id: 0, role: 1, clientScopes: 1 },
-    ).lean()) as Array<{ role?: string; clientScopes?: unknown }>;
+      { _id: 0, role: 1, workspaceId: 1, clientScopes: 1 },
+    ).lean()) as Array<{ role?: string; workspaceId?: string; clientScopes?: unknown }>;
 
     if (memberships.length === 0) return null;
 
-    const ids = new Set<string>();
+    const clientIds = new Set<string>();
+    const openWorkspaceIds = new Set<string>();
+    let anyScoped = false;
+
     for (const m of memberships) {
-      // An owner is not limited by a list of companies in their own team.
-      if (m.role === "owner") return null;
       const scopes = normalizeClientScopes(m.clientScopes);
-      if (scopes.length === 0) return null; // one unscoped membership = unrestricted
-      for (const id of scopes) ids.add(id);
+      if (m.role === "owner" || scopes.length === 0) {
+        if (m.workspaceId) openWorkspaceIds.add(String(m.workspaceId));
+        continue;
+      }
+      anyScoped = true;
+      for (const id of scopes) clientIds.add(id);
     }
-    return Array.from(ids);
+
+    // Nobody has scoped them anywhere: leave the query untouched.
+    if (!anyScoped) return null;
+    return { clientIds: Array.from(clientIds), openWorkspaceIds: Array.from(openWorkspaceIds) };
   } catch (err) {
     // Deny rather than fall open: "we could not work out what you may see" is
     // not the same as "you may see everything". An empty list still lets the
@@ -68,7 +89,7 @@ export async function resolveClientScopeIds(userId: string): Promise<string[] | 
       userId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return [];
+    return { clientIds: [], openWorkspaceIds: [] };
   }
 }
 
@@ -79,26 +100,39 @@ export async function resolveClientScopeIds(userId: string): Promise<string[] | 
  */
 export function applyClientScopeFilter(
   base: Record<string, unknown>,
-  scopedIds: string[] | null,
+  scope: ClientScope | null,
   userId: string,
 ): Record<string, unknown> {
-  if (scopedIds === null) return base;
+  if (scope === null) return base;
   return {
     $and: [
       base,
-      { $or: [{ createdByUserId: userId }, { clientId: { $in: scopedIds } }, { id: { $in: scopedIds } }] },
+      {
+        $or: [
+          { createdByUserId: userId },
+          { clientId: { $in: scope.clientIds } },
+          { id: { $in: scope.clientIds } },
+          { workspaceId: { $in: scope.openWorkspaceIds } },
+        ],
+      },
     ],
   };
 }
 
 /** Is this one company within the user's scope? */
 export function isClientInScope(
-  client: { clientId?: string | null; id?: string | null; createdByUserId?: string | null },
-  scopedIds: string[] | null,
+  client: {
+    clientId?: string | null;
+    id?: string | null;
+    workspaceId?: string | null;
+    createdByUserId?: string | null;
+  },
+  scope: ClientScope | null,
   userId: string,
 ): boolean {
-  if (scopedIds === null) return true;
+  if (scope === null) return true;
   if (client.createdByUserId && client.createdByUserId === userId) return true;
+  if (client.workspaceId && scope.openWorkspaceIds.includes(String(client.workspaceId))) return true;
   const ids = [client.clientId, client.id].filter(Boolean).map(String);
-  return ids.some((id) => scopedIds.includes(id));
+  return ids.some((id) => scope.clientIds.includes(id));
 }

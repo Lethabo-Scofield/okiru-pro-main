@@ -169,13 +169,13 @@ export default function AdminCertificates() {
         </div>
 
         {error && (
-          <div className="rounded-xl border border-[#2c2c2e] bg-[#1c1c1e] p-4 mb-6 flex items-start gap-3">
+          <div className="rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] p-4 mb-6 flex items-start gap-3">
             <AlertTriangle className="h-4 w-4 text-[#f59e0b] shrink-0 mt-0.5" />
             <p className="text-[13px] text-white">{error}</p>
           </div>
         )}
 
-        <div className="flex items-center gap-1 mb-6 overflow-x-auto" style={{ borderBottom: '1px solid #1c1c1e' }}>
+        <div className="flex items-center gap-1 mb-6 overflow-x-auto" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
           {TABS.map((t) => (
             <button
               key={t.key}
@@ -183,7 +183,7 @@ export default function AdminCertificates() {
               className={`inline-flex items-center gap-1.5 px-3 py-2 text-[13px] transition-colors whitespace-nowrap ${
                 tab === t.key
                   ? 'text-white border-b-2 border-[#6366f1]'
-                  : 'text-[#8e8e93] hover:text-white border-b-2 border-transparent'
+                  : 'text-[color:var(--body)] hover:text-white border-b-2 border-transparent'
               }`}
             >
               {t.icon}
@@ -194,17 +194,17 @@ export default function AdminCertificates() {
 
         {loading && (
           <div className="py-16 text-center">
-            <Loader2 className="h-6 w-6 animate-spin text-[#636366] mx-auto" />
+            <Loader2 className="h-6 w-6 animate-spin text-[color:var(--muted)] mx-auto" />
           </div>
         )}
 
         {!loading && tab === 'verify' && (
-          <div className="rounded-xl border border-[#1c1c1e] overflow-hidden">
-            <div className="px-4 py-3 text-[12px] text-[#8e8e93] tracking-wide uppercase" style={{ borderBottom: '1px solid #1c1c1e' }}>
+          <div className="rounded-xl border border-[rgba(255,255,255,0.03)] overflow-hidden">
+            <div className="px-4 py-3 text-[12px] text-[color:var(--body)] tracking-wide uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
               {items.length} certificates · most recent first
             </div>
             {items.length === 0 ? (
-              <p className="py-12 text-center text-[13px] text-[#636366]">No certificates in the registry yet.</p>
+              <p className="py-12 text-center text-[13px] text-[color:var(--muted)]">No certificates in the registry yet.</p>
             ) : (
               items.map((c) => (
                 <div
@@ -227,7 +227,7 @@ export default function AdminCertificates() {
                         </span>
                       )}
                     </div>
-                    <div className="text-[11px] text-[#636366] mt-0.5 flex flex-wrap gap-x-3">
+                    <div className="text-[11px] text-[color:var(--muted)] mt-0.5 flex flex-wrap gap-x-3">
                       {c.vatNumber && <span><Hash className="inline h-3 w-3 mr-0.5" />{c.vatNumber}</span>}
                       {c.companySize && <span>{c.companySize}</span>}
                       {c.bbbeeLevel != null && <span>Level {c.bbbeeLevel}</span>}
@@ -240,7 +240,7 @@ export default function AdminCertificates() {
                       <button
                         onClick={() => verifyCert(c.id!, false)}
                         disabled={acting === c.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-[#a1a1aa] hover:text-white border border-[#2c2c2e] hover:bg-[#2c2c2e] disabled:opacity-40 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] text-[#a1a1aa] hover:text-white border border-[color:var(--rule)] hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-40 transition-colors"
                       >
                         {acting === c.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldOff className="h-3.5 w-3.5" />}
                         Unverify
@@ -256,7 +256,7 @@ export default function AdminCertificates() {
                       </button>
                     )
                   ) : (
-                    <span className="text-[11px] text-[#636366]">no id</span>
+                    <span className="text-[11px] text-[color:var(--muted)]">no id</span>
                   )}
                 </div>
               ))
@@ -265,17 +265,17 @@ export default function AdminCertificates() {
         )}
 
         {!loading && tab === 'reports' && (
-          <div className="rounded-xl border border-[#1c1c1e] overflow-hidden">
-            <div className="px-4 py-3 text-[12px] text-[#8e8e93] tracking-wide uppercase" style={{ borderBottom: '1px solid #1c1c1e' }}>
+          <div className="rounded-xl border border-[rgba(255,255,255,0.03)] overflow-hidden">
+            <div className="px-4 py-3 text-[12px] text-[color:var(--body)] tracking-wide uppercase" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
               {reports.length} reports
             </div>
             {reports.length === 0 ? (
-              <p className="py-12 text-center text-[13px] text-[#636366]">No reports submitted yet.</p>
+              <p className="py-12 text-center text-[13px] text-[color:var(--muted)]">No reports submitted yet.</p>
             ) : (
               reports.map((r) => (
                 <div key={r.id} className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                   <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide bg-[#2c2c2e] text-[#a1a1aa]">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide bg-[rgba(255,255,255,0.06)] text-[#a1a1aa]">
                       {r.reason}
                     </span>
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide" style={{ color: '#f59e0b', background: 'rgba(245,158,11,0.12)' }}>
@@ -286,10 +286,10 @@ export default function AdminCertificates() {
                         View certificate
                       </Link>
                     )}
-                    <span className="text-[11px] text-[#636366] ml-auto">{fmtDateTime(r.createdAt)}</span>
+                    <span className="text-[11px] text-[color:var(--muted)] ml-auto">{fmtDateTime(r.createdAt)}</span>
                   </div>
                   <p className="text-[13px] text-white whitespace-pre-wrap">{r.message}</p>
-                  {r.email && <p className="text-[11px] text-[#636366] mt-1">From: {r.email}</p>}
+                  {r.email && <p className="text-[11px] text-[color:var(--muted)] mt-1">From: {r.email}</p>}
                 </div>
               ))
             )}
@@ -298,19 +298,19 @@ export default function AdminCertificates() {
 
         {!loading && tab === 'duplicates' && (
           <div className="space-y-3">
-            <div className="text-[12px] text-[#8e8e93] uppercase tracking-wide">
+            <div className="text-[12px] text-[color:var(--body)] uppercase tracking-wide">
               {clusters.length} duplicate cluster{clusters.length === 1 ? '' : 's'} grouped by VAT number
             </div>
             {clusters.length === 0 && (
-              <div className="py-12 text-center rounded-xl border border-[#1c1c1e]">
+              <div className="py-12 text-center rounded-xl border border-[rgba(255,255,255,0.03)]">
                 <CheckCircle2 className="h-6 w-6 text-[#22c55e] mx-auto mb-2" />
                 <p className="text-[13px] text-[#a1a1aa]">No duplicates detected.</p>
               </div>
             )}
             {clusters.map((cluster) => (
-              <div key={cluster.vatNumber} className="rounded-xl border border-[#2c2c2e] bg-[#0d0d10] overflow-hidden">
-                <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid #1c1c1e' }}>
-                  <Hash className="h-3.5 w-3.5 text-[#636366]" />
+              <div key={cluster.vatNumber} className="rounded-xl border border-[color:var(--rule)] bg-[#0d0d10] overflow-hidden">
+                <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
+                  <Hash className="h-3.5 w-3.5 text-[color:var(--muted)]" />
                   <span className="text-[13px] text-white">VAT {cluster.vatNumber}</span>
                   <span className="ml-auto text-[11px] text-[#f59e0b]">{cluster.count} certificates</span>
                 </div>
@@ -324,7 +324,7 @@ export default function AdminCertificates() {
                       ) : (
                         <span className="text-[13px] text-white">{c.companyName}</span>
                       )}
-                      <div className="text-[11px] text-[#636366]">
+                      <div className="text-[11px] text-[color:var(--muted)]">
                         {c.fileName} · {c.expiryDate ? `expires ${fmtDate(c.expiryDate)}` : 'no expiry'} · updated {fmtDate(c.lastModified)}
                       </div>
                     </div>
@@ -345,16 +345,16 @@ export default function AdminCertificates() {
                 ['Last 30 days', analytics.totals.last30d],
                 ['All time', analytics.totals.allTime],
               ] as const).map(([label, value]) => (
-                <div key={label} className="rounded-lg p-4 bg-[#1c1c1e] border border-[#2c2c2e]">
+                <div key={label} className="rounded-lg p-4 bg-[color:var(--ink-3)] border border-[color:var(--rule)]">
                   <div className="text-[20px] text-white font-semibold">{value}</div>
-                  <div className="text-[11px] text-[#8e8e93] uppercase tracking-wide mt-0.5">{label}</div>
+                  <div className="text-[11px] text-[color:var(--body)] uppercase tracking-wide mt-0.5">{label}</div>
                 </div>
               ))}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl border border-[#1c1c1e] p-4">
-                <h3 className="text-[12px] text-[#8e8e93] uppercase tracking-wide mb-3">Events by type</h3>
+              <div className="rounded-xl border border-[rgba(255,255,255,0.03)] p-4">
+                <h3 className="text-[12px] text-[color:var(--body)] uppercase tracking-wide mb-3">Events by type</h3>
                 <div className="space-y-1.5">
                   {(['view', 'search', 'upload', 'download', 'verify', 'unverify', 'report'] as const).map((t) => {
                     const v = analytics.byType[t] || 0;
@@ -369,7 +369,7 @@ export default function AdminCertificates() {
                     };
                     return (
                       <div key={t} className="flex items-center gap-2 text-[13px]">
-                        <span className="text-[#636366]">{ICON[t]}</span>
+                        <span className="text-[color:var(--muted)]">{ICON[t]}</span>
                         <span className="text-[#a1a1aa] capitalize flex-1">{t}</span>
                         <span className="text-white tabular-nums">{v}</span>
                       </div>
@@ -378,10 +378,10 @@ export default function AdminCertificates() {
                 </div>
               </div>
 
-              <div className="rounded-xl border border-[#1c1c1e] p-4">
-                <h3 className="text-[12px] text-[#8e8e93] uppercase tracking-wide mb-3">Top viewed certificates</h3>
+              <div className="rounded-xl border border-[rgba(255,255,255,0.03)] p-4">
+                <h3 className="text-[12px] text-[color:var(--body)] uppercase tracking-wide mb-3">Top viewed certificates</h3>
                 {analytics.topCertificates.length === 0 ? (
-                  <p className="text-[13px] text-[#636366]">No view events yet.</p>
+                  <p className="text-[13px] text-[color:var(--muted)]">No view events yet.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {analytics.topCertificates.map((c) => (
@@ -401,15 +401,15 @@ export default function AdminCertificates() {
               </div>
             </div>
 
-            <div className="rounded-xl border border-[#1c1c1e] p-4">
-              <h3 className="text-[12px] text-[#8e8e93] uppercase tracking-wide mb-3">Top search queries</h3>
+            <div className="rounded-xl border border-[rgba(255,255,255,0.03)] p-4">
+              <h3 className="text-[12px] text-[color:var(--body)] uppercase tracking-wide mb-3">Top search queries</h3>
               {analytics.topQueries.length === 0 ? (
-                <p className="text-[13px] text-[#636366]">No search queries recorded yet.</p>
+                <p className="text-[13px] text-[color:var(--muted)]">No search queries recorded yet.</p>
               ) : (
                 <div className="space-y-1.5">
                   {analytics.topQueries.map((q) => (
                     <div key={q.query} className="flex items-center gap-2 text-[13px]">
-                      <SearchIcon className="h-3.5 w-3.5 text-[#636366]" />
+                      <SearchIcon className="h-3.5 w-3.5 text-[color:var(--muted)]" />
                       <span className="text-[#a1a1aa] flex-1 truncate">{q.query}</span>
                       <span className="text-white tabular-nums">{q.count}</span>
                     </div>
@@ -418,17 +418,17 @@ export default function AdminCertificates() {
               )}
             </div>
 
-            <div className="rounded-xl border border-[#1c1c1e] p-4">
-              <h3 className="text-[12px] text-[#8e8e93] uppercase tracking-wide mb-3">Recent activity</h3>
+            <div className="rounded-xl border border-[rgba(255,255,255,0.03)] p-4">
+              <h3 className="text-[12px] text-[color:var(--body)] uppercase tracking-wide mb-3">Recent activity</h3>
               {analytics.recent.length === 0 ? (
-                <p className="text-[13px] text-[#636366]">No activity yet.</p>
+                <p className="text-[13px] text-[color:var(--muted)]">No activity yet.</p>
               ) : (
                 <div className="space-y-1">
                   {analytics.recent.slice(0, 30).map((e) => (
                     <div key={e.id} className="flex items-center gap-2 text-[12px] text-[#a1a1aa]">
-                      <span className="text-[#636366] tabular-nums w-32 shrink-0">{fmtDateTime(e.createdAt)}</span>
+                      <span className="text-[color:var(--muted)] tabular-nums w-32 shrink-0">{fmtDateTime(e.createdAt)}</span>
                       <span className="text-white capitalize w-20 shrink-0">{e.type}</span>
-                      <span className="truncate text-[#8e8e93]">
+                      <span className="truncate text-[color:var(--body)]">
                         {e.certificateSlug || e.query || ''}
                       </span>
                     </div>

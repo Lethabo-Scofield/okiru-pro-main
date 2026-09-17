@@ -130,8 +130,7 @@ export default function HubLanding() {
         'Measure a company against its sector scorecard, from evidence through to a verified level.',
       workspace: '/bbbee',
       create: '/bbbee/new',
-      accent: 'bg-violet-500/[0.12] text-violet-300 ring-1 ring-inset ring-violet-400/25',
-      rule: 'bg-violet-400/60',
+      hue: 'var(--bbbee)',
       show: true,
     },
     {
@@ -142,8 +141,7 @@ export default function HubLanding() {
         'Report environmental, social and governance performance against the frameworks you follow.',
       workspace: '/esg',
       create: '/esg/new',
-      accent: 'bg-teal-500/[0.12] text-teal-300 ring-1 ring-inset ring-teal-400/25',
-      rule: 'bg-teal-400/60',
+      hue: 'var(--esg)',
       show: esgAllowed,
     },
   ].filter((p) => p.show);
@@ -168,21 +166,20 @@ export default function HubLanding() {
   return (
     <div className="font-sans" data-testid="page-hub">
       <div className="max-w-[1100px] mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-7">
-          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-            {companyName || 'Okiru'}
-          </h1>
-          <p className="text-[13px] text-[#98989f] mt-1">
+        <div className="mb-8">
+          <div className="ok-eyebrow mb-2">Compliance suite</div>
+          <h1 className="ok-title-lg">{companyName || 'Okiru'}</h1>
+          <p className="ok-subtitle mt-2 max-w-xl">
             Choose a product to see the companies you are working on.
           </p>
         </div>
 
         {!profileLoading && needsProfile && reminderVisible && (
           <div
-            className="flex items-start justify-between gap-4 rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] px-4 py-3 mb-6"
+            className="ok-panel flex items-start justify-between gap-4 px-4 py-3 mb-6"
             data-testid="profile-reminder"
           >
-            <p className="text-[13px] text-[#d1d1d6]">
+            <p className="ok-subtitle">
               Your company profile is incomplete.{' '}
               <Link
                 href={companyProfilePath('/hub')}
@@ -203,7 +200,7 @@ export default function HubLanding() {
                   /* a dismissal we cannot remember is not worth failing over */
                 }
               }}
-              className="text-[#636366] hover:text-[#d1d1d6] transition-colors shrink-0"
+              className="text-[color:var(--muted)] hover:text-[color:var(--body)] transition-colors shrink-0"
             >
               <X className="h-4 w-4" />
             </button>
@@ -212,7 +209,7 @@ export default function HubLanding() {
 
         {(continueBbbee || (esgAllowed && continueEsg)) && (
           <div className="mb-7">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-[#636366] mb-2">
+            <div className="ok-eyebrow mb-2">
               Continue where you left off
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -220,36 +217,36 @@ export default function HubLanding() {
                 <button
                   type="button"
                   onClick={() => navigate('/bbbee/new')}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] px-4 py-3 text-left hover:border-[#48484a] transition-colors"
+                  className="flex items-center justify-between gap-3 ok-panel ok-panel-action px-4 py-3 text-left"
                   data-testid="continue-bbbee"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium text-white truncate">
+                    <span className="block text-[13px] font-medium truncate">
                       {continueBbbee.name || 'B-BBEE scorecard'}
                     </span>
-                    <span className="block text-[11px] text-[#8e8e93] mt-0.5">
+                    <span className="block text-[11px] text-[color:var(--body)] mt-0.5">
                       B-BBEE{continueBbbee.saved ? ` · saved ${continueBbbee.saved}` : ''}
                     </span>
                   </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-[#636366]" />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)]" />
                 </button>
               )}
               {esgAllowed && continueEsg && (
                 <button
                   type="button"
                   onClick={() => navigate('/esg/new')}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] px-4 py-3 text-left hover:border-[#48484a] transition-colors"
+                  className="flex items-center justify-between gap-3 ok-panel ok-panel-action px-4 py-3 text-left"
                   data-testid="continue-esg"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium text-white truncate">
+                    <span className="block text-[13px] font-medium truncate">
                       {continueEsg.name || 'ESG scorecard'}
                     </span>
-                    <span className="block text-[11px] text-[#8e8e93] mt-0.5">
+                    <span className="block text-[11px] text-[color:var(--body)] mt-0.5">
                       ESG{continueEsg.saved ? ` · saved ${continueEsg.saved}` : ''}
                     </span>
                   </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-[#636366]" />
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)]" />
                 </button>
               )}
             </div>
@@ -260,30 +257,35 @@ export default function HubLanding() {
           {products.map((p) => (
             <section
               key={p.id}
-              className="relative overflow-hidden rounded-xl border border-[#2c2c2e] bg-[#1c1c1e] p-5 flex flex-col"
+              className="ok-panel ok-panel-action relative overflow-hidden p-6 flex flex-col"
               data-testid={`product-${p.id}`}
             >
-              <span className={`absolute inset-x-0 top-0 h-px ${p.rule}`} aria-hidden />
-              <div className="flex items-center gap-2.5">
-                <span className={`grid h-8 w-8 place-items-center rounded-lg ${p.accent}`}>
+              <span
+                className="absolute inset-x-0 top-0 h-px"
+                style={{ background: p.hue, opacity: 0.7 }}
+                aria-hidden
+              />
+              <div className="flex items-center gap-3">
+                <span
+                  className="grid h-9 w-9 place-items-center rounded-[10px]"
+                  style={{
+                    color: p.hue,
+                    background: `color-mix(in srgb, ${p.hue} 14%, transparent)`,
+                    boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${p.hue} 28%, transparent)`,
+                  }}
+                >
                   {p.icon}
                 </span>
-                <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-white">{p.title}</h2>
+                <h2 className="text-[17px] font-semibold tracking-[-0.015em]" style={{ color: 'var(--hi)' }}>
+                  {p.title}
+                </h2>
               </div>
-              <p className="text-[13px] text-[#98989f] mt-3 flex-1">{p.description}</p>
-              <div className="flex items-center gap-2 mt-5">
-                <Link
-                  href={p.workspace}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white text-black text-[12px] font-semibold hover:bg-[#e5e5e7] transition-colors"
-                  data-testid={`open-${p.id}`}
-                >
+              <p className="ok-subtitle mt-3.5 flex-1">{p.description}</p>
+              <div className="flex items-center gap-2 mt-6">
+                <Link href={p.workspace} className="ok-btn-primary" data-testid={`open-${p.id}`}>
                   Open workspace
                 </Link>
-                <Link
-                  href={p.create}
-                  className="inline-flex items-center px-3 py-1.5 rounded-md bg-white/[0.08] hover:bg-white/[0.14] text-[#e5e5e7] text-[12px] font-medium transition-colors"
-                  data-testid={`create-${p.id}`}
-                >
+                <Link href={p.create} className="ok-btn" data-testid={`create-${p.id}`}>
                   Create scorecard
                 </Link>
               </div>
@@ -291,7 +293,7 @@ export default function HubLanding() {
           ))}
         </div>
 
-        <div className="text-[11px] font-semibold uppercase tracking-wider text-[#636366] mb-2">
+        <div className="ok-eyebrow mb-2">
           Also available
         </div>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -299,13 +301,13 @@ export default function HubLanding() {
             <Link
               key={t.id}
               href={t.href}
-              className="flex items-start gap-3 rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] px-4 py-3 hover:border-[#48484a] transition-colors"
+              className="flex items-start gap-3 ok-panel ok-panel-action px-4 py-3"
               data-testid={`tool-${t.id}`}
             >
-              <span className="text-[#98989f] mt-0.5">{t.icon}</span>
+              <span className="text-[color:var(--body)] mt-0.5">{t.icon}</span>
               <span className="min-w-0">
                 <span className="block text-[13px] font-medium text-white">{t.title}</span>
-                <span className="block text-[12px] text-[#8e8e93] mt-0.5">{t.description}</span>
+                <span className="block text-[12px] text-[color:var(--body)] mt-0.5">{t.description}</span>
               </span>
             </Link>
           ))}
