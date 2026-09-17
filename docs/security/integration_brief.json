@@ -2,8 +2,8 @@
   "outputFile": "Okiru_SuperGroup_Integration_Brief.pdf",
   "title": "System access and integration brief",
   "subtitle": "Okiru ESG Intelligence Platform — prepared for Super Group IT",
-  "meta": "Technical brief  ·  Version 1.0  ·  17 September 2026",
-  "stamp": "Okiru ESG Intelligence Platform · System access and integration brief · v1.0 · 17 September 2026 · Commercial in confidence",
+  "meta": "Technical brief  ·  Version 1.1  ·  17 September 2026",
+  "stamp": "Okiru ESG Intelligence Platform · System access and integration brief · v1.1 · 17 September 2026 · Commercial in confidence",
   "intro": [
     "Okiru produces Super Group's ESG reporting. The operational figures behind it — fuel, fleet, energy, waste, headcount, incidents — currently reach us as spreadsheets and are re-keyed by hand. Super Group already holds them in a system of record, and reading them from that system removes the re-keying and the errors that come with it.",
     "This brief sets out what we would need enabled, what your firewall would need to allow, and how the data is protected once it reaches us. It is written for an IT function deciding whether to open an interface, so it is short and specific. The field-level list of what we read is issued separately; the full security and POPIA position is in the disclosure that accompanies this document."
@@ -19,16 +19,43 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Aspect", "What we propose"],
-          "widths": [28, 72],
+          "head": [
+            "Aspect",
+            "What we propose"
+          ],
+          "widths": [
+            28,
+            72
+          ],
           "rows": [
-            ["Direction", "Outbound from Okiru to Super Group. We call you"],
-            ["Who initiates", "Okiru, on a schedule. Nothing of ours listens for you"],
-            ["Access type", "Read-only. No create, update or delete, on any endpoint"],
-            ["Protocol", "HTTPS, TLS 1.2 or better, port 443 only"],
-            ["Frequency", "Monthly or quarterly, aligned to the reporting cycle — not continuous polling"],
-            ["Volume", "Small. Aggregated operational figures, not transaction-level traffic"],
-            ["Scope", "Named datasets only, agreed in writing before anything is enabled"]
+            [
+              "Direction",
+              "Outbound from Okiru to Super Group. We call you"
+            ],
+            [
+              "Who initiates",
+              "Okiru, on a schedule. Nothing of ours listens for you"
+            ],
+            [
+              "Access type",
+              "Read-only. No create, update or delete, on any endpoint"
+            ],
+            [
+              "Protocol",
+              "HTTPS, TLS 1.2 or better, port 443 only"
+            ],
+            [
+              "Frequency",
+              "Monthly or quarterly, aligned to the reporting cycle — not continuous polling"
+            ],
+            [
+              "Volume",
+              "Small. Aggregated operational figures, not transaction-level traffic"
+            ],
+            [
+              "Scope",
+              "Named datasets only, agreed in writing before anything is enabled"
+            ]
           ]
         },
         {
@@ -43,13 +70,37 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Purpose", "Value", "Notes"],
-          "widths": [26, 26, 48],
+          "head": [
+            "Purpose",
+            "Value",
+            "Notes"
+          ],
+          "widths": [
+            26,
+            26,
+            48
+          ],
           "rows": [
-            ["Our outbound address", "4.253.169.85 / 32", "The only address to allow. Static, dedicated to our platform, South Africa North"],
-            ["Our public hostname", "okiru.pro", "Only needed if you later push to us"],
-            ["Our inbound address", "4.253.195.45", "As above. Static"],
-            ["Ports", "443 only", "No other port, no other protocol"]
+            [
+              "Our outbound address",
+              "4.253.169.85 / 32",
+              "The only address to allow. Static, dedicated to our platform, South Africa North"
+            ],
+            [
+              "Our public hostname",
+              "okiru.pro",
+              "Only needed if you later push to us"
+            ],
+            [
+              "Our inbound address",
+              "4.253.195.45",
+              "As above. Static"
+            ],
+            [
+              "Ports",
+              "443 only",
+              "No other port, no other protocol"
+            ]
           ]
         },
         {
@@ -70,17 +121,47 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Item", "Our ask"],
-          "widths": [30, 70],
+          "head": [
+            "Item",
+            "Our ask"
+          ],
+          "widths": [
+            30,
+            70
+          ],
           "rows": [
-            ["Account", "One named service account, ours alone, not shared with another integration"],
-            ["Role", "Read-only on the agreed datasets. No administrative role"],
-            ["Scope", "The specific reports, views or endpoints agreed — not blanket read across the system"],
-            ["Authentication", "OAuth 2.0 client credentials preferred; an API key over TLS with our address allow-listed is acceptable; mutual TLS if that is your standard"],
-            ["User impersonation", "Not required. We do not need to act as any Super Group user"],
-            ["Personal data", "Only what the reporting standards require. Where a headcount or an incident count will do, we do not want the underlying record"],
-            ["Revocation", "Immediate, by you, without reference to us"],
-            ["Rotation", "On your schedule. We will rotate on request within one business day"]
+            [
+              "Account",
+              "One named service account, ours alone, not shared with another integration"
+            ],
+            [
+              "Role",
+              "Read-only on the agreed datasets. No administrative role"
+            ],
+            [
+              "Scope",
+              "The specific reports, views or endpoints agreed — not blanket read across the system"
+            ],
+            [
+              "Authentication",
+              "OAuth 2.0 client credentials preferred; an API key over TLS with our address allow-listed is acceptable; mutual TLS if that is your standard"
+            ],
+            [
+              "User impersonation",
+              "Not required. We do not need to act as any Super Group user"
+            ],
+            [
+              "Personal data",
+              "Only what the reporting standards require. Where a headcount or an incident count will do, we do not want the underlying record"
+            ],
+            [
+              "Revocation",
+              "Immediate, by you, without reference to us"
+            ],
+            [
+              "Rotation",
+              "On your schedule. We will rotate on request within one business day"
+            ]
           ]
         },
         {
@@ -99,16 +180,43 @@
         },
         {
           "kind": "table",
-          "head": ["Area", "What the report needs from it"],
-          "widths": [30, 70],
+          "head": [
+            "Area",
+            "What the report needs from it"
+          ],
+          "widths": [
+            30,
+            70
+          ],
           "rows": [
-            ["Fleet and fuel", "Litres by fuel type and period, by depot or operating unit; distance travelled where available"],
-            ["Energy", "Purchased electricity in kWh by site and period; any generation or renewable supply"],
-            ["Waste and water", "Volumes by stream and disposal route; water withdrawn and discharged"],
-            ["People", "Headcount by category and period. Counts, not personnel records"],
-            ["Health and safety", "Injury and incident counts, and hours worked, for the standard rates"],
-            ["Training and development", "Spend and participation counts by category"],
-            ["Procurement and suppliers", "Supplier spend by category, and B-BBEE status where already held"]
+            [
+              "Fleet and fuel",
+              "Litres by fuel type and period, by depot or operating unit; distance travelled where available"
+            ],
+            [
+              "Energy",
+              "Purchased electricity in kWh by site and period; any generation or renewable supply"
+            ],
+            [
+              "Waste and water",
+              "Volumes by stream and disposal route; water withdrawn and discharged"
+            ],
+            [
+              "People",
+              "Headcount by category and period. Counts, not personnel records"
+            ],
+            [
+              "Health and safety",
+              "Injury and incident counts, and hours worked, for the standard rates"
+            ],
+            [
+              "Training and development",
+              "Spend and participation counts by category"
+            ],
+            [
+              "Procurement and suppliers",
+              "Supplier spend by category, and B-BBEE status where already held"
+            ]
           ]
         },
         {
@@ -125,20 +233,71 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Layer", "Position"],
-          "widths": [28, 72],
+          "head": [
+            "Layer",
+            "Position"
+          ],
+          "widths": [
+            28,
+            72
+          ],
           "rows": [
-            ["Hosting", "Microsoft Azure, South Africa North (Johannesburg). Managed Kubernetes with role-based access control"],
-            ["Database", "MongoDB 7.0 on an encrypted Azure managed disk, private to the cluster. Not a shared database service"],
-            ["Document store", "Azure Blob Storage, same region. Public access disabled, HTTPS enforced, TLS 1.2 minimum"],
-            ["Encryption at rest", "AES-256 on every disk and blob holding client data"],
-            ["Encryption in transit", "TLS 1.2 and 1.3 only; certificates renewed automatically"],
-            ["Edge protection", "Cloudflare in front of the public hostname, then ModSecurity with the OWASP Core Rule Set at our ingress, in blocking mode"],
-            ["Brute-force protection", "Rate limits on every authentication path, and a lockout on the account itself so a spray from many addresses is also stopped"],
-            ["Authentication", "Second factor required for every account that can reach client data. Passwords hashed with bcrypt at work factor 12"],
-            ["Separation", "Each client's records are scoped to their organisation and filtered on every read and write"],
-            ["Audit trail", "Every security-relevant action recorded with actor, organisation, action, result and source address. Each record signed, each day sealed, and copied to storage under a 730-day immutability policy so it cannot be altered or removed — including by us"],
-            ["Backups", "Nightly, held twice: in-cluster and off-cluster in the same region. Restored and verified end to end on 17 September 2026"]
+            [
+              "Hosting",
+              "Microsoft Azure, South Africa North (Johannesburg). Three nodes across availability zones 1, 2 and 3, on the tier with an uptime SLA"
+            ],
+            [
+              "Database",
+              "MongoDB 7.0 on a managed disk encrypted with a key we hold, private to the cluster. Not a shared database service"
+            ],
+            [
+              "Document store",
+              "Azure Blob Storage, same region, same customer-managed key. Public access disabled, HTTPS enforced, TLS 1.2 minimum"
+            ],
+            [
+              "Encryption at rest",
+              "AES-256 on every disk and blob, under a key in our own Key Vault with purge protection — not a Microsoft-managed key. Encryption at host is on for every node"
+            ],
+            [
+              "Encryption in transit",
+              "TLS 1.2 and 1.3 only; certificates renewed automatically"
+            ],
+            [
+              "Edge protection",
+              "Cloudflare in front of the public hostname, then ModSecurity with the OWASP Core Rule Set at our ingress, in blocking mode"
+            ],
+            [
+              "Network segmentation",
+              "Each workload reaches only what it must. The document parser holds no database credentials and is refused a connection to the database — tested, not assumed"
+            ],
+            [
+              "Brute-force protection",
+              "Rate limits on every authentication path, and a lockout on the account itself so a spray from many addresses is also stopped"
+            ],
+            [
+              "Authentication",
+              "Second factor required for every account that can reach client data. Passwords hashed with bcrypt at work factor 12"
+            ],
+            [
+              "Separation",
+              "Each client's records are scoped to their organisation and filtered on every read and write"
+            ],
+            [
+              "Audit trail",
+              "Every security-relevant action recorded with actor, organisation, action, result and source address. Each record signed, each day sealed, and copied to storage under a 730-day immutability policy — including beyond our own reach"
+            ],
+            [
+              "Infrastructure logging",
+              "Control-plane audit, storage access, key vault operations and every AI request retained 730 days"
+            ],
+            [
+              "Dependencies",
+              "Zero known vulnerabilities, with no suppressions. Checked on every merge"
+            ],
+            [
+              "Backups",
+              "Nightly, held twice, encrypted under the same customer-managed key. Restored and verified end to end"
+            ]
           ]
         }
       ]
@@ -149,15 +308,47 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Service", "Used for", "Region"],
-          "widths": [30, 44, 26],
+          "head": [
+            "Service",
+            "Used for",
+            "Region"
+          ],
+          "widths": [
+            30,
+            44,
+            26
+          ],
           "rows": [
-            ["Microsoft Azure", "Compute, database disks, document and backup storage, private container registry", "South Africa North"],
-            ["Azure AI Document Intelligence", "Reading uploaded documents — text and layout", "South Africa North"],
-            ["Azure OpenAI", "Interpreting extracted content against the ESG data model", "South Africa North"],
-            ["Cloudflare", "Public edge, TLS and denial-of-service protection", "Global edge"],
-            ["Azure Communication Services", "Transactional email — sign-in codes and notifications", "South Africa North"],
-            ["Let's Encrypt", "Public TLS certificates", "Not applicable"]
+            [
+              "Microsoft Azure",
+              "Compute, database disks, document and backup storage, private container registry",
+              "South Africa North"
+            ],
+            [
+              "Azure AI Document Intelligence",
+              "Reading uploaded documents — text and layout",
+              "South Africa North"
+            ],
+            [
+              "Azure OpenAI",
+              "Interpreting extracted content against the ESG data model",
+              "South Africa North"
+            ],
+            [
+              "Cloudflare",
+              "Public edge, TLS and denial-of-service protection",
+              "Global edge"
+            ],
+            [
+              "Azure Communication Services",
+              "Transactional email — sign-in codes and notifications",
+              "South Africa North"
+            ],
+            [
+              "Let's Encrypt",
+              "Public TLS certificates",
+              "Not applicable"
+            ]
           ]
         },
         {
@@ -198,13 +389,37 @@
         },
         {
           "kind": "table",
-          "head": ["Option", "What it involves", "Effort on your side"],
-          "widths": [24, 50, 26],
+          "head": [
+            "Option",
+            "What it involves",
+            "Effort on your side"
+          ],
+          "widths": [
+            24,
+            50,
+            26
+          ],
           "rows": [
-            ["Scheduled export", "The system writes a dated file to SFTP or a storage container on a schedule; we collect it", "Low — usually a built-in report schedule"],
-            ["Read-only replica or view", "A database view restricted to the agreed columns, reachable from our address only", "Medium — needs a DBA and a firewall rule"],
-            ["Push to us", "Super Group posts to an endpoint we provide, with a credential we issue and rotate", "Medium — you would then hold a credential and reach outward"],
-            ["Manual upload, as today", "A person exports and uploads. This is the current arrangement", "None, and it is what we are trying to replace"]
+            [
+              "Scheduled export",
+              "The system writes a dated file to SFTP or a storage container on a schedule; we collect it",
+              "Low — usually a built-in report schedule"
+            ],
+            [
+              "Read-only replica or view",
+              "A database view restricted to the agreed columns, reachable from our address only",
+              "Medium — needs a DBA and a firewall rule"
+            ],
+            [
+              "Push to us",
+              "Super Group posts to an endpoint we provide, with a credential we issue and rotate",
+              "Medium — you would then hold a credential and reach outward"
+            ],
+            [
+              "Manual upload, as today",
+              "A person exports and uploads. This is the current arrangement",
+              "None, and it is what we are trying to replace"
+            ]
           ]
         },
         {
@@ -219,23 +434,59 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["#", "What we need", "From"],
-          "widths": [6, 68, 26],
+          "head": [
+            "#",
+            "What we need",
+            "From"
+          ],
+          "widths": [
+            6,
+            68,
+            26
+          ],
           "rows": [
-            ["1", "The base URL of the interface, and whatever documentation exists — however rough", "Super Group IT"],
-            ["2", "Which authentication method you want us to use, and a non-production credential to test with first", "Super Group IT"],
-            ["3", "Confirmation of which of the areas in section 4 the system actually holds", "Super Group IT and operations"],
-            ["4", "4.253.169.85/32 allowed on port 443", "Super Group network"],
-            ["5", "Your outbound addresses, so we can restrict our end too", "Super Group network"],
-            ["6", "A named technical contact for the integration", "Super Group IT"],
-            ["7", "A test environment if one exists — we would rather fail against test than against production", "Super Group IT"]
+            [
+              "1",
+              "The base URL of the interface, and whatever documentation exists — however rough",
+              "Super Group IT"
+            ],
+            [
+              "2",
+              "Which authentication method you want us to use, and a non-production credential to test with first",
+              "Super Group IT"
+            ],
+            [
+              "3",
+              "Confirmation of which of the areas in section 4 the system actually holds",
+              "Super Group IT and operations"
+            ],
+            [
+              "4",
+              "4.253.169.85/32 allowed on port 443",
+              "Super Group network"
+            ],
+            [
+              "5",
+              "Your outbound addresses, so we can restrict our end too",
+              "Super Group network"
+            ],
+            [
+              "6",
+              "A named technical contact for the integration",
+              "Super Group IT"
+            ],
+            [
+              "7",
+              "A test environment if one exists — we would rather fail against test than against production",
+              "Super Group IT"
+            ]
           ]
         },
         {
           "kind": "callout",
           "tone": "amber",
           "label": "Known limitations, stated up front",
-          "text": "Two things about our platform are worth knowing before you decide. It currently runs on a single application node on a tier without a formal uptime commitment, and the workloads inside the cluster are not yet segmented from one another. Neither affects the confidentiality of the interface described here, both are remediation items with owners and dates, and both are listed in section 9 of the accompanying security disclosure. We would rather you had them from us than found them later."
+          "text": "Two things about our platform are worth knowing before you decide. The database behind the application is still a single instance — the nodes, zones and uptime SLA are in place, the database redundancy behind them is not — and traffic between workloads inside the cluster is segmented but not encrypted. Neither affects the confidentiality of the interface described here, both are funded remediation items, and both are listed in section 9 of the accompanying security disclosure. We would rather you had them from us than found them later."
         }
       ]
     },
@@ -245,12 +496,32 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Document", "Audience", "What it covers"],
-          "widths": [32, 22, 46],
+          "head": [
+            "Document",
+            "Audience",
+            "What it covers"
+          ],
+          "widths": [
+            32,
+            22,
+            46
+          ],
           "rows": [
-            ["Security, hosting and POPIA disclosure v1.1", "Governance, legal", "Hosting, encryption, AI and its regions, backups, access control, audit logging, the POPIA position condition by condition, and every open item with a risk and a remediation"],
-            ["ESG interface field specification", "IT, operations", "The field-level list: names, units, periods and formats for everything in section 4"],
-            ["This brief", "IT", "Access model, whitelisting, permissions, and how the data is protected once we hold it"]
+            [
+              "Security, hosting and POPIA disclosure v1.1",
+              "Governance, legal",
+              "Hosting, encryption, AI and its regions, backups, access control, audit logging, the POPIA position condition by condition, and every open item with a risk and a remediation"
+            ],
+            [
+              "ESG interface field specification",
+              "IT, operations",
+              "The field-level list: names, units, periods and formats for everything in section 4"
+            ],
+            [
+              "This brief",
+              "IT",
+              "Access model, whitelisting, permissions, and how the data is protected once we hold it"
+            ]
           ]
         },
         {

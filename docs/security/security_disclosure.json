@@ -1,15 +1,15 @@
 {
   "title": "Security, hosting and POPIA disclosure",
   "subtitle": "Okiru ESG Intelligence Platform — vendor due-diligence pack",
-  "meta": "Prepared for Super Group IT  ·  Version 1.1  ·  17 September 2026",
-  "stamp": "Okiru ESG Intelligence Platform · Security, hosting and POPIA disclosure · v1.1 · 17 September 2026 · Commercial in confidence",
+  "meta": "Prepared for Super Group IT  ·  Version 1.2  ·  17 September 2026",
+  "stamp": "Okiru ESG Intelligence Platform · Security, hosting and POPIA disclosure · v1.2 · 17 September 2026 · Commercial in confidence",
   "intro": [
     "This document describes how the Okiru ESG Intelligence Platform is hosted, how client data is encrypted, which artificial-intelligence services process it and where, how it is backed up, how access is controlled and logged, and how the platform sits against the Protection of Personal Information Act.",
     "It is written for an IT function performing vendor due diligence, so it states what is not in place as plainly as what is. A reader who finds an unlisted weakness is entitled to assume there are others; the open items in section 9 are listed with an owner and a date so they can be assessed rather than discovered."
   ],
   "verification": {
     "label": "Basis of this disclosure",
-    "body": "Every statement was read off the running production system — the Azure resource configuration, the Kubernetes cluster, the deployed configuration, the backup store and the source repository. Nothing here is aspirational. Where a control is planned rather than live, it appears in section 9 and nowhere else. Version 1.1 supersedes the 16 September 2026 issue; section 11 lists what changed and why."
+    "body": "Every statement was read off the running production system — the Azure resource configuration, the Kubernetes cluster, the deployed configuration, the backup store and the source repository. Nothing here is aspirational. Where a control is planned rather than live, it appears in section 9 and nowhere else. Controls are listed as in place only once their BEHAVIOUR has been verified: the network segmentation below, for example, is recorded as live because a connection that should be refused was tested and refused, not because the policy objects exist."
   },
   "sections": [
     {
@@ -18,19 +18,59 @@
       "blocks": [
         {
           "kind": "p",
-          "text": "The platform runs on Microsoft Azure in the South Africa North region (Johannesburg). All primary client data — the operational database, the cache, the document store and the backup store — is created and held in that region."
+          "text": "The platform runs on Microsoft Azure in the South Africa North region (Johannesburg). All primary client data — the operational database, the cache, the document store and the backup store — is created and held in that region. The application runs across three availability zones within it."
         },
         {
           "kind": "table",
-          "head": ["Component", "Service", "Region", "Notes"],
-          "widths": [22, 26, 20, 32],
+          "head": [
+            "Component",
+            "Service",
+            "Region",
+            "Notes"
+          ],
+          "widths": [
+            22,
+            26,
+            20,
+            32
+          ],
           "rows": [
-            ["Application platform", "Azure Kubernetes Service", "South Africa North", "Managed Kubernetes 1.35, Azure RBAC enabled"],
-            ["Operational database", "MongoDB 7.0 on managed disk", "South Africa North", "10 GiB StandardSSD, in-cluster"],
-            ["Cache / session store", "Redis on managed disk", "South Africa North", "5 GiB StandardSSD"],
-            ["Document and backup store", "Azure Blob Storage", "South Africa North", "HTTPS enforced, TLS 1.2 minimum, public blob access disabled"],
-            ["Container images", "Azure Container Registry", "South Africa North", "Private registry, pull credentials held in-cluster"],
-            ["Public entry point", "Cloudflare, then NGINX ingress on a single public IP", "South Africa North", "TLS at both hops; web application firewall at the ingress"]
+            [
+              "Application platform",
+              "Azure Kubernetes Service",
+              "South Africa North",
+              "Kubernetes 1.35, three nodes across availability zones 1, 2 and 3; encryption at host; Azure RBAC"
+            ],
+            [
+              "Operational database",
+              "MongoDB 7.0 on managed disk",
+              "South Africa North",
+              "Customer-managed key. Single instance — see open item 2"
+            ],
+            [
+              "Cache / session store",
+              "Redis on managed disk",
+              "South Africa North",
+              "Customer-managed key"
+            ],
+            [
+              "Document and backup store",
+              "Azure Blob Storage",
+              "South Africa North",
+              "Customer-managed key; HTTPS enforced; TLS 1.2 minimum; anonymous access disabled"
+            ],
+            [
+              "Container images",
+              "Azure Container Registry",
+              "South Africa North",
+              "Private registry, pull credentials held in-cluster"
+            ],
+            [
+              "Public entry point",
+              "Cloudflare, then NGINX ingress on a single public IP",
+              "South Africa North",
+              "TLS at both hops; web application firewall at the ingress"
+            ]
           ]
         },
         {
@@ -45,23 +85,67 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Layer", "Control", "Status"],
-          "widths": [26, 52, 22],
+          "head": [
+            "Layer",
+            "Control",
+            "Status"
+          ],
+          "widths": [
+            26,
+            52,
+            22
+          ],
           "rows": [
-            ["Disks (database, cache, backups)", "Azure Storage Service Encryption, AES-256, platform-managed keys", "In place"],
-            ["Blob storage", "AES-256 at rest; HTTPS enforced; TLS 1.2 minimum; anonymous access disabled", "In place"],
-            ["Public traffic", "TLS 1.2 and 1.3 only, enforced at the ingress; Let's Encrypt certificates renewed automatically", "In place"],
-            ["Passwords", "bcrypt at work factor 12; never stored or logged in plain text", "In place"],
-            ["One-time codes", "Sign-in and password-reset codes stored as keyed hashes, compared in constant time", "In place"],
-            ["Secrets", "Held as Kubernetes secrets, injected as environment variables at runtime; never committed to source control", "In place"],
-            ["Customer-managed encryption keys", "Disks use Microsoft-managed keys; no customer-managed key vault is configured", "Open"],
-            ["Host-level encryption", "Encryption-at-host is not enabled on the node pool, so the VM cache and temporary disk are not separately encrypted", "Open"],
-            ["Traffic between pods", "Not encrypted; no service mesh or mutual TLS inside the cluster", "Open"]
+            [
+              "Disks (database, cache, backups)",
+              "AES-256 with a CUSTOMER-MANAGED key held in our Azure Key Vault, not a Microsoft-managed one",
+              "In place"
+            ],
+            [
+              "Blob storage",
+              "AES-256 under the same customer-managed key; HTTPS enforced; TLS 1.2 minimum; anonymous access disabled",
+              "In place"
+            ],
+            [
+              "Key custody",
+              "Key Vault with purge protection and 90-day soft delete. The key can be rotated or revoked independently of Microsoft",
+              "In place"
+            ],
+            [
+              "Host-level encryption",
+              "Enabled on every node, so the VM cache and temporary disk are encrypted too",
+              "In place"
+            ],
+            [
+              "Public traffic",
+              "TLS 1.2 and 1.3 only, enforced at the ingress; Let's Encrypt certificates renewed automatically",
+              "In place"
+            ],
+            [
+              "Passwords",
+              "bcrypt at work factor 12; never stored or logged in plain text",
+              "In place"
+            ],
+            [
+              "One-time codes",
+              "Sign-in and password-reset codes stored as keyed hashes, compared in constant time",
+              "In place"
+            ],
+            [
+              "Secrets",
+              "Held as Kubernetes secrets, injected at runtime; never committed to source control",
+              "In place"
+            ],
+            [
+              "Traffic between pods",
+              "Not encrypted; no service mesh or mutual TLS inside the cluster. Segmented instead — see section 5",
+              "Open"
+            ]
           ]
         },
         {
           "kind": "p",
-          "text": "Encryption at rest is therefore present everywhere client data is stored, using Microsoft-managed keys. Customer-managed keys — where Super Group would hold and could revoke the key — are not configured today and are listed as an open item."
+          "text": "Every disk and every blob holding client data is encrypted with a key in our own Key Vault rather than one Microsoft holds. Azure encrypts everything by default with a platform key; that satisfies the words \"encrypted at rest\" and does not answer the question a client is actually asking, which is who can revoke the key. A client requiring custody of the key itself, rather than assurance that we hold it, can be given a key in their own vault."
         }
       ]
     },
@@ -75,12 +159,37 @@
         },
         {
           "kind": "table",
-          "head": ["Purpose", "Service and model", "Resource region", "Where it is processed"],
-          "widths": [23, 28, 22, 27],
+          "head": [
+            "Purpose",
+            "Service and model",
+            "Resource region",
+            "Where it is processed"
+          ],
+          "widths": [
+            23,
+            28,
+            22,
+            27
+          ],
           "rows": [
-            ["Document reading / OCR", "Azure AI Document Intelligence", "South Africa North", "South Africa North"],
-            ["Semantic search / embeddings", "Azure OpenAI, text-embedding-ada-002, regional deployment", "South Africa North", "South Africa North"],
-            ["Interpretation and mapping", "Azure OpenAI, GPT-5 mini class, Global Standard deployment", "South Africa North", "Any Azure region; data at rest stays in South Africa"]
+            [
+              "Document reading / OCR",
+              "Azure AI Document Intelligence",
+              "South Africa North",
+              "South Africa North"
+            ],
+            [
+              "Semantic search / embeddings",
+              "Azure OpenAI, text-embedding-ada-002, regional deployment",
+              "South Africa North",
+              "South Africa North"
+            ],
+            [
+              "Interpretation and mapping",
+              "Azure OpenAI, GPT-5 mini class, Global Standard deployment",
+              "South Africa North",
+              "Any Azure region; data at rest stays in South Africa"
+            ]
           ]
         },
         {
@@ -107,18 +216,51 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Aspect", "Position"],
-          "widths": [28, 72],
+          "head": [
+            "Aspect",
+            "Position"
+          ],
+          "widths": [
+            28,
+            72
+          ],
           "rows": [
-            ["Schedule", "Nightly at 02:00 SAST, automated"],
-            ["Method", "Full compressed database dump"],
-            ["First copy", "Encrypted managed disk in the cluster, 7-day rolling retention"],
-            ["Second copy", "Copied off-cluster to Azure Blob Storage in the same region, 30-day retention, dated folder per night"],
-            ["Integrity checking", "The dump publishes a manifest of file sizes; the copy step verifies every uploaded object against it and fails the job on any mismatch"],
-            ["Restore rehearsal", "Performed 17 September 2026. Restores the off-cluster copy into an isolated environment; 48 collections and 17,835 documents recovered with no failures"],
-            ["Recovery point objective", "24 hours — backups are nightly. Work done since the last backup is lost"],
-            ["Recovery time objective, database", "Under 5 minutes, measured"],
-            ["Recovery time objective, full platform", "Not yet measured — see open item 4"]
+            [
+              "Schedule",
+              "Nightly at 02:00 SAST, automated"
+            ],
+            [
+              "Method",
+              "Full compressed database dump"
+            ],
+            [
+              "First copy",
+              "Encrypted managed disk in the cluster, 7-day rolling retention"
+            ],
+            [
+              "Second copy",
+              "Copied off-cluster to Azure Blob Storage in the same region, 30-day retention, dated folder per night"
+            ],
+            [
+              "Integrity checking",
+              "The dump publishes a manifest of file sizes; the copy step verifies every uploaded object against it and fails the job on any mismatch"
+            ],
+            [
+              "Restore rehearsal",
+              "Performed 17 September 2026. Restores the off-cluster copy into an isolated environment; 48 collections and 17,835 documents recovered with no failures"
+            ],
+            [
+              "Recovery point objective",
+              "24 hours — backups are nightly. Work done since the last backup is lost"
+            ],
+            [
+              "Recovery time objective, database",
+              "Under 5 minutes, measured"
+            ],
+            [
+              "Recovery time objective, full platform",
+              "Not yet measured — see open item 4"
+            ]
           ]
         },
         {
@@ -139,20 +281,77 @@
       "blocks": [
         {
           "kind": "table",
-          "head": ["Control", "Position", "Status"],
-          "widths": [26, 52, 22],
+          "head": [
+            "Control",
+            "Position",
+            "Status"
+          ],
+          "widths": [
+            26,
+            52,
+            22
+          ],
           "rows": [
-            ["Authentication", "Email and password; passwords hashed with bcrypt at work factor 12", "In place"],
-            ["Two-factor authentication", "Email one-time code, required for every account with access to client data", "In place"],
-            ["Password policy", "Minimum ten characters, checked against a common-password list that sees through digit substitution, and against the person's own name, email and company", "In place"],
-            ["Sessions", "Server-side session store; cookies HTTP-only, secure and same-site restricted; 7-day lifetime; a password reset ends every other session for that user", "In place"],
-            ["Brute-force protection", "Durable rate limits per address on sign-in, sign-up, one-time codes and password reset, plus a lockout on the account itself so a spray from many addresses is also stopped", "In place"],
-            ["Web application firewall", "ModSecurity with the OWASP Core Rule Set at the ingress, in blocking mode", "In place"],
-            ["Denial-of-service protection", "Cloudflare in front of the public hostname; request-rate limits at the ingress", "In place"],
-            ["Role-based access", "Roles and assignments enforced server-side on every request", "In place"],
-            ["Tenant separation", "Records scoped to an organisation and filtered on every read and write", "In place"],
-            ["Administrative access to infrastructure", "Azure role-based access control; cluster administration restricted to named Okiru staff", "In place"],
-            ["Customer-managed identity federation", "No single sign-on against a client directory", "Open"]
+            [
+              "Authentication",
+              "Email and password; passwords hashed with bcrypt at work factor 12",
+              "In place"
+            ],
+            [
+              "Two-factor authentication",
+              "Email one-time code, required for every account with access to client data",
+              "In place"
+            ],
+            [
+              "Password policy",
+              "Minimum ten characters, checked against a common-password list that sees through digit substitution, and against the person's own name, email and company",
+              "In place"
+            ],
+            [
+              "Sessions",
+              "Server-side session store; cookies HTTP-only, secure and same-site restricted; 7-day lifetime; a password reset ends every other session for that user",
+              "In place"
+            ],
+            [
+              "Brute-force protection",
+              "Durable rate limits per address on sign-in, sign-up, one-time codes and password reset, plus a lockout on the account itself so a spray from many addresses is also stopped",
+              "In place"
+            ],
+            [
+              "Web application firewall",
+              "ModSecurity with the OWASP Core Rule Set at the ingress, in blocking mode",
+              "In place"
+            ],
+            [
+              "Denial-of-service protection",
+              "Cloudflare in front of the public hostname; request-rate limits at the ingress",
+              "In place"
+            ],
+            [
+              "Role-based access",
+              "Roles and assignments enforced server-side on every request",
+              "In place"
+            ],
+            [
+              "Tenant separation",
+              "Records scoped to an organisation and filtered on every read and write",
+              "In place"
+            ],
+            [
+              "Network segmentation",
+              "Each workload reaches only what it must. Verified by behaviour: the document parser, which holds no database credentials, is refused a connection to the database",
+              "In place"
+            ],
+            [
+              "Administrative access to infrastructure",
+              "Azure role-based access control; cluster administration restricted to named Okiru staff",
+              "In place"
+            ],
+            [
+              "Single sign-on against a client directory",
+              "Not offered; accounts are local to the platform",
+              "Open"
+            ]
           ]
         },
         {
@@ -171,17 +370,57 @@
         },
         {
           "kind": "table",
-          "head": ["Aspect", "Position", "Status"],
-          "widths": [26, 52, 22],
+          "head": [
+            "Aspect",
+            "Position",
+            "Status"
+          ],
+          "widths": [
+            26,
+            52,
+            22
+          ],
           "rows": [
-            ["Coverage", "Sign-in, failed sign-in, lockout, sign-out, second-factor failure, password reset, authorisation decisions, and record creation, change and export", "In place"],
-            ["Source address", "The true client address, taken from the edge and trusted only from the edge's own network ranges", "In place"],
-            ["Tamper evidence", "Every record carries a keyed signature over its own contents; each closed day is sealed with a digest, so both alteration and deletion are detectable", "In place"],
-            ["Append-only copy", "Each sealed day is copied to blob storage under a 730-day time-based immutability policy, which prevents alteration or deletion including by us", "In place"],
-            ["Retention policy", "730 days. Nothing is deleted that has not first been sealed and archived", "In place"],
-            ["Export to client", "An organisation administrator can retrieve their own organisation's trail as CSV or JSON, scoped so it cannot be widened to another tenant", "In place"],
-            ["Integrity reporting", "A report re-derives each day's digest and compares it with the seal taken at the time", "In place"],
-            ["Infrastructure-level logging", "Azure platform logs available; not centralised or retained to a defined policy", "Open"]
+            [
+              "Coverage",
+              "Sign-in, failed sign-in, lockout, sign-out, second-factor failure, password reset, authorisation decisions, and record creation, change and export",
+              "In place"
+            ],
+            [
+              "Source address",
+              "The true client address, taken from the edge and trusted only from the edge's own network ranges",
+              "In place"
+            ],
+            [
+              "Tamper evidence",
+              "Every record carries a keyed signature over its own contents; each closed day is sealed with a digest, so both alteration and deletion are detectable",
+              "In place"
+            ],
+            [
+              "Append-only copy",
+              "Each sealed day is copied to blob storage under a 730-day time-based immutability policy, which prevents alteration or deletion including by us",
+              "In place"
+            ],
+            [
+              "Retention policy",
+              "730 days. Nothing is deleted that has not first been sealed and archived",
+              "In place"
+            ],
+            [
+              "Export to client",
+              "An organisation administrator can retrieve their own organisation's trail as CSV or JSON, scoped so it cannot be widened to another tenant",
+              "In place"
+            ],
+            [
+              "Integrity reporting",
+              "A report re-derives each day's digest and compares it with the seal taken at the time",
+              "In place"
+            ],
+            [
+              "Infrastructure-level logging",
+              "Control-plane audit, blob access, key vault operations, every AI request and every container-image pull ship to a Log Analytics workspace with 730-day retention",
+              "In place"
+            ]
           ]
         },
         {
@@ -200,19 +439,67 @@
         },
         {
           "kind": "table",
-          "head": ["Condition", "Position", "Status"],
-          "widths": [24, 54, 22],
+          "head": [
+            "Condition",
+            "Position",
+            "Status"
+          ],
+          "widths": [
+            24,
+            54,
+            22
+          ],
           "rows": [
-            ["Accountability", "Information Officer registration with the Information Regulator to be confirmed", "Open"],
-            ["Processing limitation", "Data processed only to produce the client's ESG and B-BBEE outputs; no secondary use, no resale, no profiling", "In place"],
-            ["Purpose specification", "Purpose set by the engagement; audit records retained 730 days; client data retention to be set in the engagement terms", "Partial"],
-            ["Further processing", "No further processing beyond the stated purpose", "In place"],
-            ["Information quality", "Extracted values are shown for human correction before scoring; provenance recorded per figure", "In place"],
-            ["Openness", "This document; a processing register per client is an open item", "Partial"],
-            ["Security safeguards", "Encryption, access control, firewall and tamper-evident audit logging as set out above, with the gaps listed", "In place"],
-            ["Data subject participation", "Access and correction handled on request through the client; no self-service facility", "Partial"],
-            ["Transborder flow (s72)", "Interpretation may transit another region during inference — see section 3", "Partial"],
-            ["Security compromise notification", "Written incident-response and breach-notification plan, with severity levels and a 24-hour client-notification commitment for the most serious. Not yet rehearsed", "Partial"]
+            [
+              "Accountability",
+              "Information Officer registration with the Information Regulator to be confirmed",
+              "Open"
+            ],
+            [
+              "Processing limitation",
+              "Data processed only to produce the client's ESG and B-BBEE outputs; no secondary use, no resale, no profiling",
+              "In place"
+            ],
+            [
+              "Purpose specification",
+              "Retention schedule published per category with a basis for each; audit records 730 days, activity 365 days, backups 30 days off-cluster",
+              "In place"
+            ],
+            [
+              "Further processing",
+              "No further processing beyond the stated purpose",
+              "In place"
+            ],
+            [
+              "Information quality",
+              "Extracted values are shown for human correction before scoring; provenance recorded per figure",
+              "In place"
+            ],
+            [
+              "Openness",
+              "This document, plus a per-client record of processing activities issued alongside it",
+              "In place"
+            ],
+            [
+              "Security safeguards",
+              "Customer-managed encryption, enforced two-factor, firewall, rate limiting, segmentation and a tamper-evident audit trail",
+              "In place"
+            ],
+            [
+              "Data subject participation",
+              "Self-service: a person can download everything held about them, lodge a correction or erasure request against a 30-day clock, and be erased by an organisation administrator",
+              "In place"
+            ],
+            [
+              "Transborder flow (s72)",
+              "Interpretation may transit another region during inference — see section 3",
+              "Partial"
+            ],
+            [
+              "Security compromise notification",
+              "Written incident-response and breach-notification plan, with severity levels and a 24-hour client-notification commitment for the most serious. Not yet rehearsed",
+              "Partial"
+            ]
           ]
         },
         {
@@ -246,25 +533,77 @@
       "blocks": [
         {
           "kind": "p",
-          "text": "These are listed in the order we intend to close them. Items 1 to 3 we consider prerequisites to holding Super Group production data. Twelve items were listed on 16 September; seven have been closed and are recorded in section 11."
+          "text": "These are what remains. Twelve items were listed on 16 September and twelve more rows were marked partial across the other sections; six of the numbered items and five of the partial rows have since closed. What is left divides cleanly into three kinds: things that need money, a thing that needs people, and a registration that needs a signature. None of them is waiting on engineering."
         },
         {
           "kind": "table",
-          "head": ["#", "Open item", "Risk", "Remediation"],
-          "widths": [5, 38, 12, 45],
+          "head": [
+            "#",
+            "Open item",
+            "Risk",
+            "Remediation"
+          ],
+          "widths": [
+            5,
+            38,
+            12,
+            45
+          ],
           "rows": [
-            ["1", "Interpretation may transit another region during inference", "High", "Move to provisioned in-region throughput when volume justifies it; until then obtain a section 72 basis in the operator agreement and delete the retained United States resource"],
-            ["2", "Single application node; platform on a tier without an uptime commitment", "High", "Add a second node and move to the tier with an uptime SLA; run the database with redundancy. Also the prerequisite for item 3"],
-            ["3", "No network segmentation between workloads in the cluster", "Medium", "Policies are written and reviewed; the cluster has no policy engine, and enabling one reimages the node pool. Sequenced after item 2 so it is a rolling change rather than an outage"],
-            ["4", "Full-platform recovery time never measured", "Medium", "The database restore is rehearsed and measured. Rebuilding the cluster, ingress, certificates and secrets around it is not, and should be assumed to take hours"],
-            ["5", "Incident-response plan never rehearsed", "Medium", "Tabletop exercise against the written plan, December 2026, alongside the quarterly restore drill"],
-            ["6", "Encryption uses Microsoft-managed keys; host-level encryption off", "Low", "Enable host encryption; offer customer-managed keys where a client requires them"],
-            ["7", "No independent penetration test or third-party security assessment", "Medium", "Commission an external test and share the summary and remediation"],
-            ["8", "Information Officer registration to be confirmed", "Medium", "Confirm or complete registration with the Information Regulator"],
-            ["9", "No per-client processing register", "Low", "Issue one per client alongside the operator agreement"],
-            ["10", "Infrastructure logs not centralised or retained", "Low", "Ship cluster and platform logs to a retained workspace"],
-            ["11", "Two image-parsing advisories with no published fix", "Low", "Denial-of-service loops in a library reached only with files we supply. Tracked; will be taken up when upstream publishes a patched version"],
-            ["12", "No single sign-on against a client directory", "Low", "Offer federation where a client requires it"]
+            [
+              "1",
+              "Interpretation may transit another region during inference",
+              "High",
+              "Microsoft offers the model class in South Africa North only on a globally-routed deployment. Pinning it in-region needs provisioned throughput, which is priced for far larger volumes than ours. Until that is bought, obtain a section 72 basis in the operator agreement. COST DECISION"
+            ],
+            [
+              "2",
+              "The database is a single instance",
+              "High",
+              "Nodes, zones and the uptime SLA are now in place; the database behind them is not redundant. A replica set across the three zones, or a managed database service, is the fix. Its absence already showed: a disruption budget promising availability the single instance could not deliver blocked a cluster upgrade"
+            ],
+            [
+              "3",
+              "Full-platform recovery time never measured",
+              "Medium",
+              "The database restore is rehearsed and measured at under five minutes. Rebuilding the cluster, ingress, certificates and secrets around it is not, and should be assumed to take hours"
+            ],
+            [
+              "4",
+              "Incident-response plan never rehearsed",
+              "Medium",
+              "Written, with severity levels, notification timings and a credential-rotation procedure. A tabletop exercise needs people in a room. December 2026"
+            ],
+            [
+              "5",
+              "No independent penetration test",
+              "Medium",
+              "Commission an external test and share the summary and remediation. COST DECISION"
+            ],
+            [
+              "6",
+              "Information Officer registration to be confirmed",
+              "Medium",
+              "Confirm or complete registration with the Information Regulator. Needs a signature, not a change"
+            ],
+            [
+              "7",
+              "No single sign-on against a client directory",
+              "Low",
+              "Offer federation where a client requires it"
+            ],
+            [
+              "8",
+              "Traffic between pods is not encrypted",
+              "Low",
+              "Segmented but not encrypted in transit inside the cluster. A service mesh would close it, at a cost in complexity this cluster does not yet justify"
+            ],
+            [
+              "9",
+              "Backups are not geo-redundant",
+              "Low",
+              "Held twice, both in South Africa North. A region-wide failure would affect both"
+            ]
           ]
         }
       ]
@@ -275,58 +614,134 @@
       "blocks": [
         {
           "kind": "p",
-          "text": "Asked what additional services would be needed, these are the ones we would add. They are listed with what each one actually buys, so the spend can be judged against the risk it removes rather than accepted as a list. The web application firewall that headed this list on 16 September has since been delivered at no additional cost, using a capability already present in the software we run."
+          "text": "Asked what additional services would be needed, these are the ones that remain. Four that headed this list a day ago have since been delivered at no additional licence cost, using capability already present in what we run: the web application firewall, the customer-managed key vault, host-level encryption and centralised log retention. What is left genuinely costs money."
         },
         {
           "kind": "table",
-          "head": ["Service", "What it protects against", "Priority"],
-          "widths": [26, 54, 20],
+          "head": [
+            "Service",
+            "What it protects against",
+            "Priority"
+          ],
+          "widths": [
+            26,
+            54,
+            20
+          ],
           "rows": [
-            ["Second node and the tier with an uptime SLA", "The single point of failure the whole platform currently runs on, and the absence of any availability commitment", "High"],
-            ["Managed database with geo-redundant backup", "Loss of the region, and the single-instance failure mode of a self-managed database. Also brings point-in-time recovery, which would reduce the 24-hour recovery point", "High"],
-            ["Azure Key Vault with customer-managed keys", "Key custody: Super Group could hold and revoke the key protecting its data at rest", "High"],
-            ["Microsoft Defender for Cloud (and for Containers)", "Misconfiguration, vulnerable images and runtime threats going unnoticed", "High"],
-            ["Provisioned in-region model throughput", "The remaining cross-border element described in section 3", "Medium"],
-            ["Azure Monitor / Log Analytics with retention", "An incident that cannot be reconstructed afterwards because the logs had rotated away", "Medium"],
-            ["Azure Private Link and private cluster endpoint", "Exposure of management and data-plane endpoints to the public internet", "Medium"],
-            ["Independent penetration test, annually", "Weaknesses we cannot see ourselves; also the evidence a client's auditor asks for", "Medium"],
-            ["Cyber-liability insurance", "The financial consequence of a breach, which no control removes entirely", "Medium"]
+            [
+              "Managed database, or a replica set across the three zones",
+              "The single database instance, which is now the only remaining single point of failure. A managed service also brings point-in-time recovery, reducing the 24-hour recovery point",
+              "High"
+            ],
+            [
+              "Provisioned in-region model throughput",
+              "The remaining cross-border element in section 3. Priced for far larger volumes than ours, which is why it is a decision rather than an action",
+              "High"
+            ],
+            [
+              "Microsoft Defender for Cloud (and for Containers)",
+              "Misconfiguration, vulnerable images and runtime threats going unnoticed",
+              "High"
+            ],
+            [
+              "Independent penetration test, annually",
+              "Weaknesses we cannot see ourselves; also the evidence a client's auditor asks for",
+              "Medium"
+            ],
+            [
+              "Geo-redundant backup storage",
+              "A region-wide failure, which would currently affect both copies",
+              "Medium"
+            ],
+            [
+              "Azure Private Link and private cluster endpoint",
+              "Exposure of management and data-plane endpoints to the public internet",
+              "Medium"
+            ],
+            [
+              "Cyber-liability insurance",
+              "The financial consequence of a breach, which no control removes entirely",
+              "Medium"
+            ]
           ]
         }
       ]
     },
     {
       "kicker": "11 · Changes",
-      "title": "What is different from version 1.0, and why",
+      "title": "What is different from version 1.1, and why",
       "blocks": [
         {
           "kind": "p",
-          "text": "Version 1.0 was issued on 16 September 2026 with twelve open items. This version records what has been closed in the week since. It is included so that a reader can see the direction of travel, and so that any claim that has been strengthened can be checked against the date it changed."
+          "text": "Version 1.1 was issued earlier on 17 September with twelve open items. This version records what closed in the hours since. It is included so a reader can see the direction of travel, and so any strengthened claim can be checked against the date it changed."
         },
         {
           "kind": "table",
-          "head": ["v1.0 item", "Position now"],
-          "widths": [42, 58],
+          "head": [
+            "v1.0 item",
+            "Position now"
+          ],
+          "widths": [
+            42,
+            58
+          ],
           "rows": [
-            ["Interpretation processing occurs outside South Africa", "Partly closed. The service is now in South Africa North; embeddings are processed in-region; interpretation may still transit another region during inference. Restated precisely in section 3"],
-            ["No rate limiting or web application firewall", "Closed. Durable per-address limits and per-account lockout across every authentication path, and ModSecurity with the OWASP Core Rule Set in blocking mode at the ingress"],
-            ["Restore never rehearsed; no agreed recovery objectives", "Closed for the database. The first rehearsal found that every off-cluster copy was truncated; that is fixed and verified, and recovery objectives are now measured. Full-platform recovery time remains unmeasured as item 4"],
-            ["Two-factor authentication optional", "Closed. Required for every account with access to client data"],
-            ["Password hashing work factor below guidance", "Closed. Raised to 12, with existing accounts upgraded silently at next sign-in. Password reset previously accepted weaker passwords than sign-up; both now use one policy"],
-            ["Audit log not immutable, no retention policy, no client export", "Closed. Per-record signatures, daily seals, an append-only archive under a 730-day immutability policy, a 730-day retention policy, and client-retrievable export"],
-            ["No automated build, test or dependency pipeline", "Closed. Secret scanning, typecheck, both test suites, dependency audit and container image scanning as merge gates. Known vulnerable dependencies reduced from 127 to 30, with no critical and no unaddressed high"],
-            ["No written incident-response plan", "Partly closed. Written, with severity levels, notification timings and a credential-rotation procedure. Not yet rehearsed — item 5"],
-            ["Single node, no uptime SLA", "Open, item 2"],
-            ["No network segmentation", "Open, item 3 — policies written, engine not enabled"],
-            ["Microsoft-managed keys, host encryption off", "Open, item 6"],
-            ["No independent penetration test", "Open, item 7"]
+            [
+              "Single node, no uptime commitment",
+              "Closed for the platform. Three nodes across availability zones 1, 2 and 3, on the tier with an uptime SLA, with spread constraints making the distribution a rule rather than a coincidence. The DATABASE behind it is still a single instance — carried forward as open item 2 rather than folded away"
+            ],
+            [
+              "No network segmentation between workloads",
+              "Closed. The policy engine is enabled and the policies enforce. Verified by behaviour: the document parser, which holds no database credentials, is refused a connection to the database, while the services that need one keep it"
+            ],
+            [
+              "Microsoft-managed keys; host encryption off",
+              "Closed. Every disk and blob holding client data is encrypted under a key in our own vault, with purge protection and a 90-day soft delete. Encryption at host is on for every node"
+            ],
+            [
+              "Infrastructure logs not centralised or retained",
+              "Closed. Control-plane audit, blob access, key vault operations, every AI request and every image pull, to a workspace with 730-day retention"
+            ],
+            [
+              "No per-client processing register",
+              "Closed. Issued alongside this document"
+            ],
+            [
+              "Two image-parsing advisories with no published fix",
+              "Closed, and not by suppression. The library is pinned above the advisory range. The platform now reports zero known vulnerabilities with no suppressions in place"
+            ],
+            [
+              "Purpose specification; retention undefined",
+              "Closed. A retention schedule per category, each with its basis"
+            ],
+            [
+              "No self-service for data-subject rights",
+              "Closed. A person can download everything held about them, lodge a request against a 30-day clock, and be erased"
+            ],
+            [
+              "Interpretation may transit another region",
+              "Open, item 1 — a cost decision"
+            ],
+            [
+              "Full-platform recovery time unmeasured",
+              "Open, item 3"
+            ],
+            [
+              "Incident-response plan unrehearsed",
+              "Open, item 4 — needs people, not engineering"
+            ],
+            [
+              "No independent penetration test",
+              "Open, item 5 — a cost decision"
+            ]
           ]
         },
         {
           "kind": "callout",
           "tone": "amber",
-          "label": "One correction to version 1.0",
-          "text": "Version 1.0 stated that there was no rate limiting on authentication endpoints. That was too absolute: a per-address limit did exist on sign-in, but it was held in each process's memory, so it was multiplied by the number of running copies and reset on every deployment, and it covered neither one-time codes nor password reset. The conclusion — that the control could not be relied on — was right; the description was not precise, and it is corrected here."
+          "label": "How these were verified",
+          "text": "Each closure was tested rather than configured and assumed. The segmentation was proved by attempting a connection that should be refused and having it refused — the first attempt had a rule that silently cut every service off from the database while already-open connections kept the site answering normally, which is precisely the failure a presence check would have missed. The database migration onto the encrypted volume was reconciled collection by collection: 50 collections and 18,240 documents before, the same after, with 98 seconds of downtime."
         }
       ]
     }
