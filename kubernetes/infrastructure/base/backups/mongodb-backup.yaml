@@ -1,31 +1,45 @@
-# MongoDB Backup CronJob
-# Runs daily at 2 AM to create a mongodump backup
+# Nightly MongoDB backup.
 #
-# Backups are stored in PVC and synced to Azure Blob Storage for durability
-# Requires: AZURE_STORAGE_ACCOUNT and AZURE_STORAGE_KEY secrets
-# Secret template: See kubernetes/templates/secrets-template.yaml
-
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mongodb-backup-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: managed-csi-premium
----
+# THE ORDERING BUG THIS FIXES, because it must not come back.
+#
+# `mongodump` and `azure-sync` used to be two entries under `containers:`.
+# Kubernetes starts every container in a pod at the same time, so the sync
+# container picked "the newest dated directory" and began uploading it while
+# mongodump was still writing into it. Discovered 17 September 2026 by the first
+# restore drill: the on-disk dump of `documents` was 66,302,543 bytes written at
+# 02:00:30, and the copy in blob storage was 37,923,821 bytes uploaded at
+# 02:00:28 — two seconds before the file it was copying was finished.
+#
+# `mongorestore` of that blob copy recovered 68 of 139 documents and stopped
+# with "unexpected EOF". Every night in the retention window was truncated the
+# same way, so the off-cluster backup had never been restorable. The on-cluster
+# copy was always complete; the second copy, the one that exists precisely for
+# the case where the cluster is gone, was not.
+#
+# `--validate-content` did not catch it: it checks that the bytes that were sent
+# arrived intact, not that they were all of the file.
+#
+# THE FIX. mongodump is now an initContainer, so it runs to completion before
+# the sync container starts — Kubernetes guarantees that ordering, which two
+# containers in `containers:` never did. On top of that the dump writes a
+# COMPLETE marker as its last act and the sync refuses to upload a directory
+# without one, and after uploading, every blob's length is compared with the
+# local file it came from. Two independent checks, because this failed silently
+# for an unknown length of time.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
   name: mongodb-backup
+  namespace: okiru-pro
   labels:
     app: mongodb-backup
+    app.kubernetes.io/instance: okiru-pro-prod
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/part-of: okiru-pro
     component: database
+    environment: production
 spec:
-  schedule: "0 2 * * *"  # Daily at 2 AM
+  schedule: "0 2 * * *"
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 3
   failedJobsHistoryLimit: 3
@@ -35,7 +49,8 @@ spec:
       template:
         spec:
           restartPolicy: OnFailure
-          containers:
+          initContainers:
+            # STEP ONE. Runs to completion before anything else starts.
             - name: mongodump
               image: mongo:7.0
               command:
@@ -47,7 +62,6 @@ spec:
                   BACKUP_DIR="/backup/$(date +%Y%m%d-%H%M%S)"
                   mkdir -p "$BACKUP_DIR"
 
-                  # Perform backup
                   mongodump \
                     --host=mongodb \
                     --username="$MONGO_INITDB_ROOT_USERNAME" \
@@ -56,12 +70,20 @@ spec:
                     --out="$BACKUP_DIR" \
                     --gzip
 
-                  # Create metadata file
                   echo "Backup created: $(date -u)" > "$BACKUP_DIR/metadata.txt"
                   echo "MongoDB host: mongodb" >> "$BACKUP_DIR/metadata.txt"
                   echo "Database: $MONGODB_DB_NAME" >> "$BACKUP_DIR/metadata.txt"
 
-                  # Cleanup old backups (keep last 7 days)
+                  # A manifest of what was written, so the sync step can check
+                  # that what arrives in blob storage is the same size as what
+                  # left. Written before the marker, on purpose.
+                  ( cd "$BACKUP_DIR" && find . -type f ! -name COMPLETE -printf '%s %p\n' | sort -k2 ) \
+                    > "$BACKUP_DIR/manifest.txt"
+
+                  # The last act. Nothing uploads a directory without this.
+                  echo "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$BACKUP_DIR/COMPLETE"
+
+                  # Keep seven days on the disk.
                   cd /backup
                   ls -t | tail -n +8 | xargs -r rm -rf
 
@@ -83,18 +105,18 @@ spec:
                     secretKeyRef:
                       name: mongodb-credentials
                       key: MONGODB_DB_NAME
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 256Mi
+                limits:
+                  cpu: 250m
+                  memory: 512Mi
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backup
-              resources:
-                requests:
-                  memory: "256Mi"
-                  cpu: "100m"
-                limits:
-                  memory: "512Mi"
-                  cpu: "250m"
-          # Azure Blob Storage Sync Container
-          # Uploads backups to Azure for off-cluster durability
+          containers:
+            # STEP TWO. Cannot start until the dump above has exited zero.
             - name: azure-sync
               image: mcr.microsoft.com/azure-cli:latest
               command:
@@ -104,35 +126,70 @@ spec:
                   set -e
                   echo "Starting Azure Blob Storage sync at $(date)"
 
-                  # Find the most recent backup directory
-                  BACKUP_DIR=$(find /backup -type d -name "20*" | sort | tail -1)
+                  # Only a directory the dump declared finished. A partial dump
+                  # is not a backup and must not overwrite the idea that we have
+                  # one.
+                  BACKUP_DIR=$(find /backup -mindepth 2 -maxdepth 2 -name COMPLETE \
+                    | xargs -r -n1 dirname | sort | tail -1)
 
                   if [ -z "$BACKUP_DIR" ]; then
-                    echo "ERROR: No backup directory found"
+                    echo "FAIL: no completed backup directory found (no COMPLETE marker)"
                     exit 1
                   fi
 
-                  echo "Syncing backup: $BACKUP_DIR"
+                  NAME=$(basename "$BACKUP_DIR")
+                  echo "Syncing completed backup: $BACKUP_DIR"
 
-                  # Upload to Azure Blob Storage
                   az storage blob upload-batch \
                     --account-name "$AZURE_STORAGE_ACCOUNT" \
                     --account-key "$AZURE_STORAGE_KEY" \
-                    --destination "mongodb-backups/$(basename $BACKUP_DIR)" \
+                    --destination "mongodb-backups/$NAME" \
                     --source "$BACKUP_DIR" \
                     --overwrite true \
                     --validate-content
 
-                  if [ $? -eq 0 ]; then
-                    echo "✅ Successfully synced to Azure Blob Storage"
-                    echo "Container: mongodb-backups"
-                    echo "Path: $(basename $BACKUP_DIR)"
-                  else
-                    echo "❌ Azure sync failed"
+                  # Verify sizes rather than trusting the exit code. This is the
+                  # check that would have caught the truncation on the first
+                  # night instead of after an unknown number of them.
+                  echo "Verifying uploaded sizes against the manifest..."
+                  az storage blob list \
+                    --account-name "$AZURE_STORAGE_ACCOUNT" \
+                    --account-key "$AZURE_STORAGE_KEY" \
+                    --container-name mongodb-backups \
+                    --prefix "$NAME/" \
+                    --query "[].[properties.contentLength, name]" -o tsv > /tmp/remote.txt
+
+                  # Shell builtins only: the azure-cli image has no awk, and a
+                  # substring grep would match documents.bson.gz against
+                  # documents.metadata.json.gz and report a false mismatch.
+                  TAB=$(printf '\t')
+                  MISMATCH=0
+                  while read -r SIZE PATH_REL; do
+                    REL=$(echo "$PATH_REL" | sed 's|^\./||')
+                    [ "$REL" = "COMPLETE" ] && continue
+                    [ "$REL" = "manifest.txt" ] && continue
+                    REMOTE=$(while IFS="$TAB" read -r RSIZE RNAME; do
+                      if [ "$RNAME" = "$NAME/$REL" ]; then echo "$RSIZE"; break; fi
+                    done < /tmp/remote.txt)
+                    if [ -z "$REMOTE" ]; then
+                      echo "  MISSING  $REL"
+                      MISMATCH=1
+                    elif [ "$REMOTE" != "$SIZE" ]; then
+                      echo "  SIZE     $REL local=$SIZE remote=$REMOTE"
+                      MISMATCH=1
+                    fi
+                  done < "$BACKUP_DIR/manifest.txt"
+
+                  if [ "$MISMATCH" -ne 0 ]; then
+                    echo "FAIL: the copy in blob storage does not match what was written to disk."
                     exit 1
                   fi
 
-                  # Cleanup Azure backups older than 30 days
+                  echo "Verified: every file matches the manifest."
+                  echo "Container: mongodb-backups"
+                  echo "Path: $NAME"
+
+                  # Thirty days off-cluster.
                   echo "Cleaning up old Azure backups..."
                   CUTOFF_DATE=$(date -d '30 days ago' +%Y%m%d)
 
@@ -142,7 +199,6 @@ spec:
                     --container-name mongodb-backups \
                     --query "[].name" -o tsv | \
                   while read blob; do
-                    # Extract date from blob path (format: YYYYMMDD-HHMMSS)
                     BLOB_DATE=$(echo "$blob" | grep -oE '^[0-9]{8}' || true)
                     if [ -n "$BLOB_DATE" ] && [ "$BLOB_DATE" -lt "$CUTOFF_DATE" ]; then
                       echo "Deleting old backup: $blob"
@@ -167,17 +223,17 @@ spec:
                     secretKeyRef:
                       name: azure-backup-credentials
                       key: AZURE_STORAGE_KEY
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 250m
+                  memory: 512Mi
               volumeMounts:
                 - name: backup-storage
                   mountPath: /backup
                   readOnly: true
-              resources:
-                requests:
-                  memory: "128Mi"
-                  cpu: "100m"
-                limits:
-                  memory: "256Mi"
-                  cpu: "250m"
           volumes:
             - name: backup-storage
               persistentVolumeClaim:
