@@ -1,22 +1,91 @@
-# Network Policies for Okiru Pro
-# These policies restrict pod-to-pod traffic to only necessary communication
+# Network segmentation between workloads.
 #
-# WARNING: Enable these only after verifying your specific network requirements.
-# Test in staging first as they can block legitimate traffic.
-
-# Default deny all ingress traffic (apply this carefully)
-# apiVersion: networking.k8s.io/v1
-# kind: NetworkPolicy
-# metadata:
-#   name: default-deny-ingress
-#   namespace: okiru-pro
-# spec:
-#   podSelector: {}
-#   policyTypes:
-#     - Ingress
+# Open item 8 of the security disclosure. Today any pod in the namespace can
+# open a connection to any other: a compromised parser could talk straight to
+# MongoDB, and nothing in the cluster would object.
+#
+# READ THIS BEFORE APPLYING.
+#
+# These policies are INERT until the cluster has a network policy engine. The
+# cluster is `--network-policy none`, which means the API server accepts
+# NetworkPolicy objects and stores them and nothing enforces them. Applying this
+# file on its own changes nothing and — worse — makes the cluster look segmented
+# to anyone who runs `kubectl get networkpolicy`. That is why the previous
+# version of this file shipped with its default-deny rule commented out: it was
+# never going to work, and commenting it out hid the reason.
+#
+# Turning the engine on:
+#
+#   az aks update -g okiru-pro-rg -n okiru-pro-aks --network-policy azure
+#
+# That reimages the node pool. On a single-node cluster it is a full outage of
+# roughly ten to twenty minutes. Add the second node FIRST (open item 2) and the
+# same change becomes a rolling one with no downtime. Sequence:
+#
+#   1. az aks nodepool scale -g okiru-pro-rg -n nodepool1 --cluster-name okiru-pro-aks --node-count 2
+#   2. az aks update -g okiru-pro-rg -n okiru-pro-aks --network-policy azure
+#   3. kubectl apply -f kubernetes/infrastructure/base/network-policies.yaml
+#   4. Verify, with the commands at the end of this file.
+#
+# The default-deny rule below is first on purpose: with the engine running,
+# anything not explicitly allowed underneath it is refused.
 
 ---
-# Allow MongoDB traffic only from API, Web, and Compute
+# Nothing may reach any pod unless a rule below says so.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: okiru-pro
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+
+---
+# DNS, for everything. Without this rule the default-deny above breaks every
+# service in the namespace, because nothing can resolve a name. It is the rule
+# people forget, and the outage that follows is always blamed on something else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: okiru-pro
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Everything else the application legitimately reaches is outside the
+    # cluster: Azure OpenAI, Document Intelligence, blob storage, SMTP, PayFast.
+    # Egress to the internet stays open; this file is about what one workload
+    # can reach INSIDE the cluster.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              # Not the cluster's own pod and service ranges — that is what the
+              # ingress rules below are for — and not the cloud metadata
+              # endpoint, which hands out node identity tokens.
+              - 10.224.0.0/16
+              - 10.0.0.0/16
+              - 169.254.169.254/32
+
+---
+# The database is reachable only from the services that hold a connection
+# string, plus the backup job.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -39,12 +108,22 @@ spec:
         - podSelector:
             matchLabels:
               app: compute
+        - podSelector:
+            matchLabels:
+              app: parser
+        - podSelector:
+            matchLabels:
+              app: mongodb-backup
+        # The restore drill reads nothing from production, but it is listed so
+        # that a future drill that needs to compare against it is not a surprise.
+        - podSelector:
+            matchLabels:
+              app: mongodb-restore-drill
       ports:
         - protocol: TCP
           port: 27017
 
 ---
-# Allow Redis traffic only from API and Web
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -64,43 +143,15 @@ spec:
         - podSelector:
             matchLabels:
               app: web
+        - podSelector:
+            matchLabels:
+              app: parser
       ports:
         - protocol: TCP
           port: 6379
 
 ---
-# Allow API traffic from Ingress and Web pods
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: api-access
-  namespace: okiru-pro
-spec:
-  podSelector:
-    matchLabels:
-      app: api
-  policyTypes:
-    - Ingress
-  ingress:
-    # From ingress controller
-    - from:
-        - namespaceSelector:
-            matchLabels:
-              name: ingress-nginx
-      ports:
-        - protocol: TCP
-          port: 5000
-    # From web frontend (for internal API calls)
-    - from:
-        - podSelector:
-            matchLabels:
-              app: web
-      ports:
-        - protocol: TCP
-          port: 5000
-
----
-# Allow Web traffic only from Ingress
+# The public entry point. Only the ingress controller may reach it.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -116,13 +167,65 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              name: ingress-nginx
+              kubernetes.io/metadata.name: ingress-nginx
       ports:
         - protocol: TCP
           port: 5001
 
 ---
-# Allow Compute traffic from API only
+# The API is not public. The ingress sends some paths to it directly, and the
+# web proxy forwards others, so both are allowed — and nothing else is.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-access
+  namespace: okiru-pro
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: web
+      ports:
+        - protocol: TCP
+          port: 5000
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: parser-access
+  namespace: okiru-pro
+spec:
+  podSelector:
+    matchLabels:
+      app: parser
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: web
+        - podSelector:
+            matchLabels:
+              app: api
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -136,9 +239,32 @@ spec:
     - Ingress
   ingress:
     - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector:
+            matchLabels:
+              app: web
         - podSelector:
             matchLabels:
               app: api
       ports:
         - protocol: TCP
           port: 8000
+
+# --- Verifying that any of this is real ------------------------------------
+#
+# `kubectl get networkpolicy` proves nothing; the objects exist either way.
+# Check the engine, then check the behaviour:
+#
+#   az aks show -g okiru-pro-rg -n okiru-pro-aks \
+#     --query networkProfile.networkPolicy -o tsv          # must not be "none"
+#
+#   # Should FAIL once the policies are enforced: the parser has no business
+#   # opening a connection to the database.
+#   kubectl exec -n okiru-pro deploy/parser -- \
+#     timeout 5 sh -c 'echo > /dev/tcp/mongodb/27017' && echo "NOT ENFORCED" || echo "blocked"
+#
+#   # Should SUCCEED: the API is supposed to reach it.
+#   kubectl exec -n okiru-pro deploy/api -- \
+#     timeout 5 sh -c 'echo > /dev/tcp/mongodb/27017' && echo "allowed" || echo "BROKEN"
