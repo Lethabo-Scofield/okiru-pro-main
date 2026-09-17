@@ -1,0 +1,204 @@
+{
+  "outputFile": "Okiru_SuperGroup_Processing_Register.pdf",
+  "title": "Record of processing activities",
+  "subtitle": "Okiru as operator for Super Group — POPIA section 21 register",
+  "meta": "Processing register  ·  Version 1.0  ·  17 September 2026",
+  "stamp": "Okiru ESG Intelligence Platform · Record of processing activities · Super Group · v1.0 · 17 September 2026 · Commercial in confidence",
+  "intro": [
+    "This register records what personal information Okiru processes on Super Group's instruction, why, where it goes, how long it is kept and who can reach it. It is the per-client record that section 17 of POPIA expects a responsible party to be able to produce, prepared from the operator's side so that Super Group does not have to reconstruct it.",
+    "Super Group is the responsible party for the information listed here. Okiru is the operator, processing only on Super Group's documented instruction. Nothing in this register creates a purpose of our own."
+  ],
+  "verification": {
+    "label": "Scope of this register",
+    "body": "ESG and B-BBEE reporting for Super Group and its operating units. It covers personal information only — the great majority of what we process for Super Group is operational measurement (litres, kilowatt-hours, tonnes) that is not personal information at all, and is not listed here."
+  },
+  "sections": [
+    {
+      "kicker": "1 · Parties",
+      "title": "Who is responsible for what",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Role", "Party", "Responsibility"],
+          "widths": [22, 30, 48],
+          "rows": [
+            ["Responsible party", "Super Group", "Determines the purpose and means. Owns the lawful basis, data-subject relationships and any onward notification"],
+            ["Operator", "Okiru", "Processes only on Super Group's documented instruction. Maintains the section 19 security safeguards"],
+            ["Sub-operators", "Microsoft (Azure), Cloudflare", "Listed in section 5. No sub-operator is engaged without notice"],
+            ["Information Officer", "Super Group's appointed officer", "Okiru's own registration is recorded in section 7"]
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "2 · What is processed",
+      "title": "Categories of personal information, and why each one exists",
+      "blocks": [
+        {
+          "kind": "p",
+          "text": "Each category is here because a reporting standard or a scoring rule requires it. Where a count would do, we ask for a count — the register records the minimum that produces a defensible report, not everything the source system could supply."
+        },
+        {
+          "kind": "table",
+          "head": ["Category", "Data subjects", "Why it is needed", "Identifiability"],
+          "widths": [22, 20, 36, 22],
+          "rows": [
+            ["Platform user accounts", "Super Group staff using the platform", "To authenticate a person and record what they did", "Directly identifying — name, work email"],
+            ["Workforce composition", "Super Group employees", "B-BBEE management control and employment equity scoring, ESG diversity disclosure", "Aggregated counts by category. Not individually identifying"],
+            ["Skills development records", "Employees on training", "B-BBEE skills development scoring", "Counts and spend by category; individual records only where a scorecard requires proof"],
+            ["Health and safety incidents", "Employees involved", "Injury rates required by the ESG standards", "Counts and hours. No individual medical detail is requested or wanted"],
+            ["Ownership and directorship", "Shareholders, directors", "B-BBEE ownership scoring, governance disclosure", "Directly identifying — statutory records"],
+            ["Supplier contacts", "Supplier representatives", "Procurement scoring and B-BBEE verification", "Business contact detail only"],
+            ["Audit records", "Anyone acting on the platform", "Accountability — who touched what, when", "Directly identifying by design"]
+          ]
+        },
+        {
+          "kind": "callout",
+          "tone": "amber",
+          "label": "Special personal information",
+          "text": "Race is special personal information under section 26 of POPIA, and B-BBEE scoring cannot be produced without it. Section 27(1)(b) permits processing where it is required by law, and the B-BBEE Act and the Codes of Good Practice are that law. We process it as aggregated counts by designated group, never as individual records, and it is never used for any purpose other than producing the scorecard. Health information arising from safety incidents is limited to counts; we neither request nor want the underlying medical detail."
+        }
+      ]
+    },
+    {
+      "kicker": "3 · Where it is processed",
+      "title": "Systems, regions and transborder position",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Processing step", "System", "Region"],
+          "widths": [30, 40, 30],
+          "rows": [
+            ["Storage and computation", "Azure Kubernetes Service, MongoDB on encrypted managed disk", "South Africa North"],
+            ["Document storage", "Azure Blob Storage, customer-managed key", "South Africa North"],
+            ["Document reading", "Azure AI Document Intelligence", "South Africa North"],
+            ["Indexing and search", "Azure OpenAI embeddings, regional deployment", "South Africa North"],
+            ["Interpretation", "Azure OpenAI, Global Standard deployment", "Data at rest in South Africa; inference may transit another region"],
+            ["Public edge", "Cloudflare", "Global edge; terminates TLS, holds no application data"],
+            ["Backups", "Azure Blob Storage, customer-managed key", "South Africa North"],
+            ["Infrastructure logs", "Azure Log Analytics", "South Africa North"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "The one transborder element is the interpretation step, disclosed in full in section 3 of the security disclosure. It is a section 72 transfer and should be covered in the operator agreement. Everything else, including all storage, stays in the Republic."
+        }
+      ]
+    },
+    {
+      "kicker": "4 · Retention",
+      "title": "How long each category is kept",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Category", "Retention", "Basis"],
+          "widths": [28, 26, 46],
+          "rows": [
+            ["Platform user accounts", "Life of the account, then 90 days", "Operating the account; the 90 days allows a mistaken closure to be reversed"],
+            ["Authentication records", "Deleted with the account", "No reason to keep a credential beyond what it protects"],
+            ["Client business records", "Life of the engagement, then per Super Group's terms", "Super Group is the responsible party and sets this"],
+            ["Audit trail", "730 days", "Two annual audit cycles. Sealed and archived before deletion"],
+            ["Activity records", "365 days", "Support and capacity. Never used for profiling"],
+            ["Backups", "7 days in-cluster, 30 days off-cluster", "Recovery. A deletion takes effect immediately in the live system and works through backups within 30 days"],
+            ["Infrastructure logs", "730 days", "Incident reconstruction"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "Section 14 of POPIA requires that records not be kept longer than necessary for the purpose. \"For the life of the engagement\" is only a retention period if the engagement has an end, so the client-record row above should be given a number in the operator agreement."
+        }
+      ]
+    },
+    {
+      "kicker": "5 · Sub-operators",
+      "title": "Everyone else who touches it",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Sub-operator", "What they do", "Where", "Basis"],
+          "widths": [22, 32, 22, 24],
+          "rows": [
+            ["Microsoft (Azure)", "Hosting, storage, backup, AI services, logging", "South Africa North", "Azure enterprise agreement and Data Protection Addendum"],
+            ["Microsoft (Azure Communication Services)", "Transactional email — sign-in codes", "South Africa North", "As above"],
+            ["Cloudflare", "Public edge, TLS, denial-of-service protection", "Global edge", "Standard terms and Data Processing Addendum"]
+          ]
+        },
+        {
+          "kind": "bullets",
+          "items": [
+            "That list is complete. No analytics, advertising or third-party AI service receives Super Group data.",
+            "No sub-operator is added without notifying Super Group first.",
+            "Microsoft does not use Azure OpenAI customer content to train its models."
+          ]
+        }
+      ]
+    },
+    {
+      "kicker": "6 · Who can reach it",
+      "title": "Access, and how it is constrained",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Who", "What they can reach", "Control"],
+          "widths": [24, 40, 36],
+          "rows": [
+            ["Super Group users", "Their own organisation's records only", "Records scoped to the organisation and filtered on every read and write"],
+            ["Super Group administrators", "Their organisation, plus its audit trail and privacy requests", "Role checked server-side on every request"],
+            ["Okiru consulting staff", "Only clients they are assigned to", "Same organisation scoping. Cross-organisation access is a separate platform role held by named staff"],
+            ["Okiru platform staff", "Infrastructure, and client data where support requires it", "Azure role-based access control; every action recorded in the audit trail"],
+            ["Sub-operators", "Encrypted data only; no application-level access", "Encryption at rest with a customer-managed key we hold"]
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "Every access to client data by an Okiru person is recorded in the audit trail, which Super Group can retrieve for itself at any time as CSV or JSON. The trail is signed per record and sealed daily, so it can be checked for tampering rather than taken on trust."
+        }
+      ]
+    },
+    {
+      "kicker": "7 · Data-subject rights",
+      "title": "How a request is handled, and by whom",
+      "blocks": [
+        {
+          "kind": "table",
+          "head": ["Right", "How it is exercised", "Who answers"],
+          "widths": [26, 42, 32],
+          "rows": [
+            ["Access (s23)", "A platform user can download everything held about them, unassisted", "Okiru, immediately"],
+            ["Correction or deletion (s24)", "Lodged in the platform; recorded with a 30-day clock", "Super Group decides; Okiru executes"],
+            ["Objection (s11(3))", "As above", "Super Group decides"],
+            ["Erasure of a platform account", "An organisation administrator can erase a member", "Super Group, self-service"],
+            ["Complaint", "To Super Group's Information Officer, or the Information Regulator", "Super Group"]
+          ]
+        },
+        {
+          "kind": "callout",
+          "tone": "amber",
+          "label": "Why erasure does not delete the audit trail",
+          "text": "Erasing a person removes everything that identifies them, and keeps the audit records of what their account did with the actor reduced to an opaque identifier. Deleting those records instead would erase the evidence of processing that the accountability condition exists to preserve — a client could no longer prove who touched their data. The person is no longer identifiable from the trail; the processing history survives."
+        }
+      ]
+    },
+    {
+      "kicker": "8 · Security safeguards",
+      "title": "Section 19, in summary",
+      "blocks": [
+        {
+          "kind": "bullets",
+          "items": [
+            "Encryption at rest under a customer-managed key we hold and can revoke; TLS 1.2 or better in transit.",
+            "Two-factor authentication required for every account that can reach client data.",
+            "A web application firewall and rate limiting in front of every public endpoint.",
+            "An audit trail that is signed per record, sealed daily, and copied to storage under a 730-day immutability policy.",
+            "Nightly backups held twice, with a restore rehearsed and verified quarterly rather than assumed.",
+            "A written incident-response plan committing to notify the client within 24 hours of a confirmed or likely exposure."
+          ]
+        },
+        {
+          "kind": "p",
+          "text": "The full position, including what is not yet in place, is in the accompanying security and POPIA disclosure. This register is deliberately not the place to summarise gaps: that document lists them with a risk and a remediation, and the two should be read together."
+        }
+      ]
+    }
+  ]
+}

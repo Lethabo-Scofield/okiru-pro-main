@@ -1,0 +1,25 @@
+# Volumes encrypted with a key we hold, not one Microsoft holds.
+#
+# Azure encrypts every managed disk by default, with a platform-managed key.
+# That satisfies "encrypted at rest" and does not satisfy a client who wants to
+# know that the key protecting their data can be revoked by someone other than
+# the cloud provider. This class points the CSI driver at a disk encryption set
+# backed by a key in our own Key Vault (okiru-cmk-kv, purge protection on,
+# 90-day soft delete).
+#
+# The cluster identity needs Reader on the disk encryption set or provisioning
+# fails with LinkedAuthorizationFailed and the claim just sits Pending.
+#
+# reclaimPolicy is Retain on purpose: these carry the database. A deleted claim
+# should leave the disk behind for someone to look at, not take the data with it.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: managed-csi-cmk
+provisioner: disk.csi.azure.com
+parameters:
+  skuName: StandardSSD_LRS
+  diskEncryptionSetID: /subscriptions/b2bfd54a-f743-444a-a0e3-022d358600ef/resourceGroups/okiru-pro-rg/providers/Microsoft.Compute/diskEncryptionSets/okiru-des
+reclaimPolicy: Retain
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
