@@ -6,7 +6,6 @@ import {
   X, CheckCircle2, Pencil,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AppNavBack } from '@/components/AppNavBack';
 import { useAuth } from '@toolkit/lib/auth';
 import { CertificateEditForm } from '@/components/certificates/CertificateEditForm';
 import { certificateFormToPatchBody, type CertificateFormValues } from '@/components/certificates/CertificateUploadForm';
@@ -304,19 +303,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   }, [registryActionsAvailable, data?.id, reportReason, reportMessage, reportEmail, toast]);
 
   return (
-    <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <AppNavBack
-            href="/certificates"
-            eyebrow="Registry"
-            label="All certificates"
-            variant="dark"
-            size="compact"
-          />
-          <span className="text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate</span>
-        </div>
-      </header>
+    <div className="text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
 
       <main className="max-w-[860px] mx-auto px-5 pt-10 pb-20">
         {loading && (
@@ -349,7 +336,6 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               </p>
               <h1
                 className="text-white tracking-tight mb-4"
-                style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400, fontSize: 'clamp(2rem, 4.5vw, 3rem)', lineHeight: 1.1 }}
               >
                 {data.companyName}
               </h1>

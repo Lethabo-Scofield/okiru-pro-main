@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, ChevronRight, FileSearch, Loader2, Search, Upload } from "lucide-react";
-import { AppNavBack } from "@/components/AppNavBack";
-import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { PARSER_STATUS_PRESENTATION, type ParserDocumentSummary, type ParserStatus } from "@/lib/parserDocuments";
 
 interface LibraryResponse {
@@ -113,17 +111,7 @@ export default function ParserDocumentLibrary() {
   }), [documents]);
 
   return (
-    <div className="min-h-screen bg-black text-[#f5f5f7]">
-      <header className="sticky top-0 z-20 h-14 border-b border-[#2c2c2e] bg-black">
-        <div className="flex h-full items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4">
-            <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" />
-            <div className="hidden h-5 w-px bg-[#2c2c2e] sm:block" />
-            <span className="text-[15px] font-semibold text-white">Document Library</span>
-          </div>
-          <UserAccountMenu variant="dashboard" />
-        </div>
-      </header>
+    <div className="text-[#f5f5f7]">
 
       <main className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">

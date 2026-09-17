@@ -18,7 +18,6 @@ import PrivacyWrapper from "@/pages/PrivacyWrapper";
 import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
-import Dashboard from "@/pages/Dashboard";
 import BbbeeWorkspace from "@/pages/BbbeeWorkspace";
 import { AppShell } from "@/components/shell/AppShell";
 import EsgWorkspace from "@/pages/EsgWorkspace";
@@ -241,11 +240,11 @@ function AppRouter() {
       <Route path="/bbbee">
         <ProtectedRoute><BbbeeWorkspace /></ProtectedRoute>
       </Route>
-      {/* The old mixed list, kept so existing links and bookmarks still land
-          somewhere real. It shows both products behind a dropdown, which is
-          what the product workspaces replace. */}
+      {/* The old mixed list is gone — it showed both products behind a
+          dropdown, which is what gave neither a section of its own. Existing
+          links land on the B-BBEE workspace. */}
       <Route path="/dashboard">
-        <ProtectedRoute><Dashboard /></ProtectedRoute>
+        <ProtectedRoute><BbbeeWorkspace /></ProtectedRoute>
       </Route>
       <Route path="/create-scorecard/:companyId/summary">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>

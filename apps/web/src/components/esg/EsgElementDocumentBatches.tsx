@@ -436,7 +436,6 @@ export function EsgElementDocumentBatches({
           </p>
           <h4
             className="mt-2 text-[22px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-            style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
           >
             {satisfiedDocumentIds.length > 0 && totalTypes > 0
               ? `${totalCovered} of ${totalTypes} document types covered`

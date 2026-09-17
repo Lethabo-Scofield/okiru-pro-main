@@ -53,7 +53,6 @@ export function ExtractionConfidence({ injected, rowCount }: Props) {
           </p>
           <h4
             className="mt-2 text-[22px] font-semibold leading-none text-white"
-            style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
           >
             {rowCount} value{rowCount === 1 ? "" : "s"} placed
           </h4>

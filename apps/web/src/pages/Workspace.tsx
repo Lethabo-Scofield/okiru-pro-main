@@ -15,7 +15,6 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react";
-import { AppNavBack } from "@/components/AppNavBack";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { setPreferredWorkspaceId } from "@/lib/foundationApi";
 
@@ -364,27 +363,7 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header
-        className="h-14 sticky top-0 z-20 bg-background"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
-      >
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <AppNavBack
-            href="/hub"
-            eyebrow="Suite"
-            label="Hub"
-            variant="light"
-            size="compact"
-            data-testid="btn-back-hub"
-          />
-          <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
-            <Building2 className="h-4 w-4" />
-            Workspace
-          </div>
-          <div className="w-12" />
-        </div>
-      </header>
+    <div className="">
 
       <main className="max-w-[1100px] mx-auto px-6 py-10 space-y-6">
         <div className="space-y-1">

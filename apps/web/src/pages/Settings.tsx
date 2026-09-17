@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import { useAuth } from "@toolkit/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
-import { AppNavBack } from "@/components/AppNavBack";
 import { companyProfilePath } from "@/components/UserAccountMenu";
 import { formatTokens, useTokenBalance } from "@/components/TokenBalancePill";
 import type { TokenPack } from "../../shared/tokenPacks";
@@ -97,13 +96,7 @@ export default function Settings() {
   }, [requested, navigate]);
 
   return (
-    <div className="min-h-screen bg-[#08080a] text-white">
-      <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#08080a]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1080px] items-center gap-3 px-6 py-3">
-          <AppNavBack href="/hub" eyebrow="Suite" label="Hub" size="compact" />
-          <h1 className="ml-1 text-[15px] font-semibold text-[#e5e5ea]">Settings</h1>
-        </div>
-      </header>
+    <div className="text-white">
 
       <div className="mx-auto flex max-w-[1080px] flex-col gap-8 px-6 py-8 lg:flex-row">
         <nav className="lg:w-[212px] lg:shrink-0" aria-label="Settings sections">

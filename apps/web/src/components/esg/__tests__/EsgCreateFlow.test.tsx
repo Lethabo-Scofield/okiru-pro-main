@@ -91,8 +91,8 @@ import EsgCreateFlow from "../EsgCreateFlow";
 
 const FLOW_SRC = readFileSync(path.resolve(__dirname, "../EsgCreateFlow.tsx"), "utf8");
 const APP_SRC = readFileSync(path.resolve(__dirname, "../../../App.tsx"), "utf8");
-const SELECTOR_SRC = readFileSync(
-  path.resolve(__dirname, "../../../pages/EsgClientSelector.tsx"),
+const WORKSPACE_SRC = readFileSync(
+  path.resolve(__dirname, "../../../components/product/ProductWorkspace.tsx"),
   "utf8",
 );
 
@@ -337,9 +337,16 @@ describe("routing and the doors that must stay open", () => {
     expect(APP_SRC).not.toMatch(/EsgHubRedirect/);
   });
 
-  it("no longer offers naming-first company creation on the picker", () => {
-    expect(SELECTOR_SRC).not.toMatch(/method: "POST"/);
-    expect(SELECTOR_SRC).toMatch(/data-testid="button-esg-start-new"/);
+  /**
+   * Listing companies and creating one are separate jobs. The ESG picker used
+   * to do both, and its create path asked for a name before any document had
+   * been read. The workspace that replaced it only lists and links; every route
+   * into a new scorecard goes through the create flow.
+   */
+  it("never creates a company from the workspace listing", () => {
+    expect(WORKSPACE_SRC).not.toMatch(/method: 'POST'/);
+    expect(WORKSPACE_SRC).not.toMatch(/method: "POST"/);
+    expect(WORKSPACE_SRC).toMatch(/createHref = isEsg \? '\/esg\/new' : '\/bbbee\/new'/);
   });
 
   it("writes through the one workbook import path, never a second one", () => {

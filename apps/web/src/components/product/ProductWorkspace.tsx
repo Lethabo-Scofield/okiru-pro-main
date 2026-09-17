@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation } from 'wouter';
-import { Loader2, Search, Plus, Building2, FolderOpen } from 'lucide-react';
+import {
+  Loader2,
+  Search,
+  Building2,
+  FolderOpen,
+  FileUp,
+  FileSpreadsheet,
+  PencilLine,
+} from 'lucide-react';
 import { DeleteCompanyButton } from '@/components/DeleteCompanyButton';
 import { API_BASE } from '@toolkit/lib/config';
 import {
@@ -58,6 +66,34 @@ const COPY: Record<Product, { title: string; eyebrow: string; lead: string; empt
     empty: 'No ESG companies yet.',
   },
 };
+
+/**
+ * The three ways into a scorecard. Identical for both products — same order,
+ * same wording, same stated cost — because they are the same decision.
+ */
+const START_ROUTES = [
+  {
+    id: 'documents',
+    title: 'Upload documents',
+    icon: FileUp,
+    description: 'We read your evidence and fill the workbook from it.',
+    cost: 'Uses tokens',
+  },
+  {
+    id: 'excel',
+    title: 'Import a workbook',
+    icon: FileSpreadsheet,
+    description: 'Bring an Excel workbook you have already filled in.',
+    cost: 'Free',
+  },
+  {
+    id: 'manual',
+    title: 'Enter it yourself',
+    icon: PencilLine,
+    description: 'Open an empty workbook and complete each section.',
+    cost: 'Free',
+  },
+] as const;
 
 /** "12 Mar 2026", or empty when the timestamp is missing or unreadable. */
 function updatedLabel(iso: string | undefined): string {
@@ -180,30 +216,47 @@ export function ProductWorkspace({ product }: { product: Product }) {
     // draws what is underneath them.
     <div className="font-sans" data-testid={`workspace-${product}`}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-7">
-        <div className="flex items-start justify-between gap-4 mb-6">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-[#636366]">
-              {copy.eyebrow}
-            </div>
-            <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white mt-0.5">
-              {copy.title} companies
-            </h1>
-            <p className="text-[13px] text-[#98989f] mt-1">
-              {copy.lead}{' '}
-              <span className="text-[#636366]">
-                {loading ? '' : `${companies.length} total`}
-              </span>
-            </p>
-          </div>
-          <button
-            onClick={() => navigate(createHref)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white text-black text-[13px] font-semibold hover:bg-[#e5e5e7] transition-colors shrink-0"
-            data-testid="button-create-scorecard"
-          >
-            <Plus className="h-4 w-4" />
-            Create scorecard
-          </button>
+        <div className="mb-6">
+          <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
+            {copy.title} workspace
+          </h1>
+          <p className="text-[13px] text-[#98989f] mt-1">{copy.lead}</p>
         </div>
+
+        {/*
+          Starting a scorecard is the workspace's own job, not a button that
+          sends you somewhere else to be asked how. The three ways in are the
+          same three for both products, in the same order, with the cost of
+          each stated before it is chosen.
+        */}
+        <section className="mb-8" aria-labelledby="start-heading">
+          <h2
+            id="start-heading"
+            className="text-[11px] font-semibold uppercase tracking-wider text-[#636366] mb-2"
+          >
+            Start a scorecard
+          </h2>
+          <div className="grid gap-2 sm:grid-cols-3">
+            {START_ROUTES.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => navigate(`${createHref}?start=${r.id}`)}
+                className="group flex flex-col items-start gap-1 rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] px-4 py-3.5 text-left hover:border-[#48484a] transition-colors"
+                data-testid={`start-${r.id}`}
+              >
+                <span className="flex items-center gap-2 text-white">
+                  <r.icon className="h-4 w-4 text-[#98989f]" />
+                  <span className="text-[13px] font-medium">{r.title}</span>
+                </span>
+                <span className="text-[12px] text-[#8e8e93]">{r.description}</span>
+                <span className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#636366]">
+                  {r.cost}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
 
         <div className="flex flex-col sm:flex-row gap-3 sm:items-center mb-4">
           <div className="relative flex-1">

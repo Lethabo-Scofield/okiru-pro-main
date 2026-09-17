@@ -247,7 +247,6 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           </p>
           <h4
             className="mt-2 text-[22px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-            style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
           >
             {valuesRead} value{valuesRead === 1 ? "" : "s"} read · {placed.length} placed
           </h4>

@@ -27,8 +27,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle, Building2, Check, Download, FileWarning, Loader2, RefreshCw, Upload } from "lucide-react";
-import { AppNavBack } from "@/components/AppNavBack";
-import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { ExtractionReviewPane } from "@/components/upload/ExtractionReviewPane";
 import { PARSER_STATUS_PRESENTATION, fieldLabel, formatParserValue, type ParserDocumentSummary, type ParserRunDetail } from "@/lib/parserDocuments";
 
@@ -172,7 +170,19 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   const linkedClient = clients.find((c) => c.clientId === document.entityId);
 
   return <div className="min-h-screen bg-black text-[#f5f5f7]">
-    <header className="sticky top-0 z-20 h-14 border-b border-[#2c2c2e] bg-black"><div className="flex h-full items-center justify-between px-4 sm:px-6"><div className="flex min-w-0 items-center gap-4"><AppNavBack href="/documents" eyebrow="Library" label="Documents" variant="dark" /><div className="hidden h-5 w-px bg-[#2c2c2e] sm:block" /><span className="truncate text-[14px] font-medium text-white">{document.filename}</span></div><div className="flex items-center gap-2"><a href={`/api/parser-documents/${encodeURIComponent(id)}/download`} title="Download original" className="grid h-9 w-9 place-items-center text-[#d1d1d6] hover:bg-white/[0.06]"><Download className="h-4 w-4" /></a><UserAccountMenu variant="dashboard" /></div></div></header>
+    {/* The shell carries the trail back to the library and the account menu.
+        The file's name and its download are this page's own. */}
+    <div className="flex items-center justify-between gap-4 px-4 sm:px-6 pt-6 pb-2">
+      <h1 className="truncate text-[17px] font-semibold tracking-[-0.01em] text-white">{document.filename}</h1>
+      <a
+        href={`/api/parser-documents/${encodeURIComponent(id)}/download`}
+        title="Download original"
+        className="inline-flex items-center gap-1.5 shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1.5 text-[12px] font-medium text-[#e5e5e7] hover:bg-white/[0.14] transition-colors"
+      >
+        <Download className="h-3.5 w-3.5" />
+        Download
+      </a>
+    </div>
     <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
       <div className="mb-6 flex flex-col gap-4 border-b border-[#2c2c2e] pb-6 lg:flex-row lg:items-end lg:justify-between">
         <div>

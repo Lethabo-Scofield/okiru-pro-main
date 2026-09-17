@@ -84,7 +84,6 @@ export function EsgCreateReview({
       <div className="mb-6 text-center">
         <h2
           className="text-[30px] font-semibold leading-tight tracking-tight text-[var(--esg-text,#fff)]"
-          style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
         >
           Check this before we create it
         </h2>

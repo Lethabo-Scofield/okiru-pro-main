@@ -1560,23 +1560,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         .dus-stamp { animation: dusStamp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
       `}</style>
 
-      <div className="mb-5 text-center">
-        <h3
-          className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white"
-          style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-        >
+      {/* Left-aligned and at document scale. A 34px centred headline over a
+          working step read like a landing page rather than a step in an
+          assessment, which is what made the flow feel unserious. */}
+      <div className="mb-5">
+        <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
           {quote && !parserCase
             ? quote.paymentRequired === false
               ? "Review your documents"
               : "Review and pay"
             : "Add your documents"}
         </h3>
-        <p className="mx-auto mt-2 max-w-md text-[15px] leading-6 text-[#a1a1a6]">
+        <p className="mt-1.5 text-[13px] leading-5 text-[#98989f]">
           {quote && !parserCase
             ? quote.paymentRequired === false
-              ? "Processing is free. Review the documents below, then continue to read them."
-              : "This is what it costs to process your documents. Nothing is read until you pay."
-            : "Upload what you have. We will identify what is present, missing or needs review."}
+              ? "Processing is free. Review the documents below, then continue."
+              : "Nothing is read until you pay."
+            : "We identify what is present, what is missing and what needs review."}
         </p>
       </div>
 
@@ -1818,7 +1818,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   </p>
                   <h4
                     className="mt-2 text-[30px] font-semibold leading-none text-white"
-                    style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                   >
                     {charging && tokenCost
                       ? `${tokenText(tokenCost.tokens)} tokens`
@@ -2071,7 +2070,6 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </div>
             <h3
               className="text-[18px] text-white mb-1"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
               Upload documents
             </h3>
@@ -2079,8 +2077,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               Certificates, affidavits, spend schedules, EE reports — PDF, Word, Excel or scans.
               We read them, extract the real values, and build your scorecard.
             </p>
-            <p className="text-[13px] text-[#a1a1a6] mb-4 max-w-sm mx-auto leading-5">
-              Anything, from anywhere — or use the pillar batches below to send them a section at a time.
+            <p className="text-[13px] text-[#98989f] mb-4 max-w-sm mx-auto leading-5">
+              Certificates, affidavits, spend schedules, payroll and EE reports. Add
+              them together, or a pillar at a time using the batches below.
             </p>
             <button
               type="button"

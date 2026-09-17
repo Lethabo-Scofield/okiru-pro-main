@@ -9,8 +9,6 @@ import {
   Building2, Hash, Users2, Percent, CalendarClock, Eye, ExternalLink, ArrowRight,
 } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
-import { AppNavBack } from '@/components/AppNavBack';
-import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { gatedAuthPath } from '@/lib/authRoutes';
 import {
   CertificateUploadForm,
@@ -742,23 +740,28 @@ export default function CertificateHub() {
   const isAuthenticated = !!user && !authLoading;
 
   return (
-    <div className="h-screen overflow-y-auto bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+    <div className="text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
 
       {/* ─── Header ─────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+      {/* This page is public as well as signed-in. Signed in, the shell above
+          carries the wordmark, the trail and the account menu, so this bar
+          keeps only what belongs to the registry itself. Signed out there is
+          no shell, so it keeps the wordmark and the sign-in actions too. */}
+      <header
+        className={`sticky top-0 z-20 bg-black/90 backdrop-blur-md ${isAuthenticated ? 'border-b-0' : ''}`}
+        style={isAuthenticated ? undefined : { borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+      >
         <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           {isAuthenticated ? (
-            <AppNavBack href="/" label="Home" variant="dark" size="compact" />
+            <span className="text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate Registry</span>
           ) : (
-            <Link
-              href="/"
-              className="flex items-center gap-2"
-              style={{ fontFamily: "'Instrument Serif', serif", fontStyle: 'italic', fontSize: 20, color: '#fff' }}
-            >
+            <Link href="/" className="flex items-center gap-2 text-[16px] font-semibold text-white">
               Okiru
             </Link>
           )}
-          <span className="hidden sm:inline text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate Registry</span>
+          {!isAuthenticated && (
+            <span className="hidden sm:inline text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate Registry</span>
+          )}
           <div className="flex items-center gap-2">
             <button
               onClick={handleRefresh}
@@ -768,9 +771,6 @@ export default function CertificateHub() {
             >
               <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
-            {isAuthenticated && (
-              <UserAccountMenu variant="certificate" />
-            )}
             {isAuthenticated ? (
               <button
                 onClick={requireLoginToUpload}
@@ -902,7 +902,6 @@ export default function CertificateHub() {
           </p>
           <h1
             className="text-white tracking-tight"
-            style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400, fontSize: 'clamp(2.2rem, 5vw, 3.4rem)', lineHeight: 1.05 }}
           >
             {loading ? '…' : headlineCount.toLocaleString()} B-BBEE certificates
             <br />

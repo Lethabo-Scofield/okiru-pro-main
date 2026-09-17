@@ -6,7 +6,6 @@ import {
   CheckCircle2, Copy,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AppNavBack } from '@/components/AppNavBack';
 
 type Tab = 'verify' | 'reports' | 'duplicates' | 'analytics';
 
@@ -155,13 +154,7 @@ export default function AdminCertificates() {
   }, [loadAll, toast]);
 
   return (
-    <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <AppNavBack href="/hub" eyebrow="Suite" label="Hub" variant="dark" size="compact" />
-          <span className="text-[12px] text-[#636366] tracking-wide uppercase">Admin · Certificates</span>
-        </div>
-      </header>
+    <div className="text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
 
       <main className="max-w-[1100px] mx-auto px-5 pt-10 pb-20">
         <div className="mb-6">
@@ -170,7 +163,6 @@ export default function AdminCertificates() {
           </p>
           <h1
             className="text-white tracking-tight"
-            style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400, fontSize: 'clamp(1.8rem, 4vw, 2.6rem)', lineHeight: 1.1 }}
           >
             Registry control panel
           </h1>

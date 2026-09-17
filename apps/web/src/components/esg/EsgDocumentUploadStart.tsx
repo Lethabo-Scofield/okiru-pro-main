@@ -997,7 +997,7 @@ export function EsgDocumentUploadStart({
         .esg-fade-up { animation: esgFadeUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
       `}</style>
 
-      <div className="mb-5 text-center">
+      <div className="mb-5">
         {onBack && (
           <button
             type="button"
@@ -1009,22 +1009,21 @@ export function EsgDocumentUploadStart({
             Choose a different way to start
           </button>
         )}
-        <h3
-          className="text-[34px] font-semibold leading-[1.05] tracking-tight text-[var(--esg-text,#fff)]"
-          style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-        >
+        {/* Document scale, left aligned, matching the B-BBEE step exactly. A
+            34px centred headline over a working step read like a landing page. */}
+        <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--esg-text,#fff)]">
           {quote && !parserCase
             ? quote.paymentRequired === false
               ? "Review your documents"
               : "Review and process"
             : "Add your ESG evidence"}
         </h3>
-        <p className="mx-auto mt-2 max-w-md text-[15px] leading-6 text-[var(--esg-text2,#8e8e93)]">
+        <p className="mt-1.5 text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
           {quote && !parserCase
             ? quote.paymentRequired === false
-              ? "Processing is free. Review the documents below, then continue to read them."
-              : "This is what it costs to process your documents. Nothing is read until you spend."
-            : `Utility bills, fuel statements, waste manifests, certificates, registers and policies${companyName ? ` for ${companyName}` : ""}. We read them and tell you what is present, missing or needs review.`}
+              ? "Processing is free. Review the documents below, then continue."
+              : "Nothing is read until you spend."
+            : `Utility bills, fuel statements, waste manifests, certificates, registers and policies${companyName ? ` for ${companyName}` : ""}. We identify what is present, what is missing and what needs review.`}
         </p>
       </div>
 
@@ -1100,7 +1099,6 @@ export function EsgDocumentUploadStart({
                     </p>
                     <h4
                       className="mt-2 text-[30px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-                      style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                     >
                       {charging && tokenCost
                         ? `${tokenText(tokenCost.tokens)} tokens`
@@ -1365,12 +1363,11 @@ export function EsgDocumentUploadStart({
                 </div>
                 <h3
                   className="mb-1 text-[18px] text-[var(--esg-text,#fff)]"
-                  style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                 >
                   Upload documents
                 </h3>
                 <p className="mx-auto mb-4 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
-                  Anything, from anywhere — or use the element batches below to send them a subject at
+                  Utility bills, fuel statements, waste manifests and registers. Add them together, or an element at
                   a time.
                 </p>
                 <button

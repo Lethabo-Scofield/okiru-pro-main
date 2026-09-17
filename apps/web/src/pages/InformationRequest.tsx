@@ -16,10 +16,7 @@ import { isSuperAdmin } from "@/lib/roles";
 import { LAKE_TRADING_DEMO_NAME } from "@/lib/lakeTradingWorkbookFixture";
 import { useToast } from "@/hooks/use-toast";
 import { API_BASE } from "@toolkit/lib/config";
-import { AppNavBack } from "@/components/AppNavBack";
-import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { DeleteCompanyButton } from "@/components/DeleteCompanyButton";
-import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import {
   getSection,
   getCompanyInfoMetaFields,
@@ -328,7 +325,6 @@ function SetupShell({
             <div className="mb-8 text-center">
               <h2
                 className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white sm:text-[44px]"
-                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
               >
                 {title}
               </h2>
@@ -361,7 +357,23 @@ function CompanyPicker({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewResult, setPreviewResult] = useState<ExcelExtractionResult | null>(null);
   const [pendingSections, setPendingSections] = useState<WorkbookSectionsInput | null>(null);
-  const [setupMethod, setSetupMethod] = useState<"choose" | "upload" | "manual" | "excel">("choose");
+  /**
+   * The workspace names the route on the way in (`?start=documents|manual`),
+   * because that is where the three ways in are now offered. Being asked to
+   * choose again, having just chosen, is what makes a flow feel like paperwork.
+   * Excel is not pre-selectable: it needs a file, so the chooser still renders
+   * its file input.
+   */
+  const preChosen = (() => {
+    if (typeof window === "undefined") return null;
+    const start = new URLSearchParams(window.location.search).get("start");
+    if (start === "documents") return "upload" as const;
+    if (start === "manual") return "manual" as const;
+    return null;
+  })();
+  const [setupMethod, setSetupMethod] = useState<"choose" | "upload" | "manual" | "excel">(
+    preChosen ?? "choose",
+  );
   const { toast } = useToast();
   const loadClientData = useBbeeStore((s) => s.loadClientData);
   const showLakeDemo = isSuperAdmin(user);
@@ -800,7 +812,6 @@ function CompanyPicker({
               <div>
                 <h2
                   className="text-[26px] sm:text-[32px] font-semibold tracking-tight text-white leading-tight"
-                  style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                 >
                   Create scorecard
                 </h2>
@@ -1003,7 +1014,6 @@ function CompanyPicker({
           <div>
             <h2
               className="text-[22px] font-semibold text-white tracking-tight leading-tight"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
               Create scorecard
             </h2>
@@ -2473,9 +2483,18 @@ export default function InformationRequest() {
   const params = useParams<{ companyId?: string }>();
   const [location, navigate] = useLocation();
   const [picked, setPicked] = useState<Company | null>(null);
-  const basePath = location.startsWith("/create-scorecard") ? "/create-scorecard" : "/information-request";
-  const pageTitle = basePath === "/create-scorecard" ? "Create Scorecard" : "Information Request";
-  const isCreateScorecardFlow = basePath === "/create-scorecard";
+  // `/bbbee/new` is where starting a scorecard lives now, alongside `/esg/new`.
+  // Recognising only `/create-scorecard` here sent it to the legacy picker —
+  // a page headed "Company Assessment Workbook" with a name box and a company
+  // list, which is a different screen from the one ESG shows for the same act.
+  const isCreateScorecardFlow =
+    location.startsWith("/create-scorecard") || location.startsWith("/bbbee/new");
+  const basePath = location.startsWith("/bbbee/new")
+    ? "/bbbee/new"
+    : location.startsWith("/create-scorecard")
+      ? "/create-scorecard"
+      : "/information-request";
+  const pageTitle = isCreateScorecardFlow ? "Create Scorecard" : "Information Request";
   const isSummaryStep = isCreateScorecardFlow && /\/summary\/?$/.test(location);
   // Provisional live-score page — the destination of the document-upload flow.
   const isEstimateStep = isCreateScorecardFlow && /\/estimate\/?$/.test(location);
@@ -2584,41 +2603,13 @@ export default function InformationRequest() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: "1px solid #2c2c2e" }}>
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <AppNavBack
-              href={backHref}
-              eyebrow="Back"
-              label={backLabel}
-              variant="dark"
-              className="shrink-0"
-            />
-            <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block" />
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-[8px] bg-violet-500/15 border border-violet-400/30 flex items-center justify-center shrink-0">
-                <img
-                  src={logoCircle}
-                  alt="Okiru"
-                  className="h-5 w-5 rounded-[6px] object-contain"
-                  style={{
-                    filter:
-                      "brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(245deg) brightness(98%) contrast(98%)",
-                  }}
-                />
-              </div>
-              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">
-                {pageTitle}
-              </span>
-            </div>
-          </div>
-          <UserAccountMenu variant="dashboard" />
-        </div>
-      </header>
+    <div className="text-white">
 
-      <main className={basePath === "/create-scorecard" && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
-        {!isSummaryStep && !picked && basePath !== "/create-scorecard" && (
+      <main className={isCreateScorecardFlow && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
+        {/* The flow states its own step ("Add your documents"). A second,
+            larger title above it competed with that and said something else
+            again. It survives only on the retired /information-request path. */}
+        {!isSummaryStep && !picked && !isCreateScorecardFlow && (
           <div className="mb-10 max-w-3xl">
             <div className="flex items-center gap-2 mb-4 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80" />
@@ -2626,7 +2617,6 @@ export default function InformationRequest() {
             </div>
             <h1
               className="text-[40px] sm:text-[52px] font-semibold tracking-tight text-white leading-[1.04]"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
               Company Assessment Workbook
             </h1>
