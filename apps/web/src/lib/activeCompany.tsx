@@ -8,31 +8,19 @@ const LEGACY_ESG_KEY = "okiru-esg-active-company";
 
 export interface ActiveCompany { id: string; name: string; }
 type CompanyResponse = { clientId?: string; id?: string; name?: string };
-type ClientListResponse = CompanyResponse[] | { items?: CompanyResponse[] };
 type ActiveCompanyContextValue = { activeCompany: ActiveCompany | null; companies: ActiveCompany[]; loading: boolean; refreshCompanies: () => Promise<void>; selectCompany: (company: ActiveCompany) => void; clearActiveCompany: () => void; };
 const ActiveCompanyContext = createContext<ActiveCompanyContextValue | null>(null);
 
 export function getStoredActiveCompanyId(): string {
-  try {
-    const raw = localStorage.getItem(ACTIVE_COMPANY_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as ActiveCompany;
-      if (parsed?.id) return parsed.id;
-    }
-    return localStorage.getItem(LEGACY_SCORECARD_KEY) || localStorage.getItem(LEGACY_ESG_KEY) || "";
-  } catch {
-    return "";
-  }
+  try { return localStorage.getItem(ACTIVE_COMPANY_KEY) || localStorage.getItem(LEGACY_SCORECARD_KEY) || ""; } catch { return ""; }
 }
 
 export function persistActiveCompany(company: ActiveCompany): void {
   try {
-    const existing = readStoredCompany();
-    const normalized = { id: company.id, name: company.name || existing?.name || "" };
-    localStorage.setItem(ACTIVE_COMPANY_KEY, JSON.stringify(normalized));
+    localStorage.setItem(ACTIVE_COMPANY_KEY, JSON.stringify(company));
     // Preserve existing deep-link behaviour while it migrates to this context.
-    localStorage.setItem(LEGACY_SCORECARD_KEY, normalized.id);
-    localStorage.setItem(LEGACY_ESG_KEY, normalized.id);
+    localStorage.setItem(LEGACY_SCORECARD_KEY, company.id);
+    localStorage.setItem(LEGACY_ESG_KEY, company.id);
   } catch { /* private browsing can reject storage */ }
 }
 
@@ -55,9 +43,8 @@ export function ActiveCompanyProvider({ children }: { children: React.ReactNode 
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE}/api/clients`, { credentials: "include" });
-      const data = (response.ok ? await response.json() : []) as ClientListResponse;
-      const records = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
-      const next = records.map((company) => ({ id: company.clientId || company.id || "", name: company.name || "" })).filter((company: ActiveCompany) => company.id && company.name);
+      const data = response.ok ? await response.json() : [];
+      const next = (Array.isArray(data) ? data : []).map((company: CompanyResponse) => ({ id: company.clientId || company.id || "", name: company.name || "" })).filter((company: ActiveCompany) => company.id && company.name);
       setCompanies(next);
       const stored = readStoredCompany();
       const valid = stored ? next.find((company) => company.id === stored.id) : undefined;
