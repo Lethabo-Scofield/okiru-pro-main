@@ -2568,7 +2568,13 @@ export async function registerRoutes(
         financialYearEnd,
         product,
       };
-      const fieldErrors = validateNewClient(draft);
+      // The year end is not demanded here: an Excel import arrives with
+      // whatever the client's workbook held, and refusing at this point leaves
+      // the user nowhere to fix it — the company does not exist yet. The
+      // workbook's own submit refuses to CALCULATE without one, which is the
+      // gate that matters. A year end supplied in the wrong shape is still
+      // rejected.
+      const fieldErrors = validateNewClient(draft, { requireFinancialYearEnd: false });
       if (fieldErrors.length) {
         return res.status(400).json({
           error: fieldErrors[0].message,

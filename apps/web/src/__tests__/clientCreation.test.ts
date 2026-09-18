@@ -102,6 +102,45 @@ describe("the financial year end", () => {
   });
 });
 
+/**
+ * Where the two callers differ, and why.
+ *
+ * The create FORM asks for a year end: that is the moment someone has the
+ * answer in front of them. The ENDPOINT does not demand one, because an Excel
+ * import arrives with whatever the client's workbook held — and refusing there
+ * strands the user, since the company does not exist yet and there is no
+ * workbook to go and fix the field in.
+ *
+ * Nothing is lost by the softer rule. The workbook refuses to CALCULATE without
+ * a year end, and that is the gate the review asked for.
+ */
+describe("the year end, demanded by the form and not by the endpoint", () => {
+  it("is required by default, which is what the form uses", () => {
+    expect(fieldsIn({ ...complete, financialYearEnd: "" })).toEqual(["financialYearEnd"]);
+  });
+
+  it("can be left out when the caller says so, which is what the import path uses", () => {
+    const errors = validateNewClient(
+      { ...complete, financialYearEnd: "" },
+      { requireFinancialYearEnd: false },
+    );
+    expect(errors).toEqual([]);
+  });
+
+  /** Absent is allowed; wrong is not, whoever is asking. */
+  it("is still rejected when supplied in the wrong shape, either way", () => {
+    for (const options of [{}, { requireFinancialYearEnd: false }]) {
+      const errors = validateNewClient({ ...complete, financialYearEnd: "28 Feb 2026" }, options);
+      expect(errors.map((e) => e.field)).toEqual(["financialYearEnd"]);
+    }
+  });
+
+  it("never relaxes the other three", () => {
+    const errors = validateNewClient({ name: "Acme" }, { requireFinancialYearEnd: false });
+    expect(errors.map((e) => e.field)).toEqual(["sectorCode", "scorecardType"]);
+  });
+});
+
 describe("an ESG company", () => {
   /**
    * ESG is not measured against a B-BBEE code. Demanding a sector and a

@@ -167,9 +167,16 @@ describeApi('Auth API - registration validation', () => {
   });
 
   it('rejects a long password that uses too few character classes', async () => {
+    // Twelve lower-case letters and nothing else: long enough to clear the
+    // floor, short of sixteen, so the class rule is what has to catch it.
+    //
+    // NOT "passwordpass" — the common-password list matches on substrings, so
+    // that was rejected for containing "password" and the test passed on the
+    // wrong error. The same masking hid it a second time: this whole block was
+    // rate-limited into skipping, and the skip read as green.
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ password: 'passwordpass', email: 'x2@okiru.co.za', fullName: 'X' }),
+      body: JSON.stringify({ password: 'ngwenyamabuza', email: 'x2@okiru.co.za', fullName: 'X' }),
     });
 
     assertValidationRejected(status, body, 'three of');
@@ -192,10 +199,12 @@ describeApi('Auth API - registration validation', () => {
   it('rejects a missing full name', async () => {
     // A password that PASSES every rule, so the only thing left to reject is
     // the missing name. The old value failed complexity and this test passed
-    // on the wrong error for months.
+    // on the wrong error for months; its replacement, 'Str0ng!Passw0rd',
+    // normalises to "strongpassword" and was caught by the common-password
+    // substring rule instead. Third time: no banned word inside it.
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ password: 'Str0ng!Passw0rd', email: 'z@okiru.co.za' }),
+      body: JSON.stringify({ password: 'Mkhize!Ngwenya7', email: 'z@okiru.co.za' }),
     });
 
     assertValidationRejected(status, body, 'required');

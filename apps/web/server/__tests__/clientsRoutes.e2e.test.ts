@@ -209,9 +209,28 @@ describe("POST /api/clients + GET round-trip", () => {
     expect(res.body.fields.map((f: any) => f.field)).toContain("sectorCode");
   });
 
-  it("rejects a company with no financial year end", async () => {
+  /**
+   * The year end is the one of the four this endpoint does NOT demand.
+   *
+   * An Excel import arrives with whatever the client's workbook held, and
+   * refusing here would strand the user — the company does not exist yet, so
+   * there is no workbook in which to go and supply it. The create form asks for
+   * it, and the workbook refuses to CALCULATE without one, which is the gate
+   * that actually protects the score.
+   */
+  it("accepts a company with no financial year end, so an import is not stranded", async () => {
     const { financialYearEnd, ...withoutYearEnd } = NEW_COMPANY;
-    const res = await aliceAgent.post("/api/clients").send(withoutYearEnd);
+    const res = await aliceAgent
+      .post("/api/clients")
+      .send({ ...withoutYearEnd, name: "Imported Co" });
+    expect(res.status).toBe(200);
+    expect(res.body.financialYearEnd).toBeNull();
+  });
+
+  it("still rejects a financial year end in the wrong shape", async () => {
+    const res = await aliceAgent
+      .post("/api/clients")
+      .send({ ...NEW_COMPANY, name: "Bad Date Co", financialYearEnd: "28 Feb 2026" });
     expect(res.status).toBe(400);
     expect(res.body.fields.map((f: any) => f.field)).toContain("financialYearEnd");
   });

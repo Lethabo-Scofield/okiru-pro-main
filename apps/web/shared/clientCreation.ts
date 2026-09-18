@@ -64,6 +64,23 @@ export interface NewClientDraft {
   product?: unknown;
 }
 
+export interface ValidateOptions {
+  /**
+   * Whether a missing year end refuses the company outright.
+   *
+   * The create FORM asks for it, because that is the moment someone has the
+   * answer in front of them. The ENDPOINT does not, because an Excel import
+   * arrives with whatever the client's workbook held, and refusing there would
+   * strand the user: the company does not exist yet, so there is no workbook
+   * to go and fix the field in. A year end supplied badly is still rejected
+   * either way.
+   *
+   * Nothing is lost by the softer rule — the workbook cannot be calculated
+   * without a year end, and that gate is what the meeting asked for.
+   */
+  requireFinancialYearEnd?: boolean;
+}
+
 export interface ClientFieldError {
   field: "name" | "sectorCode" | "scorecardType" | "financialYearEnd" | "product";
   message: string;
@@ -99,7 +116,11 @@ export function isFinancialYearEndValid(value: unknown): boolean {
  * Returns them all rather than the first, so the form can mark each field at
  * once instead of revealing the next problem after every attempt.
  */
-export function validateNewClient(draft: NewClientDraft): ClientFieldError[] {
+export function validateNewClient(
+  draft: NewClientDraft,
+  options: ValidateOptions = {},
+): ClientFieldError[] {
+  const requireYearEnd = options.requireFinancialYearEnd !== false;
   const errors: ClientFieldError[] = [];
 
   const product = text(draft.product).toLowerCase() || "bbbee";
@@ -142,7 +163,9 @@ export function validateNewClient(draft: NewClientDraft): ClientFieldError[] {
   }
 
   if (!text(draft.financialYearEnd)) {
-    errors.push({ field: "financialYearEnd", message: "Financial year end is required." });
+    if (requireYearEnd) {
+      errors.push({ field: "financialYearEnd", message: "Financial year end is required." });
+    }
   } else if (!isFinancialYearEndValid(draft.financialYearEnd)) {
     errors.push({ field: "financialYearEnd", message: "Financial year end must be a date, as YYYY-MM-DD." });
   }
