@@ -65,6 +65,22 @@ export interface BulkImportSpec<T> {
   toEntity: (row: ParsedRow) => T;
   /** What makes two records the same record, for the second upload. */
   identity: (entity: T) => string;
+  /**
+   * How a repeated record reads in the duplicate warning. Falls back to the
+   * identity string, which is machine-shaped and not much use to a person.
+   */
+  duplicateLabel?: (entity: T) => string;
+  /**
+   * Amount field to add together when two rows are the same record.
+   *
+   * Only for registers where a repeat is usually a second real transaction
+   * rather than a re-typed row: a supplier on two invoice lines, a beneficiary
+   * paid twice. Dropping the second row there would take real spend out of the
+   * total, which lowers a score built on correct data. Registers without this
+   * keep the first row and discard the rest, which is what a re-typed person
+   * calls for.
+   */
+  duplicateAmountField?: keyof T & string;
   /** How a record reads in the preview table. */
   describe: (entity: T) => string[];
   /** Column headings for that preview table. */
@@ -239,6 +255,7 @@ const ownership: BulkImportSpec<Shareholder> = {
     };
   },
   identity: (s) => s.name.toLowerCase(),
+  duplicateLabel: (s) => s.name,
   previewColumns: ["Shareholder", "Voting %", "Economic %", "Black %"],
   describe: (s) => [
     s.name,
@@ -270,6 +287,7 @@ const managementControl: BulkImportSpec<Employee> = {
     votingRightsPercent: pct(row.votingRights) || undefined,
   }),
   identity: (e) => `${e.name.toLowerCase()}|${(e.idNumber ?? "").toLowerCase()}`,
+  duplicateLabel: (e) => e.name,
   previewColumns: ["Name", "Designation", "Race", "Gender"],
   describe: (e) => [e.name, e.designation, e.race, e.gender],
 };
@@ -342,6 +360,7 @@ const skillsDevelopment: BulkImportSpec<TrainingProgram> = {
     } as TrainingProgram;
   },
   identity: (p) => `${p.learnerName.toLowerCase()}|${p.programName.toLowerCase()}`,
+  duplicateLabel: (p) => `${p.learnerName} — ${p.programName}`,
   previewColumns: ["Learner", "Programme", "Category", "Cost"],
   describe: (p) => [p.learnerName, p.programName, p.categoryCode, `${p.totalCost}`],
 };
@@ -381,6 +400,9 @@ const procurement: BulkImportSpec<Supplier> = {
     spend: num(row.spend),
   }),
   identity: (s) => s.name.toLowerCase(),
+  duplicateLabel: (s) => s.name,
+  // Two lines for one supplier are usually two invoices against one account.
+  duplicateAmountField: "spend",
   previewColumns: ["Supplier", "Spend", "B-BBEE level", "Black %"],
   describe: (s) => [s.name, `${s.spend}`, s.beeLevel ? `${s.beeLevel}` : "—", `${s.blackOwnership}`],
 };
@@ -432,6 +454,8 @@ function contributionSpec(
       } as Contribution;
     },
     identity: (c) => `${c.beneficiary.toLowerCase()}|${c.amount}`,
+    duplicateLabel: (c) => c.beneficiary,
+    duplicateAmountField: "amount",
     previewColumns: ["Beneficiary", "Amount", "Type", "Classified as"],
     describe: (c) => [
       c.beneficiary,
@@ -503,6 +527,7 @@ const yes: BulkImportSpec<TrainingProgram> = {
     } as TrainingProgram;
   },
   identity: (p) => `${p.learnerName.toLowerCase()}|${(p.learnerIdNumber ?? "").toLowerCase()}`,
+  duplicateLabel: (p) => p.learnerName,
   previewColumns: ["Candidate", "Race", "Gender", "Black youth"],
   describe: (p) => [p.learnerName, p.race, p.gender, p.isBlack ? "Yes" : "No"],
 };

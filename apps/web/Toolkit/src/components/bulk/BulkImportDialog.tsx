@@ -22,6 +22,7 @@ import {
 } from "@/lib/certificateAutofill";
 import { downloadSectionTemplate } from "@/lib/informationRequestTemplate";
 import { CertificatePreview } from "@/components/certificates/CertificatePreview";
+import { describeDuplicates, findDuplicates, mergeByAmount } from "@/lib/duplicateRows";
 import type { BulkImportSpec, ParsedRow } from "./bulkImportSpecs";
 
 /**
@@ -89,6 +90,15 @@ export function BulkImportDialog<T>({
    */
   const [certMatches, setCertMatches] = useState<SupplierMatchResult[] | null>(null);
   /**
+   * Whether to collapse rows that repeat within this sheet.
+   *
+   * Off by default. A repeated row is usually a mistake but it is not always
+   * one — two invoice lines for a supplier, two payments to a beneficiary —
+   * and quietly folding a real second transaction takes spend out of a total
+   * that was correct.
+   */
+  const [collapseDuplicates, setCollapseDuplicates] = useState(false);
+  /**
    * The certificate being looked at.
    *
    * A match fills in a level and an expiry, and both move the score. Being
@@ -126,6 +136,7 @@ export function BulkImportDialog<T>({
     setCertError(null);
     setUseCertificates(true);
     setUseFuzzyMatches(false);
+    setCollapseDuplicates(false);
   }, []);
 
   const existingIds = useMemo(
@@ -187,26 +198,51 @@ export function BulkImportDialog<T>({
     return { rows: applied.rows, report: applied.report };
   }, [read, certMatches, useCertificates, useFuzzyMatches]);
 
-  const outcome = useMemo<Outcome<T> | null>(() => {
+  /**
+   * Rows that repeat WITHIN this sheet.
+   *
+   * The import already compared the sheet against what the company holds —
+   * that is what separates "new" from "update". It never compared the sheet
+   * against itself, so the same supplier on two lines was imported twice, and
+   * every pillar inflates in the company's favour when that happens.
+   */
+  const duplicates = useMemo(() => {
     if (!read) return null;
+    const entities = (enriched.rows as ParsedRow[])
+      .filter((row) => !spec.requiredKeys.some((k) => String(row[k] ?? "").trim() === ""))
+      .map((row) => spec.toEntity(row));
+    return findDuplicates(entities, {
+      identityOf: spec.identity,
+      labelOf: spec.duplicateLabel,
+      merge: spec.duplicateAmountField
+        ? mergeByAmount<T>(spec.duplicateAmountField)
+        : undefined,
+    });
+  }, [read, enriched, spec]);
+
+  const outcome = useMemo<Outcome<T> | null>(() => {
+    if (!read || !duplicates) return null;
+
+    const rows = enriched.rows as ParsedRow[];
+    const skipped = rows.filter((row) =>
+      spec.requiredKeys.some((k) => String(row[k] ?? "").trim() === ""),
+    ).length;
+
+    const entities = collapseDuplicates
+      ? duplicates.deduped
+      : rows
+          .filter((row) => !spec.requiredKeys.some((k) => String(row[k] ?? "").trim() === ""))
+          .map((row) => spec.toEntity(row));
 
     const added: T[] = [];
     const updated: T[] = [];
-    let skipped = 0;
-
-    for (const row of enriched.rows as ParsedRow[]) {
-      const missing = spec.requiredKeys.some((k) => String(row[k] ?? "").trim() === "");
-      if (missing) {
-        skipped += 1;
-        continue;
-      }
-      const entity = spec.toEntity(row);
+    for (const entity of entities) {
       if (existingIds.has(spec.identity(entity))) updated.push(entity);
       else added.push(entity);
     }
 
     return { added, updated, skipped, read };
-  }, [read, enriched, spec, existingIds]);
+  }, [read, enriched, spec, existingIds, duplicates, collapseDuplicates]);
 
   const handleFile = useCallback(
     async (file: File | undefined) => {
@@ -686,6 +722,56 @@ export function BulkImportDialog<T>({
                   ))}
                 </div>
               </>
+            )}
+
+            {/* The same record twice in one sheet. Shown before the import,
+                because afterwards it is two rows in a register that look like
+                two real ones — and every pillar inflates in the company's
+                favour when it happens. */}
+            {duplicates && duplicates.groups.length > 0 && (
+              <div
+                className="rounded border border-amber-500/40 bg-amber-500/[0.05] p-2.5"
+                data-testid="duplicate-warning"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-amber-500">
+                      {describeDuplicates(duplicates, spec.noun)}
+                    </p>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={collapseDuplicates}
+                        onChange={(e) => setCollapseDuplicates(e.target.checked)}
+                        className="mt-0.5"
+                        data-testid="collapse-duplicates"
+                      />
+                      <span className="text-[11px] text-muted-foreground">
+                        {spec.duplicateAmountField
+                          ? `Import one record each and add the ${spec.duplicateAmountField}s together. Leave this unticked if they are genuinely separate entries.`
+                          : "Import one record each, keeping the first of every repeat."}
+                      </span>
+                    </label>
+                    <div className="mt-2 max-h-[110px] overflow-y-auto">
+                      <table className="w-full text-[11px]">
+                        <tbody>
+                          {duplicates.groups.slice(0, 8).map((group) => (
+                            <tr key={group.key} className="border-t border-amber-500/20">
+                              <td className="max-w-[240px] truncate px-2 py-1">
+                                {group.label || "unnamed"}
+                              </td>
+                              <td className="px-2 py-1 text-muted-foreground">
+                                rows {group.positions.join(", ")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
 
             <div className="flex justify-between gap-2">
