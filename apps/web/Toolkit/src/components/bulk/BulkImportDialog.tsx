@@ -90,6 +90,18 @@ export function BulkImportDialog<T>({
   const [certLoading, setCertLoading] = useState(false);
   const [certError, setCertError] = useState<string | null>(null);
   const [useCertificates, setUseCertificates] = useState(true);
+  /**
+   * Matches made on a NAME that only resembles the supplier's, applied only if
+   * asked for.
+   *
+   * A registration number identifies a company; a similar name guesses at one.
+   * The registry matched "Interloc Freight Services (PTY) LTD" to a supplier
+   * called "Interlink Freight Services" — a different company, and taking its
+   * B-BBEE level would have put a wrong level on a real supplier and moved the
+   * score. Off by default, and shown with both names side by side so the guess
+   * is visible rather than buried.
+   */
+  const [useFuzzyMatches, setUseFuzzyMatches] = useState(false);
 
   const reset = useCallback(() => {
     setStep("choose");
@@ -102,6 +114,7 @@ export function BulkImportDialog<T>({
     setCertLoading(false);
     setCertError(null);
     setUseCertificates(true);
+    setUseFuzzyMatches(false);
   }, []);
 
   const existingIds = useMemo(
@@ -156,9 +169,12 @@ export function BulkImportDialog<T>({
     if (!useCertificates || !certMatches || certMatches.length === 0) {
       return { rows: read.rows, report: null };
     }
-    const applied = applyCertificateMatches(read.rows as ProcurementRow[], certMatches);
+    const accepted = certMatches.filter(
+      (m) => m.match && (useFuzzyMatches || m.match.basis !== "name-fuzzy"),
+    );
+    const applied = applyCertificateMatches(read.rows as ProcurementRow[], accepted);
     return { rows: applied.rows, report: applied.report };
-  }, [read, certMatches, useCertificates]);
+  }, [read, certMatches, useCertificates, useFuzzyMatches]);
 
   const outcome = useMemo<Outcome<T> | null>(() => {
     if (!read) return null;
@@ -226,6 +242,22 @@ export function BulkImportDialog<T>({
     onOpenChange(false);
     reset();
   }, [outcome, mode, onImport, onOpenChange, reset, spec.noun, fileName, toast]);
+
+  /** Supplier name per parsed row, so a match can be shown against its row. */
+  const supplierNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of (read?.rows ?? []) as ProcurementRow[]) {
+      map.set(String(row._id), String(row.supplierName ?? "").trim());
+    }
+    return map;
+  }, [read]);
+
+  const confidentMatches = (certMatches ?? []).filter(
+    (m) => m.match && m.match.basis !== "name-fuzzy",
+  );
+  const fuzzyMatches = (certMatches ?? []).filter(
+    (m) => m.match && m.match.basis === "name-fuzzy",
+  );
 
   const recognised = outcome
     ? outcome.read.headers.filter((h, i) => h && outcome.read.mappedKeys[i])
@@ -409,12 +441,12 @@ export function BulkImportDialog<T>({
                           />
                           <span className="text-xs">
                             <span className="font-medium">
-                              Found certificates for {certMatches.filter((m) => m.match).length} of{" "}
-                              {certMatches.length} suppliers.
+                              Identified {confidentMatches.length} of {certMatches.length} suppliers
+                              in our registry.
                             </span>{" "}
                             <span className="text-muted-foreground">
-                              Fill in their B-BBEE level and expiry date from our registry. Values
-                              already in your sheet are kept.
+                              Matched on registration number or exact name. Fill in their B-BBEE
+                              level and expiry date; values already in your sheet are kept.
                             </span>
                           </span>
                         </label>
@@ -424,18 +456,21 @@ export function BulkImportDialog<T>({
                             <table className="w-full text-[11px]">
                               <thead className="bg-muted/50">
                                 <tr>
-                                  <th className="px-2 py-1.5 text-left font-medium">Supplier</th>
+                                  <th className="px-2 py-1.5 text-left font-medium">Your supplier</th>
+                                  <th className="px-2 py-1.5 text-left font-medium">Matched to</th>
                                   <th className="px-2 py-1.5 text-left font-medium">Level</th>
                                   <th className="px-2 py-1.5 text-left font-medium">Expires</th>
                                 </tr>
                               </thead>
                               <tbody>
-                                {certMatches
-                                  .filter((m) => m.match)
+                                {confidentMatches
                                   .slice(0, 12)
                                   .map((m, i) => (
                                     <tr key={i} className="border-t">
-                                      <td className="px-2 py-1 truncate max-w-[220px]">
+                                      <td className="px-2 py-1 truncate max-w-[160px]">
+                                        {supplierNameById.get(m.key) || "—"}
+                                      </td>
+                                      <td className="px-2 py-1 truncate max-w-[180px]">
                                         {m.match?.companyName ?? "—"}
                                       </td>
                                       <td className="px-2 py-1">
@@ -452,6 +487,55 @@ export function BulkImportDialog<T>({
                                   ))}
                               </tbody>
                             </table>
+                          </div>
+                        )}
+
+                        {/* Matched on a name that merely resembles the supplier's.
+                            Shown separately and off by default: taking a level
+                            from the wrong company puts a wrong level on a real
+                            supplier and moves the score. Both names are side by
+                            side so the guess can be judged rather than trusted. */}
+                        {fuzzyMatches.length > 0 && (
+                          <div className="mt-3 rounded border border-amber-500/40 bg-amber-500/[0.05] p-2.5">
+                            <label className="flex items-start gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={useFuzzyMatches}
+                                onChange={(e) => setUseFuzzyMatches(e.target.checked)}
+                                className="mt-0.5"
+                                data-testid="use-fuzzy-matches"
+                              />
+                              <span className="text-xs">
+                                <span className="font-medium text-amber-500">
+                                  {fuzzyMatches.length} more matched only on a similar name.
+                                </span>{" "}
+                                <span className="text-muted-foreground">
+                                  These may be different companies. Check each one before using it.
+                                </span>
+                              </span>
+                            </label>
+                            <div className="mt-2 max-h-[110px] overflow-y-auto">
+                              <table className="w-full text-[11px]">
+                                <tbody>
+                                  {fuzzyMatches.slice(0, 8).map((m, i) => (
+                                    <tr key={i} className="border-t border-amber-500/20">
+                                      <td className="px-2 py-1 truncate max-w-[170px]">
+                                        {supplierNameById.get(m.key) || "—"}
+                                      </td>
+                                      <td className="px-2 py-1 text-muted-foreground">→</td>
+                                      <td className="px-2 py-1 truncate max-w-[190px]">
+                                        {m.match?.companyName ?? "—"}
+                                      </td>
+                                      <td className="px-2 py-1">
+                                        {m.match?.fields?.bbbeeLevel != null
+                                          ? `Level ${m.match.fields.bbbeeLevel}`
+                                          : "—"}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         )}
 

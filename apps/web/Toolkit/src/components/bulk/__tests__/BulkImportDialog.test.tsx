@@ -298,13 +298,63 @@ describe("BulkImportDialog — certificate registry", () => {
     // The expiry date is the field a client's own sheet is most often wrong
     // about, so it is the one shown.
     await waitFor(() => expect(screen.getByText("2026-02-28")).toBeTruthy());
-    expect(screen.getByText(/Found certificates for/i)).toBeTruthy();
+    expect(screen.getByText(/Identified 1 of 1 suppliers/i)).toBeTruthy();
 
     // Confirmation is a real choice, not a notice.
     const accept = screen.getByTestId("use-certificates") as HTMLInputElement;
     expect(accept.checked).toBe(true);
     fireEvent.click(accept);
     expect(accept.checked).toBe(false);
+
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * The registry matched "Interloc Freight Services (PTY) LTD" to a supplier
+   * called "Interlink Freight Services". Different companies. Taking that
+   * certificate's level would have put a wrong B-BBEE level on a real supplier
+   * and moved the score — indefensible in a verification, and invisible,
+   * because the panel showed only the certificate's name.
+   */
+  it("does not apply a match made on a merely similar name", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          results: [
+            {
+              key: "any",
+              match: {
+                certificateId: "c9", slug: "interloc",
+                companyName: "Interloc Freight Services (PTY) LTD",
+                certificateNumber: null, agency: "SANAS",
+                issueDate: null, expiryDate: "2026-09-28",
+                validAtAsOf: true, verified: true,
+                basis: "name-fuzzy", confidence: 0.72,
+                fields: { bbbeeLevel: 1 },
+              },
+              alternatives: [],
+            },
+          ],
+        },
+      }),
+    } as unknown as Response)));
+
+    openProcurement();
+    await chooseProcurement(procurementSheet());
+
+    // Called out as a guess, not folded in with the identified ones.
+    await waitFor(() =>
+      expect(screen.getByText(/matched only on a similar name/i)).toBeTruthy(),
+    );
+
+    const optIn = screen.getByTestId("use-fuzzy-matches") as HTMLInputElement;
+    expect(optIn.checked).toBe(false);
+
+    // Both names are on screen, so the mismatch can actually be seen.
+    expect(screen.getByText("Acme Bolts")).toBeTruthy();
+    expect(screen.getByText("Interloc Freight Services (PTY) LTD")).toBeTruthy();
 
     vi.unstubAllGlobals();
   });
