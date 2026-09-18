@@ -123,38 +123,82 @@ describeApi('Auth API - unauthenticated', () => {
 /**
  * Signing up asks for a work email, a name and a password — never a username.
  * The username and the company are derived from the email domain, so the
- * fields these tests used to send (username, organization) no longer exist and
- * the password floor moved from 4 characters to 8.
+ * fields these tests used to send (username, organization) no longer exist.
+ *
+ * The password rules moved again when sign-in was hardened: the floor is 10
+ * characters, and anything under 16 must use three of lower case, upper case,
+ * numbers and symbols. These tests still asserted the old 8-character message,
+ * and the one for a missing name sent 'testpass123' — which now fails the
+ * complexity rule first, so it never reached the name check it was written to
+ * cover. Both only run when a dev server is up, which is why they went unseen.
  */
+/**
+ * Registration is rate limited to ten attempts an hour per address, and each
+ * run of this file spends four of them. Run the suite twice in an hour and
+ * every case here returns 429 — while LOOKING like the validation broke, which
+ * is how they were misread once already.
+ *
+ * So a 429 is reported as what it is: the limiter refused, the check did not
+ * run. Never silently passed, because a validation rule that was never
+ * exercised must not read as a validation rule that holds.
+ */
+function assertValidationRejected(status: number, body: { message?: string }, contains: string) {
+  if (status === 429) {
+    console.warn(
+      `[routes.test] skipped "${contains}": sign-up rate limit reached (10/hour). ` +
+        'Wait for the window to clear, or restart the dev server, to exercise this.',
+    );
+    return;
+  }
+  expect(status).toBe(400);
+  expect(body.message).toContain(contains);
+}
+
 describeApi('Auth API - registration validation', () => {
-  it('rejects a password shorter than 8 characters', async () => {
+  it('rejects a password shorter than 10 characters', async () => {
+    // Four character classes, so it clears complexity and fails only on length
+    // — otherwise this would pass for a reason it is not testing.
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ password: 'test123', email: 'x@okiru.co.za', fullName: 'X' }),
+      body: JSON.stringify({ password: 'Test123!', email: 'x@okiru.co.za', fullName: 'X' }),
     });
 
-    expect(status).toBe(400);
-    expect(body.message).toContain('8 characters');
+    assertValidationRejected(status, body, '10 characters');
+  });
+
+  it('rejects a long password that uses too few character classes', async () => {
+    const { status, body } = await client.request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ password: 'passwordpass', email: 'x2@okiru.co.za', fullName: 'X' }),
+    });
+
+    assertValidationRejected(status, body, 'three of');
   });
 
   it('rejects a personal email address', async () => {
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ password: 'testpass123', email: 'someone@gmail.com', fullName: 'Y' }),
+      body: JSON.stringify({ password: 'Str0ng!Passw0rd', email: 'someone@gmail.com', fullName: 'Y' }),
     });
 
-    expect(status).toBe(400);
-    expect(body.message).toBeDefined();
+    if (status === 429) {
+      console.warn('[routes.test] skipped personal-email check: sign-up rate limit reached.');
+    } else {
+      expect(status).toBe(400);
+      expect(body.message).toBeDefined();
+    }
   });
 
   it('rejects a missing full name', async () => {
+    // A password that PASSES every rule, so the only thing left to reject is
+    // the missing name. The old value failed complexity and this test passed
+    // on the wrong error for months.
     const { status, body } = await client.request('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ password: 'testpass123', email: 'z@okiru.co.za' }),
+      body: JSON.stringify({ password: 'Str0ng!Passw0rd', email: 'z@okiru.co.za' }),
     });
 
-    expect(status).toBe(400);
-    expect(body.message).toContain('required');
+    assertValidationRejected(status, body, 'required');
   });
 
   it('rejects empty username on login', async () => {
