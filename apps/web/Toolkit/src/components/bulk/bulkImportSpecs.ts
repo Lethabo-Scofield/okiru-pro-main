@@ -50,6 +50,13 @@ export interface BulkImportSpec<T> {
    */
   sheetHints?: string[];
   /**
+   * Check these rows against the B-BBEE certificate registry before importing.
+   * Only procurement: a supplier is the one record we hold an independent
+   * source for, and their level and expiry are the fields most often stale in
+   * a client's own spreadsheet.
+   */
+  certificateLookup?: boolean;
+  /**
    * Column keys without which a row is not a record. A row missing one is
    * counted and reported, never quietly dropped and never half-imported.
    */
@@ -344,6 +351,7 @@ const procurement: BulkImportSpec<Supplier> = {
   label: "Procurement / Suppliers",
   noun: "suppliers",
   columns: PROCUREMENT_COLUMNS,
+  certificateLookup: true,
   requiredKeys: ["supplierName"],
   toEntity: (row) => ({
     id: uuidv4(),

@@ -11,7 +11,15 @@ import { Button } from "@toolkit/components/ui/button";
 import { Badge } from "@toolkit/components/ui/badge";
 import { cn } from "@toolkit/lib/utils";
 import { useToast } from "@toolkit/hooks/use-toast";
+import { useEffect } from "react";
 import { readSectionSheet, type SectionSheetRead } from "@/lib/workbookExcelNormalizer";
+import {
+  fetchCertificateMatches,
+  applyCertificateMatches,
+  type SupplierMatchResult,
+  type AutofillReport,
+  type ProcurementRow,
+} from "@/lib/certificateAutofill";
 import { downloadSectionTemplate } from "@/lib/informationRequestTemplate";
 import type { BulkImportSpec, ParsedRow } from "./bulkImportSpecs";
 
@@ -70,6 +78,19 @@ export function BulkImportDialog<T>({
   const [mode, setMode] = useState<"append" | "replace">("append");
   const [reading, setReading] = useState(false);
 
+  /**
+   * What our certificate registry knows about these suppliers.
+   *
+   * Looked up as soon as the file is read, applied only if the user says so.
+   * A client's own spreadsheet is usually months behind on levels and expiry
+   * dates, and we hold an independent record — but overwriting what somebody
+   * typed, on the strength of a name match, is not ours to do silently.
+   */
+  const [certMatches, setCertMatches] = useState<SupplierMatchResult[] | null>(null);
+  const [certLoading, setCertLoading] = useState(false);
+  const [certError, setCertError] = useState<string | null>(null);
+  const [useCertificates, setUseCertificates] = useState(true);
+
   const reset = useCallback(() => {
     setStep("choose");
     setFileName("");
@@ -77,6 +98,10 @@ export function BulkImportDialog<T>({
     setSheetName(undefined);
     setMode("append");
     setReading(false);
+    setCertMatches(null);
+    setCertLoading(false);
+    setCertError(null);
+    setUseCertificates(true);
   }, []);
 
   const existingIds = useMemo(
@@ -91,19 +116,58 @@ export function BulkImportDialog<T>({
    * blank: a shareholder with no name is a spacer row in someone's spreadsheet,
    * not a shareholder.
    */
-  const outcome = useMemo<Outcome<T> | null>(() => {
+  const read = useMemo<SectionSheetRead | null>(() => {
     if (!buffer) return null;
-    const read = readSectionSheet(buffer, spec.columns, {
+    return readSectionSheet(buffer, spec.columns, {
       sectionKey: spec.sectionKey,
       sheetHints: spec.sheetHints,
       sheetName,
     });
+  }, [buffer, sheetName, spec]);
+
+  // Ask the registry as soon as the rows are known. Never blocks the import:
+  // a registry that is down or slow leaves the spreadsheet's own values alone.
+  useEffect(() => {
+    if (!spec.certificateLookup || !read || read.rows.length === 0) return;
+    let cancelled = false;
+    setCertLoading(true);
+    setCertError(null);
+    void fetchCertificateMatches(read.rows as ProcurementRow[])
+      .then((results) => {
+        if (!cancelled) setCertMatches(results);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setCertMatches(null);
+          setCertError(error instanceof Error ? error.message : "Could not reach the certificate registry");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCertLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [read, spec.certificateLookup]);
+
+  /** The rows as they would be stored, with the registry applied if accepted. */
+  const enriched = useMemo<{ rows: Record<string, unknown>[]; report: AutofillReport | null }>(() => {
+    if (!read) return { rows: [], report: null };
+    if (!useCertificates || !certMatches || certMatches.length === 0) {
+      return { rows: read.rows, report: null };
+    }
+    const applied = applyCertificateMatches(read.rows as ProcurementRow[], certMatches);
+    return { rows: applied.rows, report: applied.report };
+  }, [read, certMatches, useCertificates]);
+
+  const outcome = useMemo<Outcome<T> | null>(() => {
+    if (!read) return null;
 
     const added: T[] = [];
     const updated: T[] = [];
     let skipped = 0;
 
-    for (const row of read.rows as ParsedRow[]) {
+    for (const row of enriched.rows as ParsedRow[]) {
       const missing = spec.requiredKeys.some((k) => String(row[k] ?? "").trim() === "");
       if (missing) {
         skipped += 1;
@@ -115,7 +179,7 @@ export function BulkImportDialog<T>({
     }
 
     return { added, updated, skipped, read };
-  }, [buffer, sheetName, spec, existingIds]);
+  }, [read, enriched, spec, existingIds]);
 
   const handleFile = useCallback(
     async (file: File | undefined) => {
@@ -317,6 +381,100 @@ export function BulkImportDialog<T>({
                     </div>
                   ))}
                 </div>
+
+                {/* What our own registry holds for these suppliers. Shown
+                    before anything is applied, because a name match against an
+                    outside record is a suggestion, not a fact — and an expiry
+                    date is the single field a client's spreadsheet is most
+                    often wrong about. */}
+                {spec.certificateLookup && (
+                  <div className="rounded-lg border p-3">
+                    {certLoading ? (
+                      <p className="text-xs text-muted-foreground">
+                        Checking these suppliers against the certificate registry…
+                      </p>
+                    ) : certError ? (
+                      <p className="text-xs text-muted-foreground">
+                        Certificate registry unavailable — importing the spreadsheet's own values.
+                      </p>
+                    ) : certMatches && certMatches.length > 0 ? (
+                      <>
+                        <label className="flex items-start gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={useCertificates}
+                            onChange={(e) => setUseCertificates(e.target.checked)}
+                            className="mt-0.5"
+                            data-testid="use-certificates"
+                          />
+                          <span className="text-xs">
+                            <span className="font-medium">
+                              Found certificates for {certMatches.filter((m) => m.match).length} of{" "}
+                              {certMatches.length} suppliers.
+                            </span>{" "}
+                            <span className="text-muted-foreground">
+                              Fill in their B-BBEE level and expiry date from our registry. Values
+                              already in your sheet are kept.
+                            </span>
+                          </span>
+                        </label>
+
+                        {useCertificates && (
+                          <div className="mt-2.5 max-h-[150px] overflow-y-auto rounded border">
+                            <table className="w-full text-[11px]">
+                              <thead className="bg-muted/50">
+                                <tr>
+                                  <th className="px-2 py-1.5 text-left font-medium">Supplier</th>
+                                  <th className="px-2 py-1.5 text-left font-medium">Level</th>
+                                  <th className="px-2 py-1.5 text-left font-medium">Expires</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {certMatches
+                                  .filter((m) => m.match)
+                                  .slice(0, 12)
+                                  .map((m, i) => (
+                                    <tr key={i} className="border-t">
+                                      <td className="px-2 py-1 truncate max-w-[220px]">
+                                        {m.match?.companyName ?? "—"}
+                                      </td>
+                                      <td className="px-2 py-1">
+                                        {m.match?.fields?.bbbeeLevel != null
+                                          ? `Level ${m.match.fields.bbbeeLevel}`
+                                          : "—"}
+                                      </td>
+                                      <td className="px-2 py-1">
+                                        {m.match?.expiryDate ?? (
+                                          <span className="text-amber-500">not on record</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {/* A lapsed certificate still identifies the supplier, but
+                            it cannot be used to score them — so say which, rather
+                            than filling the grid and letting it look complete. */}
+                        {enriched.report && enriched.report.notValid.length > 0 && (
+                          <p className="mt-2 text-[11px] text-amber-500">
+                            {enriched.report.notValid.length} certificate
+                            {enriched.report.notValid.length === 1 ? " has" : "s have"} lapsed or
+                            carry no expiry date — the expiry is filled in, the scoring columns are
+                            left for you.
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        No matching certificates in our registry — importing the spreadsheet's own
+                        values.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {missingRequired.length > 0 && (
                   <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-xs">

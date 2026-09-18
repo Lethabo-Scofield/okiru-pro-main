@@ -200,6 +200,137 @@ describe("BulkImportDialog", () => {
 });
 
 /**
+ * The certificate registry, on a procurement upload.
+ *
+ * Two things have to be true at once. A client's own supplier spreadsheet is
+ * usually months behind on levels and expiry dates and we hold an independent
+ * record — but a name match against an outside register is a suggestion, and
+ * overwriting what somebody typed on the strength of one, silently, is not
+ * ours to do. So it is looked up immediately and applied only on confirmation.
+ */
+describe("BulkImportDialog — certificate registry", () => {
+  const procurementSheet = () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ["Procurement / Suppliers"],
+        ["Supplier Name", "Spend (R)", "B-BBEE Level"],
+        ["Acme Bolts", 250000, ""],
+      ]),
+      "Procurement",
+    );
+    return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as unknown as Uint8Array;
+  };
+
+  function openProcurement(onImport = vi.fn()) {
+    render(
+      <BulkImportDialog
+        open
+        onOpenChange={() => {}}
+        spec={BULK_IMPORT_SPECS.procurement}
+        existing={[]}
+        onImport={onImport}
+        sectorCode="RCOGP"
+      />,
+    );
+    return { onImport };
+  }
+
+  async function chooseProcurement(bytes: Uint8Array) {
+    const input = document.querySelector(
+      '[data-testid="input-bulk-procurement"]',
+    ) as HTMLInputElement;
+    Object.defineProperty(input, "files", { value: [fileFrom(bytes, "suppliers.xlsx")], writable: false });
+    fireEvent.change(input);
+  }
+
+  it("asks the registry about the suppliers in the file", async () => {
+    const calls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      calls.push(String(url));
+      return {
+        ok: true,
+        json: async () => ({ success: true, data: { results: [] } }),
+      } as unknown as Response;
+    }));
+
+    openProcurement();
+    await chooseProcurement(procurementSheet());
+
+    await waitFor(() => expect(calls.some((u) => u.includes("/api/certificates/match"))).toBe(true));
+    vi.unstubAllGlobals();
+  });
+
+  it("offers what it found and fills nothing until it is accepted", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          results: [
+            {
+              key: "any",
+              match: {
+                certificateId: "c1",
+                slug: "acme",
+                companyName: "Acme Bolts (Pty) Ltd",
+                certificateNumber: "ZA123",
+                agency: "SANAS",
+                issueDate: "2025-03-01",
+                expiryDate: "2026-02-28",
+                validAtAsOf: true,
+                verified: true,
+                basis: "name",
+                confidence: 0.97,
+                fields: { bbbeeLevel: 4 },
+              },
+              alternatives: [],
+            },
+          ],
+        },
+      }),
+    } as unknown as Response)));
+
+    openProcurement();
+    await chooseProcurement(procurementSheet());
+
+    // The expiry date is the field a client's own sheet is most often wrong
+    // about, so it is the one shown.
+    await waitFor(() => expect(screen.getByText("2026-02-28")).toBeTruthy());
+    expect(screen.getByText(/Found certificates for/i)).toBeTruthy();
+
+    // Confirmation is a real choice, not a notice.
+    const accept = screen.getByTestId("use-certificates") as HTMLInputElement;
+    expect(accept.checked).toBe(true);
+    fireEvent.click(accept);
+    expect(accept.checked).toBe(false);
+
+    vi.unstubAllGlobals();
+  });
+
+  /** A registry that is down must not stop a client importing their own file. */
+  it("imports the spreadsheet's own values when the registry cannot be reached", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("registry down");
+    }));
+
+    const { onImport } = openProcurement();
+    await chooseProcurement(procurementSheet());
+
+    await waitFor(() => expect(screen.getByText(/registry unavailable/i)).toBeTruthy());
+
+    fireEvent.click(screen.getByTestId("button-confirm-procurement"));
+    await waitFor(() => expect(onImport).toHaveBeenCalled());
+    const [entities] = onImport.mock.calls[0];
+    expect(entities).toHaveLength(1);
+    expect(entities[0].spend).toBe(250000);
+
+    vi.unstubAllGlobals();
+  });
+});
+
+/**
  * The file a consultant actually holds. Gitignored corpus, so this skips where
  * it is absent — but where it is present, it is the only test that proves the
  * thing the old uploads got wrong.
