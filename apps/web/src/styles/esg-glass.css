@@ -6,7 +6,14 @@
  * shadow to fall on, which is what keeps the glass surfaces from going flat.
  *
  * Accent tokens are for badges, hairlines and charts only, never a page wash.
- * Cyan and purple are Okiru's own; amber stays for the social pillar.
+ * Green for environment, amber for social, purple for governance.
+ *
+ * The environment accent was cyan, which made the whole ESG flow — create,
+ * workbook, summary and toolkit — read as blue. Every ESG component already
+ * falls back to a green when the token is missing, so the flow was built green
+ * and this one line painted over it. It is #22c55e now: the same green the ESG
+ * Toolkit product page runs on (`.okiru-green`), and the same one the hub and
+ * the workspaces mark ESG with, so one product has one colour.
  */
 .esg-theme {
   color-scheme: dark;
@@ -20,9 +27,14 @@
   --esg-text: rgba(255, 255, 255, 0.92);
   --esg-text2: rgba(255, 255, 255, 0.56);
   --esg-text3: rgba(255, 255, 255, 0.32);
-  --esg-acc-e: #06b6d4;
+  --esg-acc-e: #22c55e;
+  --esg-acc-e-deep: #16a34a;
   --esg-acc-s: #f5a623;
   --esg-acc-g: #9333ea;
+  /* The toolkit's action accent. Named from when it was blue; it is the
+     ESG green now, and defined here so the literal fallback in the
+     toolkit's own components agrees with it rather than fighting it. */
+  --esg-acc-blue: #22c55e;
   --esg-section-bg: #16181c;
   --esg-input-bg: rgba(0, 0, 0, 0.32);
   --esg-input-border: rgba(255, 255, 255, 0.07);

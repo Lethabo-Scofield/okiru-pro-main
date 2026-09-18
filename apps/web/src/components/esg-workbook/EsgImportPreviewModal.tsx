@@ -55,7 +55,11 @@ export function EsgImportPreviewModal({
             type="button"
             disabled={confirming}
             onClick={onConfirm}
-            className="px-4 py-2 rounded-lg bg-blue-500 text-white text-[13px] font-semibold disabled:opacity-50"
+            // The one primary action here wears the ESG accent, like every
+            // other confirm in this flow. A raw Tailwind blue ignored the
+            // theme and was the last thing on the page still reading as blue.
+            className="px-4 py-2 rounded-lg text-[13px] font-semibold text-[#08090b] disabled:opacity-50"
+            style={{ background: "var(--esg-acc-e, #22c55e)" }}
             data-testid="esg-import-confirm"
           >
             {confirming
