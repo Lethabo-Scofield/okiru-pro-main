@@ -23,6 +23,10 @@ const validCompanyMeta = {
   companyName: "Test Co",
   industrySector: "RCOGP",
   scorecardType: "Generic",
+  // Mandatory since the 18 September review. Skills, Procurement, ESD and SED
+  // all decide what counts by date, so a workbook without a year end has four
+  // dated pillars with no period to measure.
+  financialYearEnd: "2026-02-28",
 };
 
 describe("validateWorkbook", () => {
