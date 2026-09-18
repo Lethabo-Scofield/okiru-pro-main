@@ -32,6 +32,8 @@ import ActivityHeatmap from "@/pages/ActivityHeatmap";
 import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
 import ParserDocumentLibrary from "@/pages/ParserDocumentLibrary";
+import CompanyDocumentLibrary from "@/pages/CompanyDocumentLibrary";
+import UnfiledDocuments from "@/pages/UnfiledDocuments";
 import ParserDocumentDetail from "@/pages/ParserDocumentDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
@@ -234,6 +236,26 @@ function AppRouter() {
 
           These are aliases today and become the real pages in the steps that
           follow; /dashboard and /create-scorecard keep working throughout. */}
+      {/* A company's evidence lives under its own company, in its product's
+          section — not in a shared list with a company filter on it. Declared
+          before the bare product routes so the longer path matches first. */}
+      <Route path="/bbbee/:companyId/documents">
+        {(params) => (
+          <ProtectedRoute>
+            <CompanyDocumentLibrary companyId={params.companyId} product="bbbee" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/esg/:companyId/documents">
+        {(params) => (
+          <ProtectedRoute>
+            <CompanyDocumentLibrary companyId={params.companyId} product="esg" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/documents/unfiled">
+        <ProtectedRoute><UnfiledDocuments /></ProtectedRoute>
+      </Route>
       <Route path="/bbbee/new">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
       </Route>

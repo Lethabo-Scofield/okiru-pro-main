@@ -108,9 +108,14 @@ export function buildCrumbs(path: string, companyName?: string | null): Crumb[] 
 
   switch (seg[0]) {
     case 'bbbee':
-      return seg[1] === 'new'
-        ? [root, { label: 'B-BBEE', href: '/bbbee' }, { label: 'New scorecard' }]
-        : [root, { label: 'B-BBEE' }];
+      if (seg[1] === 'new') {
+        return [root, { label: 'B-BBEE', href: '/bbbee' }, { label: 'New scorecard' }];
+      }
+      // A company's document library sits under the company, under the product.
+      if (seg[2] === 'documents') {
+        return [root, { label: 'B-BBEE', href: '/bbbee' }, company(seg[1]), { label: 'Documents' }];
+      }
+      return [root, { label: 'B-BBEE' }];
 
     case 'dashboard':
       return [root, { label: 'Saved companies' }];
@@ -120,6 +125,9 @@ export function buildCrumbs(path: string, companyName?: string | null): Crumb[] 
         return [root, { label: 'ESG', href: '/esg' }, { label: 'New scorecard' }];
       }
       if (seg[1] === 'clients') return [root, { label: 'ESG' }];
+      if (seg[2] === 'documents') {
+        return [root, { label: 'ESG', href: '/esg' }, company(seg[1]), { label: 'Documents' }];
+      }
       if (seg[1] === 'create') {
         const tail: Crumb[] = [root, { label: 'ESG', href: '/esg' }, company(seg[2])];
         if (seg[3] === 'summary') tail.push({ label: 'Summary' });
@@ -139,6 +147,9 @@ export function buildCrumbs(path: string, companyName?: string | null): Crumb[] 
     }
 
     case 'documents':
+      if (seg[1] === 'unfiled') {
+        return [root, { label: 'Documents', href: '/documents' }, { label: 'Not filed' }];
+      }
       return seg[1]
         ? [root, { label: 'Documents', href: '/documents' }, { label: 'Document' }]
         : [root, { label: 'Documents' }];

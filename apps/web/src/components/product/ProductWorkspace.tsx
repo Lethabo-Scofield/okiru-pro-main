@@ -211,8 +211,13 @@ export function ProductWorkspace({ product }: { product: Product }) {
   };
 
   /** Every company's evidence, filed under that company. */
+  // That company's own library, not the shared list with a filter applied.
   const openDocuments = (id: string) =>
-    navigate(`/documents?entityId=${encodeURIComponent(id)}`);
+    navigate(
+      isEsg
+        ? `/esg/${encodeURIComponent(id)}/documents`
+        : `/bbbee/${encodeURIComponent(id)}/documents`,
+    );
 
   const rowAction =
     'ok-btn';

@@ -158,7 +158,14 @@ export default function HubLanding() {
     return { bbbee: clients.length - esg, esg };
   }, [clients]);
 
-  /** The six most recently touched, newest first, across both products. */
+  /**
+   * The three most recently touched, newest first, across both products.
+   *
+   * Three, not six: this sits in the same row as the two product cards, and
+   * a taller list stretched them to match it — leaving both cards mostly
+   * empty space so the row could accommodate a list nobody asked to be that
+   * long. The products are the point of this page; this is a shortcut back.
+   */
   const recent = useMemo(
     () =>
       clients
@@ -170,7 +177,7 @@ export default function HubLanding() {
         }))
         .filter((c) => c.id)
         .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
-        .slice(0, 6),
+        .slice(0, 3),
     [clients],
   );
 

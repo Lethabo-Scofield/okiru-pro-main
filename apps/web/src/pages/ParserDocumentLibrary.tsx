@@ -1,7 +1,40 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, ChevronRight, FileSearch, Loader2, Search, Upload } from "lucide-react";
-import { PARSER_STATUS_PRESENTATION, type ParserDocumentSummary, type ParserStatus } from "@/lib/parserDocuments";
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileSearch,
+  FolderOpen,
+  Loader2,
+  Search,
+  Upload,
+} from "lucide-react";
+import {
+  PARSER_STATUS_PRESENTATION,
+  type ParserDocumentSummary,
+  type ParserStatus,
+} from "@/lib/parserDocuments";
+
+/**
+ * Evidence, filed the way the work is done: per company.
+ *
+ * This was one flat table of everything the organisation had ever uploaded,
+ * with the company as a *column* and a dropdown to narrow it down. That is a
+ * filing cabinet with the drawers removed — a consultant carrying twenty
+ * clients had to re-apply a filter to see any one of them, and two clients'
+ * evidence sat interleaved on the same page.
+ *
+ * So there are two views now, and no flat pile:
+ *
+ *   - the index: one container per company, holding that company's evidence
+ *     and nothing else, with what is filed and what still needs looking at;
+ *   - the company library: one client's documents, reached from its row in the
+ *     workspace, which is where the question "what have we got for them?"
+ *     actually gets asked.
+ *
+ * Documents nobody has filed yet get a container of their own rather than
+ * being hidden — unfiled evidence is a job to do, not an absence.
+ */
 
 interface LibraryResponse {
   documents: ParserDocumentSummary[];
@@ -9,218 +42,288 @@ interface LibraryResponse {
   documentTypes: string[];
 }
 
-interface CompanyOption {
+export interface CompanyOption {
   id: string;
   name: string;
+  /** "bbbee" | "esg" — decides the colour and which section it lives under. */
+  product?: string;
 }
 
-/** The sentinel the company filter uses for "not filed under any company". */
+/** The sentinel for "not filed under any company". */
 const UNASSIGNED = "__unassigned__";
 
-export default function ParserDocumentLibrary() {
-  const [, navigate] = useLocation();
-  const [documents, setDocuments] = useState<ParserDocumentSummary[]>([]);
-  const [types, setTypes] = useState<string[]>([]);
-  const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, pages: 0 });
-  const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("");
-  const [documentType, setDocumentType] = useState("");
-  /**
-   * Seeded from `?entityId=`, so arriving from a company's row opens that
-   * company's evidence rather than everything the organisation has ever
-   * uploaded with a dropdown to narrow it down. The filter still works — this
-   * only decides what you land on.
-   */
-  const [company, setCompany] = useState(() => {
-    if (typeof window === "undefined") return "";
-    const q = new URLSearchParams(window.location.search);
-    if (q.get("unassigned") === "true") return UNASSIGNED;
-    return q.get("entityId")?.trim() ?? "";
-  });
-  const [companies, setCompanies] = useState<CompanyOption[]>([]);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+const PRODUCT_LABEL: Record<string, string> = { bbbee: "B-BBEE", esg: "ESG" };
 
-  // The saved companies, once — they name the groups the library files
-  // documents under, and populate both the filter and the per-row assign.
+function productAccent(product: string | undefined): string {
+  return product === "esg" ? "var(--esg)" : "var(--bbbee)";
+}
+
+/** Where a company's own library lives, under its product's section. */
+export function companyDocumentsHref(company: CompanyOption): string {
+  // Written as two whole paths rather than a variable prefix plus segments:
+  // a path whose first segment is a variable cannot be checked against the
+  // route table, and that is exactly how /bbbee/new/C-98220 shipped as a 404.
+  const id = encodeURIComponent(company.id);
+  return company.product === "esg" ? `/esg/${id}/documents` : `/bbbee/${id}/documents`;
+}
+
+function useCompanies() {
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
   useEffect(() => {
     void (async () => {
       try {
         const res = await fetch("/api/clients", { credentials: "include" });
         if (!res.ok) return;
-        const rows = (await res.json()) as Array<{ clientId?: string; id?: string; name?: string }>;
+        const rows = (await res.json()) as Array<{
+          clientId?: string;
+          id?: string;
+          name?: string;
+          product?: string;
+        }>;
         if (Array.isArray(rows)) {
           setCompanies(
             rows
-              .map((row) => ({ id: String(row.clientId || row.id || ""), name: String(row.name || "Unnamed") }))
-              .filter((row) => row.id),
+              .map((row) => ({
+                id: String(row.clientId || row.id || ""),
+                name: String(row.name || "Unnamed"),
+                product: row.product,
+              }))
+              .filter((row) => row.id)
+              .sort((a, b) => a.name.localeCompare(b.name)),
           );
         }
       } catch {
-        // The company column degrades to raw ids; the list itself still works.
+        // The library still works without names; ids stand in.
+      } finally {
+        setLoaded(true);
       }
     })();
   }, []);
 
-  const companyName = useMemo(() => {
-    const map = new Map(companies.map((option) => [option.id, option.name]));
-    return (id: string | null | undefined) => (id ? map.get(id) ?? id : null);
-  }, [companies]);
+  return { companies, loaded };
+}
+
+// ------------------------------------------------------------------ index --
+
+interface Tally {
+  total: number;
+  review: number;
+  problem: number;
+}
+
+/**
+ * How many documents each company has, and how many need a person.
+ *
+ * Asked per company rather than by paging the whole pile, because the counts
+ * have to be exact: "3 need review" is a to-do list, and a number that only
+ * counts the current page is worse than no number at all.
+ */
+function useTallies(companies: CompanyOption[], ready: boolean) {
+  const [tallies, setTallies] = useState<Record<string, Tally>>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!ready) return;
     const controller = new AbortController();
-    const timer = window.setTimeout(async () => {
-      setLoading(true);
-      setError(null);
-      const params = new URLSearchParams({ page: String(page), limit: "25" });
-      if (search.trim()) params.set("search", search.trim());
-      if (status) params.set("status", status);
-      if (documentType) params.set("documentType", documentType);
-      if (company === UNASSIGNED) params.set("unassigned", "true");
-      else if (company) params.set("entityId", company);
-      try {
-        const res = await fetch(`/api/parser-documents?${params}`, { credentials: "include", signal: controller.signal });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(body?.message ?? "Could not load documents");
-        const data = body as LibraryResponse;
-        setDocuments(data.documents ?? []);
-        setTypes(data.documentTypes ?? []);
-        setPagination(data.pagination ?? { page, limit: 25, total: 0, pages: 0 });
-      } catch (caught) {
-        if ((caught as Error).name !== "AbortError") setError(caught instanceof Error ? caught.message : "Could not load documents");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
+
+    void (async () => {
+      const ask = async (params: string): Promise<number> => {
+        try {
+          const res = await fetch(`/api/parser-documents?${params}&limit=1`, {
+            credentials: "include",
+            signal: controller.signal,
+          });
+          if (!res.ok) return 0;
+          const body = (await res.json()) as LibraryResponse;
+          return body.pagination?.total ?? 0;
+        } catch {
+          return 0;
+        }
+      };
+
+      const targets = [
+        ...companies.map((c) => ({ key: c.id, scope: `entityId=${encodeURIComponent(c.id)}` })),
+        { key: UNASSIGNED, scope: "unassigned=true" },
+      ];
+
+      const rows = await Promise.all(
+        targets.map(async ({ key, scope }) => {
+          const [total, review, problem] = await Promise.all([
+            ask(scope),
+            ask(`${scope}&status=review_required`),
+            ask(`${scope}&status=failed`),
+          ]);
+          return [key, { total, review, problem }] as const;
+        }),
+      );
+
+      if (!controller.signal.aborted) {
+        setTallies(Object.fromEntries(rows));
+        setLoading(false);
       }
-    }, 250);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [search, status, documentType, company, page]);
+    })();
 
-  /** File a document under a company (or unfile it) from the list itself. */
-  const assignCompany = async (documentId: string, entityId: string | null) => {
-    const previous = documents;
-    // Optimistic — the row updates immediately; a failed PATCH puts it back.
-    setDocuments((rows) => rows.map((row) => (row.id === documentId ? { ...row, entityId } : row)));
-    try {
-      const res = await fetch(`/api/parser-documents/${encodeURIComponent(documentId)}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ entityId }),
-      });
-      if (!res.ok) throw new Error();
-    } catch {
-      setDocuments(previous);
-      setError("Could not move that document — try again.");
-    }
-  };
+    return () => controller.abort();
+  }, [companies, ready]);
 
-  const counts = useMemo(() => ({
-    shown: documents.length,
-    review: documents.filter((document) => document.status === "review_required").length,
-    problem: documents.filter((document) => document.status === "failed").length,
-  }), [documents]);
+  return { tallies, loading };
+}
+
+function CompanyCard({
+  name,
+  accent,
+  badge,
+  tally,
+  onOpen,
+  testId,
+}: {
+  name: string;
+  accent: string;
+  badge?: string;
+  tally: Tally | undefined;
+  onOpen: () => void;
+  testId: string;
+}) {
+  const total = tally?.total ?? 0;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="ok-panel ok-panel-action relative overflow-hidden text-left"
+      data-testid={testId}
+    >
+      <span
+        className="absolute inset-x-0 top-0 h-px"
+        style={{ background: accent, opacity: 0.55 }}
+        aria-hidden
+      />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {badge && <p className="ok-eyebrow">{badge}</p>}
+          <p className="mt-1 truncate text-[15px] font-semibold text-[color:var(--hi)]">{name}</p>
+        </div>
+        <FolderOpen className="h-4 w-4 shrink-0" style={{ color: accent }} aria-hidden />
+      </div>
+
+      <div className="mt-4 flex items-baseline gap-2">
+        <span className="ok-num text-[26px] font-semibold text-[color:var(--hi)]">{total}</span>
+        <span className="text-[12px] text-[color:var(--muted)]">
+          document{total === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {tally && tally.review > 0 && (
+          <span className="ok-chip ok-chip-warn">{tally.review} need review</span>
+        )}
+        {tally && tally.problem > 0 && (
+          <span className="ok-chip ok-chip-bad">{tally.problem} problem</span>
+        )}
+        {tally && tally.review === 0 && tally.problem === 0 && total > 0 && (
+          <span className="ok-chip ok-chip-good">All read</span>
+        )}
+        {total === 0 && <span className="ok-chip ok-chip-neutral">Nothing filed yet</span>}
+      </div>
+    </button>
+  );
+}
+
+/** The index: every company you work with, each holding its own evidence. */
+export default function ParserDocumentLibrary() {
+  const [, navigate] = useLocation();
+  const { companies, loaded } = useCompanies();
+  const { tallies, loading } = useTallies(companies, loaded);
+  const [search, setSearch] = useState("");
+
+  const shown = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return needle ? companies.filter((c) => c.name.toLowerCase().includes(needle)) : companies;
+  }, [companies, search]);
+
+  const unfiled = tallies[UNASSIGNED];
 
   return (
-    <div className="text-[color:var(--hi)]">
+    <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="ok-eyebrow">Documents</p>
+          <h1 className="ok-title-lg mt-1">Every company, and its evidence</h1>
+          <p className="ok-subtitle mt-1.5">
+            Open a company to see what has been read for it. Evidence is filed per company — never
+            one shared pile.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate("/bbbee/new?start=documents")}
+          className="ok-btn-primary"
+          data-testid="library-upload"
+        >
+          <Upload className="h-4 w-4" /> Upload documents
+        </button>
+      </div>
 
-      <main className="mx-auto max-w-[1440px] px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-          {/* Titled by the company when one is in view, because that is what
-              the page is then: that client's evidence, not a shared pile with
-              a filter applied to it. */}
-          <div>
-            <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-              {company === UNASSIGNED
-                ? "Unfiled documents"
-                : company
-                  ? `${companyName(company) ?? company} — documents`
-                  : "Documents"}
-            </h1>
-            <p className="mt-1 text-[13px] text-[color:var(--body)]">
-              {company === UNASSIGNED
-                ? "Uploads not yet filed under a company. File them here."
-                : company
-                  ? "Every document read for this company, and what the parser made of it."
-                  : "Every document you have uploaded, filed under the company it belongs to."}
-            </p>
+      {companies.length > 6 && (
+        <label className="relative mb-5 block max-w-[380px]">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--muted)]" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Find a company"
+            className="ok-input ok-input-icon w-full"
+            data-testid="library-company-search"
+          />
+        </label>
+      )}
+
+      {!loaded || loading ? (
+        <div className="flex items-center justify-center py-24 text-[color:var(--body)]">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading your companies
+        </div>
+      ) : companies.length === 0 ? (
+        <div className="ok-panel flex flex-col items-center py-16 text-center">
+          <FileSearch className="mb-4 h-8 w-8 text-[color:var(--muted)]" />
+          <p className="font-medium text-[color:var(--hi)]">No companies yet</p>
+          <p className="ok-subtitle mt-1">
+            Create a scorecard and the documents you upload for it are filed here.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {shown.map((company) => (
+              <CompanyCard
+                key={company.id}
+                name={company.name}
+                badge={PRODUCT_LABEL[company.product ?? "bbbee"] ?? "B-BBEE"}
+                accent={productAccent(company.product)}
+                tally={tallies[company.id]}
+                onOpen={() => navigate(companyDocumentsHref(company))}
+                testId={`library-company-${company.id}`}
+              />
+            ))}
           </div>
-          <button onClick={() => navigate("/bbbee/new?start=documents")} className="inline-flex h-9 items-center gap-2 rounded-md bg-white px-3.5 text-[13px] font-semibold text-black hover:bg-[#e5e5e7]">
-            <Upload className="h-4 w-4" /> Upload documents
-          </button>
-        </div>
 
-        <div className="mb-5 grid grid-cols-3 border-y border-[color:var(--rule)] py-4">
-          <div><p className="text-[11px] text-[color:var(--muted)]">Total</p><p className="mt-1 text-xl font-semibold">{pagination.total}</p></div>
-          <div><p className="text-[11px] text-[color:var(--muted)]">Needs review on page</p><p className="mt-1 text-xl font-semibold text-amber-300">{counts.review}</p></div>
-          <div><p className="text-[11px] text-[color:var(--muted)]">Problems on page</p><p className="mt-1 text-xl font-semibold text-red-300">{counts.problem}</p></div>
-        </div>
-
-        <div className="mb-5 grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_240px_200px_220px]">
-          <label className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--muted)]" />
-            <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search filename" className="h-10 w-full border border-[color:var(--rule)] bg-[color:var(--ink-3)] pl-10 pr-3 text-[13px] text-white outline-none focus:border-[rgba(255,255,255,0.32)]" />
-          </label>
-          {/* The company view is the point of the library: evidence belongs to
-              a company, and this is how a verifier works — one client at a
-              time, not one big pile. */}
-          <select value={company} onChange={(event) => { setCompany(event.target.value); setPage(1); }} className="h-10 border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none" data-testid="library-company-filter">
-            <option value="">All companies</option>
-            <option value={UNASSIGNED}>Not filed under a company</option>
-            {companies.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-          </select>
-          <select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className="h-10 border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none">
-            <option value="">All statuses</option><option value="passed">Good</option><option value="review_required">Needs review</option><option value="failed">Problem</option>
-          </select>
-          <select value={documentType} onChange={(event) => { setDocumentType(event.target.value); setPage(1); }} className="h-10 border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none">
-            <option value="">All document types</option>{types.map((type) => <option key={type} value={type}>{type}</option>)}
-          </select>
-        </div>
-
-        {error ? <div className="border-y border-red-900/60 py-8 text-sm text-red-300">{error}</div> : loading ? (
-          <div className="flex items-center justify-center py-24 text-[color:var(--body)]"><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading documents</div>
-        ) : documents.length === 0 ? (
-          <div className="flex flex-col items-center py-24 text-center"><FileSearch className="mb-4 h-8 w-8 text-[color:var(--muted)]" /><p className="font-medium text-white">No parsed documents found</p><p className="mt-1 text-sm text-[color:var(--body)]">Upload documents from Create Scorecard to build your library.</p></div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1040px] border-collapse text-left">
-              <thead className="sticky top-14 z-10 bg-[color:var(--ink)] text-[11px] text-[color:var(--muted)]"><tr className="border-b border-[color:var(--rule)]"><th className="py-3 pr-5 font-medium">Document</th><th className="px-4 py-3 font-medium">Company</th><th className="px-4 py-3 font-medium">Type</th><th className="px-4 py-3 font-medium">Status</th><th className="px-4 py-3 font-medium">Confidence</th><th className="px-4 py-3 font-medium">Fields</th><th className="pl-4 py-3 font-medium">Uploaded</th></tr></thead>
-              <tbody>{documents.map((document) => {
-                const presentation = document.status ? PARSER_STATUS_PRESENTATION[document.status as ParserStatus] : null;
-                return <tr key={document.id} onClick={() => navigate(`/documents/${document.id}`)} className="cursor-pointer border-b border-[#242426] text-[13px] hover:bg-white/[0.035]">
-                  <td className="max-w-[360px] py-4 pr-5"><p className="truncate font-medium text-white">{document.filename}</p><p className="mt-1 text-[11px] text-[color:var(--muted)]">{Math.max(1, Math.round(document.fileSize / 1024))} KB</p></td>
-                  <td className="px-4 py-4" onClick={(event) => event.stopPropagation()}>
-                    {/* Filing lives on the row: misfiled or unowned evidence is
-                        fixed where it is seen, not on a separate admin screen. */}
-                    <select
-                      value={document.entityId ?? ""}
-                      onChange={(event) => void assignCompany(document.id, event.target.value || null)}
-                      className={`h-8 max-w-[200px] truncate border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2 text-[12px] outline-none focus:border-[rgba(255,255,255,0.32)] ${document.entityId ? "text-[color:var(--body)]" : "text-amber-300"}`}
-                      title={document.entityId ? `Filed under ${companyName(document.entityId)}` : "Not filed under a company yet"}
-                      data-testid={`library-assign-${document.id}`}
-                    >
-                      <option value="">Not filed</option>
-                      {companies.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                      {/* A linked company that is not in the picker (deleted, or
-                          another teammate's) still shows rather than blanking. */}
-                      {document.entityId && !companies.some((option) => option.id === document.entityId) && (
-                        <option value={document.entityId}>{document.entityId}</option>
-                      )}
-                    </select>
-                  </td>
-                  <td className="px-4 py-4 text-[color:var(--body)]">{document.documentType || "Not parsed"}</td>
-                  <td className="px-4 py-4">{presentation ? <span className={`inline-flex items-center gap-2 ${presentation.tone}`}><span className={`h-1.5 w-1.5 rounded-full ${presentation.dot}`} />{presentation.label}</span> : <span className="text-[color:var(--muted)]">Pending</span>}</td>
-                  <td className="px-4 py-4 tabular-nums text-[color:var(--body)]">{document.overallConfidence == null ? "Missing" : `${Math.round(document.overallConfidence * 100)}%`}</td>
-                  <td className="px-4 py-4 text-[color:var(--body)]">{document.extractedFieldCount} read{document.problemFieldCount > 0 && <span className="ml-2 text-amber-300">{document.problemFieldCount} problem</span>}</td>
-                  <td className="pl-4 py-4 text-[color:var(--body)]">{new Date(document.uploadedAt).toLocaleDateString("en-ZA")}</td>
-                </tr>;
-              })}</tbody>
-            </table>
-          </div>
-        )}
-
-        {pagination.pages > 1 && <div className="mt-6 flex items-center justify-between border-t border-[color:var(--rule)] pt-4 text-[12px] text-[color:var(--body)]"><span>Page {pagination.page} of {pagination.pages}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)} title="Previous page" className="grid h-9 w-9 place-items-center border border-[color:var(--rule)] disabled:opacity-30"><ChevronLeft className="h-4 w-4" /></button><button disabled={page >= pagination.pages} onClick={() => setPage((value) => value + 1)} title="Next page" className="grid h-9 w-9 place-items-center border border-[color:var(--rule)] disabled:opacity-30"><ChevronRight className="h-4 w-4" /></button></div></div>}
-      </main>
+          {/* Unfiled evidence is a job to do, so it gets a container of its own
+              rather than being folded away into "everything else". */}
+          {unfiled && unfiled.total > 0 && (
+            <div className="mt-6">
+              <p className="ok-eyebrow mb-2">Not filed under a company</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                <CompanyCard
+                  name="Unfiled documents"
+                  accent="rgba(255,255,255,0.35)"
+                  tally={unfiled}
+                  onOpen={() => navigate("/documents/unfiled")}
+                  testId="library-company-unfiled"
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
