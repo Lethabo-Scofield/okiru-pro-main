@@ -796,3 +796,24 @@ const workspaceMemberSchema = new Schema({
 workspaceMemberSchema.index({ workspaceId: 1, userId: 1 }, { unique: true });
 
 export const WorkspaceMemberModel = mongoose.models.WorkspaceMember || mongoose.model("WorkspaceMember", workspaceMemberSchema);
+
+// One job, many replicas.
+//
+// Background jobs that walk a whole collection or a whole storage container run
+// on process start, and the API runs with two replicas — so every one of them
+// ran twice, concurrently, over the same documents. For the certificate
+// extraction walk that means paying Azure Document Intelligence twice per file
+// and letting two writers race on the same registry row.
+//
+// A lease is the smallest thing that fixes it: one document per job name, held
+// for a bounded time. Whoever inserts it runs; everyone else stands down. The
+// expiry is what makes it safe — a holder that is killed mid-walk does not
+// block the job forever, it just delays it until the lease lapses.
+const jobLeaseSchema = new Schema({
+  _id: { type: String, required: true },
+  holder: { type: String, required: true },
+  acquiredAt: { type: Date, default: () => new Date() },
+  expiresAt: { type: Date, required: true },
+}, { collection: 'job_leases', versionKey: false });
+
+export const JobLeaseModel = mongoose.models.JobLease || mongoose.model('JobLease', jobLeaseSchema);

@@ -30,11 +30,25 @@ export async function runCertificateStartupExtraction(params: {
   loadBlobServiceClient: BlobClientLoader;
   loadProcessor: ProcessorLoader;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Cluster-wide gate. The API runs two replicas and both of them reach this
+   * function on boot, so without it the walk runs twice over the same
+   * container: every file downloaded twice, every Document Intelligence page
+   * billed twice, and two writers racing on the same registry row. Optional so
+   * a single-process deployment and the tests need no coordination at all.
+   */
+  acquireLease?: () => Promise<boolean>;
+  releaseLease?: () => Promise<void>;
 }): Promise<void> {
   const env = params.env ?? process.env;
   const disabledReason = certificateStartupExtractionGuardReason(env);
   if (disabledReason) {
     params.logger.info('Startup certificate extraction disabled', { reason: disabledReason });
+    return;
+  }
+
+  if (params.acquireLease && !(await params.acquireLease())) {
+    params.logger.info('Startup certificate extraction skipped: another replica holds the lease');
     return;
   }
 
@@ -59,5 +73,10 @@ export async function runCertificateStartupExtraction(params: {
     params.logger.warn('Background certificate extraction failed (non-fatal)', {
       error: err instanceof Error ? err.message : String(err),
     });
+  } finally {
+    // Hand the lease back whether the walk finished, failed, or found no
+    // storage to walk. Holding it after we have stopped working would make the
+    // next restart wait out the full expiry for no reason.
+    if (params.releaseLease) await params.releaseLease();
   }
 }

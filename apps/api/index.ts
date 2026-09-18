@@ -15,6 +15,9 @@ import crypto from 'crypto';
 
 const logger = createLogger("ApiServer");
 
+/** Lease name for the boot-time certificate extraction walk. */
+const CERTIFICATE_EXTRACTION_LEASE = "certificate-startup-extraction";
+
 const app = express();
 const httpServer = createServer(app);
 const isProd = process.env.NODE_ENV === "production";
@@ -136,8 +139,20 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
     void import("./src/services/workbookBackSyncFanout.js").then((m) => m.startBackSyncDrainer());
 
     setImmediate(async () => {
+      // Two replicas, one walk. See jobLease.ts — without the lease both pods
+      // download and bill every unextracted certificate, twice, at once.
+      const { acquireJobLease, releaseJobLease, leaseHolderId } = await import("./src/services/jobLease.js");
+      const holder = leaseHolderId();
+
       await runCertificateStartupExtraction({
         logger,
+        acquireLease: () => acquireJobLease(CERTIFICATE_EXTRACTION_LEASE, {
+          // Longer than a full walk of the container, so a slow run is never
+          // interrupted by a second replica taking the lease out from under it.
+          ttlMs: 6 * 60 * 60 * 1000,
+          holder,
+        }),
+        releaseLease: () => releaseJobLease(CERTIFICATE_EXTRACTION_LEASE, holder),
         loadBlobServiceClient: async () => {
           const { getCertBlobServiceClient } = await import("./src/services/azureCertStorage.js");
           return getCertBlobServiceClient();
