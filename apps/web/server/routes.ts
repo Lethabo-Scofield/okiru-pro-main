@@ -1003,6 +1003,21 @@ export async function registerRoutes(
       if (!user) {
         return res.status(401).json({ message: "User not found" });
       }
+      // Answer the same question requireAuth asks, or this endpoint tells the
+      // client a session is usable that every other endpoint will reject.
+      //
+      // That is not hypothetical: sessions created BEFORE the second factor was
+      // enforced carry a userId and no otpVerified. This route had no gate, so
+      // the app restored them, rendered the whole product, and then took a 403
+      // on every request behind it — a user clicking "Create free scorecard"
+      // eight times in ten minutes and getting "Server error" each time, with
+      // no way back to the verification step short of knowing to sign out.
+      if ((user.twofaEnabled || twoFactorRequiredFor(user)) && (req.session as any).otpVerified !== true) {
+        return res.status(403).json({
+          message: "2FA verification required",
+          requires2FA: true,
+        });
+      }
       const safeUser = sanitizeUser(user);
       (req.session as any).userData = safeUser;
       res.json({ user: safeUser });

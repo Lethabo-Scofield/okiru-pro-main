@@ -423,10 +423,21 @@ function CompanyPicker({
         await load();
         onPick(c);
       } else {
-        const err = await res.json().catch(() => ({}));
+        const err = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+          requires2FA?: boolean;
+        };
+        // A session that predates the second factor is authenticated but not
+        // verified: every call behind it 403s while /api/auth/me still says
+        // you are signed in. Say what to do about it — this read `err.error`
+        // only, and the server sends `message`, so the real reason was
+        // replaced by "Server error." and the button looked simply dead.
         toast({
-          title: "Could not create",
-          description: err.error || "Server error.",
+          title: err.requires2FA ? "Please verify your sign-in" : "Could not create",
+          description: err.requires2FA
+            ? "Sign out and sign in again to receive your verification code, then try once more."
+            : err.error || err.message || "Server error.",
           variant: "destructive",
         });
       }

@@ -263,6 +263,76 @@ describe("ESD and SED contributions", () => {
   });
 });
 
+describe("YES 4 Youth", () => {
+  const spec = BULK_IMPORT_SPECS.yes;
+
+  /**
+   * A workbook carrying BOTH registers. They hold the same columns, so picking
+   * by content would read the wrong tab with complete confidence — the sheet's
+   * name is the only thing that separates them.
+   */
+  function bothRegisters(): ArrayBuffer {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["NEW", "v1.33"]]), "Instructions");
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ["", "Management Control"],
+        ["", "Name & Surname", "ID Number", "Designation", "Race", "Gender"],
+        [1, "Pieter van Wyk", "7203126000081", "Senior Manager", "White", "Male"],
+      ]),
+      "Management Control",
+    );
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ["", "Youth Employment Service"],
+        ["", "Name & Surname", "ID Number", "Job title", "Race", "Gender", "Disabled"],
+        [1, "Lerato Ndlovu", "0106140800087", "Warehouse Assistant", "African", "Female", "No"],
+        [2, "Sipho Dlamini", "0201015800081", "Driver Assistant", "African", "Male", "No"],
+      ]),
+      "Y.E.S Employees",
+    );
+    return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as ArrayBuffer;
+  }
+
+  it("reads the Y.E.S sheet, not Management Control", () => {
+    const read = readSectionSheet(bothRegisters(), spec.columns, {
+      sectionKey: spec.sectionKey,
+      sheetHints: spec.sheetHints,
+    });
+    expect(read.sheetName).toBe("Y.E.S Employees");
+  });
+
+  it("brings the candidates across as YES-flagged, which is what the pillar counts", () => {
+    const read = readSectionSheet(bothRegisters(), spec.columns, {
+      sectionKey: spec.sectionKey,
+      sheetHints: spec.sheetHints,
+    });
+    const entities = read.rows.map((r) => spec.toEntity(r as ParsedRow));
+
+    expect(entities).toHaveLength(2);
+    expect(entities.map((e) => e.learnerName)).toEqual(["Lerato Ndlovu", "Sipho Dlamini"]);
+    expect(entities.every((e) => e.isYesEmployee)).toBe(true);
+    expect(entities.every((e) => e.isBlack)).toBe(true);
+  });
+
+  /**
+   * The sheet states neither, and inventing either would hand out points the
+   * entity has not evidenced — absorption is a large part of the YES uplift.
+   */
+  it("claims no cost and no absorption, because the register states neither", () => {
+    const read = readSectionSheet(bothRegisters(), spec.columns, {
+      sectionKey: spec.sectionKey,
+      sheetHints: spec.sheetHints,
+    });
+    const entities = read.rows.map((r) => spec.toEntity(r as ParsedRow));
+
+    expect(entities.every((e) => e.totalCost === 0)).toBe(true);
+    expect(entities.every((e) => e.isAbsorbed === false)).toBe(true);
+  });
+});
+
 /**
  * The loop that had been broken: the product tells you what to fill in, and
  * then reads back what you filled in. Every pillar's blank sheet must import

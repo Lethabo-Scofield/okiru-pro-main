@@ -856,13 +856,21 @@ function sheetMatrix(wb: XLSX.WorkBook, name: string): unknown[][] {
 export function readSectionSheet(
   buffer: ArrayBuffer,
   columns: ColumnDef[],
-  opts: { sectionKey?: string; sheetName?: string } = {},
+  opts: { sectionKey?: string; sheetName?: string; sheetHints?: string[] } = {},
 ): SectionSheetRead {
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
   const sheetNames = wb.SheetNames ?? [];
-  const matchingSheetNames = opts.sectionKey
-    ? sheetNames.filter((n) => matchSheetName(n) === opts.sectionKey)
-    : [];
+  // `sheetHints` names the sheets for a register that is NOT a workbook
+  // section. YES is the case: its sheet holds a staff register whose columns
+  // are indistinguishable from Management Control's, so choosing by content
+  // would read the wrong tab with total confidence. The sheet's NAME is the
+  // only thing that separates them.
+  const hinted = opts.sheetHints?.map(norm) ?? [];
+  const matchingSheetNames = hinted.length
+    ? sheetNames.filter((n) => hinted.some((h) => norm(n) === h || norm(n).includes(h)))
+    : opts.sectionKey
+      ? sheetNames.filter((n) => matchSheetName(n) === opts.sectionKey)
+      : [];
 
   const empty: SectionSheetRead = {
     sheetName: null,

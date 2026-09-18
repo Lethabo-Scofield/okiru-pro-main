@@ -44,6 +44,12 @@ export interface BulkImportSpec<T> {
   noun: string;
   columns: ColumnDef[];
   /**
+   * Sheet names this register goes by, for a register that is not a workbook
+   * section. Without it YES would be read from the Management Control tab:
+   * the two hold the same columns, so only the name tells them apart.
+   */
+  sheetHints?: string[];
+  /**
    * Column keys without which a row is not a record. A row missing one is
    * counted and reported, never quietly dropped and never half-imported.
    */
@@ -401,11 +407,77 @@ function contributionSpec(
   };
 }
 
+/**
+ * YES 4 Youth placements.
+ *
+ * The workbook has a "Y.E.S Employees" sheet — a staff register: name, ID,
+ * job title, race, gender, disabled, occupational level — and the toolkit
+ * stores a YES candidate as a training programme carrying `isYesEmployee`,
+ * which is what the YES page filters on. So it reads with the Management
+ * Control columns and lands as a flagged programme.
+ *
+ * Two things are deliberately NOT invented, because the sheet does not carry
+ * them and guessing either would hand out points nobody evidenced:
+ *
+ *   - cost stays zero. A placement's cost belongs to Skills Development and
+ *     this sheet states none, so these rows add no skills spend.
+ *   - absorption stays false. Absorption is a large part of the YES uplift and
+ *     the register does not record it; it is set per candidate afterwards.
+ */
+const yes: BulkImportSpec<TrainingProgram> = {
+  sectionKey: "management-control",
+  sheetHints: ["y.e.s employees", "yes employees", "yes 4 youth", "yes4youth", "yes"],
+  label: "YES 4 Youth",
+  noun: "candidates",
+  columns: MC_EE_COLUMNS,
+  requiredKeys: ["name"],
+  toEntity: (row) => {
+    const learnerRace = race(row.race);
+    return {
+      id: uuidv4(),
+      programName: "YES 4 Youth placement",
+      categoryCode: "C",
+      learnerName: fullName(row),
+      learnerIdNumber: str(row.idNumber) || undefined,
+      gender: gender(row.gender),
+      race: learnerRace,
+      isDisabled: bool(row.isDisabled),
+      isForeign: bool(row.isForeign),
+      employmentStatus: "Fixed-Term",
+      isYesEmployee: true,
+      isCompleted: false,
+      isAbsorbed: false,
+      transactionDate: new Date().toISOString().slice(0, 10),
+      courseCost: 0,
+      travelCost: 0,
+      accommodationCost: 0,
+      cateringCost: 0,
+      stationeryCost: 0,
+      facilityCost: 0,
+      salaryCost: 0,
+      otherCosts: 0,
+      isAbet: false,
+      isMandatory: false,
+      isBursary: false,
+      totalCost: 0,
+      name: "YES 4 Youth placement",
+      category: "short_course",
+      cost: 0,
+      isEmployed: true,
+      isBlack: learnerRace !== "White",
+    } as TrainingProgram;
+  },
+  identity: (p) => `${p.learnerName.toLowerCase()}|${(p.learnerIdNumber ?? "").toLowerCase()}`,
+  previewColumns: ["Candidate", "Race", "Gender", "Black youth"],
+  describe: (p) => [p.learnerName, p.race, p.gender, p.isBlack ? "Yes" : "No"],
+};
+
 export const BULK_IMPORT_SPECS = {
   ownership,
   "management-control": managementControl,
   "skills-development": skillsDevelopment,
   procurement,
+  yes,
   esd: contributionSpec("esd", "Enterprise & Supplier Development", ESD_COLUMNS),
   sed: contributionSpec("sed", "Socio-Economic Development", SED_COLUMNS),
 } as const;

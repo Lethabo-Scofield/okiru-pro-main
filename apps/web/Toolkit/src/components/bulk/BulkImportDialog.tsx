@@ -95,6 +95,7 @@ export function BulkImportDialog<T>({
     if (!buffer) return null;
     const read = readSectionSheet(buffer, spec.columns, {
       sectionKey: spec.sectionKey,
+      sheetHints: spec.sheetHints,
       sheetName,
     });
 
