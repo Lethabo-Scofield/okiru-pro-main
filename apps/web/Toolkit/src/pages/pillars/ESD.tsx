@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
 import { supplierSumTmps } from "@toolkit/lib/calculators/shared";
@@ -325,7 +327,16 @@ export default function ESD() {
           <p className="text-muted-foreground mt-1">Manage Preferential Procurement and ESD Contributions.</p>
         </div>
         <div className="flex gap-2">
-          
+          <PillarBulkImport
+            spec={BULK_IMPORT_SPECS.esd}
+            existing={esd.contributions}
+            onImport={(rows, mode) => {
+              if (mode === "replace") esd.contributions.forEach((c) => removeEsdContribution(c.id));
+              rows.forEach(addEsdContribution);
+            }}
+            label="Bulk upload contributions"
+          />
+
           <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) supAddErrs.reset(); }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2" data-testid="btn-add-supplier">

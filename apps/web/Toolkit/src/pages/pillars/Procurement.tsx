@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
@@ -484,6 +486,15 @@ export default function Procurement() {
           <p className="text-muted-foreground mt-1">Manage supplier spend and B-BBEE compliance. 29 points available.</p>
         </div>
         <div className="flex gap-2">
+          <PillarBulkImport
+            spec={BULK_IMPORT_SPECS.procurement}
+            existing={suppliers}
+            onImport={(rows, mode) => {
+              if (mode === "replace") suppliers.forEach((s) => removeSupplier(s.id));
+              rows.forEach(addSupplier);
+            }}
+            label="Bulk upload suppliers"
+          />
           <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) addErrs.reset(); }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2" data-testid="btn-add-supplier">

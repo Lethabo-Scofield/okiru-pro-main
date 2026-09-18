@@ -29,6 +29,10 @@ import {
   type SectionGroup,
 } from "@/components/workbook/sections";
 import { lookupIndustryNormPercent } from "@/lib/industryNormLookup";
+import {
+  TEMPLATE_CHOICES,
+  downloadInformationRequestTemplate,
+} from "@/lib/informationRequestTemplate";
 import { SectionWorkbookEditor } from "@/components/workbook/SectionWorkbookEditor";
 import { WorkbookValidationPanel } from "@/components/workbook/WorkbookValidationPanel";
 import { ExtractionReviewModal, type CellUpdate } from "@/components/workbook/ExtractionReviewModal";
@@ -353,6 +357,10 @@ function CompanyPicker({
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
+  // Which sector’s blank Information Request to hand over. The sheets differ
+  // per sector — FSC carries an Access to Financial Services pillar nobody
+  // else has, ICT asks its own SED question — so one file cannot serve all.
+  const [templateChoiceId, setTemplateChoiceId] = useState(TEMPLATE_CHOICES[0].id);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewResult, setPreviewResult] = useState<ExcelExtractionResult | null>(null);
@@ -741,6 +749,54 @@ function CompanyPicker({
                           className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-[#107C41] px-6 text-[15px] font-semibold text-white transition-colors hover:bg-[#185C37] disabled:opacity-60"
                           onImport={handleExcelImport}
                         />
+                      </div>
+
+                      {/* The other half of this path. The product asked people to
+                          upload "the template" and never offered one, so anyone
+                          without a workbook already in hand had nowhere to go but
+                          the token-charged document route. The file is built from
+                          the same column definitions this importer reads, per
+                          sector, so what a client fills in comes back whole. */}
+                      <div className="mt-5 border-t border-white/[0.06] pt-4 text-left">
+                        <p className="text-[13px] font-medium text-white">
+                          No workbook yet? Send your client a blank one.
+                        </p>
+                        <p className="mt-1 text-[13px] leading-5 text-[color:var(--body)]">
+                          One sheet per pillar, with the columns and the allowed values for the sector
+                          you pick. Fill it in and bring it back here.
+                        </p>
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                          <select
+                            value={templateChoiceId}
+                            onChange={(e) => setTemplateChoiceId(e.target.value)}
+                            aria-label="Sector for the Information Request template"
+                            className="h-11 min-w-0 flex-1 rounded-2xl border border-white/[0.10] bg-[color:var(--ink-3)] px-3 text-[14px] text-white outline-none transition-colors focus:border-white/30 focus:ring-4 focus:ring-white/[0.06]"
+                            data-testid="select-template-sector"
+                          >
+                            {TEMPLATE_CHOICES.map((choice) => (
+                              <option key={choice.id} value={choice.id} className="bg-[#16181c]">
+                                {choice.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const choice =
+                                TEMPLATE_CHOICES.find((c) => c.id === templateChoiceId) ?? TEMPLATE_CHOICES[0];
+                              downloadInformationRequestTemplate(choice.spec);
+                              toast({
+                                title: "Template downloaded",
+                                description: `${choice.label} — one sheet per pillar, ready to send.`,
+                              });
+                            }}
+                            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/[0.12] bg-white/[0.04] px-4 text-[14px] font-semibold text-white transition-colors hover:border-white/25 hover:bg-white/[0.08]"
+                            data-testid="button-download-template"
+                          >
+                            <Download className="h-4 w-4" />
+                            Download template
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -2492,6 +2548,9 @@ export default function InformationRequest() {
   // list, which is a different screen from the one ESG shows for the same act.
   const isCreateScorecardFlow =
     location.startsWith("/create-scorecard") || location.startsWith("/bbbee/new");
+  // Where this flow STARTS — the screen the three options live on, and the
+  // only thing `basePath` is for. It is not a prefix for the steps that come
+  // after a company exists; those have routes of their own.
   const basePath = location.startsWith("/bbbee/new")
     ? "/bbbee/new"
     : location.startsWith("/create-scorecard")
@@ -2580,7 +2639,13 @@ export default function InformationRequest() {
     justPickedIdRef.current = id ?? null;
     setPicked(c);
     if (id) {
-      navigate(`${basePath}/${id}`, { replace: true });
+      // A company's steps are routed under `/create-scorecard/:companyId` and
+      // nowhere else — it is what the workspace row opens, what the summary
+      // links back to, and what the breadcrumbs read as B-BBEE. Prefixing with
+      // the path we came in on produced `/bbbee/new/C-98220`, which matches no
+      // route: the client was created and then the screen said 404. `/bbbee/new`
+      // is the way IN and stops here, as `/esg/new` hands off to `/esg/create`.
+      navigate(`/create-scorecard/${encodeURIComponent(id)}`, { replace: true });
     } else {
       // Never fail silently: with no id there is nothing to navigate to, and
       // the old code just did nothing while the client had already been created.

@@ -1,7 +1,8 @@
 import React, { useRef, useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
-import { parseSkillsBulkUploadBuffer } from "./bulkUploadParser";
 import { calculateSkillsScore, resolveSkillsSpendTargets } from "@toolkit/lib/calculators/skills";
 import { isBlackRace } from "@toolkit/lib/calculators/shared";
 import { getEAPTargets } from "@toolkit/lib/calculators/eapTargets";
@@ -185,44 +186,6 @@ export default function SkillsDevelopment() {
   const [formState, setFormState] = useState<InterventionFormState>({ ...defaultFormState });
   const [municipalityIsOther, setMunicipalityIsOther] = useState(false);
   const [expandedSkillRows, setExpandedSkillRows] = useState<Set<number>>(new Set());
-  const bulkUploadInputRef = useRef<HTMLInputElement>(null);
-
-  /**
-   * Bulk-upload Skills Development interventions from an .xlsx / .csv that matches
-   * the headers in the downloadable Information Request template (Skills Development tab).
-   * Header matching is case- and punctuation-insensitive; unrecognised columns are ignored.
-   */
-  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = evt.target?.result;
-        if (!data) {
-          toast({ title: "Parse error", description: "Empty file payload.", variant: "destructive" });
-          return;
-        }
-        const result = parseSkillsBulkUploadBuffer(data as ArrayBuffer);
-        if (result.error) {
-          toast({ title: "Bulk upload failed", description: result.error, variant: "destructive" });
-          return;
-        }
-        for (const p of result.programs) addTrainingProgram(p);
-        const added = result.programs.length;
-        toast({
-          title: "Bulk upload complete",
-          description: `${added} intervention${added === 1 ? '' : 's'} imported${result.skipped ? `, ${result.skipped} skipped (missing data).` : '.'}`,
-        });
-      } catch {
-        toast({ title: "Parse error", description: "Could not read the file. Use the downloaded template format.", variant: "destructive" });
-      } finally {
-        if (e.target) e.target.value = '';
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
   const sc = calculatorConfig?.skills;
   const { overallTargetPct, bursaryTargetPct } = resolveSkillsSpendTargets(sc);
   const targetSpend = leviableAmount * overallTargetPct;
@@ -818,24 +781,15 @@ export default function SkillsDevelopment() {
         </div>
         
         <div className="flex gap-2">
-          <input
-            ref={bulkUploadInputRef}
-            type="file"
-            accept=".xlsx,.xls,.csv"
-            className="hidden"
-            onChange={handleBulkUpload}
-            data-testid="input-skills-bulk-upload"
+          <PillarBulkImport
+            spec={BULK_IMPORT_SPECS["skills-development"]}
+            existing={trainingPrograms}
+            onImport={(rows, mode) => {
+              if (mode === "replace") trainingPrograms.forEach((p) => removeTrainingProgram(p.id));
+              rows.forEach(addTrainingProgram);
+            }}
+            label="Bulk upload"
           />
-          <Button
-            variant="outline"
-            className="gap-2"
-            onClick={() => bulkUploadInputRef.current?.click()}
-            data-testid="button-skills-bulk-upload"
-            title="Upload an .xlsx/.csv that matches the Skills Development tab of the downloaded template."
-          >
-            <Upload className="h-4 w-4" />
-            Bulk Upload
-          </Button>
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button className="gap-2">

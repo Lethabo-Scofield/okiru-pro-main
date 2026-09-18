@@ -479,24 +479,55 @@ function parseGridFromSheet(
   if (rows.length < 2) return [];
   const headerIdx = findHeaderRow(rows, columns);
   const headers = (rows[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());
-  // Two-pass column→key mapping. A column whose header EXACTLY matches a key's alias
-  // owns that key; a looser substring match cannot override an exact-claimed key.
-  // Without this, "Salary Cost (category B,C,D only)" and "Location" both substring-
-  // matched "category" and overwrote the real "Category *" -> categoryCode slot with
-  // the Location value, breaking category-based skills scoring for every workbook. (W-skills)
-  const exactKeyForHeader = (h: string): string | null => {
+  // Column→key mapping in strength order, strongest claim first. A header that IS
+  // the column's label or key (rank 0) beats one matching an alias (rank 1),
+  // which beats a substring match. Each key is spoken for once: a weaker claim
+  // never overwrites a stronger one, and a header whose key is taken falls
+  // through to its next valid key rather than being dropped.
+  //
+  // Two things forced this. "Salary Cost (category B,C,D only)" and "Location"
+  // both substring-matched "category" and overwrote the real "Category *" ->
+  // categoryCode slot with the Location value, breaking category-based skills
+  // scoring for every workbook. (W-skills) And real Management Control sheets
+  // carry BOTH "Position (Occupational Level)" and "Job Title" — each an alias of
+  // Designation — so with last-write-wins every employee's Designation was read
+  // from Job Title ("Member", "Administration Manager") and the whole register
+  // landed in the wrong management band. Designation is what MC scores.
+  const claimForHeader = (h: string): { key: string; rank: number } | null => {
     const hn = norm(h);
     if (!hn) return null;
-    for (const col of columns) for (const alias of buildColumnAliases(col)) if (norm(alias) === hn) return col.key;
-    return null;
+    let best: { key: string; rank: number } | null = null;
+    for (const col of columns) {
+      const ownNames = [col.key, col.label.replace(/\*+$/, "").trim()];
+      const rank = ownNames.some((n) => norm(n) === hn)
+        ? 0
+        : buildColumnAliases(col).some((a) => norm(a) === hn)
+          ? 1
+          : -1;
+      if (rank >= 0 && (!best || rank < best.rank)) best = { key: col.key, rank };
+      if (best?.rank === 0) break;
+    }
+    return best;
   };
-  const exactKeys = headers.map(exactKeyForHeader);
-  const claimedExact = new Set(exactKeys.filter((k): k is string => Boolean(k)));
-  const keyByCol: (string | null)[] = headers.map((h, i) => {
-    if (exactKeys[i]) return exactKeys[i];
-    // Substring match, skipping keys already exact-claimed so the header can fall
-    // through to its next valid (unclaimed) key instead of being dropped.
-    return mapHeaderToKey(h, columns, claimedExact);
+
+  const claims = headers.map(claimForHeader);
+  const keyByCol: Array<string | null> = headers.map(() => null);
+  const taken = new Set<string>();
+  for (const rank of [0, 1]) {
+    headers.forEach((_, i) => {
+      const claim = claims[i];
+      if (keyByCol[i] || !claim || claim.rank !== rank || taken.has(claim.key)) return;
+      keyByCol[i] = claim.key;
+      taken.add(claim.key);
+    });
+  }
+  headers.forEach((h, i) => {
+    if (keyByCol[i]) return;
+    const key = mapHeaderToKey(h, columns, taken);
+    if (key && !taken.has(key)) {
+      keyByCol[i] = key;
+      taken.add(key);
+    }
   });
 
   const out: WorkbookRow[] = [];
@@ -770,6 +801,119 @@ function deriveEmpowermentFinancingFacilities(rows: unknown[][]): Array<Record<s
     out.push(facility);
   }
   return out;
+}
+
+/**
+ * One sheet of a spreadsheet, read as one section's rows.
+ *
+ * The whole-workbook import and a single pillar's bulk upload are the same act
+ * at different scales, so they share this: the same sheet matching, the same
+ * hunt for the header row, the same aliases, the same type coercion. While they
+ * had a parser each, the toolkit's read sheet 1 of the file (an "Instructions"
+ * tab on every real information-gathering workbook) and looked for headers that
+ * existed only in a template the product never offered to download.
+ *
+ * `sheetName` is null when nothing in the file resembles this section, which is
+ * a question for the caller to put to the user, not an error.
+ */
+export interface SectionSheetRead {
+  /** The sheet the rows were read from, or null when none was usable. */
+  sheetName: string | null;
+  /** Every sheet in the file, so the caller can offer a different one. */
+  sheetNames: string[];
+  /** Sheets whose name maps to this section. */
+  matchingSheetNames: string[];
+  /** Index of the header row within the chosen sheet. */
+  headerRowIndex: number;
+  /** Header labels exactly as the file writes them. */
+  headers: string[];
+  /** For each header, the column key it was understood as (null = unrecognised). */
+  mappedKeys: Array<string | null>;
+  rows: WorkbookRow[];
+}
+
+/** How many of a row's cells read as headers for these columns. */
+function headerRowScore(row: unknown[], columns: ColumnDef[]): number {
+  const aliasList: string[] = [];
+  for (const col of columns) for (const alias of buildColumnAliases(col)) aliasList.push(norm(alias));
+  const aliases = new Set(aliasList);
+  let score = 0;
+  for (const cell of row || []) {
+    const value = norm(String(cell ?? ""));
+    if (!value) continue;
+    if (aliases.has(value) || aliasList.some((a) => a.length >= 4 && value.startsWith(a))) score += 1;
+  }
+  return score;
+}
+
+function sheetMatrix(wb: XLSX.WorkBook, name: string): unknown[][] {
+  return XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], {
+    header: 1,
+    defval: "",
+  }) as unknown[][];
+}
+
+export function readSectionSheet(
+  buffer: ArrayBuffer,
+  columns: ColumnDef[],
+  opts: { sectionKey?: string; sheetName?: string } = {},
+): SectionSheetRead {
+  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  const sheetNames = wb.SheetNames ?? [];
+  const matchingSheetNames = opts.sectionKey
+    ? sheetNames.filter((n) => matchSheetName(n) === opts.sectionKey)
+    : [];
+
+  const empty: SectionSheetRead = {
+    sheetName: null,
+    sheetNames,
+    matchingSheetNames,
+    headerRowIndex: 0,
+    headers: [],
+    mappedKeys: [],
+    rows: [],
+  };
+  if (sheetNames.length === 0) return empty;
+
+  // A sheet the caller named wins. Otherwise prefer one whose NAME says it holds
+  // this section; failing that, the sheet whose contents look most like this
+  // section's header row — which is how a renamed or extra tab still lands.
+  let chosen: string | null = null;
+  if (opts.sheetName && sheetNames.includes(opts.sheetName)) {
+    chosen = opts.sheetName;
+  } else if (matchingSheetNames.length > 0) {
+    chosen = matchingSheetNames[0];
+  } else {
+    let best = 0;
+    for (const name of sheetNames) {
+      const matrix = sheetMatrix(wb, name);
+      let sheetBest = 0;
+      for (let i = 0; i < Math.min(matrix.length, 25); i++) {
+        sheetBest = Math.max(sheetBest, headerRowScore(matrix[i] || [], columns));
+      }
+      if (sheetBest > best) {
+        best = sheetBest;
+        chosen = name;
+      }
+    }
+    if (best < 2) chosen = null;
+  }
+  if (!chosen) return empty;
+
+  const matrix = sheetMatrix(wb, chosen);
+  const headerRowIndex = findHeaderRow(matrix, columns);
+  const headers = ((matrix[headerRowIndex] as unknown[]) ?? []).map((h) => String(h ?? "").trim());
+  const mappedKeys = headers.map((h) => mapHeaderToKey(h, columns));
+
+  return {
+    sheetName: chosen,
+    sheetNames,
+    matchingSheetNames,
+    headerRowIndex,
+    headers,
+    mappedKeys,
+    rows: parseGridFromSheet(matrix, columns),
+  };
 }
 
 export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
