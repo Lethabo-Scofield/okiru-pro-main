@@ -1626,6 +1626,29 @@ export function registerWorkbookRoutes(app: Express): void {
       const allValidationIssues = validateWorkbook(wb.sections);
       const blockingIssues = validateWorkbookForSubmit(wb.sections);
 
+      // A blocking issue now blocks.
+      //
+      // It never did. The submit computed them, wrote the scorecard anyway, and
+      // returned the list in the response — which nothing on the client read.
+      // So "blocking" described an intention rather than a behaviour, and a
+      // workbook with no sector, no scorecard type or no year end scored
+      // exactly as if it had them.
+      //
+      // These four decide what the scorecard IS. A score produced without them
+      // is not a score with a gap in it, it is a score against the wrong
+      // measure — and it looked identical to a correct one.
+      if (blockingIssues.length > 0) {
+        return res.status(422).json({
+          error:
+            blockingIssues.length === 1
+              ? `Cannot calculate: ${blockingIssues[0].message}`
+              : `Cannot calculate — ${blockingIssues.length} company details are missing or invalid.`,
+          blockingIssues,
+          fields: blockingIssues.map((issue) => issue.field),
+          validationIssues: allValidationIssues,
+        });
+      }
+
       const projected = projectWorkbookToClient(wb);
       console.log("[SCORING-TRACE] projectWorkbookToClient input:", {
         companyId: wb.companyId,

@@ -1913,9 +1913,21 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         }
         setSyncStatus("error");
         if (!opts?.quiet) {
+          // 422 is the submit gate: company details the scorecard cannot be
+          // calculated without. Naming the fields is the difference between a
+          // user fixing it in ten seconds and reporting a broken button.
+          const blocked = res.status === 422 && Array.isArray(data.blockingIssues);
           toast({
-            title: "Scorecard sync failed",
-            description: data.error || data.summary || `Server returned ${res.status}.`,
+            title: blocked ? "Fill these in before calculating" : "Scorecard sync failed",
+            description: blocked
+              ? // The message already reads "Financial Year-End (dd/mm/yyyy):
+                // Required" — the field key alone would not tell anyone which
+                // box to go and fill.
+                (data.blockingIssues as Array<{ message?: string; field?: string }>)
+                  .slice(0, 4)
+                  .map((issue) => issue.message || issue.field)
+                  .join(" · ")
+              : data.error || data.summary || `Server returned ${res.status}.`,
             variant: "destructive",
           });
         }
