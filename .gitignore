@@ -100,3 +100,7 @@ docs/ESG Toolkit/
 docs/Proposals/
 docs/Reports/
 docs/Super Group Upload Pack/
+
+# Generated test uploads — regenerate rather than version them.
+test-uploads/
+Okiru - Supplier Register TEST.xlsx

@@ -472,13 +472,20 @@ function deriveAfsMetaFromIndicatorTable(rows: unknown[][]): Record<string, unkn
   return out;
 }
 
-function parseGridFromSheet(
-  rows: unknown[][],
+/**
+ * Which column key each header means, resolved the way the parser resolves it.
+ *
+ * Exported because the UI has to report the SAME answer the parse uses. It did
+ * not: the dialog called `mapHeaderToKey` per header, with no notion of a key
+ * already being claimed, and so told a consultant "No column found for:
+ * Current Size" about a column it had just read, and "Ignored: Registration
+ * No." about one it had not ignored. Two functions answering one question is
+ * how a screen ends up contradicting the thing behind it.
+ */
+export function resolveHeaderKeys(
+  headers: string[],
   columns: ColumnDef[],
-): WorkbookRow[] {
-  if (rows.length < 2) return [];
-  const headerIdx = findHeaderRow(rows, columns);
-  const headers = (rows[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());
+): Array<string | null> {
   // Column→key mapping in strength order, strongest claim first. A header that IS
   // the column's label or key (rank 0) beats one matching an alias (rank 1),
   // which beats a substring match. Each key is spoken for once: a weaker claim
@@ -529,6 +536,18 @@ function parseGridFromSheet(
       taken.add(key);
     }
   });
+
+  return keyByCol;
+}
+
+function parseGridFromSheet(
+  rows: unknown[][],
+  columns: ColumnDef[],
+): WorkbookRow[] {
+  if (rows.length < 2) return [];
+  const headerIdx = findHeaderRow(rows, columns);
+  const headers = (rows[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());
+  const keyByCol = resolveHeaderKeys(headers, columns);
 
   const out: WorkbookRow[] = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -911,7 +930,7 @@ export function readSectionSheet(
   const matrix = sheetMatrix(wb, chosen);
   const headerRowIndex = findHeaderRow(matrix, columns);
   const headers = ((matrix[headerRowIndex] as unknown[]) ?? []).map((h) => String(h ?? "").trim());
-  const mappedKeys = headers.map((h) => mapHeaderToKey(h, columns));
+  const mappedKeys = resolveHeaderKeys(headers, columns);
 
   return {
     sheetName: chosen,
