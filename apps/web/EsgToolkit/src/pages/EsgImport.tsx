@@ -23,7 +23,7 @@ export default function EsgImport() {
       </header>
 
       <div className="esg-glass p-6 flex flex-col sm:flex-row items-start gap-4">
-        <div className="p-3 rounded-xl bg-[rgba(74,168,255,0.08)] border border-[rgba(74,168,255,0.2)]">
+        <div className="p-3 rounded-xl bg-[rgba(34,197,94,0.08)] border border-[rgba(34,197,94,0.2)]">
           <Upload className="h-6 w-6 text-[var(--esg-acc-blue,#22c55e)]" />
         </div>
         <div className="flex-1 space-y-3">

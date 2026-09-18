@@ -118,8 +118,8 @@ function NavPillarButton({
           : item.pillar === "data"
             ? {
                 color: "var(--esg-acc-blue, #22c55e)",
-                borderColor: "rgba(74,168,255,.25)",
-                background: "rgba(74,168,255,.08)",
+                borderColor: "rgba(34,197,94,.25)",
+                background: "rgba(34,197,94,.08)",
               }
             : undefined;
 
