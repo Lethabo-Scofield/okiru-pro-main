@@ -343,7 +343,7 @@ export default function ESD() {
                 <ShoppingCart className="h-4 w-4" /> Add Supplier
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Add Supplier</DialogTitle></DialogHeader>
               {renderSupplierFormFields(newSup, setNewSup, supAddErrs)}
               <DialogFooter><Button onClick={handleAddSupplier} data-testid="btn-save-supplier">Save Supplier</Button></DialogFooter>
@@ -356,7 +356,7 @@ export default function ESD() {
                 <Plus className="h-4 w-4" /> Add Contribution
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Add ESD Contribution</DialogTitle></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-start gap-4">
@@ -440,7 +440,7 @@ export default function ESD() {
       </div>
 
       <Dialog open={isEditSupOpen} onOpenChange={(open) => { setIsEditSupOpen(open); if (!open) supEditErrs.reset(); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Supplier</DialogTitle></DialogHeader>
           {renderSupplierFormFields(editSup, setEditSup, supEditErrs)}
           <DialogFooter><Button onClick={handleEditSupplier} data-testid="btn-update-supplier">Update Supplier</Button></DialogFooter>

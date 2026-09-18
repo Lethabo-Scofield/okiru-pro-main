@@ -131,6 +131,8 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   // a failing figure is treated as MISSING, loudly, not as a tiny
   // denominator that mints points.
   const dataFlags: string[] = [];
+  /** Suppliers recognised on their B-BBEE level with no empowering status on record. */
+  let unstatedEmpowering = 0;
   let effectiveTmps = tmps;
   if (tmps > 0 && suppliers.length > 0) {
     const largestSupplierSpend = suppliers.reduce((m, s) => Math.max(m, Number(s.spend) || 0), 0);
@@ -214,6 +216,14 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
     // (DISCREPANCY-LEDGER rcogp/qse D-02; Excel Procurement Scorecard!H9 = sum over all suppliers.)
     if (sup.isEmpoweringSupplier ?? (sup.beeLevel >= 1 && sup.beeLevel <= 8)) {
       empoweringSpend += recognised;
+      // Counted on their level, having never been asked about. Not a guess —
+      // the Codes include every supplier with a recognition level on this line
+      // — but "we were told No" and "we were never told" score differently, so
+      // a verifier is entitled to know which of the two this was. Counted here,
+      // reported below; it does not change the number.
+      if (sup.isEmpoweringSupplier === undefined && sup.beeLevel >= 1 && sup.beeLevel <= 8) {
+        unstatedEmpowering += 1;
+      }
     }
 
     if (enterpriseType === 'qse') {
@@ -283,7 +293,15 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   return {
     base: round2(baseTotal),
     dataFlags,
-    coverageNotes,
+    coverageNotes: unstatedEmpowering > 0
+      ? [
+          ...coverageNotes,
+          `${unstatedEmpowering} supplier${unstatedEmpowering === 1 ? " was" : "s were"} recognised on ` +
+          `B-BBEE level alone — no empowering-supplier status is on record for ` +
+          `${unstatedEmpowering === 1 ? "it" : "them"}. The Codes count every supplier holding a ` +
+          'recognition level on this line, so the number is right; this says what it rests on.',
+        ]
+      : coverageNotes,
     empoweringSuppliers: round2(empoweringScore),
     qseSuppliers: round2(qseScore),
     emeSuppliers: round2(emeScore),

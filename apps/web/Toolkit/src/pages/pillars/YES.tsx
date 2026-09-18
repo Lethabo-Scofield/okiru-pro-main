@@ -304,7 +304,7 @@ export default function YESInitiative() {
                 Add YES Candidate
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add YES 4 Youth Candidate</DialogTitle>
                 <DialogDescription>
@@ -325,7 +325,7 @@ export default function YESInitiative() {
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); resetForm(); } }}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit YES Candidate</DialogTitle>
             <DialogDescription>Update candidate details.</DialogDescription>

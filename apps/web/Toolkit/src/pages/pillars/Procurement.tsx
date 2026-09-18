@@ -501,7 +501,7 @@ export default function Procurement() {
                 <ShoppingCart className="h-4 w-4" /> Add Supplier
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Add Supplier</DialogTitle></DialogHeader>
               {renderSupplierFormFields(newSup, setNewSup, addErrs)}
               <DialogFooter><Button onClick={handleAddSupplier} data-testid="btn-save-supplier">Save Supplier</Button></DialogFooter>
@@ -511,7 +511,7 @@ export default function Procurement() {
       </div>
 
       <Dialog open={isEditSupOpen} onOpenChange={(open) => { setIsEditSupOpen(open); if (!open) editErrs.reset(); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Supplier</DialogTitle></DialogHeader>
           {renderSupplierFormFields(editSup, setEditSup, editErrs)}
           <DialogFooter><Button onClick={handleEditSupplier} data-testid="btn-update-supplier">Update Supplier</Button></DialogFooter>

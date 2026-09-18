@@ -133,7 +133,7 @@ export default function SED() {
               Add Contribution
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add SED Contribution</DialogTitle>
               <DialogDescription>Record a new socio-economic development initiative.</DialogDescription>

@@ -60,7 +60,7 @@ import {
 import { buildConstructionScoringInput } from './calculators/construction-map';
 import { calculateConstructionScorecard } from '../../../../api/pipeline/constructionScoring';
 
-import { coerceYesNo } from '@/lib/yesNoValue';
+import { coerceYesNo, coerceYesNoOrUnset } from '@/lib/yesNoValue';
 import { calculateOwnershipScore } from './calculators/ownership';
 import { calculateManagementScore } from './calculators/management';
 import { calculateSkillsScore } from './calculators/skills';
@@ -1445,7 +1445,16 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           disabledOwnership: s.disabledOwnership || 0,
           enterpriseType: s.enterpriseType || 'generic',
           spend: s.spend || 0,
-          isEmpoweringSupplier: coerceYesNo(s.isEmpoweringSupplier ?? s.empoweringSupplier),
+          // Kept unstated when the record does not say. Procurement reads
+          // `isEmpoweringSupplier ?? (a valid B-BBEE level)`, so answering
+          // false here for a supplier nobody asked about excluded their whole
+          // spend — and because this runs on every re-hydration, an import
+          // that scored correctly went back to zero the moment the page
+          // reloaded. The other flags below only ever ADD points, so false is
+          // a safe answer for them.
+          isEmpoweringSupplier: coerceYesNoOrUnset(
+            s.isEmpoweringSupplier ?? s.empoweringSupplier,
+          ) as boolean,
           isForeignSupplier: coerceYesNo(s.isForeignSupplier),
           isBlackOwned51: coerceYesNo(s.isBlackOwned51),
           isBlackWomanOwned30: coerceYesNo(s.isBlackWomanOwned30),

@@ -25,6 +25,7 @@ import { readSectionSheet } from "@/lib/workbookExcelNormalizer";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { RCOGP_GENERIC_CALCULATOR_CONFIG } from "@toolkit/lib/sectors/rcogp-generic";
 import { BULK_IMPORT_SPECS, type ParsedRow } from "../bulkImportSpecs";
+import { coerceYesNo, coerceYesNoOrUnset } from "@/lib/yesNoValue";
 import type { Supplier } from "@toolkit/lib/types";
 
 /** A supplier register as a client sends it: no empowering-supplier column. */
@@ -110,5 +111,64 @@ describe("suppliers imported from a spreadsheet", () => {
 
     expect(suppliers[0].isEmpoweringSupplier).toBe(false);
     expect(score(suppliers).rawStats.empoweringSpend).toBe(0);
+  });
+});
+
+/**
+ * The round trip, not just the import.
+ *
+ * The first fix made the score move and stopped there. But the store rebuilds
+ * every supplier from the API on each load, and that rebuild coerced Yes/No
+ * fields with a helper that answers false for undefined — so an import scored
+ * correctly, and then went back to zero the moment the page reloaded. Fixing
+ * the mapper without fixing the re-hydration would have demoed perfectly and
+ * failed on the first refresh.
+ */
+describe("surviving a page reload", () => {
+  /** What JSON.stringify sends, and therefore what comes back. */
+  const overTheWire = (s: Supplier) => JSON.parse(JSON.stringify(s));
+
+  it("does not store an answer the sheet never gave", () => {
+    const [supplier] = importSuppliers(1);
+    expect("isEmpoweringSupplier" in overTheWire(supplier)).toBe(false);
+  });
+
+  it("re-hydrates as unstated, not as no", () => {
+    const stored = overTheWire(importSuppliers(1)[0]);
+    // The helper the store used to use — this is the regression, exactly.
+    expect(coerceYesNo(stored.isEmpoweringSupplier)).toBe(false);
+    // The one it uses now.
+    expect(coerceYesNoOrUnset(stored.isEmpoweringSupplier)).toBeUndefined();
+  });
+
+  it("still scores after a reload", () => {
+    const reloaded = importSuppliers(20).map((s) => {
+      const stored = overTheWire(s);
+      return {
+        ...stored,
+        isEmpoweringSupplier: coerceYesNoOrUnset(stored.isEmpoweringSupplier),
+      } as Supplier;
+    });
+
+    expect(score(reloaded).rawStats.empoweringSpend).toBeGreaterThan(0);
+    expect(score(reloaded).total).toBeGreaterThan(0);
+  });
+
+  it("would have scored zero under the old coercion", () => {
+    const reloadedTheOldWay = importSuppliers(20).map((s) => {
+      const stored = overTheWire(s);
+      return {
+        ...stored,
+        isEmpoweringSupplier: coerceYesNo(stored.isEmpoweringSupplier),
+      } as Supplier;
+    });
+
+    // Proof the reload path was genuinely broken, not a theory about it.
+    expect(score(reloadedTheOldWay).rawStats.empoweringSpend).toBe(0);
+  });
+
+  it("keeps an explicit no through a reload", () => {
+    const stored = { isEmpoweringSupplier: false };
+    expect(coerceYesNoOrUnset(stored.isEmpoweringSupplier)).toBe(false);
   });
 });
