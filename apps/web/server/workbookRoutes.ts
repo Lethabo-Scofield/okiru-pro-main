@@ -14,6 +14,7 @@ import {
   resolveWorkbookPillarAccess,
 } from "./pillarAccess";
 import { handleBackSync, rebuildWorkbookFromEntities } from "./workbookBackSync";
+import { reconcileRegisters } from "./registerReconcile";
 import {
   validateWorkbook,
   validateWorkbookForSubmit,
@@ -1750,6 +1751,17 @@ export function registerWorkbookRoutes(app: Express): void {
           const userId =
             (req as any).user?.id || (req.session as any)?.userId || wb.ownerUserId;
           const submittedAt = new Date().toISOString();
+          // Same fold as the stored path, so the offline demo cannot teach
+          // anyone a behaviour the real one does not have.
+          const memReconciled = reconcileRegisters(memGetClient(wb.companyId) as any, {
+            shareholders: update.shareholders,
+            employees: update.employees,
+            trainingPrograms: update.trainingPrograms,
+            suppliers: update.suppliers,
+            esdContributions: update.esdContributions,
+            sedContributions: update.sedContributions,
+          });
+          Object.assign(update, memReconciled.rows);
           const updated = memUpdateClient(wb.companyId, update);
           if (!updated) {
             return res
@@ -1783,6 +1795,32 @@ export function registerWorkbookRoutes(app: Express): void {
           return res
             .status(404)
             .json({ error: "Client not found for this workbook." });
+        }
+
+        // The registers belong to the company, not to this workbook. Writing
+        // them with $set replaced each array whole, so anything entered through
+        // the toolkit — a bulk-uploaded supplier register, an employee added on
+        // a pillar page — was deleted by a submit that had never heard of it,
+        // silently. Fold instead: the workbook replaces the rows it owns and
+        // leaves the rest standing. Rules and reasoning in registerReconcile.ts.
+        const reconciled = reconcileRegisters(
+          typeof (client as any).toObject === "function" ? (client as any).toObject() : client,
+          {
+            shareholders: update.shareholders,
+            employees: update.employees,
+            trainingPrograms: update.trainingPrograms,
+            suppliers: update.suppliers,
+            esdContributions: update.esdContributions,
+            sedContributions: update.sedContributions,
+          },
+        );
+        Object.assign(update, reconciled.rows);
+        if (reconciled.preserved > 0) {
+          logger.info("Workbook submit kept rows entered elsewhere", {
+            companyId: wb.companyId,
+            preserved: reconciled.preserved,
+            registers: reconciled.summary,
+          });
         }
 
         // Phase 3 (sync plan): financials merge fix. `update.financials` is a
