@@ -21,6 +21,7 @@ import {
   type ProcurementRow,
 } from "@/lib/certificateAutofill";
 import { downloadSectionTemplate } from "@/lib/informationRequestTemplate";
+import { CertificatePreview } from "@/components/certificates/CertificatePreview";
 import type { BulkImportSpec, ParsedRow } from "./bulkImportSpecs";
 
 /**
@@ -87,6 +88,16 @@ export function BulkImportDialog<T>({
    * typed, on the strength of a name match, is not ours to do silently.
    */
   const [certMatches, setCertMatches] = useState<SupplierMatchResult[] | null>(null);
+  /**
+   * The certificate being looked at.
+   *
+   * A match fills in a level and an expiry, and both move the score. Being
+   * able to open the document those came from is the difference between
+   * checking the match and taking its word for it.
+   */
+  const [previewing, setPreviewing] = useState<
+    { id: string; supplierName: string | null; matchedName: string | null } | null
+  >(null);
   const [certLoading, setCertLoading] = useState(false);
   const [certError, setCertError] = useState<string | null>(null);
   const [useCertificates, setUseCertificates] = useState(true);
@@ -460,6 +471,7 @@ export function BulkImportDialog<T>({
                                   <th className="px-2 py-1.5 text-left font-medium">Matched to</th>
                                   <th className="px-2 py-1.5 text-left font-medium">Level</th>
                                   <th className="px-2 py-1.5 text-left font-medium">Expires</th>
+                                  <th className="px-2 py-1.5 text-left font-medium sr-only">Certificate</th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -481,6 +493,24 @@ export function BulkImportDialog<T>({
                                       <td className="px-2 py-1">
                                         {m.match?.expiryDate ?? (
                                           <span className="text-amber-500">not on record</span>
+                                        )}
+                                      </td>
+                                      <td className="px-2 py-1 text-right">
+                                        {m.match?.certificateId && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setPreviewing({
+                                                id: m.match!.certificateId!,
+                                                supplierName: supplierNameById.get(m.key) ?? null,
+                                                matchedName: m.match!.companyName,
+                                              })
+                                            }
+                                            className="whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium text-primary underline-offset-2 hover:underline"
+                                            data-testid={`preview-certificate-${m.key}`}
+                                          >
+                                            View
+                                          </button>
                                         )}
                                       </td>
                                     </tr>
@@ -530,6 +560,24 @@ export function BulkImportDialog<T>({
                                         {m.match?.fields?.bbbeeLevel != null
                                           ? `Level ${m.match.fields.bbbeeLevel}`
                                           : "—"}
+                                      </td>
+                                      <td className="px-2 py-1 text-right">
+                                        {m.match?.certificateId && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setPreviewing({
+                                                id: m.match!.certificateId!,
+                                                supplierName: supplierNameById.get(m.key) ?? null,
+                                                matchedName: m.match!.companyName,
+                                              })
+                                            }
+                                            className="whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-500 underline-offset-2 hover:underline"
+                                            data-testid={`preview-fuzzy-certificate-${m.key}`}
+                                          >
+                                            Check it
+                                          </button>
+                                        )}
                                       </td>
                                     </tr>
                                   ))}
@@ -657,6 +705,15 @@ export function BulkImportDialog<T>({
           </div>
         )}
       </DialogContent>
+
+      {/* Outside DialogContent: the preview is its own layer, so it is not
+          clipped by the import dialog's own scroll container. */}
+      <CertificatePreview
+        certificateId={previewing?.id ?? null}
+        supplierName={previewing?.supplierName}
+        matchedName={previewing?.matchedName}
+        onClose={() => setPreviewing(null)}
+      />
     </Dialog>
   );
 }

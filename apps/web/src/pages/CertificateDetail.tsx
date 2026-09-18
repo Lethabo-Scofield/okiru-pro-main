@@ -3,7 +3,7 @@ import { useLocation } from 'wouter';
 import {
   Download, Loader2, ShieldCheck, AlertTriangle, Award,
   Building2, Hash, Users2, CalendarClock, History, Flag,
-  X, CheckCircle2, Pencil,
+  X, CheckCircle2, Pencil, Eye,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@toolkit/lib/auth';
@@ -12,6 +12,7 @@ import { certificateFormToPatchBody, type CertificateFormValues } from '@/compon
 import { sectorDisplayLabel, OKIRU_HUB_SECTORS } from '@/lib/okiruHubSectors';
 
 import { formatPercent } from '@/lib/formatPercent';
+import { CertificatePreview } from '@/components/certificates/CertificatePreview';
 interface CertDetail {
   slug: string;
   companyName: string;
@@ -135,6 +136,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   const [history, setHistory] = useState<HistoryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -373,14 +375,26 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap mb-10">
+              {/* Reading a certificate should not require downloading it first.
+                  The file is the evidence behind every field above it. */}
+              <button
+                onClick={() => setPreviewing(true)}
+                disabled={!data.blobName}
+                title={!data.blobName ? 'The file is not in storage' : undefined}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 transition-colors"
+                data-testid="certificate-detail-preview"
+              >
+                <Eye className="h-4 w-4" />
+                {data.blobName ? 'View certificate' : 'File unavailable'}
+              </button>
               <button
                 onClick={handleDownload}
                 disabled={downloading || !data.blobName}
                 title={!data.blobName ? 'Download unavailable' : undefined}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] hover:text-white border border-[color:var(--rule)] disabled:opacity-40 transition-colors"
               >
                 {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {data.blobName ? 'Download certificate' : 'Download unavailable'}
+                {data.blobName ? 'Download' : 'Download unavailable'}
               </button>
               <button
                 onClick={loadHistory}
@@ -556,6 +570,12 @@ export default function CertificateDetail({ slug }: { slug: string }) {
           onSave={saveEdit}
         />
       )}
+
+      <CertificatePreview
+        certificateId={previewing ? (data?.id ?? null) : null}
+        matchedName={data?.companyName ?? data?.fileName ?? null}
+        onClose={() => setPreviewing(false)}
+      />
     </div>
   );
 }
