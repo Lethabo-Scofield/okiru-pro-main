@@ -50,8 +50,15 @@
   --grad: linear-gradient(135deg, #e8441a 0%, #06b6d4 50%, #9333ea 100%);
   --grad-h: linear-gradient(90deg, #e8441a, #06b6d4, #9333ea);
 
+  /* The two products' marks, taken from the product landing themes so the
+     signed-in app and the site that sells it agree. `.okiru-purple` for
+     B-BBEE and `.okiru-green` for ESG, in ProductLandingPage.tsx.
+
+     ESG was cyan here, which read as a second blue rather than as ESG. Its
+     own theme has always been green: --accent #22c55e, over a #16a34a base. */
   --bbbee: #9333ea;
-  --esg: #06b6d4;
+  --esg: #22c55e;
+  --esg-deep: #16a34a;
 
   --app-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
