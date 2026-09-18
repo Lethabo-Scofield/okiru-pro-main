@@ -94,6 +94,23 @@ const bool = (v: unknown): boolean => {
   return /^(y|yes|true|1)$/i.test(str(v));
 };
 
+/**
+ * Yes/No as the sheet ACTUALLY states it, or undefined when it does not ask.
+ *
+ * The difference decides whether spend scores. `calculateProcurementScore`
+ * reads `isEmpoweringSupplier ?? (the supplier has a valid B-BBEE level)` and
+ * honours an explicit false as strict exclusion — so answering "no" on behalf
+ * of a sheet that never carried the column zeroed every imported supplier.
+ * Twenty suppliers, half a million rand of spend, and a score that did not
+ * move. Silence is not a no.
+ */
+const statedBool = (v: unknown): boolean | undefined => {
+  if (typeof v === "boolean") return v;
+  const raw = str(v);
+  if (raw === "") return undefined;
+  return /^(y|yes|true|1)$/i.test(raw);
+};
+
 /** A grid splits a combined "Name & Surname" column; a person has one name. */
 const fullName = (row: ParsedRow): string =>
   [str(row.name), str(row.surname)].filter(Boolean).join(" ").trim();
@@ -283,7 +300,13 @@ const skillsDevelopment: BulkImportSpec<TrainingProgram> = {
       race: learnerRace,
       isDisabled: bool(row.isDisabled),
       isForeign: bool(row.isForeign),
-      employmentStatus: bool(row.employed) ? "Permanent" : "Unemployed",
+      // Unstated means employed, not unemployed. Skills scores unemployed
+      // learners on their own line, so reading a missing column as "No" would
+      // have claimed that line for every learner in an imported register —
+      // the same mistake as the supplier one, pointing the other way: there it
+      // withheld points, here it would invent them. A company's skills
+      // register is its own people unless the sheet says otherwise.
+      employmentStatus: statedBool(row.employed) === false ? "Unemployed" : "Permanent",
       isYesEmployee: false,
       isCompleted: bool(row.completed),
       isAbsorbed: bool(row.absorbed),
@@ -307,7 +330,7 @@ const skillsDevelopment: BulkImportSpec<TrainingProgram> = {
       name: str(row.programName),
       category: category === "A" ? "bursary" : category === "B" ? "learnership" : "short_course",
       cost: totalCost,
-      isEmployed: bool(row.employed),
+      isEmployed: statedBool(row.employed) !== false,
       isBlack: learnerRace !== "White",
     } as TrainingProgram;
   },
@@ -335,7 +358,11 @@ const procurement: BulkImportSpec<Supplier> = {
     designatedGroupOwnership: pct(row.designated) || undefined,
     flowThroughOwnership: pct(row.unmodifiedBlackOwnership) || undefined,
     enterpriseType: enterpriseType(row.currentSize),
-    isEmpoweringSupplier: bool(row.empoweringSupplier),
+    // Unstated stays unstated: the calculator then falls back to "has a valid
+    // B-BBEE level", which is what an imported register means. The two below
+    // only ever ADD points, so a false there claims nothing that was not
+    // evidenced — the asymmetry is deliberate.
+    isEmpoweringSupplier: statedBool(row.empoweringSupplier) as boolean,
     isSupplierDevRecipient: bool(row.sdRecipient),
     hasThreeYearContract: bool(row.threeYearContract),
     firstProcurementDate: str(row.firstProcurementDate) || undefined,
