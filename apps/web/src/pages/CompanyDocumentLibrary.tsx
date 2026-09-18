@@ -126,9 +126,12 @@ export function CompanyDocumentLibrary({
   );
 
   const name = company?.name ?? companyId;
+  const filtered = Boolean(search.trim() || status || documentType);
+  /** Anything at all under this company — not "anything matching the filters". */
+  const hasAny = pagination.total > 0 || filtered;
 
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1120px] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="ok-eyebrow">{product === "esg" ? "ESG" : "B-BBEE"} · Documents</p>
@@ -170,21 +173,38 @@ export function CompanyDocumentLibrary({
         </div>
       </div>
 
-      <div className="ok-panel-flush mb-5 grid grid-cols-3 gap-4 py-4">
-        <div>
-          <p className="ok-eyebrow">Filed here</p>
-          <p className="ok-num mt-1 text-xl font-semibold">{pagination.total}</p>
+      {/* Three zeroes stretched across a 1400px row was the page's whole content
+          on an empty company. Counts appear once there is something to count,
+          and they sit inline rather than as a full-width grid of tiles. */}
+      {hasAny && (
+        <div className="ok-panel-flush mb-5 flex flex-wrap items-center gap-x-8 gap-y-3 px-5 py-3.5">
+          <div className="flex items-baseline gap-2">
+            <span className="ok-num text-[18px] font-semibold text-[color:var(--hi)]">
+              {pagination.total}
+            </span>
+            <span className="text-[12px] text-[color:var(--body)]">filed here</span>
+          </div>
+          {counts.review > 0 && (
+            <div className="flex items-baseline gap-2">
+              <span className="ok-num text-[18px] font-semibold text-amber-300">{counts.review}</span>
+              <span className="text-[12px] text-[color:var(--body)]">need review on this page</span>
+            </div>
+          )}
+          {counts.problem > 0 && (
+            <div className="flex items-baseline gap-2">
+              <span className="ok-num text-[18px] font-semibold text-red-300">{counts.problem}</span>
+              <span className="text-[12px] text-[color:var(--body)]">with a problem</span>
+            </div>
+          )}
+          {counts.review === 0 && counts.problem === 0 && (
+            <span className="ok-chip ok-chip-good">Everything on this page read cleanly</span>
+          )}
         </div>
-        <div>
-          <p className="ok-eyebrow">Needs review on page</p>
-          <p className="ok-num mt-1 text-xl font-semibold text-amber-300">{counts.review}</p>
-        </div>
-        <div>
-          <p className="ok-eyebrow">Problems on page</p>
-          <p className="ok-num mt-1 text-xl font-semibold text-red-300">{counts.problem}</p>
-        </div>
-      </div>
+      )}
 
+      {/* Filters are for narrowing a list. With nothing filed they are three
+          dead controls above an empty box. */}
+      {hasAny && (
       <div className="mb-5 grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_200px_220px]">
         <label className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--muted)]" />
@@ -228,6 +248,7 @@ export function CompanyDocumentLibrary({
           ))}
         </select>
       </div>
+      )}
 
       {error ? (
         <div className="ok-panel flex items-center gap-3 text-[13px] text-red-300">
@@ -239,12 +260,39 @@ export function CompanyDocumentLibrary({
           <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading documents
         </div>
       ) : documents.length === 0 ? (
-        <div className="ok-panel flex flex-col items-center py-16 text-center">
-          <FileSearch className="mb-4 h-8 w-8 text-[color:var(--muted)]" />
-          <p className="font-medium text-[color:var(--hi)]">Nothing filed for {name} yet</p>
-          <p className="ok-subtitle mt-1">
-            Add documents and they are read, scored and filed under this company.
+        <div className="ok-panel px-6 py-10 text-center sm:px-10">
+          <FileSearch className="mx-auto h-7 w-7 text-[color:var(--muted)]" aria-hidden />
+          <p className="mt-3 text-[15px] font-medium text-[color:var(--hi)]">
+            {filtered ? "No documents match those filters" : `Nothing filed for ${name} yet`}
           </p>
+          <p className="ok-subtitle mx-auto mt-1.5 max-w-[420px]">
+            {filtered
+              ? "Clear the search or the status filter to see everything filed under this company."
+              : "Documents uploaded for this company are read, scored and filed here automatically."}
+          </p>
+          {filtered ? (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setStatus("");
+                setDocumentType("");
+                setPage(1);
+              }}
+              className="ok-btn mt-5"
+            >
+              Clear filters
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}`)}
+              className="ok-btn-primary mt-5"
+              data-testid="company-docs-empty-upload"
+            >
+              <Upload className="h-4 w-4" /> Open workbook
+            </button>
+          )}
         </div>
       ) : (
         <div className="ok-panel ok-panel-flush overflow-x-auto">

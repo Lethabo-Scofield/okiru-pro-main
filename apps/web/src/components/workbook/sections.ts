@@ -671,9 +671,14 @@ const COMPANY_INFO_META: ColumnDef[] = [
     options: [...SCORECARD_TYPE_OPTIONS],
   },
   {
+    // Mandatory, because it is what every period filter is anchored to. Skills,
+    // Procurement, ESD and SED all decide what counts by date, so a workbook
+    // without a year end is not a scorecard with one missing field — it is a
+    // scorecard whose four dated pillars have no period to measure.
     key: "financialYearEnd",
     label: "Financial Year-End (dd/mm/yyyy)",
     type: "date",
+    required: true,
     validate: dateValidator,
     validationMessage: "Enter date as dd/mm/yyyy (e.g. 28/2/2026)",
   },

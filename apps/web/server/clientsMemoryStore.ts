@@ -32,6 +32,11 @@ export interface MemoryClient {
   companyValue?: number;
   outstandingDebt?: number;
   sectorCode?: string | null;
+  scorecardType?: string | null;
+  /** Closing date of the measurement period. Required on create. */
+  financialYearEnd?: string | null;
+  measurementPeriodStart?: string | null;
+  measurementPeriodEnd?: string | null;
   /** Which product created this company — "bbbee" (default) or "esg". */
   product?: "bbbee" | "esg";
   createdAt: Date;

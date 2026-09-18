@@ -187,44 +187,62 @@ function CompanyCard({
   testId: string;
 }) {
   const total = tally?.total ?? 0;
+  const needsAttention = (tally?.review ?? 0) + (tally?.problem ?? 0) > 0;
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="ok-panel ok-panel-action relative overflow-hidden text-left"
+      className="ok-panel ok-panel-action group relative flex flex-col gap-3 overflow-hidden p-4 text-left"
       data-testid={testId}
     >
       <span
-        className="absolute inset-x-0 top-0 h-px"
-        style={{ background: accent, opacity: 0.55 }}
+        className="absolute inset-y-0 left-0 w-[2px]"
+        style={{ background: accent, opacity: total === 0 ? 0.28 : 0.7 }}
         aria-hidden
       />
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {badge && <p className="ok-eyebrow">{badge}</p>}
-          <p className="mt-1 truncate text-[15px] font-semibold text-[color:var(--hi)]">{name}</p>
-        </div>
-        <FolderOpen className="h-4 w-4 shrink-0" style={{ color: accent }} aria-hidden />
-      </div>
 
-      <div className="mt-4 flex items-baseline gap-2">
-        <span className="ok-num text-[26px] font-semibold text-[color:var(--hi)]">{total}</span>
-        <span className="text-[12px] text-[color:var(--muted)]">
-          document{total === 1 ? "" : "s"}
+      <div className="flex items-center gap-2.5">
+        <FolderOpen
+          className="h-4 w-4 shrink-0"
+          style={{ color: accent, opacity: total === 0 ? 0.5 : 1 }}
+          aria-hidden
+        />
+        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold text-[color:var(--hi)]">
+          {name}
         </span>
+        {badge && (
+          <span className="ok-eyebrow shrink-0 rounded-md bg-white/[0.05] px-1.5 py-0.5">
+            {badge}
+          </span>
+        )}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {tally && tally.review > 0 && (
-          <span className="ok-chip ok-chip-warn">{tally.review} need review</span>
+      {/* A row of large zeroes is not a dashboard, it is a page shouting that
+          it has nothing. The count only takes the eye once there is one. */}
+      <div className="flex min-h-[26px] flex-wrap items-center gap-2">
+        {total === 0 ? (
+          <span className="text-[12px] text-[color:var(--muted)]">Nothing filed yet</span>
+        ) : (
+          <>
+            <span className="ok-num text-[20px] font-semibold leading-none text-[color:var(--hi)]">
+              {total}
+            </span>
+            <span className="text-[12px] text-[color:var(--muted)]">
+              document{total === 1 ? "" : "s"}
+            </span>
+            {tally && tally.review > 0 && (
+              <span className="ok-chip ok-chip-warn ml-auto">{tally.review} to review</span>
+            )}
+            {tally && tally.problem > 0 && (
+              <span className="ok-chip ok-chip-bad">{tally.problem} problem</span>
+            )}
+            {!needsAttention && <span className="ok-chip ok-chip-good ml-auto">All read</span>}
+          </>
         )}
-        {tally && tally.problem > 0 && (
-          <span className="ok-chip ok-chip-bad">{tally.problem} problem</span>
-        )}
-        {tally && tally.review === 0 && tally.problem === 0 && total > 0 && (
-          <span className="ok-chip ok-chip-good">All read</span>
-        )}
-        {total === 0 && <span className="ok-chip ok-chip-neutral">Nothing filed yet</span>}
+        <ChevronRight
+          className="ml-auto h-4 w-4 shrink-0 text-[color:var(--muted)] transition-transform group-hover:translate-x-0.5"
+          aria-hidden
+        />
       </div>
     </button>
   );
@@ -244,16 +262,39 @@ export default function ParserDocumentLibrary() {
 
   const unfiled = tallies[UNASSIGNED];
 
+  // What the page is actually reporting, said once at the top instead of being
+  // left for the reader to add up across a grid of cards.
+  const filedTotal = companies.reduce((sum, c) => sum + (tallies[c.id]?.total ?? 0), 0);
+  const attentionTotal = companies.reduce(
+    (sum, c) => sum + (tallies[c.id]?.review ?? 0) + (tallies[c.id]?.problem ?? 0),
+    0,
+  );
+
   return (
-    <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-[1120px] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="ok-eyebrow">Documents</p>
           <h1 className="ok-title-lg mt-1">Every company, and its evidence</h1>
-          <p className="ok-subtitle mt-1.5">
+          <p className="ok-subtitle mt-1.5 max-w-[560px]">
             Open a company to see what has been read for it. Evidence is filed per company — never
             one shared pile.
           </p>
+          {!loading && companies.length > 0 && (
+            <p className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-[color:var(--muted)]">
+              <span className="ok-num text-[color:var(--body)]">{companies.length}</span>
+              <span>{companies.length === 1 ? "company" : "companies"}</span>
+              <span aria-hidden>·</span>
+              <span className="ok-num text-[color:var(--body)]">{filedTotal}</span>
+              <span>{filedTotal === 1 ? "document filed" : "documents filed"}</span>
+              {attentionTotal > 0 && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="text-amber-300">{attentionTotal} needing a person</span>
+                </>
+              )}
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -292,7 +333,7 @@ export default function ParserDocumentLibrary() {
         </div>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {shown.map((company) => (
               <CompanyCard
                 key={company.id}
@@ -311,7 +352,7 @@ export default function ParserDocumentLibrary() {
           {unfiled && unfiled.total > 0 && (
             <div className="mt-6">
               <p className="ok-eyebrow mb-2">Not filed under a company</p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <CompanyCard
                   name="Unfiled documents"
                   accent="rgba(255,255,255,0.35)"

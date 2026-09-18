@@ -60,6 +60,7 @@ import {
   resolveClientScopeIds,
 } from "./clientScopes";
 import { companyNameFromWorkEmail, isWorkEmail, usernameFromWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from "../shared/workEmail";
+import { normalizeNewClient, validateNewClient } from "../shared/clientCreation";
 import { deleteWorkbookForClient } from "./workbookRoutes";
 import { answerScorecardQuestionWithAi } from "./bbbeeKnowledge";
 import {
@@ -2542,32 +2543,57 @@ export async function registerRoutes(
   });
   app.post("/api/clients", requireAuth, async (req, res) => {
     try {
-      const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount, product } = req.body;
-      if (!name) return res.status(400).json({ error: "Client name is required" });
-      // Which product this company belongs to. The ESG create flow stamps
-      // "esg"; everything else defaults to B-BBEE. Anything unrecognised is a
-      // 400, not a silent default — a mislabelled company surfaces in the
-      // wrong list with the wrong actions.
-      const normalizedProduct = product == null ? "bbbee" : String(product).trim().toLowerCase();
-      if (normalizedProduct !== "bbbee" && normalizedProduct !== "esg") {
-        return res.status(400).json({ error: 'Invalid product. Use "bbbee" or "esg".' });
+      const {
+        name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount, product,
+        sectorCode, scorecardType, financialYearEnd,
+        measurementPeriodStart, measurementPeriodEnd,
+      } = req.body;
+
+      // A company is created with an identity or it is not created.
+      //
+      // This endpoint used to ask only for a name, and a truthy one at that, so
+      // " " passed. Sector and scorecard type then came from schema defaults —
+      // RCOGP, Generic — which are not neutral: they pick the code series and
+      // the weightings the scorecard is scored against. The company list filled
+      // with "Example", "Test" and "Procurement examplee eeeeeeeeeee", each one
+      // silently measured against a sector nobody chose.
+      //
+      // The rules live in shared/clientCreation.ts and the create form applies
+      // the same ones. Enforcing them in the form alone would leave this
+      // endpoint as the way around them.
+      const draft = {
+        name,
+        sectorCode: sectorCode ?? industrySector,
+        scorecardType,
+        financialYearEnd,
+        product,
+      };
+      const fieldErrors = validateNewClient(draft);
+      if (fieldErrors.length) {
+        return res.status(400).json({
+          error: fieldErrors[0].message,
+          message: fieldErrors[0].message,
+          fields: fieldErrors,
+        });
       }
-      if (industrySector) {
-        const sector = String(industrySector).trim().toUpperCase();
-        if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
-          return res.status(400).json({
-            error: `Invalid industrySector. Use one of: ${SECTOR_CODE_OPTIONS.join(", ")}`,
-          });
-        }
-      }
+      const normalized = normalizeNewClient(draft);
+      const normalizedProduct = normalized.product;
+
       const userId = (req.session as any).userId as string;
       const user = (req as any).user ?? (await storage.getUserById(userId));
       const userOrgId: string | null = user?.organizationId ?? null;
       const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
       const now = new Date();
-      const normalizedSector = industrySector
-        ? String(industrySector).trim().toUpperCase()
-        : null;
+      const normalizedSector = normalized.sectorCode;
+      // The period defaults to the twelve months ending on the year end, and a
+      // caller that already knows better — a short first period, a changed year
+      // end — overrides it here rather than editing it back afterwards.
+      const periodStart = typeof measurementPeriodStart === "string" && measurementPeriodStart.trim()
+        ? measurementPeriodStart.trim()
+        : normalized.measurementPeriodStart || null;
+      const periodEnd = typeof measurementPeriodEnd === "string" && measurementPeriodEnd.trim()
+        ? measurementPeriodEnd.trim()
+        : normalized.measurementPeriodEnd || null;
 
       if (isMongoConnected()) {
         // Bind the company to the creator's team as it is made. This is what
@@ -2578,10 +2604,14 @@ export async function registerRoutes(
         const client = await ClientModel.create({
           id: clientId,
           clientId,
-          name,
-          financialYear: financialYear || new Date().getFullYear().toString(),
+          name: normalized.name,
+          financialYear: financialYear || normalized.financialYear,
           industrySector: normalizedSector,
           sectorCode: normalizedSector || "RCOGP",
+          scorecardType: normalized.scorecardType || "Generic",
+          financialYearEnd: normalized.financialYearEnd,
+          measurementPeriodStart: periodStart,
+          measurementPeriodEnd: periodEnd,
           eapProvince: eapProvince || null,
           revenue: revenue || 0,
           npat: npat || 0,
@@ -2596,10 +2626,14 @@ export async function registerRoutes(
 
       const doc: MemoryClient = {
         clientId,
-        name,
-        financialYear: financialYear || new Date().getFullYear().toString(),
+        name: normalized.name,
+        financialYear: financialYear || normalized.financialYear,
         industrySector: normalizedSector,
         sectorCode: normalizedSector || "RCOGP",
+        scorecardType: normalized.scorecardType || "Generic",
+        financialYearEnd: normalized.financialYearEnd,
+        measurementPeriodStart: periodStart,
+        measurementPeriodEnd: periodEnd,
         eapProvince: eapProvince || null,
         revenue: revenue || 0,
         npat: npat || 0,

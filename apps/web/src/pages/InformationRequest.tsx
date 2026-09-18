@@ -38,6 +38,8 @@ import { WorkbookValidationPanel } from "@/components/workbook/WorkbookValidatio
 import { ExtractionReviewModal, type CellUpdate } from "@/components/workbook/ExtractionReviewModal";
 import { CellValidationPopup, FIELD_LEARN_MORE } from "@/components/workbook/CellValidationPopup";
 import { NumericDateInput } from "@/components/ui/NumericDateInput";
+import { NewCompanyForm, EMPTY_NEW_COMPANY, type NewCompanyValues } from "@/components/scorecard/NewCompanyForm";
+import { validateNewClient } from "@shared/clientCreation";
 import { normalizeCellForColumn } from "@/lib/tabularNormalize";
 import { META_CONFLICTS_KEY } from "@/lib/parserToWorkbook";
 import { usePillarPermission } from "@/hooks/usePillarPermission";
@@ -356,7 +358,10 @@ function CompanyPicker({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
+  // Name, sector, scorecard type and year end together. A company used to be
+  // created from a name alone, with the other three taken from schema
+  // defaults that decide which code series it is scored against.
+  const [newCompany, setNewCompany] = useState<NewCompanyValues>(EMPTY_NEW_COMPANY);
   // Which sector’s blank Information Request to hand over. The sheets differ
   // per sector — FSC carries an Access to Financial Services pillar nobody
   // else has, ICT asks its own SED question — so one file cannot serve all.
@@ -407,19 +412,27 @@ function CompanyPicker({
   }, [load, mode]);
 
   const create = async () => {
-    if (!newName.trim()) return;
+    // The form disables its own button, but this is also reachable by Enter and
+    // by a caller, and the rule has to hold on every path into it.
+    if (validateNewClient(newCompany).length) return;
     setCreating(true);
     try {
       const res = await fetch(`${API_BASE}/api/clients`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({
+          name: newCompany.name.trim(),
+          industrySector: newCompany.sectorCode,
+          sectorCode: newCompany.sectorCode,
+          scorecardType: newCompany.scorecardType,
+          financialYearEnd: newCompany.financialYearEnd,
+        }),
       });
       if (res.ok) {
         const c = await res.json();
         toast({ title: "Company created", description: c.name });
-        setNewName("");
+        setNewCompany(EMPTY_NEW_COMPANY);
         await load();
         onPick(c);
       } else {
@@ -510,6 +523,26 @@ function CompanyPicker({
   };
 
   /**
+   * The four mandatory fields, read out of what an import produced.
+   *
+   * An import already carries them — the company-information sheet is where
+   * sector, scorecard type and year end come from. Sending only the name would
+   * make the endpoint reject an import that had the answers all along.
+   */
+  const identityFromSections = (sections: WorkbookSectionsInput) => {
+    const meta = (sections as Record<string, { meta?: Record<string, unknown> }>)["company-information"]?.meta ?? {};
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim());
+    return {
+      industrySector: str(meta.industrySector).toUpperCase(),
+      sectorCode: str(meta.industrySector).toUpperCase(),
+      scorecardType: str(meta.scorecardType),
+      financialYearEnd: str(meta.financialYearEnd),
+      measurementPeriodStart: str(meta.measurementPeriodStart) || undefined,
+      measurementPeriodEnd: str(meta.measurementPeriodEnd) || undefined,
+    };
+  };
+
+  /**
    * Shared create-from-sections sequence used by BOTH Excel import and the
    * document-upload start: create the client, import the workbook sections,
    * submit (scores through the canonical workbook path), open the workbook.
@@ -536,13 +569,15 @@ function CompanyPicker({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: companyName }),
+        body: JSON.stringify({ name: companyName, ...identityFromSections(sections) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({
           title: "Could not create company",
-          description: err.error || "Server error.",
+          // A missing sector, scorecard type or year end names itself here,
+          // because the workbook is where the user has to go and fix it.
+          description: err.error || err.message || "Server error.",
           variant: "destructive",
         });
         return false;
@@ -720,26 +755,17 @@ function CompanyPicker({
 
                   {selected && key === "manual" && (
                     <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[color:var(--ink-2)] p-4">
-                      <p className="mb-3 text-[13px] font-medium text-[color:var(--body)]">Enter the company name to start a free workbook.</p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
-                          id="new-company-name"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && create()}
-                          placeholder="Company name"
-                          className="h-12 min-w-0 flex-1 rounded-2xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 text-[15px] text-white outline-none transition-colors placeholder:text-[color:var(--muted)] focus:border-white/30 focus:ring-4 focus:ring-white/[0.06]"
-                          data-testid="input-new-company"
-                        />
-                        <button
-                          onClick={create}
-                          disabled={!newName.trim() || creating}
-                          className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:cursor-not-allowed disabled:bg-[rgba(255,255,255,0.06)] disabled:text-[color:var(--muted)]"
-                          data-testid="button-start-scorecard"
-                        >
-                          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create free scorecard"}
-                        </button>
-                      </div>
+                      <p className="mb-3 text-[13px] font-medium text-[color:var(--body)]">
+                        These four decide what the scorecard is measured against.
+                      </p>
+                      <NewCompanyForm
+                        values={newCompany}
+                        onChange={setNewCompany}
+                        onSubmit={create}
+                        creating={creating}
+                        submitLabel="Create free scorecard"
+                        idPrefix="new-company"
+                      />
                     </div>
                   )}
 
@@ -924,32 +950,14 @@ function CompanyPicker({
                   <Building2 className="h-4 w-4 text-[color:var(--body)]" />
                   Manual entry
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    id="new-company-name"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && create()}
-                    placeholder="Company name"
-                    className="min-w-0 flex-1 bg-[#0c0c0e] border border-white/[0.10] rounded-xl px-3.5 py-2.5 text-[13px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-violet-300/40 focus:ring-2 focus:ring-violet-300/10"
-                    data-testid="input-new-company"
-                  />
-                  <button
-                    onClick={create}
-                    disabled={!newName.trim() || creating}
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[rgba(255,255,255,0.06)] text-[#f2f2f7] text-[13px] font-semibold hover:bg-[rgba(255,255,255,0.10)] disabled:opacity-50 transition-colors whitespace-nowrap"
-                    data-testid="button-start-scorecard"
-                  >
-                    {creating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        Start free
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </>
-                    )}
-                  </button>
-                </div>
+                <NewCompanyForm
+                  values={newCompany}
+                  onChange={setNewCompany}
+                  onSubmit={create}
+                  creating={creating}
+                  tone="quiet"
+                  idPrefix="manual-entry"
+                />
               </div>
               <div className="rounded-[18px] border border-white/[0.08] bg-[#18181a] p-3.5">
                 <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[#f2f2f7]">
@@ -1090,24 +1098,14 @@ function CompanyPicker({
             <p className="text-[13px] text-[color:var(--body)] mt-1.5 max-w-md">
               Start manually for free, or import an existing BEE Information Gathering Excel file for free.
             </p>
-            <div className="mt-4 flex gap-2">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Company name…"
-                aria-label="New company name"
-                className="flex-1 bg-[color:var(--ink)]/40 border border-white/[0.10] focus:border-violet-400/50 rounded-lg px-3.5 py-2.5 text-[14px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none transition-colors"
-                data-testid="input-new-company"
+            <div className="mt-4">
+              <NewCompanyForm
+                values={newCompany}
+                onChange={setNewCompany}
+                onSubmit={create}
+                creating={creating}
+                idPrefix="create-scorecard"
               />
-              <button
-                onClick={create}
-                disabled={!newName.trim() || creating}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-violet-500 text-white text-[13px] font-semibold press-sm hover:bg-violet-400 disabled:opacity-40 disabled:hover:bg-violet-500 smooth shadow-[0_8px_24px_-8px_rgba(139,92,246,0.6)]"
-                data-testid="button-create-company"
-              >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Start free<ChevronRight className="h-4 w-4" /></>}
-              </button>
             </div>
           </div>
           <div className="md:pl-4 md:border-l md:border-white/[0.08]">
@@ -1283,7 +1281,7 @@ function CompanyPicker({
               method: "POST",
               credentials: "include",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: companyName }),
+              body: JSON.stringify({ name: companyName, ...identityFromSections(sections) }),
             });
             if (!res.ok) {
               const err = await res.json().catch(() => ({}));

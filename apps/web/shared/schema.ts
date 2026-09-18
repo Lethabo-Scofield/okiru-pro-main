@@ -699,6 +699,13 @@ const clientSchema = new Schema({
   companySize: { type: String, default: 'Generic' },
   annualTurnover: { type: Number, default: 0 },
   numberOfEmployees: { type: Number, default: 0 },
+  /**
+   * The date the measurement period closes. Mandatory on create — it is
+   * what the period below is anchored to, and a scorecard measured
+   * against the wrong period is wrong in every pillar at once.
+   */
+  financialYearEnd: { type: String, default: null },
+  // Stored, not derived, so a short or shifted reporting period stays editable.
   measurementPeriodStart: { type: String, default: null },
   measurementPeriodEnd: { type: String, default: null },
   beeCertificateNumber: { type: String, default: null },
