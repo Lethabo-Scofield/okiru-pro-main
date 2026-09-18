@@ -17,6 +17,7 @@ import {
 } from '@/components/certificates/CertificateUploadForm';
 import { OKIRU_HUB_SECTORS, sectorDisplayLabel } from '@/lib/okiruHubSectors';
 
+import { formatPercent } from '@/lib/formatPercent';
 const COMPANY_SIZES = ['EME', 'QSE', 'Generic', 'Large', 'Specialised'] as const;
 
 interface CertificateRow {
@@ -219,8 +220,7 @@ function formatExpiry(dateStr: string | null): string {
 }
 
 function formatPct(n: number | null): string {
-  if (n == null) return 'Missing';
-  return `${n.toFixed(n < 10 ? 1 : 0)}%`;
+  return formatPercent(n);
 }
 
 function displayValue(value: string | number | null | undefined): string {

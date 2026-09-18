@@ -33,6 +33,7 @@ import type { BuildPillarsData } from '@/components/build/BuildPillarsStep';
 import { EMPTY_CLIENT_INFO } from '@/components/build/ClientInformationForm';
 import { EMPTY_FINANCIALS } from '@/components/build/FinancialsForm';
 
+import { formatPercentFromFraction } from '@/lib/formatPercent';
 export type TemplateId = 'standard' | 'ownership' | 'employment_equity' | 'full_export' | 'ict_sector_pack';
 
 export interface ToolkitTemplateCard {
@@ -1430,7 +1431,7 @@ export function ToolkitStructuredReview({ result, foundationPreview, pillarPrevi
       items: pillarPreview.ownership.shareholders.slice(0, 3).map((sh) => [
         sh.name || 'Shareholder',
         // blackOwnership is stored as 0-1 fraction after mapping; multiply for display.
-        `${sh.blackOwnership > 0 ? `${(sh.blackOwnership * 100).toFixed(1)}% black` : 'shareholder'}`,
+        `${sh.blackOwnership > 0 ? `${formatPercentFromFraction(sh.blackOwnership, { decimals: 1 })} black` : 'shareholder'}`,
       ] as [string, string]),
     });
   }

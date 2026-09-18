@@ -11,6 +11,7 @@ import { CertificateEditForm } from '@/components/certificates/CertificateEditFo
 import { certificateFormToPatchBody, type CertificateFormValues } from '@/components/certificates/CertificateUploadForm';
 import { sectorDisplayLabel, OKIRU_HUB_SECTORS } from '@/lib/okiruHubSectors';
 
+import { formatPercent } from '@/lib/formatPercent';
 interface CertDetail {
   slug: string;
   companyName: string;
@@ -366,8 +367,8 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={missing(data.vatNumber)} />
               <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={missing(data.companySize)} />
               <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevelStatus || (data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : 'Needs review')} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : 'Missing'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : 'Missing'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={formatPercent(data.blackOwnership)} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={formatPercent(data.blackWomenOwnership)} />
               <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={data.expiryDate ? formatDate(data.expiryDate) : 'Missing'} />
             </div>
 
