@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 import {
@@ -555,6 +556,11 @@ export default function ManagementControl() {
               if (mode === "replace") employees.forEach((e) => removeEmployee(e.id));
               addEmployeesBulk(rows);
             }}
+          />
+          <PillarDuplicateNotice
+            specKey="management-control"
+            rows={employees}
+            className="mt-3"
           />
 
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setFormState({ ...defaultFormState }); setActiveTab("basic"); setNameError(false); } }}>

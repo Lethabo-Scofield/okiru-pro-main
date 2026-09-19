@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
@@ -533,6 +534,11 @@ export default function Procurement() {
               rows.forEach(addSupplier);
             }}
             label="Bulk upload suppliers"
+          />
+          <PillarDuplicateNotice
+            specKey="procurement"
+            rows={suppliers}
+            className="mt-3"
           />
           <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) addErrs.reset(); }}>
             <DialogTrigger asChild>

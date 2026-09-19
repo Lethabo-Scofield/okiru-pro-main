@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { calculateSkillsScore, resolveSkillsSpendTargets } from "@toolkit/lib/calculators/skills";
@@ -789,6 +790,11 @@ export default function SkillsDevelopment() {
               rows.forEach(addTrainingProgram);
             }}
             label="Bulk upload"
+          />
+          <PillarDuplicateNotice
+            specKey="skills-development"
+            rows={trainingPrograms}
+            className="mt-3"
           />
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
