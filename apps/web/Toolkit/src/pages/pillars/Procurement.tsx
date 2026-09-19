@@ -14,7 +14,7 @@ import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Switch } from "@toolkit/components/ui/switch";
-import { Plus, ShoppingCart, Trash2, Pencil, BadgeCheck, Loader2 } from "lucide-react";
+import { Plus, ShoppingCart, Trash2, Pencil, BadgeCheck, Loader2, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,7 @@ import { cn, formatRand } from "@toolkit/lib/utils";
 import { pillarSectorSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Supplier } from "@toolkit/lib/types";
 import { fetchCertificateMatches, type CertificateMatchCandidate } from "@/lib/certificateAutofill";
+import { CertificatePreview } from "@/components/certificates/CertificatePreview";
 
 // Issue 3: Added isForeignSupplier field
 const emptySupplierForm = {
@@ -47,6 +48,11 @@ const emptySupplierForm = {
   isEmpoweringSupplier: false,
   isSupplierDevRecipient: false,
   hasThreeYearContract: false,
+  // The registry match, so a supplier looked up by hand gets the same openable
+  // certificate a bulk-imported one does.
+  certificateId: '',
+  certificateMatchedName: '',
+  certificateMatchBasis: '',
 };
 
 /**
@@ -81,6 +87,10 @@ function certificateToSupplierForm(
   if (typeof f.certificateExpiryDate === 'string') {
     out.certificateExpiryDate = f.certificateExpiryDate;
   }
+  out.certificateId = cert.certificateId ?? '';
+  out.certificateMatchedName = cert.companyName ?? '';
+  out.certificateMatchBasis = cert.basis ?? '';
+
   if (f.empoweringSupplier) out.isEmpoweringSupplier = f.empoweringSupplier === 'Yes';
   if (f.sdRecipient) out.isSupplierDevRecipient = f.sdRecipient === 'Yes';
   if (f.threeYearContract) out.hasThreeYearContract = f.threeYearContract === 'Yes';
@@ -132,6 +142,10 @@ export default function Procurement() {
   const addErrs = useFieldErrors();
   const editErrs = useFieldErrors();
   const [lookingUp, setLookingUp] = useState(false);
+  /** The matched certificate being looked at, if any. */
+  const [previewCert, setPreviewCert] = useState<
+    { id: string; supplierName: string; matchedName: string | null } | null
+  >(null);
 
   /**
    * Look this supplier up in the certificate database and fill the form.
@@ -238,6 +252,9 @@ export default function Procurement() {
       isEmpoweringSupplier: newSup.isEmpoweringSupplier,
       isSupplierDevRecipient: newSup.isSupplierDevRecipient,
       hasThreeYearContract: newSup.hasThreeYearContract,
+      certificateId: newSup.certificateId || undefined,
+      certificateMatchedName: newSup.certificateMatchedName || undefined,
+      certificateMatchBasis: newSup.certificateMatchBasis || undefined,
     });
     setNewSup({ ...emptySupplierForm });
     setIsSupOpen(false);
@@ -263,6 +280,11 @@ export default function Procurement() {
       isEmpoweringSupplier: sup.isEmpoweringSupplier || false,
       isSupplierDevRecipient: sup.isSupplierDevRecipient || false,
       hasThreeYearContract: sup.hasThreeYearContract || false,
+      // Carried into the dialog so saving an edit does not wipe the link to the
+      // certificate this supplier was matched to.
+      certificateId: sup.certificateId || '',
+      certificateMatchedName: sup.certificateMatchedName || '',
+      certificateMatchBasis: sup.certificateMatchBasis || '',
     });
     setIsEditSupOpen(true);
   };
@@ -291,6 +313,9 @@ export default function Procurement() {
       isEmpoweringSupplier: editSup.isEmpoweringSupplier,
       isSupplierDevRecipient: editSup.isSupplierDevRecipient,
       hasThreeYearContract: editSup.hasThreeYearContract,
+      certificateId: editSup.certificateId || undefined,
+      certificateMatchedName: editSup.certificateMatchedName || undefined,
+      certificateMatchBasis: editSup.certificateMatchBasis || undefined,
     });
     setIsEditSupOpen(false);
     setEditSupId(null);
@@ -733,20 +758,56 @@ export default function Procurement() {
                       <td className="p-4 text-right font-mono">{formatRand(sup.spend)}</td>
                       <td className="p-4 text-right font-mono text-muted-foreground">{(sup.blackOwnership * 100).toFixed(0)}%</td>
                       <td className="p-4 text-right font-medium font-mono text-emerald-600">{formatRand(recognisedValue)}</td>
+                      {/* The certificate this supplier was matched to, openable.
+                          The level and expiry here came out of the registry and
+                          move the score, so the document behind them should be
+                          one click away rather than taken on trust. */}
                       <td className="p-4 text-center">
-                        {sup.certificateExpiryDate ? (
-                          <span className={cn(
-                            "text-[11px] font-medium px-2 py-0.5 rounded",
-                            new Date(sup.certificateExpiryDate) < new Date()
-                              ? "bg-destructive/10 text-destructive border border-destructive/20"
-                              : "text-muted-foreground"
-                          )}>
-                            {new Date(sup.certificateExpiryDate).toLocaleDateString('en-ZA')}
-                            {new Date(sup.certificateExpiryDate) < new Date() && " (Expired)"}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/40 text-[11px]">—</span>
-                        )}
+                        {(() => {
+                          const expiry = sup.certificateExpiryDate;
+                          const expired = expiry ? new Date(expiry) < new Date() : false;
+                          const fuzzy = sup.certificateMatchBasis === "name-fuzzy";
+                          const label = expiry
+                            ? `${new Date(expiry).toLocaleDateString("en-ZA")}${expired ? " (Expired)" : ""}`
+                            : sup.certificateId
+                              ? "View certificate"
+                              : "—";
+                          const body = (
+                            <span className={cn(
+                              "text-[11px] font-medium px-2 py-0.5 rounded",
+                              expired
+                                ? "bg-destructive/10 text-destructive border border-destructive/20"
+                                : expiry
+                                  ? "text-muted-foreground"
+                                  : sup.certificateId
+                                    ? "text-primary"
+                                    : "text-muted-foreground/40",
+                            )}>
+                              {label}
+                            </span>
+                          );
+                          if (!sup.certificateId) return body;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewCert({
+                                id: sup.certificateId!,
+                                supplierName: sup.name,
+                                matchedName: sup.certificateMatchedName ?? null,
+                              })}
+                              title={
+                                sup.certificateMatchedName
+                                  ? `Matched to ${sup.certificateMatchedName}${fuzzy ? " on a similar name only" : ""}`
+                                  : "Open the matched certificate"
+                              }
+                              className="inline-flex items-center gap-1 rounded hover:underline underline-offset-2"
+                              data-testid={`btn-view-certificate-${sup.id}`}
+                            >
+                              {body}
+                              <FileText className={cn("h-3 w-3", fuzzy ? "text-amber-500" : "text-primary")} />
+                            </button>
+                          );
+                        })()}
                       </td>
                       <td className="p-2 text-right">
                         <div className="flex items-center justify-end gap-1 invisible group-hover:visible">
@@ -777,6 +838,15 @@ export default function Procurement() {
           </div>
         </CardContent>
       </Card>
+
+      {/* The certificate behind a matched supplier. Its own layer, so it is not
+          clipped by the table's horizontal scroll container. */}
+      <CertificatePreview
+        certificateId={previewCert?.id ?? null}
+        supplierName={previewCert?.supplierName}
+        matchedName={previewCert?.matchedName}
+        onClose={() => setPreviewCert(null)}
+      />
     </div>
   );
 }
