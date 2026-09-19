@@ -68,9 +68,23 @@ export function ThemeProvider({
   storageKey = "vite-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  )
+  // Light was offered in Settings but never actually built: there is no .light
+  // rule anywhere in this app’s CSS and the chrome around it is hardcoded dark,
+  // so choosing it produced a half-converted page. The option is gone, but a
+  // stored “light” from before it was removed would otherwise persist forever
+  // with no control left to undo it — stranding exactly the users who tried it.
+  // Read the stored value, keep it only if the app can honour it, and clear it
+  // otherwise so the key does not sit there misreporting the state.
+  const [theme, setTheme] = useState<Theme>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey) as Theme | null;
+      if (stored === "dark") return stored;
+      if (stored) localStorage.removeItem(storageKey);
+    } catch {
+      // Private mode / blocked site data. Fall through to the default.
+    }
+    return defaultTheme;
+  });
 
   useEffect(() => {
     const root = window.document.documentElement
