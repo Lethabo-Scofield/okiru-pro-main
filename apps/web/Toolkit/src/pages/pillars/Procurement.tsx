@@ -299,6 +299,14 @@ export default function Procurement() {
 
   if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateProcurementScore(procurement, calculatorConfig);
+  /**
+   * What this pillar is actually out of, for this sector and scorecard type.
+   *
+   * The page asserted "29 points" in two places while its own breakdown totalled
+   * 21.00 for RCOGP QSE. The sub-lines carry the real weightings, so they are
+   * the single source for both.
+   */
+  const pillarMaxPoints = score.subLines.reduce((a, l) => a + l.weighting, 0);
 
   // Issue 3: Added isForeignSupplier to form fields
   const renderSupplierFormFields = (
@@ -483,7 +491,13 @@ export default function Procurement() {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h1 className="text-3xl font-heading font-bold">Preferential Procurement</h1>
-          <p className="text-muted-foreground mt-1">Manage supplier spend and B-BBEE compliance. 29 points available.</p>
+          {/* Derived, not asserted. This read "29 points available" on a page
+              whose own breakdown totalled 21.00 for RCOGP QSE — the pillar max
+              is per sector and scorecard type, so a literal is wrong for most
+              of them. */}
+          <p className="text-muted-foreground mt-1">
+            Manage supplier spend and B-BBEE compliance. {pillarMaxPoints.toFixed(2).replace(/\.00$/, "")} points available.
+          </p>
         </div>
         <div className="flex gap-2">
           <PillarBulkImport
@@ -621,9 +635,16 @@ export default function Procurement() {
               {score.dataFlags.map((f, i) => (<p key={i} className={i > 0 ? "mt-1.5" : undefined}>{f}</p>))}
             </div>
           )}
+          {/* Coverage notes were computed and never rendered here, so a pillar
+              scoring 0 for want of a TMPS said nothing about why. */}
+          {(score.coverageNotes?.length ?? 0) > 0 && (
+            <div className="mb-4 rounded-md border border-sky-300/50 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-700/50 dark:bg-sky-950/30 dark:text-sky-200" data-testid="pp-coverage-notes">
+              {score.coverageNotes!.map((n, i) => (<p key={i} className={i > 0 ? "mt-1.5" : undefined}>{n}</p>))}
+            </div>
+          )}
           <div className="rounded-md border overflow-x-auto">
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
-              <span>Target: 29 points | Max spend recognition: 135%</span>
+              <span>Target: {pillarMaxPoints.toFixed(2).replace(/\.00$/, "")} points | Max spend recognition: 135%</span>
             </div>
             <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
