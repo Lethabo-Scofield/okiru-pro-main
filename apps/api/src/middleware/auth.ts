@@ -110,20 +110,41 @@ async function verifyPillarAccessInner(
   }
 
   try {
-    const session = await ProcessorSessionModel.findOne({
-      clientId,
-      workspaceId: { $nin: [null, ''] },
-    })
-      .sort({ updatedAt: -1 })
-      .lean() as any;
+    // The company’s own binding is the authority; the workspace-bound
+    // ProcessorSession is a fallback for companies made through the super-admin
+    // processor. ProcessorSession used to be the ONLY link consulted here, and
+    // a normally-created company has client.workspaceId set but no
+    // workspace-bound session — so this lookup found nothing and fell straight
+    // through to `return true`. Pillar scopes were recorded and then never
+    // applied to essentially every company: a workspace viewer was read-only in
+    // the workbook and could add and delete shareholders in the toolkit, on the
+    // same data. resolveWorkbookPillarAccess in apps/web already resolves it in
+    // this order; this is the toolkit side agreeing with it.
+    const client = (await ClientModel.findOne(
+      { $or: [{ clientId }, { id: clientId }] },
+      { _id: 0, workspaceId: 1, createdByUserId: 1 },
+    ).lean()) as { workspaceId?: string | null; createdByUserId?: string | null } | null;
 
-    if (!session?.workspaceId) return true; // no workspace overlay → pass
+    let workspaceId = client?.workspaceId ? String(client.workspaceId) : "";
+    let ownerId: string | null = client?.createdByUserId ?? null;
 
-    const ownerId = session.createdBy ?? session.createdByUserId ?? null;
+    if (!workspaceId) {
+      const session = await ProcessorSessionModel.findOne({
+        clientId,
+        workspaceId: { $nin: [null, ''] },
+      })
+        .sort({ updatedAt: -1 })
+        .lean() as any;
+
+      if (!session?.workspaceId) return true; // no workspace overlay → pass
+      workspaceId = String(session.workspaceId);
+      ownerId = session.createdBy ?? session.createdByUserId ?? ownerId;
+    }
+
     if (ownerId && ownerId === userId) return true;
 
     const member = await WorkspaceMemberModel.findOne({
-      workspaceId: String(session.workspaceId),
+      workspaceId,
       userId,
     }).lean() as any;
 

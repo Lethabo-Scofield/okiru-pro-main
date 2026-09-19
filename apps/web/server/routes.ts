@@ -2363,7 +2363,8 @@ export async function registerRoutes(
   // creator check from loadClientWithAccess stands and access is unfiltered.
   // Audit A2/B15 — closes the server-side half of the RBAC bypass for the read
   // path. (Per-entity write routes live in apps/api and need the same plumbing
-  // applied separately — TODO logged in autoresearch/RISKS.md as B15-server.)
+  // path. Per-entity write routes in apps/api now resolve the binding the same
+  // way (verifyPillarAccessInner), so the two halves agree.
   async function resolveClientPillarAccess(
     clientId: string,
     userId: string,
@@ -2672,6 +2673,29 @@ export async function registerRoutes(
     try {
       const existing = await loadClientWithAccess(req, res);
       if (!existing) return;
+
+      // loadClientWithAccess establishes org/creator tenancy, and that was the
+      // only check here — no role check at all on a route whose allowlist
+      // writes revenue, npat, leviableAmount, tmps, afs and pipelineOverrides.
+      // Every one of those is a scoring denominator. The same fields on the
+      // workbook side are META_SECTIONS and need full access, so a workspace
+      // viewer was refused there and accepted here, on the same values.
+      // apps/api has a correctly-gated twin of this route, but the proxy does
+      // not forward PATCH /api/clients/:id, so it is never reached.
+      const patchAccess = await resolveClientPillarAccess(
+        String(req.params.clientId),
+        String(req.session.userId),
+      );
+      if (patchAccess && patchAccess.mode !== "full" && patchAccess.mode !== "owner_override") {
+        return res.status(403).json({
+          error: "Access denied",
+          message:
+            patchAccess.mode === "readOnly"
+              ? "You have read-only access to this company."
+              : "Changing company financials and settings requires full scorecard access.",
+        });
+      }
+
       // CRITICAL FIX (audit P1 #1): the previous 8-field allowlist
       // ["name", "financialYear", "industrySector", "eapProvince", "revenue",
       // "npat", "leviableAmount", "logo"] silently dropped every other field
