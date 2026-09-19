@@ -83,6 +83,18 @@ function CalculatorConfigInner({ variant = "page" }: BannerProps): ReactNode | n
     if (!activeClientId) return;
     loadCalculatorConfig(activeClientId).catch(() => undefined);
   };
+  // Synthetic ids (a parser session or an in-progress build) have no company
+  // record behind them, so /create-scorecard/<id> would 404. Offer the link
+  // only when it can actually resolve.
+  const isSyntheticClientId =
+    !!activeClientId &&
+    (activeClientId.startsWith("build-") ||
+      activeClientId.startsWith("session-") ||
+      activeClientId.startsWith("upload-"));
+  const companyHref =
+    activeClientId && !isSyntheticClientId
+      ? `~/create-scorecard/${encodeURIComponent(activeClientId)}`
+      : null;
 
   return (
     <Alert variant="destructive" className={variant === "banner" ? "mb-4" : "max-w-2xl mx-auto mt-12"} data-testid="calculator-config-gate-error">
@@ -99,9 +111,19 @@ function CalculatorConfigInner({ variant = "page" }: BannerProps): ReactNode | n
         <div className="flex items-center gap-2 pt-1">
           <Button variant="outline" size="sm" onClick={retry} data-testid="calculator-config-retry">Retry</Button>
           {isFscNoSub && (
-            <Button asChild variant="outline" size="sm">
-              <Link to="/company-info">Pick FSC sub-sector</Link>
-            </Button>
+            companyHref ? (
+              <Button asChild variant="outline" size="sm">
+                {/* Was to="/company-info" — a route that exists in neither this
+                    router nor the host, so the FSC recovery button landed on 404.
+                    The sub-sector is captured in the workbook Company Information
+                    section; "~" is wouter’s escape to the parent router. */}
+                <Link to={companyHref} data-testid="calculator-config-pick-subsector">Pick FSC sub-sector</Link>
+              </Button>
+            ) : (
+              <span className="text-xs opacity-80" data-testid="calculator-config-subsector-hint">
+                Set the FSC sub-sector in the Company Information section of this company’s workbook.
+              </span>
+            )
           )}
         </div>
       </AlertDescription>

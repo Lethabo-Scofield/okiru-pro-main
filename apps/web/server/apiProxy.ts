@@ -42,6 +42,10 @@ const PROXIED_PREFIXES = [
   "/api/admin/analytics",
   /** okiru-ai-parser document parsing (streams multipart file uploads to :3200). */
   "/api/parser",
+  /** Export logs live on apps/api. Without this the POST fell through to the
+   *  SPA catch-all, so every "log this export" call wrote nothing — and the
+   *  caller swallowed the result, so it looked like it had worked. */
+  "/api/export-log",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [
@@ -56,7 +60,7 @@ const PROXIED_TEMPLATE_PATTERNS = [
   // We deliberately exclude /api/clients/X/data, /bulk-import, and
   // /calculator-config — those belong to apps/web. The `(\/|$)` anchor stops
   // /api/clients/X/employees-something-else from matching by accident.
-  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement)(\/|$)/,
+  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement|export-logs)(\/|$)/,
 ];
 
 function shouldProxy(path: string): boolean {
