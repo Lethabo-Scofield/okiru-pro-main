@@ -3,6 +3,7 @@ import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
@@ -335,6 +336,11 @@ export default function ESD() {
               rows.forEach(addEsdContribution);
             }}
             label="Bulk upload contributions"
+          />
+          <PillarDuplicateNotice
+            specKey="esd"
+            rows={esd.contributions}
+            className="mt-3"
           />
 
           <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) supAddErrs.reset(); }}>

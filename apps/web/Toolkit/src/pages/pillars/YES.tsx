@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { calculateYESScore, calculateRecommendedCandidates } from "@toolkit/lib/calculators/yes";
 import { isBlackRace } from "@toolkit/lib/calculators/shared";
@@ -296,6 +297,11 @@ export default function YESInitiative() {
               rows.forEach(addTrainingProgram);
             }}
             label="Bulk upload candidates"
+          />
+          <PillarDuplicateNotice
+            specKey="yes"
+            rows={trainingPrograms.filter((p) => p.isYesEmployee)}
+            className="mt-3"
           />
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>

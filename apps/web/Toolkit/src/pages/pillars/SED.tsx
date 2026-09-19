@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
@@ -124,6 +125,11 @@ export default function SED() {
             rows.forEach(addSedContribution);
           }}
           label="Bulk upload contributions"
+        />
+        <PillarDuplicateNotice
+          specKey="sed"
+          rows={contributions}
+          className="mt-3"
         />
 
         <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) errs.reset(); }}>
