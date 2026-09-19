@@ -98,14 +98,37 @@ const num = (v: unknown): number => {
 };
 
 /**
- * A percentage as the workbook writes it, as the fraction the calculators read.
+ * A percentage as the workbook writes it, as the FRACTION the calculators read.
  *
- * Sheets are written both ways — "27" and "0.27" both mean 27% — and the
- * workbook's own projection reads anything above 1 as already-a-percentage.
- * Matching that is the point: a bulk upload that read them differently would
- * score differently from the same numbers typed in by hand.
+ * Sheets are written both ways — "27" and "0.27" both mean 27% — so anything
+ * above 1 is read as already-a-percentage and divided down.
+ *
+ * This used to return a percentage while its own docstring promised a fraction,
+ * and nothing downstream agreed with it. The manual form converts on the way in
+ * (`blackOwnership: formState.blackOwnership / 100`) and the calculators test
+ * fractions (`sup.blackOwnership >= 0.51`), so a bulk-uploaded supplier with 5%
+ * black ownership arrived as `5` — and `5 >= 0.51` cleared EVERY ownership
+ * threshold: the ≥51% line, both black-women lines, and designated group. The
+ * grid showed it plainly as "4079%". Bulk and manual entry now store the same
+ * unit, which is the only way the same numbers can score the same way.
  */
 const pct = (v: unknown): number => {
+  const n = num(v);
+  if (n === 0) return 0;
+  return n > 1 ? n / 100 : n;
+};
+
+/**
+ * The same reading, kept as a PERCENTAGE out of 100.
+ *
+ * The units are genuinely mixed and the types say so: Shareholder and Supplier
+ * ownership are fractions (`sup.blackOwnership >= 0.51`), but
+ * `Contribution.blackBenefitPercent` is documented "0-100%, critical for SED
+ * scoring" and the API parser converts INTO that unit. One helper for both was
+ * how a single change could fix procurement and silently divide every SED
+ * contribution's black benefit by a hundred.
+ */
+const pctOf100 = (v: unknown): number => {
   const n = num(v);
   if (n === 0) return 0;
   return n > 1 ? n : n * 100;
@@ -233,12 +256,13 @@ const ownership: BulkImportSpec<Shareholder> = {
       name: str(row.shareholderName) || str(row.name),
       shareholderId: str(row.idNumber) || undefined,
       ownershipType: str(row.ownershipType) || "shareholder",
-      blackOwnership: explicitBlack != null && str(explicitBlack) !== "" ? pct(explicitBlack) : isBlack ? 100 : 0,
+      // 1 is 100% as a fraction — the unit pct() now returns.
+      blackOwnership: explicitBlack != null && str(explicitBlack) !== "" ? pct(explicitBlack) : isBlack ? 1 : 0,
       blackWomenOwnership:
         explicitBlackWomen != null && str(explicitBlackWomen) !== ""
           ? pct(explicitBlackWomen)
           : isBlack && isFemale
-            ? 100
+            ? 1
             : 0,
       votingRightsPercent: voting,
       economicInterestPercent: economic,
@@ -450,7 +474,7 @@ function contributionSpec(
         // beneficiaries, so an unstated percentage must stay unstated rather
         // than defaulting to full benefit.
         blackBenefitPercent:
-          which === "sed" ? pct(row.percentBenefitingBlack) || undefined : undefined,
+          which === "sed" ? pctOf100(row.percentBenefitingBlack) || undefined : undefined,
       } as Contribution;
     },
     identity: (c) => `${c.beneficiary.toLowerCase()}|${c.amount}`,

@@ -1465,6 +1465,26 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
         // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
       };
 
+      /**
+       * TMPS is derived again on load unless the user pinned it.
+       *
+       * addSupplier/updateSupplier/removeSupplier keep TMPS in step with the
+       * schedule while the pin is off — but they persist the SUPPLIER, never the
+       * derived total. So a bulk upload scored correctly in the session that
+       * uploaded it and came back as `tmps: 0` on the next load, because the
+       * line above reads a persisted total that was never written. Every line in
+       * Preferential Procurement is a share of TMPS, so the whole pillar showed
+       * 0.00/29 with twenty suppliers and R9.0m of recognised spend on screen.
+       *
+       * "Calculated" now means calculated on every read, not only on mutation. A
+       * pinned value is still honoured exactly as entered, including a
+       * deliberate zero.
+       */
+      procurementState.tmpsManualOverride = data.procurement?.tmpsManualOverride === true;
+      if (!procurementState.tmpsManualOverride) {
+        procurementState.tmps = supplierSumTmps(procurementState.suppliers);
+      }
+
       const esdState: ESDData = {
         id: '',
         clientId,

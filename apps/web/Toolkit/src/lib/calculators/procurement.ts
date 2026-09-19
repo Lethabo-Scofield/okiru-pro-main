@@ -284,6 +284,26 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   const procTotal = round2(totalScore);
 
   const coverageNotes: string[] = [];
+  /**
+   * A schedule with no denominator scored 0 and said nothing.
+   *
+   * The misplacement guard above only fires when tmps > 0, so a TMPS of zero
+   * fell straight through: every line here is a share of TMPS, so all of them
+   * came out 0 while the page showed twenty suppliers and R9.0m of recognised
+   * spend. Nothing on screen connected the two.
+   *
+   * It goes in coverageNotes, not dataFlags, on purpose — a missing figure is a
+   * gap, not a misplaced one, and that distinction is pinned by its own test.
+   */
+  if (tmps <= 0 && suppliers.length > 0) {
+    const scheduleTotal = suppliers.reduce((a, s) => a + (Number(s.spend) || 0), 0);
+    coverageNotes.push(
+      `Total Measured Procurement Spend is ${tmps < 0 ? "negative" : "not set"} while ${suppliers.length} ` +
+      `supplier${suppliers.length === 1 ? "" : "s"} totalling R${Math.round(scheduleTotal).toLocaleString("en-ZA")} ` +
+      `are captured. Every Preferential Procurement line is measured as a share of TMPS, so the pillar scores 0 ` +
+      `until TMPS is set — switch TMPS to Calculated, or enter the measured figure.`,
+    );
+  }
   if (excludedSpend > 0) {
     coverageNotes.push(
       `Excluded R${Math.round(excludedSpend).toLocaleString()} of Codes-excluded spend from B-BBEE recognition (loans, provident/pension funds, taxes, statutory levies): ${excludedNames.join(', ')}${excludedNames.length >= 8 ? ' …' : ''}. These are not procurement of goods/services.`,

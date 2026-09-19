@@ -147,9 +147,12 @@ describe("Ownership", () => {
 
     // The holder is 100% black; how much of the company that is worth comes
     // from the voting/economic percentages, not from this number.
-    expect(entities[0].blackOwnership).toBe(100);
-    expect(entities[0].blackWomenOwnership).toBe(100);
-    expect(entities[0].votingRightsPercent).toBe(63);
+    // Fractions. The calculators test `>= 0.51`, and the manual form divides
+    // by 100 on the way in — bulk upload has to store the same unit or the
+    // same numbers score differently depending how they were entered.
+    expect(entities[0].blackOwnership).toBe(1);
+    expect(entities[0].blackWomenOwnership).toBe(1);
+    expect(entities[0].votingRightsPercent).toBe(0.63);
   });
 
   it("gives a white shareholder no black ownership", () => {
@@ -172,7 +175,7 @@ describe("Ownership", () => {
       ["Family Trust", "", 45, 30],
     ]);
     const { entities } = importRows(spec, buffer);
-    expect(entities[0].blackOwnership).toBe(45);
+    expect(entities[0].blackOwnership).toBe(0.45);
   });
 
   it("reads a percentage written as a fraction the same way", () => {
@@ -181,7 +184,7 @@ describe("Ownership", () => {
       ["Nomsa Khumalo", "African", "Female", 0.63],
     ]);
     const { entities } = importRows(spec, buffer);
-    expect(entities[0].votingRightsPercent).toBeCloseTo(63, 5);
+    expect(entities[0].votingRightsPercent).toBeCloseTo(0.63, 5);
   });
 });
 
@@ -200,7 +203,7 @@ describe("Procurement", () => {
       spend: 1250000,
       beeLevel: 4,
       enterpriseType: "qse",
-      blackOwnership: 51,
+      blackOwnership: 0.51,
     });
   });
 
