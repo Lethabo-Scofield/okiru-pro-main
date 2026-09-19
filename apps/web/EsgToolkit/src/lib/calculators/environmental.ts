@@ -191,12 +191,55 @@ export function scoreEnvironmental(
 
   /* ----------------------- ISO 14001 / policy ----------------------- */
 
-  // C26–C29 — MANUAL_ZERO. Sourced from ISO_Tracker / G_Data rows that no
-  // formula reads and no input writes (ledger 5.1). No source, no score.
-  const d26 = 0;
-  const d27 = 0;
-  const d28 = 0;
-  const d29 = 0;
+  /*
+   * C26–C29 — MANUAL_ZERO in the workbook (four literal `0`s, no formulas),
+   * and until now zero here too. That is twenty of the Environmental pillar's
+   * 108 points which no company could reach however well it performed — while
+   * the product still asked every one of them to complete a sixty-row ISO
+   * clause tracker and a board-policy declaration in order to earn them.
+   * Collecting evidence and then scoring it zero is worse than not asking.
+   *
+   * `esgDeriveSummary.deriveIsoTracker` now publishes the terms ledger §5.1's
+   * rules need, matched by CLAUSE rather than by sheet row, with
+   * "Not Applicable" excluded rather than handed full marks. Every rule below
+   * reads 0 out of an empty register, so a blank workbook still earns nothing.
+   *
+   * Parity mode keeps the workbook's literal zeros, exactly as `d12` and `d24`
+   * do, so `ESG_GOLDEN_SG_CONSUMER` is unaffected.
+   */
+  const parity = mode === "workbook-parity";
+  const isoCert = num(workbook, "_cert_score", "iso-tracker");
+  const isoAspects = num(workbook, "_aspects_score", "iso-tracker");
+  const isoPolicy = num(workbook, "_policy_score", "iso-tracker");
+  const isoLegal = num(workbook, "_legal_score", "iso-tracker");
+  const emsScore = num(workbook, "_ems_score", "iso-tracker");
+  const emsMax = num(workbook, "_ems_max", "iso-tracker");
+
+  /*
+   * C26 = MIN(8, 4*ISO_Tracker!E16/5 + 4*ISO_Tracker!E17/60)
+   * Half the points for the certificate itself, half for EMS maturity.
+   */
+  const d26 = parity
+    ? 0
+    : minCap((4 * isoCert) / 5 + (emsMax > 0 ? (4 * emsScore) / emsMax : 0), 8);
+
+  // C27 = 4*ISO_Tracker!E10/5 — the environmental aspects register.
+  const d27 = parity ? 0 : minCap((4 * isoAspects) / 5, 4);
+
+  /*
+   * C28 = MIN(G_Data!F27, ISO_Tracker!E8) * 4/5 — the STRICTER of the board's
+   * own declaration and the ISO clause-5.2 assessment. A policy the board
+   * approved but the audit calls partial is partial.
+   */
+  const policyDeclared = num(workbook, "F27", "g-data");
+  const d28 = parity ? 0 : minCap((Math.min(policyDeclared, isoPolicy) * 4) / 5, 4);
+
+  /*
+   * C29 = IF(G_Data!F21=0, 0, 4*ISO_Tracker!E11/5) — a legal register counts
+   * only where the governance risk register it belongs to is live.
+   */
+  const legalRegisterLive = num(workbook, "F21", "g-data") > 0;
+  const d29 = parity || !legalRegisterLive ? 0 : minCap((4 * isoLegal) / 5, 4);
 
   const rows = {
     d5, d6, d7, d8, d9, d11, d12, d13, d15, d16, d17,

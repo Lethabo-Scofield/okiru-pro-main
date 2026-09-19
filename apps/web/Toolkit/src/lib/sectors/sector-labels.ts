@@ -132,3 +132,28 @@ export function pillarSectorSubtitle(
   }
   return `Scorecard indicators per ${sectorLabel}`;
 }
+
+/**
+ * Render a sub-minimum outcome.
+ *
+ * ScorecardResult carries `undefined` when THIS SECTOR HAS NO SUB-MINIMUM for
+ * the element. Every report used to write that through a plain ternary, so
+ * "not applicable" printed as "Failed" / "Not Met" — and the strategy deck then
+ * listed invented priority actions to fix failures that did not exist. One
+ * helper so the certificate, the auditor pack and the deck cannot disagree.
+ */
+export function subMinimumLabel(
+  met: boolean | undefined,
+  labels: { met: string; notMet: string; notApplicable?: string } = {
+    met: "Passed",
+    notMet: "Failed",
+  },
+): string {
+  if (met === undefined || met === null) return labels.notApplicable ?? "n/a";
+  return met ? labels.met : labels.notMet;
+}
+
+/** True only when the sector defines a sub-minimum AND the entity missed it. */
+export function subMinimumFailed(met: boolean | undefined): boolean {
+  return met === false;
+}

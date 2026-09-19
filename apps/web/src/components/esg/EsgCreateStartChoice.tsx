@@ -16,7 +16,16 @@
  * that already existed — this screen only routes to them.
  */
 import { useRef } from "react";
-import { Building2, ChevronRight, FileSpreadsheet, FolderOpen, Loader2, Upload } from "lucide-react";
+import {
+  Building2,
+  ChevronRight,
+  Download,
+  FileSpreadsheet,
+  FolderOpen,
+  Loader2,
+  Upload,
+} from "lucide-react";
+import { API_BASE } from "@toolkit/lib/config";
 import EsgFlowSteps from "./EsgFlowSteps";
 
 export interface EsgCreateStartChoiceProps {
@@ -163,6 +172,34 @@ export function EsgCreateStartChoice({
             <ChevronRight className="h-5 w-5 text-[var(--esg-text3,rgba(255,255,255,0.32))] transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
           </button>
         ))}
+      </div>
+
+      {/*
+        The template, offered where the Excel route is actually CHOSEN.
+
+        "Continue from an existing ESG data-collection workbook" assumed the
+        user already had one, and the only place to get ours was a toolbar
+        inside a workbook they had not created yet. So the honest reading of
+        "Import Excel workbook" was "import a file we have never described to
+        you". The B-BBEE side has offered its information request at this point
+        in the flow all along; this is the same offer, on the same screen, for
+        the same reason.
+      */}
+      <div className="mt-4 rounded-[16px] border border-white/[0.07] bg-white/[0.02] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 flex-1 text-[12.5px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+            No workbook yet? Download the ESG information request and send it to the client —
+            every sheet in it maps straight back into this scorecard.
+          </p>
+          <a
+            href={`${API_BASE}/api/esg/workbook/template`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:border-white/[0.20] hover:text-white"
+            data-testid="esg-start-download-template"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download template
+          </a>
+        </div>
       </div>
 
       <p className="mt-6 text-center text-[12px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">

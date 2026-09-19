@@ -576,14 +576,23 @@ export interface PillarScore {
 }
 
 export interface ScorecardResult {
-  ownership: PillarScore & { subMinimumMet: boolean };
+  /**
+   * Sub-minimum outcome for a priority element.
+   *
+   * `undefined` means THIS SECTOR HAS NO SUB-MINIMUM for the element — that is
+   * not a failure and must never be rendered as one. The store already writes
+   * undefined in that case; this type previously claimed `boolean`, so every
+   * consumer collapsed "not applicable" into "failed" and the reports printed
+   * fabricated sub-minimum failures for sectors that have none.
+   */
+  ownership: PillarScore & { subMinimumMet?: boolean };
   managementControl: PillarScore;
   /** Separate EE pillar when sector config sets employmentEquity.maxPoints > 0 (e.g. Transport QSE). */
   employmentEquity?: PillarScore;
-  skillsDevelopment: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
-  procurement: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
-  supplierDevelopment: PillarScore & { subMinimumMet: boolean };
-  enterpriseDevelopment: PillarScore & { subMinimumMet: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
+  skillsDevelopment: PillarScore & { subMinimumMet?: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
+  procurement: PillarScore & { subMinimumMet?: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
+  supplierDevelopment: PillarScore & { subMinimumMet?: boolean };
+  enterpriseDevelopment: PillarScore & { subMinimumMet?: boolean; isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   socioEconomicDevelopment: PillarScore & { isChosenElective?: boolean; isElectiveNotChosen?: boolean };
   yesInitiative: PillarScore;
   /** FSC Banks/LTI — Empowerment Financing & ESD combined pillar (FS701/FS702 only). */

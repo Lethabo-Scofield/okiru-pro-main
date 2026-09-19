@@ -1,10 +1,11 @@
 import * as XLSX from 'xlsx';
+import type { BbeeState } from "./store";
 import { calculateOwnershipScore } from './calculators/ownership';
 import { calculateManagementScore } from './calculators/management';
 import { calculateSkillsScore } from './calculators/skills';
 import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
-import { pillarBonusSplit } from './sectors/sector-labels';
+import { pillarBonusSplit , subMinimumLabel } from "./sectors/sector-labels";
 
 interface ExportOptions {
   analystName?: string;
@@ -21,7 +22,7 @@ function pct(value: number, total: number): string {
   return `${((value / total) * 100).toFixed(1)}%`;
 }
 
-export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
+export const exportAuditorExcel = (state: BbeeState, options: ExportOptions = {}) => {
   const wb = XLSX.utils.book_new();
   const today = new Date();
   const currentLevel = state.scorecard.isDiscounted ? state.scorecard.discountedLevel : state.scorecard.achievedLevel;
@@ -38,21 +39,24 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     throw new Error('Cannot export Excel: calculator configuration not loaded. Please load a client or scorecard first.');
   }
 
-  const ownershipData = state.ownership || defaultOwnership;
-  if (!ownershipData.ownershipScorePoints && ownershipData.ownershipScorePoints !== 0) {
+  // These were the LIVE store objects, and the lines below assigned into them:
+  // downloading a spreadsheet mutated application state. Work on copies —
+  // an export is a read of the scorecard, never a write to it.
+  const ownershipData = { ...(state.ownership || defaultOwnership) };
+  if (ownershipData.ownershipScorePoints == null) {
     ownershipData.ownershipScorePoints = 0;
     ownershipData.ownershipScorePercent = 0;
     ownershipData.netValuePoints = 0;
     ownershipData.netValuePercent = 0;
   }
 
-  const skillsData = state.skills || defaultSkills;
-  if (!skillsData.yesCandidatesCount && skillsData.yesCandidatesCount !== 0) {
+  const skillsData = { ...(state.skills || defaultSkills) };
+  if (skillsData.yesCandidatesCount == null) {
     skillsData.yesCandidatesCount = 0;
     skillsData.yesAbsorbedCount = 0;
   }
 
-  const esdData = state.esd || defaultEsd;
+  const esdData = { ...(state.esd || defaultEsd) };
   if (esdData.graduationBonus === undefined) esdData.graduationBonus = false;
   if (esdData.jobsCreatedBonus === undefined) esdData.jobsCreatedBonus = false;
 
@@ -72,7 +76,7 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     [''],
     ['ENTITY INFORMATION'],
     ['Entity Name', state.client.name],
-    ['Trading As', state.client.tradeName || ''],
+    ['Trading As', state.client.tradingName || ''],
     ['Financial Year', state.client.financialYear],
     ['Measurement Period', state.client.measurementPeriodStart && state.client.measurementPeriodEnd ? `${state.client.measurementPeriodStart} to ${state.client.measurementPeriodEnd}` : 'Full financial year'],
     ['Industry Sector', state.client.industrySector || 'Generic'],
@@ -94,9 +98,9 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     ...ownCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
     ['Management Control', '', state.scorecard.managementControl.target || 19, state.scorecard.managementControl.target || 19, fmt(mgtCalc.total), pct(mgtCalc.total, state.scorecard.managementControl.target || 19), 'N/A', 'N/A'],
     ...mgtCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Skills Development', '', state.scorecard.skillsDevelopment.target || 25, state.scorecard.skillsDevelopment.target || 25, fmt(skillCalc.total), pct(skillCalc.total, state.scorecard.skillsDevelopment.target || 25), '≥ 10 pts', state.scorecard.skillsDevelopment.subMinimumMet ? 'Yes' : 'No'],
+    ['Skills Development', '', state.scorecard.skillsDevelopment.target || 25, state.scorecard.skillsDevelopment.target || 25, fmt(skillCalc.total), pct(skillCalc.total, state.scorecard.skillsDevelopment.target || 25), '≥ 10 pts', subMinimumLabel(state.scorecard.skillsDevelopment.subMinimumMet, { met: 'Yes', notMet: 'No', notApplicable: 'n/a' })],
     ...skillCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Preferential Procurement', '', state.scorecard.procurement.target || 29, state.scorecard.procurement.target || 29, fmt(procCalc.base), pct(procCalc.base, state.scorecard.procurement.target || 29), '≥ 11.6 pts (base)', state.scorecard.procurement.subMinimumMet ? 'Yes' : 'No'],
+    ['Preferential Procurement', '', state.scorecard.procurement.target || 29, state.scorecard.procurement.target || 29, fmt(procCalc.base), pct(procCalc.base, state.scorecard.procurement.target || 29), '≥ 11.6 pts (base)', subMinimumLabel(state.scorecard.procurement.subMinimumMet, { met: 'Yes', notMet: 'No', notApplicable: 'n/a' })],
     ...procCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
     ['Supplier Development', '', state.scorecard.supplierDevelopment?.target || 10, state.scorecard.supplierDevelopment?.target || 10, fmt(esdCalc.sdTotal), pct(esdCalc.sdTotal, state.scorecard.supplierDevelopment?.target || 10), '≥ 4 pts', esdCalc.sdSubMinimumMet ? 'Yes' : 'No'],
     ...esdCalc.sdSubLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
@@ -435,9 +439,9 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     // 2 designated-group bonus), not 31.
     [`PREFERENTIAL PROCUREMENT — ELEMENT 4 (${(() => {
       const s = pillarBonusSplit(
-        state.scorecard.preferentialProcurement?.weighting ?? 0,
-        state.scorecard.preferentialProcurement?.score ?? 0,
-        state.scorecard.preferentialProcurement?.subLines,
+        state.scorecard.procurement?.weighting ?? 0,
+        state.scorecard.procurement?.score ?? 0,
+        state.scorecard.procurement?.subLines,
       );
       return s.bonusAvailable > 0
         ? `${s.baseWeight} base + ${s.bonusAvailable} bonus = ${s.baseWeight + s.bonusAvailable} points`

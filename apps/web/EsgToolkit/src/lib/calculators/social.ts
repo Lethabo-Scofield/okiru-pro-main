@@ -55,6 +55,15 @@ const MGMT_HEADCOUNT_CELLS = ["L5", "L6"] as const;
 /** `S_Data!G29:G33` — LTI / MTI / near-miss / vehicle / property incident totals. */
 const INCIDENT_ROWS = ["G29", "G30", "G31", "G32", "G33"] as const;
 
+/**
+ * `THR_SUP_HS` — `Assumptions!B58`, the supplier-compliance minimum, 0.8 in the
+ * v1.7 workbook (ledger §5.2). Only a FALLBACK: `B58` is a real input, and it
+ * had no reader at all until the two supplier indicators below were wired up.
+ * It has no `esgConfig` threshold of its own because the workbook does not
+ * treat it as a sector parameter.
+ */
+const THR_SUPPLIER_COMPLIANCE = 0.8;
+
 function num(wb: EsgWorkbookData, ref: string, section = "s-data"): number {
   return readEsgCell(wb, section, ref) ?? 0;
 }
@@ -291,9 +300,44 @@ export function scoreSocial(
 
   /* ---------------------------- Suppliers -------------------------- */
 
-  // C26 / C27 — MANUAL_ZERO: SAQ_Supplier aggregates are not derived (ledger 5.2).
-  const d26 = 0;
-  const d27 = 0;
+  /*
+   * C26 / C27 — MANUAL_ZERO in the workbook, and until now zero here too, so
+   * the supplier register was the third input the product collected and never
+   * read: twelve suppliers rated across seven criteria, ten points, and no
+   * path from one to the other.
+   *
+   * The ratings already land on the cells ledger §5.2 names — `healthSafety`
+   * is column D and `foodSafety` column F — so all that was missing were the
+   * means, which `esgDeriveSummary.deriveSaqSupplier` now publishes with `N/A`
+   * excluded (Excel's own `AVERAGE` behaviour over a text cell).
+   *
+   * An empty register publishes no mean, so `supplierCount === 0` scores zero
+   * rather than a free pass — the explicit warning the ledger leaves for
+   * whoever wired this up.
+   *
+   * Both share `THR_SUP_HS` (`Assumptions!B58`) until a dedicated food-safety
+   * threshold exists, and both go through `target()`, so the expert ruling
+   * that ESG has no universal targets applies here as everywhere else: with no
+   * declared basis the indicator leaves the total with its reason stated,
+   * rather than being graded against a number we invented.
+   */
+  const thrSupplier = target(
+    "d26",
+    "B58",
+    THR_SUPPLIER_COMPLIANCE,
+    "supplier health, safety and food-safety compliance",
+  );
+  const supplierCount = readEsgCell(workbook, "saq", "_supplier_count") ?? 0;
+  const supplierRatingMax = readEsgCell(workbook, "saq", "_max_rating") ?? 5;
+  const supplierBand = (meanRef: string, maxPts: number): number => {
+    if (mode === "workbook-parity" || supplierCount <= 0 || supplierRatingMax <= 0) return 0;
+    const mean = readEsgCell(workbook, "saq", meanRef);
+    if (mean == null) return 0;
+    return prT(mean / supplierRatingMax, thrSupplier, maxPts, floor);
+  };
+
+  const d26 = supplierBand("_hs_mean", 5);
+  const d27 = supplierBand("_fs_mean", 5);
 
   const rows = {
     d5, d6, d7, d8, d9, d10, d12, d13, d14, d15,
