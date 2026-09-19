@@ -134,6 +134,21 @@ const pctOf100 = (v: unknown): number => {
   return n > 1 ? n : n * 100;
 };
 
+/**
+ * The registry match `applyCertificateMatches` attaches to a row.
+ *
+ * Written as `_certificate` alongside the filled cells, so it is present only
+ * when the row actually matched something in the certificate database.
+ */
+function certProvenance(row: ParsedRow): {
+  certificateId?: string | null;
+  companyName?: string | null;
+  basis?: string | null;
+} | null {
+  const raw = (row as Record<string, unknown>)._certificate;
+  return raw && typeof raw === "object" ? (raw as Record<string, never>) : null;
+}
+
 /** The workbook stores Yes/No columns as booleans, but a raw sheet may not. */
 const bool = (v: unknown): boolean => {
   if (typeof v === "boolean") return v;
@@ -421,6 +436,13 @@ const procurement: BulkImportSpec<Supplier> = {
       ? enterpriseType(row.sizeAtFirstProcurement)
       : undefined,
     certificateExpiryDate: str(row.certificateExpiryDate) || undefined,
+    // The registry match, carried onto the record rather than dropped here.
+    // Without it the level and expiry survived but the document they came from
+    // did not, so Procurement could assert a supplier's B-BBEE status and never
+    // show it.
+    certificateId: certProvenance(row)?.certificateId ?? undefined,
+    certificateMatchedName: certProvenance(row)?.companyName ?? undefined,
+    certificateMatchBasis: certProvenance(row)?.basis ?? undefined,
     spend: num(row.spend),
   }),
   identity: (s) => s.name.toLowerCase(),

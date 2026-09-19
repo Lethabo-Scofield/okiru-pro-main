@@ -326,6 +326,21 @@ export interface Supplier {
   firstProcurementDate?: string;
   sizeAtFirstProcurement?: 'eme' | 'qse' | 'generic';  // For graduation bonus
   certificateExpiryDate?: string;
+
+  /**
+   * The certificate in our registry this supplier was matched to.
+   *
+   * The matcher already knew this — it fills in the level and the expiry, and
+   * both move the score — but the id was dropped when the parsed row became a
+   * Supplier, so the document behind the numbers could not be opened. Keeping
+   * it is what lets Procurement show the certificate rather than only assert
+   * what it said.
+   */
+  certificateId?: string;
+  /** The registry's name for that certificate, so a match can be judged. */
+  certificateMatchedName?: string;
+  /** How it matched — a name-only guess is not a registration-number hit. */
+  certificateMatchBasis?: string;
   
   // Spend
   spend: number;

@@ -402,13 +402,13 @@ export interface BbeeState extends PillarState {
   /** FSC-only SED spend fields (Consumer Education, CE bonus, Fundisa). */
   updateSedSpend: (data: { ceSpend?: number; ceBonusSpend?: number; fundisaSpend?: number }) => void;
   
-  updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => void;
+  updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => Promise<void>;
   updateTMPS: (tmps: number, manualOverride?: boolean) => void;
-  updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => void;
+  updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => Promise<void>;
   /** Update the industry VERTICAL (Manufacturing, Retail, etc.) used for industry-norm lookup. Distinct from sectorCode/industrySector which drive the scorecard. */
-  updateIndustry: (industry: string) => void;
+  updateIndustry: (industry: string) => Promise<void>;
   /** Update the CEE report vintage used for MC/Skills EAP targets (undefined = latest). */
-  updateEapYear: (eapYear: number | undefined) => void;
+  updateEapYear: (eapYear: number | undefined) => Promise<void>;
 
   loadCalculatorConfig: (clientId: string) => Promise<void>;
   saveCalculatorConfig: (config: CalculatorConfig) => Promise<void>;
@@ -1439,10 +1439,22 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           name: s.name,
           registrationNumber: s.registrationNumber || '',
           beeLevel: Number.isFinite(Number(s.beeLevel)) ? Number(s.beeLevel) : 0,
-          blackOwnership: s.blackOwnership || 0,
-          blackWomenOwnership: s.blackWomenOwnership || 0,
-          youthOwnership: s.youthOwnership || 0,
-          disabledOwnership: s.disabledOwnership || 0,
+          // Normalised on read, exactly as shareholders already were.
+          //
+          // Shareholders went through normalizeFraction here and suppliers did
+          // not, so a supplier stored as a percentage reached the scorer as
+          // `51` — and every threshold in Preferential Procurement is a
+          // fraction test, so `5 >= 0.51` passed the >=51% black-owned line for
+          // a 5%-black-owned supplier. The grid showed it as "4079%".
+          //
+          // The importer writes fractions now, but companies onboarded before
+          // that still hold percentages. Normalising on read repairs them in
+          // place and leaves a correct fraction untouched, so no migration is
+          // needed and no value is converted twice.
+          blackOwnership: normalizeFraction(s.blackOwnership),
+          blackWomenOwnership: normalizeFraction(s.blackWomenOwnership),
+          youthOwnership: normalizeFraction(s.youthOwnership),
+          disabledOwnership: normalizeFraction(s.disabledOwnership),
           enterpriseType: s.enterpriseType || 'generic',
           spend: s.spend || 0,
           // Kept unstated when the record does not say. Procurement reads
@@ -1461,6 +1473,23 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           isDesignatedGroup: coerceYesNo(s.isDesignatedGroup),
           isSupplierDevRecipient: coerceYesNo(s.isSupplierDevRecipient),
           hasThreeYearContract: coerceYesNo(s.hasThreeYearContract),
+          // Carried, not cherry-picked away. This map listed the flags and
+          // dropped everything else, so a supplier matched against the
+          // certificate registry lost its expiry date on the next page load —
+          // "Cert Expiry" read "—" for twenty matched suppliers — and
+          // flowThrough/designatedGroup ownership went with it, which the
+          // designated-group bonus line is scored from. Same shape as the ESD
+          // note below: right until a reload, then quietly less.
+          vatNumber: s.vatNumber || undefined,
+          certificateExpiryDate: s.certificateExpiryDate || undefined,
+          flowThroughOwnership: s.flowThroughOwnership ?? undefined,
+          designatedGroupOwnership: s.designatedGroupOwnership ?? undefined,
+          firstProcurementDate: s.firstProcurementDate || undefined,
+          sizeAtFirstProcurement: s.sizeAtFirstProcurement || undefined,
+          // The registry link, so the certificate stays openable after a reload.
+          certificateId: s.certificateId || undefined,
+          certificateMatchedName: s.certificateMatchedName || undefined,
+          certificateMatchBasis: s.certificateMatchBasis || undefined,
         })),
         // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
       };
@@ -2081,16 +2110,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
 
-  updateFinancials: (revenue, npat, leviableAmount, industryNorm) => {
+  updateFinancials: async (revenue, npat, leviableAmount, industryNorm) => {
     set((state) => ({
       client: { ...state.client, revenue, npat, leviableAmount, industryNorm },
       skills: { ...state.skills, leviableAmount }
     }));
     get()._recalculateAll();
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { revenue, npat, leviableAmount, industryNorm }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { revenue, npat, leviableAmount, industryNorm }));
   },
 
   updateSedSpend: (data) => {
@@ -2114,7 +2142,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
   
-  updateSettings: (eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd) => {
+  updateSettings: async (eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd) => {
     set((state) => ({
       client: {
         ...state.client,
@@ -2126,27 +2154,24 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }));
     get()._recalculateAll();
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }));
   },
 
-  updateIndustry: (industry) => {
+  updateIndustry: async (industry) => {
     set((state) => ({ client: { ...state.client, industry } }));
     get()._recalculateAll(); // industryNorm lookup uses client.industry → Skills/PP can shift
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { industry }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { industry }));
   },
 
-  updateEapYear: (eapYear) => {
+  updateEapYear: async (eapYear) => {
     set((state) => ({ client: { ...state.client, eapYear } }));
     get()._recalculateAll(); // MC + Skills EAP bands score against the selected CEE vintage
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { eapYear: eapYear ?? null }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { eapYear: eapYear ?? null }));
   },
 
   // Dynamic scorecard API actions
