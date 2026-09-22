@@ -89,7 +89,7 @@ export function TokenBalancePill({ className }: { className?: string }) {
           ? "border-red-400/30 bg-red-500/[0.08] text-red-200 hover:bg-red-500/[0.14]"
           : low
             ? "border-amber-400/30 bg-amber-500/[0.08] text-amber-100 hover:bg-amber-500/[0.14]"
-            : "border-white/[0.08] bg-white/[0.04] text-[#d1d1d6] hover:bg-white/[0.08]",
+            : "border-white/[0.08] bg-white/[0.04] text-[color:var(--body)] hover:bg-white/[0.08]",
         className,
       )}
       data-testid="token-balance-pill"
@@ -97,7 +97,7 @@ export function TokenBalancePill({ className }: { className?: string }) {
       {empty || low ? (
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
       ) : (
-        <Coins className="h-3.5 w-3.5 shrink-0 text-[#8e8e93]" aria-hidden />
+        <Coins className="h-3.5 w-3.5 shrink-0 text-[color:var(--body)]" aria-hidden />
       )}
       <span className="tabular-nums">{formatTokens(balance)}</span>
       {/* Never colour alone: the state is spelled out. */}

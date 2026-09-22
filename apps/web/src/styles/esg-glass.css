@@ -1,25 +1,43 @@
 /**
- * ESG theme — aligned with B-BBEE hub / InformationRequest (bg-black, neutral chrome).
- * E/S/G accent tokens are for badges and charts only, not page wash.
+ * ESG theme — the same black and grey as the rest of the product.
+ *
+ * Shares the shell's greys and its 92/56/32 text ramp so ESG does not read as
+ * a separate application. Not pure black: #08090b leaves something for a
+ * shadow to fall on, which is what keeps the glass surfaces from going flat.
+ *
+ * Accent tokens are for badges, hairlines and charts only, never a page wash.
+ * Green for environment, amber for social, purple for governance.
+ *
+ * The environment accent was cyan, which made the whole ESG flow — create,
+ * workbook, summary and toolkit — read as blue. Every ESG component already
+ * falls back to a green when the token is missing, so the flow was built green
+ * and this one line painted over it. It is #22c55e now: the same green the ESG
+ * Toolkit product page runs on (`.okiru-green`), and the same one the hub and
+ * the workspaces mark ESG with, so one product has one colour.
  */
 .esg-theme {
   color-scheme: dark;
-  --esg-bg: #000000;
-  --esg-bg2: #0a0a0a;
+  --esg-bg: #08090b;
+  --esg-bg2: #101114;
   --esg-glass: rgba(255, 255, 255, 0.03);
   --esg-glass-hover: rgba(255, 255, 255, 0.06);
-  --esg-glass-border: #2c2c2e;
-  --esg-glass-border-hover: #3a3a3c;
-  --esg-glass-strong: rgba(255, 255, 255, 0.06);
-  --esg-text: #ffffff;
-  --esg-text2: #8e8e93;
-  --esg-text3: #636366;
-  --esg-acc-e: #1de9a0;
+  --esg-glass-border: rgba(255, 255, 255, 0.07);
+  --esg-glass-border-hover: rgba(255, 255, 255, 0.14);
+  --esg-glass-strong: rgba(255, 255, 255, 0.07);
+  --esg-text: rgba(255, 255, 255, 0.92);
+  --esg-text2: rgba(255, 255, 255, 0.56);
+  --esg-text3: rgba(255, 255, 255, 0.32);
+  --esg-acc-e: #22c55e;
+  --esg-acc-e-deep: #16a34a;
   --esg-acc-s: #f5a623;
-  --esg-acc-g: #9b6bff;
-  --esg-section-bg: #141416;
-  --esg-input-bg: #0e0e10;
-  --esg-input-border: #2c2c2e;
+  --esg-acc-g: #9333ea;
+  /* The toolkit's action accent. Named from when it was blue; it is the
+     ESG green now, and defined here so the literal fallback in the
+     toolkit's own components agrees with it rather than fighting it. */
+  --esg-acc-blue: #22c55e;
+  --esg-section-bg: #16181c;
+  --esg-input-bg: rgba(0, 0, 0, 0.32);
+  --esg-input-border: rgba(255, 255, 255, 0.07);
   --esg-nav-w: 220px;
   --esg-hdr-h: 52px;
   color: var(--esg-text);

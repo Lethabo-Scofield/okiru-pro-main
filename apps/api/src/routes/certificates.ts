@@ -1073,6 +1073,24 @@ router.get('/stats', async (_req: Request, res: Response) => {
     if (cached) return res.json(cached);
     const rows = await loadAllRows();
     const total = rows.length;
+
+    // Two populations, and they are not the same one.
+    //
+    // `total` counts everything we HOLD — loadAllRows enumerates Blob Storage
+    // and merges the registry over it. The directory, its search, and the
+    // supplier matcher all read the REGISTRY, and the registry only learns
+    // about a file when a sync or an extraction walk reaches it.
+    //
+    // So a batch copied straight into the container is counted here and
+    // invisible everywhere else. That had happened, silently, to 1,484 of
+    // 4,439 certificates: the tile said one number, the list said another, and
+    // nothing anywhere said why. Reporting the gap is what makes the next one
+    // a one-line check instead of an investigation.
+    const indexed = isMongoConnected()
+      ? await CertificateMetadataModel.countDocuments({})
+      : total;
+    const awaitingIndex = Math.max(0, total - indexed);
+
     let valid = 0, expiring = 0, expired = 0, unknown = 0;
     let levelSum = 0, levelCount = 0;
     let blackOwnSum = 0, blackOwnCount = 0;
@@ -1109,6 +1127,10 @@ router.get('/stats', async (_req: Request, res: Response) => {
 
     const payload = {
       total,
+      /** Rows the registry holds — what the directory can actually list. */
+      indexed,
+      /** Files in storage the registry has never seen. Should be 0. */
+      awaitingIndex,
       valid,
       expiring,
       expiringIn30: expiring,

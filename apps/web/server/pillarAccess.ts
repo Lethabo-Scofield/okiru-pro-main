@@ -17,7 +17,7 @@
  */
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
-import { ProcessorSessionModel, WorkspaceMemberModel } from "../shared/schema";
+import { ClientModel, ProcessorSessionModel, WorkspaceMemberModel } from "../shared/schema";
 
 const logger = createLogger("PillarAccess");
 
@@ -82,19 +82,34 @@ export async function resolveWorkbookPillarAccess(
 ): Promise<PillarAccess | null> {
   if (mongoose.connection.readyState !== 1) return null;
   try {
-    const session = await ProcessorSessionModel.findOne({
-      clientId: companyId,
-      workspaceId: { $nin: [null, ""] },
-    })
-      .sort({ updatedAt: -1 })
-      .lean() as { workspaceId?: string; createdBy?: string; createdByUserId?: string } | null;
-    if (!session?.workspaceId) return null;
+    // The company's own binding is the authority; the workspace-bound
+    // ProcessorSession stays as a fallback for companies made through the
+    // super-admin processor. It used to be the only link, which is why scopes
+    // were recorded and then never applied to a normally-created company.
+    const client = (await ClientModel.findOne(
+      { $or: [{ clientId: companyId }, { id: companyId }] },
+      { _id: 0, workspaceId: 1, createdByUserId: 1 },
+    ).lean()) as { workspaceId?: string | null; createdByUserId?: string | null } | null;
 
-    const ownerId = session.createdBy ?? session.createdByUserId ?? null;
+    let workspaceId = client?.workspaceId ? String(client.workspaceId) : "";
+    let ownerId: string | null = client?.createdByUserId ?? null;
+
+    if (!workspaceId) {
+      const session = await ProcessorSessionModel.findOne({
+        clientId: companyId,
+        workspaceId: { $nin: [null, ""] },
+      })
+        .sort({ updatedAt: -1 })
+        .lean() as { workspaceId?: string; createdBy?: string; createdByUserId?: string } | null;
+      if (!session?.workspaceId) return null;
+      workspaceId = String(session.workspaceId);
+      ownerId = session.createdBy ?? session.createdByUserId ?? ownerId;
+    }
+
     if (ownerId && ownerId === userId) return { mode: "full" };
 
     const member = await WorkspaceMemberModel.findOne({
-      workspaceId: String(session.workspaceId),
+      workspaceId,
       userId,
     }).lean() as { role?: string; pillarScopes?: unknown } | null;
 
@@ -108,13 +123,15 @@ export async function resolveWorkbookPillarAccess(
     if (scopes.length === 0) return { mode: "full" };
     return { mode: "scoped", scopes };
   } catch (err) {
-    // Infra error — org/creator authorisation upstream still applies; do not
-    // turn an outage into a 5xx storm at the access layer.
-    logger.warn("resolveWorkbookPillarAccess failed (non-fatal)", {
+    // A failed lookup is not permission. Returning null meant "no overlay",
+    // which meant full write access — an outage handed out exactly what the
+    // scopes exist to withhold. Read-only is the safe reading of "we could not
+    // establish what you may do"; the creator and owner paths return above.
+    logger.warn("resolveWorkbookPillarAccess failed — falling back to read-only", {
       companyId,
       error: err instanceof Error ? err.message : String(err),
     });
-    return null;
+    return { mode: "readOnly" };
   }
 }
 

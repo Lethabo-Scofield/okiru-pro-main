@@ -28,7 +28,6 @@ import Scorecard from "@toolkit/pages/Scorecard";
 import Settings from "@toolkit/pages/Settings";
 import Profile from "@toolkit/pages/Profile";
 import AuthPage from "@toolkit/pages/AuthPage";
-import ClientSelector from "@toolkit/pages/ClientSelector";
 import { AppLoader } from "@toolkit/components/Loader";
 import okiruLogoDark from "@toolkit-assets/Okiru_WHT_Circle_Logo_V1_1772658965196.png";
 import { useBbeeStore } from "@toolkit/lib/store";
@@ -152,16 +151,6 @@ export function AppRoutes() {
   );
 }
 
-function PostLoginClientGate() {
-  const { activeClientId } = useActiveClient();
-
-  if (!activeClientId) {
-    return <ClientSelector />;
-  }
-
-  return <AppRoutes />;
-}
-
 function AuthenticatedApp() {
   const { user, isLoading } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
@@ -177,9 +166,12 @@ function AuthenticatedApp() {
     return <LandingPage onNavigateAuth={() => setShowAuth(true)} />;
   }
 
+  // Choosing a company is the workspace's job, not the toolkit's. The shipped
+  // app reaches the toolkit with a company already active (ToolkitView), so the
+  // picker that used to sit here was never rendered.
   return (
     <ClientProvider>
-      <PostLoginClientGate />
+      <AppRoutes />
     </ClientProvider>
   );
 }

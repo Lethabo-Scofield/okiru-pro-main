@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -489,6 +492,23 @@ export default function Ownership() {
           </p>
         </div>
 
+        <div className="flex gap-2">
+        <PillarBulkImport
+          spec={BULK_IMPORT_SPECS.ownership}
+          existing={ownership.shareholders}
+          onImport={(rows, mode) => {
+            if (mode === "replace") {
+              ownership.shareholders.forEach((sh) => removeShareholder(sh.id));
+            }
+            rows.forEach(addShareholder);
+          }}
+        />
+        <PillarDuplicateNotice
+          specKey="ownership"
+          rows={ownership.shareholders}
+          className="mt-3"
+        />
+
         <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setNewSh({ ...emptyForm }); setActiveTab("basic"); addErrs.reset(); } }}>
           <DialogTrigger asChild>
             <Button className="gap-2">
@@ -509,6 +529,7 @@ export default function Ownership() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setEditSh({ ...emptyForm }); setActiveTab("basic"); editErrs.reset(); } }}>

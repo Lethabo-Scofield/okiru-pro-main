@@ -64,6 +64,42 @@ const GARP_CONTROL = [
 
 const SAQ_SCORE = ["5", "4", "3", "2", "1", "N/A"] as const;
 
+/**
+ * Health-and-safety evidence, strongest first.
+ *
+ * The OHS Act artefacts a South African supplier can actually produce, in the
+ * order an assurance provider would rank them: a certified management system,
+ * then the COIDA letter of good standing, then a s37(2) mandatary agreement
+ * with a safety file, then nothing. Each is a document with a number on it,
+ * which is what makes this column testable where a bare 1–5 is not.
+ */
+const SAQ_HS_EVIDENCE = [
+  "ISO 45001 certified",
+  "Letter of good standing (COIDA)",
+  "Safety file / s37(2) agreement",
+  "None held",
+] as const;
+
+/**
+ * Food-safety grade — the BRCGS ladder, plus the schemes that do not grade.
+ *
+ * BRCGS grades AA / A / B / C / D on the count and severity of
+ * non-conformities: roughly no more than five minors for AA, while one
+ * critical, or a major against a fundamental clause, fails outright. FSSC
+ * 22000 and ISO 22000 are pass/fail on a three-year cycle and issue no grade,
+ * so they are recorded as certification rather than forced onto a ladder they
+ * do not use.
+ */
+const SAQ_FOOD_GRADE = [
+  "BRCGS AA",
+  "BRCGS A",
+  "BRCGS B",
+  "BRCGS C",
+  "BRCGS D",
+  "FSSC 22000 / ISO 22000 certified",
+  "Not certified",
+] as const;
+
 export const ESG_GRID_SECTION_IDS = [
   "fleet",
   "waste",
@@ -296,6 +332,40 @@ export const ESG_GRID_SECTIONS: Record<EsgGridSectionId, EsgGridSectionDef> = {
       { key: "foodSafety", label: "Food Safety", type: "select", options: [...SAQ_SCORE], width: 100 },
       { key: "invoicing", label: "Correct Invoicing", type: "select", options: [...SAQ_SCORE], width: 120 },
       { key: "backup", label: "Backup Support", type: "select", options: [...SAQ_SCORE], width: 110 },
+      /*
+       * EVIDENCE COLUMNS — appended AFTER `backup` (column H, the last the
+       * v1.7 sheet uses), so every existing letter A…H is unchanged and no
+       * stored workbook is re-interpreted. Same rule the fleet register's
+       * `isEv` column followed.
+       *
+       * WHY THEY EXIST. The seven columns above are a 1–5 opinion with no
+       * published meaning, so two consultants rate the same supplier
+       * differently and an assurance provider can test neither answer. These
+       * record the AUDITABLE FACT instead: a certificate a reviewer can call
+       * up, or a grade an auditor actually issued.
+       *
+       * EcoVadis — the reference model for supplier ESG assessment — weights
+       * Results (35%) above Policies (25%) for exactly this reason: what was
+       * achieved outranks what was claimed. So `social.ts` prefers these
+       * columns over the rating beside them and falls back to the rating only
+       * where no evidence has been recorded.
+       */
+      {
+        key: "hsEvidence",
+        label: "H&S Evidence",
+        type: "select",
+        options: [...SAQ_HS_EVIDENCE],
+        width: 190,
+        aliases: ["Safety File", "H&S Certification", "OHS Evidence"],
+      },
+      {
+        key: "foodSafetyGrade",
+        label: "Food Safety Grade",
+        type: "select",
+        options: [...SAQ_FOOD_GRADE],
+        width: 170,
+        aliases: ["BRCGS Grade", "GFSI Grade", "Audit Grade"],
+      },
     ],
   },
   "s-data-ofo": {

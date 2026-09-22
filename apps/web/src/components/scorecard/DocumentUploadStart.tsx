@@ -391,9 +391,20 @@ export interface DocumentUploadStartProps {
     },
   ) => Promise<void>;
   creating: boolean;
+  /**
+   * Open on the dropzone alone.
+   *
+   * Set when the user reached this having already chosen "upload documents" in
+   * the workspace. They asked for a screen that is just about uploading, and
+   * landing on one covered in a company-profile panel and fifteen pillar
+   * batches reads as being asked to do something else first. Everything else
+   * appears the moment a file is staged — the sector and size are needed for
+   * the quote, and the batches are how a long pack gets organised.
+   */
+  focused?: boolean;
 }
 
-export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartProps) {
+export function DocumentUploadStart({ onCreate, creating, focused = false }: DocumentUploadStartProps) {
   const [catalog, setCatalog] = useState<ExpectedDocsCatalog | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -1391,6 +1402,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
   // layout, and doing that the moment a quote landed is what left people with
   // "files appear but there is nowhere to carry on".
   const quoteReady = Boolean(quote && doneStaging && !parserCase && !quoting);
+  /**
+   * Nothing on screen but the dropzone: the state a user lands in when they
+   * chose "upload documents" and have not yet added one. The company profile
+   * and the pillar batches both matter, and both appear the moment there is a
+   * file for them to apply to.
+   */
+  const bareUpload = focused && files.length === 0 && !parserCase && !quote;
   // Missing documents never block: the user can always proceed and the workbook
   // scores on whatever was extracted (even nothing — they complete it manually).
   // Sector + size are REQUIRED: they pick the scorecard the company is judged
@@ -1560,23 +1578,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
         .dus-stamp { animation: dusStamp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
       `}</style>
 
-      <div className="mb-5 text-center">
-        <h3
-          className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white"
-          style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-        >
+      {/* Left-aligned and at document scale. A 34px centred headline over a
+          working step read like a landing page rather than a step in an
+          assessment, which is what made the flow feel unserious. */}
+      <div className="mb-5">
+        <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
           {quote && !parserCase
             ? quote.paymentRequired === false
               ? "Review your documents"
               : "Review and pay"
             : "Add your documents"}
         </h3>
-        <p className="mx-auto mt-2 max-w-md text-[15px] leading-6 text-[#a1a1a6]">
+        <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
           {quote && !parserCase
             ? quote.paymentRequired === false
-              ? "Processing is free. Review the documents below, then continue to read them."
-              : "This is what it costs to process your documents. Nothing is read until you pay."
-            : "Upload what you have. We will identify what is present, missing or needs review."}
+              ? "Processing is free. Review the documents below, then continue."
+              : "Nothing is read until you pay."
+            : "We identify what is present, what is missing and what needs review."}
         </p>
       </div>
 
@@ -1593,7 +1611,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <Check className="h-4 w-4 shrink-0" />
               Your processed documents were saved
             </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[#a1a1a6]">
+            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
               We restored the extraction you already paid for
               {(() => {
                 const at = new Date(restoredAt);
@@ -1607,7 +1625,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
           <button
             type="button"
             onClick={discardRun}
-            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/[0.10] px-4 py-2 text-[12px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/[0.10] px-4 py-2 text-[12px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
             data-testid="button-discard-restored-run"
           >
             Discard and start over
@@ -1621,10 +1639,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
       {/* ACT 1 — the stage */}
       <motion.div
         layout
-        className={quoteReady ? "grid gap-5" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"}
+        className={
+          quoteReady || bareUpload ? "grid gap-5" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"
+        }
       >
-        {!quoteReady && (
-        <motion.aside layout className="rounded-[18px] border border-white/[0.07] bg-[#0e0e10] p-4 lg:order-2 lg:self-start">
+        {!quoteReady && !bareUpload && (
+        <motion.aside layout className="rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)] p-4 lg:order-2 lg:self-start">
           <AnimatePresence initial={false}>
           {quote && !parserCase && (
             <motion.div
@@ -1637,8 +1657,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">Documents</p>
-                  <p className="mt-1 text-[13px] text-[#d1d1d6]">
+                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Documents</p>
+                  <p className="mt-1 text-[13px] text-[color:var(--body)]">
                     {files.length} file{files.length === 1 ? "" : "s"} ready
                   </p>
                 </div>
@@ -1655,17 +1675,17 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   const quotedFile = quoted(file.name);
                   return (
                     <div key={file.name} className="flex items-center gap-2 rounded-xl bg-white/[0.035] px-2.5 py-2">
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-[#636366]" />
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[12px] font-medium text-[#e5e5ea]">{file.name}</p>
-                        <p className="mt-0.5 text-[10.5px] text-[#636366]">
+                        <p className="mt-0.5 text-[10.5px] text-[color:var(--muted)]">
                           {quotedFile?.requiresOcr ? "Scan" : quotedFile ? "Digital" : "Waiting"}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => removeFile(file.name)}
-                        className="rounded-full p-1 text-[#48484a] transition-colors hover:bg-white/[0.06] hover:text-[#d1d1d6]"
+                        className="rounded-full p-1 text-[color:var(--muted)] transition-colors hover:bg-white/[0.06] hover:text-[color:var(--body)]"
                         aria-label={`Remove ${file.name}`}
                       >
                         <X className="h-3 w-3" />
@@ -1677,18 +1697,18 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </motion.div>
           )}
           </AnimatePresence>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">Company profile</p>
+          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Company profile</p>
           <div className="mt-4 space-y-5">
             {sectorOptions.length > 0 && (
               <div>
-                <label className="mb-2 block text-[12px] font-medium text-[#8e8e93]">Sector</label>
+                <label className="mb-2 block text-[12px] font-medium text-[color:var(--body)]">Sector</label>
                 <select
                   value={sector}
                   onChange={(e) => {
                     setSector(e.target.value);
                     setSubSector("");
                   }}
-                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#141416] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
+                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
                   data-testid="sector-select-side"
                 >
                   <option value="">Select sector…</option>
@@ -1701,11 +1721,11 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
             {activeSector?.subSectors && (
               <div>
-                <label className="mb-2 block text-[12px] font-medium text-[#8e8e93]">Sub-sector</label>
+                <label className="mb-2 block text-[12px] font-medium text-[color:var(--body)]">Sub-sector</label>
                 <select
                   value={subSector}
                   onChange={(e) => setSubSector(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[#141416] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
+                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
                   data-testid="subsector-select-side"
                 >
                   <option value="">Select</option>
@@ -1717,7 +1737,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             )}
 
             <div>
-              <p className="mb-2 text-[12px] font-medium text-[#8e8e93]">Organisation size</p>
+              <p className="mb-2 text-[12px] font-medium text-[color:var(--body)]">Organisation size</p>
               <div className="space-y-1.5">
                 {sizeOptions.map((option) => (
                   <button
@@ -1729,9 +1749,9 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   >
                     <span>
                       <span className="block font-medium text-white">{option.label}</span>
-                      <span className="block text-[11px] text-[#636366]">{option.detail}</span>
+                      <span className="block text-[11px] text-[color:var(--muted)]">{option.detail}</span>
                     </span>
-                    {size === option.value && <Check className="h-3.5 w-3.5 text-[#d1d1d6]" />}
+                    {size === option.value && <Check className="h-3.5 w-3.5 text-[color:var(--body)]" />}
                   </button>
                 ))}
               </div>
@@ -1797,7 +1817,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: -24, scale: 0.985 }}
               transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
-              className="mb-4 rounded-[22px] border border-white/[0.08] bg-[#0e0e10] p-5"
+              className="mb-4 rounded-[22px] border border-white/[0.08] bg-[color:var(--ink-2)] p-5"
               data-testid="payment-summary"
             >
               {/* Reviewing the cost is not a one-way door either. Without this,
@@ -1805,7 +1825,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               <button
                 type="button"
                 onClick={() => setDoneStaging(false)}
-                className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[#8e8e93] transition-colors hover:text-white"
+                className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--body)] transition-colors hover:text-white"
                 data-testid="button-add-more-documents"
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
@@ -1813,43 +1833,42 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               </button>
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[#636366]">
+                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
                     {charging ? "This batch costs" : "Ready to process"}
                   </p>
                   <h4
                     className="mt-2 text-[30px] font-semibold leading-none text-white"
-                    style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                   >
                     {charging && tokenCost
                       ? `${tokenText(tokenCost.tokens)} tokens`
                       : `${quote.files.length} document${quote.files.length === 1 ? "" : "s"}`}
                   </h4>
-                  <p className="mt-2 max-w-sm text-[13px] leading-5 text-[#a1a1a6]">
+                  <p className="mt-2 max-w-sm text-[13px] leading-5 text-[color:var(--body)]">
                     {charging
                       ? "Longer documents and scans cost more to read. Nothing is spent until you start."
                       : "Check what we picked up before we extract and map your documents."}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-white/[0.07] bg-[#141416] px-4 py-3 text-right">
+                <div className="rounded-2xl border border-white/[0.07] bg-[color:var(--ink-3)] px-4 py-3 text-right">
                   {charging && tokenCost ? (
                     <>
-                      <p className="text-[11px] text-[#636366]">Balance after</p>
+                      <p className="text-[11px] text-[color:var(--muted)]">Balance after</p>
                       <p
                         className={`mt-1 text-[13px] font-medium tabular-nums ${
-                          tokenCost.sufficient ? "text-[#d1d1d6]" : "text-red-300"
+                          tokenCost.sufficient ? "text-[color:var(--body)]" : "text-red-300"
                         }`}
                         data-testid="balance-after"
                       >
                         {tokenText(Math.max(0, tokenCost.balanceAfter))}
                       </p>
-                      <p className="mt-0.5 text-[10.5px] text-[#636366]">
+                      <p className="mt-0.5 text-[10.5px] text-[color:var(--muted)]">
                         of {tokenText(tokenCost.balance)} now
                       </p>
                     </>
                   ) : (
                     <>
-                      <p className="text-[11px] text-[#636366]">Expires</p>
-                      <p className="mt-1 text-[13px] font-medium text-[#d1d1d6]">{expiryLabel}</p>
+                      <p className="text-[11px] text-[color:var(--muted)]">Expires</p>
+                      <p className="mt-1 text-[13px] font-medium text-[color:var(--body)]">{expiryLabel}</p>
                     </>
                   )}
                 </div>
@@ -1857,15 +1876,15 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
               <div className="mt-5 grid grid-cols-3 gap-2">
                 <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                  <p className="text-[11px] text-[#636366]">Documents</p>
+                  <p className="text-[11px] text-[color:var(--muted)]">Documents</p>
                   <p className="mt-1 text-[20px] font-semibold text-white">{quote.files.length}</p>
                 </div>
                 <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                  <p className="text-[11px] text-[#636366]">Pages</p>
+                  <p className="text-[11px] text-[color:var(--muted)]">Pages</p>
                   <p className="mt-1 text-[20px] font-semibold text-white">{totalPages || "Auto"}</p>
                 </div>
                 <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                  <p className="text-[11px] text-[#636366]">Workbooks</p>
+                  <p className="text-[11px] text-[color:var(--muted)]">Workbooks</p>
                   <p className="mt-1 text-[20px] font-semibold text-white">{spreadsheetCount}</p>
                 </div>
               </div>
@@ -1877,7 +1896,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   the effort rule that priced it, so the total is explained
                   line by line rather than asserted. */}
               <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.07]">
-                <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[#636366] max-md:hidden">
+                <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--muted)] max-md:hidden">
                   <span>Document</span>
                   <span>Effort</span>
                   <span className="text-right">{charging ? "Tokens" : "Size"}</span>
@@ -1893,7 +1912,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     >
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
-                        <p className="mt-0.5 text-[11px] text-[#636366]">
+                        <p className="mt-0.5 text-[11px] text-[color:var(--muted)]">
                           <span className="md:hidden">{effort} effort · </span>
                           {units}
                           {charging && priced ? (
@@ -1901,8 +1920,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                           ) : null}
                         </p>
                       </div>
-                      <span className="hidden text-[12px] text-[#a1a1a6] md:block">{effort}</span>
-                      <span className="hidden text-[12px] tabular-nums text-[#a1a1a6] md:block md:text-right">
+                      <span className="hidden text-[12px] text-[color:var(--body)] md:block">{effort}</span>
+                      <span className="hidden text-[12px] tabular-nums text-[color:var(--body)] md:block md:text-right">
                         {charging && priced ? `${tokenText(priced.tokens)} tokens` : units}
                       </span>
                     </div>
@@ -1914,19 +1933,19 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     data-testid="quote-minimum-charge"
                   >
                     <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-[#a1a1a6]">Small-batch minimum</p>
-                      <p className="mt-0.5 text-[11px] text-[#636366]">
+                      <p className="text-[13px] font-medium text-[color:var(--body)]">Small-batch minimum</p>
+                      <p className="mt-0.5 text-[11px] text-[color:var(--muted)]">
                         Batches this small are topped up to the minimum processing charge.
                       </p>
                     </div>
                     <span className="hidden md:block" />
-                    <span className="text-[12px] tabular-nums text-[#a1a1a6] md:text-right">
+                    <span className="text-[12px] tabular-nums text-[color:var(--body)] md:text-right">
                       {tokenText(tokenCost!.minimumTopUp!)} tokens
                     </span>
                   </div>
                 )}
                 <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
-                  <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#8e8e93]">
+                  <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--body)]">
                     {charging ? "Total" : "This batch"}
                   </span>
                   <span className="hidden md:block" />
@@ -1942,12 +1961,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                   endpoint that priced them, so the explanation cannot drift
                   from the charge. */}
               {charging && (tokenCost?.effortRules?.length ?? 0) > 0 && (
-                <div className="mt-3 rounded-2xl border border-white/[0.06] bg-[#111113] p-4" data-testid="effort-rules">
+                <div className="mt-3 rounded-2xl border border-white/[0.06] bg-[color:var(--ink-2)] p-4" data-testid="effort-rules">
                   <p className="text-[12px] font-semibold text-white">How effort sets the token cost</p>
                   <div className="mt-2 space-y-1.5">
                     {tokenCost!.effortRules!.map((rule) => (
-                      <p key={rule.tier} className="text-[11.5px] leading-5 text-[#a1a1a6]">
-                        <span className="font-semibold text-[#d1d1d6]">{rule.label}</span> — {rule.rule}
+                      <p key={rule.tier} className="text-[11.5px] leading-5 text-[color:var(--body)]">
+                        <span className="font-semibold text-[color:var(--body)]">{rule.label}</span> — {rule.rule}
                       </p>
                     ))}
                   </div>
@@ -1955,7 +1974,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               )}
 
               {!charging && (
-                <p className="mt-3 text-[11px] text-[#636366]">
+                <p className="mt-3 text-[11px] text-[color:var(--muted)]">
                   Processing is not being charged for this run.
                 </p>
               )}
@@ -1969,7 +1988,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     <AlertTriangle className="h-4 w-4" />
                     {tokenText(tokenCost.shortfall)} tokens short
                   </p>
-                  <p className="mt-1 text-[12px] leading-5 text-[#a1a1a6]">
+                  <p className="mt-1 text-[12px] leading-5 text-[color:var(--body)]">
                     This batch needs {tokenText(tokenCost.tokens)} tokens and you have{" "}
                     {tokenText(tokenCost.balance)}. Top up, or remove some documents and process the rest first.
                   </p>
@@ -1983,18 +2002,18 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 </div>
               )}
 
-              <div className="mt-5 rounded-2xl border border-white/[0.06] bg-[#111113] p-4">
+              <div className="mt-5 rounded-2xl border border-white/[0.06] bg-[color:var(--ink-2)] p-4">
                 <p className="text-[13px] font-semibold text-white">Included</p>
-                <div className="mt-3 grid gap-2 text-[12px] text-[#a1a1a6] sm:grid-cols-2">
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d1d1d6]" /> Document reading</span>
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d1d1d6]" /> Field extraction</span>
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d1d1d6]" /> Scorecard mapping</span>
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[#d1d1d6]" /> Review flags where needed</span>
+                <div className="mt-3 grid gap-2 text-[12px] text-[color:var(--body)] sm:grid-cols-2">
+                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Document reading</span>
+                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Field extraction</span>
+                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Scorecard mapping</span>
+                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Review flags where needed</span>
                 </div>
               </div>
 
               {charging && quote.totals.isUpperBound && (
-                <p className="mt-3 text-[11px] text-[#636366]">
+                <p className="mt-3 text-[11px] text-[color:var(--muted)]">
                   Scanned documents are estimated conservatively. You will not be charged more than this.
                 </p>
               )}
@@ -2021,7 +2040,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 <button
                   type="button"
                   onClick={() => inputRef.current?.click()}
-                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
                 >
                   Change documents
                 </button>
@@ -2067,20 +2086,15 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 transform: dragActive ? "scale(1.1)" : "scale(1)",
               }}
             >
-              <CloudUpload className="w-5 h-5 text-[#d1d1d6]" />
+              <CloudUpload className="w-5 h-5 text-[color:var(--body)]" />
             </div>
-            <h3
-              className="text-[18px] text-white mb-1"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
-            >
-              Upload documents
-            </h3>
-            <p className="hidden">
-              Certificates, affidavits, spend schedules, EE reports — PDF, Word, Excel or scans.
-              We read them, extract the real values, and build your scorecard.
-            </p>
-            <p className="text-[13px] text-[#a1a1a6] mb-4 max-w-sm mx-auto leading-5">
-              Anything, from anywhere — or use the pillar batches below to send them a section at a time.
+            {/* No heading here. The step above already says "Add your
+                documents"; repeating it, then labelling the button with the
+                same words a third time, is what made choosing "upload" and
+                then being asked to upload feel like being asked twice. */}
+            <p className="text-[13px] text-[color:var(--body)] mb-4 max-w-sm mx-auto leading-5">
+              Certificates, affidavits, spend schedules, payroll and EE reports.
+              PDF, Word, Excel or scans.
             </p>
             <button
               type="button"
@@ -2096,7 +2110,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </button>
             <button
               type="button"
-              className="ml-2 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-5 py-2.5 text-[14px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.06]"
+              className="ml-2 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-5 py-2.5 text-[14px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.06]"
               onClick={(e) => {
                 e.stopPropagation();
                 folderInputRef.current?.click();
@@ -2111,14 +2125,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             </p>
             <div className="hidden">
               {["PDF", "DOCX", "XLSX", "CSV", "SCANS"].map((ext) => (
-                <span key={ext} className="px-2 py-0.5 rounded text-[10px] tracking-wide text-[#636366]" style={{ background: "#1c1c1e" }}>
+                <span key={ext} className="px-2 py-0.5 rounded text-[10px] tracking-wide text-[color:var(--muted)]" style={{ background: "var(--ink-3)" }}>
                   {ext}
                 </span>
               ))}
             </div>
           </>
         ) : (
-          <div className="flex items-center justify-center gap-2 text-[#8e8e93] hover:text-violet-300 transition-colors">
+          <div className="flex items-center justify-center gap-2 text-[color:var(--body)] hover:text-violet-300 transition-colors">
             <Sparkles className="w-3.5 h-3.5" />
             <span className="text-[13px] font-medium">Add more documents</span>
           </div>
@@ -2139,11 +2153,11 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             <AlertTriangle className="h-4 w-4" />
             {skippedFiles.length} file{skippedFiles.length === 1 ? "" : "s"} in that folder could not be read
           </p>
-          <p className="mt-1 text-[12px] leading-5 text-[#a1a1a6]">
+          <p className="mt-1 text-[12px] leading-5 text-[color:var(--body)]">
             We only read PDFs, Word, Excel, PowerPoint, CSV and images. Everything else was left out —
             if one of these was evidence, convert it and add it.
           </p>
-          <p className="mt-2 truncate font-mono text-[11px] text-[#8e8e93]">
+          <p className="mt-2 truncate font-mono text-[11px] text-[color:var(--body)]">
             {skippedFiles.slice(0, 6).join(", ")}
             {skippedFiles.length > 6 ? ` +${skippedFiles.length - 6} more` : ""}
           </p>
@@ -2158,13 +2172,13 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
           batch is irrelevant here: both stage into the same list, so both end
           at the same control. */}
       {!parserCase && !doneStaging && files.length > 0 && (
-        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[#141416] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-white">
               {files.length} document{files.length === 1 ? "" : "s"} staged
               {quoting ? " · checking" : ""}
             </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[#8e8e93]">
+            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
               Keep adding — the buttons above, or any pillar batch below. Nothing is read, and
               nothing is charged, until you review the cost on the next step.
             </p>
@@ -2207,7 +2221,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             <button
               type="button"
               onClick={() => setDoneStaging(false)}
-              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[#8e8e93] transition-colors hover:text-white"
+              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white"
               data-testid="button-back-to-staging"
             >
               Back to adding
@@ -2236,7 +2250,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
           re-issued whenever the list changes, so it is not a commitment and must
           not behave like one. Extraction is the point of no return, so that is
           what closes the uploader. */}
-      {!parserCase && (
+      {!parserCase && !bareUpload && (
         <div className="mt-3">
           <PillarDocumentBatches
             satisfiedDocumentIds={satisfiedDocumentIds}
@@ -2266,7 +2280,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             <div className="text-[13px] font-semibold text-violet-100">
               {resolving ? "Reconciling into your company profile" : "Reading your documents"}
             </div>
-            <div className="text-[12px] text-[#8e8e93]">
+            <div className="text-[12px] text-[color:var(--body)]">
               {resolving
                 ? resolveProgress
                   ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking names, IDs and figures across every file`
@@ -2284,8 +2298,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
       {/* ACT 2 — scanning theatre */}
       {files.length > 0 && (!quote || parserCase || quoting) && (
-        <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.07] bg-[#0e0e10]">
-          <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[#636366] sm:grid">
+        <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)]">
+          <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--muted)] sm:grid">
             <span>File</span>
             <span>Status</span>
             <span>Type</span>
@@ -2337,14 +2351,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     }} />
                   )}
                   <div className="flex min-w-0 items-center gap-2 text-left">
-                    <FileText className="w-4 h-4 text-[#636366] shrink-0" />
+                    <FileText className="w-4 h-4 text-[color:var(--muted)] shrink-0" />
                     <div className="min-w-0">
                       <div className="truncate text-[13px] font-medium text-[#e5e5ea]">{f.name}</div>
                       {/* Where the user filed it, and how big it is. The pillar
                           it eventually SCORES against is the classifier's call
                           and shows in the Type column once we have read it. */}
                       {(quotedFile || filedBatchByFile[f.name]) && (
-                        <div className="mt-0.5 truncate text-[11px] text-[#636366]">
+                        <div className="mt-0.5 truncate text-[11px] text-[color:var(--muted)]">
                           {filedBatchByFile[f.name] ? batchLabel(filedBatchByFile[f.name]) : null}
                           {filedBatchByFile[f.name] && quotedFile ? " · " : null}
                           {quotedFile ? fileUnits(quotedFile) : null}
@@ -2352,24 +2366,24 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                       )}
                     </div>
                   </div>
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1 text-[11px] text-[#d1d1d6]">
+                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1 text-[11px] text-[color:var(--body)]">
                     {isReadingThis && <Loader2 className="h-3 w-3 animate-spin" />}
                     {perFile === "done" && parsing && <Check className="h-3 w-3 text-emerald-400" />}
                     {statusLabel}
                   </span>
-                  <span className="text-[12px] text-[#8e8e93]">{fileType}</span>
-                  <FileText className="hidden w-4 h-4 text-[#636366] shrink-0" />
+                  <span className="text-[12px] text-[color:var(--body)]">{fileType}</span>
+                  <FileText className="hidden w-4 h-4 text-[color:var(--muted)] shrink-0" />
                   <div className="hidden flex-1 min-w-0 text-left">
                     <div className="text-[13px] text-[#e5e5ea] truncate font-medium">{f.name}</div>
                     <div className="text-[11px] mt-0.5">
                       {parsing ? (
-                        <span className="text-[#636366] inline-flex items-center gap-1.5">
+                        <span className="text-[color:var(--muted)] inline-flex items-center gap-1.5">
                           <Loader2 className="w-3 h-3 animate-spin" /> Reading document…
                         </span>
                       ) : detected ? (
                         <span className="dus-stamp inline-flex items-center gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${detected.status === "passed" ? "bg-emerald-400" : detected.status === "review_required" ? "bg-amber-400" : "bg-red-400"}`} />
-                          <span className="text-[#a1a1a6]">{detected.document_type}</span>
+                          <span className="text-[color:var(--body)]">{detected.document_type}</span>
                           {detected.status === "passed" && !hasGaps && (
                             <span className="text-emerald-400/70">· all read</span>
                           )}
@@ -2377,23 +2391,23 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                       ) : quoted(f.name) ? (
                         // Priced, not read. Say only what we actually know from
                         // the structure scan — never claim a verdict yet.
-                        <span className="inline-flex items-center gap-1.5 text-[#636366]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#48484a]" />
+                        <span className="inline-flex items-center gap-1.5 text-[color:var(--muted)]">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[rgba(255,255,255,0.12)]" />
                           {quoted(f.name)!.requiresOcr ? "Scan — needs OCR" : "Digital"}
-                          <span className="text-[#48484a]">·</span>
+                          <span className="text-[color:var(--muted)]">·</span>
                           <span className="font-mono">{quoted(f.name)!.tokens.input.toLocaleString()} tok</span>
-                          <span className="text-[#48484a]">· not read yet</span>
+                          <span className="text-[color:var(--muted)]">· not read yet</span>
                         </span>
                       ) : quoting ? (
-                        <span className="text-[#636366]">Sizing…</span>
+                        <span className="text-[color:var(--muted)]">Sizing…</span>
                       ) : (
-                        <span className="text-[#636366]">Queued</span>
+                        <span className="text-[color:var(--muted)]">Queued</span>
                       )}
                     </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
-                    className="justify-self-start p-1 text-[#48484a] transition-colors hover:text-[#8e8e93] sm:justify-self-end"
+                    className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[color:var(--body)] sm:justify-self-end"
                     data-testid={`remove-${f.name}`}
                   >
                     <X className="w-3.5 h-3.5" />
@@ -2422,7 +2436,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             );
           })}
           {!parsing && files.some((f) => { const m = docMissingContent(f.name); return m.fields.length > 0 || m.notes.length > 0; }) && (
-            <div className="px-3.5 py-2.5 text-[11px] text-[#8e8e93] flex items-center gap-1.5 border-t border-white/[0.05]">
+            <div className="px-3.5 py-2.5 text-[11px] text-[color:var(--body)] flex items-center gap-1.5 border-t border-white/[0.05]">
               <AlertTriangle className="w-3 h-3 text-amber-400/70 shrink-0" />
               Anything not read, you can fill in on the workbook after — it won&apos;t block you from continuing.
             </div>
@@ -2435,7 +2449,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
 
       {/* Pricing the documents — free, structure-only, nothing read yet. */}
       {quoting && (
-        <div className="mt-3 flex items-center gap-2 text-[12px] text-[#8e8e93]">
+        <div className="mt-3 flex items-center gap-2 text-[12px] text-[color:var(--body)]">
           <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-300" />
           Checking size and format to price these documents — nothing is read yet.
         </div>
@@ -2475,10 +2489,10 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     ) : partial ? (
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                     ) : (
-                      <Minus className="w-3.5 h-3.5 text-[#3a3a3c]" />
+                      <Minus className="w-3.5 h-3.5 text-[color:var(--muted)]" />
                     )}
                   </div>
-                  <div className={`text-[10px] font-medium leading-tight ${lit ? "text-emerald-200/90" : partial ? "text-amber-200/80" : "text-[#636366]"}`}>
+                  <div className={`text-[10px] font-medium leading-tight ${lit ? "text-emerald-200/90" : partial ? "text-amber-200/80" : "text-[color:var(--muted)]"}`}>
                     {tile.short}
                   </div>
                 </div>
@@ -2490,17 +2504,17 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
           <div className="dus-fade-up grid grid-cols-3 gap-1.5 mb-4" style={{ animationDelay: "620ms" }}>
             <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
               <div className="text-[22px] font-semibold text-white leading-none tabular-nums" data-testid="stat-values">{valuesUp}</div>
-              <div className="text-[10px] text-[#636366] mt-1 uppercase tracking-wider">Values extracted</div>
+              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Values extracted</div>
             </div>
             <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
               <div className="text-[22px] font-semibold text-white leading-none tabular-nums">{suppliersUp}</div>
-              <div className="text-[10px] text-[#636366] mt-1 uppercase tracking-wider">Suppliers found</div>
+              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Suppliers found</div>
             </div>
             <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
               <div className="text-[22px] font-semibold text-white leading-none tabular-nums">
                 {spendUp >= 1_000_000 ? `R${(spendUp / 1_000_000).toFixed(1)}M` : spendUp >= 1_000 ? `R${Math.round(spendUp / 1_000)}k` : `R${spendUp}`}
               </div>
-              <div className="text-[10px] text-[#636366] mt-1 uppercase tracking-wider">Spend captured</div>
+              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Spend captured</div>
             </div>
           </div>
 
@@ -2522,7 +2536,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 {injected!.metaConflicts.length} figure
                 {injected!.metaConflicts.length === 1 ? "" : "s"} your documents disagree on
               </p>
-              <p className="mt-1 text-[11.5px] text-[#a1a1a6]">
+              <p className="mt-1 text-[11.5px] text-[color:var(--body)]">
                 Left blank rather than guessed — pick the right one in the workbook and the score
                 follows.
               </p>
@@ -2533,14 +2547,14 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 {injected!.metaConflicts.map((c) => (
                   <div
                     key={`${c.section}.${c.column}`}
-                    className="rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2"
+                    className="rounded-lg border border-white/[0.06] bg-[color:var(--ink)]/20 px-3 py-2"
                   >
-                    <p className="text-[11.5px] font-medium text-[#d1d1d6]">{c.column}</p>
+                    <p className="text-[11.5px] font-medium text-[color:var(--body)]">{c.column}</p>
                     <ul className="mt-1 space-y-0.5">
                       {c.candidates.map((cand, i) => (
                         <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[11.5px] leading-5">
                           <span className="tabular-nums text-white">{String(cand.value)}</span>
-                          <span className="text-[11px] text-[#636366]">
+                          <span className="text-[11px] text-[color:var(--muted)]">
                             {cand.sources.join(", ") || "unknown source"}
                           </span>
                         </li>
@@ -2561,7 +2575,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: "660ms" }}
               data-testid="certificate-autofill-running"
             >
-              <p className="text-[11px] text-[#8e8e93] flex items-center gap-1.5">
+              <p className="text-[11px] text-[color:var(--body)] flex items-center gap-1.5">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Checking suppliers against the certificate database…
               </p>
@@ -2575,7 +2589,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
             {/* The scorecard the company will be judged against — explicit,
                 never a silent default. Amber until sector + size are chosen. */}
             {sector && size ? (
-              <p className="mb-2 text-[12px] text-[#8e8e93]" data-testid="scoring-as-line">
+              <p className="mb-2 text-[12px] text-[color:var(--body)]" data-testid="scoring-as-line">
                 Scoring as:{" "}
                 <span className="text-emerald-300/90 font-medium">
                   {activeSector?.label ?? sector}
@@ -2606,7 +2620,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder="Company name — e.g. Acme Holdings (Pty) Ltd"
-              className="w-full bg-[#0e0e10] border border-[#2c2c2e] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[#48484a] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
+              className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
               data-testid="docs-company-name"
             />
             <button
@@ -2614,8 +2628,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               disabled={!canCreate}
               className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
               style={{
-                background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "#1c1c1e",
-                color: canCreate ? "#000" : "#636366",
+                background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "var(--ink-3)",
+                color: canCreate ? "#000" : "var(--muted)",
                 boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
               }}
               data-testid="button-create-from-documents"
@@ -2634,7 +2648,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 </>
               )}
             </button>
-            <p className="text-[11px] text-[#48484a] mt-2 text-center">
+            <p className="text-[11px] text-[color:var(--muted)] mt-2 text-center">
               {totalMappedRows > 0
                 ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
                 : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
@@ -2658,12 +2672,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               >
                 {missingDocGroups.detectable.length > 0 && (
                   <>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-[#636366]">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
                       We can read these automatically
                     </p>
                     <ul className="mb-2 mt-1 space-y-0.5">
                       {missingDocGroups.detectable.map((g) => (
-                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[#d1d1d6]">
+                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[color:var(--body)]">
                           {g.label}
                         </li>
                       ))}
@@ -2672,12 +2686,12 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 )}
                 {missingDocGroups.evidenceOnly.length > 0 && (
                   <>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-[#636366]">
+                    <p className="text-[11px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
                       Have ready for your verifier
                     </p>
                     <ul className="mt-1 space-y-0.5">
                       {missingDocGroups.evidenceOnly.map((g) => (
-                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[color:var(--body)]">
                           {g.label}
                         </li>
                       ))}
@@ -2697,7 +2711,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               >
                 <ul className="space-y-1">
                   {needsDetailPillars.map((c) => (
-                    <li key={c.pillar} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                    <li key={c.pillar} className="text-[11.5px] leading-5 text-[color:var(--body)]">
                       <span className="text-amber-300/80">{c.pillar}:</span> we extracted{" "}
                       {c.extractedValue} — it needs per-person rows in the workbook to score.
                     </li>
@@ -2717,7 +2731,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               >
                 <ul className="space-y-1">
                   {reconciliationFlags.map((flag, i) => (
-                    <li key={i} className="text-[11.5px] leading-5 text-[#8e8e93]">
+                    <li key={i} className="text-[11.5px] leading-5 text-[color:var(--body)]">
                       <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
                     </li>
                   ))}
@@ -2736,8 +2750,8 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
               >
                 <ul className="space-y-1">
                   {injected!.metaCorroboration.map((c) => (
-                    <li key={`${c.section}.${c.column}`} className="text-[11.5px] leading-5 text-[#a1a1a6]">
-                      <span className="text-[#d1d1d6]">{c.column}</span> — {String(c.value)}, agreed
+                    <li key={`${c.section}.${c.column}`} className="text-[11.5px] leading-5 text-[color:var(--body)]">
+                      <span className="text-[color:var(--body)]">{c.column}</span> — {String(c.value)}, agreed
                       by {c.agreementCount} documents ({c.sources.join(", ")})
                     </li>
                   ))}
@@ -2750,7 +2764,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                 title="What we read from your documents"
                 meta={`${totalMappedRows} placed`}
                 tone="neutral"
-                icon={<FileText className="h-3.5 w-3.5 shrink-0 text-[#636366]" />}
+                icon={<FileText className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />}
                 testId="toggle-read-details"
               >
                 <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
@@ -2801,7 +2815,7 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                       </p>
                     )}
                     {certificateFill.report.ambiguous.length > 0 && (
-                      <p className="mt-1 text-[11.5px] leading-5 text-[#8e8e93]">
+                      <p className="mt-1 text-[11.5px] leading-5 text-[color:var(--body)]">
                         {certificateFill.report.ambiguous.length} name
                         {certificateFill.report.ambiguous.length === 1 ? "" : "s"} matched more than
                         one company — left for you to pick in the workbook.
@@ -2809,11 +2823,11 @@ export function DocumentUploadStart({ onCreate, creating }: DocumentUploadStartP
                     )}
                   </>
                 ) : certificateFill.report.registryUnavailable ? (
-                  <p className="text-[11.5px] leading-5 text-[#8e8e93]">
+                  <p className="text-[11.5px] leading-5 text-[color:var(--body)]">
                     Certificate database unavailable — procurement was left exactly as extracted.
                   </p>
                 ) : (
-                  <p className="text-[11.5px] leading-5 text-[#8e8e93]">
+                  <p className="text-[11.5px] leading-5 text-[color:var(--body)]">
                     No new supplier details found in the certificate database.
                   </p>
                 )}

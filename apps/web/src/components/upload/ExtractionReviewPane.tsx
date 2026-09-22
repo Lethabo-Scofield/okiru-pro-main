@@ -36,18 +36,18 @@ export function ExtractionReviewPane({ file, title = 'Source document', classNam
   }, [file]);
 
   return (
-    <div className={cn('flex flex-col lg:flex-row flex-1 min-h-0 gap-0 rounded-2xl overflow-hidden', className)} style={{ border: '1px solid #2c2c2e' }}>
+    <div className={cn('flex flex-col lg:flex-row flex-1 min-h-0 gap-0 rounded-2xl overflow-hidden', className)} style={{ border: '1px solid var(--rule)' }}>
       <div
         className="flex flex-col min-h-[240px] lg:min-h-[420px] lg:w-1/2 shrink-0 bg-[#0d0d0d]"
-        style={{ borderBottom: '1px solid #2c2c2e', borderRight: 'none' }}
+        style={{ borderBottom: '1px solid var(--rule)', borderRight: 'none' }}
       >
-        <div className="px-4 py-3 flex items-center gap-2 shrink-0" style={{ borderBottom: '1px solid #2c2c2e' }}>
+        <div className="px-4 py-3 flex items-center gap-2 shrink-0" style={{ borderBottom: '1px solid var(--rule)' }}>
           {kind === 'pdf' ? (
             <FileText className="w-4 h-4 text-amber-400 shrink-0" />
           ) : kind === 'spreadsheet' ? (
             <FileSpreadsheet className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : (
-            <FileText className="w-4 h-4 text-[#636366] shrink-0" />
+            <FileText className="w-4 h-4 text-[color:var(--muted)] shrink-0" />
           )}
           <span className="text-sm font-medium text-white truncate">{title}</span>
           {file && docUrl && (
@@ -63,7 +63,7 @@ export function ExtractionReviewPane({ file, title = 'Source document', classNam
         </div>
         <div className="flex-1 min-h-0 flex flex-col">
           {!file && (
-            <div className="flex-1 flex items-center justify-center p-6 text-center text-sm text-[#8e8e93]">
+            <div className="flex-1 flex items-center justify-center p-6 text-center text-sm text-[color:var(--body)]">
               No file attached.
             </div>
           )}
@@ -73,7 +73,7 @@ export function ExtractionReviewPane({ file, title = 'Source document', classNam
           {file && kind === 'spreadsheet' && (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 p-8 text-center">
               <FileSpreadsheet className="w-10 h-10 text-emerald-500/50" />
-              <p className="text-sm text-[#d1d1d6] max-w-sm">
+              <p className="text-sm text-[color:var(--body)] max-w-sm">
                 Spreadsheet preview is limited in the browser. Use{' '}
                 <span className="text-white font-medium">Open</span> to view the file in a new tab, or download it to
                 inspect rows alongside the extracted summary.
@@ -82,7 +82,7 @@ export function ExtractionReviewPane({ file, title = 'Source document', classNam
                 <a
                   href={docUrl}
                   download={file.name}
-                  className="text-[13px] font-semibold px-4 py-2 rounded-xl bg-[#1c1c1e] border border-[#2c2c2e] text-[#5e9bff] hover:bg-[#2c2c2e]"
+                  className="text-[13px] font-semibold px-4 py-2 rounded-xl bg-[color:var(--ink-3)] border border-[color:var(--rule)] text-[#5e9bff] hover:bg-[rgba(255,255,255,0.06)]"
                 >
                   Download {file.name}
                 </a>
@@ -90,7 +90,7 @@ export function ExtractionReviewPane({ file, title = 'Source document', classNam
             </div>
           )}
           {file && kind === 'other' && docUrl && (
-            <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-[#8e8e93]">
+            <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center text-sm text-[color:var(--body)]">
               <p>Preview isn&apos;t available for this file type.</p>
               <a href={docUrl} download={file.name} className="text-[#5e9bff] font-medium hover:underline">
                 Download file
@@ -99,7 +99,7 @@ export function ExtractionReviewPane({ file, title = 'Source document', classNam
           )}
         </div>
       </div>
-      <div className="flex-1 min-h-0 lg:w-1/2 overflow-y-auto bg-[#1c1c1e] lg:border-l lg:border-[#2c2c2e]">
+      <div className="flex-1 min-h-0 lg:w-1/2 overflow-y-auto bg-[color:var(--ink-3)] lg:border-l lg:border-[color:var(--rule)]">
         <div className="p-6">{children}</div>
       </div>
     </div>

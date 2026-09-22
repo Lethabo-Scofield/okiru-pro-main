@@ -8,36 +8,70 @@ const HUB_TSX = readFileSync(
 );
 
 /**
- * There is ONE ESG entry on the hub and it points at `/esg`, the three-step
- * start flow, NOT at `/esg/clients`.
+ * The hub is two product doors.
  *
- * It used to point at the company picker, which made "name a company" the
- * first thing anyone did on ESG — before the documents that actually know the
- * registered name had been read. `/esg/clients` is still routed and still
- * linked from step 1, but it is the way back to an EXISTING scorecard, not the
- * way into a new one.
- *
- * There were two doors until b315c324 ("one ESG door not two") collapsed them.
- * This file went on asserting the second one — a card object carrying
- * `id: 'esg'` — after it was deliberately deleted, so the suite read red on a
- * finished change. The assertion now pins the property that change was made to
- * establish: exactly one ESG destination, and it is the start flow.
+ * It used to offer Create Scorecard, View Scorecard and ESG Toolkit as three
+ * peers, which gave B-BBEE two entries and ESG one, and gave neither product a
+ * section of its own. Each product now has a single card carrying both actions:
+ * open the companies you already carry, or start another.
  */
-describe("HubLanding ESG card (Phase 1 preview gate)", () => {
-  it("offers exactly one ESG entry, and it is the start flow", () => {
-    const esgHrefs = HUB_TSX.match(/href="\/esg[^"]*"/g) ?? [];
-    expect(esgHrefs).toEqual(['href="/esg"']);
+describe("HubLanding product sections", () => {
+  it("gives each product one card, with a workspace and a create action", () => {
+    for (const id of ["bbbee", "esg"]) {
+      expect(HUB_TSX).toMatch(new RegExp(`data-testid={\`product-\\$\\{p.id}\``));
+      expect(HUB_TSX).toContain(`id: '${id}'`);
+    }
+    expect(HUB_TSX).toMatch(/workspace: '\/bbbee'/);
+    expect(HUB_TSX).toMatch(/create: '\/bbbee\/new'/);
+    expect(HUB_TSX).toMatch(/workspace: '\/esg'/);
+    expect(HUB_TSX).toMatch(/create: '\/esg\/new'/);
   });
 
-  it("gates hero ESG CTA behind esgAllowed and sends it to the start flow", () => {
-    expect(HUB_TSX).toMatch(/esgAllowed/);
-    expect(HUB_TSX).toMatch(/data-testid="action-create-esg"/);
-    expect(HUB_TSX).toMatch(/href="\/esg"/);
-    // The picker is no longer the front door.
-    expect(HUB_TSX).not.toMatch(/href="\/esg\/clients"/);
-  });
-
-  it("uses useEsgAccess hook", () => {
+  it("keeps ESG behind the access gate", () => {
     expect(HUB_TSX).toMatch(/useEsgAccess/);
+    // The ESG card carries `show: esgAllowed` and the list is filtered on it,
+    // so a viewer without access is never offered the door.
+    expect(HUB_TSX).toMatch(/show: esgAllowed/);
+    expect(HUB_TSX).toMatch(/\.filter\(\(p\) => p\.show\)/);
+  });
+
+  it("offers the document library, which had no link anywhere before", () => {
+    expect(HUB_TSX).toMatch(/href: '\/documents'/);
+  });
+
+  /**
+   * Nothing on the hub advertises a product that does not exist, and nothing
+   * decorates it. Corporate clients called the old page unserious: a
+   * photograph, a violet glow, a greeting that changed with the clock, and
+   * "AI-Verified" badges on tiles that were filtered out before rendering.
+   */
+  it("advertises no unbuilt toolkits", () => {
+    expect(HUB_TSX).not.toMatch(/handleComingSoon/);
+    expect(HUB_TSX).not.toMatch(/Coming Soon/);
+    for (const gone of ["Employment Equity", "WSP/ATR", "Financial Audit"]) {
+      expect(HUB_TSX).not.toContain(gone);
+    }
+  });
+
+  it("carries no decorative layer", () => {
+    for (const gone of [
+      "hubBackground",
+      "certCardBg",
+      "Sparkles",
+      "AI-Verified",
+      "AI-Assisted",
+      "Instrument Serif",
+      "pulse-soft",
+      "float-soft",
+      "card-rise",
+    ]) {
+      expect(HUB_TSX).not.toContain(gone);
+    }
+  });
+
+  /** The shell above the page owns the rail, the breadcrumbs and the account menu. */
+  it("draws no header of its own", () => {
+    expect(HUB_TSX).not.toMatch(/<header/);
+    expect(HUB_TSX).not.toMatch(/UserAccountMenu\s/);
   });
 });

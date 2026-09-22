@@ -117,7 +117,10 @@ beforeAll(async () => {
   member2Agent = await loginAgent(baseUrl, member2);
   strangerAgent = await loginAgent(baseUrl, stranger);
   staffAgent = await loginAgent(baseUrl, staff);
-});
+  // Registering the whole route graph and signing five accounts in takes longer
+  // than vitest's five-second default, and longer again now that sign-in
+  // verifies a password at the production work factor. Slow by design, not stuck.
+}, 60_000);
 
 afterAll(async () => {
   await new Promise<void>((resolve) => httpServer.close(() => resolve()));

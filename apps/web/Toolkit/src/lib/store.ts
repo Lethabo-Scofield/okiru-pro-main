@@ -60,7 +60,7 @@ import {
 import { buildConstructionScoringInput } from './calculators/construction-map';
 import { calculateConstructionScorecard } from '../../../../api/pipeline/constructionScoring';
 
-import { coerceYesNo } from '@/lib/yesNoValue';
+import { coerceYesNo, coerceYesNoOrUnset } from '@/lib/yesNoValue';
 import { calculateOwnershipScore } from './calculators/ownership';
 import { calculateManagementScore } from './calculators/management';
 import { calculateSkillsScore } from './calculators/skills';
@@ -336,7 +336,7 @@ export interface CalculatorConfigErrorInfo {
   fscSubSector?: string;
 }
 
-interface BbeeState extends PillarState {
+export interface BbeeState extends PillarState {
   isLoaded: boolean;
   activeClientId: string | null;
   pipelineOverrides: PipelineOverrides | null;
@@ -402,13 +402,13 @@ interface BbeeState extends PillarState {
   /** FSC-only SED spend fields (Consumer Education, CE bonus, Fundisa). */
   updateSedSpend: (data: { ceSpend?: number; ceBonusSpend?: number; fundisaSpend?: number }) => void;
   
-  updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => void;
+  updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => Promise<void>;
   updateTMPS: (tmps: number, manualOverride?: boolean) => void;
-  updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => void;
+  updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => Promise<void>;
   /** Update the industry VERTICAL (Manufacturing, Retail, etc.) used for industry-norm lookup. Distinct from sectorCode/industrySector which drive the scorecard. */
-  updateIndustry: (industry: string) => void;
+  updateIndustry: (industry: string) => Promise<void>;
   /** Update the CEE report vintage used for MC/Skills EAP targets (undefined = latest). */
-  updateEapYear: (eapYear: number | undefined) => void;
+  updateEapYear: (eapYear: number | undefined) => Promise<void>;
 
   loadCalculatorConfig: (clientId: string) => Promise<void>;
   saveCalculatorConfig: (config: CalculatorConfig) => Promise<void>;
@@ -1439,22 +1439,80 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
           name: s.name,
           registrationNumber: s.registrationNumber || '',
           beeLevel: Number.isFinite(Number(s.beeLevel)) ? Number(s.beeLevel) : 0,
-          blackOwnership: s.blackOwnership || 0,
-          blackWomenOwnership: s.blackWomenOwnership || 0,
-          youthOwnership: s.youthOwnership || 0,
-          disabledOwnership: s.disabledOwnership || 0,
+          // Normalised on read, exactly as shareholders already were.
+          //
+          // Shareholders went through normalizeFraction here and suppliers did
+          // not, so a supplier stored as a percentage reached the scorer as
+          // `51` — and every threshold in Preferential Procurement is a
+          // fraction test, so `5 >= 0.51` passed the >=51% black-owned line for
+          // a 5%-black-owned supplier. The grid showed it as "4079%".
+          //
+          // The importer writes fractions now, but companies onboarded before
+          // that still hold percentages. Normalising on read repairs them in
+          // place and leaves a correct fraction untouched, so no migration is
+          // needed and no value is converted twice.
+          blackOwnership: normalizeFraction(s.blackOwnership),
+          blackWomenOwnership: normalizeFraction(s.blackWomenOwnership),
+          youthOwnership: normalizeFraction(s.youthOwnership),
+          disabledOwnership: normalizeFraction(s.disabledOwnership),
           enterpriseType: s.enterpriseType || 'generic',
           spend: s.spend || 0,
-          isEmpoweringSupplier: coerceYesNo(s.isEmpoweringSupplier ?? s.empoweringSupplier),
+          // Kept unstated when the record does not say. Procurement reads
+          // `isEmpoweringSupplier ?? (a valid B-BBEE level)`, so answering
+          // false here for a supplier nobody asked about excluded their whole
+          // spend — and because this runs on every re-hydration, an import
+          // that scored correctly went back to zero the moment the page
+          // reloaded. The other flags below only ever ADD points, so false is
+          // a safe answer for them.
+          isEmpoweringSupplier: coerceYesNoOrUnset(
+            s.isEmpoweringSupplier ?? s.empoweringSupplier,
+          ) as boolean,
           isForeignSupplier: coerceYesNo(s.isForeignSupplier),
           isBlackOwned51: coerceYesNo(s.isBlackOwned51),
           isBlackWomanOwned30: coerceYesNo(s.isBlackWomanOwned30),
           isDesignatedGroup: coerceYesNo(s.isDesignatedGroup),
           isSupplierDevRecipient: coerceYesNo(s.isSupplierDevRecipient),
           hasThreeYearContract: coerceYesNo(s.hasThreeYearContract),
+          // Carried, not cherry-picked away. This map listed the flags and
+          // dropped everything else, so a supplier matched against the
+          // certificate registry lost its expiry date on the next page load —
+          // "Cert Expiry" read "—" for twenty matched suppliers — and
+          // flowThrough/designatedGroup ownership went with it, which the
+          // designated-group bonus line is scored from. Same shape as the ESD
+          // note below: right until a reload, then quietly less.
+          vatNumber: s.vatNumber || undefined,
+          certificateExpiryDate: s.certificateExpiryDate || undefined,
+          flowThroughOwnership: s.flowThroughOwnership ?? undefined,
+          designatedGroupOwnership: s.designatedGroupOwnership ?? undefined,
+          firstProcurementDate: s.firstProcurementDate || undefined,
+          sizeAtFirstProcurement: s.sizeAtFirstProcurement || undefined,
+          // The registry link, so the certificate stays openable after a reload.
+          certificateId: s.certificateId || undefined,
+          certificateMatchedName: s.certificateMatchedName || undefined,
+          certificateMatchBasis: s.certificateMatchBasis || undefined,
         })),
         // Issue 3: Removed graduationBonus and jobsCreatedBonus from Procurement (ED only bonuses)
       };
+
+      /**
+       * TMPS is derived again on load unless the user pinned it.
+       *
+       * addSupplier/updateSupplier/removeSupplier keep TMPS in step with the
+       * schedule while the pin is off — but they persist the SUPPLIER, never the
+       * derived total. So a bulk upload scored correctly in the session that
+       * uploaded it and came back as `tmps: 0` on the next load, because the
+       * line above reads a persisted total that was never written. Every line in
+       * Preferential Procurement is a share of TMPS, so the whole pillar showed
+       * 0.00/29 with twenty suppliers and R9.0m of recognised spend on screen.
+       *
+       * "Calculated" now means calculated on every read, not only on mutation. A
+       * pinned value is still honoured exactly as entered, including a
+       * deliberate zero.
+       */
+      procurementState.tmpsManualOverride = data.procurement?.tmpsManualOverride === true;
+      if (!procurementState.tmpsManualOverride) {
+        procurementState.tmps = supplierSumTmps(procurementState.suppliers);
+      }
 
       const esdState: ESDData = {
         id: '',
@@ -2052,16 +2110,15 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
 
-  updateFinancials: (revenue, npat, leviableAmount, industryNorm) => {
+  updateFinancials: async (revenue, npat, leviableAmount, industryNorm) => {
     set((state) => ({
       client: { ...state.client, revenue, npat, leviableAmount, industryNorm },
       skills: { ...state.skills, leviableAmount }
     }));
     get()._recalculateAll();
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { revenue, npat, leviableAmount, industryNorm }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { revenue, npat, leviableAmount, industryNorm }));
   },
 
   updateSedSpend: (data) => {
@@ -2085,7 +2142,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }
   },
   
-  updateSettings: (eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd) => {
+  updateSettings: async (eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd) => {
     set((state) => ({
       client: {
         ...state.client,
@@ -2097,27 +2154,24 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
     }));
     get()._recalculateAll();
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { eapProvince, industrySector, measurementPeriodStart, measurementPeriodEnd }));
   },
 
-  updateIndustry: (industry) => {
+  updateIndustry: async (industry) => {
     set((state) => ({ client: { ...state.client, industry } }));
     get()._recalculateAll(); // industryNorm lookup uses client.industry → Skills/PP can shift
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { industry }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { industry }));
   },
 
-  updateEapYear: (eapYear) => {
+  updateEapYear: async (eapYear) => {
     set((state) => ({ client: { ...state.client, eapYear } }));
     get()._recalculateAll(); // MC + Skills EAP bands score against the selected CEE vintage
     const state = get();
-    if (state.activeClientId) {
-      get()._persistSave(() => api.updateClient(state.activeClientId!, { eapYear: eapYear ?? null }));
-    }
+    if (!state.activeClientId) return;
+    await get()._persistSave(() => api.updateClient(state.activeClientId!, { eapYear: eapYear ?? null }));
   },
 
   // Dynamic scorecard API actions

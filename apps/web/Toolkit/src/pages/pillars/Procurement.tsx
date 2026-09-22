@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
@@ -12,7 +15,7 @@ import { NumberInput } from "@toolkit/components/ui/number-input";
 import { Label } from "@toolkit/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@toolkit/components/ui/select";
 import { Switch } from "@toolkit/components/ui/switch";
-import { Plus, ShoppingCart, Trash2, Pencil, BadgeCheck, Loader2 } from "lucide-react";
+import { Plus, ShoppingCart, Trash2, Pencil, BadgeCheck, Loader2, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +31,7 @@ import { cn, formatRand } from "@toolkit/lib/utils";
 import { pillarSectorSubtitle } from "@toolkit/lib/sectors/sector-labels";
 import type { Supplier } from "@toolkit/lib/types";
 import { fetchCertificateMatches, type CertificateMatchCandidate } from "@/lib/certificateAutofill";
+import { CertificatePreview } from "@/components/certificates/CertificatePreview";
 
 // Issue 3: Added isForeignSupplier field
 const emptySupplierForm = {
@@ -45,6 +49,11 @@ const emptySupplierForm = {
   isEmpoweringSupplier: false,
   isSupplierDevRecipient: false,
   hasThreeYearContract: false,
+  // The registry match, so a supplier looked up by hand gets the same openable
+  // certificate a bulk-imported one does.
+  certificateId: '',
+  certificateMatchedName: '',
+  certificateMatchBasis: '',
 };
 
 /**
@@ -79,6 +88,10 @@ function certificateToSupplierForm(
   if (typeof f.certificateExpiryDate === 'string') {
     out.certificateExpiryDate = f.certificateExpiryDate;
   }
+  out.certificateId = cert.certificateId ?? '';
+  out.certificateMatchedName = cert.companyName ?? '';
+  out.certificateMatchBasis = cert.basis ?? '';
+
   if (f.empoweringSupplier) out.isEmpoweringSupplier = f.empoweringSupplier === 'Yes';
   if (f.sdRecipient) out.isSupplierDevRecipient = f.sdRecipient === 'Yes';
   if (f.threeYearContract) out.hasThreeYearContract = f.threeYearContract === 'Yes';
@@ -130,6 +143,10 @@ export default function Procurement() {
   const addErrs = useFieldErrors();
   const editErrs = useFieldErrors();
   const [lookingUp, setLookingUp] = useState(false);
+  /** The matched certificate being looked at, if any. */
+  const [previewCert, setPreviewCert] = useState<
+    { id: string; supplierName: string; matchedName: string | null } | null
+  >(null);
 
   /**
    * Look this supplier up in the certificate database and fill the form.
@@ -236,6 +253,9 @@ export default function Procurement() {
       isEmpoweringSupplier: newSup.isEmpoweringSupplier,
       isSupplierDevRecipient: newSup.isSupplierDevRecipient,
       hasThreeYearContract: newSup.hasThreeYearContract,
+      certificateId: newSup.certificateId || undefined,
+      certificateMatchedName: newSup.certificateMatchedName || undefined,
+      certificateMatchBasis: newSup.certificateMatchBasis || undefined,
     });
     setNewSup({ ...emptySupplierForm });
     setIsSupOpen(false);
@@ -261,6 +281,11 @@ export default function Procurement() {
       isEmpoweringSupplier: sup.isEmpoweringSupplier || false,
       isSupplierDevRecipient: sup.isSupplierDevRecipient || false,
       hasThreeYearContract: sup.hasThreeYearContract || false,
+      // Carried into the dialog so saving an edit does not wipe the link to the
+      // certificate this supplier was matched to.
+      certificateId: sup.certificateId || '',
+      certificateMatchedName: sup.certificateMatchedName || '',
+      certificateMatchBasis: sup.certificateMatchBasis || '',
     });
     setIsEditSupOpen(true);
   };
@@ -289,6 +314,9 @@ export default function Procurement() {
       isEmpoweringSupplier: editSup.isEmpoweringSupplier,
       isSupplierDevRecipient: editSup.isSupplierDevRecipient,
       hasThreeYearContract: editSup.hasThreeYearContract,
+      certificateId: editSup.certificateId || undefined,
+      certificateMatchedName: editSup.certificateMatchedName || undefined,
+      certificateMatchBasis: editSup.certificateMatchBasis || undefined,
     });
     setIsEditSupOpen(false);
     setEditSupId(null);
@@ -297,6 +325,14 @@ export default function Procurement() {
 
   if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const score = calculateProcurementScore(procurement, calculatorConfig);
+  /**
+   * What this pillar is actually out of, for this sector and scorecard type.
+   *
+   * The page asserted "29 points" in two places while its own breakdown totalled
+   * 21.00 for RCOGP QSE. The sub-lines carry the real weightings, so they are
+   * the single source for both.
+   */
+  const pillarMaxPoints = score.subLines.reduce((a, l) => a + l.weighting, 0);
 
   // Issue 3: Added isForeignSupplier to form fields
   const renderSupplierFormFields = (
@@ -481,16 +517,36 @@ export default function Procurement() {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h1 className="text-3xl font-heading font-bold">Preferential Procurement</h1>
-          <p className="text-muted-foreground mt-1">Manage supplier spend and B-BBEE compliance. 29 points available.</p>
+          {/* Derived, not asserted. This read "29 points available" on a page
+              whose own breakdown totalled 21.00 for RCOGP QSE — the pillar max
+              is per sector and scorecard type, so a literal is wrong for most
+              of them. */}
+          <p className="text-muted-foreground mt-1">
+            Manage supplier spend and B-BBEE compliance. {pillarMaxPoints.toFixed(2).replace(/\.00$/, "")} points available.
+          </p>
         </div>
         <div className="flex gap-2">
+          <PillarBulkImport
+            spec={BULK_IMPORT_SPECS.procurement}
+            existing={suppliers}
+            onImport={(rows, mode) => {
+              if (mode === "replace") suppliers.forEach((s) => removeSupplier(s.id));
+              rows.forEach(addSupplier);
+            }}
+            label="Bulk upload suppliers"
+          />
+          <PillarDuplicateNotice
+            specKey="procurement"
+            rows={suppliers}
+            className="mt-3"
+          />
           <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) addErrs.reset(); }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2" data-testid="btn-add-supplier">
                 <ShoppingCart className="h-4 w-4" /> Add Supplier
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Add Supplier</DialogTitle></DialogHeader>
               {renderSupplierFormFields(newSup, setNewSup, addErrs)}
               <DialogFooter><Button onClick={handleAddSupplier} data-testid="btn-save-supplier">Save Supplier</Button></DialogFooter>
@@ -500,7 +556,7 @@ export default function Procurement() {
       </div>
 
       <Dialog open={isEditSupOpen} onOpenChange={(open) => { setIsEditSupOpen(open); if (!open) editErrs.reset(); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Supplier</DialogTitle></DialogHeader>
           {renderSupplierFormFields(editSup, setEditSup, editErrs)}
           <DialogFooter><Button onClick={handleEditSupplier} data-testid="btn-update-supplier">Update Supplier</Button></DialogFooter>
@@ -610,9 +666,16 @@ export default function Procurement() {
               {score.dataFlags.map((f, i) => (<p key={i} className={i > 0 ? "mt-1.5" : undefined}>{f}</p>))}
             </div>
           )}
+          {/* Coverage notes were computed and never rendered here, so a pillar
+              scoring 0 for want of a TMPS said nothing about why. */}
+          {(score.coverageNotes?.length ?? 0) > 0 && (
+            <div className="mb-4 rounded-md border border-sky-300/50 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-700/50 dark:bg-sky-950/30 dark:text-sky-200" data-testid="pp-coverage-notes">
+              {score.coverageNotes!.map((n, i) => (<p key={i} className={i > 0 ? "mt-1.5" : undefined}>{n}</p>))}
+            </div>
+          )}
           <div className="rounded-md border overflow-x-auto">
             <div className="bg-muted/30 px-4 py-3 border-b text-sm text-muted-foreground flex justify-between items-center">
-              <span>Target: 29 points | Max spend recognition: 135%</span>
+              <span>Target: {pillarMaxPoints.toFixed(2).replace(/\.00$/, "")} points | Max spend recognition: 135%</span>
             </div>
             <table className="w-full text-sm text-left">
               <thead className="bg-muted/50 border-b">
@@ -701,20 +764,56 @@ export default function Procurement() {
                       <td className="p-4 text-right font-mono">{formatRand(sup.spend)}</td>
                       <td className="p-4 text-right font-mono text-muted-foreground">{(sup.blackOwnership * 100).toFixed(0)}%</td>
                       <td className="p-4 text-right font-medium font-mono text-emerald-600">{formatRand(recognisedValue)}</td>
+                      {/* The certificate this supplier was matched to, openable.
+                          The level and expiry here came out of the registry and
+                          move the score, so the document behind them should be
+                          one click away rather than taken on trust. */}
                       <td className="p-4 text-center">
-                        {sup.certificateExpiryDate ? (
-                          <span className={cn(
-                            "text-[11px] font-medium px-2 py-0.5 rounded",
-                            new Date(sup.certificateExpiryDate) < new Date()
-                              ? "bg-destructive/10 text-destructive border border-destructive/20"
-                              : "text-muted-foreground"
-                          )}>
-                            {new Date(sup.certificateExpiryDate).toLocaleDateString('en-ZA')}
-                            {new Date(sup.certificateExpiryDate) < new Date() && " (Expired)"}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground/40 text-[11px]">—</span>
-                        )}
+                        {(() => {
+                          const expiry = sup.certificateExpiryDate;
+                          const expired = expiry ? new Date(expiry) < new Date() : false;
+                          const fuzzy = sup.certificateMatchBasis === "name-fuzzy";
+                          const label = expiry
+                            ? `${new Date(expiry).toLocaleDateString("en-ZA")}${expired ? " (Expired)" : ""}`
+                            : sup.certificateId
+                              ? "View certificate"
+                              : "—";
+                          const body = (
+                            <span className={cn(
+                              "text-[11px] font-medium px-2 py-0.5 rounded",
+                              expired
+                                ? "bg-destructive/10 text-destructive border border-destructive/20"
+                                : expiry
+                                  ? "text-muted-foreground"
+                                  : sup.certificateId
+                                    ? "text-primary"
+                                    : "text-muted-foreground/40",
+                            )}>
+                              {label}
+                            </span>
+                          );
+                          if (!sup.certificateId) return body;
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewCert({
+                                id: sup.certificateId!,
+                                supplierName: sup.name,
+                                matchedName: sup.certificateMatchedName ?? null,
+                              })}
+                              title={
+                                sup.certificateMatchedName
+                                  ? `Matched to ${sup.certificateMatchedName}${fuzzy ? " on a similar name only" : ""}`
+                                  : "Open the matched certificate"
+                              }
+                              className="inline-flex items-center gap-1 rounded hover:underline underline-offset-2"
+                              data-testid={`btn-view-certificate-${sup.id}`}
+                            >
+                              {body}
+                              <FileText className={cn("h-3 w-3", fuzzy ? "text-amber-500" : "text-primary")} />
+                            </button>
+                          );
+                        })()}
                       </td>
                       <td className="p-2 text-right">
                         <div className="flex items-center justify-end gap-1 invisible group-hover:visible">
@@ -745,6 +844,15 @@ export default function Procurement() {
           </div>
         </CardContent>
       </Card>
+
+      {/* The certificate behind a matched supplier. Its own layer, so it is not
+          clipped by the table's horizontal scroll container. */}
+      <CertificatePreview
+        certificateId={previewCert?.id ?? null}
+        supplierName={previewCert?.supplierName}
+        matchedName={previewCert?.matchedName}
+        onClose={() => setPreviewCert(null)}
+      />
     </div>
   );
 }

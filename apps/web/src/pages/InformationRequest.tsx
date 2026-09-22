@@ -16,10 +16,7 @@ import { isSuperAdmin } from "@/lib/roles";
 import { LAKE_TRADING_DEMO_NAME } from "@/lib/lakeTradingWorkbookFixture";
 import { useToast } from "@/hooks/use-toast";
 import { API_BASE } from "@toolkit/lib/config";
-import { AppNavBack } from "@/components/AppNavBack";
-import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { DeleteCompanyButton } from "@/components/DeleteCompanyButton";
-import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 import {
   getSection,
   getCompanyInfoMetaFields,
@@ -32,11 +29,17 @@ import {
   type SectionGroup,
 } from "@/components/workbook/sections";
 import { lookupIndustryNormPercent } from "@/lib/industryNormLookup";
+import {
+  TEMPLATE_CHOICES,
+  downloadInformationRequestTemplate,
+} from "@/lib/informationRequestTemplate";
 import { SectionWorkbookEditor } from "@/components/workbook/SectionWorkbookEditor";
 import { WorkbookValidationPanel } from "@/components/workbook/WorkbookValidationPanel";
 import { ExtractionReviewModal, type CellUpdate } from "@/components/workbook/ExtractionReviewModal";
 import { CellValidationPopup, FIELD_LEARN_MORE } from "@/components/workbook/CellValidationPopup";
 import { NumericDateInput } from "@/components/ui/NumericDateInput";
+import { NewCompanyForm, EMPTY_NEW_COMPANY, type NewCompanyValues } from "@/components/scorecard/NewCompanyForm";
+import { validateNewClient } from "@shared/clientCreation";
 import { normalizeCellForColumn } from "@/lib/tabularNormalize";
 import { META_CONFLICTS_KEY } from "@/lib/parserToWorkbook";
 import { usePillarPermission } from "@/hooks/usePillarPermission";
@@ -158,8 +161,8 @@ function LakeTradingDemoEntry({
         <div className="flex items-start sm:items-center gap-2.5 min-w-0">
           <FlaskConical className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
           <div className="min-w-0">
-            <p className="text-[13px] font-medium text-[#d1d1d6]">Lake Trading Demo</p>
-            <p className="text-[12px] text-[#636366] mt-0.5">
+            <p className="text-[13px] font-medium text-[color:var(--body)]">Lake Trading Demo</p>
+            <p className="text-[12px] text-[color:var(--muted)] mt-0.5">
               Pre-filled RCOGP workbook — same validation and submit flow as a live client.
             </p>
           </div>
@@ -189,7 +192,7 @@ function LakeTradingDemoEntry({
             <FlaskConical className="h-4 w-4 text-amber-400" />
             <h2 className="text-[15px] font-semibold text-amber-100">Lake Trading Demo Workbook</h2>
           </div>
-          <p className="text-[13px] text-[#98989f] max-w-xl">
+          <p className="text-[13px] text-[color:var(--body)] max-w-xl">
             RCOGP Generic ground truth (~63.56 pts, Level 7 → 8). Pre-filled workbook — same UI,
             validation, and submit flow as a live client.
           </p>
@@ -253,7 +256,7 @@ function ExcelImportButton({
         disabled={disabled || importing}
         className={
           className ??
-          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm disabled:opacity-60"
+          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] text-[color:var(--body)] smooth press-sm disabled:opacity-60"
         }
         data-testid="button-import-excel"
       >
@@ -311,14 +314,14 @@ function SetupShell({
         }
         .setup-reveal { animation: setupReveal 220ms ease-out both; }
       `}</style>
-      <div className="rounded-[28px] border border-white/[0.08] bg-[#141416] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
+      <div className="rounded-[28px] border border-white/[0.08] bg-[color:var(--ink-3)] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
           <div className="mb-8 flex items-center justify-between">
-            <span className="text-[12px] font-medium text-[#8e8e93]">{step}</span>
+            <span className="text-[12px] font-medium text-[color:var(--body)]">{step}</span>
             {showBack && (
               <button
                 type="button"
                 onClick={onBack}
-                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-[#d1d1d6] transition-colors hover:bg-white/[0.06] hover:text-white"
+                className="rounded-full px-3 py-1.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:bg-white/[0.06] hover:text-white"
               >
                 Back
               </button>
@@ -328,11 +331,10 @@ function SetupShell({
             <div className="mb-8 text-center">
               <h2
                 className="text-[34px] font-semibold leading-[1.05] tracking-tight text-white sm:text-[44px]"
-                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
               >
                 {title}
               </h2>
-              {description && <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[#a1a1a6]">{description}</p>}
+              {description && <p className="mx-auto mt-3 max-w-md text-[15px] leading-6 text-[color:var(--body)]">{description}</p>}
             </div>
           )}
           {children}
@@ -356,12 +358,35 @@ function CompanyPicker({
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
+  // Name, sector, scorecard type and year end together. A company used to be
+  // created from a name alone, with the other three taken from schema
+  // defaults that decide which code series it is scored against.
+  const [newCompany, setNewCompany] = useState<NewCompanyValues>(EMPTY_NEW_COMPANY);
+  // Which sector’s blank Information Request to hand over. The sheets differ
+  // per sector — FSC carries an Access to Financial Services pillar nobody
+  // else has, ICT asks its own SED question — so one file cannot serve all.
+  const [templateChoiceId, setTemplateChoiceId] = useState(TEMPLATE_CHOICES[0].id);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [previewResult, setPreviewResult] = useState<ExcelExtractionResult | null>(null);
   const [pendingSections, setPendingSections] = useState<WorkbookSectionsInput | null>(null);
-  const [setupMethod, setSetupMethod] = useState<"choose" | "upload" | "manual" | "excel">("choose");
+  /**
+   * The workspace names the route on the way in (`?start=documents|manual`),
+   * because that is where the three ways in are now offered. Being asked to
+   * choose again, having just chosen, is what makes a flow feel like paperwork.
+   * Excel is not pre-selectable: it needs a file, so the chooser still renders
+   * its file input.
+   */
+  const preChosen = (() => {
+    if (typeof window === "undefined") return null;
+    const start = new URLSearchParams(window.location.search).get("start");
+    if (start === "documents") return "upload" as const;
+    if (start === "manual") return "manual" as const;
+    return null;
+  })();
+  const [setupMethod, setSetupMethod] = useState<"choose" | "upload" | "manual" | "excel">(
+    preChosen ?? "choose",
+  );
   const { toast } = useToast();
   const loadClientData = useBbeeStore((s) => s.loadClientData);
   const showLakeDemo = isSuperAdmin(user);
@@ -387,26 +412,45 @@ function CompanyPicker({
   }, [load, mode]);
 
   const create = async () => {
-    if (!newName.trim()) return;
+    // The form disables its own button, but this is also reachable by Enter and
+    // by a caller, and the rule has to hold on every path into it.
+    if (validateNewClient(newCompany).length) return;
     setCreating(true);
     try {
       const res = await fetch(`${API_BASE}/api/clients`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim() }),
+        body: JSON.stringify({
+          name: newCompany.name.trim(),
+          industrySector: newCompany.sectorCode,
+          sectorCode: newCompany.sectorCode,
+          scorecardType: newCompany.scorecardType,
+          financialYearEnd: newCompany.financialYearEnd,
+        }),
       });
       if (res.ok) {
         const c = await res.json();
         toast({ title: "Company created", description: c.name });
-        setNewName("");
+        setNewCompany(EMPTY_NEW_COMPANY);
         await load();
         onPick(c);
       } else {
-        const err = await res.json().catch(() => ({}));
+        const err = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+          requires2FA?: boolean;
+        };
+        // A session that predates the second factor is authenticated but not
+        // verified: every call behind it 403s while /api/auth/me still says
+        // you are signed in. Say what to do about it — this read `err.error`
+        // only, and the server sends `message`, so the real reason was
+        // replaced by "Server error." and the button looked simply dead.
         toast({
-          title: "Could not create",
-          description: err.error || "Server error.",
+          title: err.requires2FA ? "Please verify your sign-in" : "Could not create",
+          description: err.requires2FA
+            ? "Sign out and sign in again to receive your verification code, then try once more."
+            : err.error || err.message || "Server error.",
           variant: "destructive",
         });
       }
@@ -479,6 +523,26 @@ function CompanyPicker({
   };
 
   /**
+   * The four mandatory fields, read out of what an import produced.
+   *
+   * An import already carries them — the company-information sheet is where
+   * sector, scorecard type and year end come from. Sending only the name would
+   * make the endpoint reject an import that had the answers all along.
+   */
+  const identityFromSections = (sections: WorkbookSectionsInput) => {
+    const meta = (sections as Record<string, { meta?: Record<string, unknown> }>)["company-information"]?.meta ?? {};
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : v == null ? "" : String(v).trim());
+    return {
+      industrySector: str(meta.industrySector).toUpperCase(),
+      sectorCode: str(meta.industrySector).toUpperCase(),
+      scorecardType: str(meta.scorecardType),
+      financialYearEnd: str(meta.financialYearEnd),
+      measurementPeriodStart: str(meta.measurementPeriodStart) || undefined,
+      measurementPeriodEnd: str(meta.measurementPeriodEnd) || undefined,
+    };
+  };
+
+  /**
    * Shared create-from-sections sequence used by BOTH Excel import and the
    * document-upload start: create the client, import the workbook sections,
    * submit (scores through the canonical workbook path), open the workbook.
@@ -505,13 +569,15 @@ function CompanyPicker({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: companyName }),
+        body: JSON.stringify({ name: companyName, ...identityFromSections(sections) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast({
           title: "Could not create company",
-          description: err.error || "Server error.",
+          // A missing sector, scorecard type or year end names itself here,
+          // because the workbook is where the user has to go and fix it.
+          description: err.error || err.message || "Server error.",
           variant: "destructive",
         });
         return false;
@@ -615,7 +681,7 @@ function CompanyPicker({
           description: "Send them a pillar at a time. Token cost shown before anything is read.",
           icon: Upload,
           badge: "Uses tokens",
-          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
+          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[color:var(--body)]",
         },
         {
           key: "manual" as const,
@@ -623,7 +689,7 @@ function CompanyPicker({
           description: "Create and complete the scorecard for free.",
           icon: Building2,
           badge: "Free",
-          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
+          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[color:var(--body)]",
         },
         {
           key: "excel" as const,
@@ -639,7 +705,7 @@ function CompanyPicker({
           // read as the cost signal. "Uses AI" there implied a charge and then the
           // panel below said "free" — say both, and lead with the cost.
           badge: "Free · uses AI",
-          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[#a1a1a6]",
+          badgeClass: "border-white/[0.10] bg-white/[0.04] text-[color:var(--body)]",
         },
       ];
       return (
@@ -670,56 +736,47 @@ function CompanyPicker({
                     onClick={() => setSetupMethod(key)}
                     className={`group flex w-full items-center gap-4 rounded-[20px] border px-4 py-4 text-left transition-colors ${
                       selected
-                        ? "border-white/[0.10] bg-[#1c1c1e]"
-                        : "border-white/[0.08] bg-[#1c1c1e] hover:border-white/[0.16] hover:bg-[#222225]"
+                        ? "border-white/[0.10] bg-[color:var(--ink-3)]"
+                        : "border-white/[0.08] bg-[color:var(--ink-3)] hover:border-white/[0.16] hover:bg-[#222225]"
                     }`}
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.06] text-[#d1d1d6]">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/[0.06] text-[color:var(--body)]">
                       <Icon className="h-5 w-5" />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[16px] font-semibold text-white">{title}</span>
-                      <span className="mt-0.5 block text-[13px] leading-5 text-[#a1a1a6]">{description}</span>
+                      <span className="mt-0.5 block text-[13px] leading-5 text-[color:var(--body)]">{description}</span>
                     </span>
                     <span className={`hidden shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold sm:inline-flex ${badgeClass}`}>
                       {badge}
                     </span>
-                    <ChevronRight className={`h-5 w-5 transition-transform group-hover:translate-x-0.5 ${selected ? "text-[#8e8e93]" : "text-[#636366] group-hover:text-white"}`} />
+                    <ChevronRight className={`h-5 w-5 transition-transform group-hover:translate-x-0.5 ${selected ? "text-[color:var(--body)]" : "text-[color:var(--muted)] group-hover:text-white"}`} />
                   </button>
 
                   {selected && key === "manual" && (
-                    <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[#111113] p-4">
-                      <p className="mb-3 text-[13px] font-medium text-[#a1a1a6]">Enter the company name to start a free workbook.</p>
-                      <div className="flex flex-col gap-2 sm:flex-row">
-                        <input
-                          id="new-company-name"
-                          value={newName}
-                          onChange={(e) => setNewName(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && create()}
-                          placeholder="Company name"
-                          className="h-12 min-w-0 flex-1 rounded-2xl border border-white/[0.10] bg-[#141416] px-4 text-[15px] text-white outline-none transition-colors placeholder:text-[#636366] focus:border-white/30 focus:ring-4 focus:ring-white/[0.06]"
-                          data-testid="input-new-company"
-                        />
-                        <button
-                          onClick={create}
-                          disabled={!newName.trim() || creating}
-                          className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-white px-5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:cursor-not-allowed disabled:bg-[#2c2c2e] disabled:text-[#636366]"
-                          data-testid="button-start-scorecard"
-                        >
-                          {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create free scorecard"}
-                        </button>
-                      </div>
+                    <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[color:var(--ink-2)] p-4">
+                      <p className="mb-3 text-[13px] font-medium text-[color:var(--body)]">
+                        These four decide what the scorecard is measured against.
+                      </p>
+                      <NewCompanyForm
+                        values={newCompany}
+                        onChange={setNewCompany}
+                        onSubmit={create}
+                        creating={creating}
+                        submitLabel="Create free scorecard"
+                        idPrefix="new-company"
+                      />
                     </div>
                   )}
 
                   {selected && key === "excel" && (
-                    <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[#111113] p-5 text-center">
+                    <div className="setup-reveal mt-3 rounded-[18px] border border-white/[0.06] bg-[color:var(--ink-2)] p-5 text-center">
                       <ExcelLogoMark className="mx-auto h-10 w-10" />
-                      <p className="mt-3 text-[13px] text-[#a1a1a6]">
+                      <p className="mt-3 text-[13px] text-[color:var(--body)]">
                         Upload an existing B-BBEE information-gathering workbook — RCOGP, ICT, FSC, Transport,
                         AgriBEE or Construction. The sector is read from the workbook.
                       </p>
-                      <p className="mt-1.5 text-[13px] text-[#8e8e93]">
+                      <p className="mt-1.5 text-[13px] text-[color:var(--body)]">
                         No tokens are charged. Sheet names and sample rows from unrecognised tabs are sent to
                         the AI mapper.
                       </p>
@@ -730,6 +787,54 @@ function CompanyPicker({
                           onImport={handleExcelImport}
                         />
                       </div>
+
+                      {/* The other half of this path. The product asked people to
+                          upload "the template" and never offered one, so anyone
+                          without a workbook already in hand had nowhere to go but
+                          the token-charged document route. The file is built from
+                          the same column definitions this importer reads, per
+                          sector, so what a client fills in comes back whole. */}
+                      <div className="mt-5 border-t border-white/[0.06] pt-4 text-left">
+                        <p className="text-[13px] font-medium text-white">
+                          No workbook yet? Send your client a blank one.
+                        </p>
+                        <p className="mt-1 text-[13px] leading-5 text-[color:var(--body)]">
+                          One sheet per pillar, with the columns and the allowed values for the sector
+                          you pick. Fill it in and bring it back here.
+                        </p>
+                        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                          <select
+                            value={templateChoiceId}
+                            onChange={(e) => setTemplateChoiceId(e.target.value)}
+                            aria-label="Sector for the Information Request template"
+                            className="h-11 min-w-0 flex-1 rounded-2xl border border-white/[0.10] bg-[color:var(--ink-3)] px-3 text-[14px] text-white outline-none transition-colors focus:border-white/30 focus:ring-4 focus:ring-white/[0.06]"
+                            data-testid="select-template-sector"
+                          >
+                            {TEMPLATE_CHOICES.map((choice) => (
+                              <option key={choice.id} value={choice.id} className="bg-[#16181c]">
+                                {choice.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const choice =
+                                TEMPLATE_CHOICES.find((c) => c.id === templateChoiceId) ?? TEMPLATE_CHOICES[0];
+                              downloadInformationRequestTemplate(choice.spec);
+                              toast({
+                                title: "Template downloaded",
+                                description: `${choice.label} — one sheet per pillar, ready to send.`,
+                              });
+                            }}
+                            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/[0.12] bg-white/[0.04] px-4 text-[14px] font-semibold text-white transition-colors hover:border-white/25 hover:bg-white/[0.08]"
+                            data-testid="button-download-template"
+                          >
+                            <Download className="h-4 w-4" />
+                            Download template
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -738,7 +843,7 @@ function CompanyPicker({
           </div>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-3 text-[13px]">
             {showLakeDemo && <LakeTradingDemoEntry onPick={onPick} compact />}
-            <a href="/dashboard" className="font-medium text-[#d1d1d6] hover:text-white hover:underline">
+            <a href="/dashboard" className="font-medium text-[color:var(--body)] hover:text-white hover:underline">
               View saved scorecards
             </a>
           </div>
@@ -778,6 +883,9 @@ function CompanyPicker({
       return (
         <SetupShell step="Step 2 of 3" title="" description="" showBack onBack={() => setSetupMethod("choose")}>
           <DocumentUploadStart
+            // Arrived having already chosen "upload" in the workspace: open on
+            // the dropzone alone rather than on a screen of other decisions.
+            focused={preChosen === "upload"}
             onCreate={async (companyName, sections, extras) => {
               await createFromSections(companyName, sections as WorkbookSectionsInput, {
                 landOn: "estimate",
@@ -794,21 +902,20 @@ function CompanyPicker({
 
     return (
       <div className="max-w-5xl mx-auto py-5">
-        <div className="rounded-[28px] bg-[#111113] border border-white/[0.10] overflow-hidden shadow-[0_22px_70px_rgba(0,0,0,0.28)]">
+        <div className="rounded-[28px] bg-[color:var(--ink-2)] border border-white/[0.10] overflow-hidden shadow-[0_22px_70px_rgba(0,0,0,0.28)]">
           <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-white/[0.07]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2
                   className="text-[26px] sm:text-[32px] font-semibold tracking-tight text-white leading-tight"
-                  style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
                 >
                   Create scorecard
                 </h2>
-                <p className="text-[13px] text-[#98989f] mt-2 max-w-xl leading-5">
+                <p className="text-[13px] text-[color:var(--body)] mt-2 max-w-xl leading-5">
                   Upload documents for a quote, or use a free setup path.
                 </p>
               </div>
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-[#d1d1d6]">
+              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-[color:var(--body)]">
                 <Upload className="h-3.5 w-3.5 text-[#a78bfa]" />
                 Quote before processing
               </div>
@@ -832,7 +939,7 @@ function CompanyPicker({
               />
             </div>
             <div className="flex items-center justify-between pt-1">
-              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#636366]">Free setup</p>
+              <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Free setup</p>
               <div className="h-px flex-1 bg-white/[0.07] ml-3" />
             </div>
 
@@ -840,39 +947,21 @@ function CompanyPicker({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5">
               <div className="rounded-[18px] border border-white/[0.08] bg-[#18181a] p-3.5">
                 <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[#f2f2f7]">
-                  <Building2 className="h-4 w-4 text-[#8e8e93]" />
+                  <Building2 className="h-4 w-4 text-[color:var(--body)]" />
                   Manual entry
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    id="new-company-name"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && create()}
-                    placeholder="Company name"
-                    className="min-w-0 flex-1 bg-[#0c0c0e] border border-white/[0.10] rounded-xl px-3.5 py-2.5 text-[13px] text-white placeholder-[#636366] outline-none focus:border-violet-300/40 focus:ring-2 focus:ring-violet-300/10"
-                    data-testid="input-new-company"
-                  />
-                  <button
-                    onClick={create}
-                    disabled={!newName.trim() || creating}
-                    className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-[#2c2c2e] text-[#f2f2f7] text-[13px] font-semibold hover:bg-[#3a3a3c] disabled:opacity-50 transition-colors whitespace-nowrap"
-                    data-testid="button-start-scorecard"
-                  >
-                    {creating ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <>
-                        Start free
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </>
-                    )}
-                  </button>
-                </div>
+                <NewCompanyForm
+                  values={newCompany}
+                  onChange={setNewCompany}
+                  onSubmit={create}
+                  creating={creating}
+                  tone="quiet"
+                  idPrefix="manual-entry"
+                />
               </div>
               <div className="rounded-[18px] border border-white/[0.08] bg-[#18181a] p-3.5">
                 <div className="mb-2.5 flex items-center gap-2 text-[13px] font-semibold text-[#f2f2f7]">
-                  <Download className="h-4 w-4 text-[#8e8e93]" />
+                  <Download className="h-4 w-4 text-[color:var(--body)]" />
                   Excel import
                 </div>
                 <ExcelImportButton
@@ -937,7 +1026,7 @@ function CompanyPicker({
           </div>
 
           {showLakeDemo && (
-            <div className="px-6 sm:px-8 py-4 border-t border-[#2c2c2e] bg-amber-500/[0.03]">
+            <div className="px-6 sm:px-8 py-4 border-t border-[color:var(--rule)] bg-amber-500/[0.03]">
               <LakeTradingDemoEntry onPick={onPick} compact />
             </div>
           )}
@@ -972,9 +1061,9 @@ function CompanyPicker({
           }}
         />
 
-        <p className="text-center text-[13px] text-[#636366] mt-5">
+        <p className="text-center text-[13px] text-[color:var(--muted)] mt-5">
           Already have a scorecard?{" "}
-          <a href="/dashboard" className="text-[#d1d1d6] hover:text-white underline underline-offset-2">
+          <a href="/dashboard" className="text-[color:var(--body)] hover:text-white underline underline-offset-2">
             View saved companies
           </a>
         </p>
@@ -1003,35 +1092,24 @@ function CompanyPicker({
           <div>
             <h2
               className="text-[22px] font-semibold text-white tracking-tight leading-tight"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
               Create scorecard
             </h2>
-            <p className="text-[13px] text-[#a1a1a6] mt-1.5 max-w-md">
+            <p className="text-[13px] text-[color:var(--body)] mt-1.5 max-w-md">
               Start manually for free, or import an existing BEE Information Gathering Excel file for free.
             </p>
-            <div className="mt-4 flex gap-2">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && create()}
-                placeholder="Company name…"
-                aria-label="New company name"
-                className="flex-1 bg-black/40 border border-white/[0.10] focus:border-violet-400/50 rounded-lg px-3.5 py-2.5 text-[14px] text-white placeholder-[#636366] outline-none transition-colors"
-                data-testid="input-new-company"
+            <div className="mt-4">
+              <NewCompanyForm
+                values={newCompany}
+                onChange={setNewCompany}
+                onSubmit={create}
+                creating={creating}
+                idPrefix="create-scorecard"
               />
-              <button
-                onClick={create}
-                disabled={!newName.trim() || creating}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-violet-500 text-white text-[13px] font-semibold press-sm hover:bg-violet-400 disabled:opacity-40 disabled:hover:bg-violet-500 smooth shadow-[0_8px_24px_-8px_rgba(139,92,246,0.6)]"
-                data-testid="button-create-company"
-              >
-                {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Start free<ChevronRight className="h-4 w-4" /></>}
-              </button>
             </div>
           </div>
           <div className="md:pl-4 md:border-l md:border-white/[0.08]">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-[#8e8e93] mb-2">Or</div>
+            <div className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--body)] mb-2">Or</div>
             <ExcelImportButton
               label="Import Excel (free)"
               onImport={async (file) => {
@@ -1093,41 +1171,41 @@ function CompanyPicker({
         </div>
 
       {/* Existing companies */}
-      <div className="rounded-2xl bg-[#141416] border border-white/[0.05] p-6">
+      <div className="rounded-2xl bg-[color:var(--ink-3)] border border-white/[0.05] p-6">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-[15px] font-semibold text-white">Your companies</h2>
-            <span className="text-[11px] text-[#636366] tabular-nums">
+            <span className="text-[11px] text-[color:var(--muted)] tabular-nums">
               {loading ? "" : `${filtered.length}${search && filtered.length !== companies.length ? ` of ${companies.length}` : ""}`}
             </span>
           </div>
           <div className="relative w-full max-w-[260px]">
-            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#636366]" />
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted)]" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search companies…"
               aria-label="Search companies"
-              className="w-full bg-black/40 border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white placeholder-[#636366] outline-none focus:border-white/[0.18] transition-colors"
+              className="w-full bg-[color:var(--ink)]/40 border border-white/[0.08] rounded-lg pl-8 pr-3 py-1.5 text-[12px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-white/[0.18] transition-colors"
               data-testid="input-company-search"
             />
           </div>
         </div>
 
         {loading ? (
-          <div className="flex items-center gap-2 text-[#8e8e93] text-[13px] py-10 justify-center">
+          <div className="flex items-center gap-2 text-[color:var(--body)] text-[13px] py-10 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading companies…
           </div>
         ) : companies.length === 0 ? (
           <div className="text-center py-12 px-4">
             <div className="mx-auto w-12 h-12 rounded-xl bg-white/[0.04] border border-white/[0.06] grid place-items-center mb-3">
-              <Building2 className="h-5 w-5 text-[#636366]" />
+              <Building2 className="h-5 w-5 text-[color:var(--muted)]" />
             </div>
-            <div className="text-[14px] text-[#d1d1d6] font-medium">No companies yet</div>
-            <div className="text-[12px] text-[#636366] mt-1">Create your first one above to get started.</div>
+            <div className="text-[14px] text-[color:var(--body)] font-medium">No companies yet</div>
+            <div className="text-[12px] text-[color:var(--muted)] mt-1">Create your first one above to get started.</div>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="text-[13px] text-[#636366] py-10 text-center">
+          <div className="text-[13px] text-[color:var(--muted)] py-10 text-center">
             No matches for "{search}".
           </div>
         ) : (
@@ -1147,14 +1225,14 @@ function CompanyPicker({
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-white/[0.10] to-white/[0.03] border border-white/[0.06] grid place-items-center shrink-0 group-hover:border-violet-400/30 transition-colors">
-                        <Building2 className="h-4 w-4 text-[#d1d1d6] group-hover:text-violet-300 transition-colors" />
+                        <Building2 className="h-4 w-4 text-[color:var(--body)] group-hover:text-violet-300 transition-colors" />
                       </div>
                       <div className="min-w-0">
                         <div className="text-[13.5px] font-medium text-white truncate">{c.name}</div>
-                        <div className="text-[11px] text-[#636366] truncate font-mono">{companyId}</div>
+                        <div className="text-[11px] text-[color:var(--muted)] truncate font-mono">{companyId}</div>
                       </div>
                     </div>
-                    <ChevronRight className="h-4 w-4 text-[#636366] shrink-0 ml-2 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
+                    <ChevronRight className="h-4 w-4 text-[color:var(--muted)] shrink-0 ml-2 group-hover:text-white group-hover:translate-x-0.5 transition-all" />
                   </button>
                   <DeleteCompanyButton
                     companyId={companyId}
@@ -1203,7 +1281,7 @@ function CompanyPicker({
               method: "POST",
               credentials: "include",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: companyName }),
+              body: JSON.stringify({ name: companyName, ...identityFromSections(sections) }),
             });
             if (!res.ok) {
               const err = await res.json().catch(() => ({}));
@@ -1321,7 +1399,7 @@ function MetaForm({
     const emphasized = Boolean(f.emphasis);
     return (
       <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
-        <div className={`text-[12px] mb-1.5 flex items-center gap-1 ${emphasized ? "text-sky-200 font-medium" : "text-[#8e8e93]"}`}>
+        <div className={`text-[12px] mb-1.5 flex items-center gap-1 ${emphasized ? "text-sky-200 font-medium" : "text-[color:var(--body)]"}`}>
           {f.label}
           {f.required && <span className="text-status-error">*</span>}
         </div>
@@ -1331,11 +1409,11 @@ function MetaForm({
             value={String(v ?? "")}
             disabled={readOnly || f.readOnly}
             onChange={(e) => setField(f.key, e.target.value)}
-            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[#48484a] disabled:opacity-60 ${emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
+            className={`w-full bg-[color:var(--ink-2)] border rounded-lg px-3 py-2 text-[13px] text-white outline-none focus:border-[color:var(--rule-strong)] disabled:opacity-60 ${emphasized ? "border-sky-500/50" : "border-[color:var(--rule)]"}`}
           >
-            <option value="" className="bg-[#1c1c1e]">—</option>
+            <option value="" className="bg-[color:var(--ink-3)]">—</option>
             {f.options?.map((o) => (
-              <option key={o} value={o} className="bg-[#1c1c1e]">
+              <option key={o} value={o} className="bg-[color:var(--ink-3)]">
                 {o}
               </option>
             ))}
@@ -1357,7 +1435,7 @@ function MetaForm({
             disabled={readOnly || f.readOnly}
             onChange={(iso) => setField(f.key, iso)}
             onBlur={(e) => handleBlur(f, e.target.value)}
-            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
+            className={`w-full bg-[color:var(--ink-2)] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-[color:var(--rule-strong)] disabled:opacity-60 ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[color:var(--rule)]"}`}
             placeholder="dd/mm/yyyy"
           />
         ) : (
@@ -1376,13 +1454,13 @@ function MetaForm({
               )
             }
             onBlur={(e) => handleBlur(f, e.target.value)}
-            className={`w-full bg-[#0e0e10] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[#48484a] outline-none focus:border-[#48484a] disabled:opacity-60 ${f.readOnly ? "bg-[#141416] cursor-default" : ""} ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[#2c2c2e]"}`}
+            className={`w-full bg-[color:var(--ink-2)] border rounded-lg px-3 py-2 text-[13px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-[color:var(--rule-strong)] disabled:opacity-60 ${f.readOnly ? "bg-[color:var(--ink-3)] cursor-default" : ""} ${err ? "border-status-error" : emphasized ? "border-sky-500/50" : "border-[color:var(--rule)]"}`}
             placeholder={f.required ? "Required" : ""}
           />
         )}
         {err && <div className="text-[11px] text-status-error mt-1">{err}</div>}
         {f.guidance && (emphasized || f.readOnly) && (
-          <p className="text-[11px] text-[#8e8e93] mt-1.5 leading-snug">{f.guidance}</p>
+          <p className="text-[11px] text-[color:var(--body)] mt-1.5 leading-snug">{f.guidance}</p>
         )}
       </label>
     );
@@ -1835,9 +1913,21 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         }
         setSyncStatus("error");
         if (!opts?.quiet) {
+          // 422 is the submit gate: company details the scorecard cannot be
+          // calculated without. Naming the fields is the difference between a
+          // user fixing it in ten seconds and reporting a broken button.
+          const blocked = res.status === 422 && Array.isArray(data.blockingIssues);
           toast({
-            title: "Scorecard sync failed",
-            description: data.error || data.summary || `Server returned ${res.status}.`,
+            title: blocked ? "Fill these in before calculating" : "Scorecard sync failed",
+            description: blocked
+              ? // The message already reads "Financial Year-End (dd/mm/yyyy):
+                // Required" — the field key alone would not tell anyone which
+                // box to go and fill.
+                (data.blockingIssues as Array<{ message?: string; field?: string }>)
+                  .slice(0, 4)
+                  .map((issue) => issue.message || issue.field)
+                  .join(" · ")
+              : data.error || data.summary || `Server returned ${res.status}.`,
             variant: "destructive",
           });
         }
@@ -2084,13 +2174,13 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         className={`${baseClass} ${
           isActive
             ? "bg-white/[0.08] text-white"
-            : "text-[#8e8e93] hover:bg-white/[0.04] hover:text-[#d1d1d6]"
+            : "text-[color:var(--body)] hover:bg-white/[0.04] hover:text-[color:var(--body)]"
         }`}
         data-testid={`tab-${sec.key}`}
       >
         <span className={variant === "sidebar" ? "truncate" : ""}>{sec.label}</span>
         <span
-          className={`text-[10px] tabular-nums ${status === "filled" ? "text-status-success" : "text-[#636366]"}`}
+          className={`text-[10px] tabular-nums ${status === "filled" ? "text-status-success" : "text-[color:var(--muted)]"}`}
         >
           {indicator}
         </span>
@@ -2105,7 +2195,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         out.push(
           <div
             key={`group-${group.key}`}
-            className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-[0.14em] text-[#636366]"
+            className="px-3 pt-3 pb-1 text-[10px] uppercase tracking-[0.14em] text-[color:var(--muted)]"
             data-testid={`group-header-${group.key}`}
           >
             {group.label}
@@ -2125,7 +2215,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             data-testid={`group-chip-${group.key}`}
             className="shrink-0 inline-flex items-center gap-1 pl-2 pr-1 py-1 rounded-lg bg-white/[0.03] border border-white/[0.04]"
           >
-            <span className="text-[10px] uppercase tracking-[0.12em] text-[#8e8e93] whitespace-nowrap">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-[color:var(--body)] whitespace-nowrap">
               {group.label}
             </span>
             <div className="flex items-center gap-1">
@@ -2194,16 +2284,16 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="text-[12px] text-[#8e8e93] hover:text-white smooth press-sm"
+            className="text-[12px] text-[color:var(--body)] hover:text-white smooth press-sm"
             data-testid="button-change-company"
           >
             ← Change company
           </button>
-          <span className="text-[#3a3a3c]">|</span>
+          <span className="text-[color:var(--muted)]">|</span>
           <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4 text-[#8e8e93]" />
+            <Building2 className="h-4 w-4 text-[color:var(--body)]" />
             <span className="text-[14px] font-semibold text-white">{company.name}</span>
-            <span className="text-[11px] text-[#636366]">{companyId}</span>
+            <span className="text-[11px] text-[color:var(--muted)]">{companyId}</span>
           </div>
           {syncStatus === "synced" && submittedAt && (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-success-bg text-status-success text-[10px] font-semibold uppercase tracking-wide">
@@ -2213,21 +2303,21 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         </div>
         <div className="flex items-center gap-2">
           <span
-            className={`text-[11px] ${saveError ? "text-status-error" : "text-[#636366]"}`}
+            className={`text-[11px] ${saveError ? "text-status-error" : "text-[color:var(--muted)]"}`}
             data-testid="save-status"
           >
             {saveStatusText}
           </span>
           <button
             onClick={handleManualSave}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] text-[color:var(--body)] smooth press-sm"
             data-testid="button-save"
           >
             <Save className="h-3.5 w-3.5" /> Save
           </button>
           <button
             onClick={handleExport}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] text-[color:var(--body)] smooth press-sm"
             data-testid="button-export"
           >
             <Download className="h-3.5 w-3.5" /> Download Excel
@@ -2243,7 +2333,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             Continue to Summary
           </button>
           {syncStatus === "syncing" && (
-            <span className="text-[10px] text-[#636366]">Syncing scorecard…</span>
+            <span className="text-[10px] text-[color:var(--muted)]">Syncing scorecard…</span>
           )}
         </div>
       </div>
@@ -2331,7 +2421,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
               onSelectSection={selectSection}
             />
           )}
-          <div className="rounded-xl bg-[#1c1c1e] p-2" data-testid="workbook-tabs">
+          <div className="rounded-xl bg-[color:var(--ink-3)] p-2" data-testid="workbook-tabs">
             {renderSectionNav("sidebar")}
           </div>
         </aside>
@@ -2342,11 +2432,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           data-testid={`section-panel-${activeSection?.key ?? "unknown"}`}
         >
           {loading ? (
-            <div className="rounded-2xl bg-[#1c1c1e] p-6 flex items-center justify-center py-12 text-[#8e8e93] text-[13px]">
+            <div className="rounded-2xl bg-[color:var(--ink-3)] p-6 flex items-center justify-center py-12 text-[color:var(--body)] text-[13px]">
               <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading workbook…
             </div>
           ) : activeSection ? (
-            <div className="rounded-2xl bg-[#1c1c1e] overflow-hidden">
+            <div className="rounded-2xl bg-[color:var(--ink-3)] overflow-hidden">
               {activeMetaFieldsResolved && activeSection?.columns ? (
                 // Hybrid section: MetaForm for aggregate inputs + grid for data rows.
                 <>
@@ -2354,14 +2444,14 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                     <h2 className="text-[18px] font-bold tracking-tight text-white">
                       {activeSection.label}
                     </h2>
-                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
+                    <p className="text-[13px] text-[color:var(--body)] mt-0.5">{activeSection.description}</p>
                   </div>
                   <div className="px-6 pt-5 pb-4 border-b border-white/[0.04]">
-                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[#636366] mb-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--muted)] mb-4">
                       Section inputs
                     </p>
                     {activeSectionPermissions.loading ? (
-                      <div className="text-[13px] text-[#8e8e93] flex items-center gap-2 py-4">
+                      <div className="text-[13px] text-[color:var(--body)] flex items-center gap-2 py-4">
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
                       </div>
                     ) : (
@@ -2387,7 +2477,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                   </div>
                   <div className="pt-2">
                     <div className="px-6 pt-4 pb-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[#636366]">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--muted)]">
                         {activeSection.gridLabel ?? "Training programme entries"}
                       </p>
                     </div>
@@ -2407,11 +2497,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                     <h2 className="text-[18px] font-bold tracking-tight text-white">
                       {activeSection.label}
                     </h2>
-                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
+                    <p className="text-[13px] text-[color:var(--body)] mt-0.5">{activeSection.description}</p>
                   </div>
                   <div className="px-6 pb-6 pt-5">
                     {activeSectionPermissions.loading ? (
-                      <div className="text-[13px] text-[#8e8e93] flex items-center gap-2 py-4">
+                      <div className="text-[13px] text-[color:var(--body)] flex items-center gap-2 py-4">
                         <Loader2 className="h-4 w-4 animate-spin" /> Checking permissions…
                       </div>
                     ) : (
@@ -2451,11 +2541,11 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
                     <h2 className="text-[18px] font-bold tracking-tight text-white">
                       {activeSection.label}
                     </h2>
-                    <p className="text-[13px] text-[#8e8e93] mt-0.5">{activeSection.description}</p>
+                    <p className="text-[13px] text-[color:var(--body)] mt-0.5">{activeSection.description}</p>
                   </div>
                   <div className="px-6 pb-6">
-                    <div className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-16 px-6 text-center mt-5">
-                      <p className="text-[13px] text-[#636366]">No editor configured for this section.</p>
+                    <div className="rounded-xl border border-dashed border-[color:var(--rule)] bg-[color:var(--ink-2)] py-16 px-6 text-center mt-5">
+                      <p className="text-[13px] text-[color:var(--muted)]">No editor configured for this section.</p>
                     </div>
                   </div>
                 </>
@@ -2473,9 +2563,21 @@ export default function InformationRequest() {
   const params = useParams<{ companyId?: string }>();
   const [location, navigate] = useLocation();
   const [picked, setPicked] = useState<Company | null>(null);
-  const basePath = location.startsWith("/create-scorecard") ? "/create-scorecard" : "/information-request";
-  const pageTitle = basePath === "/create-scorecard" ? "Create Scorecard" : "Information Request";
-  const isCreateScorecardFlow = basePath === "/create-scorecard";
+  // `/bbbee/new` is where starting a scorecard lives now, alongside `/esg/new`.
+  // Recognising only `/create-scorecard` here sent it to the legacy picker —
+  // a page headed "Company Assessment Workbook" with a name box and a company
+  // list, which is a different screen from the one ESG shows for the same act.
+  const isCreateScorecardFlow =
+    location.startsWith("/create-scorecard") || location.startsWith("/bbbee/new");
+  // Where this flow STARTS — the screen the three options live on, and the
+  // only thing `basePath` is for. It is not a prefix for the steps that come
+  // after a company exists; those have routes of their own.
+  const basePath = location.startsWith("/bbbee/new")
+    ? "/bbbee/new"
+    : location.startsWith("/create-scorecard")
+      ? "/create-scorecard"
+      : "/information-request";
+  const pageTitle = isCreateScorecardFlow ? "Create Scorecard" : "Information Request";
   const isSummaryStep = isCreateScorecardFlow && /\/summary\/?$/.test(location);
   // Provisional live-score page — the destination of the document-upload flow.
   const isEstimateStep = isCreateScorecardFlow && /\/estimate\/?$/.test(location);
@@ -2558,7 +2660,13 @@ export default function InformationRequest() {
     justPickedIdRef.current = id ?? null;
     setPicked(c);
     if (id) {
-      navigate(`${basePath}/${id}`, { replace: true });
+      // A company's steps are routed under `/create-scorecard/:companyId` and
+      // nowhere else — it is what the workspace row opens, what the summary
+      // links back to, and what the breadcrumbs read as B-BBEE. Prefixing with
+      // the path we came in on produced `/bbbee/new/C-98220`, which matches no
+      // route: the client was created and then the screen said 404. `/bbbee/new`
+      // is the way IN and stops here, as `/esg/new` hands off to `/esg/create`.
+      navigate(`/create-scorecard/${encodeURIComponent(id)}`, { replace: true });
     } else {
       // Never fail silently: with no id there is nothing to navigate to, and
       // the old code just did nothing while the client had already been created.
@@ -2584,53 +2692,24 @@ export default function InformationRequest() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <header className="h-14 shrink-0 z-20 sticky top-0 bg-black" style={{ borderBottom: "1px solid #2c2c2e" }}>
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <AppNavBack
-              href={backHref}
-              eyebrow="Back"
-              label={backLabel}
-              variant="dark"
-              className="shrink-0"
-            />
-            <div className="w-px h-5 bg-[#2c2c2e] hidden sm:block" />
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-[8px] bg-violet-500/15 border border-violet-400/30 flex items-center justify-center shrink-0">
-                <img
-                  src={logoCircle}
-                  alt="Okiru"
-                  className="h-5 w-5 rounded-[6px] object-contain"
-                  style={{
-                    filter:
-                      "brightness(0) saturate(100%) invert(48%) sepia(79%) saturate(2476%) hue-rotate(245deg) brightness(98%) contrast(98%)",
-                  }}
-                />
-              </div>
-              <span className="text-lg font-semibold tracking-tight text-white border-l border-[#2c2c2e] pl-3">
-                {pageTitle}
-              </span>
-            </div>
-          </div>
-          <UserAccountMenu variant="dashboard" />
-        </div>
-      </header>
+    <div className="text-white">
 
-      <main className={basePath === "/create-scorecard" && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
-        {!isSummaryStep && !picked && basePath !== "/create-scorecard" && (
+      <main className={isCreateScorecardFlow && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
+        {/* The flow states its own step ("Add your documents"). A second,
+            larger title above it competed with that and said something else
+            again. It survives only on the retired /information-request path. */}
+        {!isSummaryStep && !picked && !isCreateScorecardFlow && (
           <div className="mb-10 max-w-3xl">
-            <div className="flex items-center gap-2 mb-4 text-[11px] font-medium tracking-[0.18em] uppercase text-[#8e8e93]">
+            <div className="flex items-center gap-2 mb-4 text-[11px] font-medium tracking-[0.18em] uppercase text-[color:var(--body)]">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-400/80" />
               Workbook
             </div>
             <h1
               className="text-[40px] sm:text-[52px] font-semibold tracking-tight text-white leading-[1.04]"
-              style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
             >
               Company Assessment Workbook
             </h1>
-            <p className="mt-4 text-[15px] text-[#a1a1a6] leading-relaxed">
+            <p className="mt-4 text-[15px] text-[color:var(--body)] leading-relaxed">
               Structured spreadsheet collection - replaces manual onboarding sheets.
             </p>
           </div>
@@ -2640,7 +2719,7 @@ export default function InformationRequest() {
             <h1 className="text-[24px] font-semibold tracking-tight text-white">
               {picked.name}
             </h1>
-            <p className="text-[13px] text-[#8e8e93] mt-1">
+            <p className="text-[13px] text-[color:var(--body)] mt-1">
               Complete each section — scores sync automatically as you save. Continue to Summary anytime.
             </p>
           </div>

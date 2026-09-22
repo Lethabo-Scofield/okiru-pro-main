@@ -401,7 +401,7 @@ export function EsgElementDocumentBatches({
 
   return (
     <div
-      className="rounded-[22px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-input-bg,#0e0e10)] p-5"
+      className="rounded-[22px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] p-5"
       data-testid="esg-upload-batches"
     >
       <input
@@ -431,18 +431,17 @@ export function EsgElementDocumentBatches({
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,#636366)]">
+          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
             Upload by element
           </p>
           <h4
             className="mt-2 text-[22px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-            style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
           >
             {satisfiedDocumentIds.length > 0 && totalTypes > 0
               ? `${totalCovered} of ${totalTypes} document types covered`
               : `${batches.length} batches, one at a time`}
           </h4>
-          <p className="mt-2 max-w-lg text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+          <p className="mt-2 max-w-lg text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             Send what you have for each element — files or a whole folder. You do not need all
             {totalTypes > 0 ? ` ${totalTypes}` : ""} document types, and it does not matter if
             something lands in the wrong batch: we read every document and file it where it
@@ -450,14 +449,14 @@ export function EsgElementDocumentBatches({
           </p>
           {/* Guidance, not a gate: a failed catalogue must never block uploading. */}
           {error && (
-            <p className="mt-2 text-[12px] text-[var(--esg-text3,#636366)]" data-testid="esg-batches-catalog-error">
+            <p className="mt-2 text-[12px] text-[var(--esg-text3,rgba(255,255,255,0.32))]" data-testid="esg-batches-catalog-error">
               {error}. You can still upload — we will tell you what is missing after reading your
               documents.
             </p>
           )}
         </div>
         {unfiledCount > 0 && (
-          <p className="rounded-xl border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] px-3 py-2 text-[11.5px] text-[var(--esg-text2,#8e8e93)]">
+          <p className="rounded-xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-3 py-2 text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             {unfiledCount} file{unfiledCount === 1 ? "" : "s"} added outside a batch
           </p>
         )}
@@ -476,7 +475,7 @@ export function EsgElementDocumentBatches({
               className={`overflow-hidden rounded-2xl border transition-colors ${
                 isDragTarget
                   ? "border-white/[0.35] bg-white/[0.04]"
-                  : "border-[var(--esg-glass-border,#2c2c2e)]"
+                  : "border-[var(--esg-glass-border,rgba(255,255,255,0.07))]"
               }`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -496,7 +495,7 @@ export function EsgElementDocumentBatches({
                 >
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
                     {batch.holistic ? (
-                      <Layers className="h-4 w-4 text-[var(--esg-text2,#8e8e93)]" />
+                      <Layers className="h-4 w-4 text-[var(--esg-text2,rgba(255,255,255,0.56))]" />
                     ) : (
                       <Leaf className="h-4 w-4 text-[var(--esg-acc-e,#1de9a0)]" />
                     )}
@@ -505,17 +504,17 @@ export function EsgElementDocumentBatches({
                     <span className="flex items-center gap-2 text-[14px] font-medium text-[var(--esg-text,#fff)]">
                       <span className="truncate">{batch.label}</span>
                       <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 text-[var(--esg-text2,#8e8e93)] transition-transform ${
+                        className={`h-3.5 w-3.5 shrink-0 text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-transform ${
                           isOpen ? "rotate-180" : ""
                         }`}
                       />
                     </span>
                     {batch.blurb && (
-                      <span className="mt-0.5 block truncate text-[11.5px] text-[var(--esg-text2,#8e8e93)]">
+                      <span className="mt-0.5 block truncate text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                         {batch.blurb}
                       </span>
                     )}
-                    <span className="mt-1 block text-[11px] text-[var(--esg-text3,#636366)]">
+                    <span className="mt-1 block text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                       {batch.holistic
                         ? `${batch.documentCount} kinds of upload`
                         : batch.documentCount === 0
@@ -543,7 +542,7 @@ export function EsgElementDocumentBatches({
                     type="button"
                     disabled={disabled}
                     onClick={() => openPicker(origin, "folder")}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[var(--esg-text2,#8e8e93)] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
                     data-testid={`esg-batch-upload-folder-${batch.id}`}
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
@@ -569,20 +568,20 @@ export function EsgElementDocumentBatches({
                               {have ? (
                                 <Check className="h-3.5 w-3.5 text-[#30d158]" />
                               ) : (
-                                <FileQuestion className="h-3.5 w-3.5 text-[var(--esg-text3,#636366)]" />
+                                <FileQuestion className="h-3.5 w-3.5 text-[var(--esg-text3,rgba(255,255,255,0.32))]" />
                               )}
                             </span>
                             <span className="min-w-0 flex-1">
-                              <span className="block text-[13px] leading-5 text-[#d1d1d6]">
+                              <span className="block text-[13px] leading-5 text-[color:var(--body)]">
                                 {item.name}
                                 {/* Never colour alone — state is spelled out. */}
-                                <span className="ml-2 text-[10px] uppercase tracking-wide text-[var(--esg-text3,#636366)]">
+                                <span className="ml-2 text-[10px] uppercase tracking-wide text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                                   {have ? "supplied" : "not yet"}
                                 </span>
                               </span>
                               {item.hint && (
-                                <span className="mt-1 block text-[11.5px] leading-[1.45] text-[var(--esg-text2,#8e8e93)]">
-                                  <Info className="mr-1 inline h-3 w-3 align-[-1px] text-[var(--esg-text3,#636366)]" />
+                                <span className="mt-1 block text-[11.5px] leading-[1.45] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+                                  <Info className="mr-1 inline h-3 w-3 align-[-1px] text-[var(--esg-text3,rgba(255,255,255,0.32))]" />
                                   {item.hint}
                                 </span>
                               )}
@@ -596,7 +595,7 @@ export function EsgElementDocumentBatches({
                                   "files",
                                 )
                               }
-                              className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.10] px-2.5 py-1 text-[11px] font-medium text-[var(--esg-text2,#8e8e93)] transition-colors hover:bg-white/[0.06] hover:text-[#e5e5ea] disabled:opacity-40"
+                              className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.10] px-2.5 py-1 text-[11px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:bg-white/[0.06] hover:text-[#e5e5ea] disabled:opacity-40"
                               aria-label={`Upload ${item.name}`}
                               data-testid={`esg-upload-doc-${item.id}`}
                             >
@@ -607,7 +606,7 @@ export function EsgElementDocumentBatches({
                         );
                       })}
                       {batch.items.length === 0 && (
-                        <li className="px-4 py-3 text-[12px] text-[var(--esg-text3,#636366)]">
+                        <li className="px-4 py-3 text-[12px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                           {elements === null && !error
                             ? "Loading the document list…"
                             : "No document list for this element — you can still upload to it."}

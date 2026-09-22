@@ -50,6 +50,22 @@ const PEOPLE_SECTIONS: Record<string, string[]> = {
 
 const CONTRIBUTION_SECTIONS = ["sed", "esd"] as const;
 
+/**
+ * Sections where a repeat is reported but never merged.
+ *
+ * The identity is deliberately tight: a supplier is the same supplier by name,
+ * but a contribution is only the same contribution when BOTH the beneficiary
+ * and the amount repeat. Two different amounts to one beneficiary are two
+ * contributions, and treating them as one would delete recognised spend.
+ */
+const MONEY_SECTIONS: Record<string, string[]> = {
+  procurement: ["supplierName"],
+  // ESD names the column supplierName ("Beneficiary / Supplier"), SED names it
+  // beneficiaryName. Both are listed so neither section falls through a rename.
+  esd: ["supplierName", "beneficiaryName", "amount"],
+  sed: ["supplierName", "beneficiaryName", "amount"],
+};
+
 /** Excel serial date (days since 1899-12-30) → ISO. Only for the plausible range. */
 function excelSerialToIso(value: unknown): string | null {
   const num = typeof value === "number" ? value : Number(String(value).trim());
@@ -349,6 +365,37 @@ function enforceWellFormedness(
         statement: `Removed ${nonOwners.length} row${nonOwners.length === 1 ? "" : "s"} from the shareholder list with no holding recorded — ${nonOwners.map((r) => `"${str(r.shareholderName)}"`).join(", ")} carried no shares or percentage.`,
       });
     }
+  }
+
+  // Duplicates in the MONEY sections.
+  //
+  // People are merged above, because one person cannot be two employees. A
+  // supplier or a beneficiary appearing twice is different: it is often two
+  // invoices or two payments, and folding those would take real spend out of a
+  // total that was correct. So these are reported and left alone — the reading
+  // is the user's to make, and it is the reading, not the rows, that was
+  // missing.
+  for (const [key, idCols] of Object.entries(MONEY_SECTIONS)) {
+    const rows = sections[key]?.rows;
+    if (!rows || rows.length < 2) continue;
+    const seen = new Map<string, WorkbookRow[]>();
+    for (const row of rows) {
+      const signature = idCols
+        .map((col) => normaliseEntityName(row[col]))
+        .filter(Boolean)
+        .join("|");
+      if (!signature) continue;
+      seen.set(signature, [...(seen.get(signature) ?? []), row]);
+    }
+    const repeats = Array.from(seen.values()).filter((group) => group.length > 1);
+    if (repeats.length === 0) continue;
+    const extra = repeats.reduce((sum, group) => sum + group.length - 1, 0);
+    issues.push({
+      id: nextId(), invariant: "identity", severity: "coverage", section: key,
+      statement: `${repeats.length} ${repeats.length === 1 ? "record appears" : "records appear"} more than once in ${sectionLabel(key)} — ${extra} extra ${extra === 1 ? "line" : "lines"} in total.`,
+      action: "Check whether these are separate transactions or the same one captured twice. They are left as they are.",
+      rowIds: repeats.flatMap((group) => group.map((row) => str(row._id))).filter(Boolean),
+    });
   }
 
   // A contribution with no amount is not (yet) a contribution — set it aside as

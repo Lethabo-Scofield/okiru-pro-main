@@ -15,7 +15,6 @@ import {
   Trash2,
   RefreshCw,
 } from "lucide-react";
-import { AppNavBack } from "@/components/AppNavBack";
 import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { setPreferredWorkspaceId } from "@/lib/foundationApi";
 
@@ -35,6 +34,8 @@ interface WorkspaceMember {
   displayRole?: DisplayRole | null;
   joinedAt: string;
   pillarScopes: string[] | null;
+  /** Company ids this member is limited to. Null or empty = all of them. */
+  clientScopes: string[] | null;
   username: string | null;
   fullName: string | null;
   email: string | null;
@@ -107,6 +108,8 @@ export default function WorkspacePage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  /** The team's companies, so access can be granted per company by name. */
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -117,6 +120,8 @@ export default function WorkspacePage() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteDisplayRole, setInviteDisplayRole] = useState<DisplayRole>("admin");
   const [invitePillarScopes, setInvitePillarScopes] = useState<Set<string>>(new Set());
+  /** Companies the invitee will be limited to. Empty means every company. */
+  const [inviteClientScopes, setInviteClientScopes] = useState<Set<string>>(new Set());
   const inviteSectionRef = useRef<HTMLDivElement | null>(null);
 
   const active = useMemo(
@@ -169,12 +174,24 @@ export default function WorkspacePage() {
 
   async function loadDetails(id: string) {
     try {
-      const [m, i] = await Promise.all([
+      const [m, i, c] = await Promise.all([
         fetchJson(`/api/workspaces/${id}/members`),
         fetchJson(`/api/workspaces/${id}/invites`).catch(() => ({ invites: [] })),
+        // Companies are needed by name to grant access per company. A failure
+        // here must not take the team list down with it.
+        fetchJson(`/api/clients`).catch(() => []),
       ]);
       setMembers(m.members || []);
       setInvites(i.invites || []);
+      setCompanies(
+        (Array.isArray(c) ? c : [])
+          .map((row: any) => ({
+            id: String(row.clientId ?? row.id ?? ""),
+            name: String(row.name ?? "Unnamed company"),
+          }))
+          .filter((row: { id: string }) => row.id)
+          .sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name)),
+      );
     } catch (err: any) {
       toast({ title: "Could not load team details", description: err.message, variant: "destructive" });
     }
@@ -253,6 +270,10 @@ export default function WorkspacePage() {
       };
       if (inviteDisplayRole === "contributor") {
         body.pillarScopes = Array.from(invitePillarScopes);
+        // Empty means every company, so only send a limit when one was drawn.
+        if (inviteClientScopes.size > 0) {
+          body.clientScopes = Array.from(inviteClientScopes);
+        }
       }
       const data = await fetchJson(`/api/workspaces/${active.id}/invites`, {
         method: "POST",
@@ -265,6 +286,7 @@ export default function WorkspacePage() {
       });
       setInviteEmail("");
       setInvitePillarScopes(new Set());
+      setInviteClientScopes(new Set());
       setInvites((prev) => [data.invite, ...prev]);
     } catch (err: any) {
       toast({ title: "Could not invite", description: err.message, variant: "destructive" });
@@ -332,6 +354,34 @@ export default function WorkspacePage() {
     void setMemberPillarScopes(memberUserId, Array.from(cur));
   }
 
+  /** Which companies this editor may open. Empty means all of them. */
+  async function setMemberClientScopes(memberUserId: string, scopes: string[]) {
+    if (!active) return;
+    setBusy(true);
+    try {
+      await fetchJson(`/api/workspaces/${active.id}/members/${memberUserId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientScopes: scopes }),
+      });
+      await loadDetails(active.id);
+      toast({ title: "Company access updated" });
+    } catch (err: any) {
+      toast({ title: "Update failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function onClientScopeToggle(memberUserId: string, clientId: string, checked: boolean) {
+    const m = members.find((x) => x.userId === memberUserId);
+    if (!m || m.role !== "collaborator") return;
+    const cur = new Set<string>(m.clientScopes ?? []);
+    if (checked) cur.add(clientId);
+    else cur.delete(clientId);
+    void setMemberClientScopes(memberUserId, Array.from(cur));
+  }
+
   async function removeMember(memberUserId: string) {
     if (!active) return;
     if (!confirm("Remove this person from your team? They'll lose access immediately.")) return;
@@ -364,27 +414,7 @@ export default function WorkspacePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header
-        className="h-14 sticky top-0 z-20 bg-background"
-        style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
-      >
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-          <AppNavBack
-            href="/hub"
-            eyebrow="Suite"
-            label="Hub"
-            variant="light"
-            size="compact"
-            data-testid="btn-back-hub"
-          />
-          <div className="flex items-center gap-2 text-[13px] font-semibold tracking-tight">
-            <Building2 className="h-4 w-4" />
-            Workspace
-          </div>
-          <div className="w-12" />
-        </div>
-      </header>
+    <div className="">
 
       <main className="max-w-[1100px] mx-auto px-6 py-10 space-y-6">
         <div className="space-y-1">
@@ -572,6 +602,42 @@ export default function WorkspacePage() {
                                 </label>
                               ))}
                             </div>
+
+                            {/* Which COMPANIES, before which pillars inside one.
+                                A consultancy carrying twenty clients needs to
+                                put an analyst on three of them; team membership
+                                used to mean every company the team held. */}
+                            <div className="pt-2 mt-2 border-t border-border/30 space-y-2">
+                              <p className="text-[11px] text-muted-foreground leading-snug">
+                                <span className="text-foreground font-medium">Companies:</span>{" "}
+                                leave all unchecked for every company in this team. Check
+                                specific ones to limit this editor to those only.
+                              </p>
+                              {companies.length === 0 ? (
+                                <p className="text-[11px] text-muted-foreground/70">
+                                  No companies in this team yet.
+                                </p>
+                              ) : (
+                                <div className="flex flex-wrap gap-x-3 gap-y-2">
+                                  {companies.map((c) => (
+                                    <label
+                                      key={c.id}
+                                      className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                    >
+                                      <Checkbox
+                                        checked={(m.clientScopes ?? []).includes(c.id)}
+                                        disabled={busy}
+                                        onCheckedChange={(ch) =>
+                                          onClientScopeToggle(m.userId, c.id, ch === true)
+                                        }
+                                        data-testid={`scope-company-${m.userId}-${c.id}`}
+                                      />
+                                      <span>{c.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -649,36 +715,106 @@ export default function WorkspacePage() {
                           </div>
                         </div>
 
-                        {inviteDisplayRole === "contributor" && (
-                          <div className="rounded-lg border border-border/40 p-3 space-y-2">
+                        {/*
+                          Access reads in the order it is decided: which
+                          companies, then which pillars inside them.
+
+                          This block used to render only when the role radio
+                          said "Contributor", and the radio defaulted to Admin —
+                          so the first thing anyone saw on this page had no
+                          permissions in it at all, and most people never
+                          discovered the feature existed. It is always on screen
+                          now; for a role that is not scoped it explains why it
+                          is not asking, rather than disappearing.
+                        */}
+                        <div className="rounded-lg border border-border/40 p-3 space-y-3">
+                          <div>
                             <p className="text-[12px] font-medium">
-                              Scorecard pillars this contributor can access
-                              <span className="text-muted-foreground font-normal ml-1">(select at least one)</span>
+                              Which companies
+                              <span className="text-muted-foreground font-normal ml-1">
+                                {inviteDisplayRole === "contributor"
+                                  ? "(none selected means every company)"
+                                  : "— every company in this team"}
+                              </span>
                             </p>
-                            <div className="flex flex-wrap gap-x-4 gap-y-2">
-                              {PILLAR_SCOPE_OPTIONS.map(({ key, label }) => (
-                                <label
-                                  key={key}
-                                  className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
-                                >
-                                  <Checkbox
-                                    checked={invitePillarScopes.has(key)}
-                                    onCheckedChange={(checked) => {
-                                      setInvitePillarScopes((prev) => {
-                                        const next = new Set(prev);
-                                        if (checked) next.add(key);
-                                        else next.delete(key);
-                                        return next;
-                                      });
-                                    }}
-                                    data-testid={`invite-pillar-${key}`}
-                                  />
-                                  <span>{label}</span>
-                                </label>
-                              ))}
-                            </div>
+                            {inviteDisplayRole === "contributor" ? (
+                              companies.length === 0 ? (
+                                <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                  No companies in this team yet.
+                                </p>
+                              ) : (
+                                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                  {companies.map((c) => (
+                                    <label
+                                      key={c.id}
+                                      className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                    >
+                                      <Checkbox
+                                        checked={inviteClientScopes.has(c.id)}
+                                        onCheckedChange={(checked) => {
+                                          setInviteClientScopes((prev) => {
+                                            const next = new Set(prev);
+                                            if (checked) next.add(c.id);
+                                            else next.delete(c.id);
+                                            return next;
+                                          });
+                                        }}
+                                        data-testid={`invite-company-${c.id}`}
+                                      />
+                                      <span>{c.name}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              )
+                            ) : (
+                              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                Choose <span className="text-foreground">Contributor</span> to limit
+                                this person to particular companies.
+                              </p>
+                            )}
                           </div>
-                        )}
+
+                          <div className="border-t border-border/30 pt-3">
+                            <p className="text-[12px] font-medium">
+                              Which pillars, inside those companies
+                              <span className="text-muted-foreground font-normal ml-1">
+                                {inviteDisplayRole === "contributor"
+                                  ? "(select at least one)"
+                                  : "— the whole scorecard"}
+                              </span>
+                            </p>
+                            {inviteDisplayRole === "contributor" ? (
+                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2">
+                                {PILLAR_SCOPE_OPTIONS.map(({ key, label }) => (
+                                  <label
+                                    key={key}
+                                    className="flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer select-none"
+                                  >
+                                    <Checkbox
+                                      checked={invitePillarScopes.has(key)}
+                                      onCheckedChange={(checked) => {
+                                        setInvitePillarScopes((prev) => {
+                                          const next = new Set(prev);
+                                          if (checked) next.add(key);
+                                          else next.delete(key);
+                                          return next;
+                                        });
+                                      }}
+                                      data-testid={`invite-pillar-${key}`}
+                                    />
+                                    <span>{label}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                                {inviteDisplayRole === "reviewer" || inviteDisplayRole === "viewer"
+                                  ? "Can read the whole scorecard, and change nothing."
+                                  : "Can work on the whole scorecard."}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {invites.length > 0 && (

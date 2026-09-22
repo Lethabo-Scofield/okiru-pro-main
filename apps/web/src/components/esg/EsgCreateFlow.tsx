@@ -37,10 +37,7 @@
  */
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { ChevronLeft, Leaf, Loader2 } from "lucide-react";
-import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
-import { AppNavBack } from "@/components/AppNavBack";
-import { UserAccountMenu } from "@/components/UserAccountMenu";
+import { ChevronLeft, Loader2 } from "lucide-react";
 import { API_BASE } from "@toolkit/lib/config";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -96,7 +93,19 @@ export function EsgCreateFlow() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
 
-  const [step, setStep] = useState<EsgCreateStep>("choose");
+  /**
+   * The workspace can name the route on the way in (`?start=documents|manual`),
+   * because that is where the three ways in are now offered. Arriving having
+   * already chosen and being asked to choose again is the kind of step that
+   * makes a flow feel like paperwork. Excel is not pre-selectable: it needs a
+   * file, so the chooser still has to render its file input.
+   */
+  const preChosen = (() => {
+    if (typeof window === "undefined") return null;
+    const start = new URLSearchParams(window.location.search).get("start");
+    return start === "documents" || start === "manual" ? start : null;
+  })();
+  const [step, setStep] = useState<EsgCreateStep>(preChosen ? "provide" : "choose");
   /**
    * A workbook the template import could not read, handed to the document
    * route instead. Foreign spreadsheets are the normal case once a client
@@ -104,7 +113,9 @@ export function EsgCreateFlow() {
    * COLUMNS where the template import can only match a tab NAME.
    */
   const [excelHandover, setExcelHandover] = useState<File[] | null>(null);
-  const [work, setWork] = useState<PendingWork>(EMPTY_WORK);
+  const [work, setWork] = useState<PendingWork>(
+    preChosen ? { ...EMPTY_WORK, route: preChosen } : EMPTY_WORK,
+  );
   const [manualName, setManualName] = useState("");
   const [entityName, setEntityName] = useState("");
   const [nameSource, setNameSource] = useState<EsgNameSource>("none");
@@ -350,22 +361,9 @@ export function EsgCreateFlow() {
   };
 
   return (
-    <div className="esg-theme min-h-screen flex flex-col bg-black text-white">
-      <header
-        className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 bg-black"
-        style={{ borderBottom: "1px solid #2c2c2e" }}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <AppNavBack href="/hub" eyebrow="Hub" label="Okiru Hub" variant="dark" size="compact" />
-          <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg hidden sm:block" />
-          <span className="text-[15px] font-semibold text-[var(--esg-text)] truncate flex items-center gap-2">
-            <Leaf className="h-4 w-4 text-[var(--esg-acc-e)] shrink-0" />
-            New ESG scorecard
-          </span>
-        </div>
-        <UserAccountMenu variant="hub" />
-      </header>
-
+    // The bar above carries the trail and the account menu. This drew a second
+    // one of each, so the flow opened under two stacked headers.
+    <div className="esg-theme flex flex-col text-white">
       <main
         className="flex-1 w-full max-w-[900px] mx-auto px-4 sm:px-6 py-8"
         data-testid="esg-create-flow"
@@ -394,6 +392,8 @@ export function EsgCreateFlow() {
                 one, so this is the flow it already supported. */}
             <EsgDocumentUploadStart
               companyId=""
+              // Chose "upload documents" in the workspace: open on the dropzone.
+              focused={preChosen === "documents"}
               onBack={backToChoose}
               onComplete={handleParsedDocuments}
               initialFiles={excelHandover ?? undefined}
@@ -407,18 +407,17 @@ export function EsgCreateFlow() {
             <div className="mb-6 text-center">
               <h2
                 className="text-[30px] font-semibold leading-tight tracking-tight text-[var(--esg-text,#fff)]"
-                style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
               >
                 What is the company called?
               </h2>
-              <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,#8e8e93)]">
+              <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                 You are completing this by hand, so there are no documents to read the name out of.
               </p>
             </div>
-            <div className="rounded-[20px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] p-5">
+            <div className="rounded-[20px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] p-5">
               <label
                 htmlFor="esg-manual-name"
-                className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text3,#636366)]"
+                className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text3,rgba(255,255,255,0.32))]"
               >
                 Company name
               </label>
@@ -436,7 +435,7 @@ export function EsgCreateFlow() {
                   }
                 }}
                 placeholder="Type the registered name"
-                className="mt-2 w-full rounded-xl border border-[var(--esg-glass-border,#2c2c2e)] bg-black/30 px-4 py-2.5 text-[15px] text-[var(--esg-text,#fff)] placeholder-[var(--esg-text3,#636366)] outline-none focus:border-[var(--esg-acc-e,#1de9a0)]/40"
+                className="mt-2 w-full rounded-xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink)]/30 px-4 py-2.5 text-[15px] text-[var(--esg-text,#fff)] placeholder-[var(--esg-text3,rgba(255,255,255,0.32))] outline-none focus:border-[var(--esg-acc-e,#1de9a0)]/40"
                 data-testid="esg-manual-name-input"
               />
             </div>
@@ -458,7 +457,7 @@ export function EsgCreateFlow() {
               <button
                 type="button"
                 onClick={backToChoose}
-                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[#d1d1d6] transition-colors hover:bg-white/[0.04]"
+                className="inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
                 data-testid="esg-manual-name-back"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -476,7 +475,7 @@ export function EsgCreateFlow() {
             <p className="text-[13px] font-semibold text-[var(--esg-text,#fff)]">
               Your processed documents were saved
             </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
               We restored the extraction you already paid for
               {(() => {
                 const at = new Date(restoredAt);
@@ -506,7 +505,7 @@ export function EsgCreateFlow() {
 
         {importing ? (
           <p
-            className="mt-4 flex items-center justify-center gap-2 text-[12px] text-[var(--esg-text2,#8e8e93)]"
+            className="mt-4 flex items-center justify-center gap-2 text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]"
             role="status"
           >
             <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--esg-acc-e,#1de9a0)]" />

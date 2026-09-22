@@ -16,7 +16,16 @@
  * that already existed — this screen only routes to them.
  */
 import { useRef } from "react";
-import { Building2, ChevronRight, FileSpreadsheet, FolderOpen, Loader2, Upload } from "lucide-react";
+import {
+  Building2,
+  ChevronRight,
+  Download,
+  FileSpreadsheet,
+  FolderOpen,
+  Loader2,
+  Upload,
+} from "lucide-react";
+import { API_BASE } from "@toolkit/lib/config";
 import EsgFlowSteps from "./EsgFlowSteps";
 
 export interface EsgCreateStartChoiceProps {
@@ -108,11 +117,10 @@ export function EsgCreateStartChoice({
       <div className="mb-6 text-center">
         <h2
           className="mt-2 text-[30px] font-semibold leading-tight tracking-tight text-[var(--esg-text,#fff)]"
-          style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
         >
           Start the ESG workbook
         </h2>
-        <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,#8e8e93)]">
+        <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           {companyName ? `For ${companyName}. ` : ""}Choose how you would like to begin — every route
           ends in the same workbook and the same score.
         </p>
@@ -128,7 +136,7 @@ export function EsgCreateStartChoice({
             className={`group flex w-full items-center gap-4 rounded-[20px] border px-4 py-4 text-left transition-colors disabled:opacity-50 ${
               primary
                 ? "border-[var(--esg-acc-e,#1de9a0)]/35 bg-[#12191a] hover:border-[var(--esg-acc-e,#1de9a0)]/60 hover:bg-[#16201f]"
-                : "border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-section-bg,#141416)] hover:border-white/[0.16] hover:bg-[#1c1c1e]"
+                : "border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] hover:border-white/[0.16] hover:bg-[color:var(--ink-3)]"
             }`}
             data-testid={testId}
           >
@@ -136,7 +144,7 @@ export function EsgCreateStartChoice({
               className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${
                 primary
                   ? "bg-[var(--esg-acc-e,#1de9a0)]/15 text-[var(--esg-acc-e,#1de9a0)]"
-                  : "bg-white/[0.06] text-[#d1d1d6]"
+                  : "bg-white/[0.06] text-[color:var(--body)]"
               }`}
             >
               {importing && key === "excel" ? (
@@ -154,19 +162,47 @@ export function EsgCreateStartChoice({
                   </span>
                 ) : null}
               </span>
-              <span className="mt-0.5 block text-[13px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+              <span className="mt-0.5 block text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                 {description}
               </span>
             </span>
-            <span className="hidden shrink-0 rounded-full border border-white/[0.10] bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-[var(--esg-text2,#8e8e93)] sm:inline-flex">
+            <span className="hidden shrink-0 rounded-full border border-white/[0.10] bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] sm:inline-flex">
               {badge}
             </span>
-            <ChevronRight className="h-5 w-5 text-[var(--esg-text3,#636366)] transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
+            <ChevronRight className="h-5 w-5 text-[var(--esg-text3,rgba(255,255,255,0.32))] transition-transform group-hover:translate-x-0.5 group-hover:text-white" />
           </button>
         ))}
       </div>
 
-      <p className="mt-6 text-center text-[12px] text-[var(--esg-text3,#636366)]">
+      {/*
+        The template, offered where the Excel route is actually CHOSEN.
+
+        "Continue from an existing ESG data-collection workbook" assumed the
+        user already had one, and the only place to get ours was a toolbar
+        inside a workbook they had not created yet. So the honest reading of
+        "Import Excel workbook" was "import a file we have never described to
+        you". The B-BBEE side has offered its information request at this point
+        in the flow all along; this is the same offer, on the same screen, for
+        the same reason.
+      */}
+      <div className="mt-4 rounded-[16px] border border-white/[0.07] bg-white/[0.02] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="min-w-0 flex-1 text-[12.5px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+            No workbook yet? Download the ESG information request and send it to the client —
+            every sheet in it maps straight back into this scorecard.
+          </p>
+          <a
+            href={`${API_BASE}/api/esg/workbook/template`}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:border-white/[0.20] hover:text-white"
+            data-testid="esg-start-download-template"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Download template
+          </a>
+        </div>
+      </div>
+
+      <p className="mt-6 text-center text-[12px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
         You can switch between these at any time — nothing is committed until you save.
       </p>
 
@@ -177,7 +213,7 @@ export function EsgCreateStartChoice({
           <button
             type="button"
             onClick={onOpenExisting}
-            className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--esg-text2,#8e8e93)] transition-colors hover:text-white"
+            className="inline-flex items-center gap-2 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
             data-testid="esg-open-existing"
           >
             <FolderOpen className="h-4 w-4" />

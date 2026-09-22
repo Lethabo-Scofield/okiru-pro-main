@@ -179,7 +179,7 @@ export function CurrencyInput({ field, value, onChange, onBlur, disabled, size =
   return (
     <div className="space-y-1">
       <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[#636366] text-sm">R</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--muted)] text-sm">R</span>
         <input
           type="text"
           value={displayValue}
@@ -188,10 +188,10 @@ export function CurrencyInput({ field, value, onChange, onBlur, disabled, size =
           disabled={disabled}
           placeholder={field.ui?.placeholder || '0.00'}
           className={`
-            w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg
+            w-full bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg
             ${sizeClasses[size]} pl-7
-            text-white placeholder-[#636366]
-            focus:outline-none focus:border-[#636366] focus:ring-1 focus:ring-[#636366]
+            text-white placeholder-[rgba(255,255,255,0.32)]
+            focus:outline-none focus:border-[rgba(255,255,255,0.32)] focus:ring-1 focus:ring-[rgba(255,255,255,0.32)]
             disabled:opacity-50 disabled:cursor-not-allowed
             transition-all duration-150
             ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}
@@ -199,7 +199,7 @@ export function CurrencyInput({ field, value, onChange, onBlur, disabled, size =
         />
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
-      {field.ui?.helpText && !error && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && !error && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }
@@ -253,19 +253,19 @@ export function PercentageInput({ field, value, onChange, onBlur, disabled, size
           disabled={disabled}
           placeholder={field.ui?.placeholder || '0.00'}
           className={`
-            w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg
+            w-full bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg
             ${sizeClasses[size]} pr-8
-            text-white placeholder-[#636366]
-            focus:outline-none focus:border-[#636366] focus:ring-1 focus:ring-[#636366]
+            text-white placeholder-[rgba(255,255,255,0.32)]
+            focus:outline-none focus:border-[rgba(255,255,255,0.32)] focus:ring-1 focus:ring-[rgba(255,255,255,0.32)]
             disabled:opacity-50 disabled:cursor-not-allowed
             transition-all duration-150
             ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}
           `}
         />
-        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[#636366] text-sm">%</span>
+        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[color:var(--muted)] text-sm">%</span>
       </div>
       {error && <p className="text-xs text-red-400">{error}</p>}
-      {field.ui?.helpText && !error && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && !error && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }
@@ -311,10 +311,10 @@ export function CountInput({ field, value, onChange, onBlur, disabled, size = 'm
         min={field.validation.min}
         max={field.validation.max}
         className={`
-          w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg
+          w-full bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg
           ${sizeClasses[size]}
-          text-white placeholder-[#636366]
-          focus:outline-none focus:border-[#636366] focus:ring-1 focus:ring-[#636366]
+          text-white placeholder-[rgba(255,255,255,0.32)]
+          focus:outline-none focus:border-[rgba(255,255,255,0.32)] focus:ring-1 focus:ring-[rgba(255,255,255,0.32)]
           disabled:opacity-50 disabled:cursor-not-allowed
           transition-all duration-150
           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none
@@ -322,7 +322,7 @@ export function CountInput({ field, value, onChange, onBlur, disabled, size = 'm
         `}
       />
       {error && <p className="text-xs text-red-400">{error}</p>}
-      {field.ui?.helpText && !error && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && !error && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }
@@ -357,17 +357,17 @@ export function TextInput({ field, value, onChange, onBlur, disabled, size = 'md
         disabled={disabled}
         placeholder={field.ui?.placeholder}
         className={`
-          w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg
+          w-full bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg
           ${sizeClasses[size]}
-          text-white placeholder-[#636366]
-          focus:outline-none focus:border-[#636366] focus:ring-1 focus:ring-[#636366]
+          text-white placeholder-[rgba(255,255,255,0.32)]
+          focus:outline-none focus:border-[rgba(255,255,255,0.32)] focus:ring-1 focus:ring-[rgba(255,255,255,0.32)]
           disabled:opacity-50 disabled:cursor-not-allowed
           transition-all duration-150
           ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''}
         `}
       />
       {error && <p className="text-xs text-red-400">{error}</p>}
-      {field.ui?.helpText && !error && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && !error && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }
@@ -399,10 +399,10 @@ export function SelectInput({ field, value, onChange, onBlur, disabled, size = '
           onChange={handleChange}
           disabled={disabled || options.length === 0}
           className={`
-            w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg
+            w-full bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg
             ${sizeClasses[size]} pr-10
             text-white
-            focus:outline-none focus:border-[#636366] focus:ring-1 focus:ring-[#636366]
+            focus:outline-none focus:border-[rgba(255,255,255,0.32)] focus:ring-1 focus:ring-[rgba(255,255,255,0.32)]
             disabled:opacity-50 disabled:cursor-not-allowed
             transition-all duration-150
             appearance-none
@@ -413,11 +413,11 @@ export function SelectInput({ field, value, onChange, onBlur, disabled, size = '
             <option key={opt} value={opt}>{opt}</option>
           ))}
         </select>
-        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#636366] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--muted)] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </div>
-      {field.ui?.helpText && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }
@@ -447,16 +447,16 @@ export function DateInput({ field, value, onChange, onBlur, disabled, size = 'md
         onBlur={onBlur}
         disabled={disabled}
         className={`
-          w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg
+          w-full bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg
           ${sizeClasses[size]}
-          text-white placeholder-[#636366]
-          focus:outline-none focus:border-[#636366] focus:ring-1 focus:ring-[#636366]
+          text-white placeholder-[rgba(255,255,255,0.32)]
+          focus:outline-none focus:border-[rgba(255,255,255,0.32)] focus:ring-1 focus:ring-[rgba(255,255,255,0.32)]
           disabled:opacity-50 disabled:cursor-not-allowed
           transition-all duration-150
           [color-scheme:dark]
         `}
       />
-      {field.ui?.helpText && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }
@@ -486,10 +486,10 @@ export function BeeLevelInput({ field, value, onChange, onBlur, disabled, size =
           onChange={handleChange}
           disabled={disabled}
           className={`
-            w-full bg-[#1c1c1e] border border-[#2c2c2e] rounded-lg
+            w-full bg-[color:var(--ink-3)] border border-[color:var(--rule)] rounded-lg
             ${sizeClasses[size]} pr-10
             text-white
-            focus:outline-none focus:border-[#636366] focus:ring-1 focus:ring-[#636366]
+            focus:outline-none focus:border-[rgba(255,255,255,0.32)] focus:ring-1 focus:ring-[rgba(255,255,255,0.32)]
             disabled:opacity-50 disabled:cursor-not-allowed
             transition-all duration-150
             appearance-none
@@ -506,11 +506,11 @@ export function BeeLevelInput({ field, value, onChange, onBlur, disabled, size =
           <option value="8">Level 8</option>
           <option value="0">Non-compliant</option>
         </select>
-        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#636366] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[color:var(--muted)] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </div>
-      {field.ui?.helpText && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }
@@ -536,14 +536,14 @@ export function ToggleInput({ field, value, onChange, onBlur, disabled }: FieldI
             disabled={disabled}
             className="sr-only peer"
           />
-          <div className="w-11 h-6 bg-[#2c2c2e] rounded-full peer peer-checked:bg-emerald-500 peer-disabled:opacity-50 transition-colors duration-200" />
+          <div className="w-11 h-6 bg-[rgba(255,255,255,0.06)] rounded-full peer peer-checked:bg-emerald-500 peer-disabled:opacity-50 transition-colors duration-200" />
           <div className="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 peer-checked:translate-x-5" />
         </div>
         <span className="text-sm text-[#b0b0b8] group-hover:text-white transition-colors">
           {value === true ? 'Yes' : 'No'}
         </span>
       </label>
-      {field.ui?.helpText && <p className="text-xs text-[#636366]">{field.ui.helpText}</p>}
+      {field.ui?.helpText && <p className="text-xs text-[color:var(--muted)]">{field.ui.helpText}</p>}
     </div>
   );
 }

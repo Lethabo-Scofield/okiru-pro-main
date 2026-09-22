@@ -48,6 +48,27 @@ spec:
                 echo "Waiting for API..."
                 sleep 2
               done
+      # Spread replicas across availability zones and across nodes. Without
+      # this the scheduler is free to put every replica on one node, which is
+      # what it did until 17 September 2026 — the cluster had three zonal
+      # nodes and all traffic was still served from one of them.
+      #
+      # ScheduleAnyway, not DoNotSchedule: a pod that cannot be spread should
+      # still run. Availability is the goal; refusing to schedule in pursuit
+      # of it would defeat the point.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: web
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: web
       containers:
         - name: web
           image: okiruproacrde4d539b.azurecr.io/okiru-pro/web:latest
@@ -115,6 +136,38 @@ spec:
                 secretKeyRef:
                   name: session-secrets
                   key: SESSION_SECRET
+            # Audit trail integrity, archival and retention. AUDIT_SIGNING_KEY
+            # is what makes a record tamper-EVIDENT: without it the signature
+            # falls back to a fixed default and proves nothing. Rotating it
+            # invalidates every existing signature, so seal the current day
+            # first (see docs/security/incident-response-plan.md).
+            - name: AUDIT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: AUDIT_SIGNING_KEY
+            - name: AUDIT_RETENTION_DAYS
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: AUDIT_RETENTION_DAYS
+                  optional: true
+            # Append-only copy of each sealed day. The container carries a
+            # 730-day time-based immutability policy, so a record that reaches
+            # it cannot be altered or removed — including by us. Retention
+            # deletes nothing that has not been archived here first.
+            - name: AUDIT_ARCHIVE_CONTAINER
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: AUDIT_ARCHIVE_CONTAINER
+                  optional: true
+            - name: AUDIT_ARCHIVE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: AUDIT_ARCHIVE_CONNECTION_STRING
+                  optional: true
             # Workbook back-sync (Phase 1) — shared secret with apps/api.
             # When set on both apps, the /api/internal/workbook-backsync
             # endpoint accepts fan-out from apps/api and merges entity rows

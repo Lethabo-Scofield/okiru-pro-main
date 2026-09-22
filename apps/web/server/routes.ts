@@ -20,19 +20,47 @@ import { randomUUID } from "crypto";
 import mongoose from "mongoose";
 import { createLogger } from "./logger";
 import { recordAudit } from "./securityAudit.js";
+import {
+  authNamespaceLimiter,
+  availabilityLimiter,
+  clearLoginFailures,
+  isAccountLocked,
+  loginLimiter,
+  otpLimiter,
+  passwordResetLimiter,
+  passwordResetRequestLimiter,
+  recordLoginFailure,
+  registerLimiter,
+} from "./rateLimit.js";
+import {
+  checkPasswordStrength,
+  hashOtp,
+  hashPassword,
+  verifyOtp,
+  verifyPassword,
+} from "./passwords.js";
 import { registerWorkbookRoutes } from "./workbookRoutes";
 import { registerEsgWorkbookRoutes } from "./esgWorkbookRoutes";
 import { registerExcelImportRoutes } from "./excelImportRoute";
 import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
+import { registerAuditRoutes } from "./auditRoutes";
+import { registerPrivacyRoutes } from "./privacyRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
 import { registerPlacementTelemetryRoutes } from "./placementTelemetry";
 import { registerVocabularyRoutes } from "./vocabularyRoutes";
 import { creditTokens } from "./tokenWallet";
 import { registerAdminRollbackRoutes } from "./adminRollbackRoutes";
 import { buildClientVisibilityFilter, hasAnyRole } from "./roles";
+import {
+  applyClientScopeFilter,
+  isClientInScope,
+  normalizeClientScopes,
+  resolveClientScopeIds,
+} from "./clientScopes";
 import { companyNameFromWorkEmail, isWorkEmail, usernameFromWorkEmail, WORK_EMAIL_REQUIRED_MESSAGE } from "../shared/workEmail";
+import { normalizeNewClient, validateNewClient } from "../shared/clientCreation";
 import { deleteWorkbookForClient } from "./workbookRoutes";
 import { answerScorecardQuestionWithAi } from "./bbbeeKnowledge";
 import {
@@ -86,6 +114,39 @@ const DEMO_USER_ID = "demo-offline-user";
 
 function isDemoLoginEnabled(): boolean {
   return process.env.ENABLE_DEMO_LOGIN === "true" || process.env.NODE_ENV !== "production";
+}
+
+/**
+ * Whether this account must complete a second factor, regardless of the
+ * per-user toggle.
+ *
+ * Two-factor authentication used to be opt-in, which meant the control existed
+ * but protected almost nobody. It is now required for every account that can
+ * reach client data. Two deliberate carve-outs:
+ *  - the offline demo identity, which holds no client data; and
+ *  - environments with no mail transport, where enforcing it would lock
+ *    everyone out with no way to receive a code. That case is logged loudly
+ *    rather than silently downgraded.
+ */
+let warnedAboutUnenforceable2fa = false;
+function twoFactorRequiredFor(user: { id?: string; username?: string } | null | undefined): boolean {
+  if (!user) return false;
+  if (user.id === DEMO_USER_ID) return false;
+
+  const setting = (process.env.ENFORCE_2FA || "").toLowerCase();
+  const enforce = setting === "true" ? true : setting === "false" ? false : process.env.NODE_ENV === "production";
+  if (!enforce) return false;
+
+  if (!isSmtpConfigured()) {
+    if (!warnedAboutUnenforceable2fa) {
+      warnedAboutUnenforceable2fa = true;
+      logger.error(
+        "ENFORCE_2FA is on but no mail transport is configured — second factor cannot be delivered and is therefore NOT being enforced. Configure SMTP.",
+      );
+    }
+    return false;
+  }
+  return true;
 }
 
 function isDemoCredentials(loginId: unknown, password: unknown): boolean {
@@ -169,7 +230,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     req.session.destroy(() => {});
     return res.status(401).json({ message: "User no longer exists" });
   }
-  if (user.twofaEnabled && (req.session as any).otpVerified !== true) {
+  if ((user.twofaEnabled || twoFactorRequiredFor(user)) && (req.session as any).otpVerified !== true) {
     return res.status(403).json({ message: "2FA verification required", requires2FA: true });
   }
   (req as any).user = user;
@@ -217,6 +278,45 @@ function sanitizeUser(user: any) {
  * the user belonged to no tenant, which is why this is set in one place rather
  * than repeated at each sign-in path.
  */
+/**
+ * End every stored session belonging to a user, optionally keeping one.
+ *
+ * Used after a password reset and after an account is disabled. connect-mongo
+ * writes the session payload as a JSON string, so this handles both that and
+ * the object form rather than assuming one.
+ *
+ * Returns how many sessions were revoked, which the audit entry records.
+ */
+async function destroySessionsForUser(userId: string, keepSessionId?: string): Promise<number> {
+  if (mongoose.connection.readyState !== 1) return 0;
+  try {
+    const col = mongoose.connection.db!.collection("sessions");
+    const docs = await col.find({}, { projection: { session: 1 } }).toArray();
+    const doomed: unknown[] = [];
+    for (const doc of docs) {
+      if (keepSessionId && doc._id === keepSessionId) continue;
+      const raw = (doc as any).session;
+      let payload: any = raw;
+      if (typeof raw === "string") {
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+      }
+      if (payload && payload.userId === userId) doomed.push(doc._id);
+    }
+    if (!doomed.length) return 0;
+    await col.deleteMany({ _id: { $in: doomed as any } });
+    return doomed.length;
+  } catch (err) {
+    logger.warn("Could not revoke sessions for user", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
+}
+
 function establishSession(
   req: { session: any },
   account: { id: string; organizationId?: string | null },
@@ -306,21 +406,13 @@ export async function registerRoutes(
     res.json(REGISTERED_ORGANIZATIONS.map(o => ({ id: o.id, name: o.name, emailDomain: o.emailDomain })));
   });
 
-  const checkRateLimits = new Map<string, { count: number; resetAt: number }>();
-  function rateLimitCheck(ip: string, limit = 30, windowMs = 60000): boolean {
-    const now = Date.now();
-    const entry = checkRateLimits.get(ip);
-    if (!entry || now > entry.resetAt) {
-      checkRateLimits.set(ip, { count: 1, resetAt: now + windowMs });
-      return true;
-    }
-    entry.count++;
-    return entry.count <= limit;
-  }
+  // Every authentication path shares one durable ceiling, then each route adds
+  // its own tighter limit below. Mounted here rather than in index.ts so it sits
+  // after the session middleware and can see `req.ip` with the proxy hop applied.
+  app.use("/api/auth", authNamespaceLimiter);
 
-  app.post("/api/auth/check-username", async (req, res) => {
+  app.post("/api/auth/check-username", availabilityLimiter, async (req, res) => {
     try {
-      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ available: false, message: "Too many requests, try again shortly" });
       const { username } = req.body;
       const trimmed = typeof username === 'string' ? username.trim() : '';
       if (!trimmed) return res.json({ available: false, message: "Username is required" });
@@ -335,9 +427,8 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/check-email", async (req, res) => {
+  app.post("/api/auth/check-email", availabilityLimiter, async (req, res) => {
     try {
-      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ available: false, message: "Too many requests, try again shortly" });
       const { email } = req.body;
       const trimmed = typeof email === 'string' ? email.trim().toLowerCase() : '';
       if (!trimmed) return res.json({ available: false, message: "Email is required" });
@@ -351,9 +442,8 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/check-subscription", async (req, res) => {
+  app.post("/api/auth/check-subscription", availabilityLimiter, async (req, res) => {
     try {
-      if (!rateLimitCheck(req.ip || 'unknown')) return res.status(429).json({ valid: false, message: "Too many requests, try again shortly" });
       const { organizationId, subscriptionId } = req.body;
       if (!organizationId) return res.json({ valid: false, message: "Select an organization" });
       const org = REGISTERED_ORGANIZATIONS.find(o => o.id === organizationId);
@@ -367,7 +457,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", registerLimiter, async (req, res) => {
     const start = Date.now();
     try {
       const { password, fullName, email } = req.body;
@@ -377,14 +467,9 @@ export async function registerRoutes(
       const trimmedUsername = usernameFromWorkEmail(trimmedEmail);
       const trimmedOrgName = companyNameFromWorkEmail(trimmedEmail) ?? '';
 
-      if (!password) {
-        return res.status(400).json({ message: "Password is required" });
-      }
-      if (password.length < 8) {
-        return res.status(400).json({ message: "Password must be at least 8 characters" });
-      }
-      if (password.length > 128) {
-        return res.status(400).json({ message: "Password must not exceed 128 characters" });
+      const strength = checkPasswordStrength(password, [trimmedEmail, trimmedFullName, trimmedOrgName]);
+      if (!strength.ok) {
+        return res.status(400).json({ message: strength.message });
       }
       if (!trimmedFullName) {
         return res.status(400).json({ message: "Full name is required" });
@@ -439,7 +524,7 @@ export async function registerRoutes(
 
       let user: any;
       if (existingEmail && !existingEmail.isVerified) {
-        const hashedPassword = await bcrypt.hash(password, 8);
+        const hashedPassword = await hashPassword(password);
         user = await storage.updateUser(existingEmail.id, {
           username: trimmedUsername,
           password: hashedPassword,
@@ -449,7 +534,7 @@ export async function registerRoutes(
           role: founderRole,
         } as any);
       } else if (existing && !existing.isVerified) {
-        const hashedPassword = await bcrypt.hash(password, 8);
+        const hashedPassword = await hashPassword(password);
         user = await storage.updateUser(existing.id, {
           password: hashedPassword,
           fullName: trimmedFullName,
@@ -459,7 +544,7 @@ export async function registerRoutes(
           role: founderRole,
         } as any);
       } else {
-        const hashedPassword = await bcrypt.hash(password, 8);
+        const hashedPassword = await hashPassword(password);
         user = await storage.createUser({
           username: trimmedUsername,
           password: hashedPassword,
@@ -499,7 +584,7 @@ export async function registerRoutes(
       const otp = generateOtp();
       const expiryMinutes = getOtpExpiryMinutes();
       const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-      await storage.setUserOtp(user.id, otp, expiry);
+      await storage.setUserOtp(user.id, hashOtp(otp), expiry);
       const sent = await sendOtpEmail(trimmedEmail, otp, trimmedFullName);
 
       (req.session as any).pendingUserId = user.id;
@@ -520,11 +605,7 @@ export async function registerRoutes(
     }
   });
 
-  const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-  const LOGIN_RATE_LIMIT = 10;
-  const LOGIN_RATE_WINDOW = 15 * 60 * 1000;
-
-  app.post("/api/auth/login", async (req, res) => {
+  app.post("/api/auth/login", loginLimiter, async (req, res) => {
     const start = Date.now();
     try {
       const { username, email, password } = req.body;
@@ -533,16 +614,22 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Username/email and password are required" });
       }
 
-      const ip = req.ip || "unknown";
-      const now = Date.now();
-      const attempts = loginAttempts.get(ip);
-      if (attempts && attempts.resetAt > now && attempts.count >= LOGIN_RATE_LIMIT) {
-        return res.status(429).json({ message: "Too many login attempts. Please try again later." });
-      }
-      if (!attempts || attempts.resetAt <= now) {
-        loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_RATE_WINDOW });
-      } else {
-        attempts.count++;
+      // Per-address limiting is handled by `loginLimiter`. This is the other
+      // half: a lock on the account itself, so a spray coming from many
+      // addresses at one mailbox is stopped too.
+      const lockedFor = await isAccountLocked(String(loginId));
+      if (lockedFor > 0) {
+        await recordAudit(req, {
+          action: "user.login.blocked",
+          resourceType: "user",
+          resourceId: String(loginId).toLowerCase(),
+          result: "failure",
+          actorUserId: null,
+          metadata: { reason: "account_locked", secondsRemaining: lockedFor },
+        });
+        return res.status(429).json({
+          message: `Too many failed attempts for this account. Try again in ${Math.ceil(lockedFor / 60)} minute(s).`,
+        });
       }
 
       if (isDemoCredentials(loginId, password)) {
@@ -564,19 +651,48 @@ export async function registerRoutes(
       }
 
       const user = await storage.getUserByUsernameOrEmail(loginId);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid username or password" });
-      }
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
+      // Verify even when there is no such account, so the response time does not
+      // distinguish "wrong password" from "no such user".
+      const { ok: valid, needsRehash } = await verifyPassword(password, user?.password);
+      if (!user || !valid) {
+        await recordLoginFailure(String(loginId));
+        await recordAudit(req, {
+          action: "user.login.failed",
+          resourceType: "user",
+          resourceId: user?.id ?? String(loginId).toLowerCase(),
+          result: "failure",
+          actorUserId: user?.id ?? null,
+          organizationId: user?.organizationId ?? null,
+          metadata: { reason: user ? "bad_password" : "no_such_user" },
+        });
         return res.status(401).json({ message: "Invalid username or password" });
       }
 
-      if (user.twofaEnabled) {
+      await clearLoginFailures(String(loginId));
+
+      // Transparent work-factor upgrade: the password was just proved correct,
+      // so re-hash it at the current cost instead of asking anyone to reset.
+      //
+      // Deliberately not awaited. Hashing at the current factor takes about a
+      // second by design, and the person signing in should not wait for an
+      // upgrade their session does not depend on. If it fails they simply get
+      // offered it again next time.
+      if (needsRehash) {
+        void hashPassword(password)
+          .then((upgraded) => storage.updateUser(user.id, { password: upgraded } as any))
+          .then(() => logger.info("Password hash upgraded to current work factor", { userId: user.id }))
+          .catch((err) =>
+            logger.warn("Could not upgrade password hash (sign-in unaffected)", {
+              error: err instanceof Error ? err.message : String(err),
+            }),
+          );
+      }
+
+      if (user.twofaEnabled || twoFactorRequiredFor(user)) {
         const otp = generateOtp();
         const expiryMinutes = getOtpExpiryMinutes();
         const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-        await storage.setUserOtp(user.id, otp, expiry);
+        await storage.setUserOtp(user.id, hashOtp(otp), expiry);
 
         const emailTarget = user.email || loginId;
         const sent = await sendOtpEmail(emailTarget, otp, user.fullName);
@@ -586,6 +702,7 @@ export async function registerRoutes(
 
         return res.json({
           requires2FA: true,
+          enforced: !user.twofaEnabled,
           message: sent ? "Verification code sent to your email" : "Could not send verification code. Please try again.",
           emailHint: emailTarget.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
         });
@@ -595,6 +712,15 @@ export async function registerRoutes(
       establishSession(req, user as any, safeUser);
       await storage.setLastLogin(user.id);
       logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
+      await recordAudit(req, {
+        action: "user.login",
+        resourceType: "user",
+        resourceId: user.id,
+        result: "success",
+        actorUserId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { method: "password", twoFactor: false },
+      });
       res.json({ user: safeUser });
 
       sendLoginNotification(
@@ -608,7 +734,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/auth/verify-otp", async (req, res) => {
+  app.post("/api/auth/verify-otp", otpLimiter, async (req, res) => {
     try {
       const pendingUserId = (req.session as any)?.pendingUserId;
       if (!pendingUserId) {
@@ -642,9 +768,18 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Verification code has expired. Please log in again." });
       }
 
-      if (otp.trim() !== user.otpCode) {
+      if (!verifyOtp(otp, user.otpCode)) {
         const attempts = await storage.incrementOtpAttempts(user.id);
         const remaining = maxAttempts - attempts;
+        await recordAudit(req, {
+          action: "user.2fa.failed",
+          resourceType: "user",
+          resourceId: user.id,
+          result: "failure",
+          actorUserId: user.id,
+          organizationId: user.organizationId ?? null,
+          metadata: { attempt: attempts },
+        });
         return res.status(401).json({
           message: remaining > 0
             ? `Invalid code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
@@ -654,14 +789,29 @@ export async function registerRoutes(
 
       await storage.clearUserOtp(user.id);
       await storage.setLastLogin(user.id);
-      if (!user.isVerified) {
-        await storage.updateUser(user.id, { isVerified: true } as any);
+      const becomesVerified = !user.isVerified;
+      // Completing a code proves the mailbox, so a policy-enforced second factor
+      // is recorded on the account rather than re-prompted as if it were new.
+      const patch: Record<string, unknown> = {};
+      if (becomesVerified) patch.isVerified = true;
+      if (!user.twofaEnabled && twoFactorRequiredFor(user)) patch.twofaEnabled = true;
+      if (Object.keys(patch).length) {
+        await storage.updateUser(user.id, patch as any);
       }
       delete (req.session as any).pendingUserId;
 
       const updatedUser = await storage.getUserById(user.id);
       const safeUser = sanitizeUser(updatedUser || user);
       establishSession(req, (updatedUser || user) as any, safeUser);
+      await recordAudit(req, {
+        action: "user.login",
+        resourceType: "user",
+        resourceId: user.id,
+        result: "success",
+        actorUserId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { method: "password+otp", twoFactor: true },
+      });
       res.json({ user: safeUser });
 
       sendLoginNotification(
@@ -678,7 +828,7 @@ export async function registerRoutes(
   const resendCooldowns = new Map<string, number>();
   const RESEND_COOLDOWN_MS = 30 * 1000;
 
-  app.post("/api/auth/resend-otp", async (req, res) => {
+  app.post("/api/auth/resend-otp", otpLimiter, async (req, res) => {
     try {
       const pendingUserId = (req.session as any)?.pendingUserId;
       if (!pendingUserId) {
@@ -699,7 +849,7 @@ export async function registerRoutes(
       const otp = generateOtp();
       const expiryMinutes = getOtpExpiryMinutes();
       const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-      await storage.setUserOtp(user.id, otp, expiry);
+      await storage.setUserOtp(user.id, hashOtp(otp), expiry);
 
       const sent = await sendOtpEmail(user.email, otp, user.fullName);
       if (!sent) {
@@ -715,6 +865,18 @@ export async function registerRoutes(
   });
 
   app.post("/api/auth/logout", async (req, res) => {
+    const actorUserId = (req.session as any)?.userId ?? null;
+    const organizationId = (req.session as any)?.organizationId ?? null;
+    if (actorUserId) {
+      await recordAudit(req, {
+        action: "user.logout",
+        resourceType: "user",
+        resourceId: actorUserId,
+        result: "success",
+        actorUserId,
+        organizationId,
+      });
+    }
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ message: "Logout failed" });
@@ -729,7 +891,7 @@ export async function registerRoutes(
     });
   });
 
-  app.post("/api/auth/forgot-password", async (req, res) => {
+  app.post("/api/auth/forgot-password", passwordResetRequestLimiter, async (req, res) => {
     try {
       const { email } = req.body;
       if (!email || typeof email !== "string") {
@@ -739,11 +901,21 @@ export async function registerRoutes(
       const user = await storage.getUserByUsernameOrEmail(email.trim());
       res.json({ message: "If an account with that email exists, a reset code has been sent." });
 
+      await recordAudit(req, {
+        action: "user.password.reset.requested",
+        resourceType: "user",
+        resourceId: user?.id ?? email.trim().toLowerCase(),
+        result: user ? "success" : "failure",
+        actorUserId: user?.id ?? null,
+        organizationId: user?.organizationId ?? null,
+      });
+
       if (!user || !user.email) return;
 
       const resetToken = generateOtp(6);
       const expiry = new Date(Date.now() + 15 * 60 * 1000);
-      await storage.setPasswordResetToken(user.id, resetToken, expiry);
+      // Stored hashed: a database or backup copy must not yield a usable code.
+      await storage.setPasswordResetToken(user.id, hashOtp(resetToken), expiry);
       await sendPasswordResetEmail(user.email, resetToken, user.fullName);
     } catch (error: any) {
       logger.error("Forgot password failed", error);
@@ -751,35 +923,11 @@ export async function registerRoutes(
     }
   });
 
-  const resetAttempts = new Map<string, { count: number; firstAttempt: number }>();
-
-  app.post("/api/auth/reset-password", async (req, res) => {
+  app.post("/api/auth/reset-password", passwordResetLimiter, async (req, res) => {
     try {
       const { email, token, newPassword } = req.body;
       if (!email || !token || !newPassword) {
         return res.status(400).json({ message: "Email, reset code, and new password are required" });
-      }
-      if (typeof newPassword !== "string" || newPassword.length < 4) {
-        return res.status(400).json({ message: "Password must be at least 4 characters" });
-      }
-      if (newPassword.length > 128) {
-        return res.status(400).json({ message: "Password must not exceed 128 characters" });
-      }
-
-      const ip = req.ip || "unknown";
-      const attemptKey = `${ip}:${email.trim().toLowerCase()}`;
-      const now = Date.now();
-      const existing = resetAttempts.get(attemptKey);
-      if (existing) {
-        if (now - existing.firstAttempt > 15 * 60 * 1000) {
-          resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
-        } else if (existing.count >= 5) {
-          return res.status(429).json({ message: "Too many attempts. Please wait before trying again." });
-        } else {
-          existing.count++;
-        }
-      } else {
-        resetAttempts.set(attemptKey, { count: 1, firstAttempt: now });
       }
 
       const user = await storage.getUserByUsernameOrEmail(email.trim());
@@ -787,8 +935,28 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Invalid reset code or email" });
       }
 
+      // Checked against the same policy as sign-up. This route used to accept
+      // four characters, which made password reset a way to weaken an account
+      // below what registration would allow.
+      const strength = checkPasswordStrength(newPassword, [
+        String(email),
+        user.fullName ?? "",
+        user.organizationName ?? "",
+      ]);
+      if (!strength.ok) {
+        return res.status(400).json({ message: strength.message });
+      }
+
       const stored = await storage.getPasswordResetToken(user.id);
-      if (!stored || stored.token !== token.trim()) {
+      if (!stored || !verifyOtp(token, stored.token)) {
+        await recordAudit(req, {
+          action: "user.password.reset.failed",
+          resourceType: "user",
+          resourceId: user.id,
+          result: "failure",
+          actorUserId: user.id,
+          organizationId: user.organizationId ?? null,
+        });
         return res.status(400).json({ message: "Invalid reset code" });
       }
       if (new Date() > stored.expiry) {
@@ -796,10 +964,22 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Reset code has expired. Please request a new one." });
       }
 
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      const hashedPassword = await hashPassword(newPassword);
       await storage.updateUser(user.id, { password: hashedPassword });
       await storage.clearPasswordResetToken(user.id);
-      resetAttempts.delete(attemptKey);
+
+      // A reset is what someone does when they think the account is compromised,
+      // so every other session for this user is ended rather than left running.
+      const destroyed = await destroySessionsForUser(user.id, req.sessionID);
+      await recordAudit(req, {
+        action: "user.password.reset",
+        resourceType: "user",
+        resourceId: user.id,
+        result: "success",
+        actorUserId: user.id,
+        organizationId: user.organizationId ?? null,
+        metadata: { sessionsRevoked: destroyed },
+      });
 
       res.json({ message: "Password has been reset successfully. You can now sign in." });
     } catch (error: any) {
@@ -823,6 +1003,21 @@ export async function registerRoutes(
       const user = await storage.getUserById(userId);
       if (!user) {
         return res.status(401).json({ message: "User not found" });
+      }
+      // Answer the same question requireAuth asks, or this endpoint tells the
+      // client a session is usable that every other endpoint will reject.
+      //
+      // That is not hypothetical: sessions created BEFORE the second factor was
+      // enforced carry a userId and no otpVerified. This route had no gate, so
+      // the app restored them, rendered the whole product, and then took a 403
+      // on every request behind it — a user clicking "Create free scorecard"
+      // eight times in ten minutes and getting "Server error" each time, with
+      // no way back to the verification step short of knowing to sign out.
+      if ((user.twofaEnabled || twoFactorRequiredFor(user)) && (req.session as any).otpVerified !== true) {
+        return res.status(403).json({
+          message: "2FA verification required",
+          requires2FA: true,
+        });
       }
       const safeUser = sanitizeUser(user);
       (req.session as any).userData = safeUser;
@@ -981,6 +1176,30 @@ export async function registerRoutes(
     await storage.createWorkspace(name, userId);
   }
 
+  /**
+   * The workspace a newly created company should belong to.
+   *
+   * Prefers a team this user owns, so a member of someone else's team does not
+   * quietly file a company under it; falls back to whichever team they are in.
+   * Returns null rather than throwing — a company is still worth creating when
+   * the team lookup fails, and null simply means no team overlay applies.
+   */
+  async function resolveCreationWorkspaceId(userId: string): Promise<string | null> {
+    try {
+      await ensureDefaultWorkspace(userId);
+      const list = await storage.listWorkspacesForUser(userId);
+      if (list.length === 0) return null;
+      const owned = list.find((w) => w.ownerUserId === userId);
+      return String((owned ?? list[0]).id);
+    } catch (err) {
+      logger.warn("Could not resolve a workspace for a new company (non-fatal)", {
+        userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return null;
+    }
+  }
+
   async function enrichWorkspaceMembers(workspaceId: string) {
     const members = await storage.listMembers(workspaceId);
     if (members.length === 0) return [];
@@ -996,6 +1215,7 @@ export async function registerRoutes(
         userId: m.userId,
         role: m.role,
         pillarScopes: m.pillarScopes ?? null,
+        clientScopes: m.clientScopes ?? null,
         joinedAt: m.joinedAt,
         username: u?.username ?? null,
         fullName: u?.fullName ?? null,
@@ -1099,12 +1319,26 @@ export async function registerRoutes(
 
       const role = req.body?.role as WorkspaceRole | undefined;
       const pillarScopesBody = req.body?.pillarScopes;
+      const clientScopesBody = req.body?.clientScopes;
 
-      if (role === undefined && pillarScopesBody === undefined) {
+      if (role === undefined && pillarScopesBody === undefined && clientScopesBody === undefined) {
         return res.status(400).json({ message: "Nothing to update" });
       }
 
-      const patch: { role?: WorkspaceRole; pillarScopes?: string[] | null } = {};
+      const patch: {
+        role?: WorkspaceRole;
+        pillarScopes?: string[] | null;
+        clientScopes?: string[] | null;
+      } = {};
+
+      if (clientScopesBody !== undefined) {
+        if (!Array.isArray(clientScopesBody)) {
+          return res.status(400).json({ message: "clientScopes must be an array of company ids" });
+        }
+        // An empty list means every company, matching how pillar scopes read.
+        const normalized = normalizeClientScopes(clientScopesBody);
+        patch.clientScopes = normalized.length === 0 ? null : normalized;
+      }
 
       if (role !== undefined) {
         if (role !== "collaborator" && role !== "viewer") {
@@ -1250,11 +1484,22 @@ export async function registerRoutes(
 
       // Validate pillar scopes for contributor role
       let pillarScopes: string[] | undefined;
+      let clientScopes: string[] | undefined;
       if (displayRole === "contributor") {
         if (!Array.isArray(rawPillarScopes) || rawPillarScopes.length === 0) {
           return res.status(400).json({ message: "Contributors must have at least one pillar selected." });
         }
         pillarScopes = (rawPillarScopes as string[]).filter((k) => typeof k === "string" && k.trim().length > 0);
+        // Which companies, before which pillars inside one. Absent means every
+        // company in the team, matching how pillar scopes read.
+        const rawClientScopes = req.body?.clientScopes;
+        if (rawClientScopes !== undefined) {
+          if (!Array.isArray(rawClientScopes)) {
+            return res.status(400).json({ message: "clientScopes must be an array of company ids" });
+          }
+          const normalized = normalizeClientScopes(rawClientScopes);
+          if (normalized.length > 0) clientScopes = normalized;
+        }
       }
 
       // Block self-invite
@@ -1307,6 +1552,7 @@ export async function registerRoutes(
         role,
         ...(displayRole ? { displayRole } : {}),
         ...(pillarScopes?.length ? { pillarScopes } : {}),
+        ...(clientScopes?.length ? { clientScopes } : {}),
         invitedByUserId: inviterId,
       });
 
@@ -1483,7 +1729,13 @@ export async function registerRoutes(
       // Idempotent: if already a member, just mark accepted.
       const existing = await storage.getMember(inv.workspaceId, userId);
       if (!existing) {
-        await storage.addMember(inv.workspaceId, userId, inv.role, { pillarScopes: inv.pillarScopes?.length ? inv.pillarScopes : undefined, displayRole: inv.displayRole });
+        await storage.addMember(inv.workspaceId, userId, inv.role, {
+          pillarScopes: inv.pillarScopes?.length ? inv.pillarScopes : undefined,
+          // The company limit the inviter drew travels with the invite; without
+          // this the membership was created unscoped and the limit was lost.
+          clientScopes: inv.clientScopes?.length ? inv.clientScopes : undefined,
+          displayRole: inv.displayRole,
+        });
       }
       await storage.acceptInvite(token);
       // Org membership: scorecard visibility is org-scoped (sameOrg || sameUser), so put the
@@ -1537,7 +1789,7 @@ export async function registerRoutes(
         const otp = generateOtp();
         const expiryMinutes = getOtpExpiryMinutes();
         const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
-        await storage.setUserOtp(userId, otp, expiry);
+        await storage.setUserOtp(userId, hashOtp(otp), expiry);
         const sent = await sendOtpEmail(user.email, otp, user.fullName);
         if (!sent) {
           return res.status(500).json({ message: "Failed to send verification email. 2FA not enabled." });
@@ -1586,7 +1838,7 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Verification code expired. Please try again." });
       }
 
-      if (otp.trim() !== user.otpCode) {
+      if (!verifyOtp(otp, user.otpCode)) {
         await storage.incrementOtpAttempts(userId);
         return res.status(401).json({ message: "Invalid verification code." });
       }
@@ -2111,7 +2363,8 @@ export async function registerRoutes(
   // creator check from loadClientWithAccess stands and access is unfiltered.
   // Audit A2/B15 — closes the server-side half of the RBAC bypass for the read
   // path. (Per-entity write routes live in apps/api and need the same plumbing
-  // applied separately — TODO logged in autoresearch/RISKS.md as B15-server.)
+  // path. Per-entity write routes in apps/api now resolve the binding the same
+  // way (verifyPillarAccessInner), so the two halves agree.
   async function resolveClientPillarAccess(
     clientId: string,
     userId: string,
@@ -2121,17 +2374,33 @@ export async function registerRoutes(
   } | null> {
     if (!isMongoConnected()) return null;
     try {
-      const session = await ProcessorSessionModel.findOne({
-        clientId,
-        workspaceId: { $nin: [null, ""] },
-      })
-        .sort({ updatedAt: -1 })
-        .lean();
-      const sessionAny = session as any;
-      if (!sessionAny?.workspaceId) return null;
-      const ownerId = sessionAny.createdBy ?? sessionAny.createdByUserId ?? null;
+      // The company's own binding is the authority. Falling back to a
+      // workspace-bound ProcessorSession keeps companies made through the
+      // super-admin processor working, but it can no longer be the ONLY way a
+      // company is bound — that is what left every scope unenforced.
+      const client = (await ClientModel.findOne(
+        { $or: [{ clientId }, { id: clientId }] },
+        { _id: 0, workspaceId: 1, createdByUserId: 1 },
+      ).lean()) as { workspaceId?: string | null; createdByUserId?: string | null } | null;
+
+      let workspaceId = client?.workspaceId ? String(client.workspaceId) : "";
+      let ownerId: string | null = client?.createdByUserId ?? null;
+
+      if (!workspaceId) {
+        const session = await ProcessorSessionModel.findOne({
+          clientId,
+          workspaceId: { $nin: [null, ""] },
+        })
+          .sort({ updatedAt: -1 })
+          .lean();
+        const sessionAny = session as any;
+        if (!sessionAny?.workspaceId) return null;
+        workspaceId = String(sessionAny.workspaceId);
+        ownerId = sessionAny.createdBy ?? sessionAny.createdByUserId ?? ownerId;
+      }
+
       if (ownerId && ownerId === userId) return { mode: "full" };
-      const member = await storage.getMember(String(sessionAny.workspaceId), userId);
+      const member = await storage.getMember(workspaceId, userId);
       if (!member) return { mode: "scoped", scopes: [] }; // not a member of the bound workspace → deny pillars
       if (member.role === "owner") return { mode: "owner_override" };
       if (member.role === "viewer") return { mode: "readOnly" };
@@ -2139,11 +2408,15 @@ export async function registerRoutes(
       if (scopes.length === 0) return { mode: "full" };
       return { mode: "scoped", scopes };
     } catch (err) {
-      logger.warn("resolveClientPillarAccess failed (non-fatal)", {
+      // A failed lookup is not permission. It used to return null, which meant
+      // "no overlay" and therefore full access — so a database hiccup handed
+      // out exactly the access the scopes exist to withhold. Read-only is the
+      // safe reading of "we could not establish what you may do".
+      logger.warn("resolveClientPillarAccess failed — falling back to read-only", {
         clientId,
         error: err instanceof Error ? err.message : String(err),
       });
-      return null;
+      return { mode: "readOnly" };
     }
   }
 
@@ -2187,6 +2460,14 @@ export async function registerRoutes(
         res.status(404).json({ error: "Client not found" });
         return null;
       }
+      // Out of company scope reads as not found, not as forbidden: a member
+      // limited to three companies should not be able to learn which other
+      // companies exist by watching the status code change.
+      const scopedIds = await resolveClientScopeIds(userId);
+      if (!isClientInScope(c, scopedIds, userId)) {
+        res.status(404).json({ error: "Client not found" });
+        return null;
+      }
       return c;
     }
 
@@ -2219,7 +2500,16 @@ export async function registerRoutes(
       const userOrgId: string | null = user?.organizationId ?? null;
 
       if (isMongoConnected()) {
-        const filter = buildClientVisibilityFilter(userId, user);
+        // Company scope is ANDed onto the org/creator filter rather than
+        // replacing it. That ordering matters: accepting an invite puts you in
+        // the inviter's organisation, which widens the OR — the AND is what
+        // stops that quietly handing a scoped member every company again.
+        const scopedIds = await resolveClientScopeIds(userId);
+        const filter = applyClientScopeFilter(
+          buildClientVisibilityFilter(userId, user),
+          scopedIds,
+          userId,
+        );
         const clients = await ClientModel.find(filter).sort({ createdAt: -1 });
         const rows = clients.map((c: any) => c.toJSON());
         // Companies created before `product` existed carry no marker, yet the
@@ -2254,46 +2544,87 @@ export async function registerRoutes(
   });
   app.post("/api/clients", requireAuth, async (req, res) => {
     try {
-      const { name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount, product } = req.body;
-      if (!name) return res.status(400).json({ error: "Client name is required" });
-      // Which product this company belongs to. The ESG create flow stamps
-      // "esg"; everything else defaults to B-BBEE. Anything unrecognised is a
-      // 400, not a silent default — a mislabelled company surfaces in the
-      // wrong list with the wrong actions.
-      const normalizedProduct = product == null ? "bbbee" : String(product).trim().toLowerCase();
-      if (normalizedProduct !== "bbbee" && normalizedProduct !== "esg") {
-        return res.status(400).json({ error: 'Invalid product. Use "bbbee" or "esg".' });
+      const {
+        name, financialYear, industrySector, eapProvince, revenue, npat, leviableAmount, product,
+        sectorCode, scorecardType, financialYearEnd,
+        measurementPeriodStart, measurementPeriodEnd,
+      } = req.body;
+
+      // A company is created with an identity or it is not created.
+      //
+      // This endpoint used to ask only for a name, and a truthy one at that, so
+      // " " passed. Sector and scorecard type then came from schema defaults —
+      // RCOGP, Generic — which are not neutral: they pick the code series and
+      // the weightings the scorecard is scored against. The company list filled
+      // with "Example", "Test" and "Procurement examplee eeeeeeeeeee", each one
+      // silently measured against a sector nobody chose.
+      //
+      // The rules live in shared/clientCreation.ts and the create form applies
+      // the same ones. Enforcing them in the form alone would leave this
+      // endpoint as the way around them.
+      const draft = {
+        name,
+        sectorCode: sectorCode ?? industrySector,
+        scorecardType,
+        financialYearEnd,
+        product,
+      };
+      // The year end is not demanded here: an Excel import arrives with
+      // whatever the client's workbook held, and refusing at this point leaves
+      // the user nowhere to fix it — the company does not exist yet. The
+      // workbook's own submit refuses to CALCULATE without one, which is the
+      // gate that matters. A year end supplied in the wrong shape is still
+      // rejected.
+      const fieldErrors = validateNewClient(draft, { requireFinancialYearEnd: false });
+      if (fieldErrors.length) {
+        return res.status(400).json({
+          error: fieldErrors[0].message,
+          message: fieldErrors[0].message,
+          fields: fieldErrors,
+        });
       }
-      if (industrySector) {
-        const sector = String(industrySector).trim().toUpperCase();
-        if (!SECTOR_CODE_OPTIONS.includes(sector as (typeof SECTOR_CODE_OPTIONS)[number])) {
-          return res.status(400).json({
-            error: `Invalid industrySector. Use one of: ${SECTOR_CODE_OPTIONS.join(", ")}`,
-          });
-        }
-      }
+      const normalized = normalizeNewClient(draft);
+      const normalizedProduct = normalized.product;
+
       const userId = (req.session as any).userId as string;
       const user = (req as any).user ?? (await storage.getUserById(userId));
       const userOrgId: string | null = user?.organizationId ?? null;
       const clientId = `C-${Math.floor(10000 + Math.random() * 90000)}`;
       const now = new Date();
-      const normalizedSector = industrySector
-        ? String(industrySector).trim().toUpperCase()
-        : null;
+      const normalizedSector = normalized.sectorCode;
+      // The period defaults to the twelve months ending on the year end, and a
+      // caller that already knows better — a short first period, a changed year
+      // end — overrides it here rather than editing it back afterwards.
+      const periodStart = typeof measurementPeriodStart === "string" && measurementPeriodStart.trim()
+        ? measurementPeriodStart.trim()
+        : normalized.measurementPeriodStart || null;
+      const periodEnd = typeof measurementPeriodEnd === "string" && measurementPeriodEnd.trim()
+        ? measurementPeriodEnd.trim()
+        : normalized.measurementPeriodEnd || null;
 
       if (isMongoConnected()) {
+        // Bind the company to the creator's team as it is made. This is what
+        // makes roles mean anything: every permission check starts by asking
+        // which workspace a company belongs to, and until now the answer for
+        // a normally-created company was "none".
+        const workspaceId = await resolveCreationWorkspaceId(userId);
         const client = await ClientModel.create({
           id: clientId,
           clientId,
-          name,
-          financialYear: financialYear || new Date().getFullYear().toString(),
+          name: normalized.name,
+          financialYear: financialYear || normalized.financialYear,
           industrySector: normalizedSector,
           sectorCode: normalizedSector || "RCOGP",
+          scorecardType: normalized.scorecardType || "Generic",
+          financialYearEnd: normalized.financialYearEnd,
+          measurementPeriodStart: periodStart,
+          measurementPeriodEnd: periodEnd,
           eapProvince: eapProvince || null,
           revenue: revenue || 0,
           npat: npat || 0,
           leviableAmount: leviableAmount || 0,
           organizationId: userOrgId,
+          workspaceId,
           createdByUserId: userId,
           product: normalizedProduct,
         });
@@ -2302,10 +2633,14 @@ export async function registerRoutes(
 
       const doc: MemoryClient = {
         clientId,
-        name,
-        financialYear: financialYear || new Date().getFullYear().toString(),
+        name: normalized.name,
+        financialYear: financialYear || normalized.financialYear,
         industrySector: normalizedSector,
         sectorCode: normalizedSector || "RCOGP",
+        scorecardType: normalized.scorecardType || "Generic",
+        financialYearEnd: normalized.financialYearEnd,
+        measurementPeriodStart: periodStart,
+        measurementPeriodEnd: periodEnd,
         eapProvince: eapProvince || null,
         revenue: revenue || 0,
         npat: npat || 0,
@@ -2338,6 +2673,29 @@ export async function registerRoutes(
     try {
       const existing = await loadClientWithAccess(req, res);
       if (!existing) return;
+
+      // loadClientWithAccess establishes org/creator tenancy, and that was the
+      // only check here — no role check at all on a route whose allowlist
+      // writes revenue, npat, leviableAmount, tmps, afs and pipelineOverrides.
+      // Every one of those is a scoring denominator. The same fields on the
+      // workbook side are META_SECTIONS and need full access, so a workspace
+      // viewer was refused there and accepted here, on the same values.
+      // apps/api has a correctly-gated twin of this route, but the proxy does
+      // not forward PATCH /api/clients/:id, so it is never reached.
+      const patchAccess = await resolveClientPillarAccess(
+        String(req.params.clientId),
+        String(req.session.userId),
+      );
+      if (patchAccess && patchAccess.mode !== "full" && patchAccess.mode !== "owner_override") {
+        return res.status(403).json({
+          error: "Access denied",
+          message:
+            patchAccess.mode === "readOnly"
+              ? "You have read-only access to this company."
+              : "Changing company financials and settings requires full scorecard access.",
+        });
+      }
+
       // CRITICAL FIX (audit P1 #1): the previous 8-field allowlist
       // ["name", "financialYear", "industrySector", "eapProvince", "revenue",
       // "npat", "leviableAmount", "logo"] silently dropped every other field
@@ -4074,6 +4432,8 @@ Respond ONLY with a valid JSON array.`;
   registerExcelImportRoutes(app, requireAuth);
   registerAiMappingRoutes(app, requireAuth);
   registerFeedbackRoutes(app, requireAuth);
+  registerAuditRoutes(app, requireAuth);
+  registerPrivacyRoutes(app, requireAuth);
   registerAdminRollbackRoutes(app, requireAuth);
   registerTokenRoutes(app);
   registerPlacementTelemetryRoutes(app);

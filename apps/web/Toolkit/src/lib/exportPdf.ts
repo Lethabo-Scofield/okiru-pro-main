@@ -1,7 +1,9 @@
 import jsPDF from "jspdf";
+import { deriveCertificateNumber } from "./certificateNumber";
+import type { BbeeState } from "./store";
 import autoTable from "jspdf-autotable";
 import { OKIRU_LOGO_BASE64 } from "./logo";
-import { pillarBonusSplit } from "./sectors/sector-labels";
+import { pillarBonusSplit , subMinimumLabel } from "./sectors/sector-labels";
 
 interface ExportOptions {
   analystName?: string;
@@ -159,7 +161,7 @@ function addSectionTitle(doc: jsPDF, title: string, y: number, margin: number, t
   return y + 7;
 }
 
-export const exportCertificatePdf = (state: any, options: ExportOptions = {}) => {
+export const exportCertificatePdf = (state: BbeeState, options: ExportOptions = {}) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
@@ -167,7 +169,13 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
   const contentWidth = pageWidth - margin * 2;
   const today = new Date();
   const currentLevel = state.scorecard.isDiscounted ? state.scorecard.discountedLevel : state.scorecard.achievedLevel;
-  const certNumber = options.certificateNumber || `OKR-${today.getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
+  const certNumber = options.certificateNumber || deriveCertificateNumber({
+    clientId: state.client.id,
+    clientName: state.client.name,
+    financialYear: state.client.financialYear,
+    measurementPeriodStart: state.client.measurementPeriodStart,
+    measurementPeriodEnd: state.client.measurementPeriodEnd,
+  });
 
   drawCertificateBorder(doc);
 
@@ -203,10 +211,10 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
   doc.setTextColor(...SLATE_900);
   doc.text(state.client.name, pageWidth / 2, 96, { align: "center" });
 
-  if (state.client.tradeName) {
+  if (state.client.tradingName) {
     doc.setFontSize(12);
     doc.setTextColor(...SLATE_500);
-    doc.text(`trading as ${state.client.tradeName}`, pageWidth / 2, 104, { align: "center" });
+    doc.text(`trading as ${state.client.tradingName}`, pageWidth / 2, 104, { align: "center" });
   }
 
   doc.setFontSize(10);
@@ -338,10 +346,10 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
     startY: y,
     head: [["Element", "Points", "Target", "Achievement", "Sub-min"]],
     body: [
-      ["Ownership", state.scorecard.ownership.score.toFixed(2), ownTarget.toString(), `${((state.scorecard.ownership.score / ownTarget) * 100).toFixed(0)}%`, state.scorecard.ownership.subMinimumMet ? "Passed" : "Failed"],
+      ["Ownership", state.scorecard.ownership.score.toFixed(2), ownTarget.toString(), `${((state.scorecard.ownership.score / ownTarget) * 100).toFixed(0)}%`, subMinimumLabel(state.scorecard.ownership.subMinimumMet)],
       ["Management Control", state.scorecard.managementControl.score.toFixed(2), mgtTarget.toString(), `${((state.scorecard.managementControl.score / mgtTarget) * 100).toFixed(0)}%`, "N/A"],
-      ["Skills Development", state.scorecard.skillsDevelopment.score.toFixed(2), sklTarget.toString(), `${((state.scorecard.skillsDevelopment.score / sklTarget) * 100).toFixed(0)}%`, state.scorecard.skillsDevelopment.subMinimumMet ? "Passed" : "Failed"],
-      ["Preferential Procurement", state.scorecard.procurement.score.toFixed(2), procTarget.toString(), `${((state.scorecard.procurement.score / procTarget) * 100).toFixed(0)}%`, state.scorecard.procurement.subMinimumMet ? "Passed" : "Failed"],
+      ["Skills Development", state.scorecard.skillsDevelopment.score.toFixed(2), sklTarget.toString(), `${((state.scorecard.skillsDevelopment.score / sklTarget) * 100).toFixed(0)}%`, subMinimumLabel(state.scorecard.skillsDevelopment.subMinimumMet)],
+      ["Preferential Procurement", state.scorecard.procurement.score.toFixed(2), procTarget.toString(), `${((state.scorecard.procurement.score / procTarget) * 100).toFixed(0)}%`, subMinimumLabel(state.scorecard.procurement.subMinimumMet)],
       ["Enterprise & Supplier Dev", esdCombinedScore.toFixed(2), esdCombinedTarget.toString(), `${(esdCombinedTarget > 0 ? (esdCombinedScore / esdCombinedTarget) * 100 : 0).toFixed(0)}%`, "N/A"],
       ["Socio-Economic Dev", state.scorecard.socioEconomicDevelopment.score.toFixed(2), sedTarget.toString(), `${((state.scorecard.socioEconomicDevelopment.score / sedTarget) * 100).toFixed(0)}%`, "N/A"],
       ["YES Initiative", (state.scorecard.yesInitiative?.score || 0).toFixed(2), yesTarget.toString(), `${(yesTarget > 0 ? ((state.scorecard.yesInitiative?.score || 0) / yesTarget) * 100 : 0).toFixed(0)}%`, "N/A"],
@@ -600,9 +608,9 @@ export const exportCertificatePdf = (state: any, options: ExportOptions = {}) =>
   // wrong everywhere else (RCOGP PP is 29 = 27 + 2; FSC Others 24 = 20 + 4;
   // Transport QSE 25 with no bonus line at all).
   const ppSplit = pillarBonusSplit(
-    state.scorecard.preferentialProcurement?.weighting ?? 0,
-    state.scorecard.preferentialProcurement?.score ?? 0,
-    state.scorecard.preferentialProcurement?.subLines,
+    state.scorecard.procurement?.weighting ?? 0,
+    state.scorecard.procurement?.score ?? 0,
+    state.scorecard.procurement?.subLines,
   );
   const ppLabel = ppSplit.bonusAvailable > 0
     ? `${ppSplit.baseWeight} base + ${ppSplit.bonusAvailable} bonus`

@@ -417,6 +417,28 @@ export const S_DATA_HS_FIELDS: EsgFieldDef[] = [
   { cell: "D27", label: "Hours worked Q2", type: "number" },
   { cell: "E27", label: "Hours worked Q3", type: "number" },
   { cell: "F27", label: "Hours worked Q4", type: "number" },
+  /*
+   * Fatalities — `S_Data!C28:F28`. THE INPUT THAT WAS NEVER THERE.
+   *
+   * `S_Scorecard!C18` ("Zero fatalities", 8 pts) reads `S_Data!G28`, and
+   * `esgDeriveSummary.deriveHealthSafety` derives `G28 = SUM(C28:F28)` along
+   * with every other H&S roll-up — but no field ever collected row 28, so
+   * `G28` was never written and the indicator scored 0 for every company that
+   * has ever used the product.
+   *
+   * It used to score 8 for everyone instead: the workbook's own formula is
+   * `IF(OR(G28=0, G28="—", G28=""), 8, 0)`, so a blank earned full marks.
+   * Correcting that to require a real assertion was right, and left the
+   * indicator with no way to make one — 8 points unreachable rather than
+   * unearned. These four cells are that way.
+   *
+   * A nil return is entered as 0, which IS an assertion and scores; leaving
+   * them blank is not a nil return and scores nothing.
+   */
+  { cell: "C28", label: "Fatalities Q1", type: "number", helpText: "Work-related fatalities recorded this quarter. Enter 0 to declare none — leaving it blank is not a nil return and earns nothing." },
+  { cell: "D28", label: "Fatalities Q2", type: "number" },
+  { cell: "E28", label: "Fatalities Q3", type: "number" },
+  { cell: "F28", label: "Fatalities Q4", type: "number" },
   { cell: "C29", label: "LTI Q1", type: "number" },
   { cell: "D29", label: "LTI Q2", type: "number" },
   { cell: "E29", label: "LTI Q3", type: "number" },
@@ -530,6 +552,31 @@ export const S_DATA_PAYROLL_FIELDS: EsgFieldDef[] = [
     type: "number",
     helpText:
       "Total measured procurement spend for the same period — the denominator the local share is measured against.",
+  },
+  /*
+   * Supplier population — `S_Data!B89`. THE MISSING DENOMINATOR.
+   *
+   * `S d26` and `S d27` average the suppliers that were assessed, and until
+   * this field existed there was nothing to measure that against. A company
+   * assessing 2 of its 200 suppliers and rating them 5/5 scored exactly the
+   * same as one that assessed all 200 — the register rewarded picking your
+   * best supplier and stopping.
+   *
+   * Every supplier-assessment scheme treats coverage as part of the answer,
+   * and CDP blocks its upper-band points on incomplete disclosure for the
+   * same reason. `esgDeriveSummary` publishes `saq!_coverage` from this, and
+   * the two supplier indicators scale by it.
+   *
+   * Left blank, coverage is unknown and NOT assumed complete: the indicators
+   * keep their pre-coverage behaviour and the validation panel asks for it,
+   * so an existing workbook is never silently re-scored downward.
+   */
+  {
+    cell: "B89",
+    label: "Total suppliers used in the period",
+    type: "number",
+    helpText:
+      "How many suppliers the business actually bought from this period, whether or not they were assessed. This is the denominator for supplier coverage — assessing three of four hundred suppliers is a different result from assessing all four hundred.",
   },
 ];
 

@@ -1,4 +1,6 @@
 import jsPDF from "jspdf";
+import { deriveCertificateNumber } from "./certificateNumber";
+import type { BbeeState } from "./store";
 import autoTable from "jspdf-autotable";
 import { OKIRU_LOGO_BASE64 } from "./logo";
 import { calculateOwnershipScore } from "./calculators/ownership";
@@ -71,7 +73,7 @@ function sectionHeader(doc: jsPDF, num: string, title: string, y: number, margin
   return y + 5;
 }
 
-export const exportVerificationPdf = (state: any, options: ExportOptions = {}) => {
+export const exportVerificationPdf = (state: BbeeState, options: ExportOptions = {}) => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const margin = 15;
@@ -82,14 +84,18 @@ export const exportVerificationPdf = (state: any, options: ExportOptions = {}) =
     ? state.scorecard.discountedLevel
     : state.scorecard.achievedLevel;
 
-  const certNumber =
-    options.certificateNumber ||
-    `OKR-${today.getFullYear()}-${String(Math.floor(Math.random() * 9999)).padStart(4, "0")}`;
+  const certNumber = options.certificateNumber || deriveCertificateNumber({
+    clientId: state.client.id,
+    clientName: state.client.name,
+    financialYear: state.client.financialYear,
+    measurementPeriodStart: state.client.measurementPeriodStart,
+    measurementPeriodEnd: state.client.measurementPeriodEnd,
+  });
 
   const docNo = `BO-${certNumber}`;
   const revision = options.docRevision || "01";
   const entityName = state.client.name;
-  const tradeName = state.client.tradingName || state.client.tradeName || "";
+  const tradeName = state.client.tradingName || "";
 
   const defaultOwnership = { id: "", clientId: "", shareholders: [], companyValue: 0, outstandingDebt: 0, yearsHeld: 0, ownershipScorePoints: 0, ownershipScorePercent: 0, netValuePoints: 0, netValuePercent: 0 };
   const defaultManagement = { id: "", clientId: "", employees: [] };
@@ -179,15 +185,23 @@ export const exportVerificationPdf = (state: any, options: ExportOptions = {}) =
 
   y = sectionHeader(doc, "2", "Scorecard Overview", y, margin);
 
-  const scElements = [
+  const scElements: string[][] = [
     ["Equity Ownership", fmt(state.scorecard.ownership.score)],
     ["Management Control", fmt(state.scorecard.managementControl.score)],
-    ["Employment Equity", "0.00"],
     ["Skills Development", fmt(state.scorecard.skillsDevelopment.score)],
     ["Preferential Procurement", fmt(state.scorecard.procurement.score)],
     ["Enterprise Development", fmt(state.scorecard.enterpriseDevelopment.score)],
     ["Socio Economic Development", fmt(state.scorecard.socioEconomicDevelopment.score)],
   ];
+
+  // Employment Equity is a real, separately-weighted pillar wherever the sector
+  // config gives it maxPoints > 0 (Transport QSE, for one). This row was
+  // hardcoded to "0.00", so those entities saw a scored pillar reported as zero.
+  // Sectors that fold EE into Management Control have no such pillar, so the row
+  // is omitted entirely rather than printed as a misleading zero.
+  if (state.scorecard.employmentEquity) {
+    scElements.splice(2, 0, ["Employment Equity", fmt(state.scorecard.employmentEquity.score)]);
+  }
 
   const totalScore = state.scorecard.total.score;
 

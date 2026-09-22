@@ -117,16 +117,16 @@ export function PillarSidebar({
           >
             <div className={`
               w-8 h-8 rounded-lg flex items-center justify-center shrink-0
-              ${isActive ? 'bg-white/[0.08]' : 'bg-[#1c1c1e]'}
+              ${isActive ? 'bg-white/[0.08]' : 'bg-[color:var(--ink-3)]'}
             `}>
-              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[#636366]'}`} />
+              <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-[color:var(--muted)]'}`} />
             </div>
             
             <div className="flex-1 min-w-0">
-              <p className={`text-[13px] font-medium leading-tight [overflow-wrap:anywhere] ${isActive ? 'text-white' : 'text-[#d1d1d6]'}`}>
+              <p className={`text-[13px] font-medium leading-tight [overflow-wrap:anywhere] ${isActive ? 'text-white' : 'text-[color:var(--body)]'}`}>
                 {pillar.pillarName}
               </p>
-              <p className="text-[10px] text-[#636366]">
+              <p className="text-[10px] text-[color:var(--muted)]">
                 {completion.percentage}% complete
               </p>
             </div>
@@ -135,7 +135,7 @@ export function PillarSidebar({
             {completion.isComplete ? (
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             ) : (
-              <div className="w-4 h-4 rounded-full border-2 border-[#2c2c2e] shrink-0" />
+              <div className="w-4 h-4 rounded-full border-2 border-[color:var(--rule)] shrink-0" />
             )}
           </button>
         );
@@ -181,7 +181,7 @@ export function CompactPillarNav({
               flex items-center gap-2 px-3 py-2 rounded-lg whitespace-nowrap transition-all
               ${isActive 
                 ? 'bg-white/[0.08] text-white' 
-                : 'bg-[#1c1c1e] text-[#8e8e93] hover:bg-white/[0.04]'
+                : 'bg-[color:var(--ink-3)] text-[color:var(--body)] hover:bg-white/[0.04]'
               }
             `}
           >

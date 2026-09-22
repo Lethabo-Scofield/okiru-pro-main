@@ -191,12 +191,79 @@ export function scoreEnvironmental(
 
   /* ----------------------- ISO 14001 / policy ----------------------- */
 
-  // C26–C29 — MANUAL_ZERO. Sourced from ISO_Tracker / G_Data rows that no
-  // formula reads and no input writes (ledger 5.1). No source, no score.
-  const d26 = 0;
-  const d27 = 0;
-  const d28 = 0;
-  const d29 = 0;
+  /*
+   * C26–C29 — MANUAL_ZERO in the workbook (four literal `0`s, no formulas),
+   * and until now zero here too. That is twenty of the Environmental pillar's
+   * 108 points which no company could reach however well it performed — while
+   * the product still asked every one of them to complete a sixty-row ISO
+   * clause tracker and a board-policy declaration in order to earn them.
+   * Collecting evidence and then scoring it zero is worse than not asking.
+   *
+   * `esgDeriveSummary.deriveIsoTracker` now publishes the terms ledger §5.1's
+   * rules need, matched by CLAUSE rather than by sheet row, with
+   * "Not Applicable" excluded rather than handed full marks. Every rule below
+   * reads 0 out of an empty register, so a blank workbook still earns nothing.
+   *
+   * Parity mode keeps the workbook's literal zeros, exactly as `d12` and `d24`
+   * do, so `ESG_GOLDEN_SG_CONSUMER` is unaffected.
+   */
+  const parity = mode === "workbook-parity";
+  const isoCert = num(workbook, "_cert_score", "iso-tracker");
+  const isoAspects = num(workbook, "_aspects_score", "iso-tracker");
+  const isoPolicy = num(workbook, "_policy_score", "iso-tracker");
+  const isoLegal = num(workbook, "_legal_score", "iso-tracker");
+  const emsScore = num(workbook, "_ems_score", "iso-tracker");
+  const emsMax = num(workbook, "_ems_max", "iso-tracker");
+
+  /*
+   * C26 — ISO 14001 certification achieved or in progress.
+   *
+   * REWRITTEN against the actual certification process, replacing a blend of
+   * "half for the certificate, half for EMS maturity" that had no source
+   * behind it and handed up to 4 points to a company holding no certificate
+   * at all.
+   *
+   * ISO 14001 is not a sliding scale. Stage 1 is a readiness review that
+   * raises no non-conformities; Stage 2 tests whether the EMS is implemented
+   * and effective; certification follows only once every MAJOR non-conformity
+   * is closed. So there are three real states — certified, genuinely in
+   * progress, and neither — which is what the tracker's own status vocabulary
+   * already says. Scoring this row on the same Fully / Partially / Gap rule as
+   * every other clause keeps one rule across the sheet instead of a special
+   * case here.
+   *
+   * The gate is CDP's sequential-scoring principle: its bands run Disclosure →
+   * Awareness → Management → Leadership, and failing a lower band BLOCKS the
+   * points above it. A certificate is the top rung; an unassessed EMS beneath
+   * it is an unevidenced claim, and earns nothing until the clauses behind it
+   * have been assessed.
+   *
+   * That gate excludes the certification row from its own evidence. Gating on
+   * the EMS total INCLUDING that row would be circular — the certificate
+   * contributes to the roll-up, so a lone compliant certificate row would
+   * vouch for itself and the gate would never bite. What must exist is an EMS
+   * besides the claim.
+   */
+  const emsBesidesTheClaim = emsScore - isoCert > 0;
+  const d26 = parity || !emsBesidesTheClaim ? 0 : minCap((8 * isoCert) / 5, 8);
+
+  // C27 = 4*ISO_Tracker!E10/5 — the environmental aspects register.
+  const d27 = parity ? 0 : minCap((4 * isoAspects) / 5, 4);
+
+  /*
+   * C28 = MIN(G_Data!F27, ISO_Tracker!E8) * 4/5 — the STRICTER of the board's
+   * own declaration and the ISO clause-5.2 assessment. A policy the board
+   * approved but the audit calls partial is partial.
+   */
+  const policyDeclared = num(workbook, "F27", "g-data");
+  const d28 = parity ? 0 : minCap((Math.min(policyDeclared, isoPolicy) * 4) / 5, 4);
+
+  /*
+   * C29 = IF(G_Data!F21=0, 0, 4*ISO_Tracker!E11/5) — a legal register counts
+   * only where the governance risk register it belongs to is live.
+   */
+  const legalRegisterLive = num(workbook, "F21", "g-data") > 0;
+  const d29 = parity || !legalRegisterLive ? 0 : minCap((4 * isoLegal) / 5, 4);
 
   const rows = {
     d5, d6, d7, d8, d9, d11, d12, d13, d15, d16, d17,
@@ -216,10 +283,28 @@ export function scoreEnvironmental(
   const scored = Object.entries(rows)
     .filter(([key]) => !excluded.some((x) => x.key === key))
     .reduce((a, [, v]) => a + v, 0);
+  /*
+   * A pillar is scored out of what it can actually reach — 108 here, not 100.
+   *
+   * `ESG_D9_PILLAR_DIVISOR` is a flat 100 because that is literally what the
+   * workbook's `ESG_Dashboard!D9` divides every pillar by, Environmental
+   * included, even though the E scorecard adds up to 108. The workbook got
+   * away with it: `d26`–`d29` were MANUAL_ZERO, so only 88 points were ever
+   * reachable and the ratio stayed under 1.
+   *
+   * Wiring those four indicators removed the accident. Against a divisor of
+   * 100 a company scoring the full 108 now reads 108%, and one scoring 90
+   * reads 90% when it has earned 83% of what was available — the arithmetic
+   * flatters every environmental result and breaks at the top.
+   *
+   * Parity keeps the flat 100, because reproducing that spreadsheet is what it
+   * is for and `ESG_GOLDEN_SG_CONSUMER.overallPercent` is avg(36/100, 33/100,
+   * 64.85/100).
+   */
   const scoringDenominator =
     mode === "workbook-parity"
       ? ESG_D9_PILLAR_DIVISOR
-      : applicableMaxFor(ESG_D9_PILLAR_DIVISOR, excluded);
+      : applicableMaxFor(PILLAR_MAX_ENVIRONMENTAL, excluded);
 
   return {
     score: minCap(mode === "workbook-parity" ? score : scored, PILLAR_MAX_ENVIRONMENTAL),

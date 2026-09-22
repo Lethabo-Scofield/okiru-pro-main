@@ -19,12 +19,13 @@ import { useToast } from "@toolkit/hooks/use-toast";
 import { format } from "date-fns";
 import { ScorecardResult } from "@toolkit/lib/types";
 import confetti from "canvas-confetti";
+import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 
 function formatLevel(level: number): string {
   return level >= 9 ? 'Non-Compliant' : `Level ${level}`;
 }
 
-export default function Scenarios() {
+function ScenariosContent() {
   const { 
     scenarios, 
     baseSnapshot,
@@ -369,5 +370,16 @@ export default function Scenarios() {
         );
       })()}
     </div>
+  );
+}
+
+// Scenarios read the scorecard straight out of the store. With no calculator
+// config the store holds an all-zero scorecard, which this page rendered as
+// "Non-Compliant, 0.00" — a fabricated answer presented as a real one.
+export default function Scenarios() {
+  return (
+    <CalculatorConfigGate>
+      <ScenariosContent />
+    </CalculatorConfigGate>
   );
 }

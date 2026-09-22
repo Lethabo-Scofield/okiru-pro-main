@@ -81,7 +81,15 @@ beforeAll(async () => {
   });
   esgAgent = await loginAgent(baseUrl, esgUser);
 
-  const created = await esgAgent.post("/api/clients").send({ name: "ESG Test Co" });
+  // Creating a company now requires its identity. Kept on the B-BBEE product,
+  // as it was before that rule existed, so these ESG workbook routes are
+  // exercised against exactly the same company they always were.
+  const created = await esgAgent.post("/api/clients").send({
+    name: "ESG Test Co",
+    industrySector: "RCOGP",
+    scorecardType: "Generic",
+    financialYearEnd: "2026-02-28",
+  });
   expect(created.status).toBe(200);
   companyId = created.body.clientId;
 });

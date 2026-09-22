@@ -14,6 +14,7 @@ import {
   resolveWorkbookPillarAccess,
 } from "./pillarAccess";
 import { handleBackSync, rebuildWorkbookFromEntities } from "./workbookBackSync";
+import { reconcileRegisters } from "./registerReconcile";
 import {
   validateWorkbook,
   validateWorkbookForSubmit,
@@ -1625,6 +1626,29 @@ export function registerWorkbookRoutes(app: Express): void {
       const allValidationIssues = validateWorkbook(wb.sections);
       const blockingIssues = validateWorkbookForSubmit(wb.sections);
 
+      // A blocking issue now blocks.
+      //
+      // It never did. The submit computed them, wrote the scorecard anyway, and
+      // returned the list in the response — which nothing on the client read.
+      // So "blocking" described an intention rather than a behaviour, and a
+      // workbook with no sector, no scorecard type or no year end scored
+      // exactly as if it had them.
+      //
+      // These four decide what the scorecard IS. A score produced without them
+      // is not a score with a gap in it, it is a score against the wrong
+      // measure — and it looked identical to a correct one.
+      if (blockingIssues.length > 0) {
+        return res.status(422).json({
+          error:
+            blockingIssues.length === 1
+              ? `Cannot calculate: ${blockingIssues[0].message}`
+              : `Cannot calculate — ${blockingIssues.length} company details are missing or invalid.`,
+          blockingIssues,
+          fields: blockingIssues.map((issue) => issue.field),
+          validationIssues: allValidationIssues,
+        });
+      }
+
       const projected = projectWorkbookToClient(wb);
       console.log("[SCORING-TRACE] projectWorkbookToClient input:", {
         companyId: wb.companyId,
@@ -1750,6 +1774,17 @@ export function registerWorkbookRoutes(app: Express): void {
           const userId =
             (req as any).user?.id || (req.session as any)?.userId || wb.ownerUserId;
           const submittedAt = new Date().toISOString();
+          // Same fold as the stored path, so the offline demo cannot teach
+          // anyone a behaviour the real one does not have.
+          const memReconciled = reconcileRegisters(memGetClient(wb.companyId) as any, {
+            shareholders: update.shareholders,
+            employees: update.employees,
+            trainingPrograms: update.trainingPrograms,
+            suppliers: update.suppliers,
+            esdContributions: update.esdContributions,
+            sedContributions: update.sedContributions,
+          });
+          Object.assign(update, memReconciled.rows);
           const updated = memUpdateClient(wb.companyId, update);
           if (!updated) {
             return res
@@ -1783,6 +1818,32 @@ export function registerWorkbookRoutes(app: Express): void {
           return res
             .status(404)
             .json({ error: "Client not found for this workbook." });
+        }
+
+        // The registers belong to the company, not to this workbook. Writing
+        // them with $set replaced each array whole, so anything entered through
+        // the toolkit — a bulk-uploaded supplier register, an employee added on
+        // a pillar page — was deleted by a submit that had never heard of it,
+        // silently. Fold instead: the workbook replaces the rows it owns and
+        // leaves the rest standing. Rules and reasoning in registerReconcile.ts.
+        const reconciled = reconcileRegisters(
+          typeof (client as any).toObject === "function" ? (client as any).toObject() : client,
+          {
+            shareholders: update.shareholders,
+            employees: update.employees,
+            trainingPrograms: update.trainingPrograms,
+            suppliers: update.suppliers,
+            esdContributions: update.esdContributions,
+            sedContributions: update.sedContributions,
+          },
+        );
+        Object.assign(update, reconciled.rows);
+        if (reconciled.preserved > 0) {
+          logger.info("Workbook submit kept rows entered elsewhere", {
+            companyId: wb.companyId,
+            preserved: reconciled.preserved,
+            registers: reconciled.summary,
+          });
         }
 
         // Phase 3 (sync plan): financials merge fix. `update.financials` is a

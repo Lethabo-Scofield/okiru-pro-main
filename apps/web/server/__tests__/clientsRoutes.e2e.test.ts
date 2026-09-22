@@ -152,16 +152,34 @@ describe("GET /api/clients", () => {
   });
 });
 
+/**
+ * A company is created with an identity: name, sector, scorecard type and
+ * financial year end. Those last three used to come from schema defaults, so a
+ * scorecard could be measured against a sector nobody had chosen.
+ */
+const NEW_COMPANY = {
+  name: "Alice Holdings",
+  industrySector: "RCOGP",
+  scorecardType: "Generic",
+  financialYearEnd: "2026-02-28",
+};
+
 describe("POST /api/clients + GET round-trip", () => {
   it("creates a client and the follow-up GET includes it", async () => {
-    const created = await aliceAgent
-      .post("/api/clients")
-      .send({ name: "Alice Holdings" });
+    const created = await aliceAgent.post("/api/clients").send(NEW_COMPANY);
     expect(created.status).toBe(200);
     expect(created.body.name).toBe("Alice Holdings");
     expect(created.body.clientId).toMatch(/^C-\d{5}$/);
     expect(created.body.organizationId).toBe("org-1");
     expect(created.body.createdByUserId).toBe(alice.id);
+    // The identity is stored, not just validated and thrown away.
+    expect(created.body.sectorCode).toBe("RCOGP");
+    expect(created.body.scorecardType).toBe("Generic");
+    expect(created.body.financialYearEnd).toBe("2026-02-28");
+    // And the measurement period is derived from the year end rather than left
+    // for someone to fill in twice.
+    expect(created.body.measurementPeriodStart).toBe("2025-03-01");
+    expect(created.body.measurementPeriodEnd).toBe("2026-02-28");
     aliceClientId = created.body.clientId;
 
     const list = await aliceAgent.get("/api/clients");
@@ -172,6 +190,69 @@ describe("POST /api/clients + GET round-trip", () => {
   it("rejects creation without a name", async () => {
     const res = await aliceAgent.post("/api/clients").send({});
     expect(res.status).toBe(400);
+  });
+
+  /**
+   * The form applies the same rules, but the form is not the gate. Enforcing
+   * them only there would leave this endpoint as the way around them — which
+   * is how "Example", "Test" and "Procurement examplee eeeeeeeeeee" got in.
+   */
+  it("rejects a name with nothing but whitespace in it", async () => {
+    const res = await aliceAgent.post("/api/clients").send({ ...NEW_COMPANY, name: "   " });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a company with no sector", async () => {
+    const { industrySector, ...withoutSector } = NEW_COMPANY;
+    const res = await aliceAgent.post("/api/clients").send(withoutSector);
+    expect(res.status).toBe(400);
+    expect(res.body.fields.map((f: any) => f.field)).toContain("sectorCode");
+  });
+
+  /**
+   * The year end is the one of the four this endpoint does NOT demand.
+   *
+   * An Excel import arrives with whatever the client's workbook held, and
+   * refusing here would strand the user — the company does not exist yet, so
+   * there is no workbook in which to go and supply it. The create form asks for
+   * it, and the workbook refuses to CALCULATE without one, which is the gate
+   * that actually protects the score.
+   */
+  it("accepts a company with no financial year end, so an import is not stranded", async () => {
+    const { financialYearEnd, ...withoutYearEnd } = NEW_COMPANY;
+    const res = await aliceAgent
+      .post("/api/clients")
+      .send({ ...withoutYearEnd, name: "Imported Co" });
+    expect(res.status).toBe(200);
+    expect(res.body.financialYearEnd).toBeNull();
+  });
+
+  it("still rejects a financial year end in the wrong shape", async () => {
+    const res = await aliceAgent
+      .post("/api/clients")
+      .send({ ...NEW_COMPANY, name: "Bad Date Co", financialYearEnd: "28 Feb 2026" });
+    expect(res.status).toBe(400);
+    expect(res.body.fields.map((f: any) => f.field)).toContain("financialYearEnd");
+  });
+
+  it("rejects a scorecard type the sector does not have", async () => {
+    const res = await aliceAgent
+      .post("/api/clients")
+      .send({ ...NEW_COMPANY, industrySector: "FSC", scorecardType: "QSE" });
+    expect(res.status).toBe(400);
+  });
+
+  /**
+   * An ESG company is not measured against a B-BBEE code, so demanding a
+   * sector and a scorecard type would be demanding fields with nothing behind
+   * them.
+   */
+  it("creates an ESG company from a name alone", async () => {
+    const res = await aliceAgent
+      .post("/api/clients")
+      .send({ name: "Alice Sustainability", product: "esg" });
+    expect(res.status).toBe(200);
+    expect(res.body.product).toBe("esg");
   });
 });
 

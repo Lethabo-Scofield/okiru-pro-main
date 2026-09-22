@@ -1,5 +1,8 @@
 import { useState, useMemo } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { calculateYESScore, calculateRecommendedCandidates } from "@toolkit/lib/calculators/yes";
 import { isBlackRace } from "@toolkit/lib/calculators/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
@@ -157,6 +160,8 @@ function TierCard({
 
 export default function YESInitiative() {
   const { skills, management } = useBbeeStore();
+  const addTrainingProgram = useBbeeStore((s) => s.addTrainingProgram);
+  const removeTrainingProgram = useBbeeStore((s) => s.removeTrainingProgram);
   const { trainingPrograms } = skills;
   const { employees } = management;
   const { toast } = useToast();
@@ -278,6 +283,26 @@ export default function YESInitiative() {
         </div>
         
         <div className="flex gap-2">
+          {/* The candidates are training programmes carrying isYesEmployee, so a
+              replace removes only those — the rest of Skills is untouched. */}
+          <PillarBulkImport
+            spec={BULK_IMPORT_SPECS.yes}
+            existing={trainingPrograms.filter((p) => p.isYesEmployee)}
+            onImport={(rows, mode) => {
+              if (mode === "replace") {
+                trainingPrograms
+                  .filter((p) => p.isYesEmployee)
+                  .forEach((p) => removeTrainingProgram(p.id));
+              }
+              rows.forEach(addTrainingProgram);
+            }}
+            label="Bulk upload candidates"
+          />
+          <PillarDuplicateNotice
+            specKey="yes"
+            rows={trainingPrograms.filter((p) => p.isYesEmployee)}
+            className="mt-3"
+          />
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button className="gap-2">
@@ -285,7 +310,7 @@ export default function YESInitiative() {
                 Add YES Candidate
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add YES 4 Youth Candidate</DialogTitle>
                 <DialogDescription>
@@ -306,7 +331,7 @@ export default function YESInitiative() {
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); resetForm(); } }}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit YES Candidate</DialogTitle>
             <DialogDescription>Update candidate details.</DialogDescription>

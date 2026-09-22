@@ -53,9 +53,9 @@ function DecisionRow({
 }) {
   const [choice, setChoice] = useState("");
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#111113] px-3.5 py-3" data-testid={`review-decision-${decision.section}-${decision.column}`}>
+    <div className="rounded-xl border border-white/[0.06] bg-[color:var(--ink-2)] px-3.5 py-3" data-testid={`review-decision-${decision.section}-${decision.column}`}>
       <p className="text-[13px] text-white leading-snug">{decision.statement}</p>
-      <p className="mt-1 text-[11px] text-[#8e8e93] truncate">
+      <p className="mt-1 text-[11px] text-[color:var(--body)] truncate">
         {decision.rows.slice(0, 4).map((r) => r.label).join(", ")}
         {decision.rows.length > 4 ? ` +${decision.rows.length - 4} more` : ""}
       </p>
@@ -65,7 +65,7 @@ function DecisionRow({
             <select
               value={choice}
               onChange={(e) => setChoice(e.target.value)}
-              className="h-8 flex-1 rounded-lg border border-white/[0.10] bg-[#1c1c1e] px-2 text-[12px] text-white outline-none"
+              className="h-8 flex-1 rounded-lg border border-white/[0.10] bg-[color:var(--ink-3)] px-2 text-[12px] text-white outline-none"
               data-testid={`review-decision-select-${decision.column}`}
             >
               <option value="">Choose a value…</option>
@@ -87,7 +87,7 @@ function DecisionRow({
           <button
             type="button"
             onClick={onNavigate}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06]"
           >
             Open {decision.sectionLabel} <ChevronRight className="h-3.5 w-3.5" />
           </button>
@@ -150,7 +150,7 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-[#1c1c1e] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] hover:border-violet-400/60"
+        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-violet-400/30 bg-[color:var(--ink-3)] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] hover:border-violet-400/60"
         data-testid="extraction-review-open"
       >
         <Sparkles className="h-4 w-4 text-violet-300" />
@@ -163,19 +163,19 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(false)} data-testid="extraction-review-modal">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--ink)]/60 p-4" onClick={() => setOpen(false)} data-testid="extraction-review-modal">
           <div
-            className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[#141416]"
+            className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[color:var(--ink-3)]"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
               <div>
                 <h2 className="text-[16px] font-semibold text-white">What the AI read — and what it needs from you</h2>
-                <p className="mt-0.5 text-[12px] text-[#8e8e93]">
+                <p className="mt-0.5 text-[12px] text-[color:var(--body)]">
                   Every fill below shows its evidence. Nothing is applied until you confirm it.
                 </p>
               </div>
-              <button type="button" onClick={() => setOpen(false)} className="rounded-full p-1.5 text-[#8e8e93] hover:bg-white/[0.06] hover:text-white" aria-label="Close">
+              <button type="button" onClick={() => setOpen(false)} className="rounded-full p-1.5 text-[color:var(--body)] hover:bg-white/[0.06] hover:text-white" aria-label="Close">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -183,7 +183,7 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
             <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
               {/* Extracted */}
               <section>
-                <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[#8e8e93]">
+                <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[color:var(--body)]">
                   <FileText className="h-3.5 w-3.5" /> Extracted into the workbook
                 </div>
                 <div className="space-y-1.5">
@@ -192,10 +192,10 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
                       key={s.section}
                       type="button"
                       onClick={() => goTo(s.section)}
-                      className="flex w-full items-center justify-between rounded-lg bg-[#111113] px-3 py-2 text-left hover:bg-white/[0.04]"
+                      className="flex w-full items-center justify-between rounded-lg bg-[color:var(--ink-2)] px-3 py-2 text-left hover:bg-white/[0.04]"
                     >
                       <span className="text-[12.5px] text-white">{s.sectionLabel}</span>
-                      <span className="text-[11.5px] text-[#8e8e93]">
+                      <span className="text-[11.5px] text-[color:var(--body)]">
                         {s.aiRowCount} row{s.aiRowCount === 1 ? "" : "s"} · {s.sources.length} document{s.sources.length === 1 ? "" : "s"}
                       </span>
                     </button>
@@ -221,7 +221,7 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
                         data-testid={`review-choice-${c.column}`}
                       >
                         <p className="text-[12.5px] text-white">{c.statement}</p>
-                        <p className="mt-0.5 text-[11.5px] text-[#8e8e93]">
+                        <p className="mt-0.5 text-[11.5px] text-[color:var(--body)]">
                           {c.sectionLabel} · {c.columnLabel}
                         </p>
                         <div className="mt-2.5 flex flex-wrap gap-2">
@@ -231,14 +231,14 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
                               type="button"
                               disabled={!onApplyMetaValue}
                               onClick={() => void onApplyMetaValue?.(c.section, c.column, o.value)}
-                              className="rounded-lg border border-white/[0.12] bg-[#1c1c1e] px-3 py-2 text-left hover:border-amber-300/50 disabled:opacity-40"
+                              className="rounded-lg border border-white/[0.12] bg-[color:var(--ink-3)] px-3 py-2 text-left hover:border-amber-300/50 disabled:opacity-40"
                               data-testid={`review-choice-option-${o.value}`}
                             >
                               <span className="block text-[13px] font-medium tabular-nums text-white">{o.value}</span>
                               {/* Naming the documents is the whole basis for
                                   choosing — a bare pair of numbers is not a
                                   question anyone can answer. */}
-                              <span className="mt-0.5 block text-[10.5px] text-[#8e8e93]">
+                              <span className="mt-0.5 block text-[10.5px] text-[color:var(--body)]">
                                 {o.sources.length > 0 ? `from ${o.sources.join(", ")}` : "source unknown"}
                               </span>
                             </button>
@@ -270,7 +270,7 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
                         <span className="ml-2 text-[11px] text-emerald-300/70">
                           {c.agreementCount} documents agree
                         </span>
-                        <span className="mt-0.5 block text-[10.5px] text-[#8e8e93]">{c.sources.join(", ")}</span>
+                        <span className="mt-0.5 block text-[10.5px] text-[color:var(--body)]">{c.sources.join(", ")}</span>
                       </div>
                     ))}
                   </div>
@@ -281,13 +281,13 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
               {pendingSuggestions.length > 0 && (
                 <section data-testid="review-suggestions">
                   <div className="mb-2 flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[#8e8e93]">
+                    <div className="flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[color:var(--body)]">
                       <GitMerge className="h-3.5 w-3.5" /> Grounded fills — confirm to apply
                     </div>
                     <button
                       type="button"
                       onClick={() => void applyAllSuggestions()}
-                      className="rounded-lg border border-white/[0.12] px-2.5 py-1 text-[11.5px] text-[#d1d1d6] hover:bg-white/[0.06]"
+                      className="rounded-lg border border-white/[0.12] px-2.5 py-1 text-[11.5px] text-[color:var(--body)] hover:bg-white/[0.06]"
                       data-testid="review-apply-all-suggestions"
                     >
                       Apply all {pendingSuggestions.length}
@@ -295,7 +295,7 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
                   </div>
                   <div className="space-y-1.5">
                     {pendingSuggestions.map((s) => (
-                      <div key={s.id} className="rounded-xl border border-white/[0.06] bg-[#111113] px-3.5 py-3">
+                      <div key={s.id} className="rounded-xl border border-white/[0.06] bg-[color:var(--ink-2)] px-3.5 py-3">
                         <p className="text-[13px] text-white leading-snug">{s.statement}</p>
                         <p className="mt-1 text-[11px] leading-snug text-emerald-300/80">Evidence: {s.basis}</p>
                         <button
@@ -346,7 +346,7 @@ export function ExtractionReviewModal({ sections, onApplyCellUpdates, onApplyMet
               {/* Decisions */}
               {review.decisions.length > 0 && (
                 <section data-testid="review-decisions">
-                  <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[#8e8e93]">
+                  <div className="mb-2 flex items-center gap-1.5 text-[12px] font-medium uppercase tracking-wide text-[color:var(--body)]">
                     <ListChecks className="h-3.5 w-3.5" /> Still missing — {review.decisions.length} decision{review.decisions.length === 1 ? "" : "s"}, not {review.decisions.reduce((n, d) => n + d.rows.length, 0)} errors
                   </div>
                   <div className="space-y-1.5">

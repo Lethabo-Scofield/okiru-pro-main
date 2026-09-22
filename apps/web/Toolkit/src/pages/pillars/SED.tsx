@@ -1,5 +1,8 @@
 import { useState } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
@@ -113,6 +116,22 @@ export default function SED() {
           <p className="text-muted-foreground mt-1">Manage your CSI and SED contributions.</p>
         </div>
         
+        <div className="flex gap-2">
+        <PillarBulkImport
+          spec={BULK_IMPORT_SPECS.sed}
+          existing={contributions}
+          onImport={(rows, mode) => {
+            if (mode === "replace") contributions.forEach((c) => removeSedContribution(c.id));
+            rows.forEach(addSedContribution);
+          }}
+          label="Bulk upload contributions"
+        />
+        <PillarDuplicateNotice
+          specKey="sed"
+          rows={contributions}
+          className="mt-3"
+        />
+
         <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) errs.reset(); }}>
           <DialogTrigger asChild>
             <Button className="gap-2" data-testid="btn-add-sed">
@@ -120,7 +139,7 @@ export default function SED() {
               Add Contribution
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add SED Contribution</DialogTitle>
               <DialogDescription>Record a new socio-economic development initiative.</DialogDescription>
@@ -192,6 +211,7 @@ export default function SED() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">

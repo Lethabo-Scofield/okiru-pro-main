@@ -898,7 +898,7 @@ export function SpreadsheetGrid({
         key={col.key}
         data-cell={`${rIdx}-${cIdx}`}
         style={{ width: colWidths[col.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[col.key] || DEFAULT_COL_WIDTH }}
-        className={`border-b border-r border-[#2c2c2e] p-0 relative select-none ${
+        className={`border-b border-r border-[color:var(--rule)] p-0 relative select-none ${
           selected ? "bg-blue-500/10" : ""
         } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""} ${err ? "bg-status-error-bg/30" : ""}`}
         onMouseDown={(e) => handleCellMouseDown(rIdx, cIdx, e)}
@@ -930,12 +930,12 @@ export function SpreadsheetGrid({
               value={editValue}
               disabled={readOnly}
               onChange={(e) => commitSelectEdit(e.target.value)}
-              className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+              className="absolute inset-0 w-full h-full bg-[color:var(--ink-3)] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
               data-testid={`cell-edit-${rIdx}-${col.key}`}
             >
-              <option value="" className="bg-[#1c1c1e]">—</option>
+              <option value="" className="bg-[color:var(--ink-3)]">—</option>
               {(isYesNoColumn(col) ? ["Yes", "No"] : col.options ?? []).map((o) => (
-                <option key={o} value={o} className="bg-[#1c1c1e]">{o}</option>
+                <option key={o} value={o} className="bg-[color:var(--ink-3)]">{o}</option>
               ))}
             </select>
           ) : (
@@ -945,7 +945,7 @@ export function SpreadsheetGrid({
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             onBlur={() => commitEdit()}
-            className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+            className="absolute inset-0 w-full h-full bg-[color:var(--ink-3)] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
             data-testid={`cell-edit-${rIdx}-${col.key}`}
           />
           )
@@ -955,7 +955,7 @@ export function SpreadsheetGrid({
             data-testid={`cell-${rIdx}-${col.key}`}
           >
             {formatCellDisplay(v, col) || (
-              <span className="text-[#48484a]">{col.required ? "Required" : ""}</span>
+              <span className="text-[color:var(--muted)]">{col.required ? "Required" : ""}</span>
             )}
           </div>
         )}
@@ -981,7 +981,7 @@ export function SpreadsheetGrid({
   const renderDataRow = (row: Row, rIdx: number) => (
     <tr key={row._id} className="hover:bg-white/[0.02]" data-testid={`row-${rIdx}`}>
       <td
-        className={`text-[#636366] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 cursor-pointer select-none sticky left-0 bg-[#0e0e10] z-[1] ${
+        className={`text-[color:var(--muted)] text-[11px] text-center border-b border-r border-[color:var(--rule)] p-1.5 cursor-pointer select-none sticky left-0 bg-[color:var(--ink-2)] z-[1] ${
           selectedRow === rIdx ? "bg-blue-500/20 text-blue-300" : ""
         }`}
         onClick={() => handleRowSelect(rIdx)}
@@ -991,12 +991,12 @@ export function SpreadsheetGrid({
         {rIdx + 1}
       </td>
       {columns.map((col, cIdx) => renderCell(row, rIdx, col, cIdx))}
-      <td className="border-b border-[#2c2c2e] p-1 text-center">
+      <td className="border-b border-[color:var(--rule)] p-1 text-center">
         {canDeleteRows && !readOnly && (
           <button
             type="button"
             onClick={() => deleteRow(rIdx)}
-            className="p-1.5 rounded hover:bg-white/[0.06] text-[#636366] hover:text-status-error smooth press-sm"
+            className="p-1.5 rounded hover:bg-white/[0.06] text-[color:var(--muted)] hover:text-status-error smooth press-sm"
             title="Delete row"
             data-testid={`button-delete-row-${rIdx}`}
           >
@@ -1018,7 +1018,7 @@ export function SpreadsheetGrid({
         data-testid={`ghost-row-${rIdx}`}
       >
         <td
-          className="text-[#3a3a3c] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 select-none sticky left-0 bg-[#0e0e10] z-[1]"
+          className="text-[color:var(--muted)] text-[11px] text-center border-b border-r border-[color:var(--rule)] p-1.5 select-none sticky left-0 bg-[color:var(--ink-2)] z-[1]"
           onClick={() => handleRowSelect(rIdx)}
           onContextMenu={(e) => handleContextMenu(e, rIdx)}
         >
@@ -1033,7 +1033,7 @@ export function SpreadsheetGrid({
               key={col.key}
               data-cell={`${rIdx}-${cIdx}`}
               style={{ width: colWidths[col.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[col.key] || DEFAULT_COL_WIDTH }}
-              className={`border-b border-r border-[#2c2c2e] p-0 relative select-none ${
+              className={`border-b border-r border-[color:var(--rule)] p-0 relative select-none ${
                 selected ? "bg-blue-500/10" : ""
               } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""}`}
               onMouseDown={(e) => handleCellMouseDown(rIdx, cIdx, e)}
@@ -1048,12 +1048,12 @@ export function SpreadsheetGrid({
                     value={editValue}
                     disabled={readOnly}
                     onChange={(e) => commitSelectEdit(e.target.value)}
-                    className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+                    className="absolute inset-0 w-full h-full bg-[color:var(--ink-3)] px-2 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
                     data-testid={`cell-edit-${rIdx}-${col.key}`}
                   >
-                    <option value="" className="bg-[#1c1c1e]">—</option>
+                    <option value="" className="bg-[color:var(--ink-3)]">—</option>
                     {(isYesNoColumn(col) ? ["Yes", "No"] : col.options ?? []).map((o) => (
-                      <option key={o} value={o} className="bg-[#1c1c1e]">{o}</option>
+                      <option key={o} value={o} className="bg-[color:var(--ink-3)]">{o}</option>
                     ))}
                   </select>
                 ) : (
@@ -1063,7 +1063,7 @@ export function SpreadsheetGrid({
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onBlur={() => commitEdit()}
-                    className="absolute inset-0 w-full h-full bg-[#1c1c1e] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
+                    className="absolute inset-0 w-full h-full bg-[color:var(--ink-3)] px-3 py-2 text-[13px] text-white outline-none ring-2 ring-blue-500 z-10"
                     data-testid={`cell-edit-${rIdx}-${col.key}`}
                   />
                 )
@@ -1082,7 +1082,7 @@ export function SpreadsheetGrid({
             </td>
           );
         })}
-        <td className="border-b border-[#2c2c2e] p-1 text-center" />
+        <td className="border-b border-[color:var(--rule)] p-1 text-center" />
       </tr>
     );
   };
@@ -1092,7 +1092,7 @@ export function SpreadsheetGrid({
 
   const toolbar = (
     <div className="flex items-center justify-between shrink-0 flex-wrap gap-2">
-      <div className="flex items-center gap-3 text-[12px] text-[#8e8e93]">
+      <div className="flex items-center gap-3 text-[12px] text-[color:var(--body)]">
         <span data-testid="grid-row-count">
           {rows.length} {rows.length === 1 ? "row" : "rows"}
         </span>
@@ -1116,7 +1116,7 @@ export function SpreadsheetGrid({
           <button
             type="button"
             onClick={undo}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[12px] text-[#d1d1d6] press-sm smooth"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.10)] text-[12px] text-[color:var(--body)] press-sm smooth"
             title="Undo (Ctrl+Z)"
             data-testid="button-undo"
           >
@@ -1127,7 +1127,7 @@ export function SpreadsheetGrid({
         <button
           type="button"
           onClick={() => (isFullscreen ? exitFullscreen() : setIsFullscreen(true))}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[12px] text-[#d1d1d6] press-sm smooth"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.10)] text-[12px] text-[color:var(--body)] press-sm smooth"
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
           data-testid="button-grid-fullscreen"
         >
@@ -1150,28 +1150,28 @@ export function SpreadsheetGrid({
   const gridTable = (
     <div
       ref={scrollRef}
-      className={`rounded-xl border border-[#2c2c2e] bg-[#0e0e10] overflow-auto ${
+      className={`rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-2)] overflow-auto ${
         isFullscreen ? "flex-1 min-h-0" : "max-h-[60vh]"
       }`}
       data-testid="grid-scroll-container"
     >
       <table className="w-full text-[13px] border-collapse table-fixed">
-        <thead className="sticky top-0 bg-[#1c1c1e] z-10">
+        <thead className="sticky top-0 bg-[color:var(--ink-3)] z-10">
           <tr>
-            <th className="w-10 p-2 text-[#636366] font-medium text-[11px] border-b border-r border-[#2c2c2e] sticky left-0 bg-[#1c1c1e] z-20" />
+            <th className="w-10 p-2 text-[color:var(--muted)] font-medium text-[11px] border-b border-r border-[color:var(--rule)] sticky left-0 bg-[color:var(--ink-3)] z-20" />
             {columns.map((c, i) => (
               <th
                 key={c.key}
                 title={c.guidance || undefined}
                 style={{ width: colWidths[c.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[c.key] || DEFAULT_COL_WIDTH }}
-                className="relative text-left px-3 py-2 font-semibold text-[#d1d1d6] border-b border-r border-[#2c2c2e] text-[11px]"
+                className="relative text-left px-3 py-2 font-semibold text-[color:var(--body)] border-b border-r border-[color:var(--rule)] text-[11px]"
               >
-                <span className="text-[#636366] mr-1.5 font-mono">{colLetter(i)}</span>
+                <span className="text-[color:var(--muted)] mr-1.5 font-mono">{colLetter(i)}</span>
                 {c.label}
                 {c.required && <span className="text-status-error ml-0.5">*</span>}
                 {c.guidance && (
                   <span
-                    className="ml-1 text-[#636366] cursor-help"
+                    className="ml-1 text-[color:var(--muted)] cursor-help"
                     title={c.guidance}
                     aria-label={`Help: ${c.label}`}
                   >
@@ -1186,11 +1186,11 @@ export function SpreadsheetGrid({
                 />
               </th>
             ))}
-            <th className="w-10 p-2 border-b border-[#2c2c2e]" />
+            <th className="w-10 p-2 border-b border-[color:var(--rule)]" />
           </tr>
           {gridTotals && gridTotals.length > 0 && (
-            <tr className="bg-[#161618] border-b border-[#2c2c2e]" data-testid="grid-totals-row">
-              <th className="sticky left-0 bg-[#161618] z-20 p-2 text-[10px] font-semibold text-[#8e8e93] border-r border-[#2c2c2e]">
+            <tr className="bg-[#161618] border-b border-[color:var(--rule)]" data-testid="grid-totals-row">
+              <th className="sticky left-0 bg-[#161618] z-20 p-2 text-[10px] font-semibold text-[color:var(--body)] border-r border-[color:var(--rule)]">
                 Σ
               </th>
               {columns.map((c) => {
@@ -1199,7 +1199,7 @@ export function SpreadsheetGrid({
                 return (
                   <th
                     key={`total-${c.key}`}
-                    className="text-right px-3 py-1.5 text-[12px] font-semibold text-emerald-400/90 border-r border-[#2c2c2e]"
+                    className="text-right px-3 py-1.5 text-[12px] font-semibold text-emerald-400/90 border-r border-[color:var(--rule)]"
                   >
                     {spec && total != null ? (
                       <span title={spec.label ?? "Total"}>
@@ -1210,7 +1210,7 @@ export function SpreadsheetGrid({
                   </th>
                 );
               })}
-              <th className="border-b border-[#2c2c2e]" />
+              <th className="border-b border-[color:var(--rule)]" />
             </tr>
           )}
         </thead>
@@ -1247,7 +1247,7 @@ export function SpreadsheetGrid({
     contextMenu &&
     createPortal(
       <div
-        className="fixed z-[200] min-w-[160px] rounded-lg border border-[#2c2c2e] bg-[#1c1c1e] py-1 shadow-xl"
+        className="fixed z-[200] min-w-[160px] rounded-lg border border-[color:var(--rule)] bg-[color:var(--ink-3)] py-1 shadow-xl"
         style={{ left: contextMenu.x, top: contextMenu.y }}
         onClick={(e) => e.stopPropagation()}
         data-testid="grid-context-menu"
@@ -1256,7 +1256,7 @@ export function SpreadsheetGrid({
           <>
             <button
               type="button"
-              className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06]"
               onClick={() => {
                 pushUndo(rows);
                 const idx = Math.min(contextMenu.row, rows.length);
@@ -1270,7 +1270,7 @@ export function SpreadsheetGrid({
             </button>
             <button
               type="button"
-              className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+              className="w-full text-left px-3 py-1.5 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06]"
               onClick={() => {
                 pushUndo(rows);
                 const idx = Math.min(contextMenu.row + 1, rows.length);
@@ -1286,7 +1286,7 @@ export function SpreadsheetGrid({
         )}
         <button
           type="button"
-          className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+          className="w-full text-left px-3 py-1.5 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06]"
           onClick={() => {
             copySelection();
             setContextMenu(null);
@@ -1297,7 +1297,7 @@ export function SpreadsheetGrid({
         {!readOnly && (
           <button
             type="button"
-            className="w-full text-left px-3 py-1.5 text-[12px] text-[#d1d1d6] hover:bg-white/[0.06]"
+            className="w-full text-left px-3 py-1.5 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06]"
             onClick={async () => {
               try {
                 const text = await navigator.clipboard.readText();
@@ -1337,7 +1337,7 @@ export function SpreadsheetGrid({
       {toolbar}
       {gridTable}
       {!readOnly && (
-        <p className="text-[11px] text-[#636366]">
+        <p className="text-[11px] text-[color:var(--muted)]">
           Click to select · drag for range · Shift+click extend · Ctrl+click multi-select · F2 or type to edit ·
           Ctrl+C copy · Ctrl+V paste from Excel · drag fill handle to copy down · Ctrl+Z undo.
         </p>
@@ -1380,16 +1380,16 @@ export function SpreadsheetGrid({
     return (
       <>
         <div
-          className="rounded-xl border border-dashed border-[#2c2c2e] bg-[#0e0e10] py-10 px-6 text-center space-y-3"
+          className="rounded-xl border border-dashed border-[color:var(--rule)] bg-[color:var(--ink-2)] py-10 px-6 text-center space-y-3"
           data-testid="grid-fullscreen-placeholder"
         >
-          <p className="text-[13px] text-[#8e8e93]">
+          <p className="text-[13px] text-[color:var(--body)]">
             {sectionLabel ? `${sectionLabel} grid` : "Grid"} is open in fullscreen.
           </p>
           <button
             type="button"
             onClick={exitFullscreen}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#2c2c2e] hover:bg-[#3a3a3c] text-[12px] text-[#d1d1d6] press-sm smooth"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.10)] text-[12px] text-[color:var(--body)] press-sm smooth"
             data-testid="button-exit-fullscreen-inline"
           >
             <Minimize2 className="h-3.5 w-3.5" />
@@ -1398,7 +1398,7 @@ export function SpreadsheetGrid({
         </div>
         {createPortal(
           <div
-            className="fixed inset-0 z-[100] bg-[#1c1c1e] flex flex-col"
+            className="fixed inset-0 z-[100] bg-[color:var(--ink-3)] flex flex-col"
             data-testid="grid-fullscreen-overlay"
             role="dialog"
             aria-modal="true"
@@ -1410,13 +1410,13 @@ export function SpreadsheetGrid({
                   <h2 className="text-[18px] font-bold tracking-tight text-white truncate">{sectionLabel}</h2>
                 )}
                 {sectionDescription && (
-                  <p className="text-[13px] text-[#8e8e93] mt-0.5">{sectionDescription}</p>
+                  <p className="text-[13px] text-[color:var(--body)] mt-0.5">{sectionDescription}</p>
                 )}
               </div>
               <button
                 type="button"
                 onClick={exitFullscreen}
-                className="p-2 rounded-lg hover:bg-white/[0.06] text-[#8e8e93] hover:text-white smooth press-sm shrink-0"
+                className="p-2 rounded-lg hover:bg-white/[0.06] text-[color:var(--body)] hover:text-white smooth press-sm shrink-0"
                 title="Close fullscreen (Esc)"
                 data-testid="button-close-fullscreen"
               >

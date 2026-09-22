@@ -18,7 +18,9 @@ import PrivacyWrapper from "@/pages/PrivacyWrapper";
 import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
-import Dashboard from "@/pages/Dashboard";
+import BbbeeWorkspace from "@/pages/BbbeeWorkspace";
+import { AppShell } from "@/components/shell/AppShell";
+import EsgWorkspace from "@/pages/EsgWorkspace";
 // Super-admin-only giants (7k + 1.7k lines) — lazy so every ordinary user
 // stops downloading flows they can never open.
 const EntityBuilder = lazy(() => import("@/pages/EntityBuilder"));
@@ -30,6 +32,8 @@ import ActivityHeatmap from "@/pages/ActivityHeatmap";
 import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
 import ParserDocumentLibrary from "@/pages/ParserDocumentLibrary";
+import CompanyDocumentLibrary from "@/pages/CompanyDocumentLibrary";
+import UnfiledDocuments from "@/pages/UnfiledDocuments";
 import ParserDocumentDetail from "@/pages/ParserDocumentDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
@@ -38,7 +42,6 @@ import Settings from "@/pages/Settings";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
-import EsgClientSelector from "@/pages/EsgClientSelector";
 import EsgInformationRequest from "@/pages/EsgInformationRequest";
 import EsgScoreSummary from "@/pages/EsgScoreSummary";
 import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
@@ -197,6 +200,12 @@ function AppRouter() {
       <Route path="/hub">
         <ProtectedRoute><HubLanding /></ProtectedRoute>
       </Route>
+      {/* People, companies and pillars. `/access` is the name this surface is
+          getting — it answers "who can open which company, and which pillars
+          inside it". `/workspace` stays as the alias its links already use. */}
+      <Route path="/access">
+        <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
       </Route>
@@ -219,8 +228,45 @@ function AppRouter() {
       <Route path="/invite/:token">
         <AcceptInvite />
       </Route>
+      {/* The two products get a door each, and behind each door a workspace:
+          the consultant's list of companies for THAT product, with "create
+          scorecard" as the action inside it. Consultants carry many companies,
+          so one mixed list filtered by a dropdown (what /dashboard is) reads as
+          one product with a filter rather than two products.
+
+          These are aliases today and become the real pages in the steps that
+          follow; /dashboard and /create-scorecard keep working throughout. */}
+      {/* A company's evidence lives under its own company, in its product's
+          section — not in a shared list with a company filter on it. Declared
+          before the bare product routes so the longer path matches first. */}
+      <Route path="/bbbee/:companyId/documents">
+        {(params) => (
+          <ProtectedRoute>
+            <CompanyDocumentLibrary companyId={params.companyId} product="bbbee" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/esg/:companyId/documents">
+        {(params) => (
+          <ProtectedRoute>
+            <CompanyDocumentLibrary companyId={params.companyId} product="esg" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/documents/unfiled">
+        <ProtectedRoute><UnfiledDocuments /></ProtectedRoute>
+      </Route>
+      <Route path="/bbbee/new">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
+      <Route path="/bbbee">
+        <ProtectedRoute><BbbeeWorkspace /></ProtectedRoute>
+      </Route>
+      {/* The old mixed list is gone — it showed both products behind a
+          dropdown, which is what gave neither a section of its own. Existing
+          links land on the B-BBEE workspace. */}
       <Route path="/dashboard">
-        <ProtectedRoute><Dashboard /></ProtectedRoute>
+        <ProtectedRoute><BbbeeWorkspace /></ProtectedRoute>
       </Route>
       <Route path="/create-scorecard/:companyId/summary">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
@@ -279,13 +325,23 @@ function AppRouter() {
       {/* The ESG front door: choose → provide → review, with NO company up
           front. It used to redirect here to the company picker, which forced a
           name out of the user before the documents that know it had been read. */}
-      <Route path="/esg">
+      {/* Creating an ESG scorecard now lives at `/esg/new`, which frees `/esg`
+          to be the ESG workspace and match `/bbbee`. This is the one semantic
+          change in the redesign: a product's path opens that product's
+          companies, and creating is an action inside it. */}
+      <Route path="/esg/new">
         <ProtectedRoute><EsgPreviewRoute><EsgCreateFlow /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg">
+        <ProtectedRoute><EsgPreviewRoute><EsgWorkspace /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       {/* Still here, still reachable — this is how an EXISTING ESG scorecard is
           reopened (step 1 links to it). It is no longer the way IN. */}
+      {/* The old name for the ESG company list. It now resolves to the same
+          workspace `/esg` shows, so existing links and the toolkit's back
+          button keep working without a second list to maintain. */}
       <Route path="/esg/clients">
-        <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgWorkspace /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId/summary">
         <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>
@@ -407,7 +463,12 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <AppRouter />
+            {/* Above the router on purpose: the toolkits run nested routers
+                that rebase every path, so the shell has to sit outside them to
+                read absolute paths and link to absolute paths. */}
+            <AppShell>
+              <AppRouter />
+            </AppShell>
             <GlobalScorecardAdvisor />
             <GlobalFeedbackWidget />
           </TooltipProvider>

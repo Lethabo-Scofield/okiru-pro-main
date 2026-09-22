@@ -1,0 +1,375 @@
+/**
+ * The application's surface: black, grey, and Okiru's own colours.
+ *
+ * An earlier pass put the product on the marketing site's navy. It was
+ * consistent and it was wrong — navy reads as somebody else's brand, and the
+ * app had already been black. This is black again, but layered rather than
+ * flat, which is what was actually missing the first time.
+ *
+ * Following the "Modern Dark" guidance in the ui-ux-pro-max skill:
+ *
+ *   NOT PURE BLACK.  #08090b, not #000. Pure black smears on OLED and gives
+ *                    shadows nothing to fall on, so everything reads flat.
+ *   ELEVATION.       A real scale. Each step is a shadow PLUS a one-pixel
+ *                    inset highlight along the top edge, which is what makes
+ *                    a surface look lit from above rather than pasted on.
+ *   AMBIENT LIGHT.   Three very low brand-coloured pools behind everything.
+ *                    You should not be able to name the colour; you should
+ *                    notice the page is not a void.
+ *   GLASS.           Blur and saturation on anything that floats.
+ *   HIGHLIGHTS.      Okiru's orange → cyan → purple, on hairlines and one
+ *                    primary action per screen. Colour marks what matters,
+ *                    it is never the background.
+ *
+ * Text is one opacity ramp — 92 / 56 / 32 — so contrast is a decision about
+ * hierarchy rather than a hex someone picked.
+ */
+
+.okiru-app {
+  /* Greys. Near-black base, each step a real surface above the last. */
+  --ink: #08090b;
+  --ink-2: #101114;
+  --ink-3: #16181c;
+  --ink-4: #1d1f24;
+
+  --rule: rgba(255, 255, 255, 0.07);
+  --rule-strong: rgba(255, 255, 255, 0.14);
+
+  --hi: rgba(255, 255, 255, 0.92);
+  --body: rgba(255, 255, 255, 0.56);
+  --muted: rgba(255, 255, 255, 0.32);
+
+  /* Okiru's highlights. */
+  --orange: #e8441a;
+  --cyan: #06b6d4;
+  --purple: #9333ea;
+  --green: #34d399;
+  --amber: #f5a623;
+  --red: #f87171;
+
+  --grad: linear-gradient(135deg, #e8441a 0%, #06b6d4 50%, #9333ea 100%);
+  --grad-h: linear-gradient(90deg, #e8441a, #06b6d4, #9333ea);
+
+  /* The two products' marks, taken from the product landing themes so the
+     signed-in app and the site that sells it agree. `.okiru-purple` for
+     B-BBEE and `.okiru-green` for ESG, in ProductLandingPage.tsx.
+
+     ESG was cyan here, which read as a second blue rather than as ESG. Its
+     own theme has always been green: --accent #22c55e, over a #16a34a base. */
+  --bbbee: #9333ea;
+  --esg: #22c55e;
+  --esg-deep: #16a34a;
+
+  --app-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --r-sm: 8px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  /**
+   * Elevation. Shadow for the drop, inset highlight for the lit top edge.
+   * A card with only a shadow still looks like a sticker; the inset is what
+   * sells it as a surface with a thickness.
+   */
+  --e1: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --e2: 0 2px 4px rgba(0, 0, 0, 0.4), 0 8px 24px -10px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --e3: 0 4px 8px rgba(0, 0, 0, 0.45), 0 18px 48px -16px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  color: var(--body);
+  /**
+   * Neutral light, no colour.
+   *
+   * These pools were tinted with the brand hues, which cast the whole page
+   * purple-blue — the opposite of "black and grey". Depth does not need a hue:
+   * plain white at a few percent lifts the top of the page and lets the base
+   * fall away, and the brand stays where it belongs, on the controls.
+   */
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -8%, rgba(255, 255, 255, 0.045), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 96% 30%, rgba(255, 255, 255, 0.022), transparent 60%),
+    var(--ink);
+  background-attachment: fixed;
+  min-height: 100vh;
+  letter-spacing: -0.011em;
+}
+
+.okiru-app ::selection {
+  background: rgba(6, 182, 212, 0.26);
+}
+
+/* Film grain. Breaks up the flat fields black produces on large surfaces. */
+.okiru-app-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 256px;
+}
+
+/* ── Surfaces ─────────────────────────────────────────────────────────── */
+
+.okiru-app .ok-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.018));
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--e2);
+  backdrop-filter: blur(18px) saturate(1.3);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+}
+
+.okiru-app .ok-panel-flush {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--e2);
+  overflow: hidden;
+}
+
+/* A panel you can press. It lifts, and the top edge catches more light. */
+.okiru-app .ok-panel-action {
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.okiru-app .ok-panel-action:hover {
+  border-color: var(--rule-strong);
+  box-shadow: var(--e3);
+  transform: translateY(-1px);
+}
+.okiru-app .ok-panel-action:active {
+  transform: translateY(0) scale(0.995);
+  box-shadow: var(--e1);
+}
+
+.okiru-app .ok-rule-brand {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  background: var(--grad-h);
+  opacity: 0.8;
+}
+
+/* ── Type ─────────────────────────────────────────────────────────────── */
+
+.okiru-app .ok-eyebrow {
+  font-family: var(--app-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.okiru-app .ok-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--hi);
+}
+
+.okiru-app .ok-title-lg {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: var(--hi);
+}
+
+.okiru-app .ok-subtitle {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--body);
+}
+
+.okiru-app .ok-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--body);
+}
+
+.okiru-app .ok-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────────── */
+
+/**
+ * One primary action per screen, carrying the brand. The glow is tied to the
+ * button rather than the page, so colour marks the thing you are meant to do.
+ */
+.okiru-app .ok-btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: var(--r-sm);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  /* A label that wraps mid-button reads as broken, whatever the layout does. */
+  white-space: nowrap;
+  color: #fff;
+  background: var(--grad);
+  box-shadow: 0 2px 10px -3px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  transition: filter 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.okiru-app .ok-btn-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.okiru-app .ok-btn-primary:active {
+  transform: scale(0.97);
+}
+.okiru-app .ok-btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+  box-shadow: none;
+  transform: none;
+}
+
+.okiru-app .ok-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--hi);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--rule);
+  box-shadow: var(--e1);
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
+}
+.okiru-app .ok-btn:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
+  border-color: var(--rule-strong);
+}
+.okiru-app .ok-btn:active {
+  transform: scale(0.97);
+}
+
+.okiru-app .ok-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--hi);
+  /* Recessed rather than raised: an input is a hole, not a surface. */
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--rule);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.okiru-app .ok-input-icon {
+  padding-left: 34px;
+}
+.okiru-app .ok-input::placeholder {
+  color: var(--muted);
+}
+.okiru-app .ok-input:focus {
+  border-color: rgba(6, 182, 212, 0.55);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 3px rgba(6, 182, 212, 0.14);
+}
+
+/* ── Data ─────────────────────────────────────────────────────────────── */
+
+.okiru-app .ok-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+}
+.okiru-app .ok-table thead th {
+  font-family: var(--app-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 9px 16px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.okiru-app .ok-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  color: var(--body);
+  vertical-align: middle;
+}
+.okiru-app .ok-table tbody tr:last-child td {
+  border-bottom: none;
+}
+.okiru-app .ok-table tbody tr {
+  transition: background 0.16s ease;
+}
+.okiru-app .ok-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.okiru-app .ok-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.okiru-app .ok-chip-neutral {
+  color: var(--body);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--rule);
+}
+.okiru-app .ok-chip-good {
+  color: #6ee7b7;
+  background: rgba(52, 211, 153, 0.11);
+  border-color: rgba(52, 211, 153, 0.26);
+}
+.okiru-app .ok-chip-warn {
+  color: #fcd34d;
+  background: rgba(245, 166, 35, 0.11);
+  border-color: rgba(245, 166, 35, 0.26);
+}
+.okiru-app .ok-chip-bad {
+  color: #fca5a5;
+  background: rgba(248, 113, 113, 0.11);
+  border-color: rgba(248, 113, 113, 0.26);
+}
+
+/* Motion is meaning, not decoration — and never forced on. */
+@media (prefers-reduced-motion: reduce) {
+  .okiru-app *,
+  .okiru-app *::before,
+  .okiru-app *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+  .okiru-app .ok-panel-action:hover,
+  .okiru-app .ok-btn-primary:active,
+  .okiru-app .ok-btn:active {
+    transform: none;
+  }
+}
