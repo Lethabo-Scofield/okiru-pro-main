@@ -259,10 +259,28 @@ export function scoreEnvironmental(
   const scored = Object.entries(rows)
     .filter(([key]) => !excluded.some((x) => x.key === key))
     .reduce((a, [, v]) => a + v, 0);
+  /*
+   * A pillar is scored out of what it can actually reach — 108 here, not 100.
+   *
+   * `ESG_D9_PILLAR_DIVISOR` is a flat 100 because that is literally what the
+   * workbook's `ESG_Dashboard!D9` divides every pillar by, Environmental
+   * included, even though the E scorecard adds up to 108. The workbook got
+   * away with it: `d26`–`d29` were MANUAL_ZERO, so only 88 points were ever
+   * reachable and the ratio stayed under 1.
+   *
+   * Wiring those four indicators removed the accident. Against a divisor of
+   * 100 a company scoring the full 108 now reads 108%, and one scoring 90
+   * reads 90% when it has earned 83% of what was available — the arithmetic
+   * flatters every environmental result and breaks at the top.
+   *
+   * Parity keeps the flat 100, because reproducing that spreadsheet is what it
+   * is for and `ESG_GOLDEN_SG_CONSUMER.overallPercent` is avg(36/100, 33/100,
+   * 64.85/100).
+   */
   const scoringDenominator =
     mode === "workbook-parity"
       ? ESG_D9_PILLAR_DIVISOR
-      : applicableMaxFor(ESG_D9_PILLAR_DIVISOR, excluded);
+      : applicableMaxFor(PILLAR_MAX_ENVIRONMENTAL, excluded);
 
   return {
     score: minCap(mode === "workbook-parity" ? score : scored, PILLAR_MAX_ENVIRONMENTAL),

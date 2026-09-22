@@ -98,23 +98,33 @@ describe("LIVE — corrected baseline (the regression gate)", () => {
     expect(result.governanceRows.d25).toBe(0);
   });
 
-  it("overall moves 0.4461764706 → 0.4072291022", () => {
+  it("overall moves 0.4461764706 → 0.3983402133", () => {
     /*
      * 0.4461764706 is the workbook's own figure; 0.4028431373 was the corrected
-     * figure before mandatory grant recovery left the Social denominator.
+     * figure before mandatory grant recovery left the Social denominator, and
+     * 0.4072291022 was it afterwards.
      *
-     * The expert does not recognise grant recovery as an ESG measure at all —
-     * "I do not understand this question and how it links to ESG" (Q5) — so its
-     * 5 points come out of the total rather than being scored. Social is now
-     * 25/95 instead of 25/100, and the overall rises accordingly:
+     * TWO ADJUSTMENTS, NEITHER OF THEM A CHANGE IN PERFORMANCE.
      *
-     *     (36/100 + 25/95 + 59.8529411765/100) / 3 = 0.4072291022
+     * 1. The expert does not recognise grant recovery as an ESG measure at all
+     *    — "I do not understand this question and how it links to ESG" (Q5) —
+     *    so its 5 points come out of the total rather than being scored.
+     *    Social is 25/95, not 25/100.
      *
-     * The company did not improve. We stopped charging it for something that
-     * was never an ESG measure.
+     * 2. Environmental is scored out of 108, its real scorecard maximum,
+     *    rather than the flat 100 the workbook's `D9` divides every pillar by.
+     *    That flat divisor was survivable only while `d26`–`d29` were
+     *    MANUAL_ZERO and just 88 of the 108 points could be reached. Now that
+     *    the ISO tracker and the board policy declaration actually score, a
+     *    perfect pillar against a divisor of 100 would read 108%.
+     *
+     *     (36/108 + 25/95 + 59.8529411765/100) / 3 = 0.3983402133
+     *
+     * The company did not get worse. The denominator stopped being wrong.
      */
-    expect(result.overallPercent).toBeCloseTo(0.4072291022, 8);
+    expect(result.overallPercent).toBeCloseTo(0.3983402133, 8);
     expect(result.social.scoringDenominator).toBe(95);
+    expect(result.environmental.scoringDenominator).toBe(108);
   });
 
   it("asserts every indicator individually", () => {
