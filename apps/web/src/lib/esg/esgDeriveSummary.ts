@@ -1280,23 +1280,104 @@ function deriveIsoTracker(d: Draft): void {
  */
 const SAQ_MAX_RATING = 5;
 
+/**
+ * Health-and-safety evidence, on the register's own 1–5 scale so it can stand
+ * in for the rating beside it.
+ *
+ * A certified management system is the full five; the COIDA letter of good
+ * standing is a real regulatory artefact but a narrower one; a safety file
+ * under a s37(2) mandatary agreement is the statutory minimum. "None held" is
+ * an explicit nil and scores zero rather than going unrated — a supplier the
+ * company checked and found to hold nothing is a finding, not missing data.
+ */
+function hsEvidenceRating(value: unknown): number | null {
+  const v = text(value).trim().toLowerCase();
+  if (v.startsWith("iso 45001")) return 5;
+  if (v.startsWith("letter of good standing")) return 4;
+  if (v.startsWith("safety file")) return 3;
+  if (v.startsWith("none")) return 0;
+  return null;
+}
+
+/**
+ * Food-safety grade on the same 1–5 scale.
+ *
+ * BRCGS grades on the count and severity of non-conformities: AA is roughly
+ * no more than five minors, and a single critical — or a major against a
+ * fundamental clause — fails outright, which is why D sits near the bottom.
+ * FSSC 22000 and ISO 22000 issue no grade at all, so a certificate under
+ * either sits at 4: unambiguously certified, without claiming the
+ * discrimination a BRCGS audit gives.
+ */
+function foodGradeRating(value: unknown): number | null {
+  const v = text(value).trim().toLowerCase();
+  if (v === "brcgs aa") return 5;
+  if (v === "brcgs a") return 4.5;
+  if (v === "brcgs b") return 4;
+  if (v === "brcgs c") return 3;
+  if (v === "brcgs d") return 2;
+  if (v.startsWith("fssc") || v.startsWith("iso 22000")) return 4;
+  if (v.startsWith("not certified")) return 0;
+  return null;
+}
+
 function deriveSaqSupplier(d: Draft): void {
   const rows = gridRows(d.cells("saq"), "saq");
   if (rows.length === 0) return;
 
-  const mean = (column: string): number | null => {
-    const ratings = rows
-      .map((r) => toNum(r.values[column]))
-      .filter((n): n is number => n != null && n > 0);
-    if (ratings.length === 0) return null;
-    return ratings.reduce((a, n) => a + n, 0) / ratings.length;
+  /*
+   * One supplier's score on a criterion: the auditable evidence where it
+   * exists, the self-assessed rating where it does not.
+   *
+   * EcoVadis weights Results (35%) above Policies (25%) — what a supplier
+   * ACHIEVED outranks what it claimed — and a certificate or an audit grade
+   * is a result in a way a 1–5 opinion is not. So evidence wins outright and
+   * the rating is a fallback, not an average partner: averaging the two would
+   * let a generous self-rating pull a failed audit upward.
+   */
+  const scoreFor = (
+    row: (typeof rows)[number],
+    ratingColumn: string,
+    evidenceColumn: string,
+    evidenceRating: (value: unknown) => number | null,
+  ): number | null => {
+    const evidence = evidenceRating(row.values[evidenceColumn]);
+    if (evidence != null) return evidence;
+    const rating = toNum(row.values[ratingColumn]);
+    return rating != null && rating > 0 ? rating : null;
   };
 
-  const hs = mean("healthSafety");
-  const fs = mean("foodSafety");
+  const meanOf = (
+    ratingColumn: string,
+    evidenceColumn: string,
+    evidenceRating: (value: unknown) => number | null,
+  ): number | null => {
+    const scores = rows
+      .map((r) => scoreFor(r, ratingColumn, evidenceColumn, evidenceRating))
+      .filter((n): n is number => n != null);
+    if (scores.length === 0) return null;
+    return scores.reduce((a, n) => a + n, 0) / scores.length;
+  };
+
+  const hs = meanOf("healthSafety", "hsEvidence", hsEvidenceRating);
+  const fs = meanOf("foodSafety", "foodSafetyGrade", foodGradeRating);
 
   d.fill("saq", "_supplier_count", rows.length);
   d.fill("saq", "_max_rating", SAQ_MAX_RATING);
   if (hs != null) d.fill("saq", "_hs_mean", hs);
   if (fs != null) d.fill("saq", "_fs_mean", fs);
+
+  /*
+   * Coverage — suppliers assessed ÷ the population declared at `S_Data!B89`.
+   *
+   * Without that figure coverage is UNKNOWN and deliberately not published,
+   * so the scorers behave exactly as they did before it existed and no stored
+   * workbook is silently re-scored downward. Capped at 1: a register longer
+   * than the declared population is a data-entry problem, not 140% coverage.
+   */
+  const population = toNum(d.raw("s-data", "B89"));
+  if (population != null && population > 0) {
+    d.fill("saq", "_coverage", Math.min(1, rows.length / population));
+    d.fill("saq", "_supplier_population", population);
+  }
 }
