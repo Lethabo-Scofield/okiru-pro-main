@@ -6,16 +6,8 @@ import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
  * workbook are catalogued in `docs/esg/ESG_SCORING_DELTA.md`.
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
-import {
-  ESG_CONSUMER_GOODS_CONFIG,
-  PILLAR_MAX_SOCIAL,
-  THR_BLACK_EE,
-  THR_CSI_INITIATIVES,
-  THR_LEVY_SPEND,
-  THR_LTIFR,
-  THR_PWD,
-  THR_TRAINING_HOURS,
-} from "../esgConfig/consumer-goods";
+import { PILLAR_MAX_SOCIAL } from "../esgConfig/consumer-goods";
+import { esgSectorConfigForWorkbook } from "../esgConfig";
 import {
   minCap,
   pr,
@@ -41,8 +33,6 @@ import type { EsgExclusion } from "./esgApplicability";
 
 export type SocialScoreResult = EsgPillarResult;
 
-const THRESHOLDS = ESG_CONSUMER_GOODS_CONFIG.thresholds;
-
 /**
  * `S_Data!F5,F6,G5,G6,H5,H6` — African / Coloured / Indian FEMALE headcount at
  * EEA2 levels 1 (Top Mgmt) and 2 (Senior Mgmt). Note the indicator label says
@@ -54,15 +44,6 @@ const BLACK_FEMALE_MGMT_CELLS = ["F5", "F6", "G5", "G6", "H5", "H6"] as const;
 const MGMT_HEADCOUNT_CELLS = ["L5", "L6"] as const;
 /** `S_Data!G29:G33` — LTI / MTI / near-miss / vehicle / property incident totals. */
 const INCIDENT_ROWS = ["G29", "G30", "G31", "G32", "G33"] as const;
-
-/**
- * `THR_SUP_HS` — `Assumptions!B58`, the supplier-compliance minimum, 0.8 in the
- * v1.7 workbook (ledger §5.2). Only a FALLBACK: `B58` is a real input, and it
- * had no reader at all until the two supplier indicators below were wired up.
- * It has no `esgConfig` threshold of its own because the workbook does not
- * treat it as a sector parameter.
- */
-const THR_SUPPLIER_COMPLIANCE = 0.8;
 
 function num(wb: EsgWorkbookData, ref: string, section = "s-data"): number {
   return readEsgCell(wb, section, ref) ?? 0;
@@ -117,14 +98,15 @@ export function scoreSocial(
     return resolved;
   };
 
-  const thrBlack = target("d5", "B50", THR_BLACK_EE, "black employee representation");
-  const thrBfm = target("d6", "B51", THRESHOLDS.blackFemaleManagement, "black women in management");
-  const thrPwd = target("d8", "B52", THR_PWD, "employees with disabilities");
-  const thrTraining = target("d14", "B53", THR_TRAINING_HOURS, "training hours per employee");
-  const thrGrant = target("d15", "B54", THR_LEVY_SPEND, "mandatory grant recovery");
-  const thrLtifr = target("d17", "B55", THR_LTIFR, "lost-time injury frequency rate");
-  const thrCsiSpend = target("d22", "B56", THRESHOLDS.csiSpendOfNpat, "community investment");
-  const thrLocal = target("d24", "B57", THRESHOLDS.localLabourProcurement, "local procurement");
+  const thresholds = esgSectorConfigForWorkbook(workbook).thresholds;
+  const thrBlack = target("d5", "B50", thresholds.blackEmployees, "black employee representation");
+  const thrBfm = target("d6", "B51", thresholds.blackFemaleManagement, "black women in management");
+  const thrPwd = target("d8", "B52", thresholds.personsWithDisabilities, "employees with disabilities");
+  const thrTraining = target("d14", "B53", thresholds.trainingHoursPerEmployee, "training hours per employee");
+  const thrGrant = target("d15", "B54", thresholds.mandatoryGrantRecovery, "mandatory grant recovery");
+  const thrLtifr = target("d17", "B55", thresholds.ltifrMax, "lost-time injury frequency rate");
+  const thrCsiSpend = target("d22", "B56", thresholds.csiSpendOfNpat, "community investment");
+  const thrLocal = target("d24", "B57", thresholds.localLabourProcurement, "local procurement");
 
   /* -------------------------- Employment Equity -------------------- */
 
@@ -282,7 +264,7 @@ export function scoreSocial(
    * The threshold 6 is hardcoded in the workbook — there is no Assumptions cell.
    */
   const initiatives = readEsgCell(workbook, "s-data", "_initiatives_count") ?? 0;
-  const d23 = pr(initiatives, THR_CSI_INITIATIVES, 5, floor);
+  const d23 = pr(initiatives, thresholds.csiInitiativesPerYear, 5, floor);
 
   /*
    * C24 — MANUAL_ZERO in the workbook. `S_Data!B86` (local procurement spend)
@@ -324,7 +306,7 @@ export function scoreSocial(
   const thrSupplier = target(
     "d26",
     "B58",
-    THR_SUPPLIER_COMPLIANCE,
+    thresholds.supplierHsCompliance,
     "supplier health, safety and food-safety compliance",
   );
   const supplierCount = readEsgCell(workbook, "saq", "_supplier_count") ?? 0;
