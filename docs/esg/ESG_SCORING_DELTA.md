@@ -325,8 +325,48 @@ explicit finding and scores 0; a blank falls back to the rating as before.
 
 **Every one of these still scores 0 on an empty register**, and all six remain
 literal 0 in `workbook-parity` mode, so `ESG_GOLDEN_SG_CONSUMER` is unchanged.
-Super Group has never populated `ISO_Tracker` or `SAQ_Supplier`, so their
-reported figure does not move.
+
+#### AMENDMENT — Super Group's score DOES move (corrects an earlier claim here)
+
+This section previously said *"Super Group has never populated `ISO_Tracker`
+or `SAQ_Supplier`, so their reported figure does not move."* **That was
+wrong.** It was measured against `ESG_GOLDEN_SG_CONSUMER`, which is a
+hand-built subset carrying zero cells for both registers — not against the
+client workbook. Importing the real
+`Okiru_ESG_Toolkit_v1_7_SG_Consumer_LiveData.xlsx` through the running
+application shows `ISO_Tracker` with **48 populated cells** and
+`SAQ_Supplier` with **121**. The same wrong claim appears in commit
+`56f4106c`; this is its correction.
+
+Live import, all 16 sections matched, no unmatched sheets and no warnings:
+
+| | E | S | G | overall |
+|---|---|---|---|---|
+| golden fixture (corrected mode) | 36.00 | 25.00 | 59.85 | 39.83% |
+| **real workbook, imported** | **40.80** | **25.00** | **61.49** | **42.43%** |
+
+Three indicators account for the difference:
+
+| id | fixture | live | why |
+|---|---|---|---|
+| `E d27` aspects register | 0 | **2.40** | clause 6.1.2 is `Partially Compliant` in the real tracker |
+| `E d29` legal compliance | 0 | **2.40** | clause 6.1.3 likewise, and the governance risk register is live |
+| `G d9` IFRS S1/S2 readiness | 0 | **1.636** | NOT a new rule — this is the column-mapping fix. The tracker was always populated; the derive layer read `IFRS_S1_S2!C` (Pillar) as Status, so these points were lost on every import. |
+
+Two further findings from the same run, both of which are the rules working
+rather than failing:
+
+* **`d26` still pays nothing.** SG's tracker holds no clause-10 certification
+  row, so `_cert_score` is absent and the gate declines to invent one.
+* **`S d26`/`d27` still pay nothing across 12 real suppliers.** Both means are
+  3.0, which is 0.6 against a 0.8 threshold — below the band. The register is
+  populated and read correctly; those suppliers simply do not clear the bar.
+  Supplier population is undeclared, so no coverage scaling applied.
+
+**The lesson for anyone testing this next: the golden fixture is not the
+client's data.** It is a curated subset for parity testing. Any claim about
+what a change does to a real score must be measured by importing the real
+workbook, not by scoring the fixture.
 
 ### 5.2 Other unavailable values
 
