@@ -64,11 +64,12 @@ describe('certificate extraction status', () => {
     });
   });
 
-  it('extracts only production-critical B-BBEE certificate fields by default', () => {
+  it('extracts production certificate identity and compliance fields by default', () => {
     const reviews: any[] = [];
     const text = `
       B-BBEE Verification Certificate
       Enterprise Name: Acme Supplies (Pty) Ltd
+      Registration Number: 2020/123456/07
       Trading as: Acme Trade
       Black Ownership: 51%
       Black Women Ownership: 26%
@@ -80,6 +81,7 @@ describe('certificate extraction status', () => {
       Value Adding Supplier: No
       Issue Date: 18 June 2026
       Expiry Date: 17 June 2027
+      Certificate Number: CERT-12345
       Measurement Period: FY2025
       Verification Agency: Example Ratings (Pty) Ltd
       SANAS Accreditation Number: BVA123
@@ -93,6 +95,7 @@ describe('certificate extraction status', () => {
     const byField = Object.fromEntries(candidates.map((c) => [c.field, c]));
 
     expect(byField.companyName).toMatchObject({ value: 'Acme Supplies (Pty) Ltd', source: 'text' });
+    expect(byField.registrationNumber).toMatchObject({ value: '2020/123456/07' });
     expect(byField.vatNumber).toMatchObject({ value: '4123456789' });
     expect(byField.companySize).toMatchObject({ value: 'QSE' });
     expect(byField.bbbeeLevel).toMatchObject({ value: 2 });
@@ -104,10 +107,11 @@ describe('certificate extraction status', () => {
     expect(Number(byField.blackWomenOwnership.value)).toBeGreaterThanOrEqual(0);
     expect(Number(byField.blackWomenOwnership.value)).toBeLessThanOrEqual(100);
     expect(byField.expiryDate.value).toBeInstanceOf(Date);
+    expect(byField.issueDate.value).toBeInstanceOf(Date);
     expect(byField.sectorCode).toMatchObject({ value: 'FSC' });
-    expect(byField.certificateNumber).toBeUndefined();
+    expect(byField.certificateNumber).toMatchObject({ value: 'CERT-12345' });
     expect(byField.procurementRecognition).toBeUndefined();
-    expect(byField.verificationAgency).toBeUndefined();
+    expect(byField.verificationAgency).toMatchObject({ value: 'Example Ratings (Pty) Ltd' });
   });
 
   it('extracts tax number from text without confusing it with VAT', () => {

@@ -59,6 +59,7 @@ type EnrichmentStatus = 'pending' | 'processing' | 'completed' | 'review_require
 
 export const PRODUCTION_CERTIFICATE_FIELDS = [
   'companyName',
+  'registrationNumber',
   'sectorCode',
   'sectorName',
   'vatNumber',
@@ -67,7 +68,10 @@ export const PRODUCTION_CERTIFICATE_FIELDS = [
   'companySize',
   'blackOwnership',
   'blackWomenOwnership',
+  'issueDate',
   'expiryDate',
+  'certificateNumber',
+  'verificationAgency',
 ] as const satisfies readonly EnrichmentField[];
 
 type FieldCandidate = {
