@@ -216,12 +216,36 @@ export function scoreEnvironmental(
   const emsMax = num(workbook, "_ems_max", "iso-tracker");
 
   /*
-   * C26 = MIN(8, 4*ISO_Tracker!E16/5 + 4*ISO_Tracker!E17/60)
-   * Half the points for the certificate itself, half for EMS maturity.
+   * C26 — ISO 14001 certification achieved or in progress.
+   *
+   * REWRITTEN against the actual certification process, replacing a blend of
+   * "half for the certificate, half for EMS maturity" that had no source
+   * behind it and handed up to 4 points to a company holding no certificate
+   * at all.
+   *
+   * ISO 14001 is not a sliding scale. Stage 1 is a readiness review that
+   * raises no non-conformities; Stage 2 tests whether the EMS is implemented
+   * and effective; certification follows only once every MAJOR non-conformity
+   * is closed. So there are three real states — certified, genuinely in
+   * progress, and neither — which is what the tracker's own status vocabulary
+   * already says. Scoring this row on the same Fully / Partially / Gap rule as
+   * every other clause keeps one rule across the sheet instead of a special
+   * case here.
+   *
+   * The gate is CDP's sequential-scoring principle: its bands run Disclosure →
+   * Awareness → Management → Leadership, and failing a lower band BLOCKS the
+   * points above it. A certificate is the top rung; an unassessed EMS beneath
+   * it is an unevidenced claim, and earns nothing until the clauses behind it
+   * have been assessed.
+   *
+   * That gate excludes the certification row from its own evidence. Gating on
+   * the EMS total INCLUDING that row would be circular — the certificate
+   * contributes to the roll-up, so a lone compliant certificate row would
+   * vouch for itself and the gate would never bite. What must exist is an EMS
+   * besides the claim.
    */
-  const d26 = parity
-    ? 0
-    : minCap((4 * isoCert) / 5 + (emsMax > 0 ? (4 * emsScore) / emsMax : 0), 8);
+  const emsBesidesTheClaim = emsScore - isoCert > 0;
+  const d26 = parity || !emsBesidesTheClaim ? 0 : minCap((8 * isoCert) / 5, 8);
 
   // C27 = 4*ISO_Tracker!E10/5 — the environmental aspects register.
   const d27 = parity ? 0 : minCap((4 * isoAspects) / 5, 4);

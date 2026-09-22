@@ -246,25 +246,76 @@ convention) and clamped outside the range — no new reduction target is invente
 Nothing was invented. Where no source exists the indicator scores **0** and is
 listed here.
 
-### 5.1 The six MANUAL_ZERO indicators still at 0 (28 pts)
+### 5.1 The six MANUAL_ZERO indicators — NOW SCORED (was 0; 30 pts)
 
-Four of the original ten are now scored (§2.4). The remaining six are **blocked
-on a missing derivation, not a missing input** — the raw data is already
-captured in the `ISO_Tracker` and `SAQ_Supplier` grids, but nothing rolls it up
-into the cells the ledger's rules read.
+**This section previously said all six scored 0 because no source justified
+them. That is no longer true, and the change needs stating plainly.**
 
-| id | Pts | Rule needs | Blocked on |
+In the client workbook these six are real scorecard rows carrying real weight
+in the 108 / 100 pillar totals, whose column C holds a hardcoded literal `0`
+with no formula — each beside the author's own unfinished note: *"Target date
+confirm with Maria"*, *"Legal register quarterly"*, *"Safety file check each
+supplier"*. They were never a decision to exclude; they were a to-do. Their
+weight counts in the denominator, so leaving them at 0 capped Environmental at
+88 of 108 for every company, forever.
+
+They are now scored. Three things about how.
+
+**1. No standard publishes a formula for any of them, and none will.** ISO
+14001 is binary certification with a defined middle state — Stage 1 is a
+readiness review raising no non-conformities, Stage 2 tests implementation and
+effectiveness, and certification follows only once every major non-conformity
+is closed. NEMA gives a duty of care under s28, not a scale; the legal register
+is an ISO 14001/45001 surveillance artefact, not a NEMA requirement. FSSC 22000
+is pass/fail. The point allocations (8/4/4/4 and 5/5) are **Okiru's judgement**
+and always were — they come from the client workbook's own column B.
+
+**2. What IS published is the shape, and the rules below follow it.**
+
+| Source | Principle borrowed |
+|---|---|
+| CDP full corporate scoring | Sequential bands — Disclosure → Awareness → Management → Leadership. Failing a lower band **blocks** the points above it. |
+| ISO 14001 certification process | Three real states: certified / genuinely in progress / neither. Not a sliding scale. |
+| EcoVadis | Supplier ESG is assessed on Policies (25%), Actions (40%) and Results (35%), weighted by sector, size and geography. |
+| BRCGS | Food safety carries a real grade ladder AA/A/B/C/D, driven by count and severity of non-conformities. |
+
+**3. The live rules.**
+
+| id | Pts | Rule | Grounding |
 |---|---|---|---|
-| `E d26` ISO 14001 certification | 8 | `ISO_Tracker!E16`, `E17` | derivation of `ISO_Tracker!E5:E17` |
-| `E d27` Aspects register | 4 | `ISO_Tracker!E10` | same |
-| `E d28` Environmental policy board-approved | 4 | `MIN(G_Data!F27, ISO_Tracker!E8)` | `G_Data!B27` input **now exists**, but neither `F27` (not in `GOV_YN_ROWS`) nor `ISO_Tracker!E8` is derived |
-| `E d29` NEMA/NWA/NEMWA legal compliance | 4 | `ISO_Tracker!E11`, gated on `G_Data!F21` | derivation of `ISO_Tracker` |
-| `S d26` Supplier H&S ≥80% | 5 | `AVERAGE(SAQ_Supplier!D5:D16)` | derivation of the SAQ column means |
-| `S d27` Supplier food safety | 5 | `AVERAGE(SAQ_Supplier!F5:F16)` | same |
+| `E d26` ISO 14001 certification | 8 | `8 × certRow/5`, gated on an EMS existing **besides the claim** (`emsScore − certRow > 0`) | ISO's three states; CDP sequential gating. The gate excludes the certificate from its own evidence — measured against the whole EMS it would vouch for itself and never fire. |
+| `E d27` Aspects register | 4 | `4 × clause 6.1.2 / 5` | ISO 14001 cl 6.1.2 is a requirement, so binary/partial is faithful |
+| `E d28` Environmental policy | 4 | `MIN(G_Data!F27, clause 5.2) × 4/5` | CDP gating: the board's claim and the audit's view, stricter wins |
+| `E d29` Legal compliance | 4 | `4 × clause 6.1.3 / 5`, gated on `G_Data!F21` | the legal register is an ISO surveillance artefact; gated on the risk register being live |
+| `S d26` Supplier H&S | 5 | mean of the `SAQ_Supplier` H&S ratings ÷ 5, banded against `Assumptions!B58` | **PROXY — see below** |
+| `S d27` Supplier food safety | 5 | same, on the food-safety column | **PROXY — see below** |
 
-`E d28` is the cheapest of the six: adding row 27 to `GOV_YN_ROWS` in
-`esgDeriveSummary.ts` plus an `ISO_Tracker!E8` derivation unlocks 4 points.
-**All six are scored 0, not defaulted.**
+Rows are matched by **clause number**, not by sheet row, so a reordered tracker
+keeps scoring. `Not Applicable` is EXCLUDED from numerator and denominator
+rather than scored full marks (expert ruling Q15/Q16) — the sheet's own formula
+awards N/A the full 5, which made marking a clause inapplicable the cheapest
+way to raise a score anywhere in the toolkit.
+
+**THE TWO SUPPLIER RULES ARE A PROXY, AND SHOULD BE CALLED ONE.** EcoVadis is
+the reference model for supplier ESG assessment and it does **not** average a
+1–5 rating — it weights Policies, Actions and Results separately. Our
+`SAQ_Supplier` register collects a single 1–5 score per criterion, with no
+P/A/R split and no field for the total supplier population, so neither the
+EcoVadis weighting nor any coverage measure (suppliers assessed ÷ suppliers
+used) is computable from it. A mean of the ratings captured is the most the
+current data model supports. Two consequences worth knowing:
+
+* a company that assesses 2 of its 200 suppliers and rates them 5/5 scores the
+  same as one that assesses all 200 — coverage is invisible;
+* the 1–5 scale is unanchored, where BRCGS would give a citable AA/A/B/C/D.
+
+Closing either gap means changing the register's columns, which invalidates
+captured client data — a product decision, not a scoring fix. Recorded in §6.
+
+**Every one of these still scores 0 on an empty register**, and all six remain
+literal 0 in `workbook-parity` mode, so `ESG_GOLDEN_SG_CONSUMER` is unchanged.
+Super Group has never populated `ISO_Tracker` or `SAQ_Supplier`, so their
+reported figure does not move.
 
 ### 5.2 Other unavailable values
 
@@ -279,6 +330,18 @@ into the cells the ledger's rules read.
 ---
 
 ## 6. Follow-ups in files this change does not own
+
+### 6.0 Two product decisions raised by §5.1, for the scoring owner
+
+Neither is a bug. Both are limits of what `SAQ_Supplier` collects, and both
+cost captured client data to fix, so they are decisions rather than repairs.
+
+| Decision | Why it matters | What it would take |
+|---|---|---|
+| **Supplier coverage is invisible.** `S d26`/`d27` average the suppliers assessed, with no denominator for suppliers used. Assessing 2 of 200 at 5/5 scores the same as assessing all 200. | Every supplier-assessment scheme weights coverage; CDP blocks upper-band points on incomplete disclosure for the same reason. | A "total suppliers used in the period" input, then band the mean by coverage. Additive — no existing column changes. |
+| **The 1–5 supplier scale is unanchored.** BRCGS publishes AA/A/B/C/D driven by non-conformity count and severity; our column asks for a bare 1–5 with no stated meaning, so two consultants rate the same supplier differently. | An assurance provider can test a BRCGS grade against the audit report. A 1–5 opinion is not testable. | Either publish a rubric for what 1–5 means, or replace the food-safety column with the BRCGS ladder. The second invalidates captured data. |
+
+### 6.1 Other files
 
 | File | Issue | Recommended action |
 |---|---|---|
