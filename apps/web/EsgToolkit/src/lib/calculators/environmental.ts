@@ -14,12 +14,10 @@ import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import {
-  ESG_CONSUMER_GOODS_CONFIG,
   PILLAR_MAX_ENVIRONMENTAL,
-  THR_GHG_YOY,
-  THR_WASTE,
   stanceFloorFromWorkbook,
 } from "../esgConfig/consumer-goods";
+import { esgSectorConfigForWorkbook } from "../esgConfig";
 import { minCap, pr, scoringMode, yesPartialNo, type EsgScoringOptions } from "./shared";
 import {
   applicableMaxFor,
@@ -31,7 +29,28 @@ import {
 
 export type EnvironmentalScoreResult = EsgPillarResult;
 
-const THRESHOLDS = ESG_CONSUMER_GOODS_CONFIG.thresholds;
+/**
+ * SECTOR THRESHOLDS ARE READ PER WORKBOOK, not bound at module load.
+ *
+ * This was `const THRESHOLDS = ESG_CONSUMER_GOODS_CONFIG.thresholds` — one
+ * client's FMCG numbers, fixed at import time, used to score every company in
+ * all fourteen sectors the cover screen offers. The sector registry existed
+ * and `ghgInventory.ts` was its only reader, so a mining company got mining
+ * emission factors and a consumer-goods waste-diversion target.
+ *
+ * Today this is a NO-OP numerically: thirteen of the fourteen sectors inherit
+ * the base end to end, so every lookup returns the same figure it did before.
+ * That is the point of landing it first — calibrating a sector is meaningless
+ * while the scorers cannot see which sector they are in, and would have
+ * produced exactly the configured-but-never-read pattern this codebase has
+ * been digging out all week.
+ *
+ * An explicit `Assumptions` cell still wins over the sector default, because a
+ * company that states its own target outranks any benchmark we hold for it.
+ */
+function sectorThresholds(workbook: EsgWorkbookData) {
+  return esgSectorConfigForWorkbook(workbook).thresholds;
+}
 
 /** `E_Data!L50:L54` — the five depot solar-generation YTD cells. */
 const SOLAR_ROWS = ["L50", "L51", "L52", "L53", "L54"] as const;
@@ -54,11 +73,12 @@ export function scoreEnvironmental(
     typeof stanceLabel === "boolean" ? null : stanceLabel,
     readEsgCell(workbook, "assumptions", "B9"),
   );
-  const thrGhgYoy = readEsgCell(workbook, "assumptions", "B43") ?? THR_GHG_YOY;
+  const thresholds = sectorThresholds(workbook);
+  const thrGhgYoy = readEsgCell(workbook, "assumptions", "B43") ?? thresholds.ghgYoyReduction;
   const thrRenew =
-    readEsgCell(workbook, "assumptions", "B44") ?? THRESHOLDS.renewableElectricityMin;
-  const thrEv = readEsgCell(workbook, "assumptions", "B46") ?? THRESHOLDS.evFleetMin;
-  const thrWaste = readEsgCell(workbook, "assumptions", "B48") ?? THR_WASTE;
+    readEsgCell(workbook, "assumptions", "B44") ?? thresholds.renewableElectricityMin;
+  const thrEv = readEsgCell(workbook, "assumptions", "B46") ?? thresholds.evFleetMin;
+  const thrWaste = readEsgCell(workbook, "assumptions", "B48") ?? thresholds.wasteDiversion;
 
   const l19 = num(workbook, "L19");
   const l46 = num(workbook, "L46");
