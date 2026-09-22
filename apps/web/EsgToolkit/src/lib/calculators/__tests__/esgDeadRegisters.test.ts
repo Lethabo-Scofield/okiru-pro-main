@@ -80,11 +80,36 @@ describe("ISO_Tracker — E d26–d29 (20 points that could not be earned)", () 
     expect([rows.d26, rows.d27, rows.d28, rows.d29]).toEqual([0, 0, 0, 0]);
   });
 
-  it("scores certification and EMS maturity together, capped at 8", () => {
-    const rows = E({ "iso-tracker": FULLY_COMPLIANT });
-    // 4 × (certificate / 5) + 4 × (EMS score / EMS max).
-    expect(rows.d26).toBeGreaterThan(4);
-    expect(rows.d26).toBeLessThanOrEqual(8);
+  /*
+   * Certification is the one row that is NOT a sliding scale. ISO 14001 has
+   * three real states — certified, in progress, neither — so the points follow
+   * the tracker's own Fully / Partially / Gap vocabulary, gated on an EMS
+   * existing BESIDES the claim itself (CDP's sequential bands: fail the lower
+   * rung and the one above it is blocked).
+   */
+  it("awards the full 8 only for an achieved certification", () => {
+    expect(E({ "iso-tracker": FULLY_COMPLIANT }).d26).toBeCloseTo(8, 6);
+  });
+
+  it("scores a certification genuinely in progress at the partial rate", () => {
+    // `Partially Compliant` is 3 of 5 → 8 × 3/5 = 4.8.
+    const inProgress = isoRows({ "10": "Partially Compliant", "6.1.2": "Fully Compliant" });
+    expect(E({ "iso-tracker": inProgress }).d26).toBeCloseTo(4.8, 6);
+  });
+
+  it("blocks a certificate with no management system behind it", () => {
+    // A lone certification row is a claim that vouches for itself. The old
+    // blend paid up to 4 points for precisely this, and a gate measured
+    // against the whole EMS — which the claim is part of — would never fire.
+    expect(E({ "iso-tracker": isoRows({ "10": "Fully Compliant" }) }).d26).toBe(0);
+    // Add one real clause behind it and the certificate counts.
+    expect(
+      E({ "iso-tracker": isoRows({ "10": "Fully Compliant", "6.1.2": "Fully Compliant" }) }).d26,
+    ).toBeCloseTo(8, 6);
+  });
+
+  it("pays nothing for a certification the tracker records as a gap", () => {
+    expect(E({ "iso-tracker": isoRows({ "10": "Gap", "6.1.2": "Fully Compliant" }) }).d26).toBe(0);
   });
 
   it("scores the aspects register from clause 6.1.2, partial for partial", () => {
