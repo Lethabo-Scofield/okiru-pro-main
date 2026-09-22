@@ -27,12 +27,11 @@ describe("HubLanding product sections", () => {
     expect(HUB_TSX).toMatch(/create: '\/esg\/new'/);
   });
 
-  it("keeps ESG behind the access gate", () => {
+  it("keeps ESG visible while access remains gated", () => {
     expect(HUB_TSX).toMatch(/useEsgAccess/);
-    // The ESG card carries `show: esgAllowed` and the list is filtered on it,
-    // so a viewer without access is never offered the door.
-    expect(HUB_TSX).toMatch(/show: esgAllowed/);
-    expect(HUB_TSX).toMatch(/\.filter\(\(p\) => p\.show\)/);
+    expect(HUB_TSX).toMatch(/available: esgAllowed/);
+    expect(HUB_TSX).toMatch(/ESG access is not enabled for this account/);
+    expect(HUB_TSX).not.toMatch(/\.filter\(\(p\) => p\.show\)/);
   });
 
   it("offers the document library, which had no link anywhere before", () => {

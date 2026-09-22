@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
-import { Award, Leaf, ShieldCheck, FolderOpen, ArrowRight, X } from 'lucide-react';
+import { Award, Leaf, ShieldCheck, FolderOpen, ArrowRight, X, LockKeyhole } from 'lucide-react';
 import { companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
 // Light snapshot peeks (type-only deps) — the create flows write these when a
@@ -40,7 +40,7 @@ interface HubClient {
  */
 export default function HubLanding() {
   const { user } = useAuth();
-  const { allowed: esgAllowed } = useEsgAccess();
+  const { allowed: esgAllowed, loading: esgAccessLoading } = useEsgAccess();
   const [location, navigate] = useLocation();
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
@@ -209,7 +209,7 @@ export default function HubLanding() {
       create: '/bbbee/new',
       hue: 'var(--bbbee)',
       count: counts.bbbee,
-      show: true,
+      available: true,
     },
     {
       id: 'esg',
@@ -221,9 +221,9 @@ export default function HubLanding() {
       create: '/esg/new',
       hue: 'var(--esg)',
       count: counts.esg,
-      show: esgAllowed,
+      available: esgAllowed,
     },
-  ].filter((p) => p.show);
+  ];
 
   const alsoAvailable = [
     {
@@ -243,26 +243,35 @@ export default function HubLanding() {
   ];
 
   return (
-    <div className="font-sans" data-testid="page-hub">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8">
-          <div className="ok-eyebrow mb-2">Compliance suite</div>
-          <h1 className="ok-title-lg">{companyName || 'Okiru'}</h1>
-          <p className="ok-subtitle mt-2 max-w-xl">
-            Choose a product to see the companies you are working on.
-          </p>
+    <div className="min-h-[calc(100vh-3rem)] bg-[#08090b] font-sans text-[color:var(--hi)]" data-testid="page-hub">
+      <div className="mx-auto max-w-[1240px] px-4 py-8 sm:px-6 lg:py-10">
+        <div className="mb-8 flex flex-col gap-4 border-b border-[color:var(--rule)] pb-7 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">Workspace</div>
+            <h1 className="text-[30px] font-semibold leading-tight tracking-normal text-[color:var(--hi)]">
+              {companyName || 'Okiru'}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--body)]">
+              Select a compliance product or return to recent company work.
+            </p>
+          </div>
+          <div className="flex items-center gap-5 text-sm text-[color:var(--body)]" aria-label="Workspace summary">
+            <span><strong className="font-semibold text-[color:var(--hi)]">{clientsLoading ? '—' : clients.length}</strong> companies</span>
+            <span className="h-4 w-px bg-[color:var(--rule-strong)]" aria-hidden />
+            <span><strong className="font-semibold text-[color:var(--hi)]">2</strong> products</span>
+          </div>
         </div>
 
         {!profileLoading && needsProfile && reminderVisible && (
           <div
-            className="ok-panel flex items-start justify-between gap-4 px-4 py-3 mb-6"
+            className="mb-6 flex items-start justify-between gap-4 border border-[color:var(--rule)] bg-[#111216] px-4 py-3 shadow-sm"
             data-testid="profile-reminder"
           >
-            <p className="ok-subtitle">
+            <p className="text-sm text-[color:var(--body)]">
               Your company profile is incomplete.{' '}
               <Link
                 href={companyProfilePath('/hub')}
-                className="text-white underline underline-offset-4"
+                className="font-medium text-[color:var(--hi)] underline underline-offset-4"
               >
                 Complete it
               </Link>{' '}
@@ -279,7 +288,7 @@ export default function HubLanding() {
                   /* a dismissal we cannot remember is not worth failing over */
                 }
               }}
-              className="text-[color:var(--muted)] hover:text-[color:var(--body)] transition-colors shrink-0"
+              className="shrink-0 text-[color:var(--muted)] transition-colors hover:text-[color:var(--hi)]"
             >
               <X className="h-4 w-4" />
             </button>
@@ -288,7 +297,7 @@ export default function HubLanding() {
 
         {(continueBbbee || (esgAllowed && continueEsg)) && (
           <div className="mb-7">
-            <div className="ok-eyebrow mb-2">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
               Continue where you left off
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
@@ -296,14 +305,14 @@ export default function HubLanding() {
                 <button
                   type="button"
                   onClick={() => navigate('/bbbee/new')}
-                  className="flex items-center justify-between gap-3 ok-panel ok-panel-action px-4 py-3 text-left"
+                  className="flex items-center justify-between gap-3 border border-[color:var(--rule)] bg-[#111216] px-4 py-3 text-left shadow-sm transition hover:border-[color:var(--rule-strong)]"
                   data-testid="continue-bbbee"
                 >
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium truncate">
                       {continueBbbee.name || 'B-BBEE scorecard'}
                     </span>
-                    <span className="block text-[11px] text-[color:var(--body)] mt-0.5">
+                    <span className="mt-0.5 block text-[11px] text-[color:var(--body)]">
                       B-BBEE{continueBbbee.saved ? ` · saved ${continueBbbee.saved}` : ''}
                     </span>
                   </span>
@@ -314,14 +323,14 @@ export default function HubLanding() {
                 <button
                   type="button"
                   onClick={() => navigate('/esg/new')}
-                  className="flex items-center justify-between gap-3 ok-panel ok-panel-action px-4 py-3 text-left"
+                  className="flex items-center justify-between gap-3 border border-[color:var(--rule)] bg-[#111216] px-4 py-3 text-left shadow-sm transition hover:border-[color:var(--rule-strong)]"
                   data-testid="continue-esg"
                 >
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium truncate">
                       {continueEsg.name || 'ESG scorecard'}
                     </span>
-                    <span className="block text-[11px] text-[color:var(--body)] mt-0.5">
+                    <span className="mt-0.5 block text-[11px] text-[color:var(--body)]">
                       ESG{continueEsg.saved ? ` · saved ${continueEsg.saved}` : ''}
                     </span>
                   </span>
@@ -332,80 +341,113 @@ export default function HubLanding() {
           </div>
         )}
 
-        {/* Products on the left, what you were last working on beside them, so
-            the page is wide enough to hold both and there is something on it. */}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] mb-8">
+        <section aria-labelledby="products-heading">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 id="products-heading" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
+              Compliance products
+            </h2>
+            <span className="text-xs text-[color:var(--muted)]">Choose where to work</span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
           {products.map((p) => (
             <section
               key={p.id}
-              className="ok-panel relative overflow-hidden p-6 flex flex-col"
+              className="relative flex min-h-[250px] flex-col overflow-hidden border border-[color:var(--rule)] bg-[#111216] p-6 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.9)]"
               data-testid={`product-${p.id}`}
             >
-              <span
-                className="absolute inset-x-0 top-0 h-px"
-                style={{ background: p.hue, opacity: 0.7 }}
-                aria-hidden
-              />
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <span
-                    className="grid h-9 w-9 place-items-center rounded-[10px]"
+                    className="grid h-10 w-10 place-items-center rounded-[6px]"
                     style={{
                       color: p.hue,
-                      background: `color-mix(in srgb, ${p.hue} 14%, transparent)`,
-                      boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${p.hue} 28%, transparent)`,
+                      background: `color-mix(in srgb, ${p.hue} 12%, #111216)`,
+                      border: `1px solid color-mix(in srgb, ${p.hue} 24%, #111216)`,
                     }}
                   >
                     {p.icon}
                   </span>
-                  <h2
-                    className="text-[17px] font-semibold tracking-[-0.015em]"
-                    style={{ color: 'var(--hi)' }}
-                  >
-                    {p.title}
-                  </h2>
+                  <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--muted)]">Product</div>
+                    <h3 className="text-xl font-semibold tracking-normal text-[color:var(--hi)]">{p.title}</h3>
+                  </div>
                 </div>
-                {/* The number is the point: how many companies are in here. */}
                 <div className="text-right shrink-0">
-                  <div
-                    className="ok-num text-[26px] font-semibold leading-none"
-                    style={{ color: 'var(--hi)' }}
-                    data-testid={`count-${p.id}`}
-                  >
+                  <div className="text-[26px] font-semibold leading-none text-[color:var(--hi)]" data-testid={`count-${p.id}`}>
                     {clientsLoading ? '—' : p.count}
                   </div>
-                  <div className="ok-eyebrow mt-1.5">
+                  <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--muted)]">
                     {p.count === 1 ? 'company' : 'companies'}
                   </div>
                 </div>
               </div>
-              <p className="ok-subtitle mt-4 flex-1">{p.description}</p>
-              <div className="flex items-center gap-2 mt-6">
-                <Link href={p.workspace} className="ok-btn-primary" data-testid={`open-${p.id}`}>
-                  Open workspace
-                </Link>
-                <Link href={p.create} className="ok-btn" data-testid={`create-${p.id}`}>
-                  Create scorecard
-                </Link>
-              </div>
+              <p className="mt-5 max-w-md flex-1 text-sm leading-6 text-[color:var(--body)]">{p.description}</p>
+              {p.id === 'esg' && !esgAccessLoading && !p.available ? (
+                <div className="mt-6 flex items-center gap-2 border-t border-[color:var(--rule)] pt-4 text-sm text-[color:var(--body)]" data-testid="esg-unavailable">
+                  <LockKeyhole className="h-4 w-4" />
+                  ESG access is not enabled for this account
+                </div>
+              ) : (
+                <div className="mt-6 flex flex-wrap items-center gap-2">
+                  <Link
+                    href={p.workspace}
+                    className="inline-flex h-9 items-center gap-2 rounded-[5px] bg-white px-4 text-sm font-medium text-[#111] transition hover:bg-[#ececea]"
+                    data-testid={`open-${p.id}`}
+                  >
+                    Open workspace <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                  <Link
+                    href={p.create}
+                    className="inline-flex h-9 items-center rounded-[5px] border border-[color:var(--rule-strong)] bg-[#18191d] px-4 text-sm font-medium text-[color:var(--hi)] transition hover:bg-[#202126]"
+                    data-testid={`create-${p.id}`}
+                  >
+                    Create scorecard
+                  </Link>
+                </div>
+              )}
+              {p.id === 'esg' && esgAccessLoading && (
+                <div className="mt-3 text-xs text-[color:var(--muted)]">Checking access</div>
+              )}
             </section>
           ))}
+          </div>
+        </section>
 
-          <section className="ok-panel-flush flex flex-col" data-testid="recent-companies">
-            <div
-              className="px-4 py-3"
-              style={{ borderBottom: '1px solid var(--rule)' }}
-            >
-              <span className="ok-eyebrow">Recently worked on</span>
+        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <section aria-labelledby="tools-heading">
+            <h2 id="tools-heading" className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
+              Shared tools
+            </h2>
+            <div className="divide-y divide-[color:var(--rule)] border border-[color:var(--rule)] bg-[#111216]">
+              {alsoAvailable.map((t) => (
+                <Link
+                  key={t.id}
+                  href={t.href}
+                  className="flex items-center gap-4 px-4 py-4 transition hover:bg-[#18191d]"
+                  data-testid={`tool-${t.id}`}
+                >
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[5px] border border-[color:var(--rule)] text-[color:var(--body)]">{t.icon}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
+                    <span className="mt-0.5 block text-xs leading-5 text-[color:var(--body)]">{t.description}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)]" />
+                </Link>
+              ))}
             </div>
-            <div className="flex-1">
+          </section>
+
+          <section className="border border-[color:var(--rule)] bg-[#111216]" data-testid="recent-companies" aria-labelledby="recent-heading">
+            <div className="border-b border-[color:var(--rule)] px-4 py-3">
+              <h2 id="recent-heading" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">Recent work</h2>
+            </div>
+            <div>
               {clientsLoading ? (
-                <div className="px-4 py-6 text-[13px] text-[color:var(--muted)]">Loading</div>
+                <div className="px-4 py-6 text-sm text-[color:var(--body)]">Loading companies</div>
               ) : recent.length === 0 ? (
                 <div className="px-4 py-6">
-                  <p className="text-[13px] text-[color:var(--body)]">
-                    Nothing yet. Create a scorecard and it will appear here.
-                  </p>
+                  <p className="text-sm font-medium text-[color:var(--hi)]">No recent company work</p>
+                  <p className="mt-1 text-xs leading-5 text-[color:var(--body)]">Create or open a scorecard to populate this list.</p>
                 </div>
               ) : (
                 recent.map((c) => (
@@ -413,53 +455,20 @@ export default function HubLanding() {
                     key={c.id}
                     type="button"
                     onClick={() => openCompany(c)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.03)]"
+                    className="flex w-full items-center gap-3 border-b border-[color:var(--rule)] px-4 py-3 text-left transition last:border-0 hover:bg-[#18191d]"
                     data-testid={`recent-${c.id}`}
                   >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full shrink-0"
-                      style={{ background: c.isEsg ? 'var(--esg)' : 'var(--bbbee)' }}
-                      aria-hidden
-                    />
+                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.isEsg ? 'var(--esg)' : 'var(--bbbee)' }} aria-hidden />
                     <span className="min-w-0 flex-1">
-                      <span
-                        className="block text-[13px] font-medium truncate"
-                        style={{ color: 'var(--hi)' }}
-                      >
-                        {c.name}
-                      </span>
-                      <span className="block ok-eyebrow mt-0.5">
-                        {c.isEsg ? 'ESG' : 'B-BBEE'}
-                      </span>
+                      <span className="block truncate text-sm font-medium text-[color:var(--hi)]">{c.name}</span>
+                      <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--muted)]">{c.isEsg ? 'ESG' : 'B-BBEE'}</span>
                     </span>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />
+                    <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)]" />
                   </button>
                 ))
               )}
-            </div>
-          </section>
-        </div>
-
-        <div className="ok-eyebrow mb-2">Also available</div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {alsoAvailable.map((t) => (
-            <Link
-              key={t.id}
-              href={t.href}
-              className="flex items-start gap-3 ok-panel ok-panel-action px-4 py-3"
-              data-testid={`tool-${t.id}`}
-            >
-              <span className="text-[color:var(--body)] mt-0.5">{t.icon}</span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium" style={{ color: 'var(--hi)' }}>
-                  {t.title}
-                </span>
-                <span className="block text-[12px] text-[color:var(--body)] mt-0.5">
-                  {t.description}
-                </span>
-              </span>
-            </Link>
-          ))}
+              </div>
+            </section>
         </div>
       </div>
     </div>

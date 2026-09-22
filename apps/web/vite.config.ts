@@ -41,6 +41,25 @@ export default defineConfig({
       clientPort: 443,
     },
     proxy: {
+      // Local development reads the public certificate directory from the live
+      // registry because the legacy local Blob Storage account is disabled.
+      // Keep this deliberately narrow: protected files and every write/admin
+      // operation must continue through the local API and its authorization.
+      "^/api/certificates(?:\\?.*)?$": {
+        target: process.env.VITE_CERTIFICATE_READ_API_URL || "https://okiru.pro",
+        changeOrigin: true,
+        secure: true,
+      },
+      "^/api/certificates/stats(?:\\?.*)?$": {
+        target: process.env.VITE_CERTIFICATE_READ_API_URL || "https://okiru.pro",
+        changeOrigin: true,
+        secure: true,
+      },
+      "^/api/certificates/by-slug/": {
+        target: process.env.VITE_CERTIFICATE_READ_API_URL || "https://okiru.pro",
+        changeOrigin: true,
+        secure: true,
+      },
       // Proxy all /api/* requests to the API server when running pure Vite dev
       // mode (i.e. without the Express wrapper in apps/web/server/index.ts).
       // The Express wrapper already handles this via apiProxy.ts, so these
@@ -49,26 +68,34 @@ export default defineConfig({
       // /api/auth/* call with an empty 404, which the sign-in screen reported
       // as "Invalid username or password" — a correct password looked wrong.
       "/api/auth": {
-        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
+        changeOrigin: true,
+      },
+      "/api/parser": {
+        target: process.env.VITE_PARSER_SERVICE_URL || "http://127.0.0.1:3200",
         changeOrigin: true,
       },
       "/api/sectors": {
-        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
         changeOrigin: true,
       },
       "/api/import": {
-        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
         changeOrigin: true,
       },
       "/api/processor-sessions": {
-        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
         changeOrigin: true,
       },
       "/api/assessments": {
-        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3001",
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
         changeOrigin: true,
       },
       "/api/feedback": {
+        target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
+        changeOrigin: true,
+      },
+      "/api": {
         target: process.env.VITE_API_SERVER_URL || process.env.API_SERVER_URL || "http://127.0.0.1:3000",
         changeOrigin: true,
       },

@@ -13,6 +13,7 @@ import { createLogger } from "./logger";
 const logger = createLogger("ApiProxy");
 
 const API_BASE = process.env.API_SERVER_URL || "http://127.0.0.1:3000";
+const CERTIFICATE_READ_BASE = process.env.CERTIFICATE_READ_API_URL || "https://okiru.pro";
 
 /**
  * okiru-ai-parser (standalone deterministic document parser, :3200). The
@@ -85,7 +86,13 @@ export function proxyTargetFor(path: string): string {
 }
 
 function proxyRequest(req: Request, res: Response): void {
-  const targetBase = proxyTargetFor(req.path);
+  const publicCertificateRead =
+    process.env.NODE_ENV !== "production" &&
+    req.method === "GET" &&
+    (req.path === "/api/certificates" ||
+      req.path === "/api/certificates/stats" ||
+      req.path.startsWith("/api/certificates/by-slug/"));
+  const targetBase = publicCertificateRead ? CERTIFICATE_READ_BASE : proxyTargetFor(req.path);
   const url = new URL(req.originalUrl, targetBase);
 
   const headers: Record<string, string> = {};
