@@ -329,11 +329,24 @@ export function scoreSocial(
   );
   const supplierCount = readEsgCell(workbook, "saq", "_supplier_count") ?? 0;
   const supplierRatingMax = readEsgCell(workbook, "saq", "_max_rating") ?? 5;
+  /*
+   * COVERAGE. Assessing three of four hundred suppliers and rating them 5/5
+   * is not the same result as assessing all four hundred, and until
+   * `S_Data!B89` existed the register could not tell those apart — so it
+   * rewarded assessing your best supplier and stopping.
+   *
+   * `null` means the population was never declared, and that is NOT read as
+   * full coverage: the indicator keeps its pre-coverage behaviour so no
+   * stored workbook is re-scored downward, and the validation panel asks for
+   * the figure instead.
+   */
+  const supplierCoverage = readEsgCell(workbook, "saq", "_coverage");
   const supplierBand = (meanRef: string, maxPts: number): number => {
     if (mode === "workbook-parity" || supplierCount <= 0 || supplierRatingMax <= 0) return 0;
     const mean = readEsgCell(workbook, "saq", meanRef);
     if (mean == null) return 0;
-    return prT(mean / supplierRatingMax, thrSupplier, maxPts, floor);
+    const earned = prT(mean / supplierRatingMax, thrSupplier, maxPts, floor);
+    return supplierCoverage == null ? earned : earned * supplierCoverage;
   };
 
   const d26 = supplierBand("_hs_mean", 5);

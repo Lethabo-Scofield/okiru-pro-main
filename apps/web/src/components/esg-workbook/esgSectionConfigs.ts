@@ -553,6 +553,31 @@ export const S_DATA_PAYROLL_FIELDS: EsgFieldDef[] = [
     helpText:
       "Total measured procurement spend for the same period — the denominator the local share is measured against.",
   },
+  /*
+   * Supplier population — `S_Data!B89`. THE MISSING DENOMINATOR.
+   *
+   * `S d26` and `S d27` average the suppliers that were assessed, and until
+   * this field existed there was nothing to measure that against. A company
+   * assessing 2 of its 200 suppliers and rating them 5/5 scored exactly the
+   * same as one that assessed all 200 — the register rewarded picking your
+   * best supplier and stopping.
+   *
+   * Every supplier-assessment scheme treats coverage as part of the answer,
+   * and CDP blocks its upper-band points on incomplete disclosure for the
+   * same reason. `esgDeriveSummary` publishes `saq!_coverage` from this, and
+   * the two supplier indicators scale by it.
+   *
+   * Left blank, coverage is unknown and NOT assumed complete: the indicators
+   * keep their pre-coverage behaviour and the validation panel asks for it,
+   * so an existing workbook is never silently re-scored downward.
+   */
+  {
+    cell: "B89",
+    label: "Total suppliers used in the period",
+    type: "number",
+    helpText:
+      "How many suppliers the business actually bought from this period, whether or not they were assessed. This is the denominator for supplier coverage — assessing three of four hundred suppliers is a different result from assessing all four hundred.",
+  },
 ];
 
 /**

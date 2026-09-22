@@ -191,6 +191,85 @@ describe("SAQ_Supplier — S d26/d27 (10 points that could not be earned)", () =
   });
 });
 
+/**
+ * The register collects a 1–5 opinion. These two columns collect the document
+ * behind it, and EcoVadis's Results-over-Policies weighting says the document
+ * wins: what a supplier achieved outranks what it claimed.
+ */
+describe("auditable evidence outranks the self-assessed rating", () => {
+  const withEvidence = (rows: Array<Record<string, string>>): Cells => {
+    const cells: Cells = { _row_count: rows.length };
+    rows.forEach((r, i) => {
+      const row = 5 + i;
+      cells[`A${row}`] = `Supplier ${i + 1}`;
+      if (r.hs) cells[`D${row}`] = r.hs;
+      if (r.fs) cells[`F${row}`] = r.fs;
+      if (r.hsEvidence) cells[`I${row}`] = r.hsEvidence; // appended column I
+      if (r.fsGrade) cells[`J${row}`] = r.fsGrade; // appended column J
+    });
+    return cells;
+  };
+
+  it("a failed audit is not rescued by a generous self-rating", () => {
+    // Rated 5/5 by the buyer, graded D by the auditor. The grade decides.
+    const rows = S({ saq: withEvidence([{ hs: "5", fs: "5", fsGrade: "BRCGS D" }]) });
+    expect(rows.d27).toBeLessThan(5);
+    // Untouched criterion still uses its rating.
+    expect(rows.d26).toBeCloseTo(5, 6);
+  });
+
+  it("an ISO 45001 certificate scores full marks whatever the rating says", () => {
+    const rows = S({ saq: withEvidence([{ hs: "2", hsEvidence: "ISO 45001 certified" }]) });
+    expect(rows.d26).toBeCloseTo(5, 6);
+  });
+
+  it("'None held' is a finding, not missing data", () => {
+    // An explicit nil scores zero rather than falling back to the rating.
+    const rows = S({ saq: withEvidence([{ hs: "5", hsEvidence: "None held" }]) });
+    expect(rows.d26).toBe(0);
+  });
+
+  it("falls back to the rating when no evidence was recorded", () => {
+    expect(S({ saq: withEvidence([{ hs: "5", fs: "5" }]) }).d26).toBeCloseTo(5, 6);
+  });
+});
+
+describe("supplier coverage", () => {
+  const assessed = (n: number): Cells => {
+    const cells: Cells = { _row_count: n };
+    for (let i = 0; i < n; i++) {
+      cells[`A${5 + i}`] = `Supplier ${i + 1}`;
+      cells[`D${5 + i}`] = "5";
+      cells[`F${5 + i}`] = "5";
+    }
+    return cells;
+  };
+
+  it("scales the score by how much of the supply base was assessed", () => {
+    // Two perfect suppliers out of ten declared → a tenth of the points each.
+    const partial = S({ saq: assessed(2), "s-data": { B89: 10 } });
+    expect(partial.d26).toBeCloseTo(1, 6);
+    expect(partial.d27).toBeCloseTo(1, 6);
+  });
+
+  it("pays the full points once the whole supply base is assessed", () => {
+    const full = S({ saq: assessed(10), "s-data": { B89: 10 } });
+    expect(full.d26).toBeCloseTo(5, 6);
+  });
+
+  it("does not silently re-score a workbook that never declared a population", () => {
+    // Coverage unknown must not be read as coverage zero, nor as complete.
+    const undeclared = S({ saq: assessed(2) });
+    expect(undeclared.d26).toBeCloseTo(5, 6);
+  });
+
+  it("never exceeds full coverage when the register outruns the declaration", () => {
+    // More rows than declared suppliers is a data-entry problem, not 200%.
+    const over = S({ saq: assessed(4), "s-data": { B89: 2 } });
+    expect(over.d26).toBeCloseTo(5, 6);
+  });
+});
+
 describe("workbook parity is untouched", () => {
   it("keeps every newly-wired indicator at the workbook's literal zero", () => {
     const derived = deriveEsgSummaryCells(
