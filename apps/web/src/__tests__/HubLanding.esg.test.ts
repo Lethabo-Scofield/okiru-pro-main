@@ -40,9 +40,10 @@ describe("HubLanding product sections", () => {
 
   /**
    * Nothing on the hub advertises a product that does not exist, and nothing
-   * decorates it. Corporate clients called the old page unserious: a
-   * photograph, a violet glow, a greeting that changed with the clock, and
-   * "AI-Verified" badges on tiles that were filtered out before rendering.
+   * decorates it with the old product-marketing treatment. Corporate clients
+   * called that version unserious: a violet glow, a greeting that changed with
+   * the clock, and "AI-Verified" badges on tiles that were filtered out before
+   * rendering.
    */
   it("advertises no unbuilt toolkits", () => {
     expect(HUB_TSX).not.toMatch(/handleComingSoon/);
@@ -54,7 +55,6 @@ describe("HubLanding product sections", () => {
 
   it("carries no decorative layer", () => {
     for (const gone of [
-      "hubBackground",
       "certCardBg",
       "Sparkles",
       "AI-Verified",

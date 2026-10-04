@@ -67,7 +67,7 @@ function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
   }, [user, isLoading, navigate]);
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
       </div>
     );
@@ -97,8 +97,8 @@ function LegacyOnboardingRedirect() {
     navigate(`/auth${q}`, { replace: true });
   }, [navigate]);
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    <div className="flex min-h-screen items-center justify-center bg-white">
+      <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
     </div>
   );
 }
@@ -122,7 +122,7 @@ function InformationRequestRedirect() {
     });
   }, [params.companyId, navigate]);
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
+    <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin" />
     </div>
   );
@@ -131,7 +131,7 @@ function InformationRequestRedirect() {
 function ToolkitLoader() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-white">
         <div className="text-center space-y-3">
           <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-muted-foreground text-sm">Loading Toolkit...</p>
@@ -163,7 +163,7 @@ function ToolkitAuthRedirect() {
     navigate("/auth?redirect=/toolkit", { replace: true });
   }, [navigate]);
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
+    <div className="min-h-screen bg-white flex items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
     </div>
   );
@@ -398,7 +398,7 @@ function GlobalScorecardAdvisor() {
         whileHover={{ y: -1 }}
         whileTap={{ scale: 0.98 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-        className="fixed bottom-[4.75rem] right-5 z-[9998] flex items-center gap-2 rounded-full bg-zinc-950 py-1.5 pl-1.5 pr-3.5 text-[13px] font-medium text-white shadow-[0_14px_36px_-18px_rgba(0,0,0,0.9)] ring-1 ring-white/15 transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-black"
+        className="fixed bottom-[4.75rem] right-5 z-[9998] flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1.5 pl-1.5 pr-3.5 text-[13px] font-medium text-zinc-950 shadow-[0_14px_36px_-18px_rgba(24,24,27,0.35)] transition hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 focus:ring-offset-white"
       >
         <span className="relative h-8 w-8 shrink-0">
           <motion.span
@@ -420,7 +420,7 @@ function GlobalScorecardAdvisor() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="fixed inset-0 z-[9999] bg-black/45 p-3 backdrop-blur-[2px] sm:p-5"
+            className="fixed inset-0 z-[9999] bg-zinc-100/75 p-3 backdrop-blur-[2px] sm:p-5"
             role="presentation"
             onClick={() => setOpen(false)}
             initial={{ opacity: 0 }}
@@ -429,7 +429,7 @@ function GlobalScorecardAdvisor() {
             transition={{ duration: 0.18 }}
           >
             <motion.div
-              className="absolute bottom-24 right-3 w-[calc(100vw-1.5rem)] max-w-[860px] overflow-hidden rounded-[24px] bg-[#101012] shadow-[0_30px_100px_-45px_rgba(0,0,0,1)] ring-1 ring-white/10 sm:right-5"
+              className="absolute bottom-24 right-3 w-[calc(100vw-1.5rem)] max-w-[860px] overflow-hidden rounded-[24px] bg-white shadow-[0_30px_100px_-45px_rgba(24,24,27,0.35)] ring-1 ring-zinc-200 sm:right-5"
               role="dialog"
               aria-modal="true"
               aria-label="Scorecard advisor"
@@ -443,7 +443,7 @@ function GlobalScorecardAdvisor() {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close scorecard advisor"
-                className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-white/45 transition hover:bg-white/10 hover:text-white"
+                className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -458,7 +458,7 @@ function GlobalScorecardAdvisor() {
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme">
+    <ThemeProvider defaultTheme="light" storageKey="okiru-pro-theme">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>

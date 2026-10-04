@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
-import { Award, Leaf, ShieldCheck, FolderOpen, ArrowRight, X, LockKeyhole } from 'lucide-react';
+import { Award, Leaf, ShieldCheck, ArrowRight, X, LockKeyhole } from 'lucide-react';
 import { companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
 // Light snapshot peeks (type-only deps) — the create flows write these when a
@@ -11,7 +11,6 @@ import { readFlowSnapshot } from '@/components/scorecard/flowSnapshot';
 import { readEsgFlowSnapshot } from '@/components/esg/esgFlowSnapshot';
 import { gatedAuthPath } from '@/lib/authRoutes';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
-import { esgSummaryHref, setEsgActiveCompany } from '@/lib/esgRoutes';
 
 interface CompanyProfile {
   companyName?: string;
@@ -23,7 +22,25 @@ interface HubClient {
   id?: string;
   name?: string;
   product?: string;
-  updatedAt?: string;
+}
+
+function HubSkeleton({ className }: { className: string }) {
+  return (
+    <span
+      className={`block animate-pulse rounded-full bg-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] ${className}`}
+      aria-hidden
+    />
+  );
+}
+
+function YellowFolderMark() {
+  return (
+    <span className="relative block h-8 w-10" aria-hidden>
+      <span className="absolute left-1 top-1 h-2.5 w-6 rounded-t-[5px] bg-[#f8c84a] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]" />
+      <span className="absolute inset-x-0 bottom-0 h-6 rounded-[7px] bg-gradient-to-b from-[#ffd96a] to-[#f2ad2e] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_18px_-14px_rgba(111,69,9,0.8)]" />
+      <span className="absolute inset-x-1 bottom-1 h-3 rounded-[5px] bg-white/18" />
+    </span>
+  );
 }
 
 /**
@@ -128,8 +145,8 @@ export default function HubLanding() {
    *
    * The Hub was two cards and a lot of space: it described the products
    * without saying anything about the work in them, so there was nothing to
-   * come back to it for. Counts and the most recently touched companies make
-   * it a place you can start from rather than pass through.
+   * come back to it for. Counts make it a place you can start from rather
+   * than pass through.
    */
   const [clients, setClients] = useState<HubClient[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
@@ -157,39 +174,6 @@ export default function HubLanding() {
     const esg = clients.filter((c) => c.product === 'esg').length;
     return { bbbee: clients.length - esg, esg };
   }, [clients]);
-
-  /**
-   * The three most recently touched, newest first, across both products.
-   *
-   * Three, not six: this sits in the same row as the two product cards, and
-   * a taller list stretched them to match it — leaving both cards mostly
-   * empty space so the row could accommodate a list nobody asked to be that
-   * long. The products are the point of this page; this is a shortcut back.
-   */
-  const recent = useMemo(
-    () =>
-      clients
-        .map((c) => ({
-          id: String(c.clientId ?? c.id ?? ''),
-          name: String(c.name ?? 'Unnamed company'),
-          isEsg: c.product === 'esg',
-          updatedAt: c.updatedAt,
-        }))
-        .filter((c) => c.id)
-        .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
-        .slice(0, 3),
-    [clients],
-  );
-
-  const openCompany = (c: { id: string; isEsg: boolean }) => {
-    if (c.isEsg) {
-      setEsgActiveCompany(c.id);
-      navigate(esgSummaryHref(c.id));
-      return;
-    }
-    localStorage.setItem('okiru-pro-active-client', c.id);
-    navigate(`/create-scorecard/${encodeURIComponent(c.id)}/summary`);
-  };
 
   /**
    * Each product keeps its own colour, used the way a bank uses colour: to tell
@@ -236,27 +220,39 @@ export default function HubLanding() {
     {
       id: 'documents',
       title: 'Document library',
-      icon: <FolderOpen className="h-4 w-4" />,
+      icon: <YellowFolderMark />,
       description: 'Every document you have uploaded, filed under the company it belongs to.',
       href: '/documents',
     },
   ];
 
   return (
-    <div className="min-h-[calc(100vh-3rem)] bg-[#08090b] font-sans text-[color:var(--hi)]" data-testid="page-hub">
+    <div
+      className="min-h-[calc(100vh-3rem)] bg-white bg-cover bg-center bg-no-repeat font-sans text-[color:var(--hi)]"
+      style={{ backgroundImage: "url('/hub-background.png')" }}
+      data-testid="page-hub"
+    >
       <div className="mx-auto max-w-[1240px] px-4 py-8 sm:px-6 lg:py-10">
-        <div className="mb-8 flex flex-col gap-4 border-b border-[color:var(--rule)] pb-7 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-8 flex flex-col gap-4 px-1 py-5 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">Workspace</div>
             <h1 className="text-[30px] font-semibold leading-tight tracking-normal text-[color:var(--hi)]">
               {companyName || 'Okiru'}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--body)]">
-              Select a compliance product or return to recent company work.
+              Select a compliance product or open a shared workspace tool.
             </p>
           </div>
-          <div className="flex items-center gap-5 text-sm text-[color:var(--body)]" aria-label="Workspace summary">
-            <span><strong className="font-semibold text-[color:var(--hi)]">{clientsLoading ? '—' : clients.length}</strong> companies</span>
+          <div className="flex w-fit items-center gap-5 text-sm text-[color:var(--body)]" aria-label="Workspace summary" aria-busy={clientsLoading}>
+            <span className="inline-flex min-w-[86px] items-center gap-1.5">
+              {clientsLoading ? (
+                <HubSkeleton className="h-4 w-16" />
+              ) : (
+                <>
+                  <strong className="font-semibold text-[color:var(--hi)]">{clients.length}</strong> companies
+                </>
+              )}
+            </span>
             <span className="h-4 w-px bg-[color:var(--rule-strong)]" aria-hidden />
             <span><strong className="font-semibold text-[color:var(--hi)]">2</strong> products</span>
           </div>
@@ -264,7 +260,7 @@ export default function HubLanding() {
 
         {!profileLoading && needsProfile && reminderVisible && (
           <div
-            className="mb-6 flex items-start justify-between gap-4 border border-[color:var(--rule)] bg-[#111216] px-4 py-3 shadow-sm"
+            className="mb-6 flex items-start justify-between gap-4 rounded-[8px] border border-white/65 bg-white/70 px-4 py-3 shadow-[0_14px_34px_-28px_rgba(24,24,27,0.42)] backdrop-blur-xl"
             data-testid="profile-reminder"
           >
             <p className="text-sm text-[color:var(--body)]">
@@ -305,7 +301,7 @@ export default function HubLanding() {
                 <button
                   type="button"
                   onClick={() => navigate('/bbbee/new')}
-                  className="flex items-center justify-between gap-3 border border-[color:var(--rule)] bg-[#111216] px-4 py-3 text-left shadow-sm transition hover:border-[color:var(--rule-strong)]"
+                  className="flex items-center justify-between gap-3 rounded-[8px] border border-white/55 bg-white/38 px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_16px_36px_-30px_rgba(24,24,27,0.48)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:bg-white/52"
                   data-testid="continue-bbbee"
                 >
                   <span className="min-w-0">
@@ -323,7 +319,7 @@ export default function HubLanding() {
                 <button
                   type="button"
                   onClick={() => navigate('/esg/new')}
-                  className="flex items-center justify-between gap-3 border border-[color:var(--rule)] bg-[#111216] px-4 py-3 text-left shadow-sm transition hover:border-[color:var(--rule-strong)]"
+                  className="flex items-center justify-between gap-3 rounded-[8px] border border-white/55 bg-white/38 px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_16px_36px_-30px_rgba(24,24,27,0.48)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:bg-white/52"
                   data-testid="continue-esg"
                 >
                   <span className="min-w-0">
@@ -352,29 +348,44 @@ export default function HubLanding() {
           {products.map((p) => (
             <section
               key={p.id}
-              className="relative flex min-h-[250px] flex-col overflow-hidden border border-[color:var(--rule)] bg-[#111216] p-6 shadow-[0_8px_24px_-16px_rgba(0,0,0,0.9)]"
+              className={`relative flex min-h-[250px] flex-col overflow-hidden rounded-[8px] border p-6 transition hover:-translate-y-0.5 ${
+                p.id === 'esg'
+                  ? 'border-white/70 bg-white/72 shadow-[0_24px_58px_-48px_rgba(24,24,27,0.62)] backdrop-blur-xl hover:bg-white/82 hover:shadow-[0_28px_70px_-52px_rgba(24,24,27,0.72)]'
+                  : 'border-white/55 bg-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_24px_58px_-48px_rgba(24,24,27,0.68)] backdrop-blur-2xl hover:bg-white/42 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_28px_70px_-52px_rgba(24,24,27,0.72)]'
+              }`}
+              style={
+                p.id === 'esg'
+                  ? {
+                      backgroundImage:
+                        "linear-gradient(90deg, rgba(255,255,255,0.68) 0%, rgba(255,255,255,0.28) 46%, rgba(255,255,255,0.06) 100%), url('/hub-esg-card-background.png')",
+                      backgroundPosition: 'center',
+                      backgroundSize: 'cover',
+                    }
+                  : undefined
+              }
               data-testid={`product-${p.id}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <span
-                    className="grid h-10 w-10 place-items-center rounded-[6px]"
-                    style={{
-                      color: p.hue,
-                      background: `color-mix(in srgb, ${p.hue} 12%, #111216)`,
-                      border: `1px solid color-mix(in srgb, ${p.hue} 24%, #111216)`,
-                    }}
-                  >
-                    {p.icon}
-                  </span>
+                  {p.id !== 'esg' && (
+                    <span
+                      className="grid h-10 w-10 place-items-center rounded-[8px] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+                      style={{
+                        color: p.hue,
+                        background: `color-mix(in srgb, ${p.hue} 10%, white)`,
+                        border: `1px solid color-mix(in srgb, ${p.hue} 24%, white)`,
+                      }}
+                    >
+                      {p.icon}
+                    </span>
+                  )}
                   <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[color:var(--muted)]">Product</div>
                     <h3 className="text-xl font-semibold tracking-normal text-[color:var(--hi)]">{p.title}</h3>
                   </div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-[26px] font-semibold leading-none text-[color:var(--hi)]" data-testid={`count-${p.id}`}>
-                    {clientsLoading ? '—' : p.count}
+                    {clientsLoading ? <HubSkeleton className="ml-auto h-7 w-9" /> : p.count}
                   </div>
                   <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--muted)]">
                     {p.count === 1 ? 'company' : 'companies'}
@@ -391,14 +402,18 @@ export default function HubLanding() {
                 <div className="mt-6 flex flex-wrap items-center gap-2">
                   <Link
                     href={p.workspace}
-                    className="inline-flex h-9 items-center gap-2 rounded-[5px] bg-white px-4 text-sm font-medium text-[#111] transition hover:bg-[#ececea]"
+                    className={`inline-flex h-9 items-center gap-2 rounded-[8px] px-4 text-sm font-medium text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.65)] transition ${
+                      p.id === 'esg'
+                        ? 'bg-emerald-600 hover:bg-emerald-700'
+                        : 'bg-violet-600 hover:bg-violet-700'
+                    }`}
                     data-testid={`open-${p.id}`}
                   >
                     Open workspace <ArrowRight className="h-3.5 w-3.5" />
                   </Link>
                   <Link
                     href={p.create}
-                    className="inline-flex h-9 items-center rounded-[5px] border border-[color:var(--rule-strong)] bg-[#18191d] px-4 text-sm font-medium text-[color:var(--hi)] transition hover:bg-[#202126]"
+                    className="inline-flex h-9 items-center rounded-[8px] border border-white/55 bg-white/42 px-4 text-sm font-medium text-[color:var(--hi)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68),0_10px_22px_-20px_rgba(24,24,27,0.45)] backdrop-blur-2xl transition hover:bg-white/62"
                     data-testid={`create-${p.id}`}
                   >
                     Create scorecard
@@ -413,62 +428,48 @@ export default function HubLanding() {
           </div>
         </section>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="mt-8">
           <section aria-labelledby="tools-heading">
-            <h2 id="tools-heading" className="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
-              Shared tools
-            </h2>
-            <div className="divide-y divide-[color:var(--rule)] border border-[color:var(--rule)] bg-[#111216]">
+            <div className="mb-3 flex items-end justify-between gap-4">
+              <div>
+                <h2 id="tools-heading" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
+                  Shared tools
+                </h2>
+                <p className="mt-1 text-xs text-[color:var(--body)]">Utilities that support both compliance workspaces.</p>
+              </div>
+              <span className="hidden text-xs text-[color:var(--muted)] sm:inline">2 available</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
               {alsoAvailable.map((t) => (
                 <Link
                   key={t.id}
                   href={t.href}
-                  className="flex items-center gap-4 px-4 py-4 transition hover:bg-[#18191d]"
+                  className={`group flex min-h-[132px] rounded-[8px] border border-white/55 bg-white/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_18px_46px_-38px_rgba(24,24,27,0.56)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:bg-white/44 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_24px_56px_-42px_rgba(24,24,27,0.62)] ${
+                    t.id === 'documents' ? 'items-center justify-center' : 'flex-col justify-between'
+                  }`}
                   data-testid={`tool-${t.id}`}
                 >
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[5px] border border-[color:var(--rule)] text-[color:var(--body)]">{t.icon}</span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
-                    <span className="mt-0.5 block text-xs leading-5 text-[color:var(--body)]">{t.description}</span>
-                  </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)]" />
+                  {t.id === 'documents' ? (
+                    <span className="flex flex-col items-center gap-3 text-center">
+                      {t.icon}
+                      <span className="text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
+                    </span>
+                  ) : (
+                    <>
+                      <span className="flex items-start justify-between gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-white/55 bg-white/36 text-[color:var(--body)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-2xl transition group-hover:bg-white/56">{t.icon}</span>
+                        <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-[color:var(--muted)] transition group-hover:translate-x-0.5 group-hover:text-[color:var(--hi)]" />
+                      </span>
+                      <span className="mt-5 block">
+                        <span className="block text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
+                        <span className="mt-1.5 block text-xs leading-5 text-[color:var(--body)]">{t.description}</span>
+                      </span>
+                    </>
+                  )}
                 </Link>
               ))}
             </div>
           </section>
-
-          <section className="border border-[color:var(--rule)] bg-[#111216]" data-testid="recent-companies" aria-labelledby="recent-heading">
-            <div className="border-b border-[color:var(--rule)] px-4 py-3">
-              <h2 id="recent-heading" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">Recent work</h2>
-            </div>
-            <div>
-              {clientsLoading ? (
-                <div className="px-4 py-6 text-sm text-[color:var(--body)]">Loading companies</div>
-              ) : recent.length === 0 ? (
-                <div className="px-4 py-6">
-                  <p className="text-sm font-medium text-[color:var(--hi)]">No recent company work</p>
-                  <p className="mt-1 text-xs leading-5 text-[color:var(--body)]">Create or open a scorecard to populate this list.</p>
-                </div>
-              ) : (
-                recent.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => openCompany(c)}
-                    className="flex w-full items-center gap-3 border-b border-[color:var(--rule)] px-4 py-3 text-left transition last:border-0 hover:bg-[#18191d]"
-                    data-testid={`recent-${c.id}`}
-                  >
-                    <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.isEsg ? 'var(--esg)' : 'var(--bbbee)' }} aria-hidden />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-[color:var(--hi)]">{c.name}</span>
-                      <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--muted)]">{c.isEsg ? 'ESG' : 'B-BBEE'}</span>
-                    </span>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)]" />
-                  </button>
-                ))
-              )}
-              </div>
-            </section>
         </div>
       </div>
     </div>

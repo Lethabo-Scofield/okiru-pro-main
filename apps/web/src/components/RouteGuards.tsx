@@ -6,8 +6,11 @@ import { fetchOnboardingStatus } from "@/lib/onboardingStatus";
 
 function FullScreenSpinner() {
   return (
-    <div className="min-h-screen bg-[color:var(--ink)] flex items-center justify-center">
-      <div className="h-10 w-10 border-2 border-[rgba(255,255,255,0.32)] border-t-transparent rounded-full animate-spin" />
+    <div
+      className="flex min-h-screen items-center justify-center bg-white bg-cover bg-center"
+      style={{ backgroundImage: "url('/hub-background.png')" }}
+    >
+      <div className="h-10 w-10 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
     </div>
   );
 }
