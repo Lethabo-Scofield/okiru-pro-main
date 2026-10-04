@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
-import { Award, Leaf, ShieldCheck, ArrowRight, X, LockKeyhole } from 'lucide-react';
+import { Award, Leaf, ArrowRight, X, LockKeyhole } from 'lucide-react';
 import { companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
 // Light snapshot peeks (type-only deps) — the create flows write these when a
@@ -30,16 +30,6 @@ function HubSkeleton({ className }: { className: string }) {
       className={`block animate-pulse rounded-full bg-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] ${className}`}
       aria-hidden
     />
-  );
-}
-
-function YellowFolderMark() {
-  return (
-    <span className="relative block h-8 w-10" aria-hidden>
-      <span className="absolute left-1 top-1 h-2.5 w-6 rounded-t-[5px] bg-[#f8c84a] shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]" />
-      <span className="absolute inset-x-0 bottom-0 h-6 rounded-[7px] bg-gradient-to-b from-[#ffd96a] to-[#f2ad2e] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_18px_-14px_rgba(111,69,9,0.8)]" />
-      <span className="absolute inset-x-1 bottom-1 h-3 rounded-[5px] bg-white/18" />
-    </span>
   );
 }
 
@@ -213,14 +203,28 @@ export default function HubLanding() {
     {
       id: 'certificates',
       title: 'Certificate Hub',
-      icon: <ShieldCheck className="h-4 w-4" />,
+      icon: (
+        <img
+          src="/certificates-icon.png"
+          alt=""
+          className="h-28 w-28 object-contain transition-transform duration-200 group-hover:scale-[1.04]"
+          draggable={false}
+        />
+      ),
       description: 'Verify and track B-BBEE certificates across your suppliers.',
       href: '/certificates',
     },
     {
       id: 'documents',
       title: 'Document library',
-      icon: <YellowFolderMark />,
+      icon: (
+        <img
+          src="/document-library-icon.png"
+          alt=""
+          className="h-20 w-20 object-contain transition-transform duration-200 group-hover:scale-[1.04]"
+          draggable={false}
+        />
+      ),
       description: 'Every document you have uploaded, filed under the company it belongs to.',
       href: '/documents',
     },
@@ -444,15 +448,20 @@ export default function HubLanding() {
                 <Link
                   key={t.id}
                   href={t.href}
-                  className={`group flex min-h-[132px] rounded-[8px] border border-white/55 bg-white/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_18px_46px_-38px_rgba(24,24,27,0.56)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:bg-white/44 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_24px_56px_-42px_rgba(24,24,27,0.62)] ${
-                    t.id === 'documents' ? 'items-center justify-center' : 'flex-col justify-between'
+                  className={`group flex min-h-[132px] transition hover:-translate-y-0.5 ${
+                    t.id === 'documents' || t.id === 'certificates'
+                      ? 'items-center justify-center p-3'
+                      : 'flex-col justify-between rounded-[8px] border border-white/55 bg-white/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_18px_46px_-38px_rgba(24,24,27,0.56)] backdrop-blur-2xl hover:bg-white/44 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_24px_56px_-42px_rgba(24,24,27,0.62)]'
                   }`}
+                  aria-label={t.title}
                   data-testid={`tool-${t.id}`}
                 >
-                  {t.id === 'documents' ? (
-                    <span className="flex flex-col items-center gap-3 text-center">
+                  {t.id === 'documents' || t.id === 'certificates' ? (
+                    <span className="flex flex-col items-center gap-2 text-center">
                       {t.icon}
-                      <span className="text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
+                      {t.id === 'documents' && (
+                        <span className="text-[13px] font-semibold text-[color:var(--hi)]">{t.title}</span>
+                      )}
                     </span>
                   ) : (
                     <>
