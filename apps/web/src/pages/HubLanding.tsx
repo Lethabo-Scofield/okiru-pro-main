@@ -443,14 +443,14 @@ export default function HubLanding() {
               </div>
               <span className="hidden text-xs text-[color:var(--muted)] sm:inline">2 available</span>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start sm:gap-6">
               {alsoAvailable.map((t) => (
                 <Link
                   key={t.id}
                   href={t.href}
                   className={`group flex min-h-[132px] transition hover:-translate-y-0.5 ${
                     t.id === 'documents' || t.id === 'certificates'
-                      ? 'items-center justify-center p-3'
+                      ? 'w-[150px] items-center justify-center p-2'
                       : 'flex-col justify-between rounded-[8px] border border-white/55 bg-white/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_18px_46px_-38px_rgba(24,24,27,0.56)] backdrop-blur-2xl hover:bg-white/44 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_24px_56px_-42px_rgba(24,24,27,0.62)]'
                   }`}
                   aria-label={t.title}
