@@ -21,9 +21,13 @@ export default function OkiruAbout({
 }) {
   useEffect(() => {
     const id = "okiru-styles";
-    if (!document.getElementById(id)) {
-      const s = document.createElement("style"); s.id = id; s.textContent = GLOBAL_CSS; document.head.appendChild(s);
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = id;
+      document.head.appendChild(style);
     }
+    style.textContent = GLOBAL_CSS;
     return () => { const el = document.getElementById(id); if (el) el.remove(); };
   }, []);
 

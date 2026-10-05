@@ -21,6 +21,32 @@ const PRODUCT_CSS = `
   }
 
   .okiru-product .ok-hero { min-height: 0; display: block; padding: 132px 0 52px; align-items: initial; }
+  .okiru-product .ok-hero-bg { overflow: hidden; }
+  .okiru-product .ok-hero-waves {
+    position: absolute;
+    inset: auto -12% -34% 34%;
+    height: 78%;
+    z-index: 0;
+    opacity: 0.95;
+    pointer-events: none;
+  }
+  .okiru-product .ok-hero-wave {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 38%;
+    border-radius: 999px 999px 0 0 / 100% 100% 0 0;
+    transform: rotate(-7deg);
+    border-top: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+    background:
+      linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 18%, transparent) 42%, color-mix(in srgb, var(--accent) 7%, transparent) 100%);
+    box-shadow:
+      0 -18px 46px color-mix(in srgb, var(--accent) 12%, transparent),
+      inset 0 1px 0 rgba(255,255,255,0.45);
+  }
+  .okiru-product .ok-hero-wave:nth-child(1) { top: 6%; transform: rotate(-8deg) translateX(2%); opacity: 0.72; }
+  .okiru-product .ok-hero-wave:nth-child(2) { top: 24%; transform: rotate(-5deg) translateX(-5%); opacity: 0.52; }
+  .okiru-product .ok-hero-wave:nth-child(3) { top: 43%; transform: rotate(-9deg) translateX(7%); opacity: 0.34; }
 
   /* ── FEATURE CARDS (icon-driven, distinct per tab) ── */
   .okiru-product .ok-feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
@@ -66,6 +92,11 @@ const PRODUCT_CSS = `
   .okiru-purple .ok-hero-glow-2 { background: radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 65%); }
   .okiru-purple .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(147,51,234,0.12) 14deg, rgba(168,85,247,0.09) 22deg, rgba(249,115,22,0.05) 30deg, transparent 40deg); }
   .okiru-purple .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(249,115,22,0.05) 6deg, rgba(147,51,234,0.09) 14deg, rgba(168,85,247,0.05) 20deg, transparent 30deg); }
+  .okiru-purple .ok-hero-wave {
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(147,51,234,0.19) 34%, rgba(168,85,247,0.11) 74%, transparent 100%);
+    border-top-color: rgba(147,51,234,0.35);
+  }
   .okiru-purple .ok-service:hover { background: rgba(147,51,234,0.06); }
   /* B-BBEE: outlined rounded-square icon tile, left-aligned, divider footer */
   .okiru-purple .ok-feat-icon { width: 48px; height: 48px; border-radius: 13px; border: 1px solid rgba(168,85,247,0.38); background: rgba(147,51,234,0.10); }
@@ -88,6 +119,11 @@ const PRODUCT_CSS = `
   .okiru-blue .ok-hero-glow-2 { background: radial-gradient(circle, rgba(147,51,234,0.06) 0%, transparent 65%); }
   .okiru-blue .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(37,99,235,0.12) 14deg, rgba(59,130,246,0.09) 22deg, rgba(147,51,234,0.05) 30deg, transparent 40deg); }
   .okiru-blue .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(147,51,234,0.05) 6deg, rgba(37,99,235,0.09) 14deg, rgba(59,130,246,0.05) 20deg, transparent 30deg); }
+  .okiru-blue .ok-hero-wave {
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(37,99,235,0.18) 34%, rgba(59,130,246,0.10) 74%, transparent 100%);
+    border-top-color: rgba(37,99,235,0.34);
+  }
   .okiru-blue .ok-service:hover { background: rgba(37,99,235,0.06); }
   /* ESG: circular icon, centred instrument layout */
   .okiru-blue .ok-feat-card { align-items: center; text-align: center; border-radius: 14px; padding: 30px 26px; }
@@ -112,6 +148,11 @@ const PRODUCT_CSS = `
   .okiru-green .ok-hero-glow-2 { background: radial-gradient(circle, rgba(14,165,233,0.06) 0%, transparent 65%); }
   .okiru-green .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(22,163,74,0.12) 14deg, rgba(34,197,94,0.09) 22deg, rgba(14,165,233,0.05) 30deg, transparent 40deg); }
   .okiru-green .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(14,165,233,0.05) 6deg, rgba(22,163,74,0.09) 14deg, rgba(34,197,94,0.05) 20deg, transparent 30deg); }
+  .okiru-green .ok-hero-wave {
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(22,163,74,0.18) 34%, rgba(34,197,94,0.11) 74%, transparent 100%);
+    border-top-color: rgba(22,163,74,0.34);
+  }
   .okiru-green .ok-service:hover { background: rgba(22,163,74,0.06); }
   /* ESG: circular icon, centred instrument layout */
   .okiru-green .ok-feat-card { align-items: center; text-align: center; border-radius: 14px; padding: 30px 26px; }
@@ -136,6 +177,11 @@ const PRODUCT_CSS = `
   .okiru-orange .ok-hero-glow-2 { background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 65%); }
   .okiru-orange .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(249,115,22,0.11) 14deg, rgba(251,146,60,0.08) 22deg, rgba(37,99,235,0.05) 30deg, transparent 40deg); }
   .okiru-orange .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(37,99,235,0.05) 6deg, rgba(249,115,22,0.08) 14deg, rgba(251,146,60,0.05) 20deg, transparent 30deg); }
+  .okiru-orange .ok-hero-wave {
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.18) 34%, rgba(251,146,60,0.11) 74%, transparent 100%);
+    border-top-color: rgba(249,115,22,0.34);
+  }
   .okiru-orange .ok-service:hover { background: rgba(249,115,22,0.06); }
   /* Certificate: soft-filled card, gradient icon chip in the top-right */
   .okiru-orange .ok-feat-card { border-radius: 18px; padding-top: 30px; background: linear-gradient(160deg, rgba(249,115,22,0.06) 0%, rgba(37,99,235,0.02) 100%); }
@@ -149,6 +195,32 @@ const PRODUCT_CSS = `
     background: linear-gradient(160deg, rgba(249,115,22,0.11) 0%, rgba(37,99,235,0.04) 100%);
   }
   .okiru-orange #product-cta .ok-w > div { background: linear-gradient(135deg, rgba(249,115,22,0.13) 0%, rgba(251,146,60,0.06) 55%, rgba(37,99,235,0.07) 100%); }
+
+  .okiru-product .ok-nav-active {
+    color: #18181b;
+    background: #f4f4f5;
+  }
+  .okiru-product .ok-feat-card,
+  .okiru-product #product-cta .ok-w > div {
+    border-color: #e4e4e7;
+    background: #ffffff;
+    box-shadow: 0 18px 48px rgba(24,24,27,0.07);
+  }
+  .okiru-product .ok-feat-meta,
+  .okiru-purple .ok-feat-meta {
+    border-top-color: #e4e4e7;
+  }
+  .okiru-product .ok-feat-card:hover {
+    background: #f4f4f5;
+    box-shadow: 0 20px 52px rgba(24,24,27,0.10);
+  }
+  @media (max-width: 760px) {
+    .okiru-product .ok-hero-waves {
+      inset: auto -48% -28% 8%;
+      height: 56%;
+      opacity: 0.72;
+    }
+  }
 `;
 
 interface ProductLandingPageProps {
@@ -184,13 +256,21 @@ export default function ProductLandingPage({
 
   useEffect(() => {
     const base = "okiru-styles";
-    if (!document.getElementById(base)) {
-      const s = document.createElement("style"); s.id = base; s.textContent = GLOBAL_CSS; document.head.appendChild(s);
+    let baseStyle = document.getElementById(base) as HTMLStyleElement | null;
+    if (!baseStyle) {
+      baseStyle = document.createElement("style");
+      baseStyle.id = base;
+      document.head.appendChild(baseStyle);
     }
+    baseStyle.textContent = GLOBAL_CSS;
     const themeId = "okiru-product-styles";
-    if (!document.getElementById(themeId)) {
-      const s = document.createElement("style"); s.id = themeId; s.textContent = PRODUCT_CSS; document.head.appendChild(s);
+    let themeStyle = document.getElementById(themeId) as HTMLStyleElement | null;
+    if (!themeStyle) {
+      themeStyle = document.createElement("style");
+      themeStyle.id = themeId;
+      document.head.appendChild(themeStyle);
     }
+    themeStyle.textContent = PRODUCT_CSS;
     return () => {
       document.getElementById(base)?.remove();
       document.getElementById(themeId)?.remove();
@@ -219,6 +299,11 @@ export default function ProductLandingPage({
           <div className="ok-hero-bg" aria-hidden>
             <div className="ok-hero-beam" /><div className="ok-hero-beam-2" />
             <div className="ok-hero-glow" /><div className="ok-hero-glow-2" />
+            <div className="ok-hero-waves">
+              <span className="ok-hero-wave" />
+              <span className="ok-hero-wave" />
+              <span className="ok-hero-wave" />
+            </div>
           </div>
           <div className="ok-w" style={{ position: "relative", zIndex: 1, width: "100%" }}>
             <h1 className="ok-h1 ok-anim-2">

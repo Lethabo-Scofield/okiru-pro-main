@@ -264,16 +264,16 @@ export const GLOBAL_CSS = `
 
   /* ── HERO ── */
   .okiru-root .ok-hero {
-    min-height: clamp(640px, 56.27vw, 100svh);
+    min-height: clamp(620px, 72svh, 860px);
     display: flex; align-items: center;
-    padding: 128px 0 64px; position: relative;
+    padding: 136px 0 88px; position: relative;
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
   .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: #ffffff; }
   .okiru-root .ok-hero-photo {
     position: absolute; inset: 0; z-index: 0;
     background-image: url('/hero-section-background.png');
-    background-position: center top; background-size: 100% auto; background-repeat: no-repeat;
+    background-position: center top; background-size: min(100%, 1440px) auto; background-repeat: no-repeat;
     opacity: 1; animation: okiru-heroPhoto 1.2s cubic-bezier(.16,1,.3,1) both;
   }
   @keyframes okiru-heroPhoto {
@@ -310,9 +310,9 @@ export const GLOBAL_CSS = `
   }
 
   .okiru-root .ok-h1 {
-    font-family: var(--serif); font-size: clamp(2.4rem, 4.4vw, 4rem);
-    line-height: 1.1; letter-spacing: -0.035em; color: #ffffff; font-weight: 700;
-    max-width: min(60rem, 100%); margin-bottom: 32px;
+    font-family: var(--serif); font-size: clamp(3.7rem, 8vw, 7.8rem);
+    line-height: 0.9; letter-spacing: -0.065em; color: #18181b; font-weight: 700;
+    max-width: min(72rem, 100%); margin-bottom: 34px;
   }
   .okiru-root .ok-h1-switch {
     display: inline-flex; min-width: 9.7ch; align-items: baseline;
@@ -337,6 +337,19 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hero-sub strong { color: rgba(255,255,255,0.92); font-weight: 500; }
   .okiru-root .ok-hero-btns { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
+  .okiru-root .ok-hero-kicker {
+    margin-bottom: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #52525b;
+  }
+
   /* ── HERO PROOF STATS ── */
   .okiru-root .ok-hero-stats {
     display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
@@ -358,67 +371,11 @@ export const GLOBAL_CSS = `
 
   /* ── HERO LAYOUT + FLOATING SCORECARD ── */
   .okiru-root .ok-hero-w {
-    display: grid; grid-template-columns: minmax(0,1fr) 460px;
-    gap: 56px; align-items: center;
+    display: block;
   }
-  .okiru-root .ok-hero-content { min-width: 0; }
-  .okiru-root .ok-hero-visual { opacity: 0; animation: okiru-slideUp .7s ease forwards .5s; }
-  .okiru-root .ok-hero-card {
-    position: relative; width: 100%; border-radius: 16px; overflow: hidden;
-    background: linear-gradient(180deg, #0f1524 0%, #0b0f1a 100%);
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 40px 100px -34px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,255,255,0.06);
-    font-family: var(--sans);
-  }
-  .okiru-root .ok-hero-card::after {
-    content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: 16px; z-index: 0;
-    background: radial-gradient(120% 80% at 100% 0%, rgba(147,51,234,0.12) 0%, transparent 52%);
-  }
-  .okiru-root .ok-hero-card::before {
-    content: ""; position: absolute; top: 0; bottom: 0; left: -55%; width: 42%; z-index: 3; pointer-events: none;
-    background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.055) 50%, transparent 100%);
-    transform: skewX(-14deg); animation: okiru-sheen 7.5s ease-in-out infinite;
-  }
-  @keyframes okiru-sheen { 0% { left: -55%; } 42%, 100% { left: 135%; } }
-  .okiru-root .ok-hcard-top {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 16px 18px 14px; border-bottom: 1px solid rgba(255,255,255,0.07); position: relative; z-index: 1;
-  }
-  .okiru-root .ok-hcard-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .okiru-root .ok-hcard-title b { font-size: 13.5px; font-weight: 600; color: #fff; letter-spacing: -0.01em; }
-  .okiru-root .ok-hcard-title span { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.05em; color: var(--muted); }
-  .okiru-root .ok-hcard-body { padding: 4px 18px 6px; position: relative; z-index: 1; }
-  .okiru-root .ok-hcard-row {
-    display: grid; grid-template-columns: 1fr 60px 46px 16px; align-items: center; gap: 11px;
-    padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.05);
-  }
-  .okiru-root .ok-hcard-name { display: flex; align-items: center; gap: 9px; min-width: 0; }
-  .okiru-root .ok-hcard-dot { width: 6px; height: 6px; border-radius: 2px; flex-shrink: 0; }
-  .okiru-root .ok-hcard-name b { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .okiru-root .ok-hcard-bar { height: 6px; border-radius: 999px; background: rgba(255,255,255,0.09); overflow: hidden; }
-  .okiru-root .ok-hcard-fill { height: 100%; border-radius: 999px; transform-origin: left; filter: saturate(1.15) brightness(1.05); box-shadow: 0 0 10px -2px currentColor; animation: okiru-barFill 1.1s cubic-bezier(.16,1,.3,1) both .55s; }
-  @keyframes okiru-barFill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-  .okiru-root .ok-hcard-score { font-family: var(--mono); font-size: 12px; font-weight: 600; color: #fff; text-align: right; }
-  .okiru-root .ok-hcard-status { display: grid; place-items: center; }
-  .okiru-root .ok-hcard-total {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 14px 18px; background: rgba(255,255,255,0.03); border-top: 1px solid rgba(255,255,255,0.1); position: relative; z-index: 1;
-  }
-  .okiru-root .ok-hcard-total-left { display: flex; align-items: center; gap: 9px; }
-  .okiru-root .ok-hcard-total-left b { font-size: 12.5px; font-weight: 700; color: #fff; }
-  .okiru-root .ok-hcard-total-right { display: flex; align-items: center; gap: 14px; }
-  .okiru-root .ok-hcard-total-score { font-family: var(--mono); font-size: 15px; font-weight: 700; color: #fff; }
-  .okiru-root .ok-hcard-total-score em { font-style: normal; font-size: 11px; font-weight: 500; color: var(--muted); margin-left: 2px; }
-  .okiru-root .ok-hcard-risk {
-    display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono);
-    font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: #fbbf24;
-    background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.28); border-radius: 999px; padding: 4px 9px;
-  }
-  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hcard-fill { animation: none; } .okiru-root .ok-hero-card::before { display: none; } }
+  .okiru-root .ok-hero-content { min-width: 0; max-width: 980px; }
   @media (max-width: 1040px) {
-    .okiru-root .ok-hero-w { grid-template-columns: 1fr; gap: 40px; }
-    .okiru-root .ok-hero-content { order: 1; text-align: center; }
-    .okiru-root .ok-hero-visual { order: 2; max-width: 480px; margin: 0 auto; }
+    .okiru-root .ok-hero-content { text-align: center; margin: 0 auto; }
     .okiru-root .ok-h1, .okiru-root .ok-hero-sub { margin-left: auto; margin-right: auto; }
     .okiru-root .ok-h1-switch { justify-content: center; min-width: 0; }
     .okiru-root .ok-hero-btns, .okiru-root .ok-hero-stats { justify-content: center; }
@@ -984,9 +941,6 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-hero-btns { justify-content: center; }
     .okiru-root .ok-hero-stats { gap: 16px 22px; margin-top: 40px; }
     .okiru-root .ok-hero-stat-div { display: none; }
-    .okiru-root .ok-hcard-row { grid-template-columns: 1fr 48px 44px 16px; gap: 9px; }
-    .okiru-root .ok-hcard-top, .okiru-root .ok-hcard-total { padding-left: 15px; padding-right: 15px; }
-    .okiru-root .ok-hcard-body { padding-left: 15px; padding-right: 15px; }
     .okiru-root .ok-btn-cta, .okiru-root .ok-btn-sec { justify-content: center; }
     .okiru-root .ok-nz-targets { grid-template-columns: 1fr 1fr; }
     .okiru-root .ok-nz-milestones { grid-template-columns: 1fr; }
@@ -1061,7 +1015,6 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-cta-card,
   .okiru-root .ok-demo-card,
   .okiru-root .ok-dashboard,
-  .okiru-root .ok-hcard,
   .okiru-root .ok-arch-card,
   .okiru-root .ok-toolkit-pillar,
   .okiru-root .ok-outcome,
@@ -1087,6 +1040,31 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-textarea::placeholder { color: #a1a1aa; }
   .okiru-root .ok-label { color: #71717a; }
   .okiru-root .ok-h1 { color: #18181b; text-shadow: none; }
+  .okiru-root .ok-page-top .ok-h2,
+  .okiru-root .ok-page-top .ok-h3 { color: #18181b !important; }
+  .okiru-root .ok-page-top .ok-lead,
+  .okiru-root .ok-page-top .ok-lead-l { color: #52525b !important; }
+  .okiru-root .ok-demo-grid {
+    border-color: #e4e4e7;
+    background: rgba(255,255,255,0.56);
+    box-shadow: 0 22px 70px rgba(24,24,27,0.07);
+  }
+  .okiru-root .ok-demo-l { border-right-color: #e4e4e7; }
+  .okiru-root .ok-demo-r { background: rgba(244,244,245,0.62); }
+  .okiru-root .ok-demo-contact-label { color: #71717a !important; }
+  .okiru-root .ok-demo-contact-val,
+  .okiru-root .ok-demo-contact-val a { color: #18181b !important; }
+  .okiru-root .ok-demo-contact-val a:hover { color: #6d28d9 !important; }
+  .okiru-root .ok-social-link {
+    border-color: #e4e4e7;
+    background: rgba(255,255,255,0.68);
+  }
+  .okiru-root .ok-social-link:hover {
+    border-color: #d4d4d8;
+    background: #ffffff;
+  }
+  .okiru-root .ok-social-name { color: #18181b !important; }
+  .okiru-root .ok-social-handle { color: #52525b !important; }
   .okiru-root .ok-hero-sub { color: #52525b; text-shadow: none; }
   .okiru-root .ok-hero-sub strong { color: #18181b; }
   .okiru-root footer::before,
@@ -1148,9 +1126,13 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
 
   useEffect(() => {
     const id = "okiru-styles";
-    if (!document.getElementById(id)) {
-      const s = document.createElement("style"); s.id = id; s.textContent = GLOBAL_CSS; document.head.appendChild(s);
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = id;
+      document.head.appendChild(style);
     }
+    style.textContent = GLOBAL_CSS;
     return () => { const el = document.getElementById(id); if (el) el.remove(); };
   }, []);
 
@@ -1186,6 +1168,10 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-content">
+              <div className="ok-hero-kicker ok-anim-1">
+                <span className="ok-hero-tag-dot" aria-hidden />
+                Compliance workspace for South Africa
+              </div>
               <h1 className="ok-h1 ok-anim-2">
                 Make{" "}
                 <span className="ok-h1-switch" aria-live="polite">
@@ -1201,60 +1187,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
                   Get started <span className="arr"><ArrowRight size={14} /></span>
                 </button>
                 <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
-              </div>
-            </div>
-            <div className="ok-hero-visual" aria-hidden="true">
-              <div className="ok-hero-card">
-                <div className="ok-hcard-top">
-                  <div className="ok-hcard-title">
-                    <b>Generic Scorecard</b>
-                    <span>B-BBEE · Automated translation</span>
-                  </div>
-                </div>
-                <div className="ok-hcard-body">
-                  {[
-                    { name:"Ownership", score:"23.00", pct:92, color:"#a855f7", status:"warn" },
-                    { name:"Management Control & EE", score:"19.40", pct:92, color:"#3b82f6", status:"warn" },
-                    { name:"Skills Development", score:"18.60", pct:81, color:"#10b981", status:"warn" },
-                    { name:"Preferential Procurement", score:"24.00", pct:100, color:"#f59e0b", status:"ok" },
-                    { name:"Supplier Development", score:"10.00", pct:100, color:"#ec4899", status:"ok" },
-                    { name:"Enterprise Development", score:"5.00", pct:56, color:"#f97316", status:"err" },
-                    { name:"Socio-Economic Development", score:"3.00", pct:38, color:"#38bdf8", status:"err" },
-                    { name:"YES Initiative", score:"0.00", pct:0, color:"#64748b", status:"err" },
-                  ].map((r) => (
-                    <div className="ok-hcard-row" key={r.name}>
-                      <span className="ok-hcard-name">
-                        <span className="ok-hcard-dot" style={{ background: r.color }} />
-                        <b>{r.name}</b>
-                      </span>
-                      <span className="ok-hcard-bar">
-                        <span className="ok-hcard-fill" style={{ width: `${r.pct}%`, background: r.color, color: r.color }} />
-                      </span>
-                      <span className="ok-hcard-score">{r.score}</span>
-                      <span className="ok-hcard-status">
-                        {r.status === "ok" ? (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                        ) : r.status === "warn" ? (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5l9 16.5H3z" /><path d="M12 10v4" /><path d="M12 17h.01" /></svg>
-                        ) : (
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></svg>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="ok-hcard-total">
-                  <span className="ok-hcard-total-left">
-                    <b>Grand Total</b>
-                  </span>
-                  <span className="ok-hcard-total-right">
-                    <span className="ok-hcard-total-score">103.00<em>/120</em></span>
-                    <span className="ok-hcard-risk">
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3.5l9 16.5H3z" /><path d="M12 10v4" /><path d="M12 17h.01" /></svg>
-                      At Risk
-                    </span>
-                  </span>
-                </div>
               </div>
             </div>
           </div>
