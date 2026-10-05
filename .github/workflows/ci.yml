@@ -127,7 +127,7 @@ jobs:
         run: docker build -f apps/${{ matrix.service }}/Dockerfile -t okiru-${{ matrix.service }}:ci .
 
       - name: Scan image
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: okiru-${{ matrix.service }}:ci
           format: sarif
