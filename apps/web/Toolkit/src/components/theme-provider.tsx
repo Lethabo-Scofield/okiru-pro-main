@@ -14,32 +14,11 @@ type ThemeProviderState = {
 }
 
 const initialState: ThemeProviderState = {
-  theme: "dark",
+  theme: "light",
   setTheme: () => null,
 }
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
-
-const darkCssVars: Record<string, string> = {
-  '--ef-bg': '#000000',
-  '--ef-bg-alt': '#0a0a0a',
-  '--ef-card': '#1c1c1e',
-  '--ef-card-hover': '#2c2c2e',
-  '--ef-surface': '#1c1c1e',
-  '--ef-surface-hover': '#2c2c2e',
-  '--ef-border': 'rgba(255,255,255,0.06)',
-  '--ef-border-light': 'rgba(255,255,255,0.04)',
-  '--ef-border-med': '#2c2c2e',
-  '--ef-border-heavy': '#3a3a3c',
-  '--ef-text': '#f5f5f7',
-  '--ef-text-secondary': '#d1d1d6',
-  '--ef-text-muted': '#8e8e93',
-  '--ef-text-dim': '#636366',
-  '--ef-text-faint': '#48484a',
-  '--ef-input-bg': '#1c1c1e',
-  '--ef-input-border': '#2c2c2e',
-  '--ef-overlay': '#1c1c1e',
-}
 
 const lightCssVars: Record<string, string> = {
   '--ef-bg': '#ffffff',
@@ -62,24 +41,21 @@ const lightCssVars: Record<string, string> = {
   '--ef-overlay': '#ffffff',
 }
 
+const darkCssVars: Record<string, string> = lightCssVars
+
 export function ThemeProvider({
   children,
-  defaultTheme = "dark",
+  defaultTheme = "light",
   storageKey = "vite-ui-theme",
   ...props
 }: ThemeProviderProps) {
-  // Light was offered in Settings but never actually built: there is no .light
-  // rule anywhere in this app’s CSS and the chrome around it is hardcoded dark,
-  // so choosing it produced a half-converted page. The option is gone, but a
-  // stored “light” from before it was removed would otherwise persist forever
-  // with no control left to undo it — stranding exactly the users who tried it.
-  // Read the stored value, keep it only if the app can honour it, and clear it
-  // otherwise so the key does not sit there misreporting the state.
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem(storageKey) as Theme | null;
-      if (stored === "dark") return stored;
-      if (stored) localStorage.removeItem(storageKey);
+      if (stored === "light" || stored === "system") return stored;
+      if (stored === "dark") {
+        localStorage.removeItem(storageKey);
+      }
     } catch {
       // Private mode / blocked site data. Fall through to the default.
     }
@@ -92,9 +68,7 @@ export function ThemeProvider({
 
     let resolvedTheme = theme
     if (theme === "system") {
-      resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
+      resolvedTheme = "light"
     }
 
     root.classList.add(resolvedTheme)
