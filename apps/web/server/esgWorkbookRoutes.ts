@@ -14,6 +14,7 @@ import { buildEsgAssistantContext } from "../src/lib/esg/esgAssistantContext";
 import OpenAI, { AzureOpenAI } from "openai";
 import { createChatCompletion } from "./openaiCompat";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
+import { computeEsgScorecard } from "../EsgToolkit/src/lib/calculators";
 import { buildGoldenSections } from "./esgGoldenFixture";
 import {
   applyEsgWorkbookReopen,
@@ -166,6 +167,118 @@ async function persistEsgWorkbook(wb: EsgWorkbookData): Promise<void> {
   }
 }
 
+/**
+ * The scorecard facts `answerEsgQuestion` grounds on, computed from the
+ * workbook rather than accepted from the browser.
+ *
+ * Deliberately the same shape the client used to send, so `esgKnowledge.ts`
+ * needs no change — what moved is WHO produces it.
+ */
+function buildRuntimeSnapshot(workbook: EsgWorkbookData): unknown {
+  const scorecard = computeEsgScorecard(workbook);
+  if (!scorecard) return {};
+  const pillar = (p: { score: number; max: number; percent: number }) => ({
+    score: p.score,
+    max: p.max,
+    percent: p.percent,
+  });
+  return {
+    companyName: workbook.companyId,
+    scorecard: {
+      environmental: pillar(scorecard.environmental),
+      social: pillar(scorecard.social),
+      governance: pillar(scorecard.governance),
+      overallPercent: scorecard.overallPercent,
+      scope1Tco2e: scorecard.scope1Tco2e,
+      scope2Tco2e: scorecard.scope2Tco2e,
+      wasteDiversionPct: scorecard.wasteDiversionPct,
+      ltifr: scorecard.ltifr,
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Cell payload limits                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What one section may hold.
+ *
+ * `express.json` is mounted at 50 MB, and both write paths below took the
+ * client's `cells` object on nothing but `typeof === "object"` plus an
+ * allow-listed section key. No cap on how many cells, how long a key, or how
+ * large a value — so a single request could push tens of megabytes into a
+ * Mongo `Mixed` field. Mongo refuses past 16 MB, but by then the server has
+ * parsed and is holding the lot, and every later read walks that object
+ * through the synchronous derive layer on the same event loop that the
+ * import-parser denial of service used to block.
+ *
+ * These bounds are far above any real workbook. The largest register the
+ * product defines is the ISO clause tracker at roughly sixty rows of nine
+ * columns; the monthly grids are nine months across a handful of sites.
+ */
+const MAX_CELLS_PER_SECTION = 20_000;
+const MAX_CELL_KEY_LENGTH = 64;
+const MAX_CELL_STRING_LENGTH = 4_000;
+
+/**
+ * `null` when the payload is acceptable, otherwise how to refuse it.
+ *
+ * Two different refusals, because they are two different mistakes: 413 for
+ * "more than we will store", 400 for "not the shape a cell can be". Values are
+ * restricted to the primitives a spreadsheet cell holds, which also closes the
+ * door on nested objects — nothing reads them, and storing them would make the
+ * document an arbitrary client-shaped blob.
+ */
+type CellPayloadProblem = { status: 400 | 413; message: string };
+
+function cellPayloadProblem(cells: Record<string, unknown>): CellPayloadProblem | null {
+  const count = (n: number) => n.toLocaleString("en-ZA");
+  const keys = Object.keys(cells);
+  if (keys.length > MAX_CELLS_PER_SECTION) {
+    return {
+      status: 413,
+      message: `A section may hold at most ${count(MAX_CELLS_PER_SECTION)} cells; this one has ${count(keys.length)}.`,
+    };
+  }
+  for (const key of keys) {
+    if (key.length > MAX_CELL_KEY_LENGTH) {
+      return {
+        status: 413,
+        message: `Cell reference "${key.slice(0, 32)}…" is longer than ${MAX_CELL_KEY_LENGTH} characters.`,
+      };
+    }
+    const value = cells[key];
+    if (value === null || value === undefined) continue;
+    const kind = typeof value;
+    if (kind === "number" || kind === "boolean") continue;
+    if (kind === "string") {
+      if ((value as string).length > MAX_CELL_STRING_LENGTH) {
+        return {
+          status: 413,
+          message: `Cell ${key} holds ${count((value as string).length)} characters; the limit is ${count(MAX_CELL_STRING_LENGTH)}.`,
+        };
+      }
+      continue;
+    }
+    /*
+     * One exception: `_rows`, the in-memory register shape the editor holds,
+     * is a genuine array of flat row objects, bounded by the same cell count.
+     */
+    if (key === "_rows" && Array.isArray(value)) {
+      if (value.length > MAX_CELLS_PER_SECTION) {
+        return { status: 413, message: `A register may hold at most ${count(MAX_CELLS_PER_SECTION)} rows.` };
+      }
+      continue;
+    }
+    return {
+      status: 400,
+      message: `Cell ${key} holds a ${kind}; a cell may only hold text, a number, a true/false value or nothing.`,
+    };
+  }
+  return null;
+}
+
 export function registerEsgWorkbookRoutes(app: Express): void {
   app.post("/api/esg/scorecards/:companyId/advice/chat", requireAuth, async (req, res) => {
     const workbook = await authorizeEsgWorkbook(req, res);
@@ -174,7 +287,24 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     if (!message || message.length > 2000) {
       return res.status(400).json({ message: "Enter an ESG question of 2,000 characters or fewer." });
     }
-    const result = await answerEsgQuestionWithAi(message, req.body?.runtimeSnapshot);
+    /*
+     * The grounding is built HERE, from the workbook this request was just
+     * authorised against — never from `req.body.runtimeSnapshot`.
+     *
+     * This route used to authorise the workbook and then discard it, grounding
+     * the answer entirely in a `runtimeSnapshot` the browser supplied, checked
+     * only for `typeof === "object"`. Two things were wrong with that. The
+     * answer cites "Current ESG scorecard" as its source while reporting
+     * whatever figures the client sent, so a stale or edited snapshot produced
+     * confident, sourced, wrong advice. And unlike `message` beside it —
+     * capped at 2,000 characters — the snapshot had no size bound at all, so
+     * arbitrary text reached the prompt and our token spend.
+     *
+     * The sibling assistant route (`/workbook/:companyId/assistant`) already
+     * worked this way. The two are now consistent: neither trusts anything the
+     * client claims about workbook CONTENT.
+     */
+    const result = await answerEsgQuestionWithAi(message, buildRuntimeSnapshot(workbook));
     return res.json({
       answer: result.answer,
       conversationId: typeof req.body?.conversationId === "string" && req.body.conversationId
@@ -239,8 +369,12 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       return res.status(423).json({ error: "Workbook is submitted and locked" });
     }
     const cells = (req.body as any)?.cells;
-    if (!cells || typeof cells !== "object") {
+    if (!cells || typeof cells !== "object" || Array.isArray(cells)) {
       return res.status(400).json({ error: "Missing cells payload" });
+    }
+    const problem = cellPayloadProblem(cells as Record<string, unknown>);
+    if (problem) {
+      return res.status(problem.status).json({ error: problem.message, code: "SECTION_REJECTED" });
     }
     try {
       wb.sections[sectionKey] = { cells };
@@ -378,9 +512,27 @@ export function registerEsgWorkbookRoutes(app: Express): void {
         let buffer: Buffer | null = null;
         const body = req.body as { fileBase64?: string; confirm?: boolean; sections?: Record<string, { cells: Record<string, unknown> }> };
         if (body?.confirm && body.sections) {
+          // Confirm replays cells the CLIENT sends, not the file we parsed, so
+          // it is a write path in its own right and carries the same bounds as
+          // the section route. Every section is checked before any is stored —
+          // a refusal must not leave half a workbook behind.
+          const accepted: Array<[string, Record<string, unknown>]> = [];
           for (const [sectionKey, payload] of Object.entries(body.sections)) {
             if (!SECTION_KEYS.includes(sectionKey)) continue;
-            wb.sections[sectionKey] = { cells: payload.cells ?? {} };
+            const cells = (payload?.cells ?? {}) as Record<string, unknown>;
+            if (typeof cells !== "object" || Array.isArray(cells)) {
+              return res.status(400).json({ error: `Section ${sectionKey} sent a malformed cells payload` });
+            }
+            const problem = cellPayloadProblem(cells);
+            if (problem) {
+              return res
+                .status(problem.status)
+                .json({ error: `${sectionKey}: ${problem.message}`, code: "SECTION_REJECTED" });
+            }
+            accepted.push([sectionKey, cells]);
+          }
+          for (const [sectionKey, cells] of accepted) {
+            wb.sections[sectionKey] = { cells };
           }
           await persistEsgWorkbook(wb);
           return res.json({ ok: true, updatedAt: wb.updatedAt });

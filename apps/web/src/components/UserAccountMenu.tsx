@@ -46,33 +46,33 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
     variant === "dashboard" ? (
       <button
         type="button"
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#1c1c1e] text-[12px] text-[#d1d1d6] hover:bg-[#2c2c2e] smooth press-sm"
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[color:var(--ink-3)] text-[12px] text-[color:var(--body)] hover:bg-[rgba(255,255,255,0.06)] smooth press-sm"
         data-testid="user-menu"
       >
         <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.12] items-center justify-center text-white font-semibold text-[9px]">
           {initial}
         </span>
         <span className="font-medium max-w-[160px] truncate">{display}</span>
-        <ChevronDown className="h-3.5 w-3.5 text-[#8e8e93]" />
+        <ChevronDown className="h-3.5 w-3.5 text-[color:var(--body)]" />
       </button>
     ) : variant === "certificate" ? (
       <button
         type="button"
-        className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] text-[#d1d1d6] bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] transition-colors"
+        className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] text-[color:var(--body)] bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] transition-colors"
         data-testid="user-account-menu-trigger"
       >
         <span className="h-5 w-5 rounded-full bg-white/[0.12] text-[10px] font-semibold flex items-center justify-center">
           {initial}
         </span>
         <span className="font-medium max-w-[140px] truncate">{display}</span>
-        <ChevronDown className="h-3.5 w-3.5 text-[#8e8e93]" />
+        <ChevronDown className="h-3.5 w-3.5 text-[color:var(--body)]" />
       </button>
     ) : (
       <button
         type="button"
         className={cn(
           "inline-flex items-center gap-2 px-2 py-1 rounded-full bg-white/[0.03] border border-white/[0.05]",
-          "hover:bg-white/[0.06] smooth press-sm text-[#d1d1d6]",
+          "hover:bg-white/[0.06] smooth press-sm text-[color:var(--body)]",
         )}
         data-testid="user-chip"
       >
@@ -80,7 +80,7 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
           {initial}
         </span>
         <span className="text-[12px] font-medium pr-0.5 max-w-[120px] truncate">{display}</span>
-        <ChevronDown className="h-3.5 w-3.5 text-[#8e8e93] shrink-0" />
+        <ChevronDown className="h-3.5 w-3.5 text-[color:var(--body)] shrink-0" />
       </button>
     );
 

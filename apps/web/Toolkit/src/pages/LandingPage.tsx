@@ -1,6 +1,4 @@
 import { useState, useEffect } from "react";
-import heroBg from "@assets/image_1783374759717.png";
-import ringLogo from "@assets/okiru_ring.png";
 import showcaseImg from "@assets/image_1783375720739.png";
 import showcaseImg2 from "@assets/image_1783375813984.png";
 import { PRODUCTS } from "./productLandingConfig";
@@ -266,26 +264,25 @@ export const GLOBAL_CSS = `
 
   /* ── HERO ── */
   .okiru-root .ok-hero {
-    min-height: 100vh; min-height: 100svh;
+    min-height: clamp(640px, 56.27vw, 100svh);
     display: flex; align-items: center;
     padding: 128px 0 64px; position: relative;
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
-  .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: var(--ink); }
+  .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: #ffffff; }
   .okiru-root .ok-hero-photo {
     position: absolute; inset: 0; z-index: 0;
-    background-position: center right; background-size: cover; background-repeat: no-repeat;
-    opacity: 0.92; animation: okiru-heroPhoto 1.8s cubic-bezier(.16,1,.3,1) both;
+    background-image: url('/hero-section-background.png');
+    background-position: center top; background-size: 100% auto; background-repeat: no-repeat;
+    opacity: 1; animation: okiru-heroPhoto 1.2s cubic-bezier(.16,1,.3,1) both;
   }
   @keyframes okiru-heroPhoto {
-    from { opacity: 0; transform: scale(1.07); }
-    to   { opacity: 0.92; transform: scale(1); }
+    from { opacity: 0; }
+    to   { opacity: 1; }
   }
   .okiru-root .ok-hero-photo-overlay {
     position: absolute; inset: 0; z-index: 1;
-    background:
-      linear-gradient(90deg, var(--ink) 0%, rgba(11,15,26,0.92) 26%, rgba(11,15,26,0.55) 54%, rgba(11,15,26,0.12) 78%, rgba(11,15,26,0.4) 100%),
-      linear-gradient(180deg, rgba(11,15,26,0.55) 0%, transparent 20%, transparent 58%, var(--ink) 100%);
+    background: none;
   }
   .okiru-root .ok-hero-beam {
     position: absolute; top: -10%; right: -5%; width: 55%; height: 120%;
@@ -317,25 +314,22 @@ export const GLOBAL_CSS = `
     line-height: 1.1; letter-spacing: -0.035em; color: #ffffff; font-weight: 700;
     max-width: min(60rem, 100%); margin-bottom: 32px;
   }
-  .okiru-root .ok-h1-gradient {
-    display: block; margin-top: 6px; white-space: nowrap;
-    background: var(--grad-text);
-    background-size: 220% 100%;
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    animation: okiru-h1Shimmer 9s ease-in-out infinite;
+  .okiru-root .ok-h1-switch {
+    display: inline-flex; min-width: 9.7ch; align-items: baseline;
   }
-  @keyframes okiru-h1Shimmer {
-    0%, 100% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
+  .okiru-root .ok-h1-word {
+    display: inline-block; animation: okiruHeroWord .46s cubic-bezier(.16,1,.3,1) both;
   }
-  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-h1-gradient { animation: none; } }
-  .okiru-root .ok-h1-ring {
-    display: inline-block; width: 0.82em; height: 0.82em; vertical-align: -0.1em;
-    margin: 0 0.015em; object-fit: contain; -webkit-text-fill-color: initial;
-    animation: okiru-ringSpin 8s linear infinite;
+  .okiru-root .ok-h1-word[data-tone="purple"] { color: #8b5cf6; }
+  .okiru-root .ok-h1-word[data-tone="green"] { color: #16a34a; }
+  .okiru-root .ok-h1-word[data-tone="blue"] { color: #2563eb; }
+  @keyframes okiruHeroWord {
+    from { opacity: 0; transform: translateY(12px); filter: blur(8px); }
+    to { opacity: 1; transform: translateY(0); filter: blur(0); }
   }
-  @keyframes okiru-ringSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .okiru-root .ok-h1-ring { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .okiru-root .ok-h1-word { animation: none; }
+  }
   .okiru-root .ok-hero-sub {
     max-width: min(44rem, 100%); font-size: 16px; color: rgba(255,255,255,0.75);
     line-height: 1.8; font-weight: 400; margin-bottom: 44px;
@@ -426,7 +420,7 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-hero-content { order: 1; text-align: center; }
     .okiru-root .ok-hero-visual { order: 2; max-width: 480px; margin: 0 auto; }
     .okiru-root .ok-h1, .okiru-root .ok-hero-sub { margin-left: auto; margin-right: auto; }
-    .okiru-root .ok-h1-gradient { white-space: normal; }
+    .okiru-root .ok-h1-switch { justify-content: center; min-width: 0; }
     .okiru-root .ok-hero-btns, .okiru-root .ok-hero-stats { justify-content: center; }
   }
 
@@ -576,6 +570,54 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-challenge-stat { font-family: var(--serif); font-weight: 700; font-size: 2.4rem; color: var(--hi); letter-spacing: -0.04em; margin-bottom: 4px; line-height: 1; }
   .okiru-root .ok-challenge-stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 18px; }
   .okiru-root .ok-challenge-desc { font-size: 13.5px; color: var(--muted); line-height: 1.75; }
+
+  /* ── PRODUCT CARDS ── */
+  .okiru-root .ok-product-card {
+    min-height: 260px;
+    border-color: rgba(24,24,27,0.08) !important;
+    background:
+      radial-gradient(circle at 82% 12%, rgba(255,255,255,0.82), transparent 28%),
+      linear-gradient(135deg, #ffffff 0%, #f4f4f5 100%);
+    box-shadow: 0 24px 70px -54px rgba(24,24,27,0.45);
+  }
+  .okiru-root .ok-product-card::after {
+    content: ''; position: absolute; inset: auto 22px 18px auto;
+    width: 118px; height: 118px; border-radius: 999px;
+    opacity: 0.7; filter: blur(1px); pointer-events: none;
+    transition: transform .35s cubic-bezier(.16,1,.3,1), opacity .35s;
+  }
+  .okiru-root .ok-product-card:hover::after { transform: translate(-6px, -6px) scale(1.05); opacity: 0.9; }
+  .okiru-root .ok-product-card.ok-product-purple {
+    background:
+      radial-gradient(circle at 80% 14%, rgba(196,181,253,0.58), transparent 30%),
+      linear-gradient(145deg, #ffffff 0%, #f5f3ff 54%, #ede9fe 100%);
+  }
+  .okiru-root .ok-product-card.ok-product-purple::after {
+    background: radial-gradient(circle, rgba(139,92,246,0.32), rgba(139,92,246,0.08) 58%, transparent 70%);
+  }
+  .okiru-root .ok-product-card.ok-product-green {
+    background:
+      radial-gradient(circle at 82% 14%, rgba(134,239,172,0.52), transparent 31%),
+      linear-gradient(145deg, #ffffff 0%, #f0fdf4 54%, #dcfce7 100%);
+  }
+  .okiru-root .ok-product-card.ok-product-green::after {
+    background: radial-gradient(circle, rgba(34,197,94,0.28), rgba(34,197,94,0.08) 58%, transparent 70%);
+  }
+  .okiru-root .ok-product-card.ok-product-orange {
+    background:
+      radial-gradient(circle at 82% 14%, rgba(147,197,253,0.55), transparent 31%),
+      linear-gradient(145deg, #ffffff 0%, #eff6ff 52%, #dbeafe 100%);
+  }
+  .okiru-root .ok-product-card.ok-product-orange::after {
+    background: radial-gradient(circle, rgba(37,99,235,0.28), rgba(249,115,22,0.08) 58%, transparent 70%);
+  }
+  .okiru-root .ok-product-card .ok-challenge-label,
+  .okiru-root .ok-product-card .ok-challenge-title,
+  .okiru-root .ok-product-card .ok-challenge-desc,
+  .okiru-root .ok-product-card .ok-product-link { position: relative; z-index: 1; }
+  .okiru-root .ok-product-card .ok-challenge-label { color: rgba(24,24,27,0.52); }
+  .okiru-root .ok-product-card .ok-challenge-title { color: #18181b; font-weight: 600; }
+  .okiru-root .ok-product-card .ok-challenge-desc { color: #52525b; max-width: 28rem; }
 
   /* ── SECTION 03: WHO WE ARE ── */
   .okiru-root .ok-about-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: start; margin-top: 56px; }
@@ -869,7 +911,7 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-nav::before,
     .okiru-root .ok-nav-demo-btn:hover::before,
     .okiru-root .ok-mobile-menu.ok-menu-open { animation: none; opacity: 1; }
-    .okiru-root .ok-hero-photo { animation: none; opacity: 0.92; transform: none; }
+    .okiru-root .ok-hero-photo { animation: none; opacity: 1; transform: none; }
   }
 
   /* ── RESPONSIVE ── */
@@ -956,6 +998,102 @@ export const GLOBAL_CSS = `
     .okiru-root .ok-vs-edge-body { padding: 20px 24px; }
     .okiru-root .ok-demo-agenda-item { grid-template-columns: 88px 1fr; }
   }
+
+  /* Light operating mode. Okiru no longer uses dark website surfaces. */
+  .okiru-root {
+    --ink: #ffffff;
+    --ink2: #f4f4f5;
+    --rule: #e4e4e7;
+    --muted: #71717a;
+    --body: #52525b;
+    --hi: #18181b;
+    --accent: #18181b;
+    --accent-line: #d4d4d8;
+    --card-hover: #f4f4f5;
+    background: #ffffff !important;
+    color: var(--body);
+  }
+  .okiru-root .okiru-grain { display: none; }
+  .okiru-root .ok-nav,
+  .okiru-root .ok-nav.ok-nav-scrolled {
+    border-color: #e4e4e7;
+    background: rgba(255,255,255,0.18);
+    backdrop-filter: blur(14px) saturate(1.1);
+    -webkit-backdrop-filter: blur(14px) saturate(1.1);
+    box-shadow: 0 14px 36px rgba(24,24,27,0.05);
+  }
+  .okiru-root .ok-nav::before { opacity: 0; }
+  .okiru-root .ok-wordmark,
+  .okiru-root .ok-nav-link,
+  .okiru-root .ok-mobile-link,
+  .okiru-root .ok-foot-brand-top,
+  .okiru-root .ok-legal-block h3 { color: #18181b; }
+  .okiru-root .ok-wordmark span,
+  .okiru-root .ok-nav-linkedin,
+  .okiru-root .ok-foot-brand-desc,
+  .okiru-root .ok-foot-col-item,
+  .okiru-root .ok-foot-col-item a,
+  .okiru-root .ok-foot-linkbtn,
+  .okiru-root .ok-foot-frameworks .ok-foot-fw-list,
+  .okiru-root .ok-foot-c,
+  .okiru-root .ok-foot-link,
+  .okiru-root .ok-legal-meta,
+  .okiru-root .ok-legal-block p,
+  .okiru-root .ok-legal-block li { color: #71717a; }
+  .okiru-root .ok-nav-div,
+  .okiru-root .ok-sc-track { background: #e4e4e7; }
+  .okiru-root .ok-nav-linkedin,
+  .okiru-root .ok-foot-social a,
+  .okiru-root .ok-modal-close {
+    border-color: #d4d4d8;
+    background: #ffffff;
+    color: #52525b;
+  }
+  .okiru-root .ok-nav-linkedin:hover,
+  .okiru-root .ok-foot-social a:hover,
+  .okiru-root .ok-modal-close:hover {
+    border-color: #a1a1aa;
+    background: #f4f4f5;
+    color: #18181b;
+  }
+  .okiru-root .ok-mobile-menu,
+  .okiru-root .ok-modal,
+  .okiru-root .ok-cta-card,
+  .okiru-root .ok-demo-card,
+  .okiru-root .ok-dashboard,
+  .okiru-root .ok-hcard,
+  .okiru-root .ok-arch-card,
+  .okiru-root .ok-toolkit-pillar,
+  .okiru-root .ok-outcome,
+  .okiru-root .ok-fw-card,
+  .okiru-root .ok-vs-edge,
+  .okiru-root .ok-ceo-card {
+    border-color: #e4e4e7 !important;
+    background: #ffffff !important;
+    box-shadow: 0 18px 48px rgba(24,24,27,0.07);
+  }
+  .okiru-root .ok-modal-overlay {
+    background: rgba(244,244,245,0.82);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .okiru-root .ok-input,
+  .okiru-root .ok-textarea {
+    color: #18181b;
+    background: #ffffff;
+    border-color: #d4d4d8;
+  }
+  .okiru-root .ok-input::placeholder,
+  .okiru-root .ok-textarea::placeholder { color: #a1a1aa; }
+  .okiru-root .ok-label { color: #71717a; }
+  .okiru-root .ok-h1 { color: #18181b; text-shadow: none; }
+  .okiru-root .ok-hero-sub { color: #52525b; text-shadow: none; }
+  .okiru-root .ok-hero-sub strong { color: #18181b; }
+  .okiru-root footer::before,
+  .okiru-root .ok-hero-glow,
+  .okiru-root .ok-hero-glow-2,
+  .okiru-root .ok-hero-beam,
+  .okiru-root .ok-hero-beam-2 { display: none; }
 `;
 
 /* ─────────────────────────────────────────────
@@ -969,12 +1107,20 @@ const SERVICES = [
   { name: "WSP", meta: "Skills & reporting" },
 ];
 
+const HERO_FOCUS_TERMS = [
+  { label: "B-BBEE", tone: "purple" },
+  { label: "ESG", tone: "green" },
+  { label: "CERTIFICATES", tone: "blue" },
+] as const;
+
 
 /* ─────────────────────────────────────────────
    MAIN COMPONENT
 ───────────────────────────────────────────── */
 export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNavigateProduct, onNavigateAbout, onNavigateContact }: { onNavigateAuth: () => void; onNavigateRegister?: () => void; onNavigateProduct?: (slug: string) => void; onNavigateAbout?: () => void; onNavigateContact?: () => void }) {
   const [demoOpen, setDemoOpen] = useState(false);
+  const [heroFocusIndex, setHeroFocusIndex] = useState(0);
+  const heroFocus = HERO_FOCUS_TERMS[heroFocusIndex];
   const SHOWCASES = [
     { label: "Workspace", url: "app.okiru.pro", img: showcaseImg, alt: "Okiru Pro workspace — create and view scorecards, ESG toolkit, and B-BBEE Certificate Hub" },
     { label: "ESG Workbook", url: "app.okiru.pro/esg", img: showcaseImg2, alt: "Okiru Pro ESG Workbook — environmental data entry with monthly emissions by depot and scope" },
@@ -991,6 +1137,14 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setHeroFocusIndex((index) => (index + 1) % HERO_FOCUS_TERMS.length);
+    }, 2400);
+
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const id = "okiru-styles";
@@ -1025,7 +1179,7 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         {/* ── 01: HERO ── */}
         <section className="ok-hero">
           <div className="ok-hero-bg" aria-hidden>
-            <div className="ok-hero-photo" style={{ backgroundImage: `url(${heroBg})` }} />
+            <div className="ok-hero-photo" />
             <div className="ok-hero-photo-overlay" />
             <div className="ok-hero-beam" />
             <div className="ok-hero-glow" />
@@ -1033,41 +1187,20 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-content">
               <h1 className="ok-h1 ok-anim-2">
-                Stop reporting.<br />
-                Start <span className="ok-h1-gradient" aria-label="compounding growth.">
-                  compounding gr<img src={ringLogo} alt="" aria-hidden="true" className="ok-h1-ring" />wth.
+                Make{" "}
+                <span className="ok-h1-switch" aria-live="polite">
+                  <span key={heroFocus.label} className="ok-h1-word" data-tone={heroFocus.tone}>
+                    {heroFocus.label}
+                  </span>
                 </span>
+                <br />
+                easier to prove.
               </h1>
-              <p className="ok-hero-sub ok-anim-3">
-                <strong>ESG, B-BBEE &amp; Skills Development</strong>. One toolkit,
-                audit-grade, Net-Zero ready.
-              </p>
-              <div className="ok-hero-btns ok-anim-4">
+              <div className="ok-hero-btns ok-anim-3">
                 <button className="ok-btn-cta" onClick={goRegister}>
                   Get started <span className="arr"><ArrowRight size={14} /></span>
                 </button>
                 <button className="ok-btn-sec" onClick={() => scrollTo("sec-products")}>Explore the toolkits</button>
-              </div>
-              <div className="ok-hero-stats ok-anim-5">
-                <div className="ok-hero-stat">
-                  <span className="ok-hero-stat-num">2,750+</span>
-                  <span className="ok-hero-stat-label">certificates indexed</span>
-                </div>
-                <div className="ok-hero-stat-div" aria-hidden />
-                <div className="ok-hero-stat">
-                  <span className="ok-hero-stat-num">9+</span>
-                  <span className="ok-hero-stat-label">sector codes automated</span>
-                </div>
-                <div className="ok-hero-stat-div" aria-hidden />
-                <div className="ok-hero-stat">
-                  <span className="ok-hero-stat-num">1 · 2 · 3</span>
-                  <span className="ok-hero-stat-label">emission scopes measured</span>
-                </div>
-                <div className="ok-hero-stat-div" aria-hidden />
-                <div className="ok-hero-stat">
-                  <span className="ok-hero-stat-num">IFRS S1/S2</span>
-                  <span className="ok-hero-stat-label">disclosure aligned</span>
-                </div>
               </div>
             </div>
             <div className="ok-hero-visual" aria-hidden="true">
@@ -1225,14 +1358,14 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
               {PRODUCTS.map((p, i) => (
                 <Reveal key={p.slug} delay={i > 0 ? `ok-d${Math.min(i,3)}` : ""}>
                   <button
-                    className="ok-challenge-card"
+                    className={`ok-challenge-card ok-product-card ok-product-${p.theme}`}
                     onClick={() => onNavigateProduct?.(p.slug)}
                     style={{ textAlign:"left", width:"100%", cursor:"pointer", font:"inherit", color:"inherit", display:"block" }}
                   >
                     <span className="ok-challenge-label">{p.heroTag}</span>
                     <div className="ok-challenge-title">{p.navLabel}</div>
                     <div className="ok-challenge-desc">{p.heroSub}</div>
-                    <span style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop:22, fontFamily:"var(--mono)", fontSize:11, letterSpacing:".08em", textTransform:"uppercase", color:"var(--pur-l)" }}>
+                    <span className="ok-product-link" style={{ display:"inline-flex", alignItems:"center", gap:6, marginTop:22, fontFamily:"var(--mono)", fontSize:11, letterSpacing:".08em", textTransform:"uppercase", color:"var(--pur-l)" }}>
                       Explore <ArrowRight size={12} />
                     </span>
                   </button>

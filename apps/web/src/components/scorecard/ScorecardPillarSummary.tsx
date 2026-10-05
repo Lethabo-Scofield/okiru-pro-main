@@ -45,17 +45,17 @@ export function ScorecardPillarSummary({ pillar, className }: ScorecardPillarSum
     return (
       <div
         className={className}
-        style={{ borderBottom: '1px solid #2c2c2e' }}
+        style={{ borderBottom: '1px solid var(--rule)' }}
         data-testid={`scorecard-pillar-summary-${pillar.code}`}
       >
         <div className="px-6 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 min-w-0">
-            <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: '#636366' }} />
-            <span className="text-sm font-medium truncate" style={{ color: '#636366' }}>
+            <Lock className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--muted)' }} />
+            <span className="text-sm font-medium truncate" style={{ color: 'var(--muted)' }}>
               {pillar.label}
             </span>
           </div>
-          <span className="text-sm font-semibold shrink-0" style={{ color: '#48484a' }}>
+          <span className="text-sm font-semibold shrink-0" style={{ color: 'var(--muted)' }}>
             — / {pillar.maxPoints} pts
           </span>
         </div>
@@ -66,7 +66,7 @@ export function ScorecardPillarSummary({ pillar, className }: ScorecardPillarSum
   return (
     <div
       className={className}
-      style={{ borderBottom: '1px solid #2c2c2e' }}
+      style={{ borderBottom: '1px solid var(--rule)' }}
       data-testid={`scorecard-pillar-row-${pillar.code}`}
     >
       <div className="px-6 py-4">
@@ -94,11 +94,11 @@ export function ScorecardPillarSummary({ pillar, className }: ScorecardPillarSum
             <span className="text-sm font-bold text-white">
               {typeof pillar.score === 'number' ? pillar.score.toFixed(2) : pillar.score}
               {' '}
-              <span style={{ color: '#8e8e93', fontWeight: 400 }}>/ {pillar.maxPoints}</span>
+              <span style={{ color: 'var(--body)', fontWeight: 400 }}>/ {pillar.maxPoints}</span>
               {(pillar.bonusAvailable ?? 0) > 0 && (
                 <span
                   className="ml-1.5 text-[10px] font-semibold"
-                  style={{ color: (pillar.bonusEarned ?? 0) > 0 ? '#f59e0b' : '#636366' }}
+                  style={{ color: (pillar.bonusEarned ?? 0) > 0 ? '#f59e0b' : 'var(--muted)' }}
                   title={`Bonus points are earned on top of the ${pillar.maxPoints}-point weighting, so a pillar can exceed 100%.`}
                 >
                   +{(pillar.bonusEarned ?? 0).toFixed(2)}/{pillar.bonusAvailable} bonus
@@ -109,7 +109,7 @@ export function ScorecardPillarSummary({ pillar, className }: ScorecardPillarSum
         </div>
         <div
           className="w-full h-2 rounded-full overflow-hidden"
-          style={{ background: '#2c2c2e' }}
+          style={{ background: 'var(--rule)' }}
         >
           <div
             className="h-full rounded-full transition-all duration-500"
@@ -120,7 +120,7 @@ export function ScorecardPillarSummary({ pillar, className }: ScorecardPillarSum
           <div
             key={i}
             className="mt-2 text-[11px] leading-snug flex items-start gap-1.5"
-            style={{ color: '#8e8e93' }}
+            style={{ color: 'var(--body)' }}
             data-testid={`pillar-coverage-note-${pillar.code}`}
           >
             <span className="shrink-0" style={{ color: '#ffd60a' }}>ⓘ</span>

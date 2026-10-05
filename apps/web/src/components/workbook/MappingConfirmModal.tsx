@@ -46,15 +46,15 @@ export function MappingConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-[color:var(--ink)]/70 backdrop-blur-sm p-4"
       onClick={() => !busy && onClose()}
       data-testid="mapping-confirm-modal"
     >
       <div
-        className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-[#2c2c2e] bg-[#1c1c1e] shadow-2xl flex flex-col"
+        className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-[#2c2c2e]">
+        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-[color:var(--rule)]">
           <div className="min-w-0">
             <h2 className="text-[16px] font-semibold text-white flex items-center gap-2">
               {title}
@@ -65,13 +65,13 @@ export function MappingConfirmModal({
                 </span>
               )}
             </h2>
-            {subtitle && <p className="text-[12px] text-[#8e8e93] mt-0.5 truncate">{subtitle}</p>}
+            {subtitle && <p className="text-[12px] text-[color:var(--body)] mt-0.5 truncate">{subtitle}</p>}
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[#8e8e93] hover:text-white smooth disabled:opacity-60"
+            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[color:var(--body)] hover:text-white smooth disabled:opacity-60"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -80,7 +80,7 @@ export function MappingConfirmModal({
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {loading || !result ? (
-            <div className="flex items-center gap-2 text-[13px] text-[#8e8e93] py-8 justify-center">
+            <div className="flex items-center gap-2 text-[13px] text-[color:var(--body)] py-8 justify-center">
               <Loader2 className="h-4 w-4 animate-spin" />
               Analyzing and mapping data…
             </div>
@@ -95,7 +95,7 @@ export function MappingConfirmModal({
               {notes.length > 0 && (
                 <ul className="space-y-1">
                   {notes.map((n) => (
-                    <li key={n} className="text-[11px] text-[#8e8e93]">
+                    <li key={n} className="text-[11px] text-[color:var(--body)]">
                       • {n}
                     </li>
                   ))}
@@ -110,12 +110,12 @@ export function MappingConfirmModal({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[#2c2c2e]">
+        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-[color:var(--rule)]">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="px-4 py-2 rounded-lg text-[13px] text-[#d1d1d6] hover:bg-white/[0.06] smooth press-sm disabled:opacity-60"
+            className="px-4 py-2 rounded-lg text-[13px] text-[color:var(--body)] hover:bg-white/[0.06] smooth press-sm disabled:opacity-60"
             data-testid="mapping-confirm-cancel"
           >
             Cancel

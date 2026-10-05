@@ -1,5 +1,8 @@
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { calculateManagementScore } from "@toolkit/lib/calculators/management";
 import {
   calculateTransportLargeManagementControl,
@@ -34,34 +37,6 @@ import { cn, formatRand } from "@toolkit/lib/utils";
 import { activeSectorDisplayLabel, pillarBreakdownSubtitle, summarizeSubLines } from "@toolkit/lib/sectors/sector-labels";
 import type { Employee } from "@toolkit/lib/types";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
-import * as XLSX from "xlsx";
-
-type BulkStep = 'upload' | 'mapping' | 'preview';
-
-interface ParsedRow {
-  [key: string]: string | number | boolean | undefined;
-}
-
-interface MappedEmployee {
-  name: string;
-  idNumber?: string;
-  gender: string;
-  race: string;
-  designation: string;
-  isDisabled: boolean;
-  isForeign: boolean;
-  province?: string;
-  hireDate?: string;
-  terminationDate?: string;
-  valid: boolean;
-  errors: string[];
-}
-
-const VALID_GENDERS = ['Male', 'Female'];
-const VALID_RACES = ['African', 'Coloured', 'Indian', 'White'];
-// Issue 1: Added new designation levels
-const VALID_DESIGNATIONS = ['Board', 'Executive', 'Executive Director', 'Other Executive Management', 'Senior', 'Middle', 'Junior', 'Skilled Technical', 'Semi-skilled', 'Unskilled'];
-const VALID_PROVINCES = ['Gauteng', 'Western Cape', 'KZN', 'Eastern Cape', 'Free State', 'Limpopo', 'Mpumalanga', 'North West', 'Northern Cape', 'National'];
 
 // Heading shown for each designation group. Using an explicit map avoids the
 // "{level} Management" concatenation that produced "Board Management",
@@ -79,107 +54,21 @@ const LEVEL_HEADINGS: Record<string, string> = {
   'Unskilled': 'Unskilled',
 };
 
-const GENDER_MAP: Record<string, string> = {
-  'm': 'Male', 'male': 'Male', 'f': 'Female', 'female': 'Female',
-};
-
-const RACE_MAP: Record<string, string> = {
-  'african': 'African', 'black': 'African', 'a': 'African',
-  'coloured': 'Coloured', 'c': 'Coloured',
-  'indian': 'Indian', 'i': 'Indian', 'asian': 'Indian',
-  'white': 'White', 'w': 'White',
-};
-
-// Issue 1: Added new designation mappings
-const DESIGNATION_MAP: Record<string, string> = {
-  'board': 'Board', 'director': 'Board', 'b': 'Board',
-  'executive': 'Executive', 'exec': 'Executive', 'e': 'Executive', 'c-suite': 'Executive',
-  'senior': 'Senior', 'senior management': 'Senior', 'sm': 'Senior', 's': 'Senior',
-  'middle': 'Middle', 'middle management': 'Middle', 'mm': 'Middle',
-  'junior': 'Junior', 'junior management': 'Junior', 'jm': 'Junior', 'j': 'Junior',
-  'skilled technical': 'Skilled Technical', 'skilled': 'Skilled Technical', 'technical': 'Skilled Technical', 'st': 'Skilled Technical',
-  'semi-skilled': 'Semi-skilled', 'semiskilled': 'Semi-skilled', 'ss': 'Semi-skilled',
-  'unskilled': 'Unskilled', 'us': 'Unskilled',
-};
-
-const PROVINCE_MAP: Record<string, string> = {
-  'gauteng': 'Gauteng', 'gp': 'Gauteng', 'jhb': 'Gauteng', 'johannesburg': 'Gauteng',
-  'western cape': 'Western Cape', 'wc': 'Western Cape', 'cape town': 'Western Cape', 'ct': 'Western Cape',
-  'kwazulu-natal': 'KZN', 'kzn': 'KZN', 'natal': 'KZN', 'durban': 'KZN',
-  'eastern cape': 'Eastern Cape', 'ec': 'Eastern Cape',
-  'free state': 'Free State', 'fs': 'Free State',
-  'limpopo': 'Limpopo',
-  'mpumalanga': 'Mpumalanga', 'mp': 'Mpumalanga',
-  'north west': 'North West', 'nw': 'North West',
-  'northern cape': 'Northern Cape', 'nc': 'Northern Cape',
-  'national': 'National',
-};
-
-function normalizeGender(val: string): string {
-  const clean = val.trim().toLowerCase();
-  return GENDER_MAP[clean] || val.trim();
-}
-
-function normalizeRace(val: string): string {
-  const clean = val.trim().toLowerCase();
-  return RACE_MAP[clean] || val.trim();
-}
-
-function normalizeDesignation(val: string): string {
-  const clean = val.trim().toLowerCase();
-  return DESIGNATION_MAP[clean] || val.trim();
-}
-
-function normalizeProvince(val: string): string {
-  const clean = val.trim().toLowerCase();
-  return PROVINCE_MAP[clean] || val.trim();
-}
-
-function normalizeDisabled(val: string | number | boolean | undefined): boolean {
-  if (typeof val === 'boolean') return val;
-  if (typeof val === 'number') return val === 1;
-  if (typeof val === 'string') {
-    const clean = val.trim().toLowerCase();
-    return ['yes', 'true', '1', 'y'].includes(clean);
-  }
-  return false;
-}
-
-function normalizeForeign(val: string | number | boolean | undefined): boolean {
-  if (typeof val === 'boolean') return val;
-  if (typeof val === 'number') return val === 1;
-  if (typeof val === 'string') {
-    const clean = val.trim().toLowerCase();
-    return ['yes', 'true', '1', 'y', 'foreign', 'international', 'expat'].includes(clean);
-  }
-  return false;
-}
-
-function validateMappedEmployee(emp: MappedEmployee): MappedEmployee {
-  const errors: string[] = [];
-  if (!emp.name || emp.name.trim().length === 0) errors.push('Name is required');
-  if (!VALID_GENDERS.includes(emp.gender)) errors.push(`Invalid gender: "${emp.gender}"`);
-  if (!VALID_RACES.includes(emp.race)) errors.push(`Invalid race: "${emp.race}"`);
-  if (!VALID_DESIGNATIONS.includes(emp.designation)) errors.push(`Invalid designation: "${emp.designation}"`);
-  if (emp.province && !VALID_PROVINCES.includes(emp.province)) errors.push(`Invalid province: "${emp.province}"`);
-  return { ...emp, valid: errors.length === 0, errors };
-}
-
 // Helper to check if employee is active during measurement period
 function isActiveDuringPeriod(emp: Employee, periodStart?: string, periodEnd?: string): boolean {
   if (!periodStart || !periodEnd) return true; // Assume active if no period set
-  
+
   const start = new Date(periodStart);
   const end = new Date(periodEnd);
   const hire = emp.hireDate ? new Date(emp.hireDate) : null;
   const term = emp.terminationDate ? new Date(emp.terminationDate) : null;
-  
+
   // If hired after period end, not active
   if (hire && hire > end) return false;
-  
+
   // If terminated before period start, not active
   if (term && term < start) return false;
-  
+
   return true;
 }
 
@@ -226,7 +115,6 @@ export default function ManagementControl() {
   const [activeTab, setActiveTab] = useState("basic");
   const [formState, setFormState] = useState<EmployeeFormState>({ ...defaultFormState });
   const [nameError, setNameError] = useState(false);
-  const [mappingNameError, setMappingNameError] = useState(false);
 
   const [showForeignOnly, setShowForeignOnly] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
@@ -348,129 +236,6 @@ export default function ManagementControl() {
     toast({ title: "Employee Updated", description: `${formState.name} has been updated.` });
   };
 
-  const [isBulkOpen, setIsBulkOpen] = useState(false);
-  const [bulkStep, setBulkStep] = useState<BulkStep>('upload');
-  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [fileColumns, setFileColumns] = useState<string[]>([]);
-  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({
-    name: '', idNumber: '', gender: '', race: '', designation: '', isDisabled: '', isForeign: '', province: '', hireDate: '',
-  });
-  const [previewEmployees, setPreviewEmployees] = useState<MappedEmployee[]>([]);
-  const [fileName, setFileName] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const resetBulkState = useCallback(() => {
-    setBulkStep('upload');
-    setParsedRows([]);
-    setFileColumns([]);
-    setColumnMapping({ name: '', idNumber: '', gender: '', race: '', designation: '', isDisabled: '', isForeign: '', province: '', hireDate: '' });
-    setPreviewEmployees([]);
-    setFileName('');
-    setMappingNameError(false);
-  }, []);
-
-  const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const data = evt.target?.result;
-        const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json<ParsedRow>(firstSheet, { defval: '' });
-
-        if (jsonData.length === 0) {
-          toast({ title: "Empty file", description: "No data rows found in the file.", variant: "destructive" });
-          return;
-        }
-
-        const cols = Object.keys(jsonData[0]);
-        setParsedRows(jsonData);
-        setFileColumns(cols);
-
-        const autoMap: Record<string, string> = { name: '', idNumber: '', gender: '', race: '', designation: '', isDisabled: '', isForeign: '', province: '', hireDate: '' };
-        for (const col of cols) {
-          const lower = col.toLowerCase().trim();
-          if (['name', 'employee name', 'full name', 'employee', 'fullname'].includes(lower)) autoMap.name = col;
-          else if (['id', 'id number', 'idnumber', 'id_no', 'sa id', 'passport'].includes(lower)) autoMap.idNumber = col;
-          else if (['gender', 'sex'].includes(lower)) autoMap.gender = col;
-          else if (['race', 'ethnicity', 'race group'].includes(lower)) autoMap.race = col;
-          else if (['designation', 'level', 'occupational level', 'position', 'management level', 'role'].includes(lower)) autoMap.designation = col;
-          else if (['disabled', 'is disabled', 'isdisabled', 'disability', 'pwd'].includes(lower)) autoMap.isDisabled = col;
-          else if (['foreign', 'foreigner', 'expat', 'international', 'is_foreign', 'nationality'].includes(lower)) autoMap.isForeign = col;
-          else if (['province', 'region', 'location'].includes(lower)) autoMap.province = col;
-          else if (['hire date', 'start date', 'commencement', 'date hired'].includes(lower)) autoMap.hireDate = col;
-        }
-        setColumnMapping(autoMap);
-        setBulkStep('mapping');
-      } catch (err) {
-        toast({ title: "Parse error", description: "Failed to parse the file. Ensure it is a valid CSV or Excel file.", variant: "destructive" });
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    if (e.target) e.target.value = '';
-  }, [toast]);
-
-  const handleApplyMapping = useCallback(() => {
-    if (!columnMapping.name) {
-      setMappingNameError(true);
-      toast({ title: "Missing mapping", description: "Name column mapping is required.", variant: "destructive" });
-      return;
-    }
-
-    const mapped: MappedEmployee[] = parsedRows.map(row => {
-      const raw = {
-        name: String(row[columnMapping.name] || '').trim(),
-        idNumber: columnMapping.idNumber ? String(row[columnMapping.idNumber] || '').trim() : undefined,
-        gender: normalizeGender(String(row[columnMapping.gender] || 'Female')),
-        race: normalizeRace(String(row[columnMapping.race] || 'African')),
-        designation: normalizeDesignation(String(row[columnMapping.designation] || 'Junior')),
-        isDisabled: normalizeDisabled(columnMapping.isDisabled ? row[columnMapping.isDisabled] : false),
-        isForeign: normalizeForeign(columnMapping.isForeign ? row[columnMapping.isForeign] : false),
-        province: columnMapping.province ? normalizeProvince(String(row[columnMapping.province] || 'Gauteng')) : undefined,
-        hireDate: columnMapping.hireDate ? String(row[columnMapping.hireDate] || '').trim() : undefined,
-        valid: true,
-        errors: [] as string[],
-      };
-      return validateMappedEmployee(raw);
-    });
-
-    setPreviewEmployees(mapped);
-    setBulkStep('preview');
-  }, [parsedRows, columnMapping, toast]);
-
-  const handleBulkSave = useCallback(() => {
-    const validEmployees: Employee[] = previewEmployees
-      .filter(e => e.valid)
-      .map(e => ({
-        id: uuidv4(),
-        name: e.name,
-        idNumber: e.idNumber,
-        gender: e.gender as Employee['gender'],
-        race: e.race as Employee['race'],
-        designation: e.designation as Employee['designation'],
-        isDisabled: e.isDisabled,
-        isForeign: e.isForeign,
-        province: e.province as Employee['province'],
-        hireDate: e.hireDate,
-      }));
-
-    if (validEmployees.length === 0) {
-      toast({ title: "No valid records", description: "No valid employee records to import.", variant: "destructive" });
-      return;
-    }
-
-    addEmployeesBulk(validEmployees);
-    toast({ title: "Bulk Import Complete", description: `${validEmployees.length} employees imported successfully.` });
-    setIsBulkOpen(false);
-    resetBulkState();
-  }, [previewEmployees, addEmployeesBulk, toast, resetBulkState]);
-
-  const validCount = previewEmployees.filter(e => e.valid).length;
-  const invalidCount = previewEmployees.filter(e => !e.valid).length;
 
   if (!calculatorConfig) return <CalculatorConfigGate>{null}</CalculatorConfigGate>;
   const isQse = String(calculatorConfig.scorecardType ?? '').toUpperCase() === 'QSE';
@@ -784,11 +549,19 @@ export default function ManagementControl() {
             {showInactive ? 'Hide Inactive' : 'Show Inactive'}
           </Button>
 
-          <Button variant="outline" className="gap-2"
-            onClick={() => { resetBulkState(); setIsBulkOpen(true); }}>
-            <Upload className="h-4 w-4" />
-            Bulk Upload
-          </Button>
+          <PillarBulkImport
+            spec={BULK_IMPORT_SPECS["management-control"]}
+            existing={employees}
+            onImport={(rows, mode) => {
+              if (mode === "replace") employees.forEach((e) => removeEmployee(e.id));
+              addEmployeesBulk(rows);
+            }}
+          />
+          <PillarDuplicateNotice
+            specKey="management-control"
+            rows={employees}
+            className="mt-3"
+          />
 
           <Dialog open={isAddOpen} onOpenChange={(open) => { setIsAddOpen(open); if (!open) { setFormState({ ...defaultFormState }); setActiveTab("basic"); setNameError(false); } }}>
             <DialogTrigger asChild>
@@ -797,7 +570,7 @@ export default function ManagementControl() {
                 Add Employee
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[480px]">
+            <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Employee</DialogTitle>
                 <DialogDescription>
@@ -838,7 +611,7 @@ export default function ManagementControl() {
       )}
 
       <Dialog open={isEditOpen} onOpenChange={(open) => { setIsEditOpen(open); if (!open) { setEditingId(null); setFormState({ ...defaultFormState }); setActiveTab("basic"); setNameError(false); } }}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[480px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Employee</DialogTitle>
             <DialogDescription>
@@ -1147,209 +920,6 @@ export default function ManagementControl() {
         })}
       </div>
 
-      <Dialog open={isBulkOpen} onOpenChange={(open) => { setIsBulkOpen(open); if (!open) resetBulkState(); }}>
-        <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="h-5 w-5" />
-              Bulk Upload Employees
-            </DialogTitle>
-            <DialogDescription>
-              Upload a CSV or Excel file with employee data. Map columns and review before importing.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="flex items-center gap-3 mb-4">
-            {(['upload', 'mapping', 'preview'] as BulkStep[]).map((step, idx) => (
-              <div key={step} className="flex items-center gap-2">
-                {idx > 0 && <div className={cn("h-px w-6", bulkStep === step || (['mapping', 'preview'].indexOf(bulkStep) >= idx) ? 'bg-primary' : 'bg-border')} />}
-                <div className={cn(
-                  "flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-md",
-                  bulkStep === step ? 'bg-primary/10 text-primary' : 'text-muted-foreground'
-                )}>
-                  <span className={cn(
-                    "h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold",
-                    bulkStep === step ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
-                  )}>{idx + 1}</span>
-                  {step === 'upload' ? 'Upload' : step === 'mapping' ? 'Map Columns' : 'Preview'}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {bulkStep === 'upload' && (
-            <div className="space-y-4">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,.xlsx,.xls"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <div
-                className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover-elevate transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-                <p className="text-sm font-medium">Click to select a file</p>
-                <p className="text-xs text-muted-foreground mt-1">Supports CSV, XLSX, XLS formats</p>
-              </div>
-              <Card className="bg-muted/30">
-                <CardContent className="p-4">
-                  <p className="text-xs font-medium mb-2 text-muted-foreground">Expected columns:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {['Name', 'ID Number', 'Gender', 'Race', 'Designation', 'Disabled', 'Foreign', 'Province', 'Hire Date'].map(col => (
-                      <Badge key={col} variant="secondary" className="text-[10px]">{col}</Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {bulkStep === 'mapping' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-                <FileSpreadsheet className="h-4 w-4" />
-                <span>{fileName}</span>
-                <Badge variant="secondary" className="text-[10px]">{parsedRows.length} rows</Badge>
-              </div>
-
-              <div className="grid gap-3">
-                {[
-                  { key: 'name', label: 'Name', required: true },
-                  { key: 'idNumber', label: 'ID Number', required: false },
-                  { key: 'gender', label: 'Gender', required: false },
-                  { key: 'race', label: 'Race', required: false },
-                  { key: 'designation', label: 'Designation / Level', required: false },
-                  { key: 'isDisabled', label: 'Disabled', required: false },
-                  { key: 'isForeign', label: 'Foreign National', required: false },
-                  { key: 'province', label: 'Province', required: false },
-                  { key: 'hireDate', label: 'Hire Date', required: false },
-                ].map(field => {
-                  const fieldHasError = field.key === 'name' && mappingNameError && !columnMapping.name;
-                  return (
-                    <div key={field.key} className="grid grid-cols-2 items-start gap-4">
-                      <Label className="text-right text-sm pt-2">
-                        {field.label}
-                        {field.required && <span className="text-destructive ml-0.5">*</span>}
-                      </Label>
-                      <div className="space-y-1">
-                        <Select
-                          value={columnMapping[field.key] || '__none__'}
-                          onValueChange={(v) => {
-                            setColumnMapping(prev => ({ ...prev, [field.key]: v === '__none__' ? '' : v }));
-                            if (field.key === 'name' && v !== '__none__' && mappingNameError) setMappingNameError(false);
-                          }}
-                        >
-                          <SelectTrigger
-                            aria-invalid={fieldHasError || undefined}
-                            aria-describedby={fieldHasError ? `${field.key}-mapping-error` : undefined}
-                            className={cn(fieldHasError && "border-destructive focus-visible:ring-destructive")}
-                          >
-                            <SelectValue placeholder="Select column" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">-- Not mapped --</SelectItem>
-                            {fileColumns.map(col => (
-                              <SelectItem key={col} value={col}>{col}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {fieldHasError && <p id={`${field.key}-mapping-error`} className="text-xs text-destructive">Map a column to {field.label}.</p>}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setBulkStep('upload')}>Back</Button>
-                <Button onClick={handleApplyMapping}>Preview Data</Button>
-              </DialogFooter>
-            </div>
-          )}
-
-          {bulkStep === 'preview' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-1.5 text-sm">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span className="font-medium">{validCount}</span>
-                  <span className="text-muted-foreground">valid</span>
-                </div>
-                {invalidCount > 0 && (
-                  <div className="flex items-center gap-1.5 text-sm">
-                    <AlertCircle className="h-4 w-4 text-destructive" />
-                    <span className="font-medium">{invalidCount}</span>
-                    <span className="text-muted-foreground">invalid (will be skipped)</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="rounded-md border overflow-x-auto max-h-[300px] overflow-y-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="bg-muted/50 border-b sticky top-0">
-                    <tr>
-                      <th className="px-3 py-2 font-medium text-muted-foreground w-8"></th>
-                      <th className="px-3 py-2 font-medium text-muted-foreground">Name</th>
-                      <th className="px-3 py-2 font-medium text-muted-foreground">Gender</th>
-                      <th className="px-3 py-2 font-medium text-muted-foreground">Race</th>
-                      <th className="px-3 py-2 font-medium text-muted-foreground">Level</th>
-                      <th className="px-3 py-2 font-medium text-muted-foreground">D</th>
-                      <th className="px-3 py-2 font-medium text-muted-foreground">F</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {previewEmployees.map((emp, idx) => (
-                      <tr key={idx} className={cn(
-                        "hover:bg-muted/30",
-                        !emp.valid && "bg-destructive/5"
-                      )}>
-                        <td className="px-3 py-2">
-                          {emp.valid ? (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                          ) : (
-                            <AlertCircle className="h-3.5 w-3.5 text-destructive" />
-                          )}
-                        </td>
-                        <td className="px-3 py-2 font-medium">{emp.name || '—'}</td>
-                        <td className="px-3 py-2">{emp.gender}</td>
-                        <td className="px-3 py-2">{emp.race}</td>
-                        <td className="px-3 py-2">{emp.designation}</td>
-                        <td className="px-3 py-2">{emp.isDisabled ? 'Y' : 'N'}</td>
-                        <td className="px-3 py-2">{emp.isForeign ? 'Y' : 'N'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {invalidCount > 0 && (
-                <Card className="border-destructive/30 bg-destructive/5">
-                  <CardContent className="p-3">
-                    <p className="text-xs font-medium text-destructive mb-1">Validation Errors:</p>
-                    <div className="space-y-1 max-h-[100px] overflow-y-auto">
-                      {previewEmployees.filter(e => !e.valid).slice(0, 10).map((emp, idx) => (
-                        <p key={idx} className="text-[11px] text-destructive/80">
-                          Row {previewEmployees.indexOf(emp) + 1} ({emp.name || 'unnamed'}): {emp.errors.join(', ')}
-                        </p>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              <DialogFooter className="gap-2">
-                <Button variant="outline" onClick={() => setBulkStep('mapping')}>Back</Button>
-                <Button onClick={handleBulkSave} disabled={validCount === 0}>
-                  Import {validCount} Employee{validCount !== 1 ? 's' : ''}
-                </Button>
-              </DialogFooter>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -46,13 +46,13 @@ export function CertificateEditForm({ initial, saving, onClose, onSave }: Certif
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)' }}>
-      <div className="w-full max-w-2xl max-h-[92vh] rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#2c2c2e]">
+      <div className="w-full max-w-2xl max-h-[92vh] rounded-2xl bg-[color:var(--ink-3)] border border-[color:var(--rule)] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[color:var(--rule)]">
           <div className="flex items-center gap-2">
             <Pencil className="h-4 w-4 text-[#a5b4fc]" />
             <h2 className="text-[15px] font-semibold text-white">Edit certificate</h2>
           </div>
-          <button onClick={onClose} disabled={saving} className="text-[#636366] hover:text-white">
+          <button onClick={onClose} disabled={saving} className="text-[color:var(--muted)] hover:text-white">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -61,7 +61,7 @@ export function CertificateEditForm({ initial, saving, onClose, onSave }: Certif
             <InputField label="Supplier Name" required value={form.supplierName} error={errors.supplierName} onChange={(v) => setField('supplierName', v)} />
             <InputField label="VAT Number" value={form.vatNumber} onChange={(v) => setField('vatNumber', v)} />
             <label className="block">
-              <span className="block text-[11px] text-[#8e8e93] mb-1.5">Sector <span className="text-[#f87171]">*</span></span>
+              <span className="block text-[11px] text-[color:var(--body)] mb-1.5">Sector <span className="text-[#f87171]">*</span></span>
               <select className="ok-cert-input" value={form.sectorCode} onChange={(e) => setField('sectorCode', e.target.value)}>
                 <option value="">Select sector…</option>
                 {OKIRU_HUB_SECTORS.map((s) => <option key={s.code} value={s.code}>{s.label}</option>)}
@@ -99,14 +99,14 @@ export function CertificateEditForm({ initial, saving, onClose, onSave }: Certif
             </div>
           </Section>
         </div>
-        <div className="flex justify-end gap-2 px-5 py-4 border-t border-[#2c2c2e]">
-          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-[13px] text-[#8e8e93] hover:text-white">Cancel</button>
+        <div className="flex justify-end gap-2 px-5 py-4 border-t border-[color:var(--rule)]">
+          <button onClick={onClose} disabled={saving} className="px-4 py-2 rounded-lg text-[13px] text-[color:var(--body)] hover:text-white">Cancel</button>
           <button onClick={handleSave} disabled={saving || !isFormValid} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-50">
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             Save changes
           </button>
         </div>
-        <style>{`.ok-cert-input{width:100%;background:#0d0d10;border:1px solid #2c2c2e;border-radius:8px;padding:8px 10px;font-size:13px;color:#fff;outline:none}.ok-cert-input:focus{border-color:#6366f1}`}</style>
+        <style>{`.ok-cert-input{width:100%;background:#0d0d10;border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:8px 10px;font-size:13px;color:#fff;outline:none}.ok-cert-input:focus{border-color:#6366f1}`}</style>
       </div>
     </div>
   );
@@ -124,7 +124,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function InputField({ label, required, value, error, onChange }: { label: string; required?: boolean; value: string; error?: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-[#8e8e93] mb-1.5">{label}{required && <span className="text-[#f87171] ml-0.5">*</span>}</span>
+      <span className="block text-[11px] text-[color:var(--body)] mb-1.5">{label}{required && <span className="text-[#f87171] ml-0.5">*</span>}</span>
       <input className="ok-cert-input" value={value} onChange={(e) => onChange(e.target.value)} />
       {error && <p className="text-[11px] text-[#ef4444] mt-1">{error}</p>}
     </label>
@@ -134,7 +134,7 @@ function InputField({ label, required, value, error, onChange }: { label: string
 function SelectField({ label, value, options, onChange }: { label: string; value: string; options: readonly string[]; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-[#8e8e93] mb-1.5">{label}</span>
+      <span className="block text-[11px] text-[color:var(--body)] mb-1.5">{label}</span>
       <select className="ok-cert-input" value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">Select…</option>
         {options.map((o) => <option key={o} value={o}>{label.includes('Level') ? `Level ${o}` : o}</option>)}
@@ -146,7 +146,7 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 function YesNoField({ label, value, onChange }: { label: string; value: '' | 'yes' | 'no'; onChange: (v: '' | 'yes' | 'no') => void }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-[#8e8e93] mb-1.5">{label}</span>
+      <span className="block text-[11px] text-[color:var(--body)] mb-1.5">{label}</span>
       <select className="ok-cert-input" value={value} onChange={(e) => onChange(e.target.value as '' | 'yes' | 'no')}>
         <option value="">Not specified</option>
         <option value="yes">Yes</option>
@@ -159,7 +159,7 @@ function YesNoField({ label, value, onChange }: { label: string; value: '' | 'ye
 function DateField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-[#8e8e93] mb-1.5">{label}</span>
+      <span className="block text-[11px] text-[color:var(--body)] mb-1.5">{label}</span>
       <input type="date" className="ok-cert-input" value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
@@ -177,7 +177,7 @@ function NumberField({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-[#8e8e93] mb-1.5">{label}</span>
+      <span className="block text-[11px] text-[color:var(--body)] mb-1.5">{label}</span>
       <input
         type="number"
         min={min}

@@ -26,9 +26,9 @@ function methodLabel(method: ColumnMapping["method"]): { text: string; cls: stri
     case "ai":
       return { text: "AI", cls: "text-blue-400", ai: true };
     case "position":
-      return { text: "by position", cls: "text-[#8e8e93]" };
+      return { text: "by position", cls: "text-[color:var(--body)]" };
     default:
-      return { text: "unmapped", cls: "text-[#636366]" };
+      return { text: "unmapped", cls: "text-[color:var(--muted)]" };
   }
 }
 
@@ -72,7 +72,7 @@ export function MappingPreviewTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[#8e8e93]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-[color:var(--body)]">
         <span data-testid="mapping-preview-rowcount">
           {rows.length} {rows.length === 1 ? "row" : "rows"}
         </span>
@@ -84,23 +84,23 @@ export function MappingPreviewTable({
           </span>
         )}
         {rows.length > visibleRows.length && (
-          <span className="text-[#636366]">showing first {visibleRows.length}</span>
+          <span className="text-[color:var(--muted)]">showing first {visibleRows.length}</span>
         )}
       </div>
 
       <div
-        className="rounded-xl border border-[#2c2c2e] bg-[#0e0e10] overflow-auto max-h-[48vh]"
+        className="rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-2)] overflow-auto max-h-[48vh]"
         data-testid="mapping-preview-table"
       >
         <table className="text-[13px] border-collapse table-fixed">
           <thead className="sticky top-0 z-10">
-            <tr className="bg-[#1c1c1e]">
-              <th className="w-10 p-2 border-b border-r border-[#2c2c2e] sticky left-0 bg-[#1c1c1e] z-20" />
+            <tr className="bg-[color:var(--ink-3)]">
+              <th className="w-10 p-2 border-b border-r border-[color:var(--rule)] sticky left-0 bg-[color:var(--ink-3)] z-20" />
               {columns.map((col) => (
                 <th
                   key={col.key}
                   style={{ width: col.width || DEFAULT_COL_WIDTH, minWidth: col.width || DEFAULT_COL_WIDTH }}
-                  className="text-left px-3 py-2 font-semibold text-[#d1d1d6] border-b border-r border-[#2c2c2e] text-[11px] align-bottom"
+                  className="text-left px-3 py-2 font-semibold text-[color:var(--body)] border-b border-r border-[color:var(--rule)] text-[11px] align-bottom"
                 >
                   {col.label}
                   {col.required && <span className="text-status-error ml-0.5">*</span>}
@@ -108,7 +108,7 @@ export function MappingPreviewTable({
               ))}
             </tr>
             <tr className="bg-[#161618]">
-              <th className="w-10 p-1 border-b border-r border-[#2c2c2e] sticky left-0 bg-[#161618] z-20" />
+              <th className="w-10 p-1 border-b border-r border-[color:var(--rule)] sticky left-0 bg-[#161618] z-20" />
               {columns.map((col) => {
                 const entry = mappingByTarget.get(col.key);
                 const meta = entry ? methodLabel(entry.method) : methodLabel("unmapped");
@@ -116,14 +116,14 @@ export function MappingPreviewTable({
                   <th
                     key={col.key}
                     style={{ width: col.width || DEFAULT_COL_WIDTH, minWidth: col.width || DEFAULT_COL_WIDTH }}
-                    className="text-left px-3 py-1.5 border-b border-r border-[#2c2c2e] font-normal"
+                    className="text-left px-3 py-1.5 border-b border-r border-[color:var(--rule)] font-normal"
                   >
                     {entry ? (
                       <span className="inline-flex items-center gap-1 text-[10px]">
-                        <span className="text-[#8e8e93] truncate max-w-[90px]" title={entry.sourceHeader || "(by position)"}>
+                        <span className="text-[color:var(--body)] truncate max-w-[90px]" title={entry.sourceHeader || "(by position)"}>
                           {entry.sourceHeader || "col " + (entry.sourceIndex + 1)}
                         </span>
-                        <ArrowRight className="h-2.5 w-2.5 text-[#48484a] shrink-0" />
+                        <ArrowRight className="h-2.5 w-2.5 text-[color:var(--muted)] shrink-0" />
                         <span className={`inline-flex items-center gap-0.5 ${meta.cls}`}>
                           {meta.ai && <Sparkles className="h-2.5 w-2.5" />}
                           {meta.text}
@@ -146,7 +146,7 @@ export function MappingPreviewTable({
                         )}
                       </span>
                     ) : (
-                      <span className="text-[10px] text-[#636366] italic">not imported</span>
+                      <span className="text-[10px] text-[color:var(--muted)] italic">not imported</span>
                     )}
                   </th>
                 );
@@ -156,7 +156,7 @@ export function MappingPreviewTable({
           <tbody>
             {visibleRows.map((row, rIdx) => (
               <tr key={row._id} className="hover:bg-white/[0.02]" data-testid={`mapping-preview-row-${rIdx}`}>
-                <td className="text-[#636366] text-[11px] text-center border-b border-r border-[#2c2c2e] p-1.5 sticky left-0 bg-[#0e0e10] z-[1]">
+                <td className="text-[color:var(--muted)] text-[11px] text-center border-b border-r border-[color:var(--rule)] p-1.5 sticky left-0 bg-[color:var(--ink-2)] z-[1]">
                   {rIdx + 1}
                 </td>
                 {columns.map((col) => {
@@ -167,7 +167,7 @@ export function MappingPreviewTable({
                     <td
                       key={col.key}
                       style={{ width: col.width || DEFAULT_COL_WIDTH, minWidth: col.width || DEFAULT_COL_WIDTH }}
-                      className={`border-b border-r border-[#2c2c2e] px-3 py-2 relative ${
+                      className={`border-b border-r border-[color:var(--rule)] px-3 py-2 relative ${
                         isError
                           ? "bg-status-error-bg/30"
                           : flag
@@ -199,8 +199,8 @@ export function MappingPreviewTable({
       </div>
 
       {unmappedHeaders.length > 0 && (
-        <div className="rounded-lg border border-[#2c2c2e] bg-[#161618] px-3 py-2 text-[11px] text-[#8e8e93]">
-          <span className="text-[#d1d1d6] font-medium">Not imported:</span>{" "}
+        <div className="rounded-lg border border-[color:var(--rule)] bg-[#161618] px-3 py-2 text-[11px] text-[color:var(--body)]">
+          <span className="text-[color:var(--body)] font-medium">Not imported:</span>{" "}
           {unmappedHeaders.join(", ")} — no matching field. Rename the column to match a field, or paste into the
           target column directly.
         </div>

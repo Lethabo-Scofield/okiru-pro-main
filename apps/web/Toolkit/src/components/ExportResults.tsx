@@ -84,13 +84,21 @@ export default function ExportResults({ className }: ExportResultsProps) {
 
       setCompletedExports(prev => [...prev, type]);
 
+      let historyNote = "";
       try {
         await api.logExport({
           clientId: state.client.id,
           exportType: type,
           fileName,
         });
-      } catch {}
+      } catch (logErr) {
+        // The file DID download — that half of the toast stays true. What was
+        // silent is that recording it in the export history failed (and it
+        // failed for as long as the route was unreachable), which is why
+        // Recent Exports looked mysteriously empty. Say so.
+        console.warn("[export] download succeeded but the export log was not written", logErr);
+        historyNote = " It could not be added to Recent Exports.";
+      }
 
       const exportNames: Record<string, string> = {
         'verification-report': 'Verification Report',
@@ -100,7 +108,7 @@ export default function ExportResults({ className }: ExportResultsProps) {
       };
       toast({
         title: "Export Complete",
-        description: `Your ${exportNames[type] || type} has been downloaded.`,
+        description: `Your ${exportNames[type] || type} has been downloaded.${historyNote}`,
       });
     } catch (error: any) {
       console.error('Export error:', error);
@@ -123,17 +131,25 @@ export default function ExportResults({ className }: ExportResultsProps) {
       await exportStrategyPptx(state, exportOptions);
       setCompletedExports(['verification-report', 'certificate', 'audit-excel', 'strategy-pack']);
 
+      let historyNote = "";
       try {
         await api.logExport({
           clientId: state.client.id,
           exportType: 'all',
           fileName: 'Multiple exports',
         });
-      } catch {}
+      } catch (logErr) {
+        // The file DID download — that half of the toast stays true. What was
+        // silent is that recording it in the export history failed (and it
+        // failed for as long as the route was unreachable), which is why
+        // Recent Exports looked mysteriously empty. Say so.
+        console.warn("[export] download succeeded but the export log was not written", logErr);
+        historyNote = " They could not be added to Recent Exports.";
+      }
 
       toast({
         title: "All Exports Complete",
-        description: "Verification Report, Certificate PDF, Auditor Excel, and Strategy Pack have been downloaded.",
+        description: `Verification Report, Certificate PDF, Auditor Excel, and Strategy Pack have been downloaded.${historyNote}`,
       });
     } catch (error: any) {
       console.error('Export all error:', error);

@@ -179,7 +179,7 @@ export function SectionWorkbookEditor({
           <div className="min-w-0">
             <h2 className="text-[18px] font-bold tracking-tight text-white">{section.label}</h2>
             {section.description && (
-              <p className="text-[13px] text-[#8e8e93] mt-0.5">{section.description}</p>
+              <p className="text-[13px] text-[color:var(--body)] mt-0.5">{section.description}</p>
             )}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
@@ -188,7 +188,7 @@ export function SectionWorkbookEditor({
                 type="button"
                 onClick={() => void runCertificateAutofill(rows)}
                 disabled={autofilling || rowsWithGaps.length === 0}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] disabled:opacity-40 disabled:hover:bg-[#1c1c1e] text-[12px] text-[#d1d1d6] smooth press-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-40 disabled:hover:bg-[color:var(--ink-3)] text-[12px] text-[color:var(--body)] smooth press-sm"
                 title={
                   rowsWithGaps.length === 0
                     ? "Every supplier already has its certificate details"
@@ -203,7 +203,7 @@ export function SectionWorkbookEditor({
                 )}
                 Fill from certificates
                 {rowsWithGaps.length > 0 && (
-                  <span className="text-[#636366]">({rowsWithGaps.length})</span>
+                  <span className="text-[color:var(--muted)]">({rowsWithGaps.length})</span>
                 )}
               </button>
             )}
@@ -211,7 +211,7 @@ export function SectionWorkbookEditor({
               <button
                 type="button"
                 onClick={handleExport}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] text-[color:var(--body)] smooth press-sm"
                 data-testid="button-export-section"
               >
                 <Download className="h-3.5 w-3.5" />
@@ -231,7 +231,7 @@ export function SectionWorkbookEditor({
                 <button
                   type="button"
                   onClick={() => fileRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[12px] text-[#d1d1d6] smooth press-sm"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] text-[color:var(--body)] smooth press-sm"
                   data-testid="button-import-section"
                 >
                   <Upload className="h-3.5 w-3.5" />
@@ -240,7 +240,7 @@ export function SectionWorkbookEditor({
               </>
             )}
             {permissions.loading && (
-              <Loader2 className="h-4 w-4 animate-spin text-[#636366]" />
+              <Loader2 className="h-4 w-4 animate-spin text-[color:var(--muted)]" />
             )}
           </div>
         </div>
@@ -252,14 +252,14 @@ export function SectionWorkbookEditor({
           data-testid="certificate-autofill-report"
         >
           <div className="flex items-start justify-between gap-4">
-            <p className={autofillReport.cellsFilled > 0 ? "text-emerald-200/90" : "text-[#8e8e93]"}>
+            <p className={autofillReport.cellsFilled > 0 ? "text-emerald-200/90" : "text-[color:var(--body)]"}>
               {summariseAutofill(autofillReport) ||
                 "No new supplier details found in the certificate database."}
             </p>
             <button
               type="button"
               onClick={() => setAutofillReport(null)}
-              className="text-[11px] text-[#636366] hover:text-[#8e8e93] shrink-0"
+              className="text-[11px] text-[color:var(--muted)] hover:text-[color:var(--body)] shrink-0"
               data-testid="button-dismiss-autofill-report"
             >
               Dismiss
@@ -280,7 +280,7 @@ export function SectionWorkbookEditor({
               more than it should, so say so rather than let it look like the
               certificates are simply missing. */}
           {autofillReport.notValid.length > 0 && (
-            <p className="text-[11px] text-[#8e8e93]">
+            <p className="text-[11px] text-[color:var(--body)]">
               {asOf ? (
                 <>Validity checked against the financial period end, {asOf}.</>
               ) : (
@@ -301,7 +301,7 @@ export function SectionWorkbookEditor({
             </p>
           ))}
           {autofillReport.ambiguous.map((a) => (
-            <p key={`ambiguous-${a.rowId}`} className="text-[11px] text-[#8e8e93]">
+            <p key={`ambiguous-${a.rowId}`} className="text-[11px] text-[color:var(--body)]">
               {a.supplierName || "Unnamed supplier"}: matches {a.candidates.join(" and ")} — too close
               to call, pick the right one manually.
             </p>

@@ -16,7 +16,7 @@ function read(rel: string): string {
 const USER_FACING_FILES = [
   "src/pages/EsgInformationRequest.tsx",
   "src/pages/EsgScoreSummary.tsx",
-  "src/pages/EsgClientSelector.tsx",
+  "src/components/product/ProductWorkspace.tsx",
   "EsgToolkit/src/pages/EsgDashboard.tsx",
   "EsgToolkit/src/pages/EsgToolkitSectionPage.tsx",
   "EsgToolkit/src/components/EsgReportScopePanel.tsx",

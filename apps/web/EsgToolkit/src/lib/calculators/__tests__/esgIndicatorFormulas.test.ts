@@ -461,12 +461,23 @@ describe("G d9 — IFRS S1/S2 disclosures, 10 pts (fabricated denominator remove
     expect(G({ ifrs: { E29: 500, _max_score: 110 } }).d9).toBe(10);
   });
   it("END TO END — an IFRS grid derives E29 and reaches d9", () => {
-    // A=requirement B=pillar C=status
+    /*
+     * B=Disclosure Requirement, C=Pillar, D=Status, E=Score/5 — the live
+     * `IFRS_S1_S2` layout, which `ESG_GRID_SECTIONS.ifrs.columnLetters`
+     * declares and `writeEsgGridCells` writes.
+     *
+     * This fixture used to read "A=requirement B=pillar C=status" and put the
+     * status in C, because the derive layer mapped columns positionally and
+     * the test was written to match it. C is the PILLAR, which never says
+     * "Disclosed", so `E29` came out 0 and this indicator scored zero for
+     * every imported workbook. The fixture agreed with the bug; the client
+     * workbook (`D5 = "Partially Disclosed"`) does not.
+     */
     const raw = wb({
       assumptions: ASSUMPTIONS,
       ifrs: {
-        A5: "Governance a", C5: "Disclosed", // 5
-        A6: "Strategy b", C6: "Partially Disclosed", // 3
+        B5: "Board oversight of climate risks", C5: "Governance", D5: "Disclosed", // 5
+        B6: "Transition plan", C6: "Strategy", D6: "Partially Disclosed", // 3
       },
     });
     expect(scoreGovernance(deriveEsgSummaryCells(raw)).rows.d9).toBeCloseTo((10 * 8) / 110, 9);

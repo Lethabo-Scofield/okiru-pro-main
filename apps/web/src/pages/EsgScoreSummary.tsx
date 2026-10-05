@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { Award, ChevronRight, Leaf, Loader2, ScanLine } from "lucide-react";
-import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
-import { AppNavBack } from "@/components/AppNavBack";
-import { UserAccountMenu } from "@/components/UserAccountMenu";
 import { API_BASE } from "@toolkit/lib/config";
 import { computeEsgScores, formatEsgPercent, ESG_PILLAR_MAX } from "@/lib/esgCalculators";
 import {
@@ -75,27 +72,7 @@ export default function EsgScoreSummary() {
   };
 
   return (
-    <div className="esg-theme min-h-screen flex flex-col bg-black text-white">
-      <header
-        className="h-14 shrink-0 sticky top-0 z-20 flex items-center justify-between px-4 sm:px-6 bg-black"
-        style={{ borderBottom: "1px solid #2c2c2e" }}
-      >
-        <div className="flex items-center gap-3 min-w-0">
-          <AppNavBack
-            href={esgCreateHref(companyId)}
-            eyebrow="Inputs"
-            label="Workbook"
-            variant="dark"
-            size="compact"
-          />
-          <img src={logoCircle} alt="Okiru" className="h-8 w-8 rounded-lg hidden sm:block" />
-          <span className="text-[15px] font-semibold text-[var(--esg-text)] truncate flex items-center gap-2">
-            <Leaf className="h-4 w-4 text-[var(--esg-acc-e)] shrink-0" />
-            Summary
-          </span>
-        </div>
-        <UserAccountMenu variant="hub" />
-      </header>
+    <div className="esg-theme flex flex-col text-white">
 
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-8" data-testid="esg-score-summary">
         <nav

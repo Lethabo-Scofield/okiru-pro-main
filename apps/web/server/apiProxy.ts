@@ -13,6 +13,7 @@ import { createLogger } from "./logger";
 const logger = createLogger("ApiProxy");
 
 const API_BASE = process.env.API_SERVER_URL || "http://127.0.0.1:3000";
+const CERTIFICATE_READ_BASE = process.env.CERTIFICATE_READ_API_URL || "https://okiru.pro";
 
 /**
  * okiru-ai-parser (standalone deterministic document parser, :3200). The
@@ -42,6 +43,10 @@ const PROXIED_PREFIXES = [
   "/api/admin/analytics",
   /** okiru-ai-parser document parsing (streams multipart file uploads to :3200). */
   "/api/parser",
+  /** Export logs live on apps/api. Without this the POST fell through to the
+   *  SPA catch-all, so every "log this export" call wrote nothing — and the
+   *  caller swallowed the result, so it looked like it had worked. */
+  "/api/export-log",
 ];
 
 const PROXIED_TEMPLATE_PATTERNS = [
@@ -56,7 +61,7 @@ const PROXIED_TEMPLATE_PATTERNS = [
   // We deliberately exclude /api/clients/X/data, /bulk-import, and
   // /calculator-config — those belong to apps/web. The `(\/|$)` anchor stops
   // /api/clients/X/employees-something-else from matching by accident.
-  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement)(\/|$)/,
+  /^\/api\/clients\/[^/]+\/(employees|suppliers|training-programs|shareholders|esd-contributions|sed-contributions|financial-years|scenarios|ownership|procurement|export-logs)(\/|$)/,
 ];
 
 function shouldProxy(path: string): boolean {
@@ -81,7 +86,13 @@ export function proxyTargetFor(path: string): string {
 }
 
 function proxyRequest(req: Request, res: Response): void {
-  const targetBase = proxyTargetFor(req.path);
+  const publicCertificateRead =
+    process.env.NODE_ENV !== "production" &&
+    req.method === "GET" &&
+    (req.path === "/api/certificates" ||
+      req.path === "/api/certificates/stats" ||
+      req.path.startsWith("/api/certificates/by-slug/"));
+  const targetBase = publicCertificateRead ? CERTIFICATE_READ_BASE : proxyTargetFor(req.path);
   const url = new URL(req.originalUrl, targetBase);
 
   const headers: Record<string, string> = {};

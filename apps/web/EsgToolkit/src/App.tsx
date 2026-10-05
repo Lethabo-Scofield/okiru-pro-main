@@ -69,9 +69,12 @@ function EsgToolkitHeader() {
       className="h-[var(--esg-hdr-h)] shrink-0 sticky top-0 z-20 flex items-center gap-3 px-5 border-b border-[var(--esg-glass-border)] bg-[rgba(8,14,20,0.75)] backdrop-blur-2xl"
       data-testid="esg-toolkit-header"
     >
+      {/* `~` escapes this nested router to the parent's absolute path without a
+          page load. It was `external`, a plain anchor, which reloaded the whole
+          app; and it only ever offered the ESG company list, so the Hub was
+          unreachable from in here. Breadcrumbs above carry on from Companies. */}
       <AppNavBack
-        href={esgClientsHref()}
-        external
+        href={`~${esgClientsHref()}`}
         eyebrow="ESG"
         label="Companies"
         variant="dark"

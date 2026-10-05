@@ -86,7 +86,7 @@ export function CellValidationPopup({
       aria-label="Validation suggestion"
       aria-modal="false"
       data-testid="cell-validation-popup"
-      className="rounded-xl border border-[#3a3a3c] bg-[#1c1c1e] shadow-2xl overflow-hidden"
+      className="rounded-xl border border-[color:var(--rule-strong)] bg-[color:var(--ink-3)] shadow-2xl overflow-hidden"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}
@@ -100,7 +100,7 @@ export function CellValidationPopup({
         <button
           type="button"
           onClick={onDismiss}
-          className="p-0.5 rounded hover:bg-white/[0.08] text-[#636366] hover:text-white smooth shrink-0"
+          className="p-0.5 rounded hover:bg-white/[0.08] text-[color:var(--muted)] hover:text-white smooth shrink-0"
           aria-label="Dismiss"
           data-testid="cell-validation-dismiss-x"
         >
@@ -110,13 +110,13 @@ export function CellValidationPopup({
 
       {/* Validation rule */}
       {validationMessage && (
-        <div className="px-3 pb-2 text-[12px] text-[#8e8e93]">{validationMessage}</div>
+        <div className="px-3 pb-2 text-[12px] text-[color:var(--body)]">{validationMessage}</div>
       )}
 
       {/* Suggestion block */}
-      <div className="mx-3 mb-3 rounded-lg border border-[#2c2c2e] bg-[#0e0e10] px-3 py-2.5 space-y-1.5">
+      <div className="mx-3 mb-3 rounded-lg border border-[color:var(--rule)] bg-[color:var(--ink-2)] px-3 py-2.5 space-y-1.5">
         {loading ? (
-          <div className="flex items-center gap-2 text-[12px] text-[#8e8e93]">
+          <div className="flex items-center gap-2 text-[12px] text-[color:var(--body)]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             Getting AI suggestion…
           </div>
@@ -126,23 +126,23 @@ export function CellValidationPopup({
               {isAiSuggestion && (
                 <Sparkles className="h-3 w-3 text-blue-400 shrink-0" />
               )}
-              <span className="text-[11px] text-[#636366]">Suggested:</span>
+              <span className="text-[11px] text-[color:var(--muted)]">Suggested:</span>
               <span className="text-[13px] font-semibold text-white">{suggestion}</span>
             </div>
             {suggestionHint && (
-              <div className="text-[11px] text-[#48484a] leading-snug">{suggestionHint}</div>
+              <div className="text-[11px] text-[color:var(--muted)] leading-snug">{suggestionHint}</div>
             )}
           </>
         ) : (
-          <div className="text-[12px] text-[#636366]">
+          <div className="text-[12px] text-[color:var(--muted)]">
             No automatic suggestion available — type the correct value manually.
           </div>
         )}
 
         {/* Typed value reminder */}
         {rawValue && (
-          <div className="text-[11px] text-[#48484a]">
-            You typed: <span className="text-[#636366]">"{rawValue}"</span>
+          <div className="text-[11px] text-[color:var(--muted)]">
+            You typed: <span className="text-[color:var(--muted)]">"{rawValue}"</span>
           </div>
         )}
       </div>
@@ -162,7 +162,7 @@ export function CellValidationPopup({
         <button
           type="button"
           onClick={onDismiss}
-          className={`${suggestion && !loading ? "" : "flex-1"} inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-[#2c2c2e] hover:bg-white/[0.06] text-[#d1d1d6] text-[12px] smooth press-sm`}
+          className={`${suggestion && !loading ? "" : "flex-1"} inline-flex items-center justify-center px-3 py-1.5 rounded-lg border border-[color:var(--rule)] hover:bg-white/[0.06] text-[color:var(--body)] text-[12px] smooth press-sm`}
           data-testid="cell-validation-keep"
         >
           Keep what I typed
@@ -171,11 +171,11 @@ export function CellValidationPopup({
 
       {/* "Learn more" expandable section */}
       {learnMore && (
-        <div className="border-t border-[#2c2c2e]">
+        <div className="border-t border-[color:var(--rule)]">
           <button
             type="button"
             onClick={() => setExpanded((p) => !p)}
-            className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-[#636366] hover:text-[#8e8e93] hover:bg-white/[0.03] smooth"
+            className="w-full flex items-center justify-between px-3 py-2 text-[11px] text-[color:var(--muted)] hover:text-[color:var(--body)] hover:bg-white/[0.03] smooth"
             aria-expanded={expanded}
             data-testid="cell-validation-learn-more"
           >
@@ -187,7 +187,7 @@ export function CellValidationPopup({
             )}
           </button>
           {expanded && (
-            <div className="px-3 pb-3 text-[11px] text-[#8e8e93] leading-relaxed">
+            <div className="px-3 pb-3 text-[11px] text-[color:var(--body)] leading-relaxed">
               {learnMore}
             </div>
           )}

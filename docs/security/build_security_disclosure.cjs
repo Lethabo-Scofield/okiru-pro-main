@@ -23,9 +23,22 @@ const REPO = path.resolve(__dirname, "..", "..");
 const { jsPDF } = require(path.join(REPO, "node_modules", "jspdf"));
 const autoTable = require(path.join(REPO, "node_modules", "jspdf-autotable")).default;
 
+/* Two documents share this renderer, so that a client receiving both gets one
+ * house format rather than two. Pass a content file to render the other:
+ *
+ *   node docs/security/build_security_disclosure.cjs                        # the POPIA disclosure
+ *   node docs/security/build_security_disclosure.cjs integration_brief.json # the IT integration brief
+ *
+ * The output name comes from `outputFile` in the content, so a new document
+ * cannot silently overwrite an existing one by forgetting an argument. */
+const CONTENT_PATH = path.resolve(
+  __dirname,
+  process.argv[2] || "security_disclosure.json",
+);
+const CONTENT = require(CONTENT_PATH);
 const OUT =
-  process.argv[2] || path.join(__dirname, "Okiru_Security_and_POPIA_Disclosure.pdf");
-const CONTENT = require("./security_disclosure.json");
+  process.argv[3] ||
+  path.join(__dirname, CONTENT.outputFile || "Okiru_Security_and_POPIA_Disclosure.pdf");
 
 /* ── Okiru format tokens, same source as the report renderers ───────────── */
 const C = {

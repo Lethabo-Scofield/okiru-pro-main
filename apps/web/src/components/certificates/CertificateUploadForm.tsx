@@ -166,15 +166,15 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}>
-      <div className="w-full max-w-2xl mx-4 rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div className="w-full max-w-2xl mx-4 rounded-2xl bg-[color:var(--ink-3)] border border-[color:var(--rule)] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between px-5 py-4 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
           <div>
             <h2 className="text-[15px] font-semibold text-white">Upload certificate</h2>
-            <p className="text-[11px] text-[#636366] mt-0.5">
+            <p className="text-[11px] text-[color:var(--muted)] mt-0.5">
               {step === 'form' ? 'Upload with MAIA, complete details, then review' : 'Review before saving'}
             </p>
           </div>
-          <button onClick={resetAndClose} disabled={uploading} className="text-[#636366] hover:text-white transition-colors disabled:opacity-50">
+          <button onClick={resetAndClose} disabled={uploading} className="text-[color:var(--muted)] hover:text-white transition-colors disabled:opacity-50">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -193,7 +193,7 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
                   onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files.length) handleFileSelected(e.dataTransfer.files); }}
                   onClick={() => fileInputRef.current?.click()}
                   className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all ${
-                    dragOver ? 'border-[#6366f1] bg-[#6366f1]/10' : 'border-[#2c2c2e] hover:border-[#48484a] hover:bg-white/[0.02]'
+                    dragOver ? 'border-[#6366f1] bg-[#6366f1]/10' : 'border-[color:var(--rule)] hover:border-[color:var(--rule-strong)] hover:bg-white/[0.02]'
                   }`}
                 >
                   {extracting ? (
@@ -208,9 +208,9 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
                     </div>
                   ) : (
                     <>
-                      <CloudUpload className={`h-7 w-7 mx-auto mb-2 ${dragOver ? 'text-[#6366f1]' : 'text-[#48484a]'}`} />
+                      <CloudUpload className={`h-7 w-7 mx-auto mb-2 ${dragOver ? 'text-[#6366f1]' : 'text-[color:var(--muted)]'}`} />
                       <p className="text-[13px] text-[#e5e5ea]">Drag & drop or click to upload</p>
-                      <p className="text-[11px] text-[#48484a] mt-1">PDF, PNG, JPG · up to 50MB</p>
+                      <p className="text-[11px] text-[color:var(--muted)] mt-1">PDF, PNG, JPG · up to 50MB</p>
                     </>
                   )}
                   <input
@@ -330,7 +330,7 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
             <button
               onClick={() => setStep('form')}
               disabled={uploading}
-              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[13px] text-[#8e8e93] hover:text-white transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-[13px] text-[color:var(--body)] hover:text-white transition-colors"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Back to edit
@@ -339,7 +339,7 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
             <span />
           )}
           <div className="flex items-center gap-2">
-            <button onClick={resetAndClose} disabled={uploading} className="px-4 py-2 rounded-lg text-[13px] text-[#8e8e93] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50">
+            <button onClick={resetAndClose} disabled={uploading} className="px-4 py-2 rounded-lg text-[13px] text-[color:var(--body)] hover:text-white bg-white/[0.04] hover:bg-white/[0.08] transition-colors disabled:opacity-50">
               Cancel
             </button>
             {step === 'form' ? (
@@ -368,7 +368,7 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
           .ok-cert-input {
             width: 100%;
             background: #0d0d10;
-            border: 1px solid #2c2c2e;
+            border: 1px solid rgba(255,255,255,0.07);
             border-radius: 8px;
             padding: 8px 10px;
             font-size: 13px;
@@ -378,7 +378,7 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
           }
           .ok-cert-input:focus { border-color: #6366f1; }
           .ok-cert-input.ok-cert-input-error { border-color: #ef4444; }
-          .ok-cert-input::placeholder { color: #48484a; }
+          .ok-cert-input::placeholder { color: rgba(255,255,255,0.32); }
         `}</style>
       </div>
     </div>
@@ -387,7 +387,7 @@ export function CertificateUploadForm({ uploading, onClose, onSubmit }: Certific
 
 function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="mb-5 pb-5 border-b border-[#2c2c2e]/80 last:border-b-0 last:pb-0">
+    <section className="mb-5 pb-5 border-b border-[color:var(--rule)]/80 last:border-b-0 last:pb-0">
       <h3 className="text-[12px] font-medium text-[#a5b4fc] uppercase tracking-wide mb-3">{title}</h3>
       <div className="space-y-3">{children}</div>
     </section>
@@ -404,7 +404,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="block text-[11px] text-[#8e8e93] mb-1.5 tracking-wide">
+      <span className="block text-[11px] text-[color:var(--body)] mb-1.5 tracking-wide">
         {label}{required && <span className="text-[#f87171] ml-0.5">*</span>}
       </span>
       {children}
@@ -458,14 +458,14 @@ function ReviewPanel({ file, form }: { file: File | null; form: CertificateFormV
   ];
 
   return (
-    <div className="rounded-xl border border-[#2c2c2e] bg-[#0d0d10] overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#2c2c2e] text-[12px] text-[#8e8e93] uppercase tracking-wide">
+    <div className="rounded-xl border border-[color:var(--rule)] bg-[#0d0d10] overflow-hidden">
+      <div className="px-4 py-3 border-b border-[color:var(--rule)] text-[12px] text-[color:var(--body)] uppercase tracking-wide">
         Review before saving
       </div>
-      <dl className="divide-y divide-[#2c2c2e]/80">
+      <dl className="divide-y divide-[color:var(--rule)]/80">
         {rows.map((row) => (
           <div key={row.label} className="grid grid-cols-[1fr_1.2fr] gap-3 px-4 py-2.5 text-[13px]">
-            <dt className="text-[#636366]">{row.label}</dt>
+            <dt className="text-[color:var(--muted)]">{row.label}</dt>
             <dd className="text-white text-right break-words">{row.value}</dd>
           </div>
         ))}

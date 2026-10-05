@@ -14,7 +14,12 @@ import {
   isEsgGridSection,
   type EsgGridSectionId,
 } from "./esgGridSections";
-import { eDataCellsFromSheetRefs, headcountCellsFromSheetRefs } from "./esgSheetStructure";
+import {
+  coverCellsFromSheetRefs,
+  eDataCellsFromSheetRefs,
+  headcountCellsFromSheetRefs,
+  sDataNamedCellsFromSheetRefs,
+} from "./esgSheetStructure";
 import type { ColumnDef } from "@/components/workbook/sections";
 
 const SHEET_TO_SECTION: Record<string, string> = {
@@ -39,29 +44,46 @@ function normSheetName(name: string): string {
   return name.replace(/[\s_]/g, "").toLowerCase();
 }
 
-function colLetter(index: number): string {
-  let n = index;
-  let s = "";
-  do {
-    s = String.fromCharCode(65 + (n % 26)) + s;
-    n = Math.floor(n / 26) - 1;
-  } while (n >= 0);
-  return s;
-}
+/** An A1-style address, and nothing else — `!ref`, `!cols`, `!merges` are metadata. */
+const CELL_ADDRESS = /^[A-Z]+[1-9]\d*$/;
 
+/**
+ * Bound on how many cells one sheet may contribute, for the honest-but-enormous
+ * case (a genuine million-row export) that no lie is needed to produce.
+ */
+const SHEET_CELL_CAP = 200_000;
+
+/**
+ * Every cell a sheet actually holds.
+ *
+ * This walks the sheet's OWN keys rather than the rectangle `!ref` declares,
+ * and the difference is not a micro-optimisation — it is the fix for a remote
+ * denial of service.
+ *
+ * `!ref` comes from the file's `<dimension>` element, which SheetJS reproduces
+ * verbatim and which nothing in the format obliges to be honest. A 2.4 KB
+ * upload declaring `A1:XFD1048576` while holding one single cell sent the old
+ * loop around 17.2 BILLION `encode_cell` calls — measured at 27 seconds for a
+ * 1,000-row slice, so on the order of eight hours for the whole sheet. It runs
+ * server-side and synchronously inside
+ * `POST /api/esg/workbook/:companyId/import`, so those hours are the Node event
+ * loop: one ESG user, one small file, and the web server stops answering
+ * anybody, on every product and every tenant.
+ *
+ * Iterating the keys costs O(cells present) and returns exactly what the old
+ * loop returned, because that loop already skipped every address the sheet held
+ * no value at.
+ */
 function sheetToCellMap(sheet: XLSX.WorkSheet): Record<string, unknown> {
   const cells: Record<string, unknown> = {};
-  const ref = sheet["!ref"];
-  if (!ref) return cells;
-  const range = XLSX.utils.decode_range(ref);
-  for (let r = range.s.r; r <= range.e.r; r++) {
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const addr = XLSX.utils.encode_cell({ r, c });
-      const cell = sheet[addr];
-      if (!cell || cell.v === undefined || cell.v === null) continue;
-      const cellRef = `${colLetter(c)}${r + 1}`;
-      cells[cellRef] = cell.v;
-    }
+  let kept = 0;
+  for (const addr of Object.keys(sheet)) {
+    if (!CELL_ADDRESS.test(addr)) continue;
+    const cell = (sheet as Record<string, { v?: unknown } | undefined>)[addr];
+    if (!cell || cell.v === undefined || cell.v === null) continue;
+    if (kept >= SHEET_CELL_CAP) break;
+    kept++;
+    cells[addr] = cell.v;
   }
   return cells;
 }
@@ -103,7 +125,30 @@ function importGridSection(
     const row = parseInt(m[2], 10);
     if (row >= startRow && row <= endRow) rowNums.add(row);
   }
-  for (const rowNum of [...rowNums].sort((a, b) => a - b)) {
+  /*
+   * A register is CONTIGUOUS FROM `startRow`, and `readEsgGridRows` has always
+   * said so — this is the import finally agreeing with the reader it claims to
+   * mirror ("what the import refuses to store, the reader also refuses to
+   * render"). It did not, and the gap showed:
+   *
+   *   `s-data-csi` owns row 72 to the end of the sheet, and `S_Data` carries
+   *   the NPAT and procurement scalars at rows 82–87. Their labels sit in
+   *   column A, which is the CSI register's first column, so every one of them
+   *   imported as a community initiative — inflating `_initiatives_count` and
+   *   handing out points on `S_Scorecard!C23` for rows that are captions.
+   *
+   * Two rules, both borrowed verbatim from the reader: the first data row must
+   * be `startRow`, and a gap ends the register.
+   */
+  const orderedRows = [...rowNums].sort((a, b) => a - b);
+  if (orderedRows.length > 0 && orderedRows[0] !== startRow) {
+    return writeEsgGridCells(sectionId, [], {});
+  }
+  let previousRow: number | null = null;
+
+  for (const rowNum of orderedRows) {
+    if (previousRow != null && rowNum > previousRow + 1) break;
+    previousRow = rowNum;
     const row: EsgGridRow = { _id: `imp_${rowNum}` };
     def.columns.forEach((col, colIdx) => {
       /*
@@ -202,7 +247,16 @@ export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPre
       // never displayed and never scored.
       cells = { ...raw, ...eDataCellsFromSheetRefs(raw) };
     } else if (sectionId === "s-data") {
-      cells = { ...raw, ...headcountCellsFromSheetRefs(raw) };
+      cells = {
+        ...raw,
+        ...headcountCellsFromSheetRefs(raw),
+        ...sDataNamedCellsFromSheetRefs(raw),
+      };
+    } else if (sectionId === "company-reporting-setup") {
+      // Cover is keyed by NAME (`entity`, `sector`, `boundary`), never by cell,
+      // so the A1 addresses alone left the section permanently blank however
+      // complete the sheet was. Match the labels across to the app's keys.
+      cells = { ...raw, ...coverCellsFromSheetRefs(raw) };
     }
     if (Object.keys(cells).length > 0) {
       sections[sectionId] = { cells };

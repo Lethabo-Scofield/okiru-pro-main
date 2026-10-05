@@ -57,7 +57,7 @@ export function EsgValidationPanel({
         placeholder="Filter rules…"
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
-        className="w-full mb-3 px-2 py-1 rounded bg-[var(--esg-input-bg,#0e0e10)] border border-[var(--esg-input-border,#2c2c2e)] text-[11px]"
+        className="w-full mb-3 px-2 py-1 rounded bg-[var(--esg-input-bg,#0e0e10)] border border-[var(--esg-input-border,rgba(255,255,255,0.07))] text-[11px]"
       />
       <ul className="space-y-2 max-h-64 overflow-y-auto">
         {filtered.map((issue) => (
@@ -87,7 +87,7 @@ export function EsgValidationPanel({
 
 function IssueIcon({ issue }: { issue: { pass: boolean; pending?: boolean; severity: string } }) {
   if (issue.pending) {
-    return <Circle className="h-3.5 w-3.5 text-[#48484a] shrink-0 mt-0.5" />;
+    return <Circle className="h-3.5 w-3.5 text-[color:var(--muted)] shrink-0 mt-0.5" />;
   }
   if (issue.pass) {
     return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0 mt-0.5" />;

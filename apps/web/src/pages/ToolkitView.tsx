@@ -9,6 +9,7 @@ import { ClientProvider } from "@toolkit/lib/client-context";
 import { AppRoutes } from "@toolkit/App";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
+import { resolveScorecardTypeForSector } from "@/components/workbook/sections";
 
 async function hydrateStoreFromSession(session: any) {
   const sessionId = session.sessionId || session.id;
@@ -38,7 +39,7 @@ async function hydrateStoreFromSession(session: any) {
       contactPerson: ci.contactPerson ?? '',
       contactEmail: ci.contactEmail ?? '',
       contactPhone: ci.contactPhone ?? '',
-      sectorCode: ci.sectorCode ?? 'RCOGP',
+      sectorCode: ci.sectorCode ?? '',
       industry: ci.industry ?? 'Generic',
       companySize: ci.companySize ?? 'Generic',
       annualTurnover: ci.annualTurnover ?? 0,
@@ -67,21 +68,41 @@ async function hydrateStoreFromSession(session: any) {
   });
 
   // Always load config and recalculate - never use stale saved results
-  const sectorCode = ci.sectorCode || 'RCOGP';
-  const turnover = ci.annualTurnover ?? fin.totalRevenue ?? 0;
-  const scorecardType = turnover > 50_000_000 ? 'Generic' : (turnover >= 10_000_000 ? 'QSE' : 'Generic');
-  try {
-    const cfgRes = await fetch(`${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`);
-    if (cfgRes.ok) {
-      const cfgData = await cfgRes.json();
-      if (cfgData.success && cfgData.config) {
-        useBbeeStore.setState({ calculatorConfig: cfgData.config });
-        useBbeeStore.getState()._recalculateAll();
-      }
-    }
-  } catch (e) {
-    console.warn('[ToolkitView] Failed to load sector config for session:', e);
+  // A missing sector used to default to RCOGP — a real, specific sector, so an
+  // entity with no sector silently got another sector's scorecard. There is no
+  // safe guess here; say so instead.
+  const sectorCode = String(ci.sectorCode ?? '').trim();
+  if (!sectorCode) {
+    throw new Error('This session has no scorecard sector. Set it in the company’s workbook before opening the toolkit.');
   }
+
+  // The scorecard type was re-derived from turnover here, with the wrong
+  // thresholds: under R10m returned 'Generic', so a small entity was scored on
+  // the large scorecard. It is not this screen's to derive at all — the
+  // workbook already captured it, and re-deriving produced a second answer
+  // that disagreed with the client record hydrated a few lines above.
+  const scorecardType = resolveScorecardTypeForSector(sectorCode, ci.scorecardType ?? ci.companySize);
+  if (!scorecardType) {
+    throw new Error(
+      `“${String(ci.scorecardType ?? ci.companySize ?? '—')}” is not a scorecard type ${sectorCode} offers. Correct it in the company’s workbook.`,
+    );
+  }
+  // This used to swallow the failure into a console.warn and leave
+  // calculatorConfig null, so the toolkit opened and scored against nothing.
+  // CalculatorConfigGate already knows how to show and retry that state — let
+  // the failure reach it.
+  const cfgRes = await fetch(
+    `${API_BASE}/api/scorecard/sector-config/${encodeURIComponent(sectorCode)}/${encodeURIComponent(scorecardType)}`,
+  );
+  if (!cfgRes.ok) {
+    throw new Error(`Could not load the ${sectorCode} ${scorecardType} scorecard rules (${cfgRes.status}).`);
+  }
+  const cfgData = await cfgRes.json();
+  if (!cfgData?.success || !cfgData.config) {
+    throw new Error(`The ${sectorCode} ${scorecardType} scorecard rules came back empty.`);
+  }
+  useBbeeStore.setState({ calculatorConfig: cfgData.config });
+  useBbeeStore.getState()._recalculateAll();
 }
 
 export default function ToolkitView() {
@@ -90,6 +111,11 @@ export default function ToolkitView() {
   const clientId = localStorage.getItem("okiru-pro-active-client") || "";
   const isSyntheticId = clientId.startsWith('build-') || clientId.startsWith('session') || clientId.startsWith('upload-');
   const [sessionLoading, setSessionLoading] = useState(!!sessionParam || (isSyntheticId && !useBbeeStore.getState().isLoaded));
+  // A failed session load used to be a console.error, after which the toolkit
+  // rendered anyway against an empty store: every pillar zero, the scorecard
+  // “Non-Compliant”, and nothing on screen saying the data never arrived.
+  const [sessionError, setSessionError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     // Case 1: session param in query string -- load session from API
@@ -108,6 +134,7 @@ export default function ToolkitView() {
       }
 
       const loadSession = async () => {
+        setSessionError(null);
         try {
           const res = await fetch(`${API_BASE}/api/processor-sessions/${sessionParam}`);
           if (!res.ok) throw new Error(`Session fetch failed: ${res.status}`);
@@ -115,7 +142,8 @@ export default function ToolkitView() {
           localStorage.setItem("okiru-pro-active-client", sessionId);
           await hydrateStoreFromSession(session);
         } catch (err) {
-          console.error("Failed to load session for toolkit:", err);
+          console.error("[ToolkitView] session load failed", err);
+          setSessionError(err instanceof Error ? err.message : "The scorecard data could not be loaded.");
         } finally {
           setSessionLoading(false);
         }
@@ -130,6 +158,7 @@ export default function ToolkitView() {
       const extractedSessionId = clientId.replace(/^(build-|session-|upload-)/, '').replace(/^sess-/, '');
       if (extractedSessionId) {
         const loadSession = async () => {
+          setSessionError(null);
           try {
             const res = await fetch(`${API_BASE}/api/processor-sessions/${extractedSessionId}`);
             if (!res.ok) throw new Error(`Session fetch failed: ${res.status}`);
@@ -137,7 +166,8 @@ export default function ToolkitView() {
             localStorage.setItem("okiru-pro-active-client", clientId);
             await hydrateStoreFromSession(session);
           } catch (err) {
-            console.error("Failed to reload session for synthetic client:", err);
+            console.error("[ToolkitView] session load failed", err);
+            setSessionError(err instanceof Error ? err.message : "The scorecard data could not be loaded.");
           } finally {
             setSessionLoading(false);
           }
@@ -150,13 +180,46 @@ export default function ToolkitView() {
     }
 
     setSessionLoading(false);
-  }, [sessionParam, clientId, isSyntheticId]);
+  }, [sessionParam, clientId, isSyntheticId, retryCount]);
+
+  if (sessionError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="max-w-sm w-full bg-card rounded-2xl border border-border p-8 flex flex-col items-center gap-5 text-center">
+          <div className="w-12 h-12 rounded-xl bg-destructive/10 border border-destructive/20 flex items-center justify-center">
+            <svg className="w-6 h-6 text-destructive" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+          </div>
+          <div>
+            <h3 className="font-bold text-foreground text-base mb-1">Scorecard data didn’t load</h3>
+            <p className="text-muted-foreground text-sm" data-testid="toolkit-session-error">{sessionError}</p>
+          </div>
+          <div className="flex gap-3 w-full">
+            <button
+              onClick={() => { setSessionError(null); setSessionLoading(true); setRetryCount((n) => n + 1); }}
+              className="flex-1 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-semibold text-sm transition-colors"
+              data-testid="toolkit-session-retry"
+            >
+              Retry
+            </button>
+            <a
+              href="/bbbee"
+              className="flex-1 py-2 bg-muted hover:bg-muted/70 text-muted-foreground rounded-lg font-semibold text-sm transition-colors flex items-center justify-center"
+            >
+              Companies
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (sessionLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="h-10 w-10 border-2 border-[rgba(255,255,255,0.32)] border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-muted-foreground text-sm">Loading scorecard data...</p>
         </div>
       </div>

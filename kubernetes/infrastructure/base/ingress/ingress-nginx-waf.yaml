@@ -1,0 +1,153 @@
+# Web application firewall at the public edge.
+#
+# Open item 3 of the security disclosure asked for "a managed WAF in front of
+# the ingress". The ingress controller image we already run
+# (registry.k8s.io/ingress-nginx/controller:v1.11.3) ships the ModSecurity
+# module and the OWASP Core Rule Set, so the firewall costs nothing beyond
+# turning it on — no Azure Front Door, no second public IP, no extra hop.
+#
+# Applied to the shared controller ConfigMap rather than as per-Ingress
+# `modsecurity-snippet` annotations, because `allow-snippet-annotations` is
+# false and should stay false: snippet annotations let anyone who can create an
+# Ingress inject arbitrary nginx configuration.
+#
+#   kubectl apply -f kubernetes/infrastructure/base/ingress/ingress-nginx-waf.yaml
+#
+# The controller watches this ConfigMap and reloads nginx in place. To roll back,
+# re-apply with `enable-modsecurity: "false"`.
+#
+# ROLLOUT ORDER. `SecRuleEngine` starts at DetectionOnly: rules evaluate and log
+# but nothing is blocked. Run real traffic through it, read what it would have
+# blocked (`kubectl logs -n ingress-nginx deploy/ingress-nginx-controller |
+# grep modsecurity`), tune, and only then set `SecRuleEngine On`. Switching
+# straight to blocking on a live system is how a WAF takes a product down on its
+# first day.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-nginx-controller
+  namespace: ingress-nginx
+  labels:
+    app.kubernetes.io/name: ingress-nginx
+    app.kubernetes.io/part-of: ingress-nginx
+data:
+  # Unchanged, and deliberately so — see the note above.
+  allow-snippet-annotations: "false"
+
+  enable-modsecurity: "true"
+  enable-owasp-modsecurity-crs: "true"
+
+  # This snippet is appended after the bundled modsecurity.conf and after the
+  # Core Rule Set, so it has the last word on every directive it names. Each one
+  # below overrides a default that is wrong for this application.
+  modsecurity-snippet: |
+    SecRuleEngine On
+
+    # Anomaly threshold, raised from the Core Rule Set default of 5.
+    #
+    # The Core Rule Set scores each match and rule 949110 blocks once the total
+    # passes this threshold. 5 is one critical rule, which on an application
+    # nobody has yet tuned the rules against is how a firewall blocks real
+    # customers on its first day. 20 needs several independent detections.
+    #
+    # Measured against this deployment on 17 September 2026: a path-traversal
+    # and shell-code probe scored 30, cross-site scripting 15 to 20, blind SQL
+    # injection 10. So the blatant cases are blocked today, and a single
+    # marginal match is not.
+    #
+    # This number should come DOWN toward 5 as the detection log proves quiet.
+    # docs/security/waf-tuning.md has the procedure and the review date.
+    SecAction "id:10000,phase:1,pass,nolog,setvar:tx.inbound_anomaly_score_threshold=20"
+
+    # Request bodies are inspected everywhere except the four routes that carry
+    # customer documents and spreadsheet content. A workbook full of Excel
+    # formulas or a scanned utility bill looks a great deal like an attack to a
+    # generic rule set, and these are the routes the product exists for.
+    #
+    # The URL, method, headers, query string and cookies of these requests are
+    # still inspected; only the body is exempt. All four require an
+    # authenticated session, so reaching them already costs an attacker an
+    # account.
+    SecRule REQUEST_URI "@beginsWith /api/parser" \
+      "id:10001,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
+    SecRule REQUEST_URI "@beginsWith /api/excel-import" \
+      "id:10002,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
+    SecRule REQUEST_URI "@beginsWith /api/workbook" \
+      "id:10003,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
+    SecRule REQUEST_URI "@beginsWith /api/esg" \
+      "id:10004,phase:1,pass,nolog,ctl:requestBodyAccess=Off"
+
+    # The bundled default is `SecRequestBodyLimitAction Reject` at 12.5 MB,
+    # which is enforced independently of the rule engine — it would reject
+    # every document upload the moment ModSecurity was switched on, even in
+    # DetectionOnly. ProcessPartial inspects what fits and passes the rest
+    # through instead of rejecting the request.
+    SecRequestBodyAccess On
+    SecRequestBodyLimit 13107200
+    SecRequestBodyNoFilesLimit 524288
+    SecRequestBodyLimitAction ProcessPartial
+
+    # Responses are not inspected. Buffering every response body costs memory on
+    # a single-node cluster and buys little here: the threats we care about are
+    # inbound.
+    SecResponseBodyAccess Off
+
+    # The default writes one file per transaction under /var/log/audit inside
+    # the controller pod: lost on restart, and able to fill the node disk.
+    # Serial JSON on stdout lands in the container log with everything else.
+    #
+    # NOTE: no apostrophes anywhere in this snippet. The controller emits it
+    # inside a single-quoted nginx directive, so one apostrophe — in a comment
+    # is enough — ends the string early and the config fails to parse.
+    SecAuditEngine RelevantOnly
+    SecAuditLogRelevantStatus "^(?:5|4(?!04))"
+    SecAuditLogParts ABIJDEFHZ
+    SecAuditLogType Serial
+    SecAuditLogFormat JSON
+    SecAuditLog /dev/stdout
+
+    # Off: the default periodically reports our ModSecurity and host version to
+    # an external service. That is an outbound call disclosing our stack that
+    # nobody asked for.
+    SecStatusEngine Off
+
+  # --- Real client address ----------------------------------------------
+  #
+  # okiru.pro is proxied through Cloudflare, so every connection nginx sees
+  # comes from a Cloudflare edge address. With the default configuration nginx
+  # then sets `X-Forwarded-For: <cloudflare ip>`, and that is what the
+  # application received — which means:
+  #
+  #   * per-address rate limits bucketed every visitor from one Cloudflare
+  #     point of presence together, so ten failed sign-ins from anywhere in
+  #     South Africa would have locked out everyone else behind the same edge;
+  #   * the `limit-rps` annotation on the Ingress was counting the same way;
+  #   * and the audit trail recorded a Cloudflare address as the source of
+  #     every action, which is not what the disclosure says it records.
+  #
+  # `CF-Connecting-IP` carries the true client address and, unlike
+  # X-Forwarded-For, is a single value Cloudflare sets itself. It is trusted
+  # only from Cloudflare address space: a request arriving directly at the
+  # ingress (the nip.io hosts do not go through Cloudflare) cannot forge it,
+  # because its source is not in the list below.
+  #
+  # The list is Cloudflare's published ranges as at 17 September 2026, from
+  # https://www.cloudflare.com/ips-v4 and /ips-v6. Cloudflare changes them
+  # rarely and announces it; re-fetch and re-apply when they do.
+  enable-real-ip: "true"
+  forwarded-for-header: "CF-Connecting-IP"
+  proxy-real-ip-cidr: "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+
+  # --- General edge hardening -------------------------------------------
+  # Do not advertise the server or its version in responses.
+  server-tokens: "false"
+  hide-headers: "Server,X-Powered-By"
+
+  # Stated explicitly so the disclosure's "TLS 1.2 minimum" claim is verifiable
+  # from configuration rather than from a default that could change.
+  ssl-protocols: "TLSv1.2 TLSv1.3"
+
+  # 429 is the honest answer to a rate-limited caller. The default, 503, tells a
+  # client the service is broken and invites a retry storm.
+  limit-req-status-code: "429"
+  limit-conn-status-code: "429"

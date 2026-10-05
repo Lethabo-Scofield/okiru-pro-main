@@ -1,10 +1,11 @@
 import * as XLSX from 'xlsx';
+import type { BbeeState } from "./store";
 import { calculateOwnershipScore } from './calculators/ownership';
 import { calculateManagementScore } from './calculators/management';
 import { calculateSkillsScore } from './calculators/skills';
 import { calculateProcurementScore } from './calculators/procurement';
 import { calculateEsdScore, calculateSedScore } from './calculators/esd-sed';
-import { pillarBonusSplit } from './sectors/sector-labels';
+import { pillarBonusSplit , subMinimumLabel, subMinimumFailed } from "./sectors/sector-labels";
 
 interface ExportOptions {
   analystName?: string;
@@ -21,7 +22,7 @@ function pct(value: number, total: number): string {
   return `${((value / total) * 100).toFixed(1)}%`;
 }
 
-export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
+export const exportAuditorExcel = (state: BbeeState, options: ExportOptions = {}) => {
   const wb = XLSX.utils.book_new();
   const today = new Date();
   const currentLevel = state.scorecard.isDiscounted ? state.scorecard.discountedLevel : state.scorecard.achievedLevel;
@@ -38,23 +39,58 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     throw new Error('Cannot export Excel: calculator configuration not loaded. Please load a client or scorecard first.');
   }
 
-  const ownershipData = state.ownership || defaultOwnership;
-  if (!ownershipData.ownershipScorePoints && ownershipData.ownershipScorePoints !== 0) {
+  // These were the LIVE store objects, and the lines below assigned into them:
+  // downloading a spreadsheet mutated application state. Work on copies —
+  // an export is a read of the scorecard, never a write to it.
+  const ownershipData = { ...(state.ownership || defaultOwnership) };
+  if (ownershipData.ownershipScorePoints == null) {
     ownershipData.ownershipScorePoints = 0;
     ownershipData.ownershipScorePercent = 0;
     ownershipData.netValuePoints = 0;
     ownershipData.netValuePercent = 0;
   }
 
-  const skillsData = state.skills || defaultSkills;
-  if (!skillsData.yesCandidatesCount && skillsData.yesCandidatesCount !== 0) {
+  const skillsData = { ...(state.skills || defaultSkills) };
+  if (skillsData.yesCandidatesCount == null) {
     skillsData.yesCandidatesCount = 0;
     skillsData.yesAbsorbedCount = 0;
   }
 
-  const esdData = state.esd || defaultEsd;
+  const esdData = { ...(state.esd || defaultEsd) };
   if (esdData.graduationBonus === undefined) esdData.graduationBonus = false;
   if (esdData.jobsCreatedBonus === undefined) esdData.jobsCreatedBonus = false;
+
+  // The workbook did not foot. Every pillar row took its score from a fresh
+  // re-run of the calculators above, while the TOTAL row took
+  // state.scorecard.total.score — and the store applies three things the bare
+  // re-run does not: pipelineOverrides, choose-one elective zeroing, and the
+  // extra pillars (employmentEquity, AFS, empowermentFinancing). So the rows
+  // and the total in one and the same sheet disagreed, and an auditor
+  // reconciling them found a gap with no explanation in the document.
+  //
+  // state.scorecard is what the application itself displays and what the total
+  // is built from, so the rows are taken from it. The calculators are kept for
+  // sub-line detail only, and even there the scored breakdown wins when the
+  // pillar carries one — the same rule PillarScore.subLines already states.
+  const pillarRow = (
+    label: string,
+    pillar: { score: number; target: number; weighting?: number; subMinimumMet?: boolean } | undefined,
+    subMinText: string,
+    subMinMet: string,
+  ) => {
+    const score = pillar?.score ?? 0;
+    // `target || 25` turned a legitimately 0-weighted elective into a 25-point
+    // denominator, reporting '0.0 / 25 — 0%' for an element the entity is not
+    // measured on. A zero weighting is a fact, not a missing value.
+    const target = pillar?.target ?? 0;
+    return [label, '', target, target, fmt(score), pct(score, target), subMinText, subMinMet];
+  };
+
+  /** Scored breakdown if the pillar carries one, else the calculator's. */
+  const subLinesOf = (
+    pillar: { subLines?: { name: string; score: number; weighting?: number }[] } | undefined,
+    fallback: { name: string; score: number; weighting?: number }[],
+  ) => (pillar?.subLines?.length ? pillar.subLines : fallback);
 
   const ownCalc = calculateOwnershipScore(ownershipData, cfg);
   const mgtCalc = calculateManagementScore(state.management || defaultManagement, cfg);
@@ -72,7 +108,7 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     [''],
     ['ENTITY INFORMATION'],
     ['Entity Name', state.client.name],
-    ['Trading As', state.client.tradeName || ''],
+    ['Trading As', state.client.tradingName || ''],
     ['Financial Year', state.client.financialYear],
     ['Measurement Period', state.client.measurementPeriodStart && state.client.measurementPeriodEnd ? `${state.client.measurementPeriodStart} to ${state.client.measurementPeriodEnd}` : 'Full financial year'],
     ['Industry Sector', state.client.industrySector || 'Generic'],
@@ -90,23 +126,37 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     [''],
     ['GENERIC SCORECARD (Amended Codes of Good Practice)'],
     ['Element', 'Indicator', 'Weighting', 'Target Points', 'Score Achieved', 'Achievement %', 'Sub-minimum', 'Sub-min Met'],
-    ['Ownership', '', state.scorecard.ownership.target || 25, state.scorecard.ownership.target || 25, fmt(ownCalc.total), pct(ownCalc.total, state.scorecard.ownership.target || 25), '≥ 10 pts', ownCalc.total >= 10 || ownCalc.subMinimumMet ? 'Yes' : 'No'],
-    ...ownCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Management Control', '', state.scorecard.managementControl.target || 19, state.scorecard.managementControl.target || 19, fmt(mgtCalc.total), pct(mgtCalc.total, state.scorecard.managementControl.target || 19), 'N/A', 'N/A'],
-    ...mgtCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Skills Development', '', state.scorecard.skillsDevelopment.target || 25, state.scorecard.skillsDevelopment.target || 25, fmt(skillCalc.total), pct(skillCalc.total, state.scorecard.skillsDevelopment.target || 25), '≥ 10 pts', state.scorecard.skillsDevelopment.subMinimumMet ? 'Yes' : 'No'],
-    ...skillCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Preferential Procurement', '', state.scorecard.procurement.target || 29, state.scorecard.procurement.target || 29, fmt(procCalc.base), pct(procCalc.base, state.scorecard.procurement.target || 29), '≥ 11.6 pts (base)', state.scorecard.procurement.subMinimumMet ? 'Yes' : 'No'],
-    ...procCalc.subLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Supplier Development', '', state.scorecard.supplierDevelopment?.target || 10, state.scorecard.supplierDevelopment?.target || 10, fmt(esdCalc.sdTotal), pct(esdCalc.sdTotal, state.scorecard.supplierDevelopment?.target || 10), '≥ 4 pts', esdCalc.sdSubMinimumMet ? 'Yes' : 'No'],
-    ...esdCalc.sdSubLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Enterprise Development', '', state.scorecard.enterpriseDevelopment?.target || 7, state.scorecard.enterpriseDevelopment?.target || 7, fmt(esdCalc.edTotal), pct(esdCalc.edTotal, state.scorecard.enterpriseDevelopment?.target || 7), '≥ 2 pts', esdCalc.edSubMinimumMet ? 'Yes' : 'No'],
-    ...esdCalc.edSubLines.map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
-    ['Socio-Economic Development', '', state.scorecard.socioEconomicDevelopment.target || 5, state.scorecard.socioEconomicDevelopment.target || 5, fmt(sedCalc.total), pct(sedCalc.total, state.scorecard.socioEconomicDevelopment.target || 5), 'N/A', 'N/A'],
-    ['', 'SED Contributions (1% of NPAT)', '', state.scorecard.socioEconomicDevelopment.target || 5, fmt(sedCalc.total), '', '', ''],
-    ['YES Initiative', '', state.scorecard.yesInitiative?.target || 3, state.scorecard.yesInitiative?.target || 3, fmt(state.scorecard.yesInitiative?.score || 0), pct(state.scorecard.yesInitiative?.score || 0, state.scorecard.yesInitiative?.target || 3), 'N/A', 'N/A'],
+    pillarRow('Ownership', state.scorecard.ownership, '≥ 10 pts', subMinimumLabel(state.scorecard.ownership.subMinimumMet, { met: 'Yes', notMet: 'No', notApplicable: 'n/a' })),
+    ...subLinesOf(state.scorecard.ownership, ownCalc.subLines).map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
+    pillarRow('Management Control', state.scorecard.managementControl, 'n/a', 'n/a'),
+    ...subLinesOf(state.scorecard.managementControl, mgtCalc.subLines).map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
+    // A separately-weighted pillar wherever the sector config gives it points
+    // (Transport QSE, for one). It was absent from this sheet entirely, so its
+    // score sat inside the total with no row to account for it.
+    ...(state.scorecard.employmentEquity
+      ? [pillarRow('Employment Equity', state.scorecard.employmentEquity, 'n/a', 'n/a')]
+      : []),
+    pillarRow('Skills Development', state.scorecard.skillsDevelopment, '≥ 10 pts', subMinimumLabel(state.scorecard.skillsDevelopment.subMinimumMet, { met: 'Yes', notMet: 'No', notApplicable: 'n/a' })),
+    ...subLinesOf(state.scorecard.skillsDevelopment, skillCalc.subLines).map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
+    pillarRow('Preferential Procurement', state.scorecard.procurement, '≥ 11.6 pts (base)', subMinimumLabel(state.scorecard.procurement.subMinimumMet, { met: 'Yes', notMet: 'No', notApplicable: 'n/a' })),
+    ...subLinesOf(state.scorecard.procurement, procCalc.subLines).map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
+    pillarRow('Supplier Development', state.scorecard.supplierDevelopment, '≥ 4 pts', subMinimumLabel(state.scorecard.supplierDevelopment?.subMinimumMet, { met: 'Yes', notMet: 'No', notApplicable: 'n/a' })),
+    ...subLinesOf(state.scorecard.supplierDevelopment, esdCalc.sdSubLines).map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
+    pillarRow('Enterprise Development', state.scorecard.enterpriseDevelopment, '≥ 2 pts', subMinimumLabel(state.scorecard.enterpriseDevelopment?.subMinimumMet, { met: 'Yes', notMet: 'No', notApplicable: 'n/a' })),
+    ...subLinesOf(state.scorecard.enterpriseDevelopment, esdCalc.edSubLines).map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
+    pillarRow('Socio-Economic Development', state.scorecard.socioEconomicDevelopment, 'n/a', 'n/a'),
+    ...subLinesOf(state.scorecard.socioEconomicDevelopment, []).map(sl => ['', sl.name, '', sl.weighting, fmt(sl.score), '', '', '']),
+    // FSC-only pillars. Same reasoning as Employment Equity: scored into the
+    // total, so they need a row.
+    ...(state.scorecard.accessToFinancialServices
+      ? [pillarRow('Access to Financial Services', state.scorecard.accessToFinancialServices, 'n/a', 'n/a')]
+      : []),
+    ...(state.scorecard.empowermentFinancing
+      ? [pillarRow('Empowerment Financing', state.scorecard.empowermentFinancing, 'n/a', 'n/a')]
+      : []),
+    pillarRow('YES Initiative', state.scorecard.yesInitiative, 'n/a', 'n/a'),
     [''],
-    ['TOTAL', '', state.scorecard.total.target || 120, state.scorecard.total.target || 120, fmt(state.scorecard.total.score), pct(state.scorecard.total.score, state.scorecard.total.target || 120), '', state.scorecard.isDiscounted ? 'DISCOUNTED' : 'ALL MET'],
+    ['TOTAL', '', state.scorecard.total.target, state.scorecard.total.target, fmt(state.scorecard.total.score), pct(state.scorecard.total.score, state.scorecard.total.target), '', state.scorecard.isDiscounted ? 'DISCOUNTED' : 'ALL MET'],
     [''],
     ['RESULT'],
     ['B-BBEE Status Level', currentLevel >= 9 ? 'Non-Compliant' : `Level ${currentLevel}`],
@@ -435,9 +485,9 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     // 2 designated-group bonus), not 31.
     [`PREFERENTIAL PROCUREMENT — ELEMENT 4 (${(() => {
       const s = pillarBonusSplit(
-        state.scorecard.preferentialProcurement?.weighting ?? 0,
-        state.scorecard.preferentialProcurement?.score ?? 0,
-        state.scorecard.preferentialProcurement?.subLines,
+        state.scorecard.procurement?.weighting ?? 0,
+        state.scorecard.procurement?.score ?? 0,
+        state.scorecard.procurement?.subLines,
       );
       return s.bonusAvailable > 0
         ? `${s.baseWeight} base + ${s.bonusAvailable} bonus = ${s.baseWeight + s.bonusAvailable} points`
@@ -659,7 +709,7 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     ['Data Source', 'Imported Excel file / Manual data entry', ''],
     [''],
     ['SCORECARD RESULT'],
-    ['Total Points', `${fmt(state.scorecard.total.score)} / 120`, ''],
+    ['Total Points', `${fmt(state.scorecard.total.score)} / ${state.scorecard.total.target}`, ''],
     ['Achieved Level', state.scorecard.achievedLevel >= 9 ? 'Non-Compliant' : `Level ${state.scorecard.achievedLevel}`, ''],
     ['Final Level', currentLevel >= 9 ? 'Non-Compliant' : `Level ${currentLevel}`, ''],
     ['Recognition Level', state.scorecard.recognitionLevel, ''],
@@ -667,27 +717,36 @@ export const exportAuditorExcel = (state: any, options: ExportOptions = {}) => {
     [''],
     ['PILLAR SCORES'],
     ['Element', 'Score', 'Target', 'Sub-min'],
-    ['Ownership', fmt(ownCalc.total), 25, ownCalc.total >= 10 || ownCalc.subMinimumMet ? 'Met' : 'FAILED'],
-    ['Management Control', fmt(mgtCalc.total), 19, 'N/A'],
-    ['Skills Development', fmt(skillCalc.total), 25, skillCalc.subMinimumMet ? 'Met' : 'FAILED'],
-    ['Procurement (base)', fmt(procCalc.base), 29, procCalc.subMinimumMet ? 'Met' : 'FAILED'],
-    ['Procurement (incl. bonuses)', fmt(procCalc.total), 31, ''],
-    ['Supplier Development', fmt(esdCalc.sdTotal), 10, esdCalc.sdSubMinimumMet ? 'Met' : 'FAILED'],
-    ['Enterprise Development', fmt(esdCalc.edTotal), 7, esdCalc.edSubMinimumMet ? 'Met' : 'FAILED'],
-    ['SED', fmt(sedCalc.total), 5, 'N/A'],
-    ['YES Initiative', fmt(state.scorecard.yesInitiative?.score || 0), 5, 'N/A'],
-    ['TOTAL', fmt(state.scorecard.total.score), 120, ''],
+    // Same source as the scorecard sheet. These used to be a second
+    // calculation against hardcoded Generic targets, so the two sheets in one
+    // workbook disagreed about the same pillars.
+    ['Ownership', fmt(state.scorecard.ownership?.score ?? 0), state.scorecard.ownership?.target ?? 0, subMinimumLabel(state.scorecard.ownership.subMinimumMet, { met: 'Met', notMet: 'FAILED', notApplicable: 'n/a' })],
+    ['Management Control', fmt(state.scorecard.managementControl?.score ?? 0), state.scorecard.managementControl?.target ?? 0, 'n/a'],
+    ...(state.scorecard.employmentEquity ? [['Employment Equity', fmt(state.scorecard.employmentEquity?.score ?? 0), state.scorecard.employmentEquity?.target ?? 0, 'n/a'],] : []),
+    ['Skills Development', fmt(state.scorecard.skillsDevelopment?.score ?? 0), state.scorecard.skillsDevelopment?.target ?? 0, subMinimumLabel(state.scorecard.skillsDevelopment.subMinimumMet, { met: 'Met', notMet: 'FAILED', notApplicable: 'n/a' })],
+    ['Preferential Procurement', fmt(state.scorecard.procurement?.score ?? 0), state.scorecard.procurement?.target ?? 0, subMinimumLabel(state.scorecard.procurement.subMinimumMet, { met: 'Met', notMet: 'FAILED', notApplicable: 'n/a' })],
+    ['Supplier Development', fmt(state.scorecard.supplierDevelopment?.score ?? 0), state.scorecard.supplierDevelopment?.target ?? 0, subMinimumLabel(state.scorecard.supplierDevelopment?.subMinimumMet, { met: 'Met', notMet: 'FAILED', notApplicable: 'n/a' })],
+    ['Enterprise Development', fmt(state.scorecard.enterpriseDevelopment?.score ?? 0), state.scorecard.enterpriseDevelopment?.target ?? 0, subMinimumLabel(state.scorecard.enterpriseDevelopment?.subMinimumMet, { met: 'Met', notMet: 'FAILED', notApplicable: 'n/a' })],
+    ['Socio-Economic Development', fmt(state.scorecard.socioEconomicDevelopment?.score ?? 0), state.scorecard.socioEconomicDevelopment?.target ?? 0, 'n/a'],
+    ['YES Initiative', fmt(state.scorecard.yesInitiative?.score ?? 0), state.scorecard.yesInitiative?.target ?? 0, 'n/a'],
+    ...(state.scorecard.accessToFinancialServices ? [['Access to Financial Services', fmt(state.scorecard.accessToFinancialServices?.score ?? 0), state.scorecard.accessToFinancialServices?.target ?? 0, 'n/a'],] : []),
+    ...(state.scorecard.empowermentFinancing ? [['Empowerment Financing', fmt(state.scorecard.empowermentFinancing?.score ?? 0), state.scorecard.empowermentFinancing?.target ?? 0, 'n/a'],] : []),
+    ['TOTAL', fmt(state.scorecard.total.score), state.scorecard.total.target, ''],
     [''],
     ['FLAGS & OBSERVATIONS'],
   ];
 
   if (state.scorecard.isDiscounted) {
     auditRows.push(['FLAG', 'Sub-minimum not met — level discounted by 1', '']);
-    if (!(ownCalc.total >= 10 || ownCalc.subMinimumMet)) auditRows.push(['SUB-MIN FAIL', `Ownership: ${fmt(ownCalc.total)} pts < 10 pts threshold`, '']);
-    if (!skillCalc.subMinimumMet) auditRows.push(['SUB-MIN FAIL', `Skills Development: ${fmt(skillCalc.total)} pts < 10 pts threshold`, '']);
-    if (!procCalc.subMinimumMet) auditRows.push(['SUB-MIN FAIL', `Procurement base: ${fmt(procCalc.base)} pts < 11.6 pts threshold`, '']);
-    if (!esdCalc.sdSubMinimumMet) auditRows.push(['SUB-MIN FAIL', `Supplier Development: ${fmt(esdCalc.sdTotal)} pts < 4 pts threshold (40% of 10)`, '']);
-    if (!esdCalc.edSubMinimumMet) auditRows.push(['SUB-MIN FAIL', `Enterprise Development: ${fmt(esdCalc.edTotal - esdCalc.graduationBonus - esdCalc.jobsCreatedBonus)} base pts < 2 pts threshold (40% of 5)`, '']);
+    // These read the calculators and treated a missing sub-minimum as a
+    // failure, so a sector with no sub-minimum for an element was flagged as
+    // having failed one. subMinimumFailed fires only when the sector defines
+    // a sub-minimum AND the entity missed it.
+    if (subMinimumFailed(state.scorecard.ownership.subMinimumMet)) auditRows.push(['SUB-MIN FAIL', `Ownership: ${fmt(state.scorecard.ownership.score)} pts below the sub-minimum`, '']);
+    if (subMinimumFailed(state.scorecard.skillsDevelopment.subMinimumMet)) auditRows.push(['SUB-MIN FAIL', `Skills Development: ${fmt(state.scorecard.skillsDevelopment.score)} pts below the sub-minimum`, '']);
+    if (subMinimumFailed(state.scorecard.procurement.subMinimumMet)) auditRows.push(['SUB-MIN FAIL', `Preferential Procurement: ${fmt(state.scorecard.procurement.score)} pts below the base sub-minimum`, '']);
+    if (subMinimumFailed(state.scorecard.supplierDevelopment?.subMinimumMet)) auditRows.push(['SUB-MIN FAIL', `Supplier Development: ${fmt(state.scorecard.supplierDevelopment?.score ?? 0)} pts below the sub-minimum`, '']);
+    if (subMinimumFailed(state.scorecard.enterpriseDevelopment?.subMinimumMet)) auditRows.push(['SUB-MIN FAIL', `Enterprise Development: ${fmt(state.scorecard.enterpriseDevelopment?.score ?? 0)} pts below the sub-minimum`, '']);
   } else {
     auditRows.push(['OK', 'All priority element sub-minimums met', '']);
   }

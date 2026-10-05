@@ -24,7 +24,7 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
         <h2 className="text-2xl font-bold text-white mb-2">
           How would you like to proceed?
         </h2>
-        <p className="text-[#8e8e93] text-sm">
+        <p className="text-[color:var(--body)] text-sm">
           Choose how you want to create your B-BBEE scorecard
         </p>
       </div>
@@ -33,7 +33,7 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
         {/* Upload documents (preset expected-documents flow) */}
         <button
           onClick={() => onSelectMode('documents')}
-          className="group relative p-6 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] hover:border-[#bf5af2]/50 hover:bg-[#1c1c1e]/80 transition-all duration-200 text-left"
+          className="group relative p-6 bg-[color:var(--ink-3)] rounded-2xl border border-[color:var(--rule)] hover:border-[#bf5af2]/50 hover:bg-[color:var(--ink-3)]/80 transition-all duration-200 text-left"
           data-testid="mode-upload-documents"
         >
           <div className="w-12 h-12 rounded-xl bg-[#bf5af2]/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -44,7 +44,7 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
             Upload Documents
           </h3>
 
-          <p className="text-[13px] text-[#8e8e93] mb-4 leading-relaxed">
+          <p className="text-[13px] text-[color:var(--body)] mb-4 leading-relaxed">
             Drop your evidence — B-BBEE certificates, affidavits, spend
             schedules, EE reports, or your toolkit workbook (PDF, Word, Excel).
             We classify each document against the expected checklist, extract
@@ -60,7 +60,7 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
         {/* Build Option */}
         <button
           onClick={() => onSelectMode('build')}
-          className="group relative p-6 bg-[#1c1c1e] rounded-2xl border border-[#2c2c2e] hover:border-emerald-500/50 hover:bg-[#1c1c1e]/80 transition-all duration-200 text-left"
+          className="group relative p-6 bg-[color:var(--ink-3)] rounded-2xl border border-[color:var(--rule)] hover:border-emerald-500/50 hover:bg-[color:var(--ink-3)]/80 transition-all duration-200 text-left"
           data-testid="mode-build"
         >
           <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
@@ -71,7 +71,7 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
             Build Manually
           </h3>
 
-          <p className="text-[13px] text-[#8e8e93] mb-4 leading-relaxed">
+          <p className="text-[13px] text-[color:var(--body)] mb-4 leading-relaxed">
             Enter your B-BBEE data pillar by pillar. Best when you don't
             have documents at hand or want to explore scenarios.
           </p>
@@ -84,7 +84,7 @@ export function ModeChooser({ onSelectMode }: ModeChooserProps) {
       </div>
 
       {/* Hint */}
-      <p className="text-center text-[12px] text-[#636366] mt-6">
+      <p className="text-center text-[12px] text-[color:var(--muted)] mt-6">
         Use Back on any step to return here and pick the other path. Build progress is saved in this browser.
       </p>
     </div>

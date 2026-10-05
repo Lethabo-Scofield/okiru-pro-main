@@ -671,9 +671,14 @@ const COMPANY_INFO_META: ColumnDef[] = [
     options: [...SCORECARD_TYPE_OPTIONS],
   },
   {
+    // Mandatory, because it is what every period filter is anchored to. Skills,
+    // Procurement, ESD and SED all decide what counts by date, so a workbook
+    // without a year end is not a scorecard with one missing field — it is a
+    // scorecard whose four dated pillars have no period to measure.
     key: "financialYearEnd",
     label: "Financial Year-End (dd/mm/yyyy)",
     type: "date",
+    required: true,
     validate: dateValidator,
     validationMessage: "Enter date as dd/mm/yyyy (e.g. 28/2/2026)",
   },
@@ -1245,7 +1250,7 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   { key: "supplierName", label: "Supplier Name", type: "text", required: true, width: 220, aliases: ["Supplier", "Vendor", "Vendor Name", "Name", "Trading Name", "Company", "Company Name", "Beneficiary"] },
   // Polo feedback #8: not all suppliers are VAT-registered — capture a company
   // registration number so unregistered-for-VAT suppliers can still be identified.
-  { key: "registrationNumber", label: "Supplier Registration Number", type: "text", width: 190, aliases: ["Reg Number", "Reg No", "Registration Number", "Company Registration", "Supplier Registration", "Supplier Reg Number"] },
+  { key: "registrationNumber", label: "Supplier Registration Number", type: "text", width: 190, aliases: ["Reg Number", "Reg No", "Reg No.", "Registration No", "Registration No.", "Registration Number", "Company Registration", "Company Registration No", "Company Registration Number", "Supplier Registration", "Supplier Reg Number", "CIPC Number", "CIPC Reg No"] },
   {
     key: "currentSize",
     label: "Current Size",

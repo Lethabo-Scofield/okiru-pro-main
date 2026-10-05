@@ -18,7 +18,9 @@ import PrivacyWrapper from "@/pages/PrivacyWrapper";
 import TermsWrapper from "@/pages/TermsWrapper";
 import AuthWrapper from "@/pages/AuthWrapper";
 import HubLanding from "@/pages/HubLanding";
-import Dashboard from "@/pages/Dashboard";
+import BbbeeWorkspace from "@/pages/BbbeeWorkspace";
+import { AppShell } from "@/components/shell/AppShell";
+import EsgWorkspace from "@/pages/EsgWorkspace";
 // Super-admin-only giants (7k + 1.7k lines) — lazy so every ordinary user
 // stops downloading flows they can never open.
 const EntityBuilder = lazy(() => import("@/pages/EntityBuilder"));
@@ -30,6 +32,8 @@ import ActivityHeatmap from "@/pages/ActivityHeatmap";
 import CertificateHub from "@/pages/CertificateHub";
 import CertificateDetail from "@/pages/CertificateDetail";
 import ParserDocumentLibrary from "@/pages/ParserDocumentLibrary";
+import CompanyDocumentLibrary from "@/pages/CompanyDocumentLibrary";
+import UnfiledDocuments from "@/pages/UnfiledDocuments";
 import ParserDocumentDetail from "@/pages/ParserDocumentDetail";
 import AdminCertificates from "@/pages/AdminCertificates";
 import DevMode from "@/pages/DevMode";
@@ -38,7 +42,6 @@ import Settings from "@/pages/Settings";
 import CompanyProfilePage from "@/pages/CompanyProfilePage";
 import AcceptInvite from "@/pages/AcceptInvite";
 import InformationRequest from "@/pages/InformationRequest";
-import EsgClientSelector from "@/pages/EsgClientSelector";
 import EsgInformationRequest from "@/pages/EsgInformationRequest";
 import EsgScoreSummary from "@/pages/EsgScoreSummary";
 import { EsgPreviewRoute } from "@/components/esg/EsgPreviewRoute";
@@ -64,7 +67,7 @@ function SuperAdminOnlyRoute({ children }: { children: React.ReactNode }) {
   }, [user, isLoading, navigate]);
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
       </div>
     );
@@ -94,8 +97,8 @@ function LegacyOnboardingRedirect() {
     navigate(`/auth${q}`, { replace: true });
   }, [navigate]);
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    <div className="flex min-h-screen items-center justify-center bg-white">
+      <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
     </div>
   );
 }
@@ -119,7 +122,7 @@ function InformationRequestRedirect() {
     });
   }, [params.companyId, navigate]);
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
+    <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin" />
     </div>
   );
@@ -128,7 +131,7 @@ function InformationRequestRedirect() {
 function ToolkitLoader() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-white">
         <div className="text-center space-y-3">
           <div className="h-10 w-10 border-2 border-[#636366] border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="text-muted-foreground text-sm">Loading Toolkit...</p>
@@ -160,7 +163,7 @@ function ToolkitAuthRedirect() {
     navigate("/auth?redirect=/toolkit", { replace: true });
   }, [navigate]);
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
+    <div className="min-h-screen bg-white flex items-center justify-center">
       <Loader2 className="h-8 w-8 animate-spin text-[#636366]" />
     </div>
   );
@@ -197,6 +200,12 @@ function AppRouter() {
       <Route path="/hub">
         <ProtectedRoute><HubLanding /></ProtectedRoute>
       </Route>
+      {/* People, companies and pillars. `/access` is the name this surface is
+          getting — it answers "who can open which company, and which pillars
+          inside it". `/workspace` stays as the alias its links already use. */}
+      <Route path="/access">
+        <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
       </Route>
@@ -219,8 +228,45 @@ function AppRouter() {
       <Route path="/invite/:token">
         <AcceptInvite />
       </Route>
+      {/* The two products get a door each, and behind each door a workspace:
+          the consultant's list of companies for THAT product, with "create
+          scorecard" as the action inside it. Consultants carry many companies,
+          so one mixed list filtered by a dropdown (what /dashboard is) reads as
+          one product with a filter rather than two products.
+
+          These are aliases today and become the real pages in the steps that
+          follow; /dashboard and /create-scorecard keep working throughout. */}
+      {/* A company's evidence lives under its own company, in its product's
+          section — not in a shared list with a company filter on it. Declared
+          before the bare product routes so the longer path matches first. */}
+      <Route path="/bbbee/:companyId/documents">
+        {(params) => (
+          <ProtectedRoute>
+            <CompanyDocumentLibrary companyId={params.companyId} product="bbbee" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/esg/:companyId/documents">
+        {(params) => (
+          <ProtectedRoute>
+            <CompanyDocumentLibrary companyId={params.companyId} product="esg" />
+          </ProtectedRoute>
+        )}
+      </Route>
+      <Route path="/documents/unfiled">
+        <ProtectedRoute><UnfiledDocuments /></ProtectedRoute>
+      </Route>
+      <Route path="/bbbee/new">
+        <ProtectedRoute><InformationRequest /></ProtectedRoute>
+      </Route>
+      <Route path="/bbbee">
+        <ProtectedRoute><BbbeeWorkspace /></ProtectedRoute>
+      </Route>
+      {/* The old mixed list is gone — it showed both products behind a
+          dropdown, which is what gave neither a section of its own. Existing
+          links land on the B-BBEE workspace. */}
       <Route path="/dashboard">
-        <ProtectedRoute><Dashboard /></ProtectedRoute>
+        <ProtectedRoute><BbbeeWorkspace /></ProtectedRoute>
       </Route>
       <Route path="/create-scorecard/:companyId/summary">
         <ProtectedRoute><InformationRequest /></ProtectedRoute>
@@ -279,13 +325,23 @@ function AppRouter() {
       {/* The ESG front door: choose → provide → review, with NO company up
           front. It used to redirect here to the company picker, which forced a
           name out of the user before the documents that know it had been read. */}
-      <Route path="/esg">
+      {/* Creating an ESG scorecard now lives at `/esg/new`, which frees `/esg`
+          to be the ESG workspace and match `/bbbee`. This is the one semantic
+          change in the redesign: a product's path opens that product's
+          companies, and creating is an action inside it. */}
+      <Route path="/esg/new">
         <ProtectedRoute><EsgPreviewRoute><EsgCreateFlow /></EsgPreviewRoute></ProtectedRoute>
+      </Route>
+      <Route path="/esg">
+        <ProtectedRoute><EsgPreviewRoute><EsgWorkspace /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       {/* Still here, still reachable — this is how an EXISTING ESG scorecard is
           reopened (step 1 links to it). It is no longer the way IN. */}
+      {/* The old name for the ESG company list. It now resolves to the same
+          workspace `/esg` shows, so existing links and the toolkit's back
+          button keep working without a second list to maintain. */}
       <Route path="/esg/clients">
-        <ProtectedRoute><EsgPreviewRoute><EsgClientSelector /></EsgPreviewRoute></ProtectedRoute>
+        <ProtectedRoute><EsgPreviewRoute><EsgWorkspace /></EsgPreviewRoute></ProtectedRoute>
       </Route>
       <Route path="/esg/create/:companyId/summary">
         <ProtectedRoute><EsgPreviewRoute><EsgScoreSummary /></EsgPreviewRoute></ProtectedRoute>
@@ -342,7 +398,7 @@ function GlobalScorecardAdvisor() {
         whileHover={{ y: -1 }}
         whileTap={{ scale: 0.98 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
-        className="fixed bottom-[4.75rem] right-5 z-[9998] flex items-center gap-2 rounded-full bg-zinc-950 py-1.5 pl-1.5 pr-3.5 text-[13px] font-medium text-white shadow-[0_14px_36px_-18px_rgba(0,0,0,0.9)] ring-1 ring-white/15 transition hover:bg-black focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-black"
+        className="fixed bottom-[4.75rem] right-5 z-[9998] flex items-center gap-2 rounded-full border border-zinc-200 bg-white py-1.5 pl-1.5 pr-3.5 text-[13px] font-medium text-zinc-950 shadow-[0_14px_36px_-18px_rgba(24,24,27,0.35)] transition hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-zinc-400/40 focus:ring-offset-2 focus:ring-offset-white"
       >
         <span className="relative h-8 w-8 shrink-0">
           <motion.span
@@ -364,7 +420,7 @@ function GlobalScorecardAdvisor() {
       <AnimatePresence>
         {open && (
           <motion.div
-            className="fixed inset-0 z-[9999] bg-black/45 p-3 backdrop-blur-[2px] sm:p-5"
+            className="fixed inset-0 z-[9999] bg-zinc-100/75 p-3 backdrop-blur-[2px] sm:p-5"
             role="presentation"
             onClick={() => setOpen(false)}
             initial={{ opacity: 0 }}
@@ -373,7 +429,7 @@ function GlobalScorecardAdvisor() {
             transition={{ duration: 0.18 }}
           >
             <motion.div
-              className="absolute bottom-24 right-3 w-[calc(100vw-1.5rem)] max-w-[860px] overflow-hidden rounded-[24px] bg-[#101012] shadow-[0_30px_100px_-45px_rgba(0,0,0,1)] ring-1 ring-white/10 sm:right-5"
+              className="absolute bottom-24 right-3 w-[calc(100vw-1.5rem)] max-w-[860px] overflow-hidden rounded-[24px] bg-white shadow-[0_30px_100px_-45px_rgba(24,24,27,0.35)] ring-1 ring-zinc-200 sm:right-5"
               role="dialog"
               aria-modal="true"
               aria-label="Scorecard advisor"
@@ -387,7 +443,7 @@ function GlobalScorecardAdvisor() {
                 type="button"
                 onClick={() => setOpen(false)}
                 aria-label="Close scorecard advisor"
-                className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-white/45 transition hover:bg-white/10 hover:text-white"
+                className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-950"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -402,12 +458,17 @@ function GlobalScorecardAdvisor() {
 
 function App() {
   return (
-    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme">
+    <ThemeProvider defaultTheme="light" storageKey="okiru-pro-theme">
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <AppRouter />
+            {/* Above the router on purpose: the toolkits run nested routers
+                that rebase every path, so the shell has to sit outside them to
+                read absolute paths and link to absolute paths. */}
+            <AppShell>
+              <AppRouter />
+            </AppShell>
             <GlobalScorecardAdvisor />
             <GlobalFeedbackWidget />
           </TooltipProvider>

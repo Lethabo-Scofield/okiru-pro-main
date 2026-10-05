@@ -9,12 +9,21 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { connectDB } from "./db";
 import { createLogger, requestContext } from "./logger";
+import { apiCeilingLimiter } from "./rateLimit";
+import { startAuditRetentionJob } from "./auditRetention";
 import crypto from 'crypto';
 
 const logger = createLogger("WebServer");
 
 const app = express();
 const httpServer = createServer(app);
+
+// Set before any rate limiter runs: the ingress adds exactly one hop, so this
+// is what makes `req.ip` the real client address instead of the node's.
+if (process.env.NODE_ENV === "production" || process.env.REPLIT_DEV_DOMAIN || process.env.REPL_SLUG) {
+  app.set("trust proxy", 1);
+}
+app.disable("x-powered-by");
 
 // In the Replit dev/preview environment the app is rendered inside a
 // cross-origin proxied iframe, so the framing/cross-origin isolation headers
@@ -35,9 +44,21 @@ app.use(helmet({
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           connectSrc: ["'self'", "https:", "wss:"],
           workerSrc: ["'self'", "blob:"],
+          // Nothing on this site is a frame target, and nothing loads a plugin.
+          // Stated explicitly so a future widen of the defaults cannot reopen
+          // clickjacking or a <base> injection.
+          frameAncestors: ["'none'"],
+          objectSrc: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+          upgradeInsecureRequests: [],
         },
       }
     : false,
+  // A year, and every subdomain: the certificate is renewed automatically, so
+  // there is no window in which committing to HTTPS could lock anyone out.
+  hsts: isProd ? { maxAge: 31536000, includeSubDomains: true } : false,
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: isProd ? undefined : false,
   crossOriginResourcePolicy: isProd ? undefined : false,
@@ -60,6 +81,16 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false, limit: "50mb" }));
+
+// A backstop over the whole API surface, mounted before the proxy so it also
+// covers everything forwarded to the other services. Deliberately generous —
+// per-endpoint limits do the real work in routes.ts; this stops scraping and
+// denial-of-wallet. Health checks are exempt so a limited caller can never take
+// the pod out of the load balancer.
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  if (req.path === "/health") return next();
+  return apiCeilingLimiter(req, res, next);
+});
 
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
@@ -104,6 +135,9 @@ app.use((req, res, next) => {
   logger.debug("Connecting to database...");
   await connectDB();
   logger.info("Database connection step completed");
+
+  // Seals each closed day of the audit trail and enforces the retention period.
+  startAuditRetentionJob();
 
 
   // Session must be mounted BEFORE the proxy so the proxy can read

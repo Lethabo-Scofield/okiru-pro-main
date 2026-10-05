@@ -200,16 +200,16 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
     <div className="max-w-4xl mx-auto py-4 space-y-6" data-testid="workbook-score-summary">
       {/* Sticky action bar: the primary Continue is ALWAYS reachable, so the
           review panels below can never hide it however far the user scrolls. */}
-      <div className="flex items-start justify-between gap-4 flex-wrap sticky top-0 z-20 -mx-4 px-4 py-3 border-b border-[#1e1e1e] bg-[#0a0a0a]/85 backdrop-blur-md">
+      <div className="flex items-start justify-between gap-4 flex-wrap sticky top-0 z-20 -mx-4 px-4 py-3 border-b border-[#1e1e1e] bg-[color:var(--ink)]/85 backdrop-blur-md">
         <div>
           <h2 className="text-[24px] font-bold text-white tracking-tight">
             {provisional ? "Your indicative B-BBEE score" : "Scorecard Summary"}
           </h2>
-          <p className="text-[#8e8e93] text-[14px] mt-1">
+          <p className="text-[color:var(--body)] text-[14px] mt-1">
             {provisional ? "Estimated from the documents you uploaded for " : "High-level results for "}
             <span className="text-white font-medium">{companyName}</span>
           </p>
-          <p className="text-[13px] text-[#636366] mt-1">
+          <p className="text-[13px] text-[color:var(--muted)] mt-1">
             {sector}
             {client.scorecardType ? ` · ${client.scorecardType}` : ""}
             {fscSubLabel ? ` · ${fscSubLabel}` : ""}
@@ -217,7 +217,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
             {scorecard.chosenElectivePillar ? " · 82 compulsory + 1 elective (107 max)" : ""}
           </p>
           {level1Threshold != null && (
-            <p className="text-[12px] text-[#636366] mt-0.5">
+            <p className="text-[12px] text-[color:var(--muted)] mt-0.5">
               Level 1 threshold: &gt; {level1Threshold.toFixed(2)} pts
             </p>
           )}
@@ -237,7 +237,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
             than wouter links. */}
         <EsgAppLink
           href={`/esg/create/${encodeURIComponent(companyId)}`}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[#d1d1d6] hover:text-white hover:bg-white/[0.08]"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[color:var(--body)] hover:text-white hover:bg-white/[0.08]"
           data-testid="link-esg-workbook"
         >
           <Leaf className="w-4 h-4" />
@@ -245,7 +245,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
         </EsgAppLink>
         <EsgAppLink
           href={`/esg/toolkit/${encodeURIComponent(companyId)}`}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[#d1d1d6] hover:text-white hover:bg-white/[0.08]"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-[13px] transition-colors shrink-0 border border-white/[0.12] bg-white/[0.04] text-[color:var(--body)] hover:text-white hover:bg-white/[0.08]"
           data-testid="link-esg-toolkit"
         >
           <Leaf className="w-4 h-4" />
@@ -264,7 +264,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
           <Sparkles className="w-4 h-4 text-violet-300 shrink-0 mt-0.5" />
           <div className="text-[13px] leading-relaxed">
             <span className="text-violet-200 font-semibold">This is an indicative score, not your final B-BBEE result.</span>
-            <span className="text-[#a1a1a6]">
+            <span className="text-[color:var(--body)]">
               {" "}It’s calculated the same way as a full assessment, but only from the documents you uploaded — anything
               they didn’t cover reads as zero. Open the workbook to review the extracted values, complete the gaps, and
               finalise your verified score.
@@ -274,7 +274,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
       )}
 
       {loading ? (
-        <div className="rounded-2xl p-12 flex flex-col items-center justify-center gap-3 text-[#8e8e93] text-sm" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
+        <div className="rounded-2xl p-12 flex flex-col items-center justify-center gap-3 text-[color:var(--body)] text-sm" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
           <Loader2 className="h-6 w-6 animate-spin" />
           Calculating scorecard…
         </div>
@@ -282,11 +282,11 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
         <>
           <div className="grid sm:grid-cols-3 gap-3">
             <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
-              <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">Total Score</span>
+              <span className="text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-widest">Total Score</span>
               <span className="text-[28px] font-bold text-white leading-none tabular-nums">
                 {scorecard.total.score.toFixed(2)}
               </span>
-              <span className="text-[12px] text-[#636366]">
+              <span className="text-[12px] text-[color:var(--muted)]">
                 of {scorecard.total.weighting} pts
                 {totals.bonusAvailable > 0 && (
                   <>
@@ -298,23 +298,23 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
                 )}
               </span>
               {totals.bonusAvailable > 0 && (
-                <span className="text-[11px] text-[#636366]">
+                <span className="text-[11px] text-[color:var(--muted)]">
                   Max reachable {(scorecard.total.weighting + totals.bonusAvailable).toFixed(0)} — bonus is
                   earned on top of the target, so a score can exceed it.
                 </span>
               )}
             </div>
             <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
-              <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">B-BBEE Level</span>
+              <span className="text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-widest">B-BBEE Level</span>
               <span className="text-[28px] font-bold text-white leading-none">{formatLevel(displayLevel)}</span>
               {scorecard.isDiscounted && (
                 <span className="text-[11px] text-amber-400">Discounted from {formatLevel(scorecard.achievedLevel)}</span>
               )}
             </div>
             <div className="rounded-xl p-4 flex flex-col gap-1" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
-              <span className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">Recognition</span>
+              <span className="text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-widest">Recognition</span>
               <span className="text-[28px] font-bold text-white leading-none">{scorecard.recognitionLevel || "—"}</span>
-              <span className="text-[12px] text-[#636366] flex items-center gap-1">
+              <span className="text-[12px] text-[color:var(--muted)] flex items-center gap-1">
                 <Award className="h-3 w-3" /> Procurement recognition
               </span>
             </div>
@@ -322,7 +322,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
 
           <div className="rounded-2xl overflow-hidden" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
             <div className="px-5 py-4" style={{ borderBottom: "1px solid #1e1e1e" }}>
-              <p className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">Pillar scores</p>
+              <p className="text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-widest">Pillar scores</p>
             </div>
             <ScorecardPillarList pillars={pillarRows} />
           </div>
@@ -344,7 +344,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
                 style={{ borderBottom: showVerdicts ? "1px solid #1e1e1e" : "none" }}
                 data-testid="toggle-document-verdicts"
               >
-                <p className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest flex items-center gap-2">
+                <p className="text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-widest flex items-center gap-2">
                   <ChevronRight className={`h-3.5 w-3.5 transition-transform ${showVerdicts ? "rotate-90" : ""}`} />
                   What each document gave us
                 </p>
@@ -363,11 +363,11 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline gap-2 flex-wrap">
                         <span className="text-[13px] text-[#e5e5ea] font-medium truncate">{v.filename}</span>
-                        <span className="text-[11px] text-[#636366]">{v.documentType}</span>
+                        <span className="text-[11px] text-[color:var(--muted)]">{v.documentType}</span>
                       </div>
                       <div className="text-[12px] mt-0.5" style={{ color: VERDICT_COLOR[v.verdict] }}>{v.summary}</div>
                       {v.gaps.length > 0 && (
-                        <div className="text-[11px] text-[#8e8e93] mt-1">
+                        <div className="text-[11px] text-[color:var(--body)] mt-1">
                           Couldn’t read: {v.gaps.slice(0, 3).join(", ")}
                           {v.gaps.length > 3 ? ` +${v.gaps.length - 3} more` : ""}
                         </div>
@@ -378,7 +378,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
               </div>}
               {/* Requote — argued from the gaps above, priced only on new files. */}
               <div className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap" style={{ borderTop: "1px solid #1e1e1e", background: "rgba(167,139,250,.05)" }}>
-                <p className="text-[12px] text-[#a1a1a6] max-w-[46ch]">
+                <p className="text-[12px] text-[color:var(--body)] max-w-[46ch]">
                   Missing a pillar? Add the documents that cover it — you’re quoted for the new files only, never for
                   anything we’ve already read.
                 </p>
@@ -400,7 +400,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
               <button
                 type="button"
                 onClick={goToScorecard}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[13px] text-[#d1d1d6] smooth press-sm"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[13px] text-[color:var(--body)] smooth press-sm"
                 data-testid="button-view-scorecard-provisional"
               >
                 <ScanLine className="w-4 h-4" /> View full scorecard
@@ -420,7 +420,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
               <button
                 type="button"
                 onClick={openWorkbook}
-                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#1c1c1e] hover:bg-[#2c2c2e] text-[13px] text-[#d1d1d6] smooth press-sm"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[13px] text-[color:var(--body)] smooth press-sm"
                 data-testid="button-back-workbook"
               >
                 ← Edit Workbook

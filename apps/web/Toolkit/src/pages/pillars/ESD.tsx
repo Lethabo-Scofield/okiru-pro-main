@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
 import { useBbeeStore } from "@toolkit/lib/store";
+import { PillarBulkImport } from "@toolkit/components/bulk/PillarBulkImport";
+import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateNotice";
+import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateEsdScore } from "@toolkit/lib/calculators/esd-sed";
 import { supplierSumTmps } from "@toolkit/lib/calculators/shared";
@@ -325,14 +328,28 @@ export default function ESD() {
           <p className="text-muted-foreground mt-1">Manage Preferential Procurement and ESD Contributions.</p>
         </div>
         <div className="flex gap-2">
-          
+          <PillarBulkImport
+            spec={BULK_IMPORT_SPECS.esd}
+            existing={esd.contributions}
+            onImport={(rows, mode) => {
+              if (mode === "replace") esd.contributions.forEach((c) => removeEsdContribution(c.id));
+              rows.forEach(addEsdContribution);
+            }}
+            label="Bulk upload contributions"
+          />
+          <PillarDuplicateNotice
+            specKey="esd"
+            rows={esd.contributions}
+            className="mt-3"
+          />
+
           <Dialog open={isSupOpen} onOpenChange={(open) => { setIsSupOpen(open); if (!open) supAddErrs.reset(); }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="gap-2" data-testid="btn-add-supplier">
                 <ShoppingCart className="h-4 w-4" /> Add Supplier
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Add Supplier</DialogTitle></DialogHeader>
               {renderSupplierFormFields(newSup, setNewSup, supAddErrs)}
               <DialogFooter><Button onClick={handleAddSupplier} data-testid="btn-save-supplier">Save Supplier</Button></DialogFooter>
@@ -345,7 +362,7 @@ export default function ESD() {
                 <Plus className="h-4 w-4" /> Add Contribution
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
               <DialogHeader><DialogTitle>Add ESD Contribution</DialogTitle></DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-start gap-4">
@@ -429,7 +446,7 @@ export default function ESD() {
       </div>
 
       <Dialog open={isEditSupOpen} onOpenChange={(open) => { setIsEditSupOpen(open); if (!open) supEditErrs.reset(); }}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Supplier</DialogTitle></DialogHeader>
           {renderSupplierFormFields(editSup, setEditSup, supEditErrs)}
           <DialogFooter><Button onClick={handleEditSupplier} data-testid="btn-update-supplier">Update Supplier</Button></DialogFooter>

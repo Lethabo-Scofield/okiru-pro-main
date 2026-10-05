@@ -52,7 +52,7 @@ export function EsgFlowSteps({
                   ? "bg-[var(--esg-acc-e,#1de9a0)] text-[#080e14]"
                   : active
                     ? "bg-white text-[#0e0e10]"
-                    : "border border-white/[0.14] text-[var(--esg-text3,#636366)]"
+                    : "border border-white/[0.14] text-[var(--esg-text3,rgba(255,255,255,0.32))]"
               }`}
               data-testid={`esg-flow-step-${step}`}
               aria-current={active ? "step" : undefined}
@@ -63,7 +63,7 @@ export function EsgFlowSteps({
               className={`min-w-0 truncate text-[12px] font-medium ${
                 active
                   ? "text-[var(--esg-text,#fff)]"
-                  : "text-[var(--esg-text3,#636366)]"
+                  : "text-[var(--esg-text3,rgba(255,255,255,0.32))]"
               }`}
             >
               {label}

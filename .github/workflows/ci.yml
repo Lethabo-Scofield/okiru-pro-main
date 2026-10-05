@@ -1,0 +1,143 @@
+# Continuous integration.
+#
+# Open item 9 of the security disclosure: "No automated build, test or
+# dependency-vulnerability pipeline." Until this file existed, nothing checked a
+# change before it reached production — the deploy path was a local build and a
+# `kubectl set image`.
+#
+# The jobs are deliberately split so a failure names itself. Everything here is
+# a merge gate; nothing is advisory. If a job is too noisy to gate on it should
+# be fixed or removed, not quietly set to continue-on-error.
+name: CI
+
+on:
+  push:
+    branches: ["main", "fix/**", "feat/**", "lethabo/**"]
+  pull_request:
+    branches: ["main"]
+  # Dependency advisories are published continuously, so the audit also runs on
+  # a schedule against whatever is currently on main.
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "22"
+  PNPM_VERSION: "10.26.1"
+
+jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: a credential committed and then removed in the next
+          # commit is still a leaked credential, and scanning only the tip would
+          # miss it. This repository has been through one history rewrite for
+          # exactly that reason.
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  test:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Server typecheck (baseline gate)
+        run: node scripts/typecheck-server.mjs
+
+      - name: Web tests
+        working-directory: apps/web
+        run: pnpm vitest run server/ src/lib
+
+      - name: API tests
+        working-directory: apps/api
+        run: pnpm test
+
+  audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # High and critical advisories fail the build. Moderate and low are
+      # reported so they are visible without blocking every merge on a
+      # transitive development dependency.
+      - name: Audit (high and critical)
+        run: pnpm audit --audit-level=high
+
+      - name: Audit (full report)
+        if: always()
+        run: pnpm audit || true
+
+  images:
+    name: Container image scan
+    runs-on: ubuntu-latest
+    # Only on pull requests and main: building both images on every branch push
+    # is slow and tells us nothing a merge check would not.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [web, api]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f apps/${{ matrix.service }}/Dockerfile -t okiru-${{ matrix.service }}:ci .
+
+      - name: Scan image
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: okiru-${{ matrix.service }}:ci
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}

@@ -345,7 +345,7 @@ export function pillarAccentClass(pillar: EsgToolkitPillar, active: boolean): st
     case "g":
       return "border-[var(--esg-acc-g)] bg-[rgba(155,107,255,0.06)]";
     case "data":
-      return "border-[var(--esg-acc-blue,#4aa8ff)] bg-[rgba(74,168,255,0.06)]";
+      return "border-[var(--esg-acc-blue,#22c55e)] bg-[rgba(34,197,94,0.06)]";
     default:
       return "border-[var(--esg-acc-e)] bg-white/[0.04]";
   }

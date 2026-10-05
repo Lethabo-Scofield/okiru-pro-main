@@ -6,6 +6,7 @@ import { Document, ParserRunModel } from '../../models.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
 import { resolveFileWithParser } from '../services/parserClient.js';
+import { applyDocumentScopeFilter, resolveClientScopeIds } from '../services/clientScopes.js';
 
 const logger = createLogger('ParserDocuments');
 const router = Router();
@@ -29,6 +30,17 @@ export function tenantFilter(id: SessionIdentity): Record<string, unknown> {
 
 function documentFilter(req: Request, documentId: string): Record<string, unknown> {
   return { _id: documentId, source: 'parser', ...tenantFilter(identity(req)) };
+}
+
+/**
+ * The same filter, narrowed to the companies this caller may see. Used by the
+ * routes that open or act on ONE document, so a scoped member cannot reach a
+ * document by id that they could not have found by listing.
+ */
+async function scopedDocumentFilter(req: Request, documentId: string): Promise<Record<string, unknown>> {
+  const owner = identity(req);
+  const scopedIds = await resolveClientScopeIds(owner.userId);
+  return applyDocumentScopeFilter(documentFilter(req, documentId), scopedIds, owner.userId);
 }
 
 function routeParam(value: string | string[]): string {
@@ -219,7 +231,7 @@ router.post('/:id/runs', async (req: Request, res: Response) => {
 
   try {
     const documentId = routeParam(req.params.id);
-    const doc = await Document.findOne(documentFilter(req, documentId));
+    const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
 
     const output = parsed.data.parserOutput as Record<string, any>;
@@ -269,7 +281,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
   const documentId = routeParam(req.params.id);
 
   try {
-    const doc = await Document.findOne(documentFilter(req, documentId));
+    const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
 
     const set: Record<string, unknown> = {};
@@ -325,7 +337,7 @@ router.post('/:id/reparse', upload.single('file'), async (req: Request, res: Res
   const documentId = routeParam(req.params.id);
 
   try {
-    const doc = await Document.findOne(documentFilter(req, documentId));
+    const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
 
     const replacement = req.file;
@@ -402,11 +414,24 @@ router.get('/', async (req: Request, res: Response) => {
     if (req.query.to) filter.uploadedAt.$lte = new Date(`${String(req.query.to).slice(0, 10)}T23:59:59.999Z`);
   }
 
+  // The library is organisation-wide, so without this a member limited to
+  // three companies could still read every other company's evidence — which is
+  // usually where the sensitive detail actually is.
+  const scopedIds = await resolveClientScopeIds(owner.userId);
+  const scopedFilter = applyDocumentScopeFilter(filter, scopedIds, owner.userId);
+
   try {
     const [docs, total, documentTypes] = await Promise.all([
-      Document.find(filter).select('-rawContent').sort({ uploadedAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
-      Document.countDocuments(filter),
-      Document.distinct('parserDocumentType', { source: 'parser', ...tenantFilter(owner), parserDocumentType: { $ne: null } }),
+      Document.find(scopedFilter).select('-rawContent').sort({ uploadedAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+      Document.countDocuments(scopedFilter),
+      Document.distinct(
+        'parserDocumentType',
+        applyDocumentScopeFilter(
+          { source: 'parser', ...tenantFilter(owner), parserDocumentType: { $ne: null } },
+          scopedIds,
+          owner.userId,
+        ),
+      ),
     ]);
     return res.json({
       documents: docs.map((doc) => documentJson(doc as Record<string, any>)),
@@ -420,7 +445,7 @@ router.get('/', async (req: Request, res: Response) => {
 });
 
 router.get('/:id/runs', async (req: Request, res: Response) => {
-  const doc = await Document.findOne(documentFilter(req, routeParam(req.params.id))).select('_id').lean();
+  const doc = await Document.findOne(await scopedDocumentFilter(req, routeParam(req.params.id))).select('_id').lean();
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   const runs = await ParserRunModel.find({ documentId: doc._id, ...tenantFilter(identity(req)) })
     .select('-parserOutput -reviewHistory').sort({ createdAt: -1 }).lean();
@@ -428,7 +453,7 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
 });
 
 router.get('/:id/runs/:runId', async (req: Request, res: Response) => {
-  const doc = await Document.findOne(documentFilter(req, routeParam(req.params.id))).select('_id').lean();
+  const doc = await Document.findOne(await scopedDocumentFilter(req, routeParam(req.params.id))).select('_id').lean();
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   const run = await ParserRunModel.findOne({ documentId: doc._id, runId: routeParam(req.params.runId), ...tenantFilter(identity(req)) }).lean();
   if (!run) return res.status(404).json({ message: 'Parser run not found' });
@@ -436,7 +461,7 @@ router.get('/:id/runs/:runId', async (req: Request, res: Response) => {
 });
 
 router.get('/:id/download', async (req: Request, res: Response) => {
-  const doc = await Document.findOne(documentFilter(req, routeParam(req.params.id))).select('filename fileType rawContent').lean() as any;
+  const doc = await Document.findOne(await scopedDocumentFilter(req, routeParam(req.params.id))).select('filename fileType rawContent').lean() as any;
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   if (!doc.rawContent) return res.status(404).json({ message: 'Original file is unavailable' });
   res.setHeader('Content-Type', doc.fileType || 'application/octet-stream');
@@ -445,7 +470,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
 });
 
 router.get('/:id', async (req: Request, res: Response) => {
-  const doc = await Document.findOne(documentFilter(req, routeParam(req.params.id))).select('-rawContent').lean();
+  const doc = await Document.findOne(await scopedDocumentFilter(req, routeParam(req.params.id))).select('-rawContent').lean();
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   const latestRun = doc.latestParserRunId
     ? await ParserRunModel.findOne({ documentId: doc._id, runId: doc.latestParserRunId, ...tenantFilter(identity(req)) }).lean()

@@ -111,10 +111,10 @@ export function EsgMonthlyGrid({
                     </td>
                   );
                 })}
-                <td className={`${ESG_TABLE_CELL} text-[#8e8e93]`} data-testid={`ytd-${ri}`}>
+                <td className={`${ESG_TABLE_CELL} text-[color:var(--body)]`} data-testid={`ytd-${ri}`}>
                   {ytd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </td>
-                <td className={`${ESG_TABLE_CELL} text-[#8e8e93]`} data-testid={`tco2-${ri}`}>
+                <td className={`${ESG_TABLE_CELL} text-[color:var(--body)]`} data-testid={`tco2-${ri}`}>
                   {tco2.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                 </td>
                 <td className={ESG_TABLE_CELL}>

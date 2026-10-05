@@ -50,6 +50,7 @@ import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { useBbeeStore } from "@toolkit/lib/store";
 import { NumberTextInput } from "../NumberTextInput";
 
+import { formatPercent } from '@/lib/formatPercent';
 // ============================================================================
 // Types
 // ============================================================================
@@ -313,7 +314,7 @@ export function OwnershipForm({ data, onChange, className }: OwnershipFormProps)
               <h3 className="font-semibold">Shareholders</h3>
               <p className="text-sm text-muted-foreground">
                 {metrics.shareholderCount} shareholder{metrics.shareholderCount !== 1 ? 's' : ''} • 
-                {metrics.blackPercentage.toFixed(1)}% Black Owned
+                {formatPercent(metrics.blackPercentage, { decimals: 1 })} Black Owned
               </p>
             </div>
             <Button onClick={handleAddShareholder} className="gap-2">

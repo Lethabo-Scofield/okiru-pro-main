@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   ESG_CLIENTS_PATH,
   ESG_HOME_PATH,
+  ESG_NEW_PATH,
   esgClientsHref,
   esgCreateHref,
   esgHomeHref,
+  esgNewHref,
   esgSummaryHref,
   esgToolkitHref,
   hasChosenEsgStart,
@@ -24,8 +26,10 @@ describe("esgRoutes", () => {
   });
 
   it("exposes canonical companies path for toolkit back navigation", () => {
+    // The constant still names the legacy path, because that route still
+    // resolves; the href points at the workspace, which is the company list now.
     expect(ESG_CLIENTS_PATH).toBe("/esg/clients");
-    expect(esgClientsHref()).toBe("/esg/clients");
+    expect(esgClientsHref()).toBe(ESG_HOME_PATH);
   });
 
   it("detects app-root ESG paths that must escape nested toolkit router", () => {
@@ -35,14 +39,26 @@ describe("esgRoutes", () => {
   });
 
   /**
-   * `/esg` STARTS a scorecard and `/esg/clients` REOPENS one. They are separate
-   * paths on purpose: collapsing the first into the second is what put naming a
-   * company ahead of reading the documents that name it.
+   * Starting a scorecard and opening an existing one stay on separate paths —
+   * collapsing them is what once put naming a company ahead of reading the
+   * documents that name it. What changed is which path is which.
+   *
+   * `/esg` is now the ESG WORKSPACE, mirroring `/bbbee`: the consultant's
+   * companies, with creating one as an action inside. Starting moved to
+   * `/esg/new`. Sending a consultant who carries twenty companies to a blank
+   * creation form is what made the two products feel unlike each other.
    */
-  it("keeps starting and reopening on separate paths", () => {
+  it("opens the workspace at /esg and starts a scorecard at /esg/new", () => {
     expect(ESG_HOME_PATH).toBe("/esg");
     expect(esgHomeHref()).toBe("/esg");
-    expect(esgHomeHref()).not.toBe(esgClientsHref());
+    expect(ESG_NEW_PATH).toBe("/esg/new");
+    expect(esgNewHref()).toBe("/esg/new");
+    expect(esgHomeHref()).not.toBe(esgNewHref());
+  });
+
+  /** The old company-list path resolves to the workspace, not a second list. */
+  it("folds the old /esg/clients link into the workspace", () => {
+    expect(esgClientsHref()).toBe(ESG_HOME_PATH);
   });
 
   it("remembers that a company has been through the entry choice", () => {

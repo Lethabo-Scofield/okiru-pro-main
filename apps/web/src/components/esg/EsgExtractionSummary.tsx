@@ -112,7 +112,7 @@ function ValueRow({ entry }: { entry: EsgUnplacedValue }) {
   return (
     <li className="border-t border-white/[0.04] py-2 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="text-[12.5px] text-[#d1d1d6]">{humanizeField(entry.field)}</span>
+        <span className="text-[12.5px] text-[color:var(--body)]">{humanizeField(entry.field)}</span>
         <span className="tabular-nums text-[12.5px] font-medium text-[var(--esg-text,#fff)]">
           {rows
             ? `${rows.length} row${rows.length === 1 ? "" : "s"}`
@@ -121,7 +121,7 @@ function ValueRow({ entry }: { entry: EsgUnplacedValue }) {
               : formatScalar(value)}
         </span>
         {entry.sourceFile && (
-          <span className="ml-auto shrink-0 text-[11px] text-[var(--esg-text3,#636366)]">
+          <span className="ml-auto shrink-0 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
             {entry.sourceFile}
           </span>
         )}
@@ -131,17 +131,17 @@ function ValueRow({ entry }: { entry: EsgUnplacedValue }) {
           not evidence — the rows are. */}
       {rows && (
         <details className="mt-1">
-          <summary className="cursor-pointer list-none text-[11px] text-[var(--esg-text2,#8e8e93)] hover:text-[#d1d1d6]">
+          <summary className="cursor-pointer list-none text-[11px] text-[var(--esg-text2,rgba(255,255,255,0.56))] hover:text-[color:var(--body)]">
             Show rows
           </summary>
           <ul className="mt-1 space-y-0.5 pl-3">
             {rows.slice(0, 6).map((row, i) => (
-              <li key={i} className="text-[11px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+              <li key={i} className="text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
                 {describeRow(row)}
               </li>
             ))}
             {rows.length > 6 && (
-              <li className="text-[11px] text-[var(--esg-text3,#636366)]">
+              <li className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                 +{rows.length - 6} more row{rows.length - 6 === 1 ? "" : "s"}
               </li>
             )}
@@ -172,11 +172,11 @@ function ElementGroup({
         className="flex w-full items-center gap-2 px-3 py-2 text-left"
       >
         <ChevronRight
-          className={`h-3.5 w-3.5 shrink-0 text-[var(--esg-text3,#636366)] transition-transform ${open ? "rotate-90" : ""}`}
+          className={`h-3.5 w-3.5 shrink-0 text-[var(--esg-text3,rgba(255,255,255,0.32))] transition-transform ${open ? "rotate-90" : ""}`}
           aria-hidden
         />
-        <span className="text-[12.5px] font-medium text-[#d1d1d6]">{elementLabel(code)}</span>
-        <span className="ml-auto tabular-nums text-[11.5px] text-[var(--esg-text2,#8e8e93)]">
+        <span className="text-[12.5px] font-medium text-[color:var(--body)]">{elementLabel(code)}</span>
+        <span className="ml-auto tabular-nums text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           {entries.length}
         </span>
       </button>
@@ -237,17 +237,16 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
 
   return (
     <div
-      className="rounded-[22px] border border-[var(--esg-glass-border,#2c2c2e)] bg-[var(--esg-input-bg,#0e0e10)] p-5"
+      className="rounded-[22px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] p-5"
       data-testid="esg-extraction-summary"
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,#636366)]">
+          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
             What we read from your documents
           </p>
           <h4
             className="mt-2 text-[22px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-            style={{ fontFamily: "'Instrument Serif', Georgia, serif", fontWeight: 500 }}
           >
             {valuesRead} value{valuesRead === 1 ? "" : "s"} read · {placed.length} placed
           </h4>
@@ -278,7 +277,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           <p className="text-[13px] font-semibold text-amber-200">
             We could not extract any values from these documents
           </p>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             Nothing has been written to your workbook. This usually means the files were scans we
             could not read, or documents outside the ESG evidence set. You can add different
             documents above, or continue and complete the workbook by hand — the score is
@@ -291,7 +290,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           claim an element the documents did not speak to. */}
       {elementRows.length > 0 && (
         <div className="mt-4">
-          <p className="text-[13px] font-semibold text-[#d1d1d6]">Evidence by element</p>
+          <p className="text-[13px] font-semibold text-[color:var(--body)]">Evidence by element</p>
           <div className="mt-2 flex flex-wrap gap-1.5" data-testid="esg-element-coverage">
             {elementRows.map(([code, count]) => (
               <span
@@ -300,7 +299,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
               >
                 <CheckCircle2 className="h-3 w-3" aria-hidden />
                 {elementLabel(code)}
-                <span className="tabular-nums text-[var(--esg-text2,#8e8e93)]">{count}</span>
+                <span className="tabular-nums text-[var(--esg-text2,rgba(255,255,255,0.56))]">{count}</span>
               </span>
             ))}
           </div>
@@ -312,11 +311,11 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           unreadable at exactly the moment the user had to choose between them. */}
       {conflicts.length > 0 && (
         <div className="mt-4" data-testid="esg-value-conflicts">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[#d1d1d6]">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
             {conflicts.length} figure{conflicts.length === 1 ? "" : "s"} your documents disagree on
           </p>
-          <p className="mt-1 text-[11.5px] text-[var(--esg-text2,#8e8e93)]">
+          <p className="mt-1 text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             Left blank rather than guessed — pick the right one in the workbook.
           </p>
           <div className="mt-2 space-y-2">
@@ -325,14 +324,14 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
                 key={`${conflict.sectionId}.${conflict.cellRef}`}
                 className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
               >
-                <p className="text-[12px] font-medium text-[#d1d1d6]">{conflict.label}</p>
+                <p className="text-[12px] font-medium text-[color:var(--body)]">{conflict.label}</p>
                 <ul className="mt-1 space-y-0.5">
                   {conflict.candidates.map((candidate, i) => (
                     <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-5">
                       <span className="tabular-nums text-[var(--esg-text,#fff)]">
                         {formatScalar(candidate.value)}
                       </span>
-                      <span className="text-[11px] text-[var(--esg-text3,#636366)]">
+                      <span className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                         {candidate.sources.join(", ") || "unknown source"}
                       </span>
                     </li>
@@ -349,11 +348,11 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           element headings is a summary someone will actually open. */}
       {unplaced.length > 0 && (
         <div className="mt-4">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[#d1d1d6]">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <FileWarning className="h-4 w-4 text-amber-300" />
             Read, but could not be placed automatically
           </p>
-          <p className="mt-1 text-[11.5px] text-[var(--esg-text2,#8e8e93)]">
+          <p className="mt-1 text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             Enter the ones you need in the workbook — nothing here has been guessed for you.
           </p>
           <div className="mt-2 space-y-1.5" data-testid="esg-unplaced-values">
@@ -377,7 +376,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           documents open. */}
       {exceptions.length > 0 && (
         <div className="mt-4" data-testid="esg-extraction-exceptions">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[#d1d1d6]">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
             {exceptions.length} thing{exceptions.length === 1 ? "" : "s"} worth checking in your
             evidence
@@ -386,14 +385,14 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
             {exceptions.slice(0, 8).map((entry, index) => (
               <li
                 key={`${entry.sourceFile}-${index}`}
-                className="text-[11.5px] leading-5 text-[var(--esg-text2,#8e8e93)]"
+                className="text-[11.5px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]"
               >
                 <span className="text-amber-300/80">{entry.sourceFile || "This case"}:</span>{" "}
                 {entry.note}
               </li>
             ))}
             {exceptions.length > 8 && (
-              <li className="text-[11px] text-[var(--esg-text3,#636366)]">
+              <li className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                 +{exceptions.length - 8} more
               </li>
             )}
@@ -406,7 +405,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           comma-joined run of filenames truncated exactly where it mattered. */}
       {readNothing.length > 0 && (
         <div className="mt-4">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[#d1d1d6]">
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <HelpCircle className="h-4 w-4 text-amber-300" />
             {readNothing.length} document{readNothing.length === 1 ? "" : "s"} we read nothing from
           </p>
@@ -414,14 +413,14 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
             {readNothing.slice(0, 6).map((name) => (
               <li
                 key={name}
-                className="truncate font-mono text-[11px] leading-5 text-[var(--esg-text2,#8e8e93)]"
+                className="truncate font-mono text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]"
                 title={name}
               >
                 {name}
               </li>
             ))}
             {readNothing.length > 6 && (
-              <li className="text-[11px] text-[var(--esg-text3,#636366)]">
+              <li className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
                 +{readNothing.length - 6} more
               </li>
             )}
@@ -429,7 +428,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
         </div>
       )}
 
-      <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[var(--esg-text3,#636366)]">
+      <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[var(--esg-text3,rgba(255,255,255,0.32))]">
         Everything above is editable in the workbook. A value we could not place is left blank
         rather than guessed — a wrong entry would score as nothing without telling you.
       </p>

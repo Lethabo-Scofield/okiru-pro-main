@@ -94,7 +94,7 @@ export function EsgHeadcountGrid({ values, onChange, onTouch, readOnly }: Props)
                     </td>
                   );
                 })}
-                <td className={`${ESG_TABLE_CELL} text-[#8e8e93]`} data-testid={`hc-total-${ri}`}>
+                <td className={`${ESG_TABLE_CELL} text-[color:var(--body)]`} data-testid={`hc-total-${ri}`}>
                   {total}
                 </td>
               </tr>

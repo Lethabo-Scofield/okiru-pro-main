@@ -38,13 +38,9 @@
     {
       "name": "okiru-web-client",
       "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "--prefix",
-        "C:/Users/Administrator/Documents/GitHub/okiru-pro-main/apps/web",
-        "run",
-        "dev:client"
-      ],
-      "port": 5000
+      "runtimeArgs": ["--prefix", "C:/dev/Okiru.pro-monorepo/apps/web", "run", "dev:client", "--", "--port", "5173", "--strictPort"],
+      "port": 5173,
+      "autoPort": false
     },
     {
       "name": "okiru-parser",

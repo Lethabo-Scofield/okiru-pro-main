@@ -55,17 +55,17 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
             {overwrites.slice(0, sampleLimit).map((change) => (
               <li
                 key={`${change.sectionId}:${change.cell}`}
-                className="flex items-center gap-2 font-mono text-[11px] text-[var(--esg-text2,#8e8e93)]"
+                className="flex items-center gap-2 font-mono text-[11px] text-[var(--esg-text2,rgba(255,255,255,0.56))]"
               >
                 <span className="shrink-0">{label(change.sectionId)} {change.cell}</span>
-                <span className="text-[#d1d1d6]">{cellText(change.before)}</span>
+                <span className="text-[color:var(--body)]">{cellText(change.before)}</span>
                 <ArrowRight className="h-3 w-3 shrink-0" aria-label="becomes" />
                 <span className="text-white">{cellText(change.after)}</span>
               </li>
             ))}
           </ul>
           {overwrites.length > sampleLimit ? (
-            <p className="mt-1 text-[11px] text-[var(--esg-text3,#636366)]">
+            <p className="mt-1 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
               +{overwrites.length - sampleLimit} more
             </p>
           ) : null}
@@ -83,10 +83,10 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
             {duplicates.length} value{duplicates.length === 1 ? " appears" : "s appear"} more than
             once in the file
           </p>
-          <ul className="mt-2 space-y-1 text-[11px] text-[var(--esg-text2,#8e8e93)]">
+          <ul className="mt-2 space-y-1 text-[11px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             {duplicates.slice(0, sampleLimit).map((dup) => (
               <li key={`${dup.sectionId}:${dup.value}`}>
-                <span className="font-mono text-[#d1d1d6]">{cellText(dup.value)}</span>
+                <span className="font-mono text-[color:var(--body)]">{cellText(dup.value)}</span>
                 {" in "}
                 {label(dup.sectionId)} ({dup.cells.slice(0, 4).join(", ")})
               </li>
@@ -104,7 +104,7 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
             <AlertTriangle className="h-4 w-4 shrink-0" />
             {newIssues.length} check{newIssues.length === 1 ? "" : "s"} this import would break
           </p>
-          <ul className="mt-2 space-y-1 text-[11px] text-[var(--esg-text2,#8e8e93)]">
+          <ul className="mt-2 space-y-1 text-[11px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             {newIssues.slice(0, sampleLimit).map((issue) => (
               <li key={issue.id}>
                 {issue.label}
@@ -124,7 +124,7 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
           <Layers className="h-4 w-4 shrink-0" />
           {isPartial ? "Partial upload" : "Covers every section"}
         </p>
-        <p className="mt-1 text-[11px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+        <p className="mt-1 text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           {additions.length} new value{additions.length === 1 ? "" : "s"}
           {overwrites.length > 0 ? `, ${overwrites.length} replaced` : ""}
           {unchanged > 0 ? `, ${unchanged} already matching` : ""}
@@ -152,7 +152,7 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
       ) : null}
 
       {unmatchedSheets.length > 0 ? (
-        <p className="text-[11px] leading-5 text-[var(--esg-text2,#8e8e93)]">
+        <p className="text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
           Left out because they match no workbook section: {unmatchedSheets.join(", ")}.
         </p>
       ) : null}

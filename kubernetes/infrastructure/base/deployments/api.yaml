@@ -38,6 +38,27 @@ spec:
                         - api
                 topologyKey: kubernetes.io/hostname
       terminationGracePeriodSeconds: 300
+      # Spread replicas across availability zones and across nodes. Without
+      # this the scheduler is free to put every replica on one node, which is
+      # what it did until 17 September 2026 — the cluster had three zonal
+      # nodes and all traffic was still served from one of them.
+      #
+      # ScheduleAnyway, not DoNotSchedule: a pod that cannot be spread should
+      # still run. Availability is the goal; refusing to schedule in pursuit
+      # of it would defeat the point.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: api
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: api
       containers:
         - name: api
           image: okiruproacrde4d539b.azurecr.io/okiru-pro/api:latest
@@ -115,6 +136,14 @@ spec:
             # Internal URL apps/api uses to reach apps/web (cluster DNS).
             - name: WEB_INTERNAL_URL
               value: "http://web:5001"
+            # Must match the web service: both write into one auditLogs
+            # collection and the daily seal verifies every record in it.
+            - name: AUDIT_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: AUDIT_SIGNING_KEY
+                  optional: true
             - name: AZURE_OPENAI_ENDPOINT
               valueFrom:
                 secretKeyRef:

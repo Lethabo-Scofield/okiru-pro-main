@@ -42,12 +42,12 @@ export function SectionImportPreviewModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-[color:var(--ink)]/70 p-4"
       onClick={() => !importing && onClose()}
       data-testid="section-import-preview-modal"
     >
       <div
-        className={`w-full ${showMapping ? "max-w-4xl" : "max-w-lg"} max-h-[90vh] overflow-hidden flex flex-col rounded-2xl bg-[#1c1c1e] border border-[#2c2c2e] shadow-2xl`}
+        className={`w-full ${showMapping ? "max-w-4xl" : "max-w-lg"} max-h-[90vh] overflow-hidden flex flex-col rounded-2xl bg-[color:var(--ink-3)] border border-[color:var(--rule)] shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-white/[0.06]">
@@ -61,13 +61,13 @@ export function SectionImportPreviewModal({
                 </span>
               )}
             </h2>
-            <p className="text-[12px] text-[#8e8e93] mt-0.5 truncate">{fileName}</p>
+            <p className="text-[12px] text-[color:var(--body)] mt-0.5 truncate">{fileName}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
             disabled={importing}
-            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[#8e8e93]"
+            className="p-1.5 rounded-lg hover:bg-white/[0.06] text-[color:var(--body)]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -86,25 +86,25 @@ export function SectionImportPreviewModal({
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-3">
                 <div className="text-[20px] font-bold text-emerald-400">{diff.added.length}</div>
-                <div className="text-[11px] text-[#8e8e93]">To add</div>
+                <div className="text-[11px] text-[color:var(--body)]">To add</div>
               </div>
               <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
                 <div className="text-[20px] font-bold text-amber-400">{diff.updated.length}</div>
-                <div className="text-[11px] text-[#8e8e93]">To update</div>
+                <div className="text-[11px] text-[color:var(--body)]">To update</div>
               </div>
               <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
                 <div className="text-[20px] font-bold text-red-400">
                   {importMode === "replace" ? diff.removed.length : 0}
                 </div>
-                <div className="text-[11px] text-[#8e8e93]">To remove</div>
+                <div className="text-[11px] text-[color:var(--body)]">To remove</div>
               </div>
             </div>
           ) : (
-            <div className="text-[13px] text-[#8e8e93]">Parsing file…</div>
+            <div className="text-[13px] text-[color:var(--body)]">Parsing file…</div>
           )}
 
           <div className="space-y-2">
-            <div className="text-[12px] text-[#8e8e93] font-medium">Import mode</div>
+            <div className="text-[12px] text-[color:var(--body)] font-medium">Import mode</div>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -112,7 +112,7 @@ export function SectionImportPreviewModal({
                 className={`flex-1 px-3 py-2 rounded-lg text-[12px] font-medium smooth ${
                   importMode === "append"
                     ? "bg-white text-black"
-                    : "bg-[#2c2c2e] text-[#d1d1d6] hover:bg-[#3a3a3c]"
+                    : "bg-[rgba(255,255,255,0.06)] text-[color:var(--body)] hover:bg-[rgba(255,255,255,0.10)]"
                 }`}
                 data-testid="import-mode-append"
               >
@@ -125,7 +125,7 @@ export function SectionImportPreviewModal({
                   className={`flex-1 px-3 py-2 rounded-lg text-[12px] font-medium smooth ${
                     importMode === "replace"
                       ? "bg-white text-black"
-                      : "bg-[#2c2c2e] text-[#d1d1d6] hover:bg-[#3a3a3c]"
+                      : "bg-[rgba(255,255,255,0.06)] text-[color:var(--body)] hover:bg-[rgba(255,255,255,0.10)]"
                   }`}
                   data-testid="import-mode-replace"
                 >
@@ -133,7 +133,7 @@ export function SectionImportPreviewModal({
                 </button>
               )}
             </div>
-            <p className="text-[11px] text-[#636366]">
+            <p className="text-[11px] text-[color:var(--muted)]">
               Only this section will be updated. Other workbook sections stay unchanged.
             </p>
           </div>
@@ -144,7 +144,7 @@ export function SectionImportPreviewModal({
             type="button"
             onClick={onClose}
             disabled={importing}
-            className="px-4 py-2 rounded-lg bg-[#2c2c2e] text-[13px] text-[#d1d1d6] hover:bg-[#3a3a3c] disabled:opacity-60"
+            className="px-4 py-2 rounded-lg bg-[rgba(255,255,255,0.06)] text-[13px] text-[color:var(--body)] hover:bg-[rgba(255,255,255,0.10)] disabled:opacity-60"
           >
             Cancel
           </button>

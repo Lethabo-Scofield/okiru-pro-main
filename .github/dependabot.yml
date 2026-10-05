@@ -1,0 +1,75 @@
+# Dependency updates.
+#
+# Security updates are raised as soon as an advisory lands, regardless of the
+# schedule below; the weekly cadence is for everything else. Grouping keeps the
+# volume to something a small team will actually review rather than rubber-stamp.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Africa/Johannesburg
+    open-pull-requests-limit: 5
+    groups:
+      # One pull request for the routine churn.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+      # Anything that touches how a request is authenticated, hashed, limited or
+      # logged gets its own pull request, because these are the ones worth
+      # reading rather than merging on green.
+      security-critical:
+        patterns:
+          - "bcrypt*"
+          - "helmet"
+          - "express"
+          - "express-session"
+          - "express-rate-limit"
+          - "connect-mongo"
+          - "mongoose"
+          - "jsonwebtoken"
+          - "cookie*"
+          - "@azure/*"
+    labels: ["dependencies"]
+
+  - package-ecosystem: npm
+    directory: "/apps/web"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "web"]
+
+  - package-ecosystem: npm
+    directory: "/apps/api"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    labels: ["dependencies", "api"]
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    labels: ["dependencies", "ci"]
+
+  # The base images are where most container findings come from, and nothing
+  # else watches them.
+  - package-ecosystem: docker
+    directories:
+      - "/apps/web"
+      - "/apps/api"
+    schedule:
+      interval: weekly
+      day: monday
+    labels: ["dependencies", "docker"]

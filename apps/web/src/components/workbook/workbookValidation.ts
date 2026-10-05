@@ -994,6 +994,8 @@ export function isCriticalWorkbookIssue(issue: WorkbookValidationIssue): boolean
 
       issue.field === "scorecardType" ||
 
+      issue.field === "financialYearEnd" ||
+
       issue.field === "fscSubSector"
 
     ) {

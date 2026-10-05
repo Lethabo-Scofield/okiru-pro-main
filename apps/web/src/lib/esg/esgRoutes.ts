@@ -1,28 +1,40 @@
 /**
- * Canonical ESG paths — start → inputs → summary → toolkit.
+ * Canonical ESG paths — workspace → start → inputs → summary → toolkit.
  *
- * `/esg` is the START of a new scorecard: the three ways in (documents, Excel,
- * manual), with no company required. It used to redirect to `/esg/clients`,
- * which forced everyone to name a company before they had told us anything —
- * including the people whose documents were about to tell us the name.
+ * `/esg` is the ESG WORKSPACE: the companies this consultant reports on, with
+ * creating a new one as an action inside it. It mirrors `/bbbee` exactly, so
+ * each product has one door and the same shape behind it.
  *
- * `/esg/clients` is still here and still reachable: it is how an EXISTING ESG
- * scorecard is reopened. It is no longer the front door.
+ * `/esg/new` is the START of a scorecard: the three ways in (documents, Excel,
+ * manual), with no company required. That flow used to live at `/esg` itself,
+ * which meant the ESG "section" was a creation form — a consultant carrying
+ * twenty companies arrived at a blank page asking them to add a twenty-first.
+ *
+ * `/esg/clients` is the old name for the workspace and still resolves to it.
  */
 
 export const ESG_ACTIVE_COMPANY_KEY = "okiru-esg-active-company";
 
-/** Start a new ESG scorecard — no company needed. */
+/** The ESG workspace — this consultant's ESG companies. */
 export const ESG_HOME_PATH = "/esg";
 
+/** Start a new ESG scorecard — no company needed. */
+export const ESG_NEW_PATH = "/esg/new";
+
+/** Superseded by ESG_HOME_PATH; kept so old links keep resolving. */
 export const ESG_CLIENTS_PATH = "/esg/clients";
 
 export function esgHomeHref(): string {
   return ESG_HOME_PATH;
 }
 
+export function esgNewHref(): string {
+  return ESG_NEW_PATH;
+}
+
+/** The way back to the ESG company list, which is now the workspace itself. */
 export function esgClientsHref(): string {
-  return ESG_CLIENTS_PATH;
+  return ESG_HOME_PATH;
 }
 
 /** True when href targets the parent app router (outside nested /esg/toolkit/:id). */

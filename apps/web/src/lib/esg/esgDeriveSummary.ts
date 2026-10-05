@@ -37,7 +37,7 @@
  */
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { ESG_GRID_SECTIONS, type EsgGridSectionId } from "@/lib/esg/esgGridSections";
-import { king5Weight } from "@/lib/esg/esgGridRows";
+import { king5Weight, refFor } from "@/lib/esg/esgGridRows";
 import { hydrateEsgWorkbookSections } from "@/lib/esg/esgSheetStructure";
 import { toFractionOrZero } from "../../../../api/pipeline/units/percentage";
 
@@ -266,7 +266,25 @@ function gridRows(cells: Cells | undefined, sectionId: EsgGridSectionId): Number
   for (const rowNum of Array.from(rowNums).sort((a, b) => a - b)) {
     const values: Record<string, unknown> = {};
     def.columns.forEach((col, idx) => {
-      const v = source[`${colLetter(idx)}${rowNum}`];
+      /*
+       * `refFor`, NOT positional `colLetter(idx)` — the third place this
+       * lesson had to be learnt, and the only one where it was still costing
+       * points.
+       *
+       * `ISO_Tracker` and `IFRS_S1_S2` start at column B and reserve E for the
+       * sheet's own derived `Score /5`, so both declare `columnLetters`.
+       * `writeEsgGridCells` honours them when it PERSISTS a register, and
+       * `readEsgGridRows` and the importer both honour them when they read one
+       * — this reader did not. It took `status` from index 2, which is column
+       * C, the Pillar column, while every value lives in D.
+       *
+       * So `deriveIfrs` scored the word "Governance" against the vocabulary
+       * `Disclosed / Partially Disclosed`, matched nothing, and published
+       * `IFRS_S1_S2!E29 = 0` for every workbook stored as flat cells — which
+       * is every imported one. `G d9` is ten points, and it was zero no matter
+       * what the client had disclosed.
+       */
+      const v = source[`${refFor(def, col, idx)}${rowNum}`];
       if (v !== undefined) values[col.key] = v;
     });
     if (isRealRow(values, sectionId)) out.push({ rowNum, values });
@@ -346,6 +364,8 @@ export function deriveEsgSummaryCells(rawWorkbook: EsgWorkbookData): EsgWorkbook
   deriveGData(d);
   deriveKing5(d);
   deriveIfrs(d);
+  deriveIsoTracker(d);
+  deriveSaqSupplier(d);
 
   return d.result(workbook);
 }
@@ -976,6 +996,23 @@ function deriveGData(d: Draft): void {
     d.fill("g-data", `F${row}`, ynScore(d.raw("g-data", `B${row}`), 5, 2.5));
   }
 
+  /*
+   * `F27 = =IF(B27="Yes",5,IF(B27="Partial",2.5,0))` — the board-approved
+   * environmental policy, kept OUT of `GOV_YN_ROWS` on purpose.
+   *
+   * It follows the same Yes/Partial/No rule as the rows above, but it sits
+   * below the sheet's own total (`F26 = SUM(F5:F24)`) and must stay out of it.
+   * It scores in the ENVIRONMENTAL pillar instead — `E d28` reads it — which
+   * is why the input lives on the governance sheet but its points do not.
+   *
+   * `B27` was added as an input with `F27` declared as its score cell, and
+   * then nothing ever computed `F27`, so the declaration pointed at a cell
+   * that never existed and the four points stayed unreachable.
+   */
+  if (d.has("g-data", "B27")) {
+    d.fill("g-data", "F27", ynScore(d.raw("g-data", "B27"), 5, 2.5));
+  }
+
   // `F22 = =IFERROR(IF(B22>=B61,5,IF(B22>=B61*B9,5*B22/B61,0)),0)` — material risks.
   const thrRisks = toNum(d.raw("assumptions", "B61")) ?? 10;
   if (d.has("g-data", "B22")) {
@@ -1133,4 +1170,214 @@ function ifrsScore(status: string): number {
   if (s === "disclosed") return 5;
   if (s === "partially disclosed") return 3;
   return 0;
+}
+
+/* ------------------------- ISO_Tracker ---------------------------- */
+
+/**
+ * The ISO 14001 clause tracker — until now, a register the app asked people to
+ * fill in and then read nothing from.
+ *
+ * `ISO_Tracker` is the stated data source for four Environmental indicators —
+ * `E d26` certification (8 pts), `E d27` aspects register (4), `E d28` board
+ * approved environmental policy (4) and `E d29` NEMA/NWA/NEMWA legal
+ * compliance (4). All four are `MANUAL_ZERO` in the client workbook: a literal
+ * 0 with no formula, because the sheet was authored before the tracker
+ * existed. Nothing ever replaced them, so twenty of the Environmental pillar's
+ * 108 points were unreachable no matter what a company did, while the product
+ * still asked for a sixty-row clause-by-clause assessment to produce them.
+ *
+ * The rules are `docs/esg/ESG_FORMULA_LEDGER.md` §5.1, and this publishes the
+ * terms they need. Rows are matched on the CLAUSE number rather than on a
+ * sheet row: the ledger cites `ISO_Tracker!E8/E10/E11/E16`, but those are
+ * positions in ONE workbook, and this register is user-editable, so a clause
+ * that moves down a row must not silently stop scoring.
+ *
+ * `Not Applicable` is EXCLUDED rather than scored. The sheet's own formula
+ * gives it the full five — `=IF(D="Not Applicable",5,…)` — which makes marking
+ * a clause inapplicable the cheapest way to raise a score in the toolkit. The
+ * expert ruling on exactly this question is that an inapplicable item leaves
+ * the numerator and the denominator together (Z. Mnanzana, Q15/Q16, 14
+ * September 2026), which is what `deriveIfrs` above already does.
+ */
+const ISO_POINTS_PER_CLAUSE = 5;
+
+/** `ISO_Tracker!E17` is the EMS roll-up, max 60 — twelve clauses of five. */
+const ISO_EMS_CLAUSE_COUNT = 12;
+
+/** Clause numbers the ledger's four rules name, with a text fallback. */
+const ISO_CLAUSE_TARGETS = [
+  { key: "_policy_score", clause: "5.2", matches: ["environmental policy"] },
+  { key: "_aspects_score", clause: "6.1.2", matches: ["aspect"] },
+  { key: "_legal_score", clause: "6.1.3", matches: ["legal requirement", "legal register"] },
+  { key: "_cert_score", clause: "10", matches: ["certification"] },
+] as const;
+
+function isoScore(status: string): number {
+  const s = status.trim().toLowerCase();
+  if (s === "fully compliant") return 5;
+  if (s === "partially compliant") return 3;
+  return 0; // "Gap", and anything unreadable — silence is not compliance
+}
+
+/** `6.1.2` matches the clause `6.1.2`, and `10` matches `10` or `10.1`. */
+function clauseMatches(cellValue: string, target: string): boolean {
+  const c = cellValue.trim().replace(/^clause\s*/i, "");
+  return c === target || c.startsWith(`${target}.`);
+}
+
+function deriveIsoTracker(d: Draft): void {
+  const stated = gridRows(d.cells("iso-tracker"), "iso-tracker").filter(
+    (r) => text(r.values.status) !== "",
+  );
+  if (stated.length === 0) return;
+
+  const applicable = stated.filter((r) => !isNotApplicable(text(r.values.status)));
+
+  // The whole-EMS view: every clause that applies, out of a denominator that
+  // shrinks only for clauses explicitly marked not applicable. Sizing it to
+  // the rows entered would let a company raise its score by assessing fewer.
+  const notApplicable = stated.length - applicable.length;
+  const emsScore = applicable.reduce((a, r) => a + isoScore(text(r.values.status)), 0);
+  const emsMax =
+    ISO_POINTS_PER_CLAUSE *
+    Math.max(0, Math.max(ISO_EMS_CLAUSE_COUNT, stated.length) - notApplicable);
+
+  d.fill("iso-tracker", "_ems_score", emsScore);
+  d.fill("iso-tracker", "_ems_max", emsMax);
+  d.fill("iso-tracker", "_applicable_count", applicable.length);
+  d.fill("iso-tracker", "_not_applicable_count", notApplicable);
+
+  for (const target of ISO_CLAUSE_TARGETS) {
+    const row =
+      applicable.find((r) => clauseMatches(text(r.values.clause), target.clause)) ??
+      applicable.find((r) => {
+        const requirement = text(r.values.requirement).toLowerCase();
+        return target.matches.some((m) => requirement.includes(m));
+      });
+    // No row, or a row marked not applicable, leaves the cell absent — the
+    // scorer then reads 0, which is the correct answer for an unevidenced
+    // claim. Writing a 0 here would look like an assessed failure instead.
+    if (row) d.fill("iso-tracker", target.key, isoScore(text(row.values.status)));
+  }
+}
+
+/* ------------------------- SAQ_Supplier --------------------------- */
+
+/**
+ * Supplier self-assessment aggregates for `S d26` (health & safety, 5 pts) and
+ * `S d27` (food safety, 5 pts) — ledger §5.2.
+ *
+ * Both were `MANUAL_ZERO`, so the supplier register was the third input the
+ * product collected and never read. The ratings already land on the cells the
+ * ledger's formulas name (`D5:D16` and `F5:F16`); only these means were
+ * missing.
+ *
+ * `N/A` is excluded from the mean, matching Excel's own `COUNT`/`AVERAGE` over
+ * a text cell — which is what the ledger's formulas assume — and an empty
+ * register publishes nothing, so a company with no suppliers assessed scores
+ * zero rather than a free pass.
+ */
+const SAQ_MAX_RATING = 5;
+
+/**
+ * Health-and-safety evidence, on the register's own 1–5 scale so it can stand
+ * in for the rating beside it.
+ *
+ * A certified management system is the full five; the COIDA letter of good
+ * standing is a real regulatory artefact but a narrower one; a safety file
+ * under a s37(2) mandatary agreement is the statutory minimum. "None held" is
+ * an explicit nil and scores zero rather than going unrated — a supplier the
+ * company checked and found to hold nothing is a finding, not missing data.
+ */
+function hsEvidenceRating(value: unknown): number | null {
+  const v = text(value).trim().toLowerCase();
+  if (v.startsWith("iso 45001")) return 5;
+  if (v.startsWith("letter of good standing")) return 4;
+  if (v.startsWith("safety file")) return 3;
+  if (v.startsWith("none")) return 0;
+  return null;
+}
+
+/**
+ * Food-safety grade on the same 1–5 scale.
+ *
+ * BRCGS grades on the count and severity of non-conformities: AA is roughly
+ * no more than five minors, and a single critical — or a major against a
+ * fundamental clause — fails outright, which is why D sits near the bottom.
+ * FSSC 22000 and ISO 22000 issue no grade at all, so a certificate under
+ * either sits at 4: unambiguously certified, without claiming the
+ * discrimination a BRCGS audit gives.
+ */
+function foodGradeRating(value: unknown): number | null {
+  const v = text(value).trim().toLowerCase();
+  if (v === "brcgs aa") return 5;
+  if (v === "brcgs a") return 4.5;
+  if (v === "brcgs b") return 4;
+  if (v === "brcgs c") return 3;
+  if (v === "brcgs d") return 2;
+  if (v.startsWith("fssc") || v.startsWith("iso 22000")) return 4;
+  if (v.startsWith("not certified")) return 0;
+  return null;
+}
+
+function deriveSaqSupplier(d: Draft): void {
+  const rows = gridRows(d.cells("saq"), "saq");
+  if (rows.length === 0) return;
+
+  /*
+   * One supplier's score on a criterion: the auditable evidence where it
+   * exists, the self-assessed rating where it does not.
+   *
+   * EcoVadis weights Results (35%) above Policies (25%) — what a supplier
+   * ACHIEVED outranks what it claimed — and a certificate or an audit grade
+   * is a result in a way a 1–5 opinion is not. So evidence wins outright and
+   * the rating is a fallback, not an average partner: averaging the two would
+   * let a generous self-rating pull a failed audit upward.
+   */
+  const scoreFor = (
+    row: (typeof rows)[number],
+    ratingColumn: string,
+    evidenceColumn: string,
+    evidenceRating: (value: unknown) => number | null,
+  ): number | null => {
+    const evidence = evidenceRating(row.values[evidenceColumn]);
+    if (evidence != null) return evidence;
+    const rating = toNum(row.values[ratingColumn]);
+    return rating != null && rating > 0 ? rating : null;
+  };
+
+  const meanOf = (
+    ratingColumn: string,
+    evidenceColumn: string,
+    evidenceRating: (value: unknown) => number | null,
+  ): number | null => {
+    const scores = rows
+      .map((r) => scoreFor(r, ratingColumn, evidenceColumn, evidenceRating))
+      .filter((n): n is number => n != null);
+    if (scores.length === 0) return null;
+    return scores.reduce((a, n) => a + n, 0) / scores.length;
+  };
+
+  const hs = meanOf("healthSafety", "hsEvidence", hsEvidenceRating);
+  const fs = meanOf("foodSafety", "foodSafetyGrade", foodGradeRating);
+
+  d.fill("saq", "_supplier_count", rows.length);
+  d.fill("saq", "_max_rating", SAQ_MAX_RATING);
+  if (hs != null) d.fill("saq", "_hs_mean", hs);
+  if (fs != null) d.fill("saq", "_fs_mean", fs);
+
+  /*
+   * Coverage — suppliers assessed ÷ the population declared at `S_Data!B89`.
+   *
+   * Without that figure coverage is UNKNOWN and deliberately not published,
+   * so the scorers behave exactly as they did before it existed and no stored
+   * workbook is silently re-scored downward. Capped at 1: a register longer
+   * than the declared population is a data-entry problem, not 140% coverage.
+   */
+  const population = toNum(d.raw("s-data", "B89"));
+  if (population != null && population > 0) {
+    d.fill("saq", "_coverage", Math.min(1, rows.length / population));
+    d.fill("saq", "_supplier_population", population);
+  }
 }

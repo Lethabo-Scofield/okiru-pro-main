@@ -105,7 +105,7 @@ spec:
       volumes:
         - name: mongodb-data
           persistentVolumeClaim:
-            claimName: mongodb-pvc
+            claimName: mongodb-pvc-cmk
         - name: mongodb-config
           configMap:
             name: mongodb-config

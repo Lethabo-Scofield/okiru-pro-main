@@ -74,21 +74,21 @@ export function ReviewSection({
         className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left"
       >
         <ChevronRight
-          className={`h-3.5 w-3.5 shrink-0 text-[#636366] transition-transform ${open ? "rotate-90" : ""}`}
+          className={`h-3.5 w-3.5 shrink-0 text-[color:var(--muted)] transition-transform ${open ? "rotate-90" : ""}`}
           aria-hidden
         />
         {icon}
         <span className="text-[12.5px] font-medium" style={{ color: style.title }}>
           {title}
         </span>
-        {meta && <span className="ml-auto shrink-0 text-[11.5px] text-[#8e8e93]">{meta}</span>}
+        {meta && <span className="ml-auto shrink-0 text-[11.5px] text-[color:var(--body)]">{meta}</span>}
       </button>
       {summary && !open && (
-        <p className="px-3.5 pb-2.5 pl-9 text-[11.5px] leading-5 text-[#8e8e93]">{summary}</p>
+        <p className="px-3.5 pb-2.5 pl-9 text-[11.5px] leading-5 text-[color:var(--body)]">{summary}</p>
       )}
       {open && (
         <div className="px-3.5 pb-3 pl-9">
-          {summary && <p className="mb-2 text-[11.5px] leading-5 text-[#8e8e93]">{summary}</p>}
+          {summary && <p className="mb-2 text-[11.5px] leading-5 text-[color:var(--body)]">{summary}</p>}
           {children}
         </div>
       )}

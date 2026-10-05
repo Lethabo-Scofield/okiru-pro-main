@@ -661,6 +661,18 @@ const clientSchema = new Schema({
   companyValue: { type: Number, default: 0 },
   outstandingDebt: { type: Number, default: 0 },
   organizationId: { type: String, default: null, index: true },
+  /**
+   * The team this company belongs to, and therefore the team whose roles
+   * decide who may open it and which pillars they may edit.
+   *
+   * Without it, permissions were recorded and never applied. The only link
+   * between a company and a workspace was a ProcessorSession, written by one
+   * super-admin-only screen, so a company created the normal way had no
+   * workspace, the resolver found nothing, and every recorded scope was
+   * ignored. Null still means "no team overlay" for companies made before
+   * this existed — the creator and organisation checks stand on their own.
+   */
+  workspaceId: { type: String, default: null, index: true },
   createdByUserId: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
@@ -687,6 +699,13 @@ const clientSchema = new Schema({
   companySize: { type: String, default: 'Generic' },
   annualTurnover: { type: Number, default: 0 },
   numberOfEmployees: { type: Number, default: 0 },
+  /**
+   * The date the measurement period closes. Mandatory on create — it is
+   * what the period below is anchored to, and a scorecard measured
+   * against the wrong period is wrong in every pillar at once.
+   */
+  financialYearEnd: { type: String, default: null },
+  // Stored, not derived, so a short or shifted reporting period stays editable.
   measurementPeriodStart: { type: String, default: null },
   measurementPeriodEnd: { type: String, default: null },
   beeCertificateNumber: { type: String, default: null },
@@ -951,6 +970,13 @@ export interface WorkspaceMember {
   displayRole?: WorkspaceDisplayRole;
   /** When set for collaborators, limits which scorecard pillars they may view or edit. Empty/absent = all pillars. */
   pillarScopes?: string[];
+  /**
+   * When set, limits which COMPANIES this member may open. Empty or absent
+   * means every company in the workspace, so nobody's access changes on the
+   * day this field appears. Composed with pillarScopes as a strict AND:
+   * which companies first, then which pillars inside one.
+   */
+  clientScopes?: string[];
   joinedAt: Date;
 }
 
@@ -963,6 +989,8 @@ export interface WorkspaceInvite {
   displayRole?: WorkspaceDisplayRole;
   /** Pillar keys the invitee will be scoped to (contributor role only). */
   pillarScopes?: string[];
+  /** Company ids the invitee will be limited to. Empty/absent = all of them. */
+  clientScopes?: string[];
   token: string;
   invitedByUserId: string;
   expiresAt: Date;
@@ -996,6 +1024,7 @@ const workspaceMemberSchema = new Schema({
   role: { type: String, enum: ["owner", "collaborator", "viewer"], required: true },
   displayRole: { type: String, enum: ["owner", "admin", "contributor", "reviewer", "viewer"], default: null },
   pillarScopes: { type: [String], default: undefined },
+  clientScopes: { type: [String], default: undefined },
   joinedAt: { type: Date, default: Date.now },
 }, { collection: "workspace_members" });
 
@@ -1018,6 +1047,7 @@ const workspaceInviteSchema = new Schema({
   role: { type: String, enum: ["collaborator", "viewer"], required: true },
   displayRole: { type: String, enum: ["admin", "contributor", "reviewer", "viewer"], default: null },
   pillarScopes: { type: [String], default: undefined },
+  clientScopes: { type: [String], default: undefined },
   token: { type: String, required: true, unique: true, index: true },
   invitedByUserId: { type: String, required: true },
   expiresAt: { type: Date, required: true },

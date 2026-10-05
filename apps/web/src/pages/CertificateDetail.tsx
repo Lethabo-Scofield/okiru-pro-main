@@ -3,15 +3,16 @@ import { useLocation } from 'wouter';
 import {
   Download, Loader2, ShieldCheck, AlertTriangle, Award,
   Building2, Hash, Users2, CalendarClock, History, Flag,
-  X, CheckCircle2, Pencil,
+  X, CheckCircle2, Pencil, Eye,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { AppNavBack } from '@/components/AppNavBack';
 import { useAuth } from '@toolkit/lib/auth';
 import { CertificateEditForm } from '@/components/certificates/CertificateEditForm';
 import { certificateFormToPatchBody, type CertificateFormValues } from '@/components/certificates/CertificateUploadForm';
 import { sectorDisplayLabel, OKIRU_HUB_SECTORS } from '@/lib/okiruHubSectors';
 
+import { formatPercent } from '@/lib/formatPercent';
+import { CertificatePreview } from '@/components/certificates/CertificatePreview';
 interface CertDetail {
   slug: string;
   companyName: string;
@@ -95,7 +96,7 @@ function StatusBadge({ status }: { status?: string | null }) {
     valid: { color: '#22c55e', bg: 'rgba(34,197,94,0.12)', label: 'Valid' },
     expiring: { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', label: 'Expiring soon' },
     expired: { color: '#ef4444', bg: 'rgba(239,68,68,0.12)', label: 'Expired' },
-    unknown: { color: '#8e8e93', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
+    unknown: { color: 'var(--body)', bg: 'rgba(142,142,147,0.12)', label: 'Unknown' },
   };
   const cfg = map[status || 'unknown'] || map.unknown;
   return (
@@ -111,9 +112,9 @@ function StatusBadge({ status }: { status?: string | null }) {
 function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start gap-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
-      <div className="text-[#636366] mt-0.5">{icon}</div>
+      <div className="text-[color:var(--muted)] mt-0.5">{icon}</div>
       <div className="flex-1 min-w-0">
-        <div className="text-[11px] text-[#8e8e93] tracking-wide uppercase mb-0.5">{label}</div>
+        <div className="text-[11px] text-[color:var(--body)] tracking-wide uppercase mb-0.5">{label}</div>
         <div className="text-[14px] text-white">{value}</div>
       </div>
     </div>
@@ -135,6 +136,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   const [history, setHistory] = useState<HistoryPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -304,30 +306,18 @@ export default function CertificateDetail({ slug }: { slug: string }) {
   }, [registryActionsAvailable, data?.id, reportReason, reportMessage, reportEmail, toast]);
 
   return (
-    <div className="min-h-screen bg-black text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <header className="sticky top-0 z-20 bg-black/90 backdrop-blur-md" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
-          <AppNavBack
-            href="/certificates"
-            eyebrow="Registry"
-            label="All certificates"
-            variant="dark"
-            size="compact"
-          />
-          <span className="text-[12px] text-[#636366] tracking-wide uppercase">B-BBEE Certificate</span>
-        </div>
-      </header>
+    <div className="text-white" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
 
       <main className="max-w-[860px] mx-auto px-5 pt-10 pb-20">
         {loading && (
           <div className="py-24 text-center">
-            <Loader2 className="h-6 w-6 animate-spin text-[#636366] mx-auto" />
-            <p className="text-[13px] text-[#636366] mt-3">Loading certificate…</p>
+            <Loader2 className="h-6 w-6 animate-spin text-[color:var(--muted)] mx-auto" />
+            <p className="text-[13px] text-[color:var(--muted)] mt-3">Loading certificate…</p>
           </div>
         )}
 
         {!loading && error && (
-          <div className="py-16 text-center rounded-xl border border-[#1c1c1e]">
+          <div className="py-16 text-center rounded-xl border border-[rgba(255,255,255,0.03)]">
             <AlertTriangle className="h-6 w-6 text-[#ef4444] mx-auto mb-3" />
             <p className="text-[14px] text-white mb-1">{error}</p>
             <button onClick={() => navigate('/certificates')} className="text-[13px] text-[#a5b4fc] hover:text-white mt-3">
@@ -349,7 +339,6 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               </p>
               <h1
                 className="text-white tracking-tight mb-4"
-                style={{ fontFamily: "'Instrument Serif', serif", fontWeight: 400, fontSize: 'clamp(2rem, 4.5vw, 3rem)', lineHeight: 1.1 }}
               >
                 {data.companyName}
               </h1>
@@ -380,26 +369,38 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               <MetaRow icon={<Hash className="h-4 w-4" />} label="VAT number" value={missing(data.vatNumber)} />
               <MetaRow icon={<Building2 className="h-4 w-4" />} label="Company size" value={missing(data.companySize)} />
               <MetaRow icon={<Award className="h-4 w-4" />} label="B-BBEE level" value={data.bbbeeLevelStatus || (data.bbbeeLevel != null ? `Level ${data.bbbeeLevel}` : 'Needs review')} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={data.blackOwnership != null ? `${data.blackOwnership}%` : 'Missing'} />
-              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={data.blackWomenOwnership != null ? `${data.blackWomenOwnership}%` : 'Missing'} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black ownership" value={formatPercent(data.blackOwnership)} />
+              <MetaRow icon={<Users2 className="h-4 w-4" />} label="Black women ownership" value={formatPercent(data.blackWomenOwnership)} />
               <MetaRow icon={<CalendarClock className="h-4 w-4" />} label="Expiry date" value={data.expiryDate ? formatDate(data.expiryDate) : 'Missing'} />
             </div>
 
             <div className="flex items-center gap-2 flex-wrap mb-10">
+              {/* Reading a certificate should not require downloading it first.
+                  The file is the evidence behind every field above it. */}
+              <button
+                onClick={() => setPreviewing(true)}
+                disabled={!data.blobName}
+                title={!data.blobName ? 'The file is not in storage' : undefined}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 transition-colors"
+                data-testid="certificate-detail-preview"
+              >
+                <Eye className="h-4 w-4" />
+                {data.blobName ? 'View certificate' : 'File unavailable'}
+              </button>
               <button
                 onClick={handleDownload}
                 disabled={downloading || !data.blobName}
                 title={!data.blobName ? 'Download unavailable' : undefined}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5] disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] hover:text-white border border-[color:var(--rule)] disabled:opacity-40 transition-colors"
               >
                 {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {data.blobName ? 'Download certificate' : 'Download unavailable'}
+                {data.blobName ? 'Download' : 'Download unavailable'}
               </button>
               <button
                 onClick={loadHistory}
                 disabled={!registryActionsAvailable}
                 title={!registryActionsAvailable ? 'Version history unavailable' : undefined}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[#1c1c1e] hover:bg-[#2c2c2e] hover:text-white border border-[#2c2c2e] disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] hover:text-white border border-[color:var(--rule)] disabled:opacity-40 transition-colors"
               >
                 <History className="h-4 w-4" />
                 {registryActionsAvailable ? 'View version history' : 'History unavailable'}
@@ -408,7 +409,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
                 onClick={() => setShowEdit(true)}
                 disabled={!canEdit}
                 title={!canEdit ? 'Sign in to edit this certificate' : undefined}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[#1c1c1e] hover:bg-[#2c2c2e] hover:text-white border border-[#2c2c2e] disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] hover:text-white border border-[color:var(--rule)] disabled:opacity-40 transition-colors"
               >
                 <Pencil className="h-4 w-4" />
                 Edit certificate
@@ -417,7 +418,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
                 onClick={() => { setReportSuccess(false); setShowReport(true); }}
                 disabled={!registryActionsAvailable}
                 title={!registryActionsAvailable ? 'Report unavailable for this record' : undefined}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] hover:text-white hover:bg-[#2c2c2e] disabled:opacity-40 transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] hover:text-white hover:bg-[rgba(255,255,255,0.06)] disabled:opacity-40 transition-colors"
               >
                 <Flag className="h-4 w-4" />
                 {registryActionsAvailable ? 'Report incorrect data' : 'Report unavailable'}
@@ -425,7 +426,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             </div>
 
             {data.updatedAt && (
-              <p className="text-[12px] text-[#636366]">Last updated {formatDate(data.updatedAt)}</p>
+              <p className="text-[12px] text-[color:var(--muted)]">Last updated {formatDate(data.updatedAt)}</p>
             )}
           </>
         )}
@@ -433,37 +434,37 @@ export default function CertificateDetail({ slug }: { slug: string }) {
 
       {/* History dialog */}
       {showHistory && history && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowHistory(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color:var(--ink)]/70" onClick={() => setShowHistory(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg bg-[#0d0d10] rounded-2xl border border-[#2c2c2e] overflow-hidden"
+            className="w-full max-w-lg bg-[#0d0d10] rounded-2xl border border-[color:var(--rule)] overflow-hidden"
           >
-            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #1c1c1e' }}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
               <div className="flex items-center gap-2">
                 <History className="h-4 w-4 text-[#a5b4fc]" />
                 <span className="text-[14px] text-white">Version history</span>
               </div>
-              <button onClick={() => setShowHistory(false)} className="text-[#8e8e93] hover:text-white">
+              <button onClick={() => setShowHistory(false)} className="text-[color:var(--body)] hover:text-white">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="p-5 space-y-3 max-h-[60vh] overflow-y-auto">
-              <div className="rounded-lg p-3 bg-[#1c1c1e] border border-[#2c2c2e]">
+              <div className="rounded-lg p-3 bg-[color:var(--ink-3)] border border-[color:var(--rule)]">
                 <div className="text-[12px] text-[#22d3ee] uppercase tracking-wide mb-1">Current</div>
                 <div className="text-[13px] text-white">{history.latest.fileName || '-'}</div>
-                <div className="text-[12px] text-[#8e8e93]">
+                <div className="text-[12px] text-[color:var(--body)]">
                   Uploaded {formatDate(history.latest.uploadedAt)}
                   {history.latest.expiryDate && ` · expires ${formatDate(history.latest.expiryDate)}`}
                 </div>
               </div>
               {history.versions.length === 0 && (
-                <p className="text-[13px] text-[#636366] text-center py-4">No previous versions on record.</p>
+                <p className="text-[13px] text-[color:var(--muted)] text-center py-4">No previous versions on record.</p>
               )}
               {history.versions.slice().reverse().map((v, idx) => (
-                <div key={idx} className="rounded-lg p-3 bg-[#0d0d10] border border-[#1c1c1e]">
-                  <div className="text-[12px] text-[#636366] uppercase tracking-wide mb-1">Previous</div>
+                <div key={idx} className="rounded-lg p-3 bg-[#0d0d10] border border-[rgba(255,255,255,0.03)]">
+                  <div className="text-[12px] text-[color:var(--muted)] uppercase tracking-wide mb-1">Previous</div>
                   <div className="text-[13px] text-[#a1a1aa]">{v.fileName || '-'}</div>
-                  <div className="text-[12px] text-[#636366]">
+                  <div className="text-[12px] text-[color:var(--muted)]">
                     Replaced {formatDate(v.replacedAt)}
                     {v.expiryDate && ` · expired ${formatDate(v.expiryDate)}`}
                   </div>
@@ -476,17 +477,17 @@ export default function CertificateDetail({ slug }: { slug: string }) {
 
       {/* Report dialog */}
       {showReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setShowReport(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[color:var(--ink)]/70" onClick={() => setShowReport(false)}>
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md bg-[#0d0d10] rounded-2xl border border-[#2c2c2e] overflow-hidden"
+            className="w-full max-w-md bg-[#0d0d10] rounded-2xl border border-[color:var(--rule)] overflow-hidden"
           >
-            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #1c1c1e' }}>
+            <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}>
               <div className="flex items-center gap-2">
                 <Flag className="h-4 w-4 text-[#f59e0b]" />
                 <span className="text-[14px] text-white">Report this certificate</span>
               </div>
-              <button onClick={() => setShowReport(false)} className="text-[#8e8e93] hover:text-white">
+              <button onClick={() => setShowReport(false)} className="text-[color:var(--body)] hover:text-white">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -494,7 +495,7 @@ export default function CertificateDetail({ slug }: { slug: string }) {
               <div className="p-8 text-center">
                 <CheckCircle2 className="h-10 w-10 text-[#22c55e] mx-auto mb-3" />
                 <p className="text-[14px] text-white mb-1">Report submitted</p>
-                <p className="text-[12px] text-[#8e8e93]">An administrator will review your submission.</p>
+                <p className="text-[12px] text-[color:var(--body)]">An administrator will review your submission.</p>
                 <button
                   onClick={() => setShowReport(false)}
                   className="mt-5 px-4 py-2 rounded-lg text-[13px] text-white bg-[#6366f1] hover:bg-[#4f46e5]"
@@ -505,11 +506,11 @@ export default function CertificateDetail({ slug }: { slug: string }) {
             ) : (
               <div className="p-5 space-y-4">
                 <label className="block">
-                  <span className="block text-[11px] text-[#8e8e93] mb-1.5 tracking-wide">REASON</span>
+                  <span className="block text-[11px] text-[color:var(--body)] mb-1.5 tracking-wide">REASON</span>
                   <select
                     value={reportReason}
                     onChange={(e) => setReportReason(e.target.value as typeof reportReason)}
-                    className="w-full bg-[#1c1c1e] rounded-lg px-3 py-2 text-[14px] text-white border border-[#2c2c2e] focus:border-[#6366f1] outline-none"
+                    className="w-full bg-[color:var(--ink-3)] rounded-lg px-3 py-2 text-[14px] text-white border border-[color:var(--rule)] focus:border-[#6366f1] outline-none"
                   >
                     <option value="incorrect-data">Incorrect data on the certificate</option>
                     <option value="expired">Certificate is expired</option>
@@ -519,30 +520,30 @@ export default function CertificateDetail({ slug }: { slug: string }) {
                   </select>
                 </label>
                 <label className="block">
-                  <span className="block text-[11px] text-[#8e8e93] mb-1.5 tracking-wide">DETAILS (required)</span>
+                  <span className="block text-[11px] text-[color:var(--body)] mb-1.5 tracking-wide">DETAILS (required)</span>
                   <textarea
                     value={reportMessage}
                     onChange={(e) => setReportMessage(e.target.value)}
                     rows={4}
                     placeholder="Tell us what's wrong with this certificate (minimum 10 characters)…"
-                    className="w-full bg-[#1c1c1e] rounded-lg px-3 py-2 text-[14px] text-white border border-[#2c2c2e] focus:border-[#6366f1] outline-none resize-none"
+                    className="w-full bg-[color:var(--ink-3)] rounded-lg px-3 py-2 text-[14px] text-white border border-[color:var(--rule)] focus:border-[#6366f1] outline-none resize-none"
                   />
                 </label>
                 <label className="block">
-                  <span className="block text-[11px] text-[#8e8e93] mb-1.5 tracking-wide">EMAIL (optional)</span>
+                  <span className="block text-[11px] text-[color:var(--body)] mb-1.5 tracking-wide">EMAIL (optional)</span>
                   <input
                     type="email"
                     value={reportEmail}
                     onChange={(e) => setReportEmail(e.target.value)}
                     placeholder="So we can follow up if needed"
-                    className="w-full bg-[#1c1c1e] rounded-lg px-3 py-2 text-[14px] text-white border border-[#2c2c2e] focus:border-[#6366f1] outline-none"
+                    className="w-full bg-[color:var(--ink-3)] rounded-lg px-3 py-2 text-[14px] text-white border border-[color:var(--rule)] focus:border-[#6366f1] outline-none"
                   />
                 </label>
                 <div className="flex justify-end gap-2 pt-1">
                   <button
                     onClick={() => setShowReport(false)}
                     disabled={reportSubmitting}
-                    className="px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] hover:text-white hover:bg-[#2c2c2e] transition-colors"
+                    className="px-4 py-2 rounded-lg text-[13px] text-[#a1a1aa] hover:text-white hover:bg-[rgba(255,255,255,0.06)] transition-colors"
                   >
                     Cancel
                   </button>
@@ -569,6 +570,12 @@ export default function CertificateDetail({ slug }: { slug: string }) {
           onSave={saveEdit}
         />
       )}
+
+      <CertificatePreview
+        certificateId={previewing ? (data?.id ?? null) : null}
+        matchedName={data?.companyName ?? data?.fileName ?? null}
+        onClose={() => setPreviewing(false)}
+      />
     </div>
   );
 }

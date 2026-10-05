@@ -32,6 +32,8 @@
  */
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { readEsgCell, readEsgText } from "@/lib/esgWorkbookStorage";
+import { readEsgGridRows } from "@/lib/esg/esgGridRows";
+import type { EsgGridSectionId } from "@/lib/esg/esgGridSections";
 import {
   SCORECARD_INDICATORS,
   type EsgScorecardPillar,
@@ -355,6 +357,32 @@ const num = (v: number | null | undefined, digits = 1): string =>
 const pct = (v: number | null | undefined): string =>
   v == null || !Number.isFinite(v) ? "—" : `${(v * 100).toFixed(1)}%`;
 
+/**
+ * Rows a register actually holds, read through the register's own reader so a
+ * banner or a repeated header cannot be counted as a record.
+ */
+function countRegisterRows(wb: EsgWorkbookData, sectionId: EsgGridSectionId): number {
+  return readEsgGridRows(wb.sections?.[sectionId]?.cells ?? {}, sectionId).length;
+}
+
+/** Σ of one numeric column across a register, or null when nothing is captured. */
+function sumRegisterColumn(
+  wb: EsgWorkbookData,
+  sectionId: EsgGridSectionId,
+  columnKey: string,
+): number | null {
+  const rows = readEsgGridRows(wb.sections?.[sectionId]?.cells ?? {}, sectionId);
+  let total = 0;
+  let seen = false;
+  for (const row of rows) {
+    const n = Number(row[columnKey]);
+    if (!Number.isFinite(n)) continue;
+    total += n;
+    seen = true;
+  }
+  return seen ? total : null;
+}
+
 function countCells(wb: EsgWorkbookData, sectionId: string, prefix?: RegExp): number {
   const cells = wb.sections?.[sectionId]?.cells ?? {};
   return Object.entries(cells).filter(([k, v]) => {
@@ -512,6 +540,33 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
   const evIfrs = addEvidence("IFRS S1/S2 climate-related disclosure readiness", "IFRS_S1_S2", "A4:F30", countCells(workbook, "ifrs"));
   const evGarp = addEvidence("ESG risk register (GARP/GRAP)", "GARP_GRAP", "A4:F30", countCells(workbook, "garp"));
   const evIso = addEvidence("ISO 14001 clause tracker", "ISO_Tracker", "A4:F40", countCells(workbook, "iso-tracker"));
+  /*
+   * The two registers that reached nothing.
+   *
+   * A section-by-section ablation — fill the workbook, remove one section,
+   * see what moves — found `s-data-ofo` and `driver-debrief` changing neither
+   * the score nor a single line of this report. Everything a client typed into
+   * the OFO training register and the per-trip driver debrief was stored and
+   * then surfaced nowhere. Asking for data and showing it back nowhere is the
+   * worst of both: the client does the work, and the report is quieter than
+   * the evidence sitting behind it.
+   *
+   * They belong here as EVIDENCE rather than as score. OFO codes are the
+   * occupational breakdown GRI 404-1 asks for, and the debrief register is the
+   * operational record behind the driver-fatigue programme.
+   */
+  const evOfo = addEvidence(
+    "Training interventions by OFO occupation code (WSP/ATR)",
+    "S_Data",
+    "A58:H71",
+    countCells(workbook, "s-data-ofo"),
+  );
+  const evDriver = addEvidence(
+    "Per-trip driver debrief — route completion and fatigue monitoring",
+    "Driver_Debrief",
+    "A3:M50",
+    countCells(workbook, "driver-debrief"),
+  );
   const evAssumptions = addEvidence("Assumptions — sector, emission factors, thresholds, targets", "Assumptions", "B6:B112", countCells(workbook, "assumptions"));
 
   /* ── metric register ─────────────────────────────────────────────────── */
@@ -772,6 +827,33 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
     countCells(workbook, "iso-tracker") || null, "clauses",
     "ISO 14001 clause tracker", "SHEQ Manager", "Count of tracked ISO 14001 clauses",
     2, [evIso], ["ISO 14001", "JSE Leadership"], "Environmental", "Leadership");
+
+  /*
+   * The OFO register, reported as learners rather than as a row count.
+   *
+   * GRI 404-1 asks for training "by employee category", and an OFO-coded
+   * register is exactly that breakdown — which a single `S_Data!B49` hours
+   * total cannot give. Counting rows would report how many interventions were
+   * TYPED; summing the learners column reports how many people were trained.
+   */
+  simple("S-OFO", "Skills development", "Training by occupation", "Learners trained, by OFO occupation code",
+    sumRegisterColumn(workbook, "s-data-ofo", "learners"), "learners",
+    "WSP/ATR training register", "Human Resources Executive",
+    "Sum of the learners column across the OFO training register (S_Data!A58:H71)",
+    3, [evOfo], ["GRI 404-1", "B-BBEE Skills Development", "WSP/ATR"], "Social");
+
+  /*
+   * The debrief register, reported as trips assessed.
+   *
+   * `S_Scorecard!C19` scores whether a driver-fatigue programme exists; this
+   * is the operational record behind that answer, and the number an assurance
+   * provider would sample from.
+   */
+  simple("S-DRV", "Health and safety", "Driver fatigue management", "Driver debriefs completed",
+    countRegisterRows(workbook, "driver-debrief") || null, "trips",
+    "Driver debrief register", "Operations Manager",
+    "Count of per-trip debriefs recorded in the period (Driver_Debrief!A3:M50)",
+    3, [evDriver], ["GRI 403-2", "RTMS"], "Social");
 
   // ── every scored indicator becomes a performance metric ─────────────────
   const pillarLabel: Record<EsgScorecardPillar, EsgMetricRecord["pillar"]> = {

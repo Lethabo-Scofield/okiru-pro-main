@@ -22,12 +22,12 @@ function IssueRow({ issue }: { issue: ReconciliationIssue }) {
   return (
     <div className="px-5 py-3" style={{ borderTop: "1px solid #141414" }}>
       <div className="flex items-start gap-2.5">
-        <span className="text-[10px] uppercase tracking-wider mt-0.5 shrink-0 rounded px-1.5 py-0.5" style={{ background: "#151515", color: "#8e8e93" }}>
+        <span className="text-[10px] uppercase tracking-wider mt-0.5 shrink-0 rounded px-1.5 py-0.5" style={{ background: "#151515", color: "var(--body)" }}>
           {issue.invariant}
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-[13px] text-[#e5e5ea] leading-snug">{issue.statement}</div>
-          {issue.action && <div className="text-[12px] text-[#8e8e93] mt-0.5">{issue.action}</div>}
+          {issue.action && <div className="text-[12px] text-[color:var(--body)] mt-0.5">{issue.action}</div>}
         </div>
       </div>
     </div>
@@ -52,8 +52,8 @@ function Group({ severity, issues }: { severity: IssueSeverity; issues: Reconcil
       >
         <Icon className="w-4 h-4 shrink-0" style={{ color: meta.color }} />
         <span className="text-[13px] font-semibold" style={{ color: meta.color }}>{meta.label}</span>
-        <span className="text-[12px] text-[#8e8e93] tabular-nums">{issues.length}</span>
-        <ChevronDown className={`w-4 h-4 ml-auto text-[#636366] transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className="text-[12px] text-[color:var(--body)] tabular-nums">{issues.length}</span>
+        <ChevronDown className={`w-4 h-4 ml-auto text-[color:var(--muted)] transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && <div>{issues.map((i) => <IssueRow key={i.id} issue={i} />)}</div>}
     </div>
@@ -76,7 +76,7 @@ export function ReconciliationReview({ reconcile }: { reconcile: ReconcileResult
       <div className="rounded-2xl px-5 py-4" style={{ background: "#0d0d0d", border: "1px solid #1e1e1e" }}>
         <div className="flex items-center gap-2.5 mb-1.5">
           <ShieldCheck className="w-4 h-4 text-violet-300" />
-          <p className="text-[11px] font-semibold text-[#636366] uppercase tracking-widest">We reconciled your documents into one company profile</p>
+          <p className="text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-widest">We reconciled your documents into one company profile</p>
         </div>
         {headline.length > 0 && (
           <div className="text-[13px] text-[#e5e5ea]">{headline.join(" · ")}</div>

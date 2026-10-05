@@ -1,0 +1,181 @@
+# Restore drill.
+#
+# Open item 4 of the security disclosure: "Restore has never been rehearsed."
+# A backup nobody has restored is a claim, not a control, and it is the claim
+# that fails at the worst possible moment — a dump that has been silently
+# writing zero-byte files for a month looks identical from the outside to one
+# that works.
+#
+# This job proves the OFF-CLUSTER copy, not the one on the backup disk. If the
+# cluster is gone, the blob container is what is left, so that is what has to be
+# tested. It:
+#
+#   1. finds the newest dated folder in the backup container,
+#   2. downloads it,
+#   3. starts a private mongod on an empty directory inside the pod,
+#   4. restores the dump into it,
+#   5. counts what came back and prints the result.
+#
+# It is read-only with respect to production: a separate pod, an emptyDir, and a
+# mongod bound to localhost inside that pod. It never connects to the production
+# database and could not write to it if it tried.
+#
+#   kubectl apply -f kubernetes/infrastructure/drills/mongodb-restore-drill.yaml
+#   kubectl logs -n okiru-pro job/mongodb-restore-drill -c verify -f
+#
+# Record the elapsed time and the age of the backup in
+# docs/security/restore-drill-log.md — those two numbers are the recovery time
+# and recovery point objectives, and without a drill they are guesses.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongodb-restore-drill
+  namespace: okiru-pro
+  labels:
+    app: mongodb-restore-drill
+    component: database
+spec:
+  backoffLimit: 1
+  # Clean itself up an hour after finishing so a drill does not sit holding one
+  # of the node's thirty pod slots.
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: mongodb-restore-drill
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: fetch
+          image: mcr.microsoft.com/azure-cli:latest
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              # Only dated dump folders. The container also holds unrelated
+              # objects at its root, and one of them sorts after every date.
+              echo "Listing backup container..."
+              LATEST=$(az storage blob list \
+                --account-name "$AZURE_STORAGE_ACCOUNT" \
+                --account-key "$AZURE_STORAGE_KEY" \
+                --container-name mongodb-backups \
+                --query "[].name" -o tsv \
+                | cut -d/ -f1 | grep -E "^20[0-9]{6}-[0-9]{6}$" | sort -u | tail -1)
+
+              if [ -z "$LATEST" ]; then
+                echo "FAIL: the backup container is empty"
+                exit 1
+              fi
+
+              echo "Newest backup folder: $LATEST"
+              echo "$LATEST" > /restore/.folder
+
+              az storage blob download-batch \
+                --account-name "$AZURE_STORAGE_ACCOUNT" \
+                --account-key "$AZURE_STORAGE_KEY" \
+                --source mongodb-backups \
+                --pattern "$LATEST/*" \
+                --destination /restore
+
+              echo "Downloaded:"
+              du -sh /restore
+              find /restore -name "*.bson.gz" | head -20
+          env:
+            - name: AZURE_STORAGE_ACCOUNT
+              valueFrom:
+                secretKeyRef:
+                  name: azure-backup-credentials
+                  key: AZURE_STORAGE_ACCOUNT
+            - name: AZURE_STORAGE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: azure-backup-credentials
+                  key: AZURE_STORAGE_KEY
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          volumeMounts:
+            - name: restore
+              mountPath: /restore
+      containers:
+        - name: verify
+          image: mongo:7.0
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              FOLDER=$(cat /restore/.folder)
+              echo "=== RESTORE DRILL ==="
+              echo "Backup folder : $FOLDER"
+              echo "Backup taken  : $(cat /restore/$FOLDER/metadata.txt 2>/dev/null | head -1)"
+              echo "Drill started : $(date -u)"
+              START=$(date +%s)
+
+              mkdir -p /data/drill
+              mongod --dbpath /data/drill --bind_ip 127.0.0.1 --port 27018 --fork \
+                --logpath /data/mongod.log --quiet
+
+              # The dump has one directory per database under the dated folder.
+              DUMP_ROOT="/restore/$FOLDER"
+              echo "Databases in the dump: $(ls "$DUMP_ROOT" | tr '\n' ' ')"
+
+              echo "mongorestore: $(command -v mongorestore || echo NOT FOUND)"
+              mongorestore --host 127.0.0.1 --port 27018 --gzip "$DUMP_ROOT" 2>&1 | tail -40
+
+              END=$(date +%s)
+              echo ""
+              echo "=== RESULT ==="
+              echo "Restore completed in $((END - START)) seconds"
+              echo ""
+
+              mongosh --quiet --host 127.0.0.1 --port 27018 --eval '
+                const out = [];
+                for (const d of db.adminCommand({ listDatabases: 1 }).databases) {
+                  if (["admin", "config", "local"].includes(d.name)) continue;
+                  const target = db.getSiblingDB(d.name);
+                  for (const name of target.getCollectionNames().sort()) {
+                    out.push({ db: d.name, collection: name, documents: target[name].countDocuments() });
+                  }
+                }
+                const total = out.reduce((a, r) => a + r.documents, 0);
+                print("collection".padEnd(38) + "documents");
+                print("-".repeat(50));
+                for (const r of out) print(r.collection.padEnd(38) + r.documents);
+                print("-".repeat(50));
+                print("collections".padEnd(38) + out.length);
+                print("documents".padEnd(38) + total);
+                if (out.length === 0 || total === 0) {
+                  print("");
+                  print("FAIL: the restore produced no data.");
+                  quit(1);
+                }
+              '
+              echo ""
+              echo "Drill finished: $(date -u)"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1536Mi
+          volumeMounts:
+            - name: restore
+              mountPath: /restore
+            - name: data
+              mountPath: /data
+      volumes:
+        # Ephemeral on purpose. The drill must not be able to leave anything
+        # behind, and must not touch the production or backup volumes.
+        - name: restore
+          emptyDir:
+            sizeLimit: 4Gi
+        - name: data
+          emptyDir:
+            sizeLimit: 8Gi

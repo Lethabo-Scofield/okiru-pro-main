@@ -139,6 +139,110 @@ export function headcountCellsFromSheetRefs(raw: Cells): Cells {
 }
 
 /**
+ * `Cover` — the one section the app addresses by NAME rather than by cell.
+ *
+ * `COVER_FIELDS` keys its fields `entity`, `period`, `boundary`,
+ * `baselineYear`, `netZeroTargetYear`, `sector`; there is no `B4` about it. The
+ * import, meanwhile, stores every sheet by A1 address, so a Cover sheet arrived
+ * as `{A1:"Entity", B1:"Acme (Pty) Ltd", …}` and not one of those keys was ever
+ * produced. Company & Reporting Setup was therefore UNFILLABLE from Excel: the
+ * import reported success, the sidebar counted the cells, and the section
+ * stayed blank. The organisational boundary is a mandatory GHG Protocol
+ * disclosure, so that is not a cosmetic gap.
+ *
+ * The bridge is the label. Each row's first text cell is matched against the
+ * field labels (case and punctuation ignored) and the next non-empty cell on
+ * that row becomes the value. That reads the generated template and a client's
+ * own cover sheet alike, because writing the label beside the value is the only
+ * thing a cover sheet ever does.
+ */
+const COVER_LABEL_TO_KEY: ReadonlyArray<{ key: string; labels: readonly string[] }> = [
+  { key: "entity", labels: ["entity", "entity name", "company", "company name", "legal entity"] },
+  { key: "period", labels: ["reporting period", "period", "financial year", "reporting year"] },
+  { key: "boundary", labels: ["organisational boundary", "organizational boundary", "boundary"] },
+  { key: "baselineYear", labels: ["baseline year", "base year"] },
+  {
+    key: "netZeroTargetYear",
+    labels: ["net zero target year", "net zero year", "net zero target"],
+  },
+  { key: "sector", labels: ["sector", "industry", "industry sector"] },
+];
+
+/** Case, punctuation and spacing all ignored: "Net-Zero  Target Year" → "net zero target year". */
+function normaliseLabel(raw: unknown): string {
+  return typeof raw === "string"
+    ? raw.replace(/[^a-z0-9]+/gi, " ").trim().toLowerCase()
+    : "";
+}
+
+/**
+ * `S_Data!_hsTracking` — "does the company record H&S incidents?".
+ *
+ * Also a named key with no cell, and also scored: `social.ts` reads it to tell
+ * a clean year apart from an untracked one (expert Q14), which decides four
+ * points and whether `d20` is excluded at all. Same bridge, same reason.
+ */
+const S_DATA_LABEL_TO_KEY: ReadonlyArray<{ key: string; labels: readonly string[] }> = [
+  {
+    key: "_hsTracking",
+    labels: [
+      "does the company record health and safety incidents",
+      "health and safety incidents recorded",
+      "h s incident register in place",
+      "incident register in place",
+    ],
+  },
+];
+
+const LABEL_COLUMN_SCAN = ["A", "B", "C", "D", "E", "F"] as const;
+
+/**
+ * Values for named (cell-less) fields, read from `label | value` rows.
+ *
+ * Scans each row left to right for a recognised label and takes the next
+ * non-empty cell on that row as the value. A key already present in `raw` is
+ * never overwritten — a typed value always beats a label match.
+ */
+function namedFieldsFromSheetLabels(
+  raw: Cells,
+  table: ReadonlyArray<{ key: string; labels: readonly string[] }>,
+): Cells {
+  const out: Cells = {};
+  const rows = new Set<number>();
+  for (const ref of Object.keys(raw)) {
+    const m = /^[A-Z]+([1-9]\d*)$/.exec(ref);
+    if (m) rows.add(Number(m[1]));
+  }
+
+  for (const row of rows) {
+    for (let i = 0; i < LABEL_COLUMN_SCAN.length; i++) {
+      const label = normaliseLabel(raw[`${LABEL_COLUMN_SCAN[i]}${row}`]);
+      if (!label) continue;
+      const field = table.find((f) => f.labels.includes(label));
+      // The row's first text cell is not a field label — this row is prose.
+      if (!field) break;
+      if (raw[field.key] !== undefined || out[field.key] !== undefined) break;
+      for (let j = i + 1; j < LABEL_COLUMN_SCAN.length; j++) {
+        const value = raw[`${LABEL_COLUMN_SCAN[j]}${row}`];
+        if (value === undefined || value === null || String(value).trim() === "") continue;
+        out[field.key] = value;
+        break;
+      }
+      break;
+    }
+  }
+  return out;
+}
+
+export function coverCellsFromSheetRefs(raw: Cells): Cells {
+  return namedFieldsFromSheetLabels(raw, COVER_LABEL_TO_KEY);
+}
+
+export function sDataNamedCellsFromSheetRefs(raw: Cells): Cells {
+  return namedFieldsFromSheetLabels(raw, S_DATA_LABEL_TO_KEY);
+}
+
+/**
  * One section's cells with sheet-address data made visible to the app.
  *
  * Stored cells always win — this only ADDS the app-address spelling of values
@@ -150,7 +254,14 @@ export function hydrateEsgSectionCells(sectionId: string, cells: Cells): Cells {
     return Object.keys(translated).length ? { ...translated, ...cells } : cells;
   }
   if (sectionId === "s-data") {
-    const translated = headcountCellsFromSheetRefs(cells);
+    const translated = {
+      ...headcountCellsFromSheetRefs(cells),
+      ...sDataNamedCellsFromSheetRefs(cells),
+    };
+    return Object.keys(translated).length ? { ...translated, ...cells } : cells;
+  }
+  if (sectionId === "company-reporting-setup") {
+    const translated = coverCellsFromSheetRefs(cells);
     return Object.keys(translated).length ? { ...translated, ...cells } : cells;
   }
   return cells;
@@ -163,7 +274,7 @@ export function hydrateEsgWorkbookSections<
   const sections = workbook.sections ?? {};
   let changed = false;
   const next: Record<string, { cells?: Cells } | undefined> = { ...sections };
-  for (const id of ["e-data", "s-data"]) {
+  for (const id of ["e-data", "s-data", "company-reporting-setup"]) {
     const cells = sections[id]?.cells;
     if (!cells) continue;
     const hydrated = hydrateEsgSectionCells(id, cells);
