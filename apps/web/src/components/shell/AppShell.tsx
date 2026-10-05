@@ -32,12 +32,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const crumbs = buildCrumbs(location);
   const onHub = crumbs.length === 1;
+  const isCreateScorecard =
+    location.startsWith('/bbbee/new') || location.startsWith('/create-scorecard');
   const display = user?.fullName || user?.username || 'Account';
   const initial = display.charAt(0).toUpperCase();
 
   return (
     <div
-      className="okiru-app"
+      className={`okiru-app${isCreateScorecard ? ' okiru-create-scorecard-shell' : ''}`}
       style={
         onHub
           ? {
