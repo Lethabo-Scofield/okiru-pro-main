@@ -21,32 +21,35 @@ const PRODUCT_CSS = `
   }
 
   .okiru-product .ok-hero { min-height: 0; display: block; padding: 132px 0 52px; align-items: initial; }
-  .okiru-product .ok-hero-bg { overflow: hidden; }
+  .okiru-product .ok-hero-bg {
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(250,250,250,0.9) 55%, #ffffff 100%);
+  }
   .okiru-product .ok-hero-waves {
     position: absolute;
-    inset: auto -12% -34% 34%;
-    height: 78%;
-    z-index: 0;
-    opacity: 0.95;
+    inset: 0;
+    z-index: 1;
+    opacity: 1;
     pointer-events: none;
   }
   .okiru-product .ok-hero-wave {
     position: absolute;
-    left: 0;
-    right: 0;
-    height: 38%;
-    border-radius: 999px 999px 0 0 / 100% 100% 0 0;
-    transform: rotate(-7deg);
-    border-top: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+    right: -18%;
+    width: min(1120px, 92vw);
+    height: 230px;
+    border-radius: 999px;
+    transform: rotate(-8deg);
+    border: 1px solid var(--wave-border);
     background:
-      linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 18%, transparent) 42%, color-mix(in srgb, var(--accent) 7%, transparent) 100%);
+      linear-gradient(90deg, transparent 0%, var(--wave-strong) 34%, var(--wave-soft) 74%, transparent 100%);
     box-shadow:
-      0 -18px 46px color-mix(in srgb, var(--accent) 12%, transparent),
-      inset 0 1px 0 rgba(255,255,255,0.45);
+      0 28px 80px var(--wave-shadow),
+      inset 0 1px 0 rgba(255,255,255,0.64);
   }
-  .okiru-product .ok-hero-wave:nth-child(1) { top: 6%; transform: rotate(-8deg) translateX(2%); opacity: 0.72; }
-  .okiru-product .ok-hero-wave:nth-child(2) { top: 24%; transform: rotate(-5deg) translateX(-5%); opacity: 0.52; }
-  .okiru-product .ok-hero-wave:nth-child(3) { top: 43%; transform: rotate(-9deg) translateX(7%); opacity: 0.34; }
+  .okiru-product .ok-hero-wave:nth-child(1) { top: 34px; transform: rotate(-8deg) translateX(2%); opacity: 0.9; }
+  .okiru-product .ok-hero-wave:nth-child(2) { top: 142px; transform: rotate(-5deg) translateX(-9%); opacity: 0.64; }
+  .okiru-product .ok-hero-wave:nth-child(3) { top: 254px; transform: rotate(-9deg) translateX(7%); opacity: 0.42; }
 
   /* ── FEATURE CARDS (icon-driven, distinct per tab) ── */
   .okiru-product .ok-feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
@@ -86,17 +89,16 @@ const PRODUCT_CSS = `
     --grad-text: linear-gradient(100deg, #a855f7 0%, #c084fc 48%, #fb923c 100%);
     --grad-h:    linear-gradient(90deg, #9333ea, #f97316);
     --accent:    #a855f7;
+    --wave-strong: rgba(147,51,234,0.30);
+    --wave-soft: rgba(168,85,247,0.16);
+    --wave-border: rgba(147,51,234,0.32);
+    --wave-shadow: rgba(147,51,234,0.12);
   }
   .okiru-purple .ok-hero-tag-dot { background: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,0.7); }
   .okiru-purple .ok-hero-glow   { background: radial-gradient(circle, rgba(147,51,234,0.14) 0%, rgba(168,85,247,0.06) 42%, transparent 70%); }
   .okiru-purple .ok-hero-glow-2 { background: radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 65%); }
   .okiru-purple .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(147,51,234,0.12) 14deg, rgba(168,85,247,0.09) 22deg, rgba(249,115,22,0.05) 30deg, transparent 40deg); }
   .okiru-purple .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(249,115,22,0.05) 6deg, rgba(147,51,234,0.09) 14deg, rgba(168,85,247,0.05) 20deg, transparent 30deg); }
-  .okiru-purple .ok-hero-wave {
-    background:
-      linear-gradient(90deg, transparent 0%, rgba(147,51,234,0.19) 34%, rgba(168,85,247,0.11) 74%, transparent 100%);
-    border-top-color: rgba(147,51,234,0.35);
-  }
   .okiru-purple .ok-service:hover { background: rgba(147,51,234,0.06); }
   /* B-BBEE: outlined rounded-square icon tile, left-aligned, divider footer */
   .okiru-purple .ok-feat-icon { width: 48px; height: 48px; border-radius: 13px; border: 1px solid rgba(168,85,247,0.38); background: rgba(147,51,234,0.10); }
@@ -113,17 +115,16 @@ const PRODUCT_CSS = `
     --grad-text: linear-gradient(100deg, #3b82f6 0%, #60a5fa 48%, #a855f7 100%);
     --grad-h:    linear-gradient(90deg, #2563eb, #9333ea);
     --accent:    #3b82f6;
+    --wave-strong: rgba(37,99,235,0.28);
+    --wave-soft: rgba(59,130,246,0.15);
+    --wave-border: rgba(37,99,235,0.30);
+    --wave-shadow: rgba(37,99,235,0.12);
   }
   .okiru-blue .ok-hero-tag-dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.7); }
   .okiru-blue .ok-hero-glow   { background: radial-gradient(circle, rgba(37,99,235,0.15) 0%, rgba(59,130,246,0.06) 42%, transparent 70%); }
   .okiru-blue .ok-hero-glow-2 { background: radial-gradient(circle, rgba(147,51,234,0.06) 0%, transparent 65%); }
   .okiru-blue .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(37,99,235,0.12) 14deg, rgba(59,130,246,0.09) 22deg, rgba(147,51,234,0.05) 30deg, transparent 40deg); }
   .okiru-blue .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(147,51,234,0.05) 6deg, rgba(37,99,235,0.09) 14deg, rgba(59,130,246,0.05) 20deg, transparent 30deg); }
-  .okiru-blue .ok-hero-wave {
-    background:
-      linear-gradient(90deg, transparent 0%, rgba(37,99,235,0.18) 34%, rgba(59,130,246,0.10) 74%, transparent 100%);
-    border-top-color: rgba(37,99,235,0.34);
-  }
   .okiru-blue .ok-service:hover { background: rgba(37,99,235,0.06); }
   /* ESG: circular icon, centred instrument layout */
   .okiru-blue .ok-feat-card { align-items: center; text-align: center; border-radius: 14px; padding: 30px 26px; }
@@ -142,17 +143,16 @@ const PRODUCT_CSS = `
     --grad-text: linear-gradient(100deg, #22c55e 0%, #4ade80 48%, #38bdf8 100%);
     --grad-h:    linear-gradient(90deg, #16a34a, #0ea5e9);
     --accent:    #22c55e;
+    --wave-strong: rgba(22,163,74,0.28);
+    --wave-soft: rgba(34,197,94,0.16);
+    --wave-border: rgba(22,163,74,0.30);
+    --wave-shadow: rgba(22,163,74,0.12);
   }
   .okiru-green .ok-hero-tag-dot { background: #22c55e; box-shadow: 0 0 10px rgba(34,197,94,0.7); }
   .okiru-green .ok-hero-glow   { background: radial-gradient(circle, rgba(22,163,74,0.15) 0%, rgba(34,197,94,0.06) 42%, transparent 70%); }
   .okiru-green .ok-hero-glow-2 { background: radial-gradient(circle, rgba(14,165,233,0.06) 0%, transparent 65%); }
   .okiru-green .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(22,163,74,0.12) 14deg, rgba(34,197,94,0.09) 22deg, rgba(14,165,233,0.05) 30deg, transparent 40deg); }
   .okiru-green .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(14,165,233,0.05) 6deg, rgba(22,163,74,0.09) 14deg, rgba(34,197,94,0.05) 20deg, transparent 30deg); }
-  .okiru-green .ok-hero-wave {
-    background:
-      linear-gradient(90deg, transparent 0%, rgba(22,163,74,0.18) 34%, rgba(34,197,94,0.11) 74%, transparent 100%);
-    border-top-color: rgba(22,163,74,0.34);
-  }
   .okiru-green .ok-service:hover { background: rgba(22,163,74,0.06); }
   /* ESG: circular icon, centred instrument layout */
   .okiru-green .ok-feat-card { align-items: center; text-align: center; border-radius: 14px; padding: 30px 26px; }
@@ -171,17 +171,16 @@ const PRODUCT_CSS = `
     --grad-text: linear-gradient(100deg, #fb923c 0%, #fdba74 45%, #3b82f6 100%);
     --grad-h:    linear-gradient(90deg, #f97316, #2563eb);
     --accent:    #fb923c;
+    --wave-strong: rgba(249,115,22,0.30);
+    --wave-soft: rgba(251,146,60,0.17);
+    --wave-border: rgba(249,115,22,0.32);
+    --wave-shadow: rgba(249,115,22,0.12);
   }
   .okiru-orange .ok-hero-tag-dot { background: #fb923c; box-shadow: 0 0 10px rgba(251,146,60,0.7); }
   .okiru-orange .ok-hero-glow   { background: radial-gradient(circle, rgba(249,115,22,0.14) 0%, rgba(251,146,60,0.06) 42%, transparent 70%); }
   .okiru-orange .ok-hero-glow-2 { background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 65%); }
   .okiru-orange .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(249,115,22,0.11) 14deg, rgba(251,146,60,0.08) 22deg, rgba(37,99,235,0.05) 30deg, transparent 40deg); }
   .okiru-orange .ok-hero-beam-2 { background: conic-gradient(from 200deg at 90% 18%, transparent 0deg, rgba(37,99,235,0.05) 6deg, rgba(249,115,22,0.08) 14deg, rgba(251,146,60,0.05) 20deg, transparent 30deg); }
-  .okiru-orange .ok-hero-wave {
-    background:
-      linear-gradient(90deg, transparent 0%, rgba(249,115,22,0.18) 34%, rgba(251,146,60,0.11) 74%, transparent 100%);
-    border-top-color: rgba(249,115,22,0.34);
-  }
   .okiru-orange .ok-service:hover { background: rgba(249,115,22,0.06); }
   /* Certificate: soft-filled card, gradient icon chip in the top-right */
   .okiru-orange .ok-feat-card { border-radius: 18px; padding-top: 30px; background: linear-gradient(160deg, rgba(249,115,22,0.06) 0%, rgba(37,99,235,0.02) 100%); }
@@ -216,10 +215,16 @@ const PRODUCT_CSS = `
   }
   @media (max-width: 760px) {
     .okiru-product .ok-hero-waves {
-      inset: auto -48% -28% 8%;
-      height: 56%;
       opacity: 0.72;
     }
+    .okiru-product .ok-hero-wave {
+      right: -58%;
+      width: 760px;
+      height: 168px;
+    }
+    .okiru-product .ok-hero-wave:nth-child(1) { top: 66px; }
+    .okiru-product .ok-hero-wave:nth-child(2) { top: 168px; }
+    .okiru-product .ok-hero-wave:nth-child(3) { top: 270px; }
   }
 `;
 

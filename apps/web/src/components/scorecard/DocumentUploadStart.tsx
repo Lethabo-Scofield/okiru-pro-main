@@ -1567,9 +1567,73 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
 
 
   return (
-    <div data-testid="document-upload-start">
+    <div className="scorecard-create-light" data-testid="document-upload-start">
       {/* Scoped animation keyframes */}
       <style>{`
+        .scorecard-create-light {
+          --ink: #ffffff;
+          --ink-2: rgba(255,255,255,0.86);
+          --ink-3: #f4f4f5;
+          --body: #52525b;
+          --muted: #71717a;
+          --rule: rgba(24,24,27,0.10);
+          --rule-strong: rgba(24,24,27,0.18);
+          color: #18181b;
+        }
+        .scorecard-create-light [class~="text-white"]:not([class*="bg-"]) {
+          color: #18181b !important;
+        }
+        .scorecard-create-light [class~="text-[#e5e5ea]"] {
+          color: #27272a !important;
+        }
+        .scorecard-create-light [class*="text-emerald-200"] {
+          color: #047857 !important;
+        }
+        .scorecard-create-light [class*="text-amber-200"] {
+          color: #b45309 !important;
+        }
+        .scorecard-create-light [class*="border-white/"],
+        .scorecard-create-light [class*="border-white\\["] {
+          border-color: rgba(24,24,27,0.10) !important;
+        }
+        .scorecard-create-light [class*="bg-white/"],
+        .scorecard-create-light [class*="bg-white\\["] {
+          background-color: rgba(24,24,27,0.035) !important;
+        }
+        .scorecard-create-light [class*="bg-[#0"],
+        .scorecard-create-light [class*="bg-[#1"],
+        .scorecard-create-light [class*="bg-[color:var(--ink"] {
+          background-color: rgba(255,255,255,0.86) !important;
+        }
+        .scorecard-create-light input,
+        .scorecard-create-light select,
+        .scorecard-create-light textarea {
+          color: #18181b !important;
+          background: #ffffff !important;
+          border-color: rgba(24,24,27,0.14) !important;
+        }
+        .scorecard-create-light input::placeholder,
+        .scorecard-create-light textarea::placeholder {
+          color: #a1a1aa !important;
+        }
+        .scorecard-create-light button[class*="bg-white"],
+        .scorecard-create-light a[class*="bg-white"] {
+          background-color: #18181b !important;
+          color: #ffffff !important;
+          border-color: #18181b !important;
+        }
+        .scorecard-create-light button[class*="bg-white"]:hover,
+        .scorecard-create-light a[class*="bg-white"]:hover {
+          background-color: #000000 !important;
+        }
+        .scorecard-create-light [class*="bg-emerald-500"],
+        .scorecard-create-light [class*="bg-violet-"] {
+          background-color: rgba(124,58,237,0.08) !important;
+        }
+        .scorecard-create-light [class*="bg-[#1d1a14]"] {
+          background-color: #fffbeb !important;
+          border-color: rgba(217,119,6,0.22) !important;
+        }
         @keyframes dusFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes dusShimmer { from { transform: translateX(-100%); } to { transform: translateX(220%); } }
         @keyframes dusPulseRing { 0% { box-shadow: 0 0 0 0 rgba(167,139,250,0.28); } 70% { box-shadow: 0 0 0 14px rgba(167,139,250,0); } 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); } }

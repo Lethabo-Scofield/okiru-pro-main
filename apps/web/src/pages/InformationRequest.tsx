@@ -95,6 +95,108 @@ function buildSectionSummary(sections: WorkbookSectionsInput) {
     }))
     .filter((s) => s.rowCount > 0 || s.fieldCount > 0);
 }
+
+const CREATE_SCORECARD_LIGHT_CSS = `
+  .bbbee-create-light {
+    --ink: #ffffff;
+    --ink-2: rgba(255,255,255,0.9);
+    --ink-3: rgba(255,255,255,0.82);
+    --body: #52525b;
+    --muted: #71717a;
+    --rule: rgba(24,24,27,0.1);
+    --rule-strong: rgba(24,24,27,0.18);
+    color: #18181b;
+  }
+  .bbbee-create-light [class~="text-white"]:not([class*="bg-"]) {
+    color: #18181b !important;
+  }
+  .bbbee-create-light [class~="text-[#f2f2f7]"],
+  .bbbee-create-light [class~="text-[#e5e5ea]"] {
+    color: #27272a !important;
+  }
+  .bbbee-create-light [class*="text-amber-100"],
+  .bbbee-create-light [class*="text-amber-200"] {
+    color: #92400e !important;
+  }
+  .bbbee-create-light [class*="text-emerald-200"] {
+    color: #047857 !important;
+  }
+  .bbbee-create-light [class*="border-white/"],
+  .bbbee-create-light [class*="border-white\\["] {
+    border-color: rgba(24,24,27,0.1) !important;
+  }
+  .bbbee-create-light [class*="bg-white/"],
+  .bbbee-create-light [class*="bg-white\\["] {
+    background-color: rgba(24,24,27,0.035) !important;
+  }
+  .bbbee-create-light [class*="bg-[#0"],
+  .bbbee-create-light [class*="bg-[#1"],
+  .bbbee-create-light [class*="bg-[color:var(--ink"] {
+    background-color: rgba(255,255,255,0.88) !important;
+  }
+  .bbbee-create-light [class*="hover:bg-[#222225]"]:hover,
+  .bbbee-create-light [class*="hover:bg-[rgba(255,255,255"]:hover {
+    background-color: #f4f4f5 !important;
+  }
+  .bbbee-create-light [class*="hover:text-white"]:hover {
+    color: #18181b !important;
+  }
+  .bbbee-create-light input,
+  .bbbee-create-light select,
+  .bbbee-create-light textarea {
+    background: #ffffff !important;
+    border-color: rgba(24,24,27,0.14) !important;
+    color: #18181b !important;
+  }
+  .bbbee-create-light input::placeholder,
+  .bbbee-create-light textarea::placeholder {
+    color: #a1a1aa !important;
+  }
+  .bbbee-create-light option {
+    background: #ffffff !important;
+    color: #18181b !important;
+  }
+  .bbbee-create-light button[class*="bg-white"],
+  .bbbee-create-light a[class*="bg-white"] {
+    background-color: #18181b !important;
+    border-color: #18181b !important;
+    color: #ffffff !important;
+  }
+  .bbbee-create-light button[class*="bg-white"]:hover,
+  .bbbee-create-light a[class*="bg-white"]:hover {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+  }
+  .bbbee-create-light .bg-violet-500,
+  .bbbee-create-light [class*="bg-violet-"] {
+    background-color: #18181b !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+  .bbbee-create-light .bg-violet-500:hover,
+  .bbbee-create-light [class*="hover:bg-violet-"]:hover {
+    background-color: #000000 !important;
+  }
+  .bbbee-create-light [class*="bg-[#107C41]"] {
+    background-color: #107C41 !important;
+    color: #ffffff !important;
+  }
+  .bbbee-create-light [class*="hover:bg-[#185C37]"]:hover {
+    background-color: #185C37 !important;
+    color: #ffffff !important;
+  }
+  .bbbee-create-light [class*="bg-amber-500"] {
+    background-color: #f59e0b !important;
+    color: #18181b !important;
+  }
+  .bbbee-create-light [class*="shadow-[0_24px_80px"],
+  .bbbee-create-light [class*="shadow-[0_22px_70px"] {
+    box-shadow: 0 24px 70px rgba(24,24,27,0.08) !important;
+  }
+  .bbbee-create-light [class*="ring-white/"] {
+    --tw-ring-color: rgba(24,24,27,0.1) !important;
+  }
+`;
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
 type Workbook = {
   companyId: string;
@@ -2692,7 +2794,8 @@ export default function InformationRequest() {
   };
 
   return (
-    <div className="text-white">
+    <div className={isCreateScorecardFlow ? "bbbee-create-light text-zinc-900" : "text-white"}>
+      {isCreateScorecardFlow && <style>{CREATE_SCORECARD_LIGHT_CSS}</style>}
 
       <main className={isCreateScorecardFlow && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
         {/* The flow states its own step ("Add your documents"). A second,
