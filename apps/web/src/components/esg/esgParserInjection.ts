@@ -284,6 +284,13 @@ export interface EsgInjectionResult {
   conflicts: EsgValueConflict[];
   /** placed + unplaced + conflicting values. The reconciliation invariant. */
   valuesRead: number;
+  /**
+   * Figures actually written to the workbook — one per cell. A dashboard is
+   * ONE reading holding hundreds of figures, so `placed` (readings) said "32
+   * placed" for a read that filled 1,600 cells; this is the number to show.
+   * Absent on a result restored from before it existed.
+   */
+  figuresPlaced?: number;
 }
 
 /**
@@ -397,6 +404,7 @@ export function applyEsgParserResult(
       unplaced: readings,
       conflicts: [],
       valuesRead: readings.length,
+      figuresPlaced: 0,
     };
   }
 
@@ -418,7 +426,10 @@ export function applyEsgParserResult(
   const unplaced: EsgUnplacedValue[] = [];
 
   for (const reading of readings) {
-    const outcome = mapped.outcomes[reading.field];
+    // A reading whose fate is known for its own document (a bill's figure, the
+    // site and period that placed it) answers for itself; the rest share their
+    // field's fate.
+    const outcome = mapped.sourceOutcomes?.[reading.field]?.[reading.sourceFile] ?? mapped.outcomes[reading.field];
 
     if (outcome?.status === "conflict") continue; // accounted for by `conflicts`
 
@@ -461,7 +472,23 @@ export function applyEsgParserResult(
       candidates: conflict.candidates,
     })),
     valuesRead: readings.length,
+    figuresPlaced: esgFigureCount(mapped.patches),
   };
+}
+
+/**
+ * Figures a patch set writes: its cells, less the furniture — register meta
+ * (`_row_count`) and the sites and months recorded with the figures.
+ */
+export function esgFigureCount(patches: EsgSectionPatches): number {
+  return Object.entries(patches).reduce(
+    (sum, [sectionId, section]) =>
+      sum +
+      Object.keys(section?.cells ?? {}).filter(
+        (ref) => !ref.startsWith("_") && (sectionId !== "e-data" || !isEsgAxisCell(ref)),
+      ).length,
+    0,
+  );
 }
 
 /** How many cells a patch set would write. Used for honest UI counts. */

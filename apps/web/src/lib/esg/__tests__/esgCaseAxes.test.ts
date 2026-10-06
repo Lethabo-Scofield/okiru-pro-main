@@ -140,6 +140,7 @@ describe("applyEsgParserResult — a client that is not Acme Group", () => {
     expect(injection.patches["e-data"].cells).toMatchObject({ s2_C15: 100, s2_E14: 200, eSites: "Midrand\nRosebank" });
     // The axes are settings, not figures the user is told were filled.
     expect(esgPatchCellCount(injection.patches)).toBe(2);
+    expect(injection.figuresPlaced).toBe(2);
   });
 
   it("a company-wide workbook adds different sites' bills into its one row", () => {
