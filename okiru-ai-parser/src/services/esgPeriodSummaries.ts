@@ -23,9 +23,17 @@
  *   - The CODE adds the rows up. It stops at the sheet's own total row and
  *     checks against it — the rows are the evidence, and a total that does not
  *     match them is reported, never used.
+ *
+ * THE VEHICLES ARE KEPT TOO. A depot's fuel report is also the one document
+ * that states each vehicle's month — its litres beside the kilometres it drove
+ * — which is what emissions vehicle by vehicle are calculated from. The same
+ * rows that make the depot's figure become fleet rows, each stamped with the
+ * month it covers, so a vehicle's kilometres and litres are always one
+ * document's month and never paired with another's.
  */
 import { createLogger } from '../logger.js';
 import type { DocumentExtraction, ExtractionModel } from './aiExtraction.js';
+import { ROW_PERIOD_KEY } from './entityResolution.js';
 import { ESG_MONTHLY_MEASURES, type EsgMonthlyMeasure } from './esgMonthlyTables.js';
 import { decisionFingerprint, rememberDecision } from './semanticDecisionCache.js';
 
@@ -48,6 +56,12 @@ export interface PeriodSummaryReading {
   quantityColumn: string | null;
   measure: EsgMonthlyMeasure | 'none';
   unit: string;
+  /** When the rows are vehicles: the kilometres each drove in the period — never an odometer reading. */
+  distanceColumn: string | null;
+  /** When the rows are vehicles: each one's litres-per-100-km norm or target, if the sheet states one. */
+  normColumn: string | null;
+  /** When the rows are vehicles: the column naming each one's make or model. */
+  modelColumn: string | null;
 }
 
 const SYSTEM = [
@@ -57,7 +71,11 @@ const SYSTEM = [
   'ONE vehicle or meter ("one": that vehicle\'s own log, rows are dates or transactions). If it is one',
   'period, give the site and the month as the title or dates state them, the column that names each row,',
   'the column holding the quantity (the TOTAL litres per row when there are internal and external',
-  'columns), and which measure that is, from the list given. Reply with JSON only.',
+  'columns), and which measure that is, from the list given. When the rows are vehicles, also give the',
+  'column of kilometres each drove in the period (NOT an odometer or closing reading), the column of its',
+  'MEASURED litres per 100 km if the sheet works one out (its litres over its kilometres), SEPARATELY the',
+  'column of its litres-per-100-km NORM or target if the sheet has one, and the column naming its make or',
+  'model; null for any the sheet does not have. Reply with JSON only.',
 ].join(' ');
 
 /** Text of the first rows of a sheet, as the person opening it would see them. */
@@ -98,11 +116,15 @@ async function readSheet(
     'MEASURES:',
     ...Object.entries(ESG_MONTHLY_MEASURES).map(([key, spec]) => `  ${key}: ${spec.what} (stored in ${spec.unit})`),
     'Reply: {"single_period":boolean,"covers":"site"|"one"|"other","site":string|null,"period_month":"YYYY-MM"|null,',
-    '"label_column":string|null,"quantity_column":string|null,"measure":"<measure or none>","unit":"L"|"kL"|"kWh"|"kg"|"km"|"other"}',
+    '"label_column":string|null,"quantity_column":string|null,"measure":"<measure or none>","unit":"L"|"kL"|"kWh"|"kg"|"km"|"other",',
+    '"distance_column":string|null,"rate_column":string|null,"norm_column":string|null,"model_column":string|null}',
   ].join('\n');
 
+  // "vehicles": a decision remembered from before the vehicle columns were
+  // asked for has none of them, and is not reused.
   const fingerprint = decisionFingerprint([
     'esgperiod',
+    'vehicles-2',
     input.sheetName ?? '',
     topOfSheet(input.matrix.slice(0, 4), 4),
     ...input.headers,
@@ -124,6 +146,10 @@ async function readSheet(
         quantityColumn: column(json.quantity_column),
         measure: (measure in ESG_MONTHLY_MEASURES ? measure : 'none') as PeriodSummaryReading['measure'],
         unit: String(json.unit ?? 'other'),
+        distanceColumn: column(json.distance_column),
+        // The measured rate is asked for only so it is not given as the norm.
+        normColumn: column(json.norm_column) === column(json.rate_column) ? null : column(json.norm_column),
+        modelColumn: column(json.model_column),
       };
     });
     return decision.value;
@@ -154,8 +180,17 @@ export function sumPeriodRows(
   labelColumn: string,
   quantityColumn: string,
 ): { sum: number; counted: number; statedTotal: number | null } {
-  let sum = 0;
-  let counted = 0;
+  const { counted, statedTotal } = walkPeriodRows(rows, labelColumn, quantityColumn);
+  return { sum: counted.reduce((total, row) => total + row.quantity, 0), counted: counted.length, statedTotal };
+}
+
+/** The rows a period's figure is made of, and the sheet's stated total, by the rule above. */
+function walkPeriodRows<T extends Record<string, unknown>>(
+  rows: T[],
+  labelColumn: string,
+  quantityColumn: string,
+): { counted: Array<{ row: T; label: string; quantity: number }>; statedTotal: number | null } {
+  const counted: Array<{ row: T; label: string; quantity: number }> = [];
   let statedTotal: number | null = null;
   for (const row of rows) {
     const quantity = asNumber(row[quantityColumn]);
@@ -163,15 +198,14 @@ export function sumPeriodRows(
     const isTotal = !label || /^(grand\s+)?(sub-?)?totals?\b/i.test(label);
     if (isTotal) {
       if (quantity === null) continue;
-      if (counted > 0) return { sum, counted, statedTotal: quantity };
+      if (counted.length > 0) return { counted, statedTotal: quantity };
       statedTotal = quantity;
       continue;
     }
     if (quantity === null) continue;
-    sum += quantity;
-    counted += 1;
+    counted.push({ row, label, quantity });
   }
-  return { sum, counted, statedTotal };
+  return { counted, statedTotal };
 }
 
 /**
@@ -231,6 +265,122 @@ export function sumPeriodMatrix(
   return sumPeriodRows(rows, labelColumn, quantityColumn);
 }
 
+/** A row label that names a vehicle: a registration or fleet number, letters and digits. */
+function namesAVehicle(label: string): boolean {
+  const compact = label.replace(/[\s-]/g, '');
+  return /^[a-z0-9]{4,14}$/i.test(compact) && /[a-z]/i.test(compact) && /\d/.test(compact);
+}
+
+/**
+ * The vehicle a sheet is kept for — one tab per vehicle in a depot's fuel
+ * report, its fills listed by date with no registration on any row. Read from
+ * the tab's NAME, and only when its title rows repeat it: "Sheet2" or "Detail3"
+ * also mix letters and digits, but no title names them.
+ */
+export function vehicleOfSheet(sheetName: string | undefined, matrix: unknown[][] | undefined): string | null {
+  if (!sheetName || !matrix || !namesAVehicle(sheetName.trim())) return null;
+  const compact = (text: string) => text.replace(/[\s-]/g, '').toUpperCase();
+  const name = compact(sheetName);
+  const titled = matrix.slice(0, 6).some((row) => row.some((cell) => typeof cell === 'string' && compact(cell) === name));
+  return titled ? sheetName.trim() : null;
+}
+
+/**
+ * A vehicle's own fuel log, its fills each made that vehicle's. The log's
+ * "Totals" line is the sum of those fills, not one more, and is left as it is.
+ */
+export function fillsOfVehicle(rows: unknown[], vehicle: string): unknown[] {
+  const isTotalLine = (row: Record<string, unknown>) =>
+    Object.values(row).some((cell) => typeof cell === 'string' && /^(grand\s+)?(sub-?)?totals?\b/i.test(cell.trim()));
+  return rows.map((row) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+    const record = row as Record<string, unknown>;
+    return record.vehicle_registration || isTotalLine(record) ? row : { ...record, vehicle_registration: vehicle };
+  });
+}
+
+/** Beyond what one vehicle drives in a month: an odometer reading, not the month's distance. */
+const MAX_MONTH_KM = 30_000;
+
+/**
+ * The vehicles behind a depot's month, from the RAW cells and over exactly the
+ * rows the depot's figure adds up: each one's registration and litres (or
+ * kilometres, for a distance report), and — where the sheet states them — the
+ * kilometres it drove, its norm and its model. Each row is stamped with the
+ * month. A distance column that holds odometer readings is not read, and said.
+ */
+export function periodVehicleRows(
+  matrix: unknown[][],
+  reading: PeriodSummaryReading,
+): { rows: Array<Record<string, unknown>>; notes: string[] } {
+  const none = { rows: [], notes: [] };
+  const fuel = reading.measure === 'fleet.diesel_litres';
+  if (!fuel && reading.measure !== 'fleet.distance_km') return none;
+  if (!reading.labelColumn || !reading.quantityColumn || !reading.periodEnd) return none;
+  const label = findColumn(matrix, reading.labelColumn);
+  const quantity = findColumn(matrix, reading.quantityColumn);
+  if (!label || !quantity || label.row !== quantity.row) return none;
+  // A two-row header names some columns on the row above the labels.
+  const beside = (name: string | null) => {
+    const found = name ? findColumn(matrix, name) : null;
+    return found && Math.abs(found.row - label.row) <= 1 ? found.col : null;
+  };
+  const distanceCol = fuel ? beside(reading.distanceColumn) : null;
+  const normCol = beside(reading.normColumn);
+  const modelCol = beside(reading.modelColumn);
+  const cells = matrix.slice(label.row + 1).map((row) => ({
+    label: row[label.col],
+    quantity: row[quantity.col],
+    distance: distanceCol === null ? null : row[distanceCol],
+    norm: normCol === null ? null : row[normCol],
+    model: modelCol === null ? null : row[modelCol],
+  }));
+  const { counted } = walkPeriodRows(cells, 'label', 'quantity');
+  const month = reading.periodEnd.slice(0, 7);
+
+  const distances = counted.map((c) => asNumber(c.row.distance)).filter((d): d is number => d !== null);
+  const odometers = distances.filter((d) => d > MAX_MONTH_KM).length;
+  // Mostly beyond a month's driving: the column is an odometer, small values included.
+  const distanceIsOdometer = distances.length > 0 && odometers * 2 >= distances.length;
+  const notes: string[] = [];
+  if (distanceIsOdometer) {
+    notes.push(`"${reading.distanceColumn}" holds odometer readings, not the kilometres driven in the month, so no vehicle's kilometres were read from it.`);
+  } else if (odometers > 0) {
+    notes.push(`${odometers} vehicle(s) show more than ${MAX_MONTH_KM.toLocaleString('en-ZA')} km in "${reading.distanceColumn}", more than one vehicle drives in a month; their kilometres were not read.`);
+  }
+
+  const rows: Array<Record<string, unknown>> = [];
+  for (const { row, label: name, quantity: amount } of counted) {
+    if (!namesAVehicle(name)) continue;
+    const vehicle: Record<string, unknown> = {
+      vehicle_registration: name,
+      [fuel ? 'monthly_litres' : 'monthly_km']: amount,
+      [ROW_PERIOD_KEY]: month,
+    };
+    const km = distanceIsOdometer ? null : asNumber(row.distance);
+    if (km !== null && km >= 0 && km <= MAX_MONTH_KM) vehicle.monthly_km = km;
+    const norm = asNumber(row.norm);
+    if (norm !== null && norm >= 3 && norm <= 100) vehicle.l_per_100km_norm = norm;
+    const model = String(row.model ?? '').replace(/\s+/g, ' ').trim();
+    if (model) vehicle.vehicle_make_model = model;
+    if (reading.site) vehicle.depot_name = reading.site;
+    rows.push(vehicle);
+  }
+
+  // A "norm" that is each vehicle's own litres over its kilometres is the rate
+  // it ran at, not the rate it should run at.
+  const compared = rows.filter((r) => typeof r.l_per_100km_norm === 'number' && Number(r.monthly_km) > 0 && Number(r.monthly_litres) > 0);
+  const ranAt = compared.filter((r) => {
+    const measured = (Number(r.monthly_litres) / Number(r.monthly_km)) * 100;
+    return Math.abs(Number(r.l_per_100km_norm) - measured) <= Math.max(0.05, measured * 0.01);
+  });
+  if (compared.length > 0 && ranAt.length * 2 >= compared.length) {
+    for (const row of rows) delete row.l_per_100km_norm;
+    notes.push(`"${reading.normColumn}" is each vehicle's measured rate (its litres over its kilometres), not a norm, so it was not read as one.`);
+  }
+  return { rows, notes };
+}
+
 export interface EsgPeriodSheetInput {
   filename: string;
   sheetName?: string;
@@ -269,30 +419,47 @@ export async function extractEsgPeriodSummary(
     );
   }
 
+  // The same rows, vehicle by vehicle: the month each one drove and fuelled.
+  const vehicles = periodVehicleRows(matrix, reading);
+  if (vehicles.rows.length > 0) {
+    const withKm = vehicles.rows.filter((row) => row.monthly_km !== undefined && row.monthly_litres !== undefined).length;
+    exceptions.push(
+      `${vehicles.rows.length} vehicle(s) read with their own ${reading.periodEnd.slice(0, 7)} figures` +
+        (withKm > 0 ? `, ${withKm} with both litres and kilometres.` : '.'),
+    );
+  }
+  exceptions.push(...vehicles.notes);
+
   logger.info('Read one-period summary deterministically', {
     file: input.filename,
     measure: reading.measure,
     site: reading.site,
     period: reading.periodEnd,
     rows: counted,
+    vehicles: vehicles.rows.length,
   });
 
   return {
     documentId: 'esg_period_summary',
     documentName: `${input.sheetName ?? input.filename} period summary`,
     sourceFile: input.filename,
-    values: [{
-      field: 'esg_monthly_rows',
-      value: [{
-        monthly_measure: reading.measure,
-        monthly_site: reading.site,
-        monthly_period_end: reading.periodEnd,
-        monthly_value: value,
-        monthly_unit: reading.unit,
-      }],
-      sourceFile: input.filename,
-      sourceDocumentId: 'esg_period_summary',
-    }],
+    values: [
+      {
+        field: 'esg_monthly_rows',
+        value: [{
+          monthly_measure: reading.measure,
+          monthly_site: reading.site,
+          monthly_period_end: reading.periodEnd,
+          monthly_value: value,
+          monthly_unit: reading.unit,
+        }],
+        sourceFile: input.filename,
+        sourceDocumentId: 'esg_period_summary',
+      },
+      ...(vehicles.rows.length > 0
+        ? [{ field: 'fleet_vehicle_rows', value: vehicles.rows, sourceFile: input.filename, sourceDocumentId: 'esg_period_summary' }]
+        : []),
+    ],
     missingFields: [],
     unexpectedFields: [],
     exceptions,

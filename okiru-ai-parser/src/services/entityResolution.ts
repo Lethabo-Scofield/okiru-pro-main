@@ -110,6 +110,14 @@ export const ROW_SOURCE_KEY = '__source';
 export const ROW_HIDDEN_KEY = '__hidden';
 
 /**
+ * Marks a register row that states ONE MONTH's figures for its record — a
+ * vehicle's kilometres and litres from a depot's monthly fuel report. The value
+ * is that month, "YYYY-MM": a month's figures travel together, and are never
+ * paired with another document's month.
+ */
+export const ROW_PERIOD_KEY = '__period';
+
+/**
  * A REGISTER adds up; it does not compete.
  *
  * Two sheets listing different vehicles are two halves of one fleet, not two
