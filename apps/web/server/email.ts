@@ -513,79 +513,76 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
   }
 }
 
-export async function sendDemoRequestEmail(params: {
+/** A "Book a demo" request, as the website's form sends it. */
+export interface DemoRequest {
   name: string;
   company: string;
   email: string;
   phone?: string;
   message?: string;
-}): Promise<boolean> {
-  const t = getTransporter();
-  const to = ADMIN_EMAIL;
-  const now = new Date().toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "full", timeStyle: "short" });
+}
 
-  if (!t) {
-    logger.warn("SMTP not configured — logging demo request to console", params);
-    console.log("\n=== DEMO REQUEST ===", params, "\n");
-    return false;
-  }
+/** The team's copy of a demo request — every field escaped. Pure, so it is tested as written. */
+export function demoRequestEmail(params: DemoRequest, now = new Date()): { subject: string; replyTo: string; html: string } {
+  const submitted = now.toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", dateStyle: "full", timeStyle: "short" });
+  const line = (value: string) => value.replace(/[\r\n]+/g, " ").trim();
+  const name = escapeHtml(line(params.name));
+  const company = escapeHtml(line(params.company));
+  const email = escapeHtml(line(params.email));
+  const phone = params.phone ? escapeHtml(line(params.phone)) : "";
+  const message = params.message ? escapeHtml(params.message.trim()).replace(/\r?\n/g, "<br/>") : "";
+  // Encoded, so an address like "a@b.co?bcc=…" cannot add headers to the reply.
+  const mailto = `mailto:${encodeURIComponent(line(params.email)).replace(/%40/g, "@")}`;
 
-  try {
-    await t.sendMail({
-      from: `"Okiru Website" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-      to,
-      replyTo: params.email,
-      subject: `Demo request from ${params.name} · ${params.company}`,
-      html: `
+  return {
+    replyTo: line(params.email),
+    subject: `Demo request from ${line(params.name)} · ${line(params.company)}`,
+    html: `
         <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;">
           <div style="background:#0b0f1a;border-radius:12px;padding:32px;color:#ffffff;border:1px solid rgba(255,255,255,0.08);">
             <h2 style="margin:0 0 4px;font-size:18px;color:#818cf8;">New Demo Request</h2>
-            <p style="margin:0 0 24px;font-size:12px;color:#6b7280;">Submitted ${now}</p>
+            <p style="margin:0 0 24px;font-size:12px;color:#6b7280;">Submitted ${submitted}</p>
             <table style="width:100%;border-collapse:collapse;">
-              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;width:90px;">Name</td><td style="padding:8px 0;color:#fff;font-size:14px;font-weight:600;">${params.name}</td></tr>
-              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Company</td><td style="padding:8px 0;color:#fff;font-size:14px;">${params.company}</td></tr>
-              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Email</td><td style="padding:8px 0;"><a href="mailto:${params.email}" style="color:#818cf8;">${params.email}</a></td></tr>
-              ${params.phone ? `<tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Phone</td><td style="padding:8px 0;color:#fff;font-size:14px;">${params.phone}</td></tr>` : ""}
-              ${params.message ? `<tr><td style="padding:8px 12px 8px 0;color:#9ca3af;font-size:12px;vertical-align:top;">Message</td><td style="padding:8px 0;color:#d1d5db;font-size:13px;line-height:1.6;">${params.message.replace(/\n/g, "<br/>")}</td></tr>` : ""}
+              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;width:90px;">Name</td><td style="padding:8px 0;color:#fff;font-size:14px;font-weight:600;">${name}</td></tr>
+              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Company</td><td style="padding:8px 0;color:#fff;font-size:14px;">${company}</td></tr>
+              <tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Email</td><td style="padding:8px 0;"><a href="${mailto}" style="color:#818cf8;">${email}</a></td></tr>
+              ${phone ? `<tr><td style="padding:8px 0;color:#9ca3af;font-size:12px;">Phone</td><td style="padding:8px 0;color:#fff;font-size:14px;">${phone}</td></tr>` : ""}
+              ${message ? `<tr><td style="padding:8px 12px 8px 0;color:#9ca3af;font-size:12px;vertical-align:top;">Message</td><td style="padding:8px 0;color:#d1d5db;font-size:13px;line-height:1.6;">${message}</td></tr>` : ""}
             </table>
             <div style="margin-top:24px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
-              <a href="mailto:${params.email}?subject=Re: Demo request" style="display:inline-block;background:#e8724a;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:13px;font-weight:600;">Reply to ${params.name}</a>
+              <a href="${mailto}?subject=Re%3A%20Demo%20request" style="display:inline-block;background:#e8724a;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:13px;font-weight:600;">Reply to ${name}</a>
             </div>
           </div>
         </div>`,
-    });
+  };
+}
 
-    // Send confirmation to the requester
+/**
+ * The website's "Book a demo" form, to the team.
+ *
+ * Everything in it was typed by an anonymous visitor, so every field is
+ * escaped before it reaches the HTML, and the single-line ones lose their line
+ * breaks. There is deliberately NO confirmation to the address typed in: that
+ * mailed Okiru-branded HTML, with the visitor's own text in it, to any address
+ * at all — an open relay for anyone's phishing. The team replies instead.
+ */
+export async function sendDemoRequestEmail(params: DemoRequest): Promise<boolean> {
+  const t = getTransporter();
+  const company = params.company.replace(/[\r\n]+/g, " ").trim();
+  if (!t) {
+    logger.warn("SMTP not configured — a demo request could not be sent", { company });
+    return false;
+  }
+  try {
     await t.sendMail({
-      from: `"Okiru" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-      to: params.email,
-      subject: "We've received your demo request · Okiru",
-      html: `
-        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;padding:24px;">
-          <div style="background:#0b0f1a;border-radius:12px;padding:32px;color:#ffffff;border:1px solid rgba(255,255,255,0.08);">
-            <h2 style="margin:0 0 16px;font-size:20px;color:#ffffff;">Thanks, ${params.name}.</h2>
-            <p style="margin:0 0 16px;font-size:14px;color:#9ca3af;line-height:1.7;">We've received your demo request and will be in touch within one business day to schedule your 45-minute session.</p>
-            <p style="margin:0 0 24px;font-size:14px;color:#9ca3af;line-height:1.7;">In the meantime, feel free to reply to this email if you have any questions.</p>
-            <div style="background:rgba(255,255,255,0.04);border-radius:8px;padding:16px;margin-bottom:24px;">
-              <p style="margin:0 0 8px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;">What to expect</p>
-              <ul style="margin:0;padding:0 0 0 18px;color:#d1d5db;font-size:13px;line-height:2;">
-                <li>Your transformation reporting today (10 min)</li>
-                <li>Live walkthrough of the Okiru Toolkit (15 min)</li>
-                <li>Net-Zero Roadmap using your own data (10 min)</li>
-                <li>Engagement model &amp; next steps (10 min)</li>
-              </ul>
-            </div>
-            <div style="margin-top:8px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.08);">
-              <p style="margin:0;font-size:12px;color:#6b7280;">Okiru · Braamfontein, Johannesburg · <a href="https://okiru.co.za" style="color:#818cf8;">okiru.co.za</a></p>
-            </div>
-          </div>
-        </div>`,
+      from: `"Okiru Website" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      to: ADMIN_EMAIL,
+      ...demoRequestEmail(params),
     });
-
-    logger.info("Demo request emails sent", { to: params.email });
+    logger.info("Demo request sent to the team", { company });
     return true;
   } catch (err: any) {
-    logger.error("Failed to send demo request email", err, params);
+    logger.error("Failed to send demo request email", err, { company });
     return false;
   }
 }
