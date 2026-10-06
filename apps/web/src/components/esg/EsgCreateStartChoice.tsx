@@ -19,13 +19,12 @@ import { useRef } from "react";
 import {
   Building2,
   ChevronRight,
-  Download,
   FileSpreadsheet,
   FolderOpen,
   Loader2,
   Upload,
 } from "lucide-react";
-import { API_BASE } from "@toolkit/lib/config";
+import { EsgTemplateMenu } from "@/components/esg-workbook/EsgTemplateMenu";
 import EsgFlowSteps from "./EsgFlowSteps";
 
 export interface EsgCreateStartChoiceProps {
@@ -191,14 +190,10 @@ export function EsgCreateStartChoice({
             No workbook yet? Download the ESG information request and send it to the client —
             every sheet in it maps straight back into this scorecard.
           </p>
-          <a
-            href={`${API_BASE}/api/esg/workbook/template`}
+          <EsgTemplateMenu
             className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:border-white/[0.20] hover:text-white"
-            data-testid="esg-start-download-template"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Download template
-          </a>
+            testId="esg-start-download-template"
+          />
         </div>
       </div>
 
