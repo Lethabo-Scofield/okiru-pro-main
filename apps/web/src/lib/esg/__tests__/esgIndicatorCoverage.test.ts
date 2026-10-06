@@ -67,6 +67,13 @@ describe("computeEsgIndicatorCoverage", () => {
         expect(label, `${pillar} ${def.key}`).not.toMatch(/Cority|IMS-T|depots|≥|≤|\d+\s?%|\d+ hours|2\.0/);
       }
     }
+    // The explanations and the "needed" lines are read by every client too.
+    for (const x of computeEsgIndicatorCoverage(wb({})).pillars.flatMap((p) => p.indicators)) {
+      const shown = [x.meaning, ...x.missing, ...x.optional, x.excludedReason ?? ""].join(" | ");
+      expect(shown, `${x.pillar} ${x.key}`).not.toMatch(/Cority|IMS-T/);
+      // Nor a site of the workbook the fallback axes were taken from.
+      for (const site of ESG_DEFAULT_DEPOTS) expect(shown, `${x.pillar} ${x.key}`).not.toMatch(new RegExp(`\\b${site}\\b`));
+    }
   });
 
   it("calls a zero on present data a result, not a gap", () => {

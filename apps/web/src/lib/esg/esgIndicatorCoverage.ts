@@ -166,8 +166,8 @@ const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
       needs: [need("The waste diversion rate (waste register or contractor report)", (c) => c.num("waste", "B16") !== null)],
     },
     d20: {
-      meaning: "Awarded when monthly recycling (the Cority % recycled) is tracked.",
-      needs: [need("Monthly % recycled (Cority)", positive("waste", "B17"))],
+      meaning: "Awarded when monthly recycling (the % recycled in the waste contractor's report) is tracked.",
+      needs: [need("Monthly % recycled (waste contractor's report)", positive("waste", "B17"))],
     },
     d21: {
       meaning: "Awarded when landfill waste is measured, so its emissions can be stated.",
