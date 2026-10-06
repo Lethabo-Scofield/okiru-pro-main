@@ -86,12 +86,35 @@ export function esgSheetNameOf(filename: string): string {
   return (marker >= 0 ? filename.slice(marker + 1) : filename).trim();
 }
 
+/*
+ * The model is called in JSON mode, and Azure refuses a JSON-mode request whose
+ * messages never say "json" (400 — "'messages' must contain the word 'json'").
+ * This prompt asked for a bare id, so EVERY sheet without a name hint failed the
+ * choice and fell to the flat model pass: Super Group's 153-vehicle fleet master
+ * arrived as 15 rows, its fuel-per-vehicle sheet not at all.
+ */
 const CHOOSE_SYSTEM_PROMPT = [
   'You match a spreadsheet sheet to the ESG register it holds.',
-  'Answer with ONLY the register id, or the word NONE.',
   'Answer NONE when the sheet is not a register of repeated records — a summary,',
   'a scorecard, a dashboard, a set of monthly totals or a policy is NONE.',
+  'Reply with JSON only: {"register": "<register id>"} or {"register": "NONE"}.',
 ].join(' ');
+
+/** The register id in a reply: `{"register": "…"}`, or a bare id. */
+export function registerIdFromReply(reply: string): string {
+  let answer = reply.trim();
+  const start = answer.indexOf('{');
+  const end = answer.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try {
+      const parsed = JSON.parse(answer.slice(start, end + 1)) as { register?: unknown };
+      if (typeof parsed.register === 'string') answer = parsed.register;
+    } catch {
+      // A bare id, or prose around one — read as text below.
+    }
+  }
+  return answer.replace(/[^a-z_]/gi, '').toLowerCase();
+}
 
 /**
  * Which ESG register is this sheet, if any?
@@ -121,7 +144,7 @@ export async function chooseEsgSheetGrid(
     `SHEET COLUMNS: ${JSON.stringify(headers)}`,
     'REGISTERS:',
     ...catalogue.map((entry) => `  ${entry.documentId}: rows of ${entry.grid.rowFields.slice(0, 6).join(', ')}`),
-    'Reply with one register id, or NONE.',
+    'Reply as JSON: {"register": "<register id>"} or {"register": "NONE"}.',
   ].join('\n');
 
   const fingerprint = decisionFingerprint(['esggrid', normName(sheetName), ...[...headers].sort()]);
@@ -130,8 +153,7 @@ export async function chooseEsgSheetGrid(
   try {
     decision = await rememberDecision<string>('esggrid', fingerprint, async () => {
       const think = model.completeHard?.bind(model) ?? model.complete.bind(model);
-      const reply = (await think(CHOOSE_SYSTEM_PROMPT, user)).trim();
-      const id = reply.replace(/[^a-z_]/gi, '').toLowerCase();
+      const id = registerIdFromReply(await think(CHOOSE_SYSTEM_PROMPT, user));
       // NONE is a real decision and is remembered — re-asking a summary sheet on
       // every upload buys nothing but latency.
       return byId.has(id) ? id : null;

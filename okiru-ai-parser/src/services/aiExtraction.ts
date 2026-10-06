@@ -141,12 +141,16 @@ export function createAzureExtractionModel(): ExtractionModel | null {
   const reviewEffort = process.env.PARSER_REVIEW_REASONING_EFFORT ?? 'high';
 
   const callAt = (effort: string) => async (system: string, user: string): Promise<string> => {
+    // JSON mode is refused outright (400) unless the messages say "json". A
+    // prompt that forgot to failed every call it made — the ESG register
+    // choice did, for every sheet — so the instruction is added, not trusted.
+    const asked = /json/i.test(system) || /json/i.test(user) ? system : `${system}\nReply in JSON.`;
     const response = await fetchAzureWithRetry(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'api-key': apiKey },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: system },
+          { role: 'system', content: asked },
           { role: 'user', content: user },
         ],
         // gpt-5-family deployments reject non-default `temperature`, so
