@@ -369,8 +369,11 @@ export function scoreSocial(
       ? []
       : mergeExclusions(
           readDeclaredExclusions(workbook, "social"),
-          targetExclusions,
+          // The first reason for a key is the one stated, so the permanent one
+          // goes before the resolvable: declaring a target basis does not bring
+          // mandatory grant recovery back into an ESG score.
           notEsgExclusions,
+          targetExclusions,
         );
   const scored = Object.entries(rows)
     .filter(([key]) => !excluded.some((x) => x.key === key))

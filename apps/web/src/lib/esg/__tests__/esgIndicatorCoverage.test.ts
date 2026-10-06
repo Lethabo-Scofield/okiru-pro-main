@@ -1,0 +1,70 @@
+/**
+ * The score behind the number: every indicator's points, status and what it
+ * still needs — "missing" only when the scorer had nothing to work with.
+ */
+import { describe, expect, it } from "vitest";
+import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { computeEsgIndicatorCoverage } from "../esgIndicatorCoverage";
+import { SCORECARD_INDICATORS } from "../esgScorecardDefinitions";
+
+const wb = (sections: Record<string, Record<string, unknown>>): EsgWorkbookData =>
+  ({ sections: Object.fromEntries(Object.entries(sections).map(([k, cells]) => [k, { cells }])) }) as unknown as EsgWorkbookData;
+
+const find = (result: ReturnType<typeof computeEsgIndicatorCoverage>, pillar: string, key: string) =>
+  result.pillars.find((p) => p.pillar === pillar)!.indicators.find((x) => x.key === key)!;
+
+describe("computeEsgIndicatorCoverage", () => {
+  it("covers every scorecard indicator, each with a plain-English meaning", () => {
+    const result = computeEsgIndicatorCoverage(wb({}));
+    for (const pillar of ["environmental", "social", "governance"] as const) {
+      const keys = result.pillars.find((p) => p.pillar === pillar)!.indicators.map((x) => x.key);
+      expect(keys).toEqual(SCORECARD_INDICATORS[pillar].map((d) => d.key));
+      for (const x of result.pillars.find((p) => p.pillar === pillar)!.indicators) {
+        expect(x.meaning, `${pillar} ${x.key}`).not.toBe("");
+      }
+    }
+  });
+
+  it("on an empty workbook, says what each indicator is waiting for", () => {
+    const result = computeEsgIndicatorCoverage(wb({}));
+    expect(result.counts.full).toBe(0);
+    expect(find(result, "environmental", "d5")).toMatchObject({
+      status: "missing",
+      missing: ["Monthly fleet diesel (litres), Scope 1A"],
+      topic: { id: "e-ghg" },
+    });
+    expect(find(result, "governance", "d25").missing).toEqual([
+      "Material regulatory penalties in the period (enter 0 for none)",
+    ]);
+    expect(result.pointsAwaitingData).toBeGreaterThan(0);
+  });
+
+  it("tells a final exclusion from one the company can resolve", () => {
+    const result = computeEsgIndicatorCoverage(wb({}));
+    const grant = find(result, "social", "d15");
+    expect(grant.status).toBe("excluded");
+    expect(grant.excludedFixable).toBe(false);
+    const blackEmployees = find(result, "social", "d5");
+    expect(blackEmployees.status).toBe("excluded");
+    expect(blackEmployees.excludedFixable).toBe(true);
+  });
+
+  it("moves an indicator from missing to scored as its inputs arrive", () => {
+    const fuel = computeEsgIndicatorCoverage(wb({ "e-data": { s1a_C14: 1_000 } }));
+    expect(find(fuel, "environmental", "d5")).toMatchObject({ status: "full", points: 5, missing: [] });
+    // A baseline is still needed for the reduction indicator.
+    expect(find(fuel, "environmental", "d6")).toMatchObject({ status: "missing", missing: ["A Scope 1 + 2 baseline in tCO₂e"] });
+
+    const answered = computeEsgIndicatorCoverage(wb({ "g-data": { B25: 0 } }));
+    expect(find(answered, "governance", "d25")).toMatchObject({ status: "full", points: 5 });
+  });
+
+  it("calls a zero on present data a result, not a gap", () => {
+    // Grid electricity recorded, no solar: the renewable share is a real zero.
+    const result = computeEsgIndicatorCoverage(wb({ "e-data": { s2_C14: 100_000 } }));
+    const solarShare = find(result, "environmental", "d13");
+    expect(solarShare.status).toBe("zero");
+    expect(solarShare.missing).toEqual([]);
+    expect(solarShare.optional[0]).toMatch(/solar generation/);
+  });
+});
