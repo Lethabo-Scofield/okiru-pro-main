@@ -98,10 +98,17 @@ vi.mock('../../logger.js', () => ({
 }));
 
 const parserCalls = vi.fn();
+const quoteCalls = vi.fn();
+let paidReply: Record<string, unknown> = { ok: true, result: { status: 'passed', document_type: 'AFS', overall_confidence: 0.9, extracted_fields: {}, validation: { passed: true, warnings: [], errors: [], missing_fields: [] }, audit_trail: {} } };
 vi.mock('../../services/parserClient.js', () => ({
-  resolveFileWithParser: async (...args: unknown[]) => {
+  isParserConfigured: () => true,
+  quoteFileWithParser: async (file: { buffer: Buffer }) => {
+    quoteCalls(file);
+    return { ok: true, quoteId: 'quote_reread_1' };
+  },
+  resolvePaidFileWithParser: async (...args: unknown[]) => {
     parserCalls(...args);
-    return { ok: false, error: 'parser not reachable in tests' };
+    return paidReply;
   },
 }));
 
@@ -158,6 +165,91 @@ beforeEach(() => {
   nextRunId = 1;
   viewOnly = false;
   parserCalls.mockClear();
+  quoteCalls.mockClear();
+  paidReply = { ok: true, result: { status: 'passed', document_type: 'AFS', overall_confidence: 0.9, extracted_fields: { revenue: { normalized_value: 274953097, confidence: 0.95 } }, validation: { passed: true, warnings: [], errors: [], missing_fields: [] }, audit_trail: {} } };
+});
+
+describe('paid fresh reads', () => {
+  function seed(extra: Record<string, unknown> = {}) {
+    documents.push({
+      _id: 'doc-1', filename: 'afs.pdf', fileType: 'application/pdf', rawContent: Buffer.from('%PDF afs'),
+      source: 'parser', userId: 'user-a', organizationId: 'org-a', latestParserRunId: 'run-9', ...extra,
+    });
+    runs.push({ runId: 'run-9', documentId: 'doc-1', organizationId: 'org-a', status: 'review_required', parserOutput: { domain: 'bbbee' } });
+  }
+
+  it('prices the stored bytes and pins the quote to this document', async () => {
+    seed();
+    const res = await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    expect(res.status).toBe(201);
+    expect(res.body.quoteId).toBe('quote_reread_1');
+    expect(documents[0].pendingRereadQuoteId).toBe('quote_reread_1');
+    expect(documents[0].pendingRereadSha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(quoteCalls.mock.calls[0][0].buffer.toString()).toBe('%PDF afs');
+    expect(parserCalls).not.toHaveBeenCalled();
+  });
+
+  it('reads with the paid quote, appends a run, and clears the pending price', async () => {
+    seed();
+    await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    const res = await request('/api/parser-documents/doc-1/reread', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: 'quote_reread_1' }),
+    });
+    expect(res.status).toBe(201);
+    expect(parserCalls).toHaveBeenCalledTimes(1);
+    expect(parserCalls.mock.calls[0][1]).toBe('quote_reread_1');
+    expect(runs).toHaveLength(2);
+    expect(documents[0].pendingRereadQuoteId).toBeNull();
+  });
+
+  it('will not spend a quote priced for something else', async () => {
+    seed({ pendingRereadQuoteId: 'quote_other', pendingRereadSha256: 'x' });
+    const res = await request('/api/parser-documents/doc-1/reread', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: 'quote_reread_1' }),
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('QUOTE_NOT_FOR_THIS_DOCUMENT');
+    expect(parserCalls).not.toHaveBeenCalled();
+  });
+
+  it('passes the parser’s refusal through — a voided quote is not read', async () => {
+    seed();
+    await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    paidReply = { ok: false, status: 409, code: 'QUOTE_VOIDED', error: 'This batch never ran, so its tokens were refunded.' };
+    const res = await request('/api/parser-documents/doc-1/reread', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: 'quote_reread_1' }),
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('QUOTE_VOIDED');
+    expect(runs).toHaveLength(1);
+  });
+
+  it('says plainly when the paid reader is not deployed yet', async () => {
+    seed();
+    await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    paidReply = { ok: false, status: 404, error: 'Not found' };
+    const res = await request('/api/parser-documents/doc-1/reread', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: 'quote_reread_1' }),
+    });
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('PAID_READ_UNAVAILABLE');
+  });
+
+  it('sends ESG evidence back to the ESG workbook instead of reading it as B-BBEE', async () => {
+    seed();
+    runs[0].parserOutput = { domain: 'esg' };
+    const res = await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('ESG_REREAD_FROM_WORKBOOK');
+    expect(quoteCalls).not.toHaveBeenCalled();
+  });
+
+  it('is not available to a view-only member', async () => {
+    seed();
+    viewOnly = true;
+    expect((await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' })).status).toBe(403);
+    expect(quoteCalls).not.toHaveBeenCalled();
+  });
 });
 
 describe('re-reading, reviewing, and who may do either', () => {
@@ -179,11 +271,12 @@ describe('re-reading, reviewing, and who may do either', () => {
     expect(runs).toHaveLength(1);
   });
 
-  it('still reads afresh when asked to', async () => {
+  it('never reads afresh for free — a fresh read is priced first', async () => {
     seedReadDocument();
     const res = await request('/api/parser-documents/doc-1/reparse?fresh=1', { method: 'POST' });
-    expect(parserCalls).toHaveBeenCalledTimes(1);
-    expect(res.status).toBe(502); // the test parser is unreachable — but it was asked
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe('PRICE_FIRST');
+    expect(parserCalls).not.toHaveBeenCalled();
   });
 
   it('takes a reviewed document out of the "Needs review" queue', async () => {

@@ -353,6 +353,14 @@ const documentSchema = new Schema({
    */
   reviewedAt: { type: Date, default: null },
   reviewedByUserId: { type: String, default: null },
+  /**
+   * A paid fresh read in progress: the parser quote it was priced under and
+   * the sha256 of the exact bytes priced. The read must present both — the
+   * quote cannot be spent on this document with different bytes, or on
+   * another document.
+   */
+  pendingRereadQuoteId: { type: String, default: null },
+  pendingRereadSha256: { type: String, default: null },
 }, { collection: "documents" });
 
 documentSchema.index({ organizationId: 1, source: 1, parserLastRunAt: -1 });
