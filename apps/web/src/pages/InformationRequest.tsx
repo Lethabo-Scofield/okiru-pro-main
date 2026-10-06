@@ -343,7 +343,7 @@ function SetupShell({
   );
 }
 
-function CompanyPicker({
+export function CompanyPicker({
   onPick,
   onLandEstimate,
   mode = "picker",
@@ -553,7 +553,6 @@ function CompanyPicker({
     sections: WorkbookSectionsInput,
     opts?: {
       importMarker?: unknown;
-      warnCount?: number;
       landOn?: "workbook" | "estimate";
       /** Per-document verdicts from the document flow, shown on the estimate page. */
       verdicts?: unknown;
@@ -630,6 +629,13 @@ function CompanyPicker({
         return false;
       }
       let submitted = false;
+      // Why the submit refused, in the server's words. A refusal used to be
+      // read only as `!ok` and thrown away: the toast said "Workbook imported"
+      // and the document flow went on to the provisional score page, which
+      // read the company before anything had been synced to it and showed 0.
+      // That is how a full evidence pack missing only its year end scored
+      // nothing, with no sign of what to fix.
+      let submitRefusal: string | null = null;
       const submitRes = await fetch(
         `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
         { method: "POST", credentials: "include" },
@@ -641,21 +647,26 @@ function CompanyPicker({
         } catch {
           // Summary page will retry loadClientData.
         }
+      } else {
+        const body = await submitRes.json().catch(() => ({}));
+        submitRefusal = (
+          (typeof body?.error === "string" && body.error) ||
+          `The score could not be calculated (error ${submitRes.status})`
+        ).replace(/[.\s]*$/, ".");
       }
-      const warnCount = opts?.warnCount ?? 0;
-      toast({
-        title: submitted
-          ? "Imported and synced to scorecard"
-          : warnCount > 0
-            ? "Imported with gaps"
-            : "Workbook imported",
-        description: submitted
-          ? companyName
-          : warnCount > 0
-            ? `${warnCount} warning(s) — open workbook and submit when ready.`
-            : `${companyName} — submit workbook to calculate score.`,
-      });
-      if (opts?.landOn === "estimate" && onLandEstimate) {
+      if (submitRefusal) {
+        toast({
+          title: "Workbook saved — score not calculated yet",
+          description: `${submitRefusal} Complete it in the workbook, then submit.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Imported and synced to scorecard", description: companyName });
+      }
+      // The estimate page scores what was synced. When nothing was, it can
+      // only show 0 — so a refused submit lands in the workbook, where the
+      // missing field is, instead.
+      if (submitted && opts?.landOn === "estimate" && onLandEstimate) {
         onLandEstimate(c);
       } else {
         onPick(c);
@@ -865,7 +876,6 @@ function CompanyPicker({
               if (!companyName || !sections) return;
               const ok = await createFromSections(companyName, sections, {
                 importMarker: previewResult?.data,
-                warnCount: previewResult?.warnings?.length ?? 0,
               });
               if (ok) {
                 setPreviewOpen(false);
@@ -1050,7 +1060,6 @@ function CompanyPicker({
             if (!companyName || !sections) return;
             const ok = await createFromSections(companyName, sections, {
               importMarker: previewResult?.data,
-              warnCount: previewResult?.warnings?.length ?? 0,
             });
             if (ok) {
               setPreviewOpen(false);
@@ -1317,7 +1326,8 @@ function CompanyPicker({
               `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
               { method: "POST", credentials: "include" },
             );
-            console.log('[SCORING-TRACE] POST /api/workbook/submit response:', submitRes.status, submitRes.ok ? await submitRes.clone().json().catch(() => ({})) : await submitRes.text().catch(() => ''));
+            console.log('[SCORING-TRACE] POST /api/workbook/submit response:', submitRes.status, submitRes.ok ? await submitRes.clone().json().catch(() => ({})) : await submitRes.clone().text().catch(() => ''));
+            let submitRefusal: string | null = null;
             if (submitRes.ok) {
               submitted = true;
               try {
@@ -1325,20 +1335,23 @@ function CompanyPicker({
               } catch {
                 // Summary page will retry loadClientData.
               }
+            } else {
+              // Same as createFromSections: say why, not just that it was imported.
+              const body = await submitRes.json().catch(() => ({}));
+              submitRefusal = (
+                (typeof body?.error === "string" && body.error) ||
+                `The score could not be calculated (error ${submitRes.status})`
+              ).replace(/[.\s]*$/, ".");
             }
-            const warnCount = previewResult?.warnings?.length ?? 0;
-            toast({
-              title: submitted
-                ? "Imported and synced to scorecard"
-                : warnCount > 0
-                  ? "Imported with gaps"
-                  : "Workbook imported",
-              description: submitted
-                ? companyName
-                : warnCount > 0
-                  ? `${warnCount} warning(s) — open workbook and submit when ready.`
-                  : `${companyName} — submit workbook to calculate score.`,
-            });
+            toast(
+              submitted
+                ? { title: "Imported and synced to scorecard", description: companyName }
+                : {
+                    title: "Workbook saved — score not calculated yet",
+                    description: `${submitRefusal} Complete it in the workbook, then submit.`,
+                    variant: "destructive",
+                  },
+            );
             setPreviewOpen(false);
             setPendingFile(null);
             setPreviewResult(null);
