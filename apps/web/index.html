@@ -78,7 +78,10 @@
       gtag('config', 'G-WF69VTV757', { send_page_view: false });
     </script>
   </head>
-  <body style="background-color:#0a0a0a;color:#f5f5f5;margin:0">
+  <!-- data-clarity-mask: Microsoft Clarity masks ALL text in recordings and
+       heatmaps (ID numbers, salaries, names, the documents themselves).
+       Inert unless CLARITY_PROJECT_ID is set; see server/clarity.ts. -->
+  <body data-clarity-mask="True" style="background-color:#0a0a0a;color:#f5f5f5;margin:0">
     <div id="root"><noscript>JavaScript is required.</noscript></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
