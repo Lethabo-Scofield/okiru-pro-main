@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
-import { Award, Leaf, ShieldCheck, FolderOpen, ArrowRight, X } from 'lucide-react';
+import { Award, Leaf, ArrowRight, X, LockKeyhole } from 'lucide-react';
 import { companyProfilePath } from '@/components/UserAccountMenu';
 import { useEsgAccess } from '@/hooks/useEsgAccess';
 // Light snapshot peeks (type-only deps) — the create flows write these when a
@@ -11,7 +11,6 @@ import { readFlowSnapshot } from '@/components/scorecard/flowSnapshot';
 import { readEsgFlowSnapshot } from '@/components/esg/esgFlowSnapshot';
 import { gatedAuthPath } from '@/lib/authRoutes';
 import { isSkippedCompanyProfileName } from '@/lib/profilePlaceholder';
-import { esgSummaryHref, setEsgActiveCompany } from '@/lib/esgRoutes';
 
 interface CompanyProfile {
   companyName?: string;
@@ -23,7 +22,39 @@ interface HubClient {
   id?: string;
   name?: string;
   product?: string;
-  updatedAt?: string;
+}
+
+function HubSkeleton({ className }: { className: string }) {
+  return (
+    <span
+      className={`block animate-pulse rounded-full bg-[color:var(--hub-skeleton)] ${className}`}
+      aria-hidden
+    />
+  );
+}
+
+function HubSectionHeader({
+  id,
+  title,
+  hint,
+  aside,
+}: {
+  id?: string;
+  title: string;
+  hint?: string;
+  aside?: string;
+}) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-4">
+      <div>
+        <h2 id={id} className="hub-label">
+          {title}
+        </h2>
+        {hint && <p className="mt-1 text-xs text-[color:var(--body)]">{hint}</p>}
+      </div>
+      {aside && <span className="hidden text-xs text-[color:var(--muted)] sm:inline">{aside}</span>}
+    </div>
+  );
 }
 
 /**
@@ -40,7 +71,7 @@ interface HubClient {
  */
 export default function HubLanding() {
   const { user } = useAuth();
-  const { allowed: esgAllowed } = useEsgAccess();
+  const { allowed: esgAllowed, loading: esgAccessLoading } = useEsgAccess();
   const [location, navigate] = useLocation();
 
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
@@ -128,8 +159,8 @@ export default function HubLanding() {
    *
    * The Hub was two cards and a lot of space: it described the products
    * without saying anything about the work in them, so there was nothing to
-   * come back to it for. Counts and the most recently touched companies make
-   * it a place you can start from rather than pass through.
+   * come back to it for. Counts make it a place you can start from rather
+   * than pass through.
    */
   const [clients, setClients] = useState<HubClient[]>([]);
   const [clientsLoading, setClientsLoading] = useState(true);
@@ -159,39 +190,6 @@ export default function HubLanding() {
   }, [clients]);
 
   /**
-   * The three most recently touched, newest first, across both products.
-   *
-   * Three, not six: this sits in the same row as the two product cards, and
-   * a taller list stretched them to match it — leaving both cards mostly
-   * empty space so the row could accommodate a list nobody asked to be that
-   * long. The products are the point of this page; this is a shortcut back.
-   */
-  const recent = useMemo(
-    () =>
-      clients
-        .map((c) => ({
-          id: String(c.clientId ?? c.id ?? ''),
-          name: String(c.name ?? 'Unnamed company'),
-          isEsg: c.product === 'esg',
-          updatedAt: c.updatedAt,
-        }))
-        .filter((c) => c.id)
-        .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
-        .slice(0, 3),
-    [clients],
-  );
-
-  const openCompany = (c: { id: string; isEsg: boolean }) => {
-    if (c.isEsg) {
-      setEsgActiveCompany(c.id);
-      navigate(esgSummaryHref(c.id));
-      return;
-    }
-    localStorage.setItem('okiru-pro-active-client', c.id);
-    navigate(`/create-scorecard/${encodeURIComponent(c.id)}/summary`);
-  };
-
-  /**
    * Each product keeps its own colour, used the way a bank uses colour: to tell
    * two products apart at a glance, on the icon and a hairline, against a
    * neutral surface. Not as a wash, a gradient or a glow — that is what read as
@@ -202,67 +200,110 @@ export default function HubLanding() {
     {
       id: 'bbbee',
       title: 'B-BBEE',
-      icon: <Award className="h-5 w-5" />,
+      icon: <Award className="h-6 w-6" />,
       description:
         'Measure a company against its sector scorecard, from evidence through to a verified level.',
       workspace: '/bbbee',
       create: '/bbbee/new',
       hue: 'var(--bbbee)',
+      accent: '#7c3aed',
+      art: '/hub-bbbee-card-background.webp',
+      artSize: 'auto 185%',
+      artPos: 'right 35%',
       count: counts.bbbee,
-      show: true,
+      available: true,
     },
     {
       id: 'esg',
       title: 'ESG',
-      icon: <Leaf className="h-5 w-5" />,
+      icon: <Leaf className="h-6 w-6" />,
       description:
         'Report environmental, social and governance performance against the frameworks you follow.',
       workspace: '/esg',
       create: '/esg/new',
       hue: 'var(--esg)',
+      accent: '#15803d',
+      art: '/hub-esg-card-background.png',
+      artSize: 'cover',
+      artPos: 'center 62%',
       count: counts.esg,
-      show: esgAllowed,
+      available: esgAllowed,
     },
-  ].filter((p) => p.show);
+  ];
 
   const alsoAvailable = [
     {
       id: 'certificates',
       title: 'Certificate Hub',
-      icon: <ShieldCheck className="h-4 w-4" />,
+      icon: (
+        <img
+          src="/certificates-icon.png"
+          alt=""
+          className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.06]"
+          draggable={false}
+        />
+      ),
       description: 'Verify and track B-BBEE certificates across your suppliers.',
       href: '/certificates',
     },
     {
       id: 'documents',
       title: 'Document library',
-      icon: <FolderOpen className="h-4 w-4" />,
+      icon: (
+        <img
+          src="/document-library-icon.png"
+          alt=""
+          className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.06]"
+          draggable={false}
+        />
+      ),
       description: 'Every document you have uploaded, filed under the company it belongs to.',
       href: '/documents',
     },
   ];
 
   return (
-    <div className="font-sans" data-testid="page-hub">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        <div className="mb-8">
-          <div className="ok-eyebrow mb-2">Compliance suite</div>
-          <h1 className="ok-title-lg">{companyName || 'Okiru'}</h1>
-          <p className="ok-subtitle mt-2 max-w-xl">
-            Choose a product to see the companies you are working on.
-          </p>
+    <div
+      className="min-h-[calc(100vh-3rem)] bg-[color:var(--ink)] bg-cover bg-center bg-no-repeat font-sans text-[color:var(--hi)]"
+      style={{ backgroundImage: 'var(--hub-bg-image)' }}
+      data-testid="page-hub"
+    >
+      <div className="mx-auto max-w-[1240px] px-4 py-8 sm:px-6 lg:py-10">
+        <div className="mb-8 flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="hub-label mb-2">Workspace</div>
+            <h1 className="text-[30px] font-semibold leading-tight tracking-normal text-[color:var(--hi)]">
+              {companyName || 'Okiru'}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[color:var(--body)]">
+              Select a compliance product or open a shared workspace tool.
+            </p>
+          </div>
+          <div className="flex w-fit items-center gap-5 text-sm text-[color:var(--body)]" aria-label="Workspace summary" aria-busy={clientsLoading}>
+            <span className="inline-flex min-w-[86px] items-center gap-1.5">
+              {clientsLoading ? (
+                <HubSkeleton className="h-4 w-16" />
+              ) : (
+                <>
+                  <strong className="font-semibold text-[color:var(--hi)]">{clients.length}</strong> companies
+                </>
+              )}
+            </span>
+            <span className="h-4 w-px bg-[color:var(--rule-strong)]" aria-hidden />
+            <span><strong className="font-semibold text-[color:var(--hi)]">{products.length}</strong> products</span>
+          </div>
         </div>
 
         {!profileLoading && needsProfile && reminderVisible && (
           <div
-            className="ok-panel flex items-start justify-between gap-4 px-4 py-3 mb-6"
+            className="hub-card mb-8 flex items-start justify-between gap-4 px-4 py-3"
             data-testid="profile-reminder"
           >
-            <p className="ok-subtitle">
+            <p className="text-sm text-[color:var(--body)]">
               Your company profile is incomplete.{' '}
               <Link
                 href={companyProfilePath('/hub')}
-                className="text-white underline underline-offset-4"
+                className="font-medium text-[color:var(--hi)] underline underline-offset-4"
               >
                 Complete it
               </Link>{' '}
@@ -279,7 +320,7 @@ export default function HubLanding() {
                   /* a dismissal we cannot remember is not worth failing over */
                 }
               }}
-              className="text-[color:var(--muted)] hover:text-[color:var(--body)] transition-colors shrink-0"
+              className="shrink-0 text-[color:var(--muted)] transition-colors hover:text-[color:var(--hi)]"
             >
               <X className="h-4 w-4" />
             </button>
@@ -287,23 +328,22 @@ export default function HubLanding() {
         )}
 
         {(continueBbbee || (esgAllowed && continueEsg)) && (
-          <div className="mb-7">
-            <div className="ok-eyebrow mb-2">
-              Continue where you left off
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+          <section className="mb-8" aria-labelledby="continue-heading">
+            <HubSectionHeader id="continue-heading" title="Continue where you left off" />
+            <div className="grid gap-4 md:grid-cols-2">
               {continueBbbee && (
                 <button
                   type="button"
                   onClick={() => navigate('/bbbee/new')}
-                  className="flex items-center justify-between gap-3 ok-panel ok-panel-action px-4 py-3 text-left"
+                  className="hub-card hub-card--lift flex items-center justify-between gap-3 px-4 py-3 text-left"
+                  style={{ '--hub-accent': '#7c3aed' } as CSSProperties}
                   data-testid="continue-bbbee"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium truncate">
+                    <span className="block truncate text-[13px] font-medium">
                       {continueBbbee.name || 'B-BBEE scorecard'}
                     </span>
-                    <span className="block text-[11px] text-[color:var(--body)] mt-0.5">
+                    <span className="mt-0.5 block text-[11px] text-[color:var(--body)]">
                       B-BBEE{continueBbbee.saved ? ` · saved ${continueBbbee.saved}` : ''}
                     </span>
                   </span>
@@ -314,14 +354,15 @@ export default function HubLanding() {
                 <button
                   type="button"
                   onClick={() => navigate('/esg/new')}
-                  className="flex items-center justify-between gap-3 ok-panel ok-panel-action px-4 py-3 text-left"
+                  className="hub-card hub-card--lift flex items-center justify-between gap-3 px-4 py-3 text-left"
+                  style={{ '--hub-accent': '#15803d' } as CSSProperties}
                   data-testid="continue-esg"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium truncate">
+                    <span className="block truncate text-[13px] font-medium">
                       {continueEsg.name || 'ESG scorecard'}
                     </span>
-                    <span className="block text-[11px] text-[color:var(--body)] mt-0.5">
+                    <span className="mt-0.5 block text-[11px] text-[color:var(--body)]">
                       ESG{continueEsg.saved ? ` · saved ${continueEsg.saved}` : ''}
                     </span>
                   </span>
@@ -329,138 +370,94 @@ export default function HubLanding() {
                 </button>
               )}
             </div>
-          </div>
+          </section>
         )}
 
-        {/* Products on the left, what you were last working on beside them, so
-            the page is wide enough to hold both and there is something on it. */}
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] mb-8">
-          {products.map((p) => (
-            <section
-              key={p.id}
-              className="ok-panel relative overflow-hidden p-6 flex flex-col"
-              data-testid={`product-${p.id}`}
-            >
-              <span
-                className="absolute inset-x-0 top-0 h-px"
-                style={{ background: p.hue, opacity: 0.7 }}
-                aria-hidden
-              />
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span
-                    className="grid h-9 w-9 place-items-center rounded-[10px]"
-                    style={{
-                      color: p.hue,
-                      background: `color-mix(in srgb, ${p.hue} 14%, transparent)`,
-                      boxShadow: `inset 0 0 0 1px color-mix(in srgb, ${p.hue} 28%, transparent)`,
-                    }}
-                  >
-                    {p.icon}
-                  </span>
-                  <h2
-                    className="text-[17px] font-semibold tracking-[-0.015em]"
-                    style={{ color: 'var(--hi)' }}
-                  >
-                    {p.title}
-                  </h2>
-                </div>
-                {/* The number is the point: how many companies are in here. */}
-                <div className="text-right shrink-0">
-                  <div
-                    className="ok-num text-[26px] font-semibold leading-none"
-                    style={{ color: 'var(--hi)' }}
-                    data-testid={`count-${p.id}`}
-                  >
-                    {clientsLoading ? '—' : p.count}
-                  </div>
-                  <div className="ok-eyebrow mt-1.5">
-                    {p.count === 1 ? 'company' : 'companies'}
-                  </div>
-                </div>
-              </div>
-              <p className="ok-subtitle mt-4 flex-1">{p.description}</p>
-              <div className="flex items-center gap-2 mt-6">
-                <Link href={p.workspace} className="ok-btn-primary" data-testid={`open-${p.id}`}>
-                  Open workspace
-                </Link>
-                <Link href={p.create} className="ok-btn" data-testid={`create-${p.id}`}>
-                  Create scorecard
-                </Link>
-              </div>
-            </section>
-          ))}
-
-          <section className="ok-panel-flush flex flex-col" data-testid="recent-companies">
-            <div
-              className="px-4 py-3"
-              style={{ borderBottom: '1px solid var(--rule)' }}
-            >
-              <span className="ok-eyebrow">Recently worked on</span>
-            </div>
-            <div className="flex-1">
-              {clientsLoading ? (
-                <div className="px-4 py-6 text-[13px] text-[color:var(--muted)]">Loading</div>
-              ) : recent.length === 0 ? (
-                <div className="px-4 py-6">
-                  <p className="text-[13px] text-[color:var(--body)]">
-                    Nothing yet. Create a scorecard and it will appear here.
-                  </p>
-                </div>
-              ) : (
-                recent.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => openCompany(c)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[rgba(255,255,255,0.03)]"
-                    data-testid={`recent-${c.id}`}
-                  >
-                    <span
-                      className="h-1.5 w-1.5 rounded-full shrink-0"
-                      style={{ background: c.isEsg ? 'var(--esg)' : 'var(--bbbee)' }}
-                      aria-hidden
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span
-                        className="block text-[13px] font-medium truncate"
-                        style={{ color: 'var(--hi)' }}
-                      >
-                        {c.name}
-                      </span>
-                      <span className="block ok-eyebrow mt-0.5">
-                        {c.isEsg ? 'ESG' : 'B-BBEE'}
-                      </span>
+        <section aria-labelledby="products-heading">
+          <HubSectionHeader id="products-heading" title="Compliance products" aside="Choose where to work" />
+          <div className="grid gap-4 md:grid-cols-2">
+            {products.map((p) => (
+              <section
+                key={p.id}
+                className="hub-card hub-card--art hub-card--lift flex min-h-[250px] flex-col overflow-hidden p-6"
+                style={
+                  {
+                    '--hub-accent': p.accent,
+                    '--hub-art': `url('${p.art}')`,
+                    '--hub-art-size': p.artSize,
+                    '--hub-art-pos': p.artPos,
+                  } as CSSProperties
+                }
+                data-testid={`product-${p.id}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`grid h-10 w-10 place-items-center hub-icon-${p.id}`}>
+                      {p.icon}
                     </span>
-                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />
-                  </button>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
+                    <h3 className="text-xl font-semibold tracking-normal text-[color:var(--hi)]">{p.title}</h3>
+                  </div>
+                  <div className="hub-chip hub-chip--stat shrink-0 px-3 py-2 text-right">
+                   <div>
+                    <div className="text-[26px] font-semibold leading-none text-[color:var(--hi)]" data-testid={`count-${p.id}`}>
+                      {clientsLoading ? <HubSkeleton className="ml-auto h-7 w-9" /> : p.count}
+                    </div>
+                    <div className="hub-label mt-1.5 text-[10px]">
+                      {p.count === 1 ? 'company' : 'companies'}
+                    </div>
+                   </div>
+                  </div>
+                </div>
+                <p className="hub-art-copy mt-5 flex-1 text-sm leading-6 text-[color:var(--body)]">{p.description}</p>
+                {p.id === 'esg' && !esgAccessLoading && !p.available ? (
+                  <div className="mt-6 flex items-center gap-2 border-t border-[color:var(--rule)] pt-4 text-sm text-[color:var(--body)]" data-testid="esg-unavailable">
+                    <LockKeyhole className="h-4 w-4" />
+                    ESG access is not enabled for this account
+                  </div>
+                ) : (
+                  <div className="mt-6 flex flex-wrap items-center gap-2">
+                    <Link href={p.workspace} className="hub-btn" data-testid={`open-${p.id}`}>
+                      Open workspace <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                    <Link href={p.create} className="hub-btn-secondary" data-testid={`create-${p.id}`}>
+                      Create scorecard
+                    </Link>
+                  </div>
+                )}
+                {p.id === 'esg' && esgAccessLoading && (
+                  <div className="mt-3 text-xs text-[color:var(--muted)]">Checking access</div>
+                )}
+              </section>
+            ))}
+          </div>
+        </section>
 
-        <div className="ok-eyebrow mb-2">Also available</div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {alsoAvailable.map((t) => (
-            <Link
-              key={t.id}
-              href={t.href}
-              className="flex items-start gap-3 ok-panel ok-panel-action px-4 py-3"
-              data-testid={`tool-${t.id}`}
-            >
-              <span className="text-[color:var(--body)] mt-0.5">{t.icon}</span>
-              <span className="min-w-0">
-                <span className="block text-[13px] font-medium" style={{ color: 'var(--hi)' }}>
-                  {t.title}
+        <section className="mt-8" aria-labelledby="tools-heading">
+          <HubSectionHeader
+            id="tools-heading"
+            title="Shared tools"
+            hint="Utilities that support both compliance workspaces."
+            aside={`${alsoAvailable.length} available`}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            {alsoAvailable.map((t) => (
+              <Link
+                key={t.id}
+                href={t.href}
+                className="hub-card group flex items-center gap-4 p-4"
+                aria-label={t.title}
+                data-testid={`tool-${t.id}`}
+              >
+                <span className="h-14 w-14 shrink-0">{t.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-[color:var(--body)]">{t.description}</span>
                 </span>
-                <span className="block text-[12px] text-[color:var(--body)] mt-0.5">
-                  {t.description}
-                </span>
-              </span>
-            </Link>
-          ))}
-        </div>
+                <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)] transition group-hover:translate-x-0.5 group-hover:text-[color:var(--hi)]" />
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

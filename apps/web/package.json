@@ -8,6 +8,7 @@
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
     "build": "tsx script/build.ts",
     "start": "cross-env NODE_ENV=production node dist/index.cjs",
+    "test-email": "cross-env NODE_ENV=development tsx script/test-email.ts",
     "check": "tsc",
     "test": "vitest run",
     "test:e2e": "playwright test",

@@ -137,8 +137,8 @@ function NavItem({ item, isActive, searchParams }: { item: { name: string; href:
       className={cn(
         "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium relative transition-all duration-150",
         isActive
-          ? "bg-white/10 text-white"
-          : "text-white/55 hover:text-white/90 hover:bg-white/6"
+          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border))]"
+          : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
       )}
       data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
     >
@@ -148,7 +148,7 @@ function NavItem({ item, isActive, searchParams }: { item: { name: string; href:
       <item.icon
         className={cn(
           "h-4 w-4 shrink-0 transition-colors duration-150",
-          isActive ? "text-primary" : "text-white/35 group-hover:text-white/65"
+          isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground"
         )}
       />
       <span className="truncate flex-1 leading-snug">{item.name}</span>
@@ -164,8 +164,8 @@ function PillarNavItem({ item, isActive, searchParams }: { item: PillarNavDef; i
       className={cn(
         "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium relative transition-all duration-150",
         isActive
-          ? "bg-white/10 text-white"
-          : "text-white/55 hover:text-white/90 hover:bg-white/6"
+          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-border))]"
+          : "text-sidebar-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground"
       )}
       data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, '-')}`}
     >
@@ -175,7 +175,7 @@ function PillarNavItem({ item, isActive, searchParams }: { item: PillarNavDef; i
       <item.icon
         className={cn(
           "h-4 w-4 shrink-0 transition-colors duration-150",
-          isActive ? "text-primary" : "text-white/35 group-hover:text-white/65"
+          isActive ? "text-primary" : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground"
         )}
       />
       <span className="truncate flex-1 leading-snug">{item.name}</span>
@@ -198,15 +198,15 @@ function CollapsibleSection({
     <div className="space-y-0.5">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center w-full px-3 pb-1 pt-3 tracking-widest uppercase hover:text-white/60 transition-colors duration-150"
+        className="flex items-center w-full px-3 pb-1 pt-3 tracking-widest uppercase text-sidebar-foreground/70 transition-colors duration-150 hover:text-sidebar-accent-foreground"
         data-testid={`section-toggle-${label.toLowerCase().replace(/\s+/g, '-')}`}
       >
-        <span className="flex-1 text-left text-[10px] font-bold text-white/35 tracking-[0.12em]">
+        <span className="flex-1 text-left text-[10px] font-bold tracking-[0.12em]">
           {label}
         </span>
         <ChevronDown
           className={cn(
-            "h-3 w-3 text-white/30 transition-transform duration-200",
+            "h-3 w-3 transition-transform duration-200",
             !isOpen && "-rotate-90"
           )}
         />
@@ -235,7 +235,7 @@ function ScoreRing({ score, total }: { score: number; total: number }) {
         <circle
           cx="22" cy="22" r={radius}
           fill="none" strokeWidth="3"
-          className="stroke-white/10"
+          className="stroke-sidebar-border"
         />
         <circle
           cx="22" cy="22" r={radius}
@@ -247,7 +247,7 @@ function ScoreRing({ score, total }: { score: number; total: number }) {
         />
       </svg>
       <div className="text-center z-10">
-        <span className="text-[12px] font-bold tabular-nums leading-none text-white">
+        <span className="text-[12px] font-bold tabular-nums leading-none text-sidebar-accent-foreground">
           {Math.round(score)}
         </span>
       </div>
@@ -278,19 +278,19 @@ export function Sidebar() {
   const searchParams = sessionParam ? `session=${encodeURIComponent(sessionParam)}` : undefined;
 
   return (
-    <div className="flex h-screen w-[220px] flex-col bg-sidebar border-r border-white/8 z-10">
+    <div className="flex h-screen w-[220px] flex-col bg-sidebar border-r border-sidebar-border text-sidebar-foreground z-10">
 
-      <div className="flex h-14 items-center px-4 shrink-0 border-b border-white/8">
+      <div className="flex h-14 items-center px-4 shrink-0 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
           <img
             src={okiruLogo}
             alt="Okiru"
-            className="h-8 w-8 rounded-full object-contain ring-1 ring-white/15"
+            className="h-8 w-8 rounded-full object-contain ring-1 ring-sidebar-border"
             data-testid="img-logo-sidebar"
           />
           <div className="flex flex-col gap-0">
-            <span className="text-[14px] font-extrabold tracking-widest leading-tight text-white">OKIRU</span>
-            <span className="text-[9px] font-semibold text-white/30 tracking-[0.2em] leading-tight">.PRO</span>
+            <span className="text-[14px] font-extrabold tracking-widest leading-tight text-sidebar-accent-foreground">OKIRU</span>
+            <span className="text-[9px] font-semibold text-sidebar-foreground/70 tracking-[0.2em] leading-tight">.PRO</span>
           </div>
         </div>
       </div>
@@ -315,15 +315,15 @@ export function Sidebar() {
         </CollapsibleSection>
       </div>
 
-      <div className="px-2 pb-3 mt-auto border-t border-white/8 space-y-1 pt-3">
+      <div className="px-2 pb-3 mt-auto border-t border-sidebar-border space-y-1 pt-3">
         {isLoaded && scorecard && (
-          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-white/7 border border-white/8 mb-1">
+          <div className="flex items-center gap-3 px-3 py-3 rounded-xl bg-card/80 border border-sidebar-border mb-1 shadow-sm">
             <ScoreRing score={totalScore} total={totalMax} />
             <div className="flex flex-col min-w-0 gap-0.5">
-              <span className="text-[10.5px] font-semibold text-white/45 uppercase tracking-wider leading-none">
+              <span className="text-[10.5px] font-semibold text-muted-foreground uppercase tracking-wider leading-none">
                 Total Score
               </span>
-              <span className="text-[22px] font-black tabular-nums text-white leading-tight">
+              <span className="text-[22px] font-black tabular-nums text-foreground leading-tight">
                 {totalScore.toFixed(1)}
               </span>
               <span className="text-[11px] font-bold text-primary leading-none">
