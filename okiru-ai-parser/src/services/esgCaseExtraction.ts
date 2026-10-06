@@ -45,7 +45,7 @@ import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
 import { extractEsgMonthlyTables } from './esgMonthlyTables.js';
-import { extractEsgPeriodSummary, topOfSheetIsDated } from './esgPeriodSummaries.js';
+import { extractEsgPeriodSummary, fillsOfVehicle, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
 import {
   ESG_REGISTER_FIELDS,
   esgFieldElementIndex,
@@ -184,6 +184,17 @@ export async function extractEsgCaseEntities(
         rows: structuredRows(input.tables),
         sheetName,
       });
+    // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
+    // in the tab's name and title, and never on its rows. Each fill is that
+    // vehicle's, or it could never reach the vehicle's month.
+    const loggedVehicle = sheetTable ? vehicleOfSheet(sheetName, matrix) : null;
+    if (sheetTable && loggedVehicle) {
+      for (const value of sheetTable.values) {
+        if (value.field === 'fleet_fuel_transaction_rows' && Array.isArray(value.value)) {
+          value.value = fillsOfVehicle(value.value, loggedVehicle);
+        }
+      }
+    }
     // A hidden sheet's register rows say so: scratch copies and old lists may
     // add to what is known about a record, never add a record of their own.
     if (sheetTable && input.metadata?.sheet_hidden === true) {

@@ -48,7 +48,7 @@ import {
 } from '../../schemas/esg_calculator_allowlist.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { findEsgDocumentById } from '../../schemas/esg_document_matrix.js';
-import { ROW_HIDDEN_KEY, ROW_SOURCE_KEY, type CaseEntities } from './entityResolution.js';
+import { ROW_HIDDEN_KEY, ROW_PERIOD_KEY, ROW_SOURCE_KEY, type CaseEntities } from './entityResolution.js';
 import type { ExtractionModel } from './aiExtraction.js';
 import { proposeFieldMappings, type MappableKey } from './semanticFieldMapping.js';
 
@@ -556,6 +556,12 @@ function toNumber(value: unknown): number | null {
 
 /** "15 March 2026", "2026-03-14", "14/03/2027" → ISO. Null if unparseable. */
 function toIsoDate(value: unknown): string | null {
+  // A date-formatted cell reaches the parser as Excel's day number (46090 is
+  // 9 March 2026). In a field that IS a date, a day number between 2000 and
+  // 2099 can only be one — a fuel log lost a third of its fill dates without this.
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 36526 && value <= 73050) {
+    return new Date(Math.round((value - 25569) * 86_400_000)).toISOString().slice(0, 10);
+  }
   if (typeof value !== 'string') return null;
   const text = value.trim();
 
@@ -671,6 +677,8 @@ export interface EsgCalculatorRow {
   droppedFields: string[];
   /** Read from a hidden sheet: it may add to what is known, not to what exists. */
   hidden?: boolean;
+  /** The month ("YYYY-MM") the row's figures are for, when it states one month's figures. */
+  period?: string;
 }
 
 export interface EsgCalculatorMappingResult {
@@ -880,8 +888,10 @@ function expandRows(
     const rowSources = typeof stated === 'string' && stated ? [stated] : sourceFiles;
 
     const hidden = (raw as Record<string, unknown>)[ROW_HIDDEN_KEY] === true;
+    const stamped = (raw as Record<string, unknown>)[ROW_PERIOD_KEY];
+    const period = typeof stamped === 'string' && /^\d{4}-\d{2}$/.test(stamped) ? stamped : undefined;
     for (const [field, cellValue] of Object.entries(raw as Record<string, unknown>)) {
-      if (field === ROW_SOURCE_KEY || field === ROW_HIDDEN_KEY) continue;
+      if (field === ROW_SOURCE_KEY || field === ROW_HIDDEN_KEY || field === ROW_PERIOD_KEY) continue;
       if (cellValue === null || cellValue === undefined || String(cellValue).trim() === '') continue;
       const mapping = mappingFor(field, elements);
       if (!mapping) {
@@ -902,7 +912,15 @@ function expandRows(
     }
 
     if (Object.keys(cells).length === 0) return;
-    rows.push({ grid: gridField, index, cells, sourceFiles: rowSources, droppedFields, ...(hidden ? { hidden: true } : {}) });
+    rows.push({
+      grid: gridField,
+      index,
+      cells,
+      sourceFiles: rowSources,
+      droppedFields,
+      ...(hidden ? { hidden: true } : {}),
+      ...(period ? { period } : {}),
+    });
   });
 
   return rows;
