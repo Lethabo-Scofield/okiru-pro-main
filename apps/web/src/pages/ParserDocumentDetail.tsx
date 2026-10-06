@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AlertTriangle, Building2, Check, Download, FileWarning, Loader2, RefreshCw, Upload } from "lucide-react";
 import { ExtractionReviewPane } from "@/components/upload/ExtractionReviewPane";
+import { EditableValue } from "@/components/review/EditableValue";
 import { PARSER_STATUS_PRESENTATION, fieldLabel, formatParserValue, type ParserDocumentSummary, type ParserRunDetail } from "@/lib/parserDocuments";
 
 interface ClientRow { clientId: string; name: string }
@@ -100,8 +101,40 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     ...(run?.missingFields ?? []),
     ...Object.entries(fields).filter(([, field]) => field?.raw_value == null && field?.normalized_value == null).map(([key]) => key),
   ]), [run, fields]);
-  const readableFields = Object.entries(fields).filter(([key, field]) => !missingKeys.has(key) && field?.normalized_value != null);
-  const missingFields = Object.entries(fields).filter(([key]) => missingKeys.has(key));
+  /**
+   * What people have corrected or filled in, field by field. They sit beside the
+   * parser's reading in the run's review history, never over it; the latest
+   * word on a field wins, and a null withdraws an earlier correction.
+   */
+  const corrections = useMemo(() => {
+    const out = new Map<string, { value: unknown; original: unknown }>();
+    for (const e of (run?.reviewHistory ?? []) as Array<{ fieldKey?: string | null; approvalState?: string; correctedValue?: unknown; originalValue?: unknown }>) {
+      if (e.approvalState !== "corrected" || !e.fieldKey || e.fieldKey === "document_type" || e.fieldKey === "document") continue;
+      if (e.correctedValue == null) out.delete(e.fieldKey);
+      else out.set(e.fieldKey, { value: e.correctedValue, original: e.originalValue });
+    }
+    return out;
+  }, [run]);
+  // A missing field someone has filled in is read now — by a person.
+  const readableKeys = Array.from(new Set([
+    ...Object.entries(fields).filter(([key, field]) => !missingKeys.has(key) && field?.normalized_value != null).map(([key]) => key),
+    ...Array.from(corrections.keys()),
+  ]));
+  const missingKeyList = Array.from(missingKeys).filter((key) => !corrections.has(key));
+
+  /** Save one value a person read off the document. Throws so the editor can say why. */
+  const saveField = async (key: string, value: string) => {
+    const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fields: { [key]: value } }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 403 ? "You can view this company's documents but not change them." : body?.message ?? "Could not save that value");
+    setRun((current) => (current ? { ...current, reviewHistory: body.reviewHistory ?? current.reviewHistory } : current));
+    setNotice(`Saved ${fieldLabel(key)}.`);
+  };
   const presentation = run ? PARSER_STATUS_PRESENTATION[run.status] : null;
 
   const candidates: ClassificationCandidate[] = Array.isArray(audit.classification_candidates) ? audit.classification_candidates : [];
@@ -513,9 +546,79 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
               </div>
             </section>}
 
-            <section><div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-semibold text-white">Extracted fields</h2><span className="text-[11px] text-[color:var(--muted)]">{readableFields.length} read</span></div><div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">{readableFields.map(([key, field]) => <div key={key} className="grid gap-2 py-4 sm:grid-cols-[180px_1fr_80px]"><div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div><div><p className="break-words text-[13px] text-white">{formatParserValue(field.normalized_value)}</p>{/* The raw text behind the number. Without it a normalisation bug — "R1,200,000" read as 1200 — is invisible and unarguable. */}{field.raw_value != null && String(field.raw_value) !== String(field.normalized_value) && <p className="mt-1 text-[11px] text-[color:var(--muted)]">read as “{String(field.raw_value)}”{field.data_type ? ` · ${field.data_type}` : ""}</p>}{field.source?.text_snippet && <details className="mt-2"><summary className="cursor-pointer text-[11px] text-[color:var(--muted)]">View source</summary><p className="mt-2 border-l border-[color:var(--rule-strong)] pl-3 text-[11px] leading-5 text-[color:var(--body)]">{field.source.text_snippet}</p><p className="mt-1 text-[10px] text-[color:var(--muted)]">{field.source.page != null ? `Page ${field.source.page}` : "Page unavailable"}{field.source.table ? `, ${field.source.table}` : ""}</p></details>}</div><div className={`text-right text-[12px] tabular-nums ${Number(field.confidence) >= 0.85 ? "text-emerald-300" : "text-amber-300"}`}>{Math.round(Number(field.confidence || 0) * 100)}%</div></div>)}</div></section>
+            {/* Fact-checking and fixing are one gesture: look at the document on
+                the left, click the value, type. A correction is kept beside the
+                parser's reading — both stay on record. */}
+            <section data-testid="extracted-fields">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-[14px] font-semibold text-white">Extracted fields</h2>
+                <span className="text-[11px] text-[color:var(--muted)]">
+                  {readableKeys.length} read{corrections.size > 0 ? ` · ${corrections.size} checked by your team` : ""}
+                </span>
+              </div>
+              <p className="mb-3 text-[11.5px] text-[color:var(--body)]">Check each value against the document. Click one to correct it.</p>
+              <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">
+                {readableKeys.map((key) => {
+                  const field = (fields[key] ?? {}) as Record<string, any>;
+                  const fix = corrections.get(key);
+                  const shown = formatParserValue(fix ? fix.value : field.normalized_value);
+                  return (
+                    <div key={key} className="grid gap-2 py-4 sm:grid-cols-[180px_1fr_80px]" data-testid={`field-row-${key}`}>
+                      <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] text-white">
+                          <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+                        </div>
+                        {fix ? (
+                          <p className="mt-1 text-[11px] text-violet-200/80" data-testid={`field-${key}-corrected`}>
+                            {fix.original != null ? `Corrected by your team — the parser read “${formatParserValue(fix.original)}”` : "Added by your team — the parser did not find this"}
+                          </p>
+                        ) : (
+                          // The raw text behind the number. Without it a normalisation bug — "R1,200,000" read as 1200 — is invisible and unarguable.
+                          field.raw_value != null && String(field.raw_value) !== String(field.normalized_value) && (
+                            <p className="mt-1 text-[11px] text-[color:var(--muted)]">read as “{String(field.raw_value)}”{field.data_type ? ` · ${field.data_type}` : ""}</p>
+                          )
+                        )}
+                        {field.source?.text_snippet && (
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-[11px] text-[color:var(--muted)]">View source</summary>
+                            <p className="mt-2 border-l border-[color:var(--rule-strong)] pl-3 text-[11px] leading-5 text-[color:var(--body)]">{field.source.text_snippet}</p>
+                            <p className="mt-1 text-[10px] text-[color:var(--muted)]">{field.source.page != null ? `Page ${field.source.page}` : "Page unavailable"}{field.source.table ? `, ${field.source.table}` : ""}</p>
+                          </details>
+                        )}
+                      </div>
+                      <div className={`text-right text-[12px] tabular-nums ${fix ? "text-violet-200" : Number(field.confidence) >= 0.85 ? "text-emerald-300" : "text-amber-300"}`}>
+                        {fix ? "Checked" : `${Math.round(Number(field.confidence || 0) * 100)}%`}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
 
-            <section><div className="mb-3 flex items-center justify-between"><h2 className="text-[14px] font-semibold text-white">Could not be read</h2><span className="text-[11px] text-[color:var(--muted)]">{missingFields.length} expected</span></div>{missingFields.length === 0 ? <p className="border-y border-[color:var(--rule)] py-4 text-[12px] text-[color:var(--body)]">No expected fields are missing.</p> : <div className="divide-y divide-[#3a2f20] border-y border-[#3a2f20]">{missingFields.map(([key]) => <div key={key} className="flex items-center justify-between py-3"><span className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</span><span className="text-[11px] text-amber-300">Not found</span></div>)}</div>}</section>
+            <section data-testid="missing-fields">
+              <div className="mb-1 flex items-center justify-between">
+                <h2 className="text-[14px] font-semibold text-white">Not found in this document</h2>
+                <span className="text-[11px] text-[color:var(--muted)]">{missingKeyList.length} expected</span>
+              </div>
+              {missingKeyList.length === 0 ? (
+                <p className="border-y border-[color:var(--rule)] py-4 text-[12px] text-[color:var(--body)]">No expected fields are missing.</p>
+              ) : (
+                <>
+                  <p className="mb-3 text-[11.5px] text-[color:var(--body)]">If the document does show one of these, add it — you know where to look better than the parser did.</p>
+                  <div className="divide-y divide-[#3a2f20] border-y border-[#3a2f20]">
+                    {missingKeyList.map((key) => (
+                      <div key={key} className="flex items-center justify-between gap-4 py-3" data-testid={`missing-row-${key}`}>
+                        <span className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</span>
+                        <div className="min-w-0 max-w-[60%] text-[12.5px] text-white">
+                          <EditableValue value={null} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </section>
 
             {/* Read, then refused. Being told a value was found and thrown away
                 is a different problem from it never being found, and the fix is
