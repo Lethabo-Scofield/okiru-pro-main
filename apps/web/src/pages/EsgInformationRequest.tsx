@@ -295,7 +295,7 @@ export default function EsgInformationRequest() {
     }
   };
 
-  const confirmImport = async () => {
+  const confirmImport = async (replace: string[] = []) => {
     if (!importPreview) return;
     setImporting(true);
     try {
@@ -305,7 +305,7 @@ export default function EsgInformationRequest() {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ confirm: true, sections: importPreview.sections }),
+          body: JSON.stringify({ confirm: true, sections: importPreview.sections, replace }),
         },
       );
       if (!res.ok) throw new Error("confirm failed");
@@ -551,7 +551,7 @@ export default function EsgInformationRequest() {
             setImportOpen(false);
             setImportPreview(null);
           }}
-          onConfirm={() => void confirmImport()}
+          onConfirm={(replace) => void confirmImport(replace)}
           confirming={importing}
           // The workbook being imported INTO — what turns "812 cells" into
           // "300 of these replace figures you already captured".

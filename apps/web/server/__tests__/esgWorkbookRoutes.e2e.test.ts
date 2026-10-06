@@ -20,6 +20,7 @@ import bcrypt from "bcryptjs";
 import { storage, MemoryStorage } from "../storage";
 import { registerRoutes } from "../routes";
 import { withStorageReportedAvailable } from "./memoryStorageSession";
+import { mergeEsgSectionCells, readEsgGridRows } from "../../src/lib/esg/esgGridRows";
 
 async function seedVerifiedUser(opts: {
   username: string;
@@ -158,5 +159,22 @@ describe("ESG workbook routes", () => {
     const get = await esgAgent.get(`/api/esg/workbook/${companyId}`);
     expect(get.body.sections.applicability.cells["e:d24"]).toBe("Water is metered and billed by the landlord.");
     expect(get.body.sections.netzero.cells.A20).toBe("Fleet renewal");
+  });
+
+  it("merges an import by default, and replaces a register only when the person chose to", async () => {
+    const fleet = (regs: string[]) => ({ cells: mergeEsgSectionCells("fleet", regs.map((reg, i) => ({ _id: `r${i}`, reg })), {}) });
+    const rowsNow = async () => readEsgGridRows((await esgAgent.get(`/api/esg/workbook/${companyId}`)).body.sections.fleet.cells, "fleet").map((r) => r.reg);
+
+    await esgAgent.put(`/api/esg/workbook/${companyId}/section/fleet`).send(fleet(["AA11BBGP", "CC22DDGP"]));
+    const merged = await esgAgent.post(`/api/esg/workbook/${companyId}/import`).send({ confirm: true, sections: { fleet: fleet(["EE33FFGP"]) } });
+    expect(merged.status).toBe(200);
+    expect(await rowsNow()).toEqual(["AA11BBGP", "CC22DDGP", "EE33FFGP"]);
+
+    const replaced = await esgAgent
+      .post(`/api/esg/workbook/${companyId}/import`)
+      .send({ confirm: true, sections: { fleet: fleet(["EE33FFGP"]) }, replace: ["fleet"] });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.registers).toEqual([expect.objectContaining({ sectionId: "fleet", replaced: true, removed: 3 })]);
+    expect(await rowsNow()).toEqual(["EE33FFGP"]);
   });
 });

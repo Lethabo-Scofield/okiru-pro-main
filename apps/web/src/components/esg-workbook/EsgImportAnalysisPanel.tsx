@@ -22,6 +22,14 @@ interface Props {
   sectionLabels?: Record<string, string>;
   /** Cap on rows shown per group before "+N more". */
   sampleLimit?: number;
+  /** Registers the person chose to replace with the file's rows. */
+  replace?: ReadonlySet<string>;
+  /**
+   * Offer, per register that already holds rows, to replace it with the
+   * file's rows instead of updating and adding. Absent where nothing can be
+   * replaced (a new company has no register yet).
+   */
+  onReplaceChange?: (sectionId: string, replace: boolean) => void;
 }
 
 function cellText(value: unknown): string {
@@ -30,7 +38,13 @@ function cellText(value: unknown): string {
   return text.length > 28 ? `${text.slice(0, 27)}…` : text;
 }
 
-export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLimit = 6 }: Props) {
+export function EsgImportAnalysisPanel({
+  analysis,
+  sectionLabels = {},
+  sampleLimit = 6,
+  replace = new Set<string>(),
+  onReplaceChange,
+}: Props) {
   const label = (id: string) => sectionLabels[id] ?? id;
   const {
     overwrites, additions, unchanged, duplicates,
@@ -147,15 +161,41 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
           data-testid="esg-import-registers"
         >
           <p className="text-[13px] font-medium text-[#e5e5ea]">
-            Registers — matching rows are updated, new rows added, none removed
+            {registers.some((r) => r.replaced)
+              ? "Registers — updated and added to, except where you chose to replace one"
+              : "Registers — matching rows are updated, new rows added, none removed"}
           </p>
-          <ul className="mt-1 space-y-0.5 text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+          <ul className="mt-1 space-y-1 text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
             {registers.map((r) => (
-              <li key={r.sectionId}>
-                {label(r.sectionId)}: {r.added} row{r.added === 1 ? "" : "s"} added
-                {r.updated > 0 ? `, ${r.updated} updated` : ""}
-                {r.existing > 0 ? ` (${r.existing} already there)` : ""}
-                {r.alreadyThere > 0 ? ` · ${r.alreadyThere} unchanged` : ""}
+              <li key={r.sectionId} className="flex flex-wrap items-center gap-x-2" data-testid={`esg-import-register-${r.sectionId}`}>
+                <span>
+                  {r.replaced ? (
+                    <>
+                      {label(r.sectionId)}: <span className="text-amber-300">replaced</span> with the file&apos;s{" "}
+                      {r.incoming} row{r.incoming === 1 ? "" : "s"}
+                      {r.removed ? ` — the ${r.removed} row${r.removed === 1 ? "" : "s"} in the workbook now go` : ""}
+                    </>
+                  ) : (
+                    <>
+                      {label(r.sectionId)}: {r.added} row{r.added === 1 ? "" : "s"} added
+                      {r.updated > 0 ? `, ${r.updated} updated` : ""}
+                      {r.existing > 0 ? ` (${r.existing} already there)` : ""}
+                      {r.alreadyThere > 0 ? ` · ${r.alreadyThere} unchanged` : ""}
+                    </>
+                  )}
+                </span>
+                {onReplaceChange && r.existing > 0 ? (
+                  // For the client who sends a complete, corrected list.
+                  <select
+                    aria-label={`How to import ${label(r.sectionId)}`}
+                    value={replace.has(r.sectionId) ? "replace" : "merge"}
+                    onChange={(e) => onReplaceChange(r.sectionId, e.target.value === "replace")}
+                    className="rounded-md border border-white/[0.12] bg-transparent px-1.5 py-0.5 text-[11px] text-[#e5e5ea]"
+                  >
+                    <option value="merge">Update and add rows</option>
+                    <option value="replace">Replace with the file&apos;s rows</option>
+                  </select>
+                ) : null}
               </li>
             ))}
           </ul>
