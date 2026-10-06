@@ -122,6 +122,14 @@ export interface EsgWorkbookMappingResult {
   patches: EsgSectionPatchMap;
   /** Parser field name → outcome. The UI attributes each reading through this. */
   outcomes: Record<string, EsgFieldOutcome>;
+  /**
+   * Field → source file → outcome, for readings whose fate is known document
+   * by document: a bill's figure (and the site and period that placed it), a
+   * dashboard's monthly figures. Wins over `outcomes` for those readings, so
+   * one bill outside the reporting year no longer says "placed" because
+   * another bill was.
+   */
+  sourceOutcomes: Record<string, Record<string, EsgFieldOutcome>>;
   conflicts: EsgCellConflict[];
 }
 
@@ -437,7 +445,7 @@ export function mapEsgCalculatorToWorkbook(
     }
     applyRegisterRows(gridField, gridRows, target.sectionId, target.columns, gridCells, record, axes);
   }
-  if (monthlyFacts.length > 0) applyMonthlyFacts(monthlyFacts, axes, builder, record);
+  const monthlyFates = monthlyFacts.length > 0 ? applyMonthlyFacts(monthlyFacts, axes, builder, record) : [];
 
   /* ---------------- Supplier questionnaire ---------------- */
 
@@ -605,7 +613,10 @@ export function mapEsgCalculatorToWorkbook(
     }
   }
 
-  return { patches, outcomes, conflicts };
+  const contestedCells = new Set(conflicts.filter((c) => c.sectionId === "e-data").map((c) => c.cellRef));
+  const sourceOutcomes = monthlyFactOutcomes(monthlyFacts, monthlyFates, contestedCells, patches);
+
+  return { patches, outcomes, sourceOutcomes, conflicts };
 }
 
 /* ------------------------------------------------------------------ *
@@ -803,11 +814,16 @@ interface MonthlyFact {
   periodEnd: unknown;
   value: number;
   sources: string[];
+  /** Fields that gave the figure its site and month — a bill's site_name, billing_period_end. */
+  context: string[];
 }
 
 function monthlyFactsFromRows(rows: EsgCalculatorRowLike[]): MonthlyFact[] {
   return rows.map((row) => ({
-    field: ESG_MONTHLY_FACTS_FIELD,
+    // A bill read as a row names the field it was read as; a dashboard's
+    // figures are the register itself.
+    field: String(row.cells["monthly.field"] ?? "").trim() || ESG_MONTHLY_FACTS_FIELD,
+    context: String(row.cells["monthly.context"] ?? "").split(",").map((f) => f.trim()).filter(Boolean),
     measure: String(row.cells["monthly.measure"] ?? ""),
     site: row.cells["monthly.site"],
     periodEnd: row.cells["monthly.period_end"],
@@ -839,6 +855,7 @@ function monthlyFactsFromRowGrid(
       periodEnd: periods.find((p) => esgMonthColumnFor(p, axes)) ?? periods[0],
       value: Number(result.value),
       sources: row.sourceFiles ?? [],
+      context: [],
     });
   }
   return facts;
@@ -849,6 +866,16 @@ interface PartReading {
   value: number;
   sources: string[];
   fields: string[];
+  /** The facts (by index) this reading is made of — what each one's fate follows. */
+  factIds: number[];
+}
+
+/** What became of one figure. */
+interface MonthlyFactFate {
+  status: "placed" | "unplaced";
+  /** The cell it was proposed for; settling may still contest it. */
+  cellRef?: string;
+  reason?: string;
 }
 
 const uniq = (items: string[]): string[] => Array.from(new Set(items.filter(Boolean)));
@@ -862,7 +889,10 @@ function distinctReadings(readings: PartReading[]): PartReading[] {
     if (same) {
       same.sources = uniq([...same.sources, ...reading.sources]);
       same.fields = uniq([...same.fields, ...reading.fields]);
-    } else byValue.set(key, { value: key, sources: uniq(reading.sources), fields: uniq(reading.fields) });
+      same.factIds = [...same.factIds, ...reading.factIds];
+    } else {
+      byValue.set(key, { value: key, sources: uniq(reading.sources), fields: uniq(reading.fields), factIds: [...reading.factIds] });
+    }
   }
   return Array.from(byValue.values());
 }
@@ -887,7 +917,11 @@ function applyMonthlyFacts(
   axes: EsgReportingAxes,
   builder: PatchBuilder,
   record: (field: string, outcome: EsgFieldOutcome) => void,
-): void {
+): MonthlyFactFate[] {
+  const fates: MonthlyFactFate[] = facts.map(() => ({ status: "unplaced", reason: "Not placed." }));
+  const hold = (ids: number[], reason: string): void => {
+    for (const id of ids) fates[id] = { status: "unplaced", reason };
+  };
   type Cell = {
     prefix: string;
     month: string;
@@ -929,9 +963,10 @@ function applyMonthlyFacts(
     return "unknown";
   };
 
-  for (const fact of facts) {
+  facts.forEach((fact, factId) => {
     fieldsSeen.add(fact.field);
     if (fact.measure === EXTERNAL_DIESEL_ISSUED) {
+      hold([factId], "Diesel issued to vehicles outside the fleet is reported, not written to a grid — decide whether it belongs in your Scope 1.");
       // Never written to a grid — whether it is Scope 1 is the company's call —
       // but kept to catch the same litres booked as something they are not.
       const where = locate(fact.site, true);
@@ -951,28 +986,38 @@ function applyMonthlyFacts(
           });
         }
       }
-      continue;
+      return;
     }
     const grid = MONTHLY_MEASURE_GRIDS[fact.measure];
     if (!grid) {
       if (fact.measure) noGrid.add(fact.measure);
-      continue;
+      hold([factId], `${fact.measure || "This figure"} is read and reported; the workbook has no monthly grid for it.`);
+      return;
     }
-    if (!Number.isFinite(fact.value)) continue;
+    if (!Number.isFinite(fact.value)) {
+      hold([factId], "The figure could not be read as a number.");
+      return;
+    }
 
     const where = locate(fact.site, grid.perSite);
     if (where === "siteless") {
       siteless += 1;
-      continue;
+      hold([factId], "This is a company-wide total and the workbook records this per site, so the sites' own figures are used instead.");
+      return;
     }
     if (where === "unknown") {
       unknownSites.add(String(fact.site));
-      continue;
+      hold([factId], `Site "${String(fact.site)}" is not a site this workbook reports on (${axes.depots.join(", ")}). Add it to the workbook's sites to place it.`);
+      return;
     }
     const month = esgMonthColumnFor(fact.periodEnd, axes);
     if (!month) {
-      outsideYear.add(String(fact.periodEnd ?? "").slice(0, 7));
-      continue;
+      const stated = String(fact.periodEnd ?? "").slice(0, 7);
+      outsideYear.add(stated);
+      hold([factId], stated
+        ? `${stated} falls outside the workbook's reporting year (${axes.months[0]} to ${axes.months[axes.months.length - 1]}).`
+        : "The figure states no month we could read.");
+      return;
     }
 
     const cellRef = esgMonthlyCellRef(grid.prefix, where.rowIndex, month);
@@ -992,8 +1037,9 @@ function applyMonthlyFacts(
     if (reading) {
       reading.value += fact.value;
       reading.fields = uniq([...reading.fields, fact.field]);
-    } else part.bySource.set(source, { value: fact.value, sources: [...fact.sources], fields: [fact.field] });
-  }
+      reading.factIds.push(factId);
+    } else part.bySource.set(source, { value: fact.value, sources: [...fact.sources], fields: [fact.field], factIds: [factId] });
+  });
 
   const notes: string[] = [];
   const told = new Set<string>();
@@ -1022,9 +1068,9 @@ function applyMonthlyFacts(
           )
           : undefined;
         if (issue) {
-          notes.push(
-            `${reading.sources[0] ?? "A document"} books ${Math.round(reading.value * 100) / 100} L as generator diesel for ${issue.site} in ${issue.month}, but ${issue.sources[0] ?? "the fuel report"} shows exactly that diesel issued to vehicles outside the fleet — road diesel, not generator fuel. It was not written; check where it belongs.`,
-          );
+          const why = `${reading.sources[0] ?? "A document"} books ${Math.round(reading.value * 100) / 100} L as generator diesel for ${issue.site} in ${issue.month}, but ${issue.sources[0] ?? "the fuel report"} shows exactly that diesel issued to vehicles outside the fleet — road diesel, not generator fuel. It was not written; check where it belongs.`;
+          notes.push(why);
+          hold(reading.factIds, why);
           continue;
         }
         readings.push(reading);
@@ -1039,21 +1085,23 @@ function applyMonthlyFacts(
     if (named.length > 0) {
       const contested = named.filter((part) => part.options.length > 1);
       if (contested.length > 1) {
-        notes.push(
-          `${cell.label}, ${cell.month}: documents disagree about ${contested.map((part) => part.label).join(" and ")}, so the total was left for you.`,
-        );
+        const why = `${cell.label}, ${cell.month}: documents disagree about ${contested.map((part) => part.label).join(" and ")}, so the total was left for you.`;
+        notes.push(why);
+        hold(named.flatMap((part) => part.options.flatMap((option) => option.factIds)), why);
       } else {
         const agreed = named.filter((part) => part.options.length === 1).map((part) => part.options[0]);
         const base: PartReading = {
           value: agreed.reduce((sum, reading) => sum + reading.value, 0),
           sources: uniq(agreed.flatMap((reading) => reading.sources)),
           fields: uniq(agreed.flatMap((reading) => reading.fields)),
+          factIds: agreed.flatMap((reading) => reading.factIds),
         };
-        for (const option of contested[0]?.options ?? [{ value: 0, sources: [], fields: [] }]) {
+        for (const option of contested[0]?.options ?? [{ value: 0, sources: [], fields: [], factIds: [] }]) {
           candidates.push({
             value: base.value + option.value,
             sources: uniq([...base.sources, ...option.sources]),
             fields: uniq([...base.fields, ...option.fields]),
+            factIds: [...base.factIds, ...option.factIds],
           });
         }
       }
@@ -1064,6 +1112,7 @@ function applyMonthlyFacts(
       if (same) {
         same.sources = uniq([...same.sources, ...option.sources]);
         same.fields = uniq([...same.fields, ...option.fields]);
+        same.factIds = [...same.factIds, ...option.factIds];
       } else candidates.push(option);
     }
 
@@ -1079,6 +1128,7 @@ function applyMonthlyFacts(
         sources: candidate.sources,
       });
       for (const field of candidate.fields) fieldsProposed.add(field);
+      for (const id of candidate.factIds) fates[id] = { status: "placed", cellRef };
     }
   }
 
@@ -1105,6 +1155,43 @@ function applyMonthlyFacts(
         reason: notes.join(" ") || "These monthly figures had no grid, site or month in this workbook to go in.",
       });
   }
+  return fates;
+}
+
+/**
+ * Each reading's own fate, document by document: a bill's figure, and the
+ * site and period that placed it, are placed when THAT bill's figure was
+ * written — contested when its cell is — and otherwise carry that figure's
+ * own reason. A reading backed by several figures (a dashboard) is placed
+ * when any of them was.
+ */
+function monthlyFactOutcomes(
+  facts: MonthlyFact[],
+  fates: MonthlyFactFate[],
+  contested: ReadonlySet<string>,
+  patches: EsgSectionPatchMap,
+): Record<string, Record<string, EsgFieldOutcome>> {
+  const rank = { placed: 2, conflict: 1, unplaced: 0 } as const;
+  const out: Record<string, Record<string, EsgFieldOutcome>> = {};
+  facts.forEach((fact, i) => {
+    const fate = fates[i];
+    let outcome: EsgFieldOutcome;
+    const written = fate?.cellRef !== undefined ? patches["e-data"]?.cells[fate.cellRef] : undefined;
+    if (fate?.status === "placed" && fate.cellRef && contested.has(fate.cellRef)) {
+      outcome = { status: "conflict", cells: [] };
+    } else if (fate?.status === "placed" && fate.cellRef && written !== undefined) {
+      outcome = { status: "placed", cells: [{ sectionId: "e-data", cellRef: fate.cellRef, value: written }] };
+    } else {
+      outcome = { status: "unplaced", cells: [], rejection: "needs_context", reason: fate?.reason ?? "Not placed." };
+    }
+    const source = fact.sources[0] ?? "";
+    for (const field of [fact.field, ...fact.context]) {
+      const bySource = out[field] ?? (out[field] = {});
+      const prior = bySource[source];
+      if (!prior || rank[outcome.status] > rank[prior.status]) bySource[source] = outcome;
+    }
+  });
+  return out;
 }
 
 function applyMonthlyScalar(
