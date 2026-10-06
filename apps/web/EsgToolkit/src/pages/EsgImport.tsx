@@ -2,6 +2,7 @@ import { Download, FileSpreadsheet, FileText, Upload } from "lucide-react";
 import type { ReactNode } from "react";
 import { API_BASE } from "@toolkit/lib/config";
 import { EsgAppLink } from "@/components/EsgAppLink";
+import { EsgTemplateMenu } from "@/components/esg-workbook/EsgTemplateMenu";
 import { esgClientsHref, esgCreateHref } from "@/lib/esgRoutes";
 import { useEsgStore } from "../lib/esgStore";
 
@@ -79,12 +80,10 @@ export default function EsgImport() {
           <HubCard
             icon={<Download className="h-5 w-5 text-[var(--esg-acc-blue,#22c55e)]" />}
             title="Templates"
-            body="The blank workbook to fill in, or this company's workbook as it stands — to correct offline and import back."
+            body="A blank template to fill in — the whole workbook, one pillar, or just the sheet a colleague owns — or this company's workbook as it stands, to correct offline and import back."
             action={
               <div className="flex flex-wrap gap-2">
-                <a href={`${API_BASE}/api/esg/workbook/template`} className={SECONDARY} data-testid="esg-import-template">
-                  <Download className="h-3.5 w-3.5" /> Blank template
-                </a>
+                <EsgTemplateMenu className={SECONDARY} label="Blank template" align="left" testId="esg-import-template" />
                 <a
                   href={`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/export`}
                   className={SECONDARY}

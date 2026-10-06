@@ -17,6 +17,7 @@ import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import request from "supertest";
 import bcrypt from "bcryptjs";
+import * as XLSX from "xlsx";
 import { storage, MemoryStorage } from "../storage";
 import { registerRoutes } from "../routes";
 import { withStorageReportedAvailable } from "./memoryStorageSession";
@@ -159,6 +160,28 @@ describe("ESG workbook routes", () => {
     const get = await esgAgent.get(`/api/esg/workbook/${companyId}`);
     expect(get.body.sections.applicability.cells["e:d24"]).toBe("Water is metered and billed by the landlord.");
     expect(get.body.sections.netzero.cells.A20).toBe("Fleet renewal");
+  });
+
+  it("serves the template whole or one part of it, and refuses a part that names nothing", async () => {
+    const binary = (res: request.Response, cb: (err: Error | null, body: Buffer) => void) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => cb(null, Buffer.concat(chunks)));
+    };
+    const sheetsOf = (body: Buffer) => XLSX.read(body, { type: "buffer" }).SheetNames;
+
+    const whole = await esgAgent.get("/api/esg/workbook/template").buffer(true).parse(binary);
+    expect(whole.status).toBe(200);
+    expect(whole.headers["content-disposition"]).toContain("esg-bulk-input-template.xlsx");
+    expect(sheetsOf(whole.body)).toContain("SAQ_Supplier");
+
+    const fleet = await esgAgent.get("/api/esg/workbook/template?part=fleet").buffer(true).parse(binary);
+    expect(fleet.status).toBe(200);
+    expect(fleet.headers["content-disposition"]).toContain("esg-template-fleet.xlsx");
+    expect(sheetsOf(fleet.body)).toEqual(["Instructions", "Fleet_Register"]);
+
+    const bad = await esgAgent.get("/api/esg/workbook/template?part=..%2F..%2Fsecrets");
+    expect(bad.status).toBe(400);
   });
 
   it("merges an import by default, and replaces a register only when the person chose to", async () => {

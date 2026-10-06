@@ -10,6 +10,7 @@ import { ESG_SECTION_IDS } from "../src/lib/esgSections";
 import { validateEsgWorkbookForSubmit } from "../src/lib/esgValidation";
 import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
 import { buildEsgWorkbookTemplateXlsx } from "../src/lib/esg/esgWorkbookTemplate";
+import { esgTemplatePart } from "../src/lib/esg/esgTemplateParts";
 import { buildEsgAssistantContext } from "../src/lib/esg/esgAssistantContext";
 import OpenAI, { AzureOpenAI } from "openai";
 import { createChatCompletion } from "./openaiCompat";
@@ -347,10 +348,20 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     }
   }
 
+  /**
+   * The template, whole or one part of it: `?part=` names a pillar
+   * (`environmental`) or one sheet's section (`fleet`). No `part` is the whole
+   * workbook, under the file name it always had.
+   */
   app.get("/api/esg/workbook/template", requireAuth, async (req, res) => {
     if (!requireEsgAccess(req, res)) return;
-    const buf = buildEsgWorkbookTemplateXlsx();
-    res.setHeader("Content-Disposition", 'attachment; filename="esg-bulk-input-template.xlsx"');
+    const part = esgTemplatePart(typeof req.query.part === "string" ? req.query.part : undefined);
+    if (!part) {
+      return res.status(400).json({ error: "Unknown template part" });
+    }
+    const buf = buildEsgWorkbookTemplateXlsx(part.id);
+    // The name comes from the parts list, never from the request.
+    res.setHeader("Content-Disposition", `attachment; filename="${part.fileName}"`);
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

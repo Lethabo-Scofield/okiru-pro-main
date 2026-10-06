@@ -35,6 +35,7 @@ import {
 } from "@/lib/esgRoutes";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import { EsgImportPreviewModal } from "@/components/esg-workbook/EsgImportPreviewModal";
+import { EsgTemplateMenu } from "@/components/esg-workbook/EsgTemplateMenu";
 import { esgImportHandover, type EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 import EsgCreateStartChoice from "@/components/esg/EsgCreateStartChoice";
 import EsgDocumentUploadStart from "@/components/esg/EsgDocumentUploadStart";
@@ -508,13 +509,10 @@ export default function EsgInformationRequest() {
                 e.target.value = "";
               }}
             />
-            <a
-              href={`${API_BASE}/api/esg/workbook/template`}
+            <EsgTemplateMenu
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
-              data-testid="button-esg-download-template"
-            >
-              <Download className="h-3.5 w-3.5" /> Download template
-            </a>
+              testId="button-esg-download-template"
+            />
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
