@@ -39,7 +39,7 @@ import {
 } from "@/lib/parserWorkbookMap";
 import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
 import { vocabularyDecisionKey, type VocabularyDecisions } from "@/lib/workbookInjection";
-import { getSection } from "@/components/workbook/sections";
+import { getSection, parseWorkbookDate } from "@/components/workbook/sections";
 import PillarDocumentBatches, { batchLabel, type UploadOrigin } from "./PillarDocumentBatches";
 import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
@@ -439,6 +439,13 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   const [sector, setSector] = useState("");
   const [subSector, setSubSector] = useState("");
   const [size, setSize] = useState(""); // Generic | QSE | EME
+  // Financial year-end, yyyy-mm-dd. REQUIRED, and asked for here because the
+  // documents never supply it: the B-BBEE parser does not read one. Without it
+  // the workbook's submit refuses to calculate (every dated pillar is measured
+  // over the twelve months ending on it), and a refused submit used to land on
+  // a provisional score of 0 — that is how a fully-uploaded evidence pack
+  // scored nothing. Also unset by default: a guessed year end is a wrong period.
+  const [yearEnd, setYearEnd] = useState("");
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -535,6 +542,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     if (snap.sector) setSector(snap.sector);
     if (snap.subSector) setSubSector(snap.subSector);
     if (snap.size) setSize(snap.size);
+    if (snap.yearEnd) setYearEnd(snap.yearEnd);
     setFiledBatchByFile(snap.filedBatchByFile ?? {});
     restoredDocumentIdsRef.current = snap.documentIds ?? [];
     setRestoredAt(snap.savedAt);
@@ -549,10 +557,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     const timer = window.setTimeout(() => {
       const snap = readFlowSnapshot();
       if (!snap) return;
-      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size });
+      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size, yearEnd });
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [parserCase, companyName, sector, subSector, size]);
+  }, [parserCase, companyName, sector, subSector, size, yearEnd]);
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.
@@ -1152,6 +1160,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         sector,
         subSector,
         size,
+        yearEnd,
         fileNames: list.map((f) => f.name),
         filedBatchByFile,
         documentIds: allDocumentIds(),
@@ -1412,8 +1421,12 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // Missing documents never block: the user can always proceed and the workbook
   // scores on whatever was extracted (even nothing — they complete it manually).
   // Sector + size are REQUIRED: they pick the scorecard the company is judged
-  // against, so creating without them is never a safe default.
-  const canCreate = Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && !parsing && !creating;
+  // against, so creating without them is never a safe default. The year end is
+  // required for the same reason — it picks the period every dated pillar is
+  // measured over, and the workbook will not calculate without one.
+  const yearEndValid = parseWorkbookDate(yearEnd) !== null;
+  const canCreate =
+    Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && yearEndValid && !parsing && !creating;
 
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
@@ -1436,6 +1449,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       companyName: companyName.trim(),
       industrySector: SECTOR_TO_WORKBOOK[sector] ?? "Generic",
       scorecardType: size,
+      financialYearEnd: yearEnd,
     };
     if (sector === "CONSTRUCTION" && subSector) companyMeta.constructionSubSector = subSector;
     if (sector === "FSC" && subSector) companyMeta.fscSubSector = subSector;
@@ -2623,6 +2637,24 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
               className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
               data-testid="docs-company-name"
             />
+            <label className="mb-2.5 block" data-testid="docs-year-end-field">
+              <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--body)]">
+                Financial year-end
+              </span>
+              <input
+                type="date"
+                value={yearEnd}
+                onChange={(e) => setYearEnd(e.target.value)}
+                className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[15px] text-white outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 transition-colors [color-scheme:dark]"
+                data-testid="docs-year-end"
+              />
+              {!yearEndValid && (
+                <span className="mt-1.5 block text-[11.5px] leading-5 text-amber-300/90" data-testid="docs-year-end-hint">
+                  Required — Skills, Procurement, ESD and SED are measured over the twelve months ending
+                  on this date, so the score cannot be calculated without it.
+                </span>
+              )}
+            </label>
             <button
               onClick={() => void handleCreate()}
               disabled={!canCreate}
