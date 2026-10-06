@@ -70,6 +70,13 @@ vi.mock('../../../models.js', () => ({
     findOne(filter: Record<string, any>) {
       return new Query(runs.find((run) => matches(run, filter)) ?? null);
     },
+    async updateOne(filter: Record<string, any>, update: any) {
+      const run = runs.find((r) => matches(r, filter));
+      for (const [key, value] of Object.entries(update.$push ?? {})) {
+        if (run) (run[key] ??= []).push(value);
+      }
+      return { modifiedCount: run ? 1 : 0 };
+    },
   },
 }));
 
@@ -85,6 +92,20 @@ vi.mock('../../middleware/requireAuth.js', () => ({
 vi.mock('../../logger.js', () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
+
+const parserCalls = vi.fn();
+vi.mock('../../services/parserClient.js', () => ({
+  resolveFileWithParser: async (...args: unknown[]) => {
+    parserCalls(...args);
+    return { ok: false, error: 'parser not reachable in tests' };
+  },
+}));
+
+let viewOnly = false;
+vi.mock('../../services/clientScopes.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/clientScopes.js')>();
+  return { ...actual, isViewOnlyMember: async () => viewOnly };
+});
 
 let server: http.Server;
 let port: number;
@@ -131,6 +152,66 @@ beforeEach(() => {
   runs.length = 0;
   nextDocumentId = 1;
   nextRunId = 1;
+  viewOnly = false;
+  parserCalls.mockClear();
+});
+
+describe('re-reading, reviewing, and who may do either', () => {
+  function seedReadDocument() {
+    documents.push({
+      _id: 'doc-1', filename: 'afs.pdf', fileType: 'application/pdf', rawContent: Buffer.from('%PDF'),
+      source: 'parser', userId: 'user-a', organizationId: 'org-a', latestParserRunId: 'run-9', parserStatus: 'review_required',
+    });
+    runs.push({ runId: 'run-9', documentId: 'doc-1', organizationId: 'org-a', status: 'review_required', documentType: 'AFS' });
+  }
+
+  it('returns the stored read for an unchanged file — the parser is never called', async () => {
+    seedReadDocument();
+    const res = await request('/api/parser-documents/doc-1/reparse', { method: 'POST' });
+    expect(res.status).toBe(200);
+    expect(res.body.reused).toBe(true);
+    expect(res.body.run.runId).toBe('run-9');
+    expect(parserCalls).not.toHaveBeenCalled();
+    expect(runs).toHaveLength(1);
+  });
+
+  it('still reads afresh when asked to', async () => {
+    seedReadDocument();
+    const res = await request('/api/parser-documents/doc-1/reparse?fresh=1', { method: 'POST' });
+    expect(parserCalls).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(502); // the test parser is unreachable — but it was asked
+  });
+
+  it('takes a reviewed document out of the "Needs review" queue', async () => {
+    seedReadDocument();
+    expect((await request('/api/parser-documents?status=review_required')).body.documents).toHaveLength(1);
+
+    const res = await request('/api/parser-documents/doc-1', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewed: true }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.document.reviewedByUserId).toBe('user-a');
+    expect(res.body.document.reviewedAt).toBeTruthy();
+    expect((await request('/api/parser-documents?status=review_required')).body.documents).toHaveLength(0);
+
+    // Reopened, it is back in the queue.
+    await request('/api/parser-documents/doc-1', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewed: false }),
+    });
+    expect((await request('/api/parser-documents?status=review_required')).body.documents).toHaveLength(1);
+  });
+
+  it('lets a view-only member look, but not change, review or re-read', async () => {
+    seedReadDocument();
+    viewOnly = true;
+    expect((await request('/api/parser-documents/doc-1')).status).toBe(200);
+    const patch = await request('/api/parser-documents/doc-1', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewed: true }),
+    });
+    expect(patch.status).toBe(403);
+    expect((await request('/api/parser-documents/doc-1/reparse', { method: 'POST' })).status).toBe(403);
+    expect(documents[0].reviewedAt).toBeUndefined();
+  });
 });
 
 describe('parser document persistence', () => {
