@@ -1,5 +1,6 @@
 import {
   SCORECARD_INDICATORS,
+  esgIndicatorLabel,
   type EsgScorecardIndicator,
   type EsgScorecardPillar,
 } from "@/lib/esg/esgScorecardDefinitions";
@@ -82,7 +83,8 @@ function pillarRows(
   pillar: EsgScorecardPillar,
 ): EsgPillarRow[] {
   const defs: readonly EsgScorecardIndicator[] = SCORECARD_INDICATORS[pillar];
-  return defs.map(({ key, indicator, maxPoints }) => {
+  return defs.map(({ key, maxPoints }) => {
+    const indicator = esgIndicatorLabel(pillar, key);
     const score = rows[key] ?? 0;
     return {
       indicator,
