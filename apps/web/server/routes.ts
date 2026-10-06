@@ -45,6 +45,14 @@ import { registerExcelImportRoutes } from "./excelImportRoute";
 import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
+import {
+  issueTrustedDeviceToken,
+  readCookie,
+  TRUSTED_DEVICE_COOKIE,
+  TRUSTED_DEVICE_COOKIE_PATH,
+  trustedDeviceDays,
+  verifyTrustedDeviceToken,
+} from "./trustedDevice";
 import { registerAuditRoutes } from "./auditRoutes";
 import { registerPrivacyRoutes } from "./privacyRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
@@ -346,6 +354,30 @@ export async function registerRoutes(
   // working if registerRoutes is ever used standalone (e.g. in tests).
   configureSession(app);
 
+  // "Remember this device" for the emailed code (see trustedDevice.ts). Signed
+  // with the session secret, falling back the way sessionConfig does outside
+  // production so it can be exercised locally.
+  const trustedDeviceSecret =
+    process.env.SESSION_SECRET || (isProduction ? "" : "okiru-entity-studio-dev-secret");
+  const isRememberedDevice = (req: Request, account: { id: string; password?: string | null }): boolean =>
+    verifyTrustedDeviceToken(
+      readCookie(req.headers.cookie, TRUSTED_DEVICE_COOKIE),
+      account.password ? { id: account.id, password: account.password } : null,
+      trustedDeviceSecret,
+    );
+  const rememberThisDevice = (res: Response, account: { id: string; password?: string | null }): void => {
+    if (!account.password) return;
+    const issued = issueTrustedDeviceToken({ id: account.id, password: account.password }, trustedDeviceSecret);
+    if (!issued) return;
+    res.cookie(TRUSTED_DEVICE_COOKIE, issued.token, {
+      httpOnly: true,
+      secure: isProduction || isReplit,
+      sameSite: isReplit ? "none" : "lax",
+      path: TRUSTED_DEVICE_COOKIE_PATH,
+      maxAge: issued.maxAgeMs,
+    });
+  };
+
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
@@ -594,6 +626,7 @@ export async function registerRoutes(
 
       res.json({
         requiresVerification: true,
+        rememberDeviceDays: trustedDeviceDays(),
         message: sent
           ? "Account created! A verification code has been sent to your email."
           : "Account created but we couldn't send the verification email. Please try resending.",
@@ -688,7 +721,12 @@ export async function registerRoutes(
           );
       }
 
-      if (user.twofaEnabled || twoFactorRequiredFor(user)) {
+      const secondFactorRequired = user.twofaEnabled || twoFactorRequiredFor(user);
+      // A browser that completed a code for this account before, and was asked
+      // to remember it, stands in for the code. The password was still checked.
+      const rememberedDevice = secondFactorRequired && isRememberedDevice(req, user);
+
+      if (secondFactorRequired && !rememberedDevice) {
         const otp = generateOtp();
         const expiryMinutes = getOtpExpiryMinutes();
         const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
@@ -703,6 +741,7 @@ export async function registerRoutes(
         return res.json({
           requires2FA: true,
           enforced: !user.twofaEnabled,
+          rememberDeviceDays: trustedDeviceDays(),
           message: sent ? "Verification code sent to your email" : "Could not send verification code. Please try again.",
           emailHint: emailTarget.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
         });
@@ -711,7 +750,7 @@ export async function registerRoutes(
       const safeUser = sanitizeUser(user);
       establishSession(req, user as any, safeUser);
       await storage.setLastLogin(user.id);
-      logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
+      logger.info('User logged in', { userId: user.id, rememberedDevice, durationMs: Date.now() - start });
       await recordAudit(req, {
         action: "user.login",
         resourceType: "user",
@@ -719,7 +758,9 @@ export async function registerRoutes(
         result: "success",
         actorUserId: user.id,
         organizationId: user.organizationId ?? null,
-        metadata: { method: "password", twoFactor: false },
+        metadata: rememberedDevice
+          ? { method: "password+remembered-device", twoFactor: true }
+          : { method: "password", twoFactor: false },
       });
       res.json({ user: safeUser });
 
@@ -803,6 +844,8 @@ export async function registerRoutes(
       const updatedUser = await storage.getUserById(user.id);
       const safeUser = sanitizeUser(updatedUser || user);
       establishSession(req, (updatedUser || user) as any, safeUser);
+      const rememberDevice = req.body?.rememberDevice === true;
+      if (rememberDevice) rememberThisDevice(res, (updatedUser || user) as any);
       await recordAudit(req, {
         action: "user.login",
         resourceType: "user",
@@ -810,7 +853,7 @@ export async function registerRoutes(
         result: "success",
         actorUserId: user.id,
         organizationId: user.organizationId ?? null,
-        metadata: { method: "password+otp", twoFactor: true },
+        metadata: { method: "password+otp", twoFactor: true, rememberDevice },
       });
       res.json({ user: safeUser });
 
