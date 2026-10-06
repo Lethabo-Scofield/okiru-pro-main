@@ -163,6 +163,14 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     }
     return res.status(201).json({ document: documentJson(doc.toObject()) });
   } catch (error) {
+    // The same bytes uploaded twice at once — a folder holding two copies of
+    // one ledger under different names does exactly this — both miss the
+    // lookup above and race to insert. The loser used to get a 500 and its
+    // file dropped out of the library. The winner's record IS this upload.
+    if ((error as { code?: number })?.code === 11000) {
+      const existing = await Document.findOne({ source: 'parser', fileHash, ...tenantFilter(owner) }).select('-rawContent').lean();
+      if (existing) return res.status(201).json({ document: documentJson(existing as Record<string, any>) });
+    }
     logger.error('Failed to persist parser document', error as Error);
     return res.status(500).json({ message: 'Could not persist document' });
   }
@@ -460,12 +468,32 @@ router.get('/:id/runs/:runId', async (req: Request, res: Response) => {
   return res.json({ run: { ...runSummary(run as Record<string, any>), parserOutput: run.parserOutput, reviewHistory: run.reviewHistory ?? [] } });
 });
 
+/**
+ * Types a browser can display from our own origin without running anything.
+ *
+ * The stored type is whatever the uploader's browser claimed, and the original
+ * used to be served under it, inline, from okiru.pro: an uploaded .html (or
+ * .svg, which carries script) ran with the session of whoever opened it. Only
+ * these are shown inline now; everything else is a download of opaque bytes.
+ */
+const INLINE_SAFE_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'text/plain']);
+
+export function downloadHeaders(fileType: unknown, filename: unknown): Record<string, string> {
+  const type = String(fileType ?? '').split(';')[0].trim().toLowerCase();
+  const name = encodeURIComponent(String(filename || 'document'));
+  const inline = INLINE_SAFE_TYPES.has(type);
+  return {
+    'Content-Type': inline ? (type === 'text/plain' ? 'text/plain; charset=utf-8' : type) : 'application/octet-stream',
+    'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${name}`,
+    'X-Content-Type-Options': 'nosniff',
+  };
+}
+
 router.get('/:id/download', async (req: Request, res: Response) => {
   const doc = await Document.findOne(await scopedDocumentFilter(req, routeParam(req.params.id))).select('filename fileType rawContent').lean() as any;
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   if (!doc.rawContent) return res.status(404).json({ message: 'Original file is unavailable' });
-  res.setHeader('Content-Type', doc.fileType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(doc.filename)}`);
+  res.set(downloadHeaders(doc.fileType, doc.filename));
   return res.send(doc.rawContent);
 });
 

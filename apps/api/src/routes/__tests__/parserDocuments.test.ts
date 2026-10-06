@@ -37,6 +37,10 @@ vi.mock('../../../models.js', () => ({
       return new Query(documents.find((document) => matches(document, filter)) ?? null);
     },
     async create(payload: any) {
+      // Mongo's unique fileHash index, as the real collection has it.
+      if (payload.fileHash && documents.some((document) => document.fileHash === payload.fileHash)) {
+        throw Object.assign(new Error('E11000 duplicate key error collection: okiru.documents index: fileHash_1'), { code: 11000 });
+      }
       const record = { ...payload, _id: `doc-${nextDocumentId++}` };
       record.toObject = () => ({ ...record, toObject: undefined });
       documents.push(record);
@@ -175,6 +179,25 @@ describe('parser document persistence', () => {
     expect(documents[0].latestParserRunId).toBe('run-2');
   });
 
+  it('returns the existing record when the same bytes lose an upload race, instead of a 500', async () => {
+    // Two copies of one ledger under different names, uploaded at once: the
+    // first insert lands between the second's lookup and its insert. Replayed
+    // deterministically by planting the winner where only the unique index sees it.
+    const crypto = await import('crypto');
+    const bytes = 'ledger summary';
+    const contentHash = crypto.createHash('sha256').update(bytes).digest('hex');
+    const fileHash = crypto.createHash('sha256').update(`org-a:${contentHash}`).digest('hex');
+    documents.push({ _id: 'doc-winner', filename: '1 Ledger SUPPLIERS ESD.xlsx', fileHash, source: 'parser', userId: 'user-a', organizationId: 'org-a' });
+
+    const form = new FormData();
+    form.append('file', new Blob([bytes], { type: 'text/plain' }), '1 Ledger 4 SUPPLIERS ESF.xlsx');
+    const uploaded = await request('/api/parser-documents/upload', { method: 'POST', body: form });
+
+    expect(uploaded.status).toBe(201);
+    expect(uploaded.body.document.id).toBe('doc-winner');
+    expect(documents).toHaveLength(1);
+  });
+
   it('does not expose another organisation document or parser result', async () => {
     documents.push({ _id: 'doc-secret', filename: 'private.pdf', source: 'parser', userId: 'user-b', organizationId: 'org-b' });
     const detail = await request('/api/parser-documents/doc-secret', {}, 'user-a', 'org-a');
@@ -183,5 +206,35 @@ describe('parser document persistence', () => {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parserOutput: parserOutput() }),
     }, 'user-a', 'org-a');
     expect(createRun.status).toBe(404);
+  });
+});
+
+describe('serving the original file', () => {
+  async function download(fileType: string, filename: string) {
+    documents.push({ _id: 'doc-1', filename, fileType, rawContent: Buffer.from('<script>alert(document.cookie)</script>'), source: 'parser', userId: 'user-a', organizationId: 'org-a' });
+    const response = await fetch(`http://127.0.0.1:${port}/api/parser-documents/doc-1/download`, {
+      headers: { 'x-test-user': 'user-a', 'x-test-org': 'org-a' },
+    });
+    return response.headers;
+  }
+
+  it('never renders uploaded HTML or SVG from our own origin', async () => {
+    for (const [type, name] of [['text/html', 'invoice.html'], ['image/svg+xml', 'logo.svg'], ['application/xhtml+xml', 'x.xhtml'], ['', 'unknown']]) {
+      documents.length = 0;
+      const headers = await download(type, name);
+      expect(headers.get('content-type')).toBe('application/octet-stream');
+      expect(headers.get('content-disposition')).toMatch(/^attachment;/);
+      expect(headers.get('x-content-type-options')).toBe('nosniff');
+    }
+  });
+
+  it('still shows PDFs and images inline, for the side-by-side preview', async () => {
+    for (const [type, name] of [['application/pdf', 'afs.pdf'], ['image/jpeg', 'id.jpg'], ['IMAGE/PNG', 'scan.png']]) {
+      documents.length = 0;
+      const headers = await download(type, name);
+      expect(headers.get('content-type')).toBe(type.toLowerCase());
+      expect(headers.get('content-disposition')).toMatch(/^inline;/);
+      expect(headers.get('x-content-type-options')).toBe('nosniff');
+    }
   });
 });
