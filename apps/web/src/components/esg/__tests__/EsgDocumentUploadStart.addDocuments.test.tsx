@@ -31,6 +31,20 @@ function streamBody(text: string) {
 
 const json = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body });
 
+/** One site × month figure per file, as the parser's dashboard readers emit them. */
+const MONTHLY_FIGURE: Record<string, Array<Record<string, unknown>>> = {
+  "city-power-oct.pdf": [{
+    grid: "esg_monthly_rows",
+    cells: { "monthly.measure": "energy.electricity_kwh", "monthly.site": "BLOEM", "monthly.period_end": "2025-07-31", "monthly.value": 111 },
+    sourceFiles: ["city-power-oct.pdf"],
+  }],
+  "diesel-oct.pdf": [{
+    grid: "esg_monthly_rows",
+    cells: { "monthly.measure": "fleet.diesel_litres", "monthly.site": "DBN", "monthly.period_end": "2025-08-31", "monthly.value": 222 },
+    sourceFiles: ["diesel-oct.pdf"],
+  }],
+};
+
 function stubServer() {
   vi.stubGlobal(
     "fetch",
@@ -71,6 +85,8 @@ function stubServer() {
               element: "GHG_ENERGY",
               values: [{ field: "site_name", value: "ISANDO", sourceFile }],
             })),
+            // Each round's own monthly figure — the half the workbook is filled from.
+            calculator: { rows: files.flatMap((file) => MONTHLY_FIGURE[file] ?? []) },
           },
         };
         return { ok: true, status: 200, body: streamBody(sse("result", result)), json: async () => ({}) };
@@ -132,5 +148,27 @@ describe("EsgDocumentUploadStart — adding a forgotten document after the read"
     expect(screen.queryByTestId("esg-remove-city-power-oct.pdf")).not.toBeInTheDocument();
     expect(screen.queryByTestId("esg-remove-diesel-oct.pdf")).not.toBeInTheDocument();
     expect(screen.getAllByText("Read").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps the first round's figures in the workbook after a document is added", async () => {
+    const user = userEvent.setup();
+    const onComplete = vi.fn(async (_result: { injection: { patches: Record<string, { cells: Record<string, unknown> }> } }) => {});
+    render(<EsgDocumentUploadStart companyId="company-1" companyName="Lake Trading" onComplete={onComplete} />);
+
+    await user.upload(await screen.findByTestId("esg-docs-file-input"), new File(["%PDF a"], "city-power-oct.pdf", { type: "application/pdf" }));
+    await readFromBar(user);
+    await screen.findByTestId("esg-button-continue-to-workbook", {}, { timeout: 10_000 });
+
+    await user.upload(screen.getByTestId("esg-docs-file-input"), new File(["%PDF b"], "diesel-oct.pdf", { type: "application/pdf" }));
+    await readFromBar(user);
+    await waitFor(() => expect(named("/settle-outcome")).toHaveLength(2));
+
+    const proceed = screen.getByTestId("esg-button-continue-to-workbook");
+    await waitFor(() => expect(proceed).not.toBeDisabled());
+    await user.click(proceed);
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    // Round one's electricity AND round two's diesel — the second read used to
+    // replace the first's calculator, and round one's figures left the workbook.
+    expect(onComplete.mock.calls[0]![0].injection.patches["e-data"].cells).toMatchObject({ s2_C14: 111, s1a_D16: 222 });
   });
 });
