@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { Document, ParserRunModel } from '../../models.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
-import { resolveFileWithParser } from '../services/parserClient.js';
+import { isParserConfigured, quoteFileWithParser, resolvePaidFileWithParser } from '../services/parserClient.js';
 import { applyDocumentScopeFilter, isViewOnlyMember, resolveClientScopeIds } from '../services/clientScopes.js';
 
 const logger = createLogger('ParserDocuments');
@@ -410,50 +410,146 @@ router.post('/:id/reparse', upload.single('file'), async (req: Request, res: Res
         });
       }
     }
-    const raw = replacement?.buffer ?? (doc as unknown as { rawContent?: Buffer }).rawContent;
-    if (!raw || raw.length === 0) {
-      return res.status(409).json({
-        message: 'The original file is not stored for this document, so it cannot be re-read. Upload the file again.',
-      });
-    }
-
-    const filename = replacement?.originalname ?? String((doc as unknown as { filename: string }).filename);
-    const mimeType = replacement?.mimetype ?? String((doc as unknown as { fileType?: string }).fileType ?? '');
-
-    const outcome = await resolveFileWithParser({ buffer: Buffer.from(raw), filename, mimeType });
-    if (!outcome.ok || !outcome.result) {
-      return res.status(502).json({ message: outcome.error ?? 'The parser could not read this file' });
-    }
-
-    // Swap the stored bytes only once the new file has actually been read —
-    // a failed re-parse must not leave the document holding a file nobody has
-    // successfully parsed and no copy of the one that worked.
-    if (replacement) {
-      await Document.updateOne(documentFilter(req, documentId), {
-        $set: {
-          rawContent: replacement.buffer,
-          filename: replacement.originalname,
-          fileType: replacement.mimetype,
-          fileSize: replacement.size,
-          contentHash: crypto.createHash('sha256').update(replacement.buffer).digest('hex'),
-        },
-      });
-    }
-
-    const output = outcome.result as unknown as Record<string, any>;
-    const run = await appendRun(doc as unknown as { _id: unknown }, owner, output, {
-      reviewReasons: replacement ? ['Re-read after the file was replaced by a user.'] : ['Re-read on request.'],
-    });
-    await Document.updateOne(documentFilter(req, documentId), { $set: documentSetFromRun(run.toObject()) });
-
-    const updated = await Document.findOne(documentFilter(req, documentId)).lean();
-    return res.status(201).json({
-      document: documentJson(updated as Record<string, any>),
-      run: runSummary(run.toObject()),
+    // Anything else is a real read — from scratch, or of a replacement — and
+    // a real read is priced and paid first (POST /:id/reread/quote, then the
+    // wallet, then POST /:id/reread). This route used to run it for free.
+    return res.status(402).json({
+      message: 'Reading this document again from scratch is charged — get its price first.',
+      code: 'PRICE_FIRST',
     });
   } catch (error) {
     logger.error('Failed to re-parse document', error as Error, { documentId });
     return res.status(500).json({ message: 'Could not re-read this document' });
+  }
+});
+
+/**
+ * ESG evidence is read by the ESG case reader into the ESG workbook. The paid
+ * single-file read is the B-BBEE reader: an ESG bill through it would come back
+ * as B-BBEE fields and reach no workbook. Refused rather than read wrongly.
+ */
+async function isEsgDocument(doc: Record<string, any>, owner: SessionIdentity): Promise<boolean> {
+  if (!doc.latestParserRunId) return false;
+  const run = await ParserRunModel.findOne({ documentId: doc._id, runId: doc.latestParserRunId, ...tenantFilter(owner) })
+    .select('parserOutput')
+    .lean() as { parserOutput?: { domain?: unknown } } | null;
+  return run?.parserOutput?.domain === 'esg';
+}
+
+const ESG_REREAD = {
+  message: 'ESG documents are read again from the ESG workbook — use Add documents there.',
+  code: 'ESG_REREAD_FROM_WORKBOOK',
+};
+
+/** The bytes a fresh read would use: a replacement, or what is stored. */
+function rereadBytes(doc: Record<string, any>, replacement: Express.Multer.File | undefined) {
+  const raw: Buffer | undefined = replacement?.buffer ?? doc.rawContent;
+  if (!raw || raw.length === 0) return null;
+  return {
+    buffer: Buffer.from(raw),
+    filename: replacement?.originalname ?? String(doc.filename),
+    mimeType: replacement?.mimetype ?? String(doc.fileType ?? ''),
+    sha256: crypto.createHash('sha256').update(raw).digest('hex'),
+  };
+}
+
+/**
+ * POST /:id/reread/quote — price a fresh read of this document (multipart
+ * `file` to price a replacement instead). Free: a structure scan, nothing
+ * read. The quote is pinned to this document AND these exact bytes; the
+ * browser then pays it through the wallet (/api/tokens/authorize), exactly as
+ * a bulk upload is paid.
+ */
+router.post('/:id/reread/quote', upload.single('file'), async (req: Request, res: Response) => {
+  const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
+  if (!isParserConfigured()) return res.status(503).json({ message: 'Fresh reads are not available right now.' });
+  try {
+    const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+    if (await isEsgDocument(doc as unknown as Record<string, any>, identity(req))) return res.status(409).json(ESG_REREAD);
+    const bytes = rereadBytes(doc as unknown as Record<string, any>, req.file);
+    if (!bytes) {
+      return res.status(409).json({ message: 'The original file is not stored for this document. Upload it again as a replacement.' });
+    }
+    const quote = await quoteFileWithParser(bytes);
+    if (!quote.ok || !quote.quoteId) {
+      return res.status(502).json({ message: quote.error ?? 'We could not price this file.' });
+    }
+    await Document.updateOne(documentFilter(req, documentId), {
+      $set: { pendingRereadQuoteId: quote.quoteId, pendingRereadSha256: bytes.sha256 },
+    });
+    return res.status(201).json({ quoteId: quote.quoteId });
+  } catch (error) {
+    logger.error('Failed to price a fresh read', error as Error, { documentId });
+    return res.status(500).json({ message: 'Could not price a fresh read of this document' });
+  }
+});
+
+/**
+ * POST /:id/reread — the paid fresh read itself, after the wallet authorised
+ * `quoteId`. Same bytes as were priced (a replacement is sent again), checked
+ * here against the pending quote and again by the parser's gate, which claims
+ * the quote once and records how the read ended — the wallet's settlement
+ * (/api/tokens/runs/:quoteId/settle-outcome) refunds a read that delivered
+ * nothing. Appended as a new run: the earlier readings stay in the history.
+ */
+router.post('/:id/reread', upload.single('file'), async (req: Request, res: Response) => {
+  const owner = identity(req);
+  const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
+  if (!isParserConfigured()) return res.status(503).json({ message: 'Fresh reads are not available right now.' });
+  const quoteId = typeof req.body?.quoteId === 'string' ? req.body.quoteId : '';
+  try {
+    const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+    const plain = doc as unknown as Record<string, any>;
+    if (await isEsgDocument(plain, owner)) return res.status(409).json(ESG_REREAD);
+    if (!quoteId || plain.pendingRereadQuoteId !== quoteId) {
+      return res.status(409).json({ message: 'That price was for a different read. Get a new price.', code: 'QUOTE_NOT_FOR_THIS_DOCUMENT' });
+    }
+    const bytes = rereadBytes(plain, req.file);
+    if (!bytes || bytes.sha256 !== plain.pendingRereadSha256) {
+      return res.status(409).json({ message: 'These are not the bytes that were priced. Get a new price.', code: 'QUOTE_FILE_MISMATCH' });
+    }
+
+    const outcome = await resolvePaidFileWithParser(bytes, quoteId);
+    if (!outcome.ok || !outcome.result) {
+      if (outcome.status === 404) {
+        return res.status(503).json({ message: 'Fresh reads are not available yet. Nothing was read.', code: 'PAID_READ_UNAVAILABLE' });
+      }
+      if (outcome.status && [402, 409, 410].includes(outcome.status)) {
+        return res.status(outcome.status).json({ message: outcome.error, code: outcome.code });
+      }
+      return res.status(502).json({ message: outcome.error ?? 'The parser could not read this file', code: outcome.code });
+    }
+
+    // Swap the stored bytes only once the new file has actually been read —
+    // a failed read must not leave the document holding a file nobody has
+    // successfully parsed and no copy of the one that worked.
+    if (req.file) {
+      await Document.updateOne(documentFilter(req, documentId), {
+        $set: {
+          rawContent: req.file.buffer,
+          filename: req.file.originalname,
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+          contentHash: bytes.sha256,
+        },
+      });
+    }
+
+    const run = await appendRun(doc as unknown as { _id: unknown }, owner, outcome.result as unknown as Record<string, any>, {
+      reviewReasons: req.file ? ['Read again after the file was replaced by a user.'] : ['Read again from scratch on request.'],
+    });
+    await Document.updateOne(documentFilter(req, documentId), {
+      $set: { ...documentSetFromRun(run.toObject()), pendingRereadQuoteId: null, pendingRereadSha256: null },
+    });
+    const updated = await Document.findOne(documentFilter(req, documentId)).lean();
+    return res.status(201).json({ document: documentJson(updated as Record<string, any>), run: runSummary(run.toObject()) });
+  } catch (error) {
+    logger.error('Failed to run a paid fresh read', error as Error, { documentId, quoteId });
+    return res.status(500).json({ message: 'Could not read this document again' });
   }
 });
 

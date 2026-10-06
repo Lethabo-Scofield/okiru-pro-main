@@ -138,6 +138,115 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     }
   };
 
+  /**
+   * A fresh read, priced and waiting for the user to confirm the spend. Only
+   * an unchanged file's stored reading is free; reading from scratch or a
+   * replacement runs the whole extraction again, so it is priced, paid
+   * through the wallet like any upload, and settled — a read that delivers
+   * nothing comes back as tokens.
+   */
+  const [paidRead, setPaidRead] = useState<null | {
+    quoteId: string;
+    file?: File;
+    tokens: number;
+    balance: number;
+    sufficient: boolean;
+    shortfall: number;
+  }>(null);
+
+  const priceFreshRead = async (replacement?: File) => {
+    setBusy("reparse");
+    setNotice(null);
+    try {
+      const init: RequestInit = { method: "POST", credentials: "include" };
+      if (replacement) {
+        const form = new FormData();
+        form.append("file", replacement, replacement.name);
+        init.body = form;
+      }
+      const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reread/quote`, init);
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body?.message ?? "We could not price a fresh read of this document.");
+      const priced = await fetch(`/api/tokens/quote/${encodeURIComponent(body.quoteId)}`, { credentials: "include" });
+      const cost = await priced.json().catch(() => ({}));
+      if (!priced.ok) throw new Error(cost?.message ?? "We could not work out what this read costs.");
+      setPaidRead({
+        quoteId: String(body.quoteId),
+        file: replacement,
+        tokens: Number(cost.tokens ?? 0),
+        balance: Number(cost.balance ?? 0),
+        sufficient: cost.sufficient !== false || Boolean(cost.alreadyAuthorized),
+        shortfall: Number(cost.shortfall ?? 0),
+      });
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "Could not price a fresh read");
+    } finally {
+      setBusy(null);
+      if (replaceRef.current) replaceRef.current.value = "";
+    }
+  };
+
+  const confirmFreshRead = async () => {
+    if (!paidRead) return;
+    const { quoteId, file } = paidRead;
+    setBusy("reparse");
+    setNotice(null);
+    try {
+      const auth = await fetch("/api/tokens/authorize", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quoteId }),
+      });
+      const authBody = await auth.json().catch(() => ({}));
+      if (!auth.ok) {
+        throw new Error(
+          auth.status === 402
+            ? `${authBody?.message ?? "You do not have enough tokens for this read."} Add tokens in Settings → Billing.`
+            : authBody?.message ?? "Could not authorise this read.",
+        );
+      }
+      window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+
+      const form = new FormData();
+      form.append("quoteId", quoteId);
+      if (file) form.append("file", file, file.name);
+      const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reread`, {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      });
+      const body = await res.json().catch(() => ({}));
+
+      // Settle the paid run whatever happened — the server decides from the
+      // parser's own record what was delivered, and refunds what was not.
+      let refunded = "";
+      try {
+        const settled = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
+          method: "POST",
+          credentials: "include",
+        });
+        const settledBody = await settled.json().catch(() => null);
+        if (settledBody?.state === "settled" && Number(settledBody.refundedTokens) > 0) {
+          refunded = ` ${Number(settledBody.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance.`;
+          window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+        }
+      } catch {
+        // The server's own sweep settles every paid run regardless.
+      }
+
+      setPaidRead(null);
+      if (!res.ok) throw new Error(`${body?.message ?? "The document could not be read again."}${refunded}`);
+      await load();
+      if (file) setPreviewFile(file);
+      setNotice(`${file ? `Read again from ${file.name}.` : "Read again from scratch."}${refunded}`);
+    } catch (caught) {
+      setNotice(caught instanceof Error ? caught.message : "Could not read this document again");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   /** Re-read the stored bytes, or a replacement file if one was chosen. */
   const reparse = async (replacement?: File) => {
     setBusy("reparse");
@@ -151,6 +260,12 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       }
       const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reparse`, init);
       const body = await res.json().catch(() => ({}));
+      // Nothing stored to show — a real read is needed, and it is priced first.
+      if (res.status === 402 && body?.code === "PRICE_FIRST") {
+        setBusy(null);
+        await priceFreshRead(replacement);
+        return;
+      }
       if (!res.ok) throw new Error(body?.message ?? "The parser could not read this file");
       await load();
       if (replacement) setPreviewFile(replacement);
@@ -205,6 +320,51 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       </div>
 
       {notice && <div className="mb-4 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-2.5 text-[12.5px] text-[color:var(--body)]" data-testid="document-notice">{notice}</div>}
+
+      {/* A fresh read, priced — nothing is charged until this is confirmed. */}
+      {paidRead && (
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-violet-300/25 bg-[#17151d] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-fresh-read-price">
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-white">
+              Reading {paidRead.file ? paidRead.file.name : "this document"} {paidRead.file ? "" : "again from scratch "}costs{" "}
+              {paidRead.tokens.toLocaleString("en-ZA")} tokens
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
+              You have {paidRead.balance.toLocaleString("en-ZA")}. If the read gives us nothing, the tokens come back automatically.
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => setPaidRead(null)}
+              className="h-9 rounded-lg px-3 text-[12px] text-[color:var(--body)] hover:text-white disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            {paidRead.sufficient ? (
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void confirmFreshRead()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3 text-[12px] font-semibold text-black disabled:opacity-40"
+                data-testid="document-fresh-read-confirm"
+              >
+                {busy === "reparse" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                Read it — {paidRead.tokens.toLocaleString("en-ZA")} tokens
+              </button>
+            ) : (
+              <a
+                href="/settings/billing"
+                className="inline-flex h-9 items-center rounded-lg bg-white px-3 text-[12px] font-semibold text-black"
+                data-testid="document-fresh-read-topup"
+              >
+                Add tokens — {paidRead.shortfall.toLocaleString("en-ZA")} short
+              </a>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* The team handoff: whoever uploaded may leave the checking to someone
           else. Signing it off takes it out of the company's "Needs review". */}
@@ -283,8 +443,10 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
         {/* 3. Try again, with the same file or a better one. */}
         <div className="rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] p-4">
           <div className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--body)]"><RefreshCw className="h-3.5 w-3.5" /> Read it again</div>
-          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">Appended as a new run — the previous reading is kept.</p>
-          <div className="mt-2.5 flex gap-2">
+          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">
+            The stored reading is free. Reading from scratch or a replacement is priced first — the previous reading is kept.
+          </p>
+          <div className="mt-2.5 flex flex-wrap gap-2">
             <button
               type="button"
               disabled={busy !== null}
@@ -294,11 +456,20 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
             >
               {busy === "reparse" ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : "Re-read"}
             </button>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void priceFreshRead()}
+              className="h-9 flex-1 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
+              data-testid="document-read-fresh"
+            >
+              Read from scratch
+            </button>
             <input
               ref={replaceRef}
               type="file"
               className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void reparse(f); }}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) void priceFreshRead(f); }}
               data-testid="document-replace-input"
             />
             <button
