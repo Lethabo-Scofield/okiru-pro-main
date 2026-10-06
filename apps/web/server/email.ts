@@ -293,13 +293,23 @@ export const DEFAULT_FEEDBACK_RECIPIENTS = [
   "pm@webparam.co.za",
 ];
 
-const PLAUSIBLE_EMAIL = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/;
+/**
+ * Deliberately narrower than RFC 5322: no `?`, `&`, `%`, `=` or quotes, so an
+ * address can go into a mailto: link or a header without carrying anything else
+ * along (`a@b.co?bcc=…` is not an address here).
+ */
+const STRICT_EMAIL = /^[A-Za-z0-9._+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
+
+/** Single-line fields stay single-line, so a typed name cannot forge lines below it. */
+function oneLine(value: string | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
 
 export function getFeedbackRecipients(): string[] {
   const configured = (process.env.FEEDBACK_NOTIFY_EMAILS || "")
     .split(/[,;\s]+/)
     .map((s) => s.trim().toLowerCase())
-    .filter((s) => PLAUSIBLE_EMAIL.test(s));
+    .filter((s) => STRICT_EMAIL.test(s));
   return configured.length ? Array.from(new Set(configured)) : [...DEFAULT_FEEDBACK_RECIPIENTS];
 }
 
@@ -338,39 +348,47 @@ export function buildFeedbackEmail(ctx: FeedbackEmailContext): {
 } {
   const base = appBaseUrl();
   const kind = FEEDBACK_CATEGORY_LABELS[ctx.category] || "Other";
-  const replyTo = [ctx.accountEmail, ctx.userEmail].find((e) => !!e && PLAUSIBLE_EMAIL.test(e)) || null;
-  const who = (ctx.userName || "").trim() || ctx.accountEmail || ctx.userEmail || "Someone who was not signed in";
-  const firstLine = ctx.message.split(/\r?\n/).find((l) => l.trim())?.trim() || ctx.message.trim();
+  const area = oneLine(ctx.areaLabel) || "General";
+  const accountEmail = ctx.accountEmail && STRICT_EMAIL.test(ctx.accountEmail) ? ctx.accountEmail : null;
+  const typedEmail = oneLine(ctx.userEmail) || null;
+  // Only the signed-in account's own address is trusted to receive a reply.
+  // What an anonymous visitor typed is shown, labelled unverified, never wired
+  // into Reply-To or a mailto link.
+  const replyTo = accountEmail;
+  const organization = oneLine(ctx.organizationName) || null;
+  const who = oneLine(ctx.userName) || accountEmail || typedEmail || "Someone who was not signed in";
+  const firstLine = oneLine(ctx.message.split(/\r?\n/).find((l) => l.trim()) || ctx.message);
   const gist = firstLine.length > 70 ? `${firstLine.slice(0, 67).trimEnd()}…` : firstLine;
-  const subject = `[Okiru feedback] ${kind} · ${ctx.areaLabel} — ${gist}`;
+  const subject = `[Okiru feedback] ${kind} · ${area} — ${gist}`;
 
-  const pageLink = ctx.pageUrl ? `${base}${ctx.pageUrl.startsWith("/") ? "" : "/"}${ctx.pageUrl}` : null;
+  const pagePath = oneLine(ctx.pageUrl);
+  const pageLink = pagePath ? `${base}${pagePath.startsWith("/") ? "" : "/"}${pagePath}` : null;
   const received = new Date(ctx.createdAt).toLocaleString("en-ZA", {
     timeZone: "Africa/Johannesburg",
     dateStyle: "medium",
     timeStyle: "short",
   });
-  const identity = ctx.accountEmail
-    ? `Signed in as ${ctx.accountEmail}`
-    : "Not signed in — the email below was typed into the form and is unverified";
+  const identity = accountEmail
+    ? `Signed in as ${accountEmail}`
+    : "Not signed in — any email below was typed into the form and is unverified";
 
   const rows: Array<[string, string]> = [
     ["Type", escapeHtml(kind)],
-    ["Area", escapeHtml(ctx.areaLabel)],
+    ["Area", escapeHtml(area)],
     ["From", escapeHtml(who)],
     ["Account", escapeHtml(identity)],
   ];
-  if (ctx.userEmail && ctx.userEmail !== ctx.accountEmail) rows.push(["Email given", escapeHtml(ctx.userEmail)]);
-  if (ctx.organizationName) rows.push(["Organisation", escapeHtml(ctx.organizationName)]);
+  if (typedEmail && typedEmail !== accountEmail) rows.push(["Email given", `${escapeHtml(typedEmail)} (unverified)`]);
+  if (organization) rows.push(["Organisation", escapeHtml(organization)]);
   if (pageLink) {
-    rows.push(["Page", `<a href="${escapeHtml(pageLink)}" style="color:#4f46e5;word-break:break-all;">${escapeHtml(ctx.pageUrl || "")}</a>`]);
+    rows.push(["Page", `<a href="${escapeHtml(pageLink)}" style="color:#4f46e5;word-break:break-all;">${escapeHtml(pagePath)}</a>`]);
   }
   rows.push(["Received", escapeHtml(received)]);
   rows.push(["Reference", `<span style="font-family:'SF Mono',Monaco,monospace;font-size:12px;">${escapeHtml(ctx.feedbackId)}</span>`]);
 
   const html = `
     <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937;">
-      <p style="margin:0 0 6px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">${escapeHtml(kind)} · ${escapeHtml(ctx.areaLabel)}</p>
+      <p style="margin:0 0 6px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">${escapeHtml(kind)} · ${escapeHtml(area)}</p>
       <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;line-height:1.35;">New feedback from ${escapeHtml(who)}</h1>
       <div style="border-left:3px solid #4f46e5;background:#f9fafb;padding:14px 16px;margin:0 0 20px;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(ctx.message)}</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 20px;">
@@ -385,19 +403,19 @@ export function buildFeedbackEmail(ctx: FeedbackEmailContext): {
         ${replyTo ? `<a href="mailto:${escapeHtml(replyTo)}?subject=${encodeURIComponent(`Re: your Okiru feedback`)}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;margin-right:8px;">Reply to ${escapeHtml(who)}</a>` : ""}
         <a href="${escapeHtml(`${base}/devmode`)}" style="display:inline-block;border:1px solid #d1d5db;color:#374151;text-decoration:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;">Open in DevMode</a>
       </div>
-      <p style="margin:0;font-size:11px;color:#9ca3af;">Sent by okiru.pro to the feedback list. Replying to this email answers the person who sent it${replyTo ? "" : " — none was given, so a reply goes nowhere"}.</p>
+      <p style="margin:0;font-size:11px;color:#9ca3af;">Sent by okiru.pro to the feedback list. ${replyTo ? "Replying to this email answers the signed-in account that sent it." : "The sender was not signed in, so replying goes only to the list."}</p>
     </div>
   `;
 
   const text = [
     `New feedback from ${who}`,
-    `${kind} · ${ctx.areaLabel}`,
+    `${kind} · ${area}`,
     "",
     ctx.message,
     "",
     identity,
-    ...(ctx.userEmail && ctx.userEmail !== ctx.accountEmail ? [`Email given: ${ctx.userEmail}`] : []),
-    ...(ctx.organizationName ? [`Organisation: ${ctx.organizationName}`] : []),
+    ...(typedEmail && typedEmail !== accountEmail ? [`Email given (unverified): ${typedEmail}`] : []),
+    ...(organization ? [`Organisation: ${organization}`] : []),
     ...(pageLink ? [`Page: ${pageLink}`] : []),
     `Received: ${received}`,
     `Reference: ${ctx.feedbackId}`,

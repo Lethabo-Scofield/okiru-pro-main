@@ -82,6 +82,15 @@ describe("trusted device token", () => {
     expect(verifyTrustedDeviceToken(token, alice, SECRET, NOW)).toBe(false);
   });
 
+  it("honours a shortened lifetime for cookies already handed out", () => {
+    const { token } = issueTrustedDeviceToken(alice, SECRET, NOW, 90)!;
+    process.env.TRUSTED_DEVICE_DAYS = "1";
+    expect(verifyTrustedDeviceToken(token, alice, SECRET, NOW + 60 * DAY)).toBe(false);
+    expect(verifyTrustedDeviceToken(token, alice, SECRET, NOW)).toBe(false);
+    const fresh = issueTrustedDeviceToken(alice, SECRET, NOW)!;
+    expect(verifyTrustedDeviceToken(fresh.token, alice, SECRET, NOW)).toBe(true);
+  });
+
   it("defaults to 30 days and caps configuration at 90", () => {
     expect(trustedDeviceDays()).toBe(30);
     process.env.TRUSTED_DEVICE_DAYS = "365";

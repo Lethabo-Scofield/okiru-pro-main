@@ -886,6 +886,8 @@ const feedbackSchema = new Schema({
   notifyClaimedAt: { type: Date, default: null },
   notifyAttempts: { type: Number, default: 0 },
   notifyError: { type: String, default: null },
+  /** After a failed send: not before this. */
+  notifyNextAttemptAt: { type: Date, default: null },
 }, { collection: "feedback", id: false });
 
 feedbackSchema.set("toJSON", {

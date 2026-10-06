@@ -28,9 +28,14 @@ vi.mock("../../shared/schema", () => ({
 }));
 
 const { buildFeedbackEmail, getFeedbackRecipients, DEFAULT_FEEDBACK_RECIPIENTS } = await import("../email");
-const { deliverFeedbackNotification, sweepPendingFeedbackNotifications, MAX_NOTIFY_ATTEMPTS } = await import(
-  "../feedbackNotifier"
-);
+const {
+  deliverFeedbackNotification,
+  sweepPendingFeedbackNotifications,
+  notifyUnstoredFeedback,
+  resetFeedbackSendBudget,
+  nextAttemptAfter,
+  MAX_NOTIFY_ATTEMPTS,
+} = await import("../feedbackNotifier");
 
 const SMTP_ENV = { SMTP_HOST: "smtp.example.test", SMTP_USER: "user", SMTP_PASS: "pass", SMTP_FROM: "noreply@example.test" };
 
@@ -58,11 +63,14 @@ beforeEach(() => {
   find.mockReset();
   Object.assign(process.env, SMTP_ENV);
   setMongoConnected(true);
+  resetFeedbackSendBudget();
 });
 
 afterEach(() => {
   for (const k of Object.keys(SMTP_ENV)) delete process.env[k];
   delete process.env.FEEDBACK_NOTIFY_EMAILS;
+  delete process.env.FEEDBACK_NOTIFY_DISABLED;
+  delete process.env.FEEDBACK_EMAILS_PER_HOUR;
   delete (mongoose.connection as unknown as Record<string, unknown>).readyState;
 });
 
@@ -93,15 +101,30 @@ describe("the email", () => {
     expect(subject).toBe("[Okiru feedback] Bug · Procurement — I uploaded procurement but the score went to 0.02");
   });
 
-  it("replies to the signed-in account rather than whatever was typed into the form", () => {
+  it("replies only to the signed-in account, never to what was typed into the form", () => {
     expect(buildFeedbackEmail(baseCtx).replyTo).toBe("mpho@client.co.za");
-    expect(buildFeedbackEmail({ ...baseCtx, accountEmail: null }).replyTo).toBe("typed@elsewhere.com");
-    expect(buildFeedbackEmail({ ...baseCtx, accountEmail: null, userEmail: null }).replyTo).toBeNull();
+    const anonymous = buildFeedbackEmail({ ...baseCtx, accountEmail: null });
+    expect(anonymous.replyTo).toBeNull();
+    expect(anonymous.html).not.toContain("mailto:");
+    // Still shown, so the team can choose to answer — but labelled for what it is.
+    expect(anonymous.text).toContain("Email given (unverified): typed@elsewhere.com");
   });
 
   it("says whether the sender was signed in", () => {
     expect(buildFeedbackEmail(baseCtx).text).toContain("Signed in as mpho@client.co.za");
     expect(buildFeedbackEmail({ ...baseCtx, accountEmail: null }).text).toContain("unverified");
+  });
+
+  it("cannot be made to forge lines or smuggle mail headers through a typed name or address", () => {
+    const { text, html } = buildFeedbackEmail({
+      ...baseCtx,
+      accountEmail: null,
+      userName: "Mpho\nSigned in as ceo@okiru.co.za",
+      userEmail: "a@b.co?bcc=evil%40x.com&body=hi",
+    });
+    expect(text).not.toMatch(/^Signed in as ceo@okiru\.co\.za$/m);
+    expect(text).toContain("New feedback from Mpho Signed in as ceo@okiru.co.za");
+    expect(html).not.toContain("mailto:a@b.co?bcc");
   });
 
   it("links the page the feedback came from", () => {
@@ -161,14 +184,63 @@ describe("delivery", () => {
     expect(stamp.$set.notifyClaimedAt).toBeNull();
   });
 
-  it("releases the claim and keeps the error when the send fails, so the sweep retries", async () => {
-    findOneAndUpdate.mockResolvedValue(claimed);
+  it("releases the claim, keeps the error and backs off when the send fails", async () => {
+    findOneAndUpdate.mockResolvedValue({ ...claimed, notifyAttempts: 1 });
     sendMail.mockRejectedValue(new Error("421 try again later"));
-    await expect(deliverFeedbackNotification("fb-1")).resolves.toBe("failed");
+    const now = new Date("2026-10-06T10:00:00Z");
+    await expect(deliverFeedbackNotification("fb-1", now)).resolves.toBe("failed");
     const [, update] = updateOne.mock.calls[0];
     expect(update.$set.notifyClaimedAt).toBeNull();
     expect(update.$set.notifyError).toContain("421");
     expect(update.$set.notifiedAt).toBeUndefined();
+    expect(update.$set.notifyNextAttemptAt.getTime()).toBe(now.getTime() + 5 * 60 * 1000);
+  });
+
+  it("backs off by doubling, capped at six hours, so retries span hours not minutes", () => {
+    const now = new Date("2026-10-06T10:00:00Z");
+    const delayMin = (n: number) => (nextAttemptAfter(n, now).getTime() - now.getTime()) / 60000;
+    expect([1, 2, 3, 4].map(delayMin)).toEqual([5, 10, 20, 40]);
+    expect(delayMin(12)).toBe(360);
+    const total = Array.from({ length: MAX_NOTIFY_ATTEMPTS - 1 }, (_, i) => delayMin(i + 1)).reduce((a, b) => a + b, 0);
+    expect(total).toBeGreaterThan(8 * 60);
+  });
+
+  it("does not claim anything once the hour's email budget is spent — the sweep sends it later", async () => {
+    process.env.FEEDBACK_EMAILS_PER_HOUR = "2";
+    findOneAndUpdate.mockResolvedValue(claimed);
+    const now = new Date("2026-10-06T10:00:00Z");
+    await deliverFeedbackNotification("fb-1", now);
+    await deliverFeedbackNotification("fb-2", now);
+    findOneAndUpdate.mockClear();
+    await expect(deliverFeedbackNotification("fb-3", now)).resolves.toBe("skipped");
+    expect(findOneAndUpdate).not.toHaveBeenCalled();
+    // An hour later there is room again.
+    await expect(deliverFeedbackNotification("fb-3", new Date(now.getTime() + 61 * 60 * 1000))).resolves.toBe("sent");
+  });
+
+  it("a slot is given back when the record turns out to be someone else's", async () => {
+    process.env.FEEDBACK_EMAILS_PER_HOUR = "1";
+    findOneAndUpdate.mockResolvedValueOnce(null).mockResolvedValueOnce(claimed);
+    await expect(deliverFeedbackNotification("fb-1")).resolves.toBe("skipped");
+    await expect(deliverFeedbackNotification("fb-2")).resolves.toBe("sent");
+  });
+
+  it("the kill switch stops every path, not just the sweep", async () => {
+    process.env.FEEDBACK_NOTIFY_DISABLED = "true";
+    findOneAndUpdate.mockResolvedValue(claimed);
+    await expect(deliverFeedbackNotification("fb-1")).resolves.toBe("skipped");
+    await notifyUnstoredFeedback({
+      id: "fb-mem",
+      message: "x",
+      category: "bug",
+      pillar: null,
+      pageUrl: null,
+      userName: null,
+      userEmail: null,
+      createdAt: new Date().toISOString(),
+    });
+    await expect(sweepPendingFeedbackNotifications()).resolves.toEqual({ sent: 0, failed: 0 });
+    expect(sendMail).not.toHaveBeenCalled();
   });
 
   it("does nothing when another replica holds it or it was already sent", async () => {
@@ -187,6 +259,12 @@ describe("delivery", () => {
   it("gives up after a bounded number of attempts", () => {
     expect(MAX_NOTIFY_ATTEMPTS).toBeGreaterThan(1);
     expect(MAX_NOTIFY_ATTEMPTS).toBeLessThanOrEqual(10);
+  });
+
+  it("only claims a record that is due", async () => {
+    findOneAndUpdate.mockResolvedValue(null);
+    await deliverFeedbackNotification("fb-1");
+    expect(JSON.stringify(findOneAndUpdate.mock.calls[0][0])).toContain("notifyNextAttemptAt");
   });
 
   it("the sweep delivers everything still owed, oldest first", async () => {
