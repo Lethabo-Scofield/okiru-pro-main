@@ -98,7 +98,7 @@ export function applicableMaxFor(pillarMax: number, excluded: EsgExclusion[]): n
  */
 export const ESG_APPLICABILITY_SECTION = "applicability";
 
-const PILLAR_LETTER: Record<EsgScorecardPillar, string> = {
+export const PILLAR_LETTER: Record<EsgScorecardPillar, string> = {
   environmental: "e",
   social: "s",
   governance: "g",
