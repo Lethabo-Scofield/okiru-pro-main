@@ -42,7 +42,7 @@ import {
   WASTE_SCALAR_FIELDS,
 } from "@/components/esg-workbook/esgSectionConfigs";
 import type { EsgFieldDef } from "@/components/esg-workbook/EsgScalarForm";
-import { ESG_GRID_SECTIONS, isEsgGridSection } from "./esgGridSections";
+import { esgGridColumnsOnAxes, isEsgGridSection } from "./esgGridSections";
 
 /** The value types an ESG workbook cell can hold. */
 export type EsgCellValue = string | number | boolean | null;
@@ -132,10 +132,18 @@ export function esgCellOptions(sectionId: string, cell: string): readonly string
   return null;
 }
 
-/** The options a register-grid COLUMN permits, or null when the column is free. */
-export function esgGridColumnOptions(sectionId: string, columnKey: string): readonly string[] | null {
+/**
+ * The options a register-grid COLUMN permits, or null when the column is free.
+ * `axes` is the workbook's own sites and months, which the waste register's
+ * month and depot columns offer.
+ */
+export function esgGridColumnOptions(
+  sectionId: string,
+  columnKey: string,
+  axes?: { depots: readonly string[]; months: readonly string[] } | null,
+): readonly string[] | null {
   if (!isEsgGridSection(sectionId)) return null;
-  const column = ESG_GRID_SECTIONS[sectionId].columns.find((c) => c.key === columnKey);
+  const column = esgGridColumnsOnAxes(sectionId, axes).find((c) => c.key === columnKey);
   return column?.options?.length ? column.options : null;
 }
 

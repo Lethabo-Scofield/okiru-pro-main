@@ -34,7 +34,7 @@ import { deriveEsgSummaryCells } from "./esgDeriveSummary";
 import { validateEsgWorkbookForSubmit } from "./esgValidation";
 import type { EsgWorkbookData } from "./esgWorkbookStorage";
 import { computeEsgScorecard } from "../../../EsgToolkit/src/lib/calculators";
-import { ESG_DEFAULT_DEPOTS } from "./esgAxes";
+import { esgWorkbookAxes } from "@/components/esg-workbook/esgDefaults";
 
 /** Rows shown per register before "+N more". Enough for duplicates, not a dump. */
 const REGISTER_ROW_CAP = 30;
@@ -97,18 +97,25 @@ function environmentalTotals(derived: EsgWorkbookData): string {
     .filter((line): line is string => line !== null);
 
   // Per-site YTDs — "which depot uses the most water?" is a question clients
-  // actually ask, and the derived L cells already hold the answer. Row order
-  // is the site axis, same convention as every monthly grid.
-  const perSite: Array<[string, number, string]> = [
-    ["Diesel by site", 14, "litres"],
-    ["Electricity by site", 41, "kWh"],
-    ["Water by site", 58, "kL"],
+  // actually ask. Summed from each site's own grid row, named from the
+  // workbook's OWN site axis: row index, not label, is the key of every grid.
+  const axes = esgWorkbookAxes(cells);
+  const perSite: Array<[string, string, string]> = [
+    ["Diesel by site", "s1a", "litres"],
+    ["Electricity by site", "s2", "kWh"],
+    ["Water by site", "water", "kL"],
   ];
-  for (const [label, firstRow, unit] of perSite) {
-    const split = ESG_DEFAULT_DEPOTS.map((depot, i) => {
-      const v = num(cells[`L${firstRow + i}`]);
-      return v === null ? null : `${depot} ${fmt(v)}`;
-    }).filter((s): s is string => s !== null);
+  for (const [label, prefix, unit] of axes.companyWide ? [] : perSite) {
+    const split = axes.depots
+      .map((site, i) => {
+        const row = new RegExp(`^${prefix}_[C-Z]${14 + i}$`);
+        const values = Object.entries(cells)
+          .filter(([ref]) => row.test(ref))
+          .map(([, v]) => num(v))
+          .filter((v): v is number => v !== null);
+        return values.length ? `${site} ${fmt(values.reduce((a, b) => a + b, 0))}` : null;
+      })
+      .filter((s): s is string => s !== null);
     if (split.length > 1) lines.push(`- ${label} (${unit} YTD): ${split.join(", ")}`);
   }
 

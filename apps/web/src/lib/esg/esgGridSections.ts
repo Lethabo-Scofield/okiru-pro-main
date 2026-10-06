@@ -446,3 +446,25 @@ export function esgGridSectionDef(sectionId: string): EsgGridSectionDef | undefi
   if (!isEsgGridSection(sectionId)) return undefined;
   return ESG_GRID_SECTIONS[sectionId];
 }
+
+/**
+ * A register's columns on a workbook's OWN axes. The waste register's month
+ * and depot dropdowns offer the workbook's reporting months and sites — the
+ * reference workbook's Jul-25…Mar-26 and five depots were never another
+ * company's, and a value outside the dropdown is rejected on the way in.
+ */
+export function esgGridColumnsOnAxes(
+  sectionId: string,
+  axes?: { depots: readonly string[]; months: readonly string[] } | null,
+): ColumnDef[] {
+  const def = esgGridSectionDef(sectionId);
+  if (!def) return [];
+  if (!axes || sectionId !== "waste") return def.columns;
+  return def.columns.map((column) =>
+    column.key === "month"
+      ? { ...column, options: [...axes.months] }
+      : column.key === "depot"
+        ? { ...column, options: [...axes.depots, "ALL"] }
+        : column,
+  );
+}

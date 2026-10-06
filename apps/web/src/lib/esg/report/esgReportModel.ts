@@ -41,6 +41,7 @@ import {
 import { ESG_TOOLKIT_PILLAR_NAV } from "@/lib/esg/esgToolkitNav";
 import { readReportScopeFromCells, type EsgReportScope } from "@/lib/esg/esgTopicScope";
 import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
+import { esgWorkbookAxes } from "@/components/esg-workbook/esgDefaults";
 import {
   computeEsgScorecard,
   computeGhgInventory,
@@ -574,9 +575,13 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
   let metricSeq = 1;
   const mid = (prefix: string) => `${prefix}-${String(metricSeq++).padStart(3, "0")}`;
 
-  // The monthly grids carry 9 columns (C..K), not 12 — `ESG_DEFAULT_MONTHS`.
-  // Defaulting to 12 would rate a fully captured grid as partial (3 not 4).
-  const monthsExpected = dataMonths && dataMonths > 0 ? dataMonths : 9;
+  // The monthly grids carry one column per month of the workbook's OWN reporting
+  // year (C onwards) — nine for the reference workbook, not a fixed twelve, which
+  // would rate a fully captured grid as partial (3 not 4).
+  const monthsExpected =
+    dataMonths && dataMonths > 0
+      ? dataMonths
+      : esgWorkbookAxes(workbook.sections?.["e-data"]?.cells as Record<string, unknown> | undefined).months.length;
   const monthsFor = (re: RegExp): number => {
     const cells = workbook.sections?.["e-data"]?.cells ?? {};
     const cols = new Set<string>();
@@ -609,10 +614,10 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
   for (const line of ghg.lines) {
     const captureRe =
       line.scope === 1
-        ? /^s1[a-d]_([C-K])\d+$/
+        ? /^s1[a-d]_([C-Z])\d+$/
         : line.scope === 2
-          ? /^(?:s2|solar)_([C-K])\d+$/
-          : /^water_([C-K])\d+$/;
+          ? /^(?:s2|solar)_([C-Z])\d+$/
+          : /^water_([C-Z])\d+$/;
     const months = monthsFor(captureRe);
     const has = line.activity > 0;
     const dq = has ? (dataQualityFromCapture(months, monthsExpected) ?? 2) : null;
@@ -655,7 +660,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
 
   // Scope 1+2 headline, with the net-zero trajectory as its target.
   const nzMilestone = netZero?.milestones?.find((m) => !m.onTrack) ?? netZero?.milestones?.[0] ?? null;
-  const s12Dq = ghg.hasData ? (dataQualityFromCapture(monthsFor(/^s1[a-d]_([C-K])\d+$/), monthsExpected) ?? 3) : null;
+  const s12Dq = ghg.hasData ? (dataQualityFromCapture(monthsFor(/^s1[a-d]_([C-Z])\d+$/), monthsExpected) ?? 3) : null;
   const s12OnTrack = netZero?.available && nzMilestone ? nzMilestone.onTrack : null;
   metrics.push({
     metricId: mid("E-GHG"),
@@ -760,15 +765,15 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
 
   simple("E-ENE", "Energy", "Purchased electricity", "Purchased grid electricity", electricityKwh || null, "kWh",
     "Utility meter portal / municipal account", "Facilities Manager", "Sum of monthly meter reads (E_Data!A41:N45)",
-    dataQualityFromCapture(monthsFor(/^s2_([C-K])\d+$/), monthsExpected) ?? 3, [evElectricity],
+    dataQualityFromCapture(monthsFor(/^s2_([C-Z])\d+$/), monthsExpected) ?? 3, [evElectricity],
     ["JSE Core", "IFRS S2", "GRI 302-1"], "Environmental");
   simple("E-ENE", "Energy", "Renewable generation", "On-site solar generation", solarKwh || null, "kWh",
     "Inverter portal / generation meter", "Facilities Manager", "Sum of monthly generation (E_Data!A50:M54)",
-    dataQualityFromCapture(monthsFor(/^solar_([C-K])\d+$/), monthsExpected) ?? 3, [evElectricity],
+    dataQualityFromCapture(monthsFor(/^solar_([C-Z])\d+$/), monthsExpected) ?? 3, [evElectricity],
     ["JSE Leadership", "GRI 302-1"], "Environmental", "Leadership");
   simple("E-WAT", "Water", "Water consumption", "Municipal water consumed", waterKl || null, "kL",
     "Municipal water account", "Facilities Manager", "Sum of monthly consumption (E_Data!A58:M62)",
-    dataQualityFromCapture(monthsFor(/^water_([C-K])\d+$/), monthsExpected) ?? 3, [evWater],
+    dataQualityFromCapture(monthsFor(/^water_([C-Z])\d+$/), monthsExpected) ?? 3, [evWater],
     ["JSE Core", "GRI 303-5"], "Environmental");
   simple("E-WST", "Waste", "Waste diversion", "Waste diverted from landfill", wasteDiversion, "%",
     "Waste register / weighbridge tickets", "Group Operations Manager", "Diverted mass / total mass (Waste_Register!B16)",

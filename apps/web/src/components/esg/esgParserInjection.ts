@@ -64,6 +64,12 @@ import {
   mapEsgCalculatorToWorkbook,
   type EsgCalculatorResultLike,
 } from "@/lib/esg/esgParserToWorkbook";
+import {
+  esgPlacementAxes,
+  esgWorkbookAxisState,
+  isEsgAxisCell,
+  type EsgWorkbookAxisState,
+} from "@/lib/esg/esgCaseAxes";
 
 /** One field the parser read out of one document. */
 export interface EsgParserValue {
@@ -365,7 +371,17 @@ export function collectEsgExtractedValues(
  */
 export function applyEsgParserResult(
   caseResult: EsgParserCaseLike | null,
-  options: { axes?: EsgReportingAxes } = {},
+  options: {
+    /** Place on exactly these axes (the answer-key run). */
+    axes?: EsgReportingAxes;
+    /**
+     * The workbook being filled. What it states about its sites and months
+     * wins, and a workbook holding monthly figures keeps its axes; whatever
+     * it leaves open is taken from the documents and recorded with the
+     * figures. Absent — a company being created — everything is.
+     */
+    workbook?: EsgWorkbookAxisState | null;
+  } = {},
 ): EsgInjectionResult {
   const readings = collectEsgExtractedValues(caseResult);
   const calculator = caseResult?.ai_entities?.calculator ?? null;
@@ -384,7 +400,19 @@ export function applyEsgParserResult(
     };
   }
 
-  const mapped = mapEsgCalculatorToWorkbook(calculator, { axes: options.axes });
+  const placement = options.axes
+    ? { axes: options.axes, cells: {} as Record<string, string | number> }
+    : esgPlacementAxes(caseResult, options.workbook);
+  const mapped = mapEsgCalculatorToWorkbook(calculator, { axes: placement.axes });
+  // The axes the figures were placed on travel WITH them: a workbook that
+  // later read its axes from anywhere else would re-point every cell. With no
+  // monthly figure placed there is nothing to anchor, and the workbook's axes
+  // stay open for the documents that do place one.
+  const placedMonthly = esgWorkbookAxisState(mapped.patches["e-data"]?.cells).filled;
+  if (placedMonthly && Object.keys(placement.cells).length > 0) {
+    const eData = mapped.patches["e-data"] ?? (mapped.patches["e-data"] = { cells: {} });
+    eData.cells = { ...placement.cells, ...eData.cells };
+  }
 
   const placed: EsgPlacedValue[] = [];
   const unplaced: EsgUnplacedValue[] = [];
@@ -438,8 +466,10 @@ export function applyEsgParserResult(
 
 /** How many cells a patch set would write. Used for honest UI counts. */
 export function esgPatchCellCount(patches: EsgSectionPatches): number {
-  return Object.values(patches).reduce(
-    (sum, section) => sum + Object.keys(section?.cells ?? {}).length,
+  // The sites and months recorded with the figures are settings, not values.
+  return Object.entries(patches).reduce(
+    (sum, [sectionId, section]) =>
+      sum + Object.keys(section?.cells ?? {}).filter((ref) => sectionId !== "e-data" || !isEsgAxisCell(ref)).length,
     0,
   );
 }

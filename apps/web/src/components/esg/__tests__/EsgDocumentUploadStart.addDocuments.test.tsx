@@ -169,6 +169,13 @@ describe("EsgDocumentUploadStart — adding a forgotten document after the read"
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
     // Round one's electricity AND round two's diesel — the second read used to
     // replace the first's calculator, and round one's figures left the workbook.
-    expect(onComplete.mock.calls[0]![0].injection.patches["e-data"].cells).toMatchObject({ s2_C14: 111, s1a_D16: 222 });
+    // A company being created reports on the sites its documents name (BLOEM,
+    // DBN, ISANDO — DBN is row 1) from the first month they cover (Jul-25 = C).
+    expect(onComplete.mock.calls[0]![0].injection.patches["e-data"].cells).toMatchObject({
+      s2_C14: 111,
+      s1a_D15: 222,
+      eSites: "BLOEM\nDBN\nISANDO",
+      eFirstMonth: "Jul-25",
+    });
   });
 });
