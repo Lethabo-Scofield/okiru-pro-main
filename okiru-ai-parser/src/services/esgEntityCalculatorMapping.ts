@@ -48,7 +48,7 @@ import {
 } from '../../schemas/esg_calculator_allowlist.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { findEsgDocumentById } from '../../schemas/esg_document_matrix.js';
-import { ROW_SOURCE_KEY, type CaseEntities } from './entityResolution.js';
+import { ROW_HIDDEN_KEY, ROW_SOURCE_KEY, type CaseEntities } from './entityResolution.js';
 import type { ExtractionModel } from './aiExtraction.js';
 import { proposeFieldMappings, type MappableKey } from './semanticFieldMapping.js';
 
@@ -669,6 +669,8 @@ export interface EsgCalculatorRow {
   sourceFiles: string[];
   /** Row keys that had no mapping or would not coerce. */
   droppedFields: string[];
+  /** Read from a hidden sheet: it may add to what is known, not to what exists. */
+  hidden?: boolean;
 }
 
 export interface EsgCalculatorMappingResult {
@@ -877,8 +879,9 @@ function expandRows(
     const stated = (raw as Record<string, unknown>)[ROW_SOURCE_KEY];
     const rowSources = typeof stated === 'string' && stated ? [stated] : sourceFiles;
 
+    const hidden = (raw as Record<string, unknown>)[ROW_HIDDEN_KEY] === true;
     for (const [field, cellValue] of Object.entries(raw as Record<string, unknown>)) {
-      if (field === ROW_SOURCE_KEY) continue;
+      if (field === ROW_SOURCE_KEY || field === ROW_HIDDEN_KEY) continue;
       if (cellValue === null || cellValue === undefined || String(cellValue).trim() === '') continue;
       const mapping = mappingFor(field, elements);
       if (!mapping) {
@@ -899,7 +902,7 @@ function expandRows(
     }
 
     if (Object.keys(cells).length === 0) return;
-    rows.push({ grid: gridField, index, cells, sourceFiles: rowSources, droppedFields });
+    rows.push({ grid: gridField, index, cells, sourceFiles: rowSources, droppedFields, ...(hidden ? { hidden: true } : {}) });
   });
 
   return rows;
