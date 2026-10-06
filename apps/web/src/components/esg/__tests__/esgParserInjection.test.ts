@@ -17,6 +17,7 @@ import {
   esgCaseFileNames,
   esgPatchCellCount,
   esgUploadNameForSource,
+  mergeEsgCalculators,
   persistEsgSectionPatches,
   type EsgParserCaseLike,
 } from "../esgParserInjection";
@@ -341,5 +342,41 @@ describe("persistEsgSectionPatches", () => {
     await expect(
       persistEsgSectionPatches("company-1", { "e-data": { cells: { B14: 1 } } }),
     ).rejects.toThrow(/locked/i);
+  });
+});
+
+describe("mergeEsgCalculators — a second round keeps the first round's figures", () => {
+  const row = (file: string, site: string, value: number) => ({
+    grid: "esg_monthly_rows",
+    cells: { "monthly.measure": "fleet.diesel_litres", "monthly.site": site, "monthly.period_end": "2025-07-31", "monthly.value": value },
+    sourceFiles: [file],
+  });
+  const entry = (key: string, value: unknown, file: string) => ({ key, value, sourceField: key, sourceFiles: [file] });
+
+  it("keeps earlier rows and entries beside the new ones", () => {
+    const merged = mergeEsgCalculators(
+      { rows: [row("a.xlsx › fuel", "ALDER", 100)], entries: [entry("board.size", 7, "board.pdf")] },
+      { rows: [row("b.xlsx › fuel", "DRN", 200)], entries: [entry("hs.lti_count", 4, "she.xlsx")] },
+      new Set(["b.xlsx › fuel", "she.xlsx"]),
+    );
+    expect(merged?.rows?.map((r) => r.sourceFiles?.[0])).toEqual(["a.xlsx › fuel", "b.xlsx › fuel"]);
+    expect(merged?.entries?.map((e) => e.key)).toEqual(["board.size", "hs.lti_count"]);
+    expect(merged?.payload).toEqual({ "board.size": 7, "hs.lti_count": 4 });
+  });
+
+  it("lets a re-read file's fresh read replace its earlier one, and the newer round win a shared key", () => {
+    const merged = mergeEsgCalculators(
+      { rows: [row("a.xlsx › fuel", "ALDER", 100)], entries: [entry("board.size", 7, "board.pdf")] },
+      { rows: [row("a.xlsx › fuel", "ALDER", 110)], entries: [entry("board.size", 8, "board-2026.pdf")] },
+      new Set(["a.xlsx › fuel", "board-2026.pdf"]),
+    );
+    expect(merged?.rows?.map((r) => r.cells["monthly.value"])).toEqual([110]);
+    expect(merged?.payload).toEqual({ "board.size": 8 });
+  });
+
+  it("returns whichever side exists when the other has no calculator", () => {
+    const only = { rows: [row("a.xlsx › fuel", "ALDER", 100)] };
+    expect(mergeEsgCalculators(null, only, new Set())).toBe(only);
+    expect(mergeEsgCalculators(only, undefined, new Set())).toBe(only);
   });
 });
