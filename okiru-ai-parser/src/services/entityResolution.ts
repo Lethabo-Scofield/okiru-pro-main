@@ -100,9 +100,49 @@ function bucketValues(values: ExtractedValue[]): Array<{ value: unknown; sources
   return buckets.sort((a, b) => b.sources.length - a.sources.length);
 }
 
+/** The row property naming the file a register row came from (see mergeRegister). */
+export const ROW_SOURCE_KEY = '__source';
+
+/**
+ * A REGISTER adds up; it does not compete.
+ *
+ * Two sheets listing different vehicles are two halves of one fleet, not two
+ * answers to one question — yet compared as JSON blobs they could only ever
+ * "disagree", so the whole register was held back as a conflict and nothing in
+ * it placed. Rows are concatenated, each carrying the file it came from, so a
+ * later step can total within a document and raise a conflict only BETWEEN
+ * documents. A row two files state identically is one fact stated twice, so it
+ * is kept once; repeated rows within one file are kept, because only that file
+ * knows whether they are two meters or one mistake.
+ */
+function mergeRegister(field: string, values: ExtractedValue[]): ResolvedField {
+  const rows: Array<Record<string, unknown>> = [];
+  const statedBy = new Map<string, Set<string>>();
+  const sources: string[] = [];
+  for (const entry of values) {
+    if (!sources.includes(entry.sourceFile)) sources.push(entry.sourceFile);
+    if (!Array.isArray(entry.value)) continue;
+    for (const raw of entry.value) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+      const { [ROW_SOURCE_KEY]: _stated, ...cells } = raw as Record<string, unknown>;
+      const key = JSON.stringify(cells);
+      const files = statedBy.get(key) ?? new Set<string>();
+      if (files.size > 0 && !files.has(entry.sourceFile)) continue;
+      files.add(entry.sourceFile);
+      statedBy.set(key, files);
+      rows.push({ ...cells, [ROW_SOURCE_KEY]: entry.sourceFile });
+    }
+  }
+  return { field, value: rows, sources, agreementCount: sources.length, conflicted: false, alternatives: [] };
+}
+
 export function resolveCaseEntities(
   extractions: DocumentExtraction[],
-  options: { allFiles?: string[] } = {},
+  options: {
+    allFiles?: string[];
+    /** Register fields whose rows add up across documents instead of competing. */
+    additiveFields?: ReadonlySet<string>;
+  } = {},
 ): CaseEntities {
   const byField = new Map<string, ExtractedValue[]>();
   for (const extraction of extractions) {
@@ -117,6 +157,10 @@ export function resolveCaseEntities(
   const conflicts: ResolvedField[] = [];
 
   for (const [field, values] of Array.from(byField.entries())) {
+    if (options.additiveFields?.has(field)) {
+      fields[field] = mergeRegister(field, values);
+      continue;
+    }
     const buckets = bucketValues(values);
     const [winner, ...rivals] = buckets;
 

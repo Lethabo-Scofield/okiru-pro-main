@@ -70,6 +70,15 @@ export const ESG_CALCULATOR_KEY_ALLOWLIST: readonly EsgCalculatorKeySpec[] = [
   { key: 'energy.generator_run_hours', type: 'number', description: 'Generator run hours in the period' },
   { key: 'energy.lpg_kg', type: 'number', description: 'LPG combusted, kilograms (Scope 1C)' },
 
+  // ── One site × month figure from a dashboard table (E_Data monthly grids) ──
+  // The workbook decides the grid (from the measure), the depot row (from the
+  // site, against its own sites) and the month column (from the period).
+  { key: 'monthly.measure', type: 'string', description: 'Which monthly measure: fleet.diesel_litres, energy.electricity_kwh, water.kl, …' },
+  { key: 'monthly.site', type: 'string', description: 'The site as the document names it' },
+  { key: 'monthly.period_end', type: 'iso_date', description: 'Last day of the month the figure covers' },
+  { key: 'monthly.value', type: 'number', description: 'The figure, in the measure\'s stored unit' },
+  { key: 'monthly.unit', type: 'string', description: 'The stored unit (L, kL, kWh, kg, km)' },
+
   // ── Emissions and carbon tax (E_Data rows 73-90, Carbon_Tax) ──
   { key: 'emissions.scope1_fleet_tco2e', type: 'number', description: 'Scope 1A fleet diesel emissions, tCO2e' },
   { key: 'emissions.scope1_generator_tco2e', type: 'number', description: 'Scope 1B generator diesel emissions, tCO2e' },

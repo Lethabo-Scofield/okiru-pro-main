@@ -537,8 +537,8 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
       const input = await rawExtractionInputFromUpload(file);
       return [{
         ...input,
-        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows }],
-        metadata: { ...input.metadata, sheet_name: sheet.sheetName },
+        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows, matrix: sheet.matrix }],
+        metadata: { ...input.metadata, sheet_name: sheet.sheetName, sheet_hidden: Boolean(sheet.hidden) },
       }];
     }
 
@@ -567,13 +567,14 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
         mime_type: childMime,
         raw_text: sheet.text,
         markdown: sheet.markdown,
-        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows }],
+        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows, matrix: sheet.matrix }],
         metadata: {
           source: 'direct_upload',
           file_size: file.size,
           mime_type: file.mimetype,
           sheet_name: sheet.sheetName,
           parent_file: file.originalname,
+          sheet_hidden: Boolean(sheet.hidden),
         },
       }));
     }
