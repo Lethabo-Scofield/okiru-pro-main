@@ -50,6 +50,7 @@ import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { hasAnyRole, isSuperAdmin } from "@/lib/roles";
 import { usePageViewTracking } from "@/lib/gaTracker";
+import { useClarityContext } from "@/lib/clarityContext";
 import { ScorecardAdviceChat } from "@toolkit/components/scorecard/ScorecardAdviceChat";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 
@@ -171,6 +172,7 @@ function ToolkitAuthRedirect() {
 
 function AppRouter() {
   usePageViewTracking();
+  useClarityContext();
   return (
     <Switch>
       <Route path="/">
