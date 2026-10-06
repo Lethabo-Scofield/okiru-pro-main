@@ -34,6 +34,7 @@ const {
   notifyUnstoredFeedback,
   resetFeedbackSendBudget,
   nextAttemptAfter,
+  undeliverableRecipients,
   MAX_NOTIFY_ATTEMPTS,
 } = await import("../feedbackNotifier");
 
@@ -79,9 +80,21 @@ describe("who is told", () => {
     expect(getFeedbackRecipients()).toEqual([
       "contact@okiru.co.za",
       "lawubrian15@gmail.com",
-      "pm@webparam.co.za",
+      // .org: webparam.co.za does not exist, and every copy sent there bounced.
+      "pm@webparam.org",
     ]);
     expect(DEFAULT_FEEDBACK_RECIPIENTS).toHaveLength(3);
+  });
+
+  it("flags a recipient whose domain does not exist, and only that", async () => {
+    const resolveMx = async (domain: string) => {
+      if (domain === "webparam.co.za") throw Object.assign(new Error("queryMx ENOTFOUND"), { code: "ENOTFOUND" });
+      if (domain === "slow.example") throw Object.assign(new Error("timeout"), { code: "ETIMEOUT" });
+      return [{ exchange: `mx.${domain}` }];
+    };
+    await expect(
+      undeliverableRecipients(["pm@webparam.co.za", "pm@webparam.org", "x@slow.example"], resolveMx),
+    ).resolves.toEqual(["pm@webparam.co.za"]);
   });
 
   it("can be replaced by FEEDBACK_NOTIFY_EMAILS, ignoring junk and duplicates", () => {
@@ -180,8 +193,38 @@ describe("delivery", () => {
 
     const [, stamp] = updateOne.mock.calls[0];
     expect(stamp.$set.notifiedAt).toBeInstanceOf(Date);
-    expect(stamp.$set.notifiedTo).toEqual(DEFAULT_FEEDBACK_RECIPIENTS);
+    expect(stamp.$addToSet.notifiedTo.$each).toEqual(DEFAULT_FEEDBACK_RECIPIENTS);
     expect(stamp.$set.notifyClaimedAt).toBeNull();
+  });
+
+  it("catches up only a recipient added or corrected after the report went out", async () => {
+    // What production held after the first send: the PM's mistyped address.
+    const sentEarlier = new Date("2026-10-06T10:09:29Z");
+    findOneAndUpdate.mockResolvedValue({
+      ...claimed,
+      notifiedAt: sentEarlier,
+      notifiedTo: ["contact@okiru.co.za", "lawubrian15@gmail.com", "pm@webparam.co.za"],
+    });
+    await expect(deliverFeedbackNotification("fb-1")).resolves.toBe("sent");
+
+    const [filter] = findOneAndUpdate.mock.calls[0];
+    expect(JSON.stringify(filter)).toContain('"$all"');
+    expect(sendMail.mock.calls[0][0].to).toEqual(["pm@webparam.org"]);
+
+    const [, stamp] = updateOne.mock.calls[0];
+    expect(stamp.$set.notifiedAt).toBe(sentEarlier); // the first send's time stands
+    expect(stamp.$addToSet.notifiedTo.$each).toEqual(["pm@webparam.org"]);
+  });
+
+  it("sends nothing when everyone on the list already has it", async () => {
+    findOneAndUpdate.mockResolvedValue({
+      ...claimed,
+      notifiedAt: new Date(),
+      notifiedTo: [...DEFAULT_FEEDBACK_RECIPIENTS],
+    });
+    await expect(deliverFeedbackNotification("fb-1")).resolves.toBe("skipped");
+    expect(sendMail).not.toHaveBeenCalled();
+    expect(updateOne.mock.calls[0][1].$set.notifyClaimedAt).toBeNull();
   });
 
   it("releases the claim, keeps the error and backs off when the send fails", async () => {

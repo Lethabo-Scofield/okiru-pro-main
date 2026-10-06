@@ -21,10 +21,16 @@
  * sent, and a failed send backs off (5 min, doubling, up to 6 h) instead of
  * hammering a relay that is already refusing.
  */
+import { promises as dns } from "dns";
 import mongoose from "mongoose";
 import { FeedbackModel, OrganizationModel, UserModel } from "../shared/schema";
 import { feedbackPillarLabel } from "../src/lib/feedbackPillars";
-import { isSmtpConfigured, sendFeedbackNotification, type FeedbackEmailContext } from "./email";
+import {
+  getFeedbackRecipients,
+  isSmtpConfigured,
+  sendFeedbackNotification,
+  type FeedbackEmailContext,
+} from "./email";
 import { createLogger } from "./logger";
 
 const logger = createLogger("FeedbackNotifier");
@@ -84,12 +90,22 @@ function due(now: Date) {
   return { $or: [{ notifyNextAttemptAt: null }, { notifyNextAttemptAt: { $lte: now } }] };
 }
 
+/**
+ * Not yet sent to everyone on today's list. A recipient added — or an address
+ * corrected — after a report went out is still owed that report, so changing
+ * the list catches them up on the last BACKFILL_WINDOW_DAYS without anyone
+ * forwarding anything.
+ */
+function owed(recipients: string[]) {
+  return { $or: [{ notifiedAt: null }, { notifiedTo: { $not: { $all: recipients } } }] };
+}
+
 /** Still owed an email, due, and nobody is sending it right now. */
-export function claimFilter(feedbackId: string, now: Date) {
+export function claimFilter(feedbackId: string, now: Date, recipients: string[] = getFeedbackRecipients()) {
   return {
     $and: [
       { $or: [{ feedbackId }, { id: feedbackId }] },
-      { notifiedAt: null },
+      owed(recipients),
       // `$not` so records written before these fields existed still match.
       { notifyAttempts: { $not: { $gte: MAX_NOTIFY_ATTEMPTS } } },
       due(now),
@@ -98,16 +114,39 @@ export function claimFilter(feedbackId: string, now: Date) {
   };
 }
 
-export function pendingFilter(now: Date) {
+export function pendingFilter(now: Date, recipients: string[] = getFeedbackRecipients()) {
   return {
     $and: [
-      { notifiedAt: null },
+      owed(recipients),
       { notifyAttempts: { $not: { $gte: MAX_NOTIFY_ATTEMPTS } } },
       { createdAt: { $gte: new Date(now.getTime() - BACKFILL_WINDOW_DAYS * DAY_MS) } },
       due(now),
       unclaimed(now),
     ],
   };
+}
+
+/**
+ * Recipients whose domain does not exist. A typo here fails silently: the relay
+ * accepts the message and the bounce never comes back to the app — which is how
+ * every copy to "pm@webparam.co.za" vanished. Only a domain that does not exist
+ * is flagged; a resolver timeout proves nothing either way.
+ */
+export async function undeliverableRecipients(
+  recipients: string[],
+  resolveMx: (domain: string) => Promise<Array<{ exchange: string }>> = (d) => dns.resolveMx(d),
+): Promise<string[]> {
+  const bad: string[] = [];
+  for (const recipient of recipients) {
+    const domain = recipient.split("@")[1] ?? "";
+    try {
+      const records = await resolveMx(domain);
+      if (records.length === 0) bad.push(recipient);
+    } catch (err) {
+      if ((err as { code?: string })?.code === "ENOTFOUND") bad.push(recipient);
+    }
+  }
+  return bad;
 }
 
 /** The signed-in account's own email and organisation, which the form fields are not. */
@@ -156,8 +195,9 @@ export async function deliverFeedbackNotification(feedbackId: string, now: Date 
   const release = reserveSend(now.getTime());
   if (!release) return "skipped";
 
+  const recipients = getFeedbackRecipients();
   const doc: any = await FeedbackModel.findOneAndUpdate(
-    claimFilter(feedbackId, now),
+    claimFilter(feedbackId, now, recipients),
     { $set: { notifyClaimedAt: now }, $inc: { notifyAttempts: 1 } },
     { new: true },
   ).lean();
@@ -166,18 +206,29 @@ export async function deliverFeedbackNotification(feedbackId: string, now: Date 
     return "skipped";
   }
 
-  const result = await sendFeedbackNotification(await emailContextFor(doc));
+  // Everyone on a first send; after one, only who has joined the list since.
+  const already = new Set<string>(
+    (doc.notifiedAt ? doc.notifiedTo ?? [] : []).map((e: unknown) => String(e).toLowerCase()),
+  );
+  const missing = recipients.filter((r) => !already.has(r));
+  if (missing.length === 0) {
+    await FeedbackModel.updateOne({ _id: doc._id }, { $set: { notifyClaimedAt: null } });
+    release();
+    return "skipped";
+  }
+
+  const result = await sendFeedbackNotification(await emailContextFor(doc), missing);
   if (result.sent) {
     await FeedbackModel.updateOne(
       { _id: doc._id },
       {
         $set: {
-          notifiedAt: new Date(),
-          notifiedTo: result.recipients,
+          notifiedAt: doc.notifiedAt ?? new Date(),
           notifyError: null,
           notifyClaimedAt: null,
           notifyNextAttemptAt: null,
         },
+        $addToSet: { notifiedTo: { $each: result.recipients } },
       },
     );
     return "sent";
@@ -261,6 +312,15 @@ export function startFeedbackNotifier(): void {
   if (!isSmtpConfigured()) {
     logger.warn("No mail transport configured — feedback is saved but nobody is emailed until SMTP is set");
   }
+  void undeliverableRecipients(getFeedbackRecipients())
+    .then((bad) => {
+      if (bad.length) {
+        logger.error("Feedback recipients whose domain does not exist — they will never receive a report", undefined, {
+          recipients: bad,
+        });
+      }
+    })
+    .catch(() => {});
   const run = () => {
     sweepPendingFeedbackNotifications().catch((err) => logger.error("Feedback notification sweep failed", err));
   };
