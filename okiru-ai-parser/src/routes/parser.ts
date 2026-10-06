@@ -622,19 +622,31 @@ router.post('/webhooks/payfast', async (req: Request, res: Response) => {
  * unconsumed quote whose fingerprint matches the uploaded files. All that has
  * changed is who is allowed to say "paid".
  */
-router.post('/quotes/:quoteId/settle', async (req: Request, res: Response) => {
+/**
+ * The server-to-server guard both internal quote routes share: 404 when no
+ * secret is configured, 403 on a wrong or missing one, constant-time compare.
+ * Answers the request itself and returns false when the caller may not pass.
+ */
+function internalCallerAllowed(req: Request, res: Response, what: string): boolean {
   const secret = process.env.PARSER_INTERNAL_SECRET || '';
   if (!secret) {
-    logger.warn('Wallet settle attempted with no PARSER_INTERNAL_SECRET configured');
-    return res.status(404).json(fail('Not found', 'NOT_FOUND'));
+    logger.warn(`${what} attempted with no PARSER_INTERNAL_SECRET configured`);
+    res.status(404).json(fail('Not found', 'NOT_FOUND'));
+    return false;
   }
   const presented = String(req.header('x-okiru-internal-secret') ?? '');
   const a = Buffer.from(presented);
   const b = Buffer.from(secret);
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    logger.warn('Rejected wallet settle with a bad internal secret', { quoteId: req.params.quoteId });
-    return res.status(403).json(fail('Forbidden', 'FORBIDDEN'));
+    logger.warn(`Rejected ${what} with a bad internal secret`, { quoteId: req.params.quoteId });
+    res.status(403).json(fail('Forbidden', 'FORBIDDEN'));
+    return false;
   }
+  return true;
+}
+
+router.post('/quotes/:quoteId/settle', async (req: Request, res: Response) => {
+  if (!internalCallerAllowed(req, res, 'wallet settle')) return;
 
   const quoteId = String(req.params.quoteId);
   const record = await getQuoteStore().get(quoteId);
@@ -659,6 +671,30 @@ router.post('/quotes/:quoteId/settle', async (req: Request, res: Response) => {
   });
   logger.info('Quote settled from the credit wallet', { quoteId, reference: reference || null });
   return res.json(ok({ quoteId, paymentStatus: 'paid', alreadySettled: false, totalCents: record.totalCents }));
+});
+
+/**
+ * How a paid run ended, per file, for the web wallet's refund decision.
+ * Server-to-server only, behind the same guard as settle: a browser that could
+ * read this could not refund itself anyway, but it has no business here.
+ */
+router.get('/quotes/:quoteId/outcome', async (req: Request, res: Response) => {
+  if (!internalCallerAllowed(req, res, 'outcome read')) return;
+  const quoteId = String(req.params.quoteId);
+  const record = await getQuoteStore().get(quoteId);
+  if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
+  return res.json(ok({
+    quoteId,
+    paymentStatus: record.paymentStatus,
+    paidAt: record.paidAt ?? null,
+    consumedAt: record.consumedAt ?? null,
+    outcome: record.outcome ?? null,
+    totalCents: record.totalCents,
+    files: (record.quote?.files ?? []).map((file) => ({
+      filename: file.filename,
+      extractionCents: file.pricing?.extractionCents ?? 0,
+    })),
+  }));
 });
 
 /**
