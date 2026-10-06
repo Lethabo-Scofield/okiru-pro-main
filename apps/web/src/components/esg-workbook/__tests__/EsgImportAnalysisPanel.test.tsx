@@ -11,9 +11,10 @@
  */
 import { describe, expect, it } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { EsgImportAnalysisPanel } from "../EsgImportAnalysisPanel";
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
+import { mergeEsgSectionCells } from "@/lib/esg/esgGridRows";
 import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 
 const preview = (sections: Record<string, Record<string, unknown>>): EsgImportPreview => ({
@@ -103,5 +104,38 @@ describe("EsgImportAnalysisPanel", () => {
     const block = screen.getByTestId("esg-import-registers");
     expect(block).toHaveTextContent(/none removed/i);
     expect(block).toHaveTextContent("Fleet: 1 row added, 1 updated (2 already there)");
+  });
+
+  it("offers to replace a register that already has rows, and says plainly what a replace removes", () => {
+    const rows = (regs: string[]) =>
+      mergeEsgSectionCells("fleet", regs.map((reg, i) => ({ _id: String(i), reg })), {});
+    const imported = preview({ fleet: rows(["AA11BBGP"]) });
+    const current = workbook({ fleet: rows(["AA11BBGP", "CC22DDGP", "EE33FFGP"]) });
+    const choices: Array<[string, boolean]> = [];
+
+    const { unmount } = render(
+      <EsgImportAnalysisPanel
+        analysis={analyseEsgImport(imported, current)}
+        sectionLabels={{ fleet: "Fleet" }}
+        onReplaceChange={(id, on) => choices.push([id, on])}
+      />,
+    );
+    const choose = screen.getByLabelText("How to import Fleet");
+    expect(choose).toHaveValue("merge");
+    fireEvent.change(choose, { target: { value: "replace" } });
+    expect(choices).toEqual([["fleet", true]]);
+    unmount();
+
+    render(
+      <EsgImportAnalysisPanel
+        analysis={analyseEsgImport(imported, current, new Set(["fleet"]))}
+        sectionLabels={{ fleet: "Fleet" }}
+        replace={new Set(["fleet"])}
+        onReplaceChange={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("esg-import-register-fleet")).toHaveTextContent(
+      "Fleet: replaced with the file's 1 row — the 3 rows in the workbook now go",
+    );
   });
 });

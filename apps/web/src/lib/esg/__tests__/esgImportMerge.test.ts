@@ -186,3 +186,42 @@ describe("rows are matched by what identifies them", () => {
     expect(result.register).toMatchObject({ updated: 1, added: 1 });
   });
 });
+
+describe("replacing a register on purpose (C5)", () => {
+  const existingFleet = mergeEsgSectionCells("fleet", fleetRows, { B28: 3 });
+  const corrected = mergeEsgSectionCells("fleet", [{ _id: "x", reg: "AB56STGP", depot: "BKT", monthlyKm: 1250 }], { B28: 1 });
+
+  it("takes the file's rows as the register when the person chose to replace it", () => {
+    const result = mergeImportIntoSection("fleet", existingFleet, corrected, { replaceRows: true });
+    expect(readEsgGridRows(result.cells, "fleet").map((r) => [r.reg, r.monthlyKm])).toEqual([["AB56STGP", 1250]]);
+    expect(result.register).toMatchObject({ replaced: true, existing: 3, incoming: 1, removed: 3 });
+    // The register's other figures still follow the value-cell rule.
+    expect(result.cells.B28).toBe(1);
+  });
+
+  it("never replaces with an empty sheet — a template's untouched register stays", () => {
+    const empty = { _row_count: 0 };
+    const result = mergeImportIntoSection("fleet", existingFleet, empty, { replaceRows: true });
+    expect(readEsgGridRows(result.cells, "fleet")).toHaveLength(3);
+    expect(result.register?.replaced).toBeUndefined();
+  });
+
+  it("replaces only the registers chosen; every other section merges as before", () => {
+    const merged = mergeImportIntoSections(
+      { fleet: { cells: existingFleet }, "e-data": { cells: { s1a_C14: 100 } } },
+      { fleet: { cells: corrected }, "e-data": { cells: { s1a_D14: 200 } } },
+      new Set(["fleet"]),
+    );
+    expect(readEsgGridRows(merged.fleet.cells, "fleet")).toHaveLength(1);
+    expect(merged["e-data"].cells).toEqual({ s1a_C14: 100, s1a_D14: 200 });
+  });
+
+  it("the preview tells the same story: rows removed, counted on the confirm", () => {
+    const analysis = analyseEsgImport(
+      { sections: { fleet: { cells: corrected } }, warnings: [], unmatchedSheets: [] },
+      { sections: { fleet: { cells: existingFleet } } },
+      new Set(["fleet"]),
+    );
+    expect(analysis.registers).toEqual([expect.objectContaining({ sectionId: "fleet", replaced: true, removed: 3 })]);
+  });
+});
