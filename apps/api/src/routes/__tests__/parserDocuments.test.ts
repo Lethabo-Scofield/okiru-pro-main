@@ -741,3 +741,33 @@ describe('serving the original file', () => {
     }
   });
 });
+
+describe('serving the original file', () => {
+  async function download(fileType: string, filename: string) {
+    documents.push({ _id: 'doc-1', filename, fileType, rawContent: Buffer.from('<script>alert(document.cookie)</script>'), source: 'parser', userId: 'user-a', organizationId: 'org-a' });
+    const response = await fetch(`http://127.0.0.1:${port}/api/parser-documents/doc-1/download`, {
+      headers: { 'x-test-user': 'user-a', 'x-test-org': 'org-a' },
+    });
+    return response.headers;
+  }
+
+  it('never renders uploaded HTML or SVG from our own origin', async () => {
+    for (const [type, name] of [['text/html', 'invoice.html'], ['image/svg+xml', 'logo.svg'], ['application/xhtml+xml', 'x.xhtml'], ['', 'unknown']]) {
+      documents.length = 0;
+      const headers = await download(type, name);
+      expect(headers.get('content-type')).toBe('application/octet-stream');
+      expect(headers.get('content-disposition')).toMatch(/^attachment;/);
+      expect(headers.get('x-content-type-options')).toBe('nosniff');
+    }
+  });
+
+  it('still shows PDFs and images inline, for the side-by-side preview', async () => {
+    for (const [type, name] of [['application/pdf', 'afs.pdf'], ['image/jpeg', 'id.jpg'], ['IMAGE/PNG', 'scan.png']]) {
+      documents.length = 0;
+      const headers = await download(type, name);
+      expect(headers.get('content-type')).toBe(type.toLowerCase());
+      expect(headers.get('content-disposition')).toMatch(/^inline;/);
+      expect(headers.get('x-content-type-options')).toBe('nosniff');
+    }
+  });
+});
