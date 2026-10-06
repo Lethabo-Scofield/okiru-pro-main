@@ -17,6 +17,8 @@ import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import { mergeEsgSectionCells, readEsgGridRows, type EsgGridRow } from "@/lib/esgGridRows";
 import { useEsgStore } from "../../../EsgToolkit/src/lib/esgStore";
 import { ESG_PANEL, ESG_PANEL_HEADER, ESG_SAVE_BTN } from "./esgEditorChrome";
+import { esgWorkbookAxes } from "./esgDefaults";
+import { esgGridColumnsOnAxes } from "@/lib/esg/esgGridSections";
 
 const SAVE_DEBOUNCE_MS = 800;
 
@@ -86,7 +88,13 @@ export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function
     },
   }));
 
-  const columns = useMemo(() => def.columns, [def]);
+  // The waste register's month and depot dropdowns offer the workbook's own
+  // reporting months and sites (E_Data), not the reference workbook's.
+  const eData = workbook?.sections?.["e-data"]?.cells;
+  const columns = useMemo(
+    () => esgGridColumnsOnAxes(sectionId, esgWorkbookAxes(eData as Record<string, unknown> | undefined)),
+    [sectionId, eData],
+  );
   const addRows = canAddRows ?? sectionId !== "iso-tracker";
   const delRows = canDeleteRows ?? sectionId !== "iso-tracker";
 

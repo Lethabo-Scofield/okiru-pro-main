@@ -490,19 +490,33 @@ export function esgDepotRowIndex(
   siteName: unknown,
   axes: EsgReportingAxes = ESG_FALLBACK_REPORTING_AXES,
 ): number | null {
+  const match = esgSiteMatch(siteName, axes.depots);
+  return typeof match === "number" ? match : null;
+}
+
+/**
+ * Which of `sites` a document's site label names: its index, null when it
+ * names none, "ambiguous" when it names two or more.
+ */
+export function esgSiteMatch(siteName: unknown, sites: readonly string[]): number | null | "ambiguous" {
   const label = String(siteName ?? "").trim();
   if (!label) return null;
   // Strongest evidence first; at the first kind of evidence that names any
   // depot, exactly one must be named — two candidates is a guess, and a guess
   // here credits one depot with another's consumption.
   for (const matches of SITE_MATCH_RULES) {
-    const hits = axes.depots
+    const hits = sites
       .map((depot, index) => ({ depot, index }))
       .filter(({ depot }) => matches(siteWords(label), siteWords(depot)));
     if (hits.length === 1) return hits[0].index;
-    if (hits.length > 1) return null;
+    if (hits.length > 1) return "ambiguous";
   }
   return null;
+}
+
+/** A site label's identity regardless of case and punctuation: "Cape-Town " → "CAPE TOWN". */
+export function esgSiteKey(siteName: unknown): string {
+  return siteWords(String(siteName ?? "")).join(" ");
 }
 
 /** "SG CONSUMER - BLOEMFONTEIN" → ["SG", "CONSUMER", "BLOEMFONTEIN"]. */
