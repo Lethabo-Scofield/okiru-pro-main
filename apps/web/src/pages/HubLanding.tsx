@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useAuth } from '@toolkit/lib/auth';
 import { checkOnboardingGate } from '@/lib/onboardingStatus';
@@ -27,9 +27,33 @@ interface HubClient {
 function HubSkeleton({ className }: { className: string }) {
   return (
     <span
-      className={`block animate-pulse rounded-full bg-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] ${className}`}
+      className={`block animate-pulse rounded-full bg-[color:var(--hub-skeleton)] ${className}`}
       aria-hidden
     />
+  );
+}
+
+function HubSectionHeader({
+  id,
+  title,
+  hint,
+  aside,
+}: {
+  id?: string;
+  title: string;
+  hint?: string;
+  aside?: string;
+}) {
+  return (
+    <div className="mb-3 flex items-end justify-between gap-4">
+      <div>
+        <h2 id={id} className="hub-label">
+          {title}
+        </h2>
+        {hint && <p className="mt-1 text-xs text-[color:var(--body)]">{hint}</p>}
+      </div>
+      {aside && <span className="hidden text-xs text-[color:var(--muted)] sm:inline">{aside}</span>}
+    </div>
   );
 }
 
@@ -176,24 +200,32 @@ export default function HubLanding() {
     {
       id: 'bbbee',
       title: 'B-BBEE',
-      icon: <Award className="h-5 w-5" />,
+      icon: <Award className="h-6 w-6" />,
       description:
         'Measure a company against its sector scorecard, from evidence through to a verified level.',
       workspace: '/bbbee',
       create: '/bbbee/new',
       hue: 'var(--bbbee)',
+      accent: '#7c3aed',
+      art: '/hub-bbbee-card-background.webp',
+      artSize: 'auto 185%',
+      artPos: 'right 35%',
       count: counts.bbbee,
       available: true,
     },
     {
       id: 'esg',
       title: 'ESG',
-      icon: <Leaf className="h-5 w-5" />,
+      icon: <Leaf className="h-6 w-6" />,
       description:
         'Report environmental, social and governance performance against the frameworks you follow.',
       workspace: '/esg',
       create: '/esg/new',
       hue: 'var(--esg)',
+      accent: '#15803d',
+      art: '/hub-esg-card-background.png',
+      artSize: 'cover',
+      artPos: 'center 62%',
       count: counts.esg,
       available: esgAllowed,
     },
@@ -207,7 +239,7 @@ export default function HubLanding() {
         <img
           src="/certificates-icon.png"
           alt=""
-          className="h-28 w-28 object-contain transition-transform duration-200 group-hover:scale-[1.04]"
+          className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.06]"
           draggable={false}
         />
       ),
@@ -221,7 +253,7 @@ export default function HubLanding() {
         <img
           src="/document-library-icon.png"
           alt=""
-          className="h-20 w-20 object-contain transition-transform duration-200 group-hover:scale-[1.04]"
+          className="h-full w-full object-contain transition-transform duration-200 group-hover:scale-[1.06]"
           draggable={false}
         />
       ),
@@ -232,14 +264,14 @@ export default function HubLanding() {
 
   return (
     <div
-      className="min-h-[calc(100vh-3rem)] bg-white bg-cover bg-center bg-no-repeat font-sans text-[color:var(--hi)]"
-      style={{ backgroundImage: "url('/hub-background.png')" }}
+      className="min-h-[calc(100vh-3rem)] bg-[color:var(--ink)] bg-cover bg-center bg-no-repeat font-sans text-[color:var(--hi)]"
+      style={{ backgroundImage: 'var(--hub-bg-image)' }}
       data-testid="page-hub"
     >
       <div className="mx-auto max-w-[1240px] px-4 py-8 sm:px-6 lg:py-10">
-        <div className="mb-8 flex flex-col gap-4 px-1 py-5 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mb-8 flex flex-col gap-4 px-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">Workspace</div>
+            <div className="hub-label mb-2">Workspace</div>
             <h1 className="text-[30px] font-semibold leading-tight tracking-normal text-[color:var(--hi)]">
               {companyName || 'Okiru'}
             </h1>
@@ -258,13 +290,13 @@ export default function HubLanding() {
               )}
             </span>
             <span className="h-4 w-px bg-[color:var(--rule-strong)]" aria-hidden />
-            <span><strong className="font-semibold text-[color:var(--hi)]">2</strong> products</span>
+            <span><strong className="font-semibold text-[color:var(--hi)]">{products.length}</strong> products</span>
           </div>
         </div>
 
         {!profileLoading && needsProfile && reminderVisible && (
           <div
-            className="mb-6 flex items-start justify-between gap-4 rounded-[8px] border border-white/65 bg-white/70 px-4 py-3 shadow-[0_14px_34px_-28px_rgba(24,24,27,0.42)] backdrop-blur-xl"
+            className="hub-card mb-8 flex items-start justify-between gap-4 px-4 py-3"
             data-testid="profile-reminder"
           >
             <p className="text-sm text-[color:var(--body)]">
@@ -296,20 +328,19 @@ export default function HubLanding() {
         )}
 
         {(continueBbbee || (esgAllowed && continueEsg)) && (
-          <div className="mb-7">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
-              Continue where you left off
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
+          <section className="mb-8" aria-labelledby="continue-heading">
+            <HubSectionHeader id="continue-heading" title="Continue where you left off" />
+            <div className="grid gap-4 md:grid-cols-2">
               {continueBbbee && (
                 <button
                   type="button"
                   onClick={() => navigate('/bbbee/new')}
-                  className="flex items-center justify-between gap-3 rounded-[8px] border border-white/55 bg-white/38 px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_16px_36px_-30px_rgba(24,24,27,0.48)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:bg-white/52"
+                  className="hub-card hub-card--lift flex items-center justify-between gap-3 px-4 py-3 text-left"
+                  style={{ '--hub-accent': '#7c3aed' } as CSSProperties}
                   data-testid="continue-bbbee"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium truncate">
+                    <span className="block truncate text-[13px] font-medium">
                       {continueBbbee.name || 'B-BBEE scorecard'}
                     </span>
                     <span className="mt-0.5 block text-[11px] text-[color:var(--body)]">
@@ -323,11 +354,12 @@ export default function HubLanding() {
                 <button
                   type="button"
                   onClick={() => navigate('/esg/new')}
-                  className="flex items-center justify-between gap-3 rounded-[8px] border border-white/55 bg-white/38 px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_16px_36px_-30px_rgba(24,24,27,0.48)] backdrop-blur-2xl transition hover:-translate-y-0.5 hover:bg-white/52"
+                  className="hub-card hub-card--lift flex items-center justify-between gap-3 px-4 py-3 text-left"
+                  style={{ '--hub-accent': '#15803d' } as CSSProperties}
                   data-testid="continue-esg"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-medium truncate">
+                    <span className="block truncate text-[13px] font-medium">
                       {continueEsg.name || 'ESG scorecard'}
                     </span>
                     <span className="mt-0.5 block text-[11px] text-[color:var(--body)]">
@@ -338,148 +370,94 @@ export default function HubLanding() {
                 </button>
               )}
             </div>
-          </div>
+          </section>
         )}
 
         <section aria-labelledby="products-heading">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 id="products-heading" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
-              Compliance products
-            </h2>
-            <span className="text-xs text-[color:var(--muted)]">Choose where to work</span>
-          </div>
+          <HubSectionHeader id="products-heading" title="Compliance products" aside="Choose where to work" />
           <div className="grid gap-4 md:grid-cols-2">
-          {products.map((p) => (
-            <section
-              key={p.id}
-              className={`relative flex min-h-[250px] flex-col overflow-hidden rounded-[8px] border p-6 transition hover:-translate-y-0.5 ${
-                p.id === 'esg'
-                  ? 'border-white/70 bg-white/72 shadow-[0_24px_58px_-48px_rgba(24,24,27,0.62)] backdrop-blur-xl hover:bg-white/82 hover:shadow-[0_28px_70px_-52px_rgba(24,24,27,0.72)]'
-                  : 'border-white/55 bg-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_24px_58px_-48px_rgba(24,24,27,0.68)] backdrop-blur-2xl hover:bg-white/42 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.8),0_28px_70px_-52px_rgba(24,24,27,0.72)]'
-              }`}
-              style={
-                p.id === 'esg'
-                  ? {
-                      backgroundImage:
-                        "linear-gradient(90deg, rgba(255,255,255,0.68) 0%, rgba(255,255,255,0.28) 46%, rgba(255,255,255,0.06) 100%), url('/hub-esg-card-background.png')",
-                      backgroundPosition: 'center',
-                      backgroundSize: 'cover',
-                    }
-                  : undefined
-              }
-              data-testid={`product-${p.id}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  {p.id !== 'esg' && (
-                    <span
-                      className="grid h-10 w-10 place-items-center rounded-[8px] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
-                      style={{
-                        color: p.hue,
-                        background: `color-mix(in srgb, ${p.hue} 10%, white)`,
-                        border: `1px solid color-mix(in srgb, ${p.hue} 24%, white)`,
-                      }}
-                    >
+            {products.map((p) => (
+              <section
+                key={p.id}
+                className="hub-card hub-card--art hub-card--lift flex min-h-[250px] flex-col overflow-hidden p-6"
+                style={
+                  {
+                    '--hub-accent': p.accent,
+                    '--hub-art': `url('${p.art}')`,
+                    '--hub-art-size': p.artSize,
+                    '--hub-art-pos': p.artPos,
+                  } as CSSProperties
+                }
+                data-testid={`product-${p.id}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <span className={`grid h-10 w-10 place-items-center hub-icon-${p.id}`}>
                       {p.icon}
                     </span>
-                  )}
-                  <div>
                     <h3 className="text-xl font-semibold tracking-normal text-[color:var(--hi)]">{p.title}</h3>
                   </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-[26px] font-semibold leading-none text-[color:var(--hi)]" data-testid={`count-${p.id}`}>
-                    {clientsLoading ? <HubSkeleton className="ml-auto h-7 w-9" /> : p.count}
+                  <div className="hub-chip hub-chip--stat shrink-0 px-3 py-2 text-right">
+                   <div>
+                    <div className="text-[26px] font-semibold leading-none text-[color:var(--hi)]" data-testid={`count-${p.id}`}>
+                      {clientsLoading ? <HubSkeleton className="ml-auto h-7 w-9" /> : p.count}
+                    </div>
+                    <div className="hub-label mt-1.5 text-[10px]">
+                      {p.count === 1 ? 'company' : 'companies'}
+                    </div>
+                   </div>
                   </div>
-                  <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[color:var(--muted)]">
-                    {p.count === 1 ? 'company' : 'companies'}
+                </div>
+                <p className="hub-art-copy mt-5 flex-1 text-sm leading-6 text-[color:var(--body)]">{p.description}</p>
+                {p.id === 'esg' && !esgAccessLoading && !p.available ? (
+                  <div className="mt-6 flex items-center gap-2 border-t border-[color:var(--rule)] pt-4 text-sm text-[color:var(--body)]" data-testid="esg-unavailable">
+                    <LockKeyhole className="h-4 w-4" />
+                    ESG access is not enabled for this account
                   </div>
-                </div>
-              </div>
-              <p className="mt-5 max-w-md flex-1 text-sm leading-6 text-[color:var(--body)]">{p.description}</p>
-              {p.id === 'esg' && !esgAccessLoading && !p.available ? (
-                <div className="mt-6 flex items-center gap-2 border-t border-[color:var(--rule)] pt-4 text-sm text-[color:var(--body)]" data-testid="esg-unavailable">
-                  <LockKeyhole className="h-4 w-4" />
-                  ESG access is not enabled for this account
-                </div>
-              ) : (
-                <div className="mt-6 flex flex-wrap items-center gap-2">
-                  <Link
-                    href={p.workspace}
-                    className={`inline-flex h-9 items-center gap-2 rounded-[8px] px-4 text-sm font-medium text-white shadow-[0_12px_24px_-18px_rgba(0,0,0,0.65)] transition ${
-                      p.id === 'esg'
-                        ? 'bg-emerald-600 hover:bg-emerald-700'
-                        : 'bg-violet-600 hover:bg-violet-700'
-                    }`}
-                    data-testid={`open-${p.id}`}
-                  >
-                    Open workspace <ArrowRight className="h-3.5 w-3.5" />
-                  </Link>
-                  <Link
-                    href={p.create}
-                    className="inline-flex h-9 items-center rounded-[8px] border border-white/55 bg-white/42 px-4 text-sm font-medium text-[color:var(--hi)] shadow-[inset_0_1px_0_rgba(255,255,255,0.68),0_10px_22px_-20px_rgba(24,24,27,0.45)] backdrop-blur-2xl transition hover:bg-white/62"
-                    data-testid={`create-${p.id}`}
-                  >
-                    Create scorecard
-                  </Link>
-                </div>
-              )}
-              {p.id === 'esg' && esgAccessLoading && (
-                <div className="mt-3 text-xs text-[color:var(--muted)]">Checking access</div>
-              )}
-            </section>
-          ))}
+                ) : (
+                  <div className="mt-6 flex flex-wrap items-center gap-2">
+                    <Link href={p.workspace} className="hub-btn" data-testid={`open-${p.id}`}>
+                      Open workspace <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                    <Link href={p.create} className="hub-btn-secondary" data-testid={`create-${p.id}`}>
+                      Create scorecard
+                    </Link>
+                  </div>
+                )}
+                {p.id === 'esg' && esgAccessLoading && (
+                  <div className="mt-3 text-xs text-[color:var(--muted)]">Checking access</div>
+                )}
+              </section>
+            ))}
           </div>
         </section>
 
-        <div className="mt-8">
-          <section aria-labelledby="tools-heading">
-            <div className="mb-3 flex items-end justify-between gap-4">
-              <div>
-                <h2 id="tools-heading" className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[color:var(--muted)]">
-                  Shared tools
-                </h2>
-                <p className="mt-1 text-xs text-[color:var(--body)]">Utilities that support both compliance workspaces.</p>
-              </div>
-              <span className="hidden text-xs text-[color:var(--muted)] sm:inline">2 available</span>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start sm:gap-6">
-              {alsoAvailable.map((t) => (
-                <Link
-                  key={t.id}
-                  href={t.href}
-                  className={`group flex min-h-[132px] transition hover:-translate-y-0.5 ${
-                    t.id === 'documents' || t.id === 'certificates'
-                      ? 'w-[150px] items-center justify-center p-2'
-                      : 'flex-col justify-between rounded-[8px] border border-white/55 bg-white/30 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_18px_46px_-38px_rgba(24,24,27,0.56)] backdrop-blur-2xl hover:bg-white/44 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.82),0_24px_56px_-42px_rgba(24,24,27,0.62)]'
-                  }`}
-                  aria-label={t.title}
-                  data-testid={`tool-${t.id}`}
-                >
-                  {t.id === 'documents' || t.id === 'certificates' ? (
-                    <span className="flex flex-col items-center gap-2 text-center">
-                      {t.icon}
-                      {t.id === 'documents' && (
-                        <span className="text-[13px] font-semibold text-[color:var(--hi)]">{t.title}</span>
-                      )}
-                    </span>
-                  ) : (
-                    <>
-                      <span className="flex items-start justify-between gap-3">
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-[8px] border border-white/55 bg-white/36 text-[color:var(--body)] shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] backdrop-blur-2xl transition group-hover:bg-white/56">{t.icon}</span>
-                        <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-[color:var(--muted)] transition group-hover:translate-x-0.5 group-hover:text-[color:var(--hi)]" />
-                      </span>
-                      <span className="mt-5 block">
-                        <span className="block text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
-                        <span className="mt-1.5 block text-xs leading-5 text-[color:var(--body)]">{t.description}</span>
-                      </span>
-                    </>
-                  )}
-                </Link>
-              ))}
-            </div>
-          </section>
-        </div>
+        <section className="mt-8" aria-labelledby="tools-heading">
+          <HubSectionHeader
+            id="tools-heading"
+            title="Shared tools"
+            hint="Utilities that support both compliance workspaces."
+            aside={`${alsoAvailable.length} available`}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            {alsoAvailable.map((t) => (
+              <Link
+                key={t.id}
+                href={t.href}
+                className="hub-card group flex items-center gap-4 p-4"
+                aria-label={t.title}
+                data-testid={`tool-${t.id}`}
+              >
+                <span className="h-14 w-14 shrink-0">{t.icon}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold text-[color:var(--hi)]">{t.title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-[color:var(--body)]">{t.description}</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-[color:var(--muted)] transition group-hover:translate-x-0.5 group-hover:text-[color:var(--hi)]" />
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );

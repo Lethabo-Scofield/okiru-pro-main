@@ -456,9 +456,20 @@ function GlobalScorecardAdvisor() {
   );
 }
 
+/**
+ * The public marketing site is always light; dark mode belongs to the signed-in
+ * app. Passed to ThemeProvider, which renders these paths light without touching
+ * the saved preference.
+ */
+const MARKETING_PATHS = ["/about", "/contact", "/privacy", "/terms", "/auth"];
+const isMarketingPath = (path: string) => {
+  const p = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  return p === "/" || p === "/products" || p.startsWith("/products/") || MARKETING_PATHS.includes(p);
+};
+
 function App() {
   return (
-    <ThemeProvider defaultTheme="light" storageKey="okiru-pro-theme">
+    <ThemeProvider defaultTheme="light" storageKey="okiru-pro-theme" lightOnlyPaths={isMarketingPath}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>

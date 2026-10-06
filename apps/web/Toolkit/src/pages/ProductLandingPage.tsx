@@ -24,7 +24,7 @@ const PRODUCT_CSS = `
   .okiru-product .ok-hero-bg {
     overflow: hidden;
     background:
-      linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(250,250,250,0.9) 55%, #ffffff 100%);
+      var(--paper, #cdd2da);
   }
   .okiru-product .ok-hero-waves {
     position: absolute;
@@ -197,12 +197,12 @@ const PRODUCT_CSS = `
 
   .okiru-product .ok-nav-active {
     color: #18181b;
-    background: #f4f4f5;
+    background: var(--paper-hover, #d9dde4);
   }
   .okiru-product .ok-feat-card,
   .okiru-product #product-cta .ok-w > div {
     border-color: #e4e4e7;
-    background: #ffffff;
+    background: var(--paper-raised, #e4e7ec);
     box-shadow: 0 18px 48px rgba(24,24,27,0.07);
   }
   .okiru-product .ok-feat-meta,
@@ -212,6 +212,30 @@ const PRODUCT_CSS = `
   .okiru-product .ok-feat-card:hover {
     background: #f4f4f5;
     box-shadow: 0 20px 52px rgba(24,24,27,0.10);
+  }
+  html.dark .okiru-product .ok-hero-bg {
+    background:
+      radial-gradient(ellipse 80% 48% at 50% -10%, rgba(255,255,255,0.055), transparent 62%),
+      radial-gradient(ellipse 60% 44% at 96% 30%, rgba(255,255,255,0.028), transparent 60%),
+      #08090b;
+  }
+  html.dark .okiru-product .ok-nav-active {
+    color: var(--hi);
+    background: rgba(255,255,255,0.06);
+  }
+  html.dark .okiru-product .ok-feat-card,
+  html.dark .okiru-product #product-cta .ok-w > div {
+    border-color: rgba(255,255,255,0.09);
+    background: rgba(255,255,255,0.026);
+    box-shadow: 0 18px 48px rgba(0,0,0,0.22);
+  }
+  html.dark .okiru-product .ok-feat-meta,
+  html.dark .okiru-purple .ok-feat-meta {
+    border-top-color: rgba(255,255,255,0.08);
+  }
+  html.dark .okiru-product .ok-feat-card:hover {
+    background: rgba(255,255,255,0.045);
+    box-shadow: 0 20px 52px rgba(0,0,0,0.32);
   }
   @media (max-width: 760px) {
     .okiru-product .ok-hero-waves {

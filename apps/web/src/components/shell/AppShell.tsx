@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       style={
         onHub
           ? {
-              backgroundImage: "url('/hub-background.png')",
+              backgroundImage: 'var(--hub-bg-image)',
               backgroundPosition: 'center top',
               backgroundSize: 'cover',
               backgroundAttachment: 'fixed',

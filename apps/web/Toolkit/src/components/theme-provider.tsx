@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react"
+import { useLocation } from "wouter"
 
 type Theme = "dark" | "light" | "system"
 
@@ -6,6 +7,12 @@ type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: Theme
   storageKey?: string
+  /**
+   * Paths that always render in light mode, whatever the saved theme is — the
+   * public marketing site. The saved choice is left untouched, so the signed-in
+   * app still opens in the user's own light/dark preference.
+   */
+  lightOnlyPaths?: (path: string) => boolean
 }
 
 type ThemeProviderState = {
@@ -14,32 +21,11 @@ type ThemeProviderState = {
 }
 
 const initialState: ThemeProviderState = {
-  theme: "dark",
+  theme: "light",
   setTheme: () => null,
 }
 
 const ThemeProviderContext = createContext<ThemeProviderState>(initialState)
-
-const darkCssVars: Record<string, string> = {
-  '--ef-bg': '#000000',
-  '--ef-bg-alt': '#0a0a0a',
-  '--ef-card': '#1c1c1e',
-  '--ef-card-hover': '#2c2c2e',
-  '--ef-surface': '#1c1c1e',
-  '--ef-surface-hover': '#2c2c2e',
-  '--ef-border': 'rgba(255,255,255,0.06)',
-  '--ef-border-light': 'rgba(255,255,255,0.04)',
-  '--ef-border-med': '#2c2c2e',
-  '--ef-border-heavy': '#3a3a3c',
-  '--ef-text': '#f5f5f7',
-  '--ef-text-secondary': '#d1d1d6',
-  '--ef-text-muted': '#8e8e93',
-  '--ef-text-dim': '#636366',
-  '--ef-text-faint': '#48484a',
-  '--ef-input-bg': '#1c1c1e',
-  '--ef-input-border': '#2c2c2e',
-  '--ef-overlay': '#1c1c1e',
-}
 
 const lightCssVars: Record<string, string> = {
   '--ef-bg': '#ffffff',
@@ -62,24 +48,40 @@ const lightCssVars: Record<string, string> = {
   '--ef-overlay': '#ffffff',
 }
 
+const darkCssVars: Record<string, string> = {
+  '--ef-bg': '#08090b',
+  '--ef-bg-alt': '#101114',
+  '--ef-card': '#111216',
+  '--ef-card-hover': '#18191d',
+  '--ef-surface': '#101114',
+  '--ef-surface-hover': '#18191d',
+  '--ef-border': 'rgba(255,255,255,0.08)',
+  '--ef-border-light': 'rgba(255,255,255,0.05)',
+  '--ef-border-med': 'rgba(255,255,255,0.14)',
+  '--ef-border-heavy': 'rgba(255,255,255,0.22)',
+  '--ef-text': '#f4f4f5',
+  '--ef-text-secondary': '#d4d4d8',
+  '--ef-text-muted': '#a1a1aa',
+  '--ef-text-dim': '#71717a',
+  '--ef-text-faint': '#52525b',
+  '--ef-input-bg': '#101114',
+  '--ef-input-border': 'rgba(255,255,255,0.14)',
+  '--ef-overlay': '#08090b',
+}
+
 export function ThemeProvider({
   children,
-  defaultTheme = "dark",
+  defaultTheme = "light",
   storageKey = "vite-ui-theme",
+  lightOnlyPaths,
   ...props
 }: ThemeProviderProps) {
-  // Light was offered in Settings but never actually built: there is no .light
-  // rule anywhere in this app’s CSS and the chrome around it is hardcoded dark,
-  // so choosing it produced a half-converted page. The option is gone, but a
-  // stored “light” from before it was removed would otherwise persist forever
-  // with no control left to undo it — stranding exactly the users who tried it.
-  // Read the stored value, keep it only if the app can honour it, and clear it
-  // otherwise so the key does not sit there misreporting the state.
+  const [location] = useLocation()
+  const forceLight = !!lightOnlyPaths && lightOnlyPaths(location)
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem(storageKey) as Theme | null;
-      if (stored === "dark") return stored;
-      if (stored) localStorage.removeItem(storageKey);
+      if (stored === "light" || stored === "dark" || stored === "system") return stored;
     } catch {
       // Private mode / blocked site data. Fall through to the default.
     }
@@ -92,10 +94,10 @@ export function ThemeProvider({
 
     let resolvedTheme = theme
     if (theme === "system") {
-      resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light"
+      resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
     }
+    // Public marketing pages never go dark; the saved preference is not changed.
+    if (forceLight) resolvedTheme = "light"
 
     root.classList.add(resolvedTheme)
 
@@ -103,7 +105,7 @@ export function ThemeProvider({
     Object.entries(vars).forEach(([key, value]) => {
       root.style.setProperty(key, value)
     })
-  }, [theme])
+  }, [theme, forceLight])
 
   const value = {
     theme,

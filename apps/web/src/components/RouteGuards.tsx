@@ -8,7 +8,7 @@ function FullScreenSpinner() {
   return (
     <div
       className="flex min-h-screen items-center justify-center bg-white bg-cover bg-center"
-      style={{ backgroundImage: "url('/hub-background.png')" }}
+      style={{ backgroundImage: 'var(--hub-bg-image)' }}
     >
       <div className="h-10 w-10 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900" />
     </div>

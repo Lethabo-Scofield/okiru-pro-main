@@ -12,6 +12,9 @@ export const GLOBAL_CSS = `
 
   .okiru-root *, .okiru-root *::before, .okiru-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
   .okiru-root {
+    --paper:        #cdd2da; /* page tone, sampled from hero-background.webp */
+    --paper-raised: #e4e7ec; /* cards, modals, inputs: lighter, never pure white */
+    --paper-hover:  #d9dde4;
     --ink:    #0b0f1a;
     --ink2:   #0d1220;
     --rule:   rgba(255,255,255,0.07);
@@ -49,6 +52,75 @@ export const GLOBAL_CSS = `
     font-size: 15px; line-height: 1.65; overflow-x: hidden; min-height: 100%;
   }
   .okiru-root ::selection { background: rgba(6,182,212,0.22); }
+
+  html.light .okiru-root {
+    --ink:    var(--paper);
+    --ink2:   var(--paper-raised);
+    --rule:   rgba(24,24,27,0.10);
+    --muted:  #5a5a63;
+    --body:   #52525b;
+    --hi:     #18181b;
+    --accent: rgba(24,24,27,0.55);
+    --accent-line: rgba(24,24,27,0.12);
+    --card-hover: rgba(24,24,27,0.035);
+    background:
+      radial-gradient(ellipse 70% 45% at 12% 8%, rgba(147,51,234,0.065), transparent 60%),
+      radial-gradient(ellipse 60% 45% at 92% 42%, rgba(6,182,212,0.06), transparent 58%),
+      radial-gradient(ellipse 55% 40% at 50% 100%, rgba(232,68,26,0.045), transparent 62%),
+      var(--paper);
+    color: var(--body);
+  }
+
+  html.light .okiru-root .okiru-grain { display: none; }
+  html.light .okiru-root .ok-nav {
+    border-color: rgba(24,24,27,0.10);
+    background: rgba(255,255,255,0.78);
+    box-shadow: 0 12px 34px rgba(24,24,27,0.10);
+  }
+  html.light .okiru-root .ok-nav.ok-nav-scrolled {
+    background: rgba(255,255,255,0.94);
+    box-shadow: 0 12px 38px rgba(24,24,27,0.14), 0 0 0 1px rgba(24,24,27,0.02);
+  }
+  html.light .okiru-root .ok-wordmark,
+  html.light .okiru-root .ok-nav-link:hover,
+  html.light .okiru-root .ok-nav-link.ok-nav-active,
+  html.light .okiru-root .ok-hamburger { color: var(--hi); }
+  html.light .okiru-root .ok-wordmark span,
+  html.light .okiru-root .ok-nav-link { color: rgba(24,24,27,0.58); }
+  html.light .okiru-root .ok-nav-div { background: rgba(24,24,27,0.12); }
+  html.light .okiru-root .ok-nav-linkedin {
+    color: rgba(24,24,27,0.58);
+    border-color: rgba(24,24,27,0.12);
+  }
+  html.light .okiru-root .ok-nav-linkedin:hover {
+    color: var(--hi);
+    border-color: rgba(24,24,27,0.24);
+    background: rgba(24,24,27,0.04);
+  }
+  html.light .okiru-root .ok-mobile-menu {
+    background: rgba(255,255,255,0.97);
+    box-shadow: 0 20px 60px rgba(24,24,27,0.16);
+  }
+  html.light .okiru-root .ok-mobile-link {
+    color: rgba(24,24,27,0.72);
+    border-bottom-color: rgba(24,24,27,0.08);
+  }
+  html.light .okiru-root .ok-mobile-link:hover { color: var(--hi); }
+  html.light .okiru-root .ok-modal-overlay { background: rgba(244,244,245,0.72); }
+  html.light .okiru-root .ok-modal {
+    background: var(--paper-raised);
+    border-color: rgba(24,24,27,0.10);
+    box-shadow: 0 34px 90px rgba(24,24,27,0.18);
+  }
+  html.light .okiru-root .ok-modal-close {
+    background: rgba(24,24,27,0.04);
+    border-color: rgba(24,24,27,0.10);
+    color: var(--muted);
+  }
+  html.light .okiru-root .ok-modal-close:hover {
+    background: rgba(24,24,27,0.08);
+    color: var(--hi);
+  }
 
   .okiru-root .okiru-grain {
     position: fixed; inset: 0; z-index: 500; pointer-events: none; opacity: 0.032;
@@ -269,11 +341,11 @@ export const GLOBAL_CSS = `
     padding: 136px 0 88px; position: relative;
     border-bottom: 1px solid var(--rule); overflow: hidden;
   }
-  .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: #ffffff; }
+  .okiru-root .ok-hero-bg { position: absolute; inset: 0; pointer-events: none; z-index: 0; background: var(--paper); }
   .okiru-root .ok-hero-photo {
     position: absolute; inset: 0; z-index: 0;
-    background-image: url('/hero-section-background.png');
-    background-position: center top; background-size: min(100%, 1440px) auto; background-repeat: no-repeat;
+    background-image: url('/hero-background.webp');
+    background-position: center bottom; background-size: cover; background-repeat: no-repeat;
     opacity: 1; animation: okiru-heroPhoto 1.2s cubic-bezier(.16,1,.3,1) both;
   }
   @keyframes okiru-heroPhoto {
@@ -955,16 +1027,16 @@ export const GLOBAL_CSS = `
 
   /* Light operating mode. Okiru no longer uses dark website surfaces. */
   .okiru-root {
-    --ink: #ffffff;
-    --ink2: #f4f4f5;
-    --rule: #e4e4e7;
-    --muted: #71717a;
+    --ink: var(--paper);
+    --ink2: var(--paper-raised);
+    --rule: #b9bfc9;
+    --muted: #5a5a63;
     --body: #52525b;
     --hi: #18181b;
     --accent: #18181b;
     --accent-line: #d4d4d8;
-    --card-hover: #f4f4f5;
-    background: #ffffff !important;
+    --card-hover: var(--paper-hover);
+    background: var(--paper) !important;
     color: var(--body);
   }
   .okiru-root .okiru-grain { display: none; }
@@ -1000,14 +1072,14 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-foot-social a,
   .okiru-root .ok-modal-close {
     border-color: #d4d4d8;
-    background: #ffffff;
+    background: var(--paper-raised);
     color: #52525b;
   }
   .okiru-root .ok-nav-linkedin:hover,
   .okiru-root .ok-foot-social a:hover,
   .okiru-root .ok-modal-close:hover {
     border-color: #a1a1aa;
-    background: #f4f4f5;
+    background: var(--paper-hover);
     color: #18181b;
   }
   .okiru-root .ok-mobile-menu,
@@ -1022,7 +1094,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-vs-edge,
   .okiru-root .ok-ceo-card {
     border-color: #e4e4e7 !important;
-    background: #ffffff !important;
+    background: var(--paper-raised) !important;
     box-shadow: 0 18px 48px rgba(24,24,27,0.07);
   }
   .okiru-root .ok-modal-overlay {
@@ -1033,7 +1105,7 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-input,
   .okiru-root .ok-textarea {
     color: #18181b;
-    background: #ffffff;
+    background: var(--paper-raised);
     border-color: #d4d4d8;
   }
   .okiru-root .ok-input::placeholder,
@@ -1061,7 +1133,7 @@ export const GLOBAL_CSS = `
   }
   .okiru-root .ok-social-link:hover {
     border-color: #d4d4d8;
-    background: #ffffff;
+    background: var(--paper-raised);
   }
   .okiru-root .ok-social-name { color: #18181b !important; }
   .okiru-root .ok-social-handle { color: #52525b !important; }
@@ -1072,6 +1144,96 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hero-glow-2,
   .okiru-root .ok-hero-beam,
   .okiru-root .ok-hero-beam-2 { display: none; }
+
+  html.dark .okiru-root {
+    --ink: #0b0f1a;
+    --ink2: #0d1220;
+    --rule: rgba(255,255,255,0.07);
+    --muted: rgba(255,255,255,0.32);
+    --body: rgba(255,255,255,0.56);
+    --hi: rgba(255,255,255,0.92);
+    --accent: rgba(255,255,255,0.42);
+    --accent-line: rgba(255,255,255,0.14);
+    --card-hover: rgba(255,255,255,0.035);
+    background:
+      radial-gradient(ellipse 70% 45% at 12% 8%, rgba(147,51,234,0.055), transparent 60%),
+      radial-gradient(ellipse 60% 45% at 92% 42%, rgba(6,182,212,0.04), transparent 58%),
+      radial-gradient(ellipse 55% 40% at 50% 100%, rgba(232,68,26,0.035), transparent 62%),
+      var(--ink) !important;
+    color: var(--body);
+  }
+  html.dark .okiru-root .okiru-grain { display: block; }
+  html.dark .okiru-root .ok-nav {
+    border-color: rgba(255,255,255,0.08);
+    background: rgba(11,15,26,0.62);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.35);
+  }
+  html.dark .okiru-root .ok-nav.ok-nav-scrolled {
+    background: rgba(11,15,26,0.9);
+    box-shadow: 0 12px 46px rgba(0,0,0,0.55), 0 0 0 1px rgba(255,255,255,0.02);
+  }
+  html.dark .okiru-root .ok-nav::before { opacity: 0.75; }
+  html.dark .okiru-root .ok-wordmark,
+  html.dark .okiru-root .ok-nav-link:hover,
+  html.dark .okiru-root .ok-nav-link.ok-nav-active,
+  html.dark .okiru-root .ok-mobile-link:hover,
+  html.dark .okiru-root .ok-foot-brand-top,
+  html.dark .okiru-root .ok-legal-block h3,
+  html.dark .okiru-root .ok-h1,
+  html.dark .okiru-root .ok-h2,
+  html.dark .okiru-root .ok-h3,
+  html.dark .okiru-root .ok-cta-h,
+  html.dark .okiru-root .ok-hero-sub strong,
+  html.dark .okiru-root .ok-demo-contact-val,
+  html.dark .okiru-root .ok-demo-contact-val a,
+  html.dark .okiru-root .ok-social-name { color: var(--hi) !important; }
+  html.dark .okiru-root .ok-wordmark span,
+  html.dark .okiru-root .ok-nav-link,
+  html.dark .okiru-root .ok-mobile-link,
+  html.dark .okiru-root .ok-foot-brand-desc,
+  html.dark .okiru-root .ok-foot-col-item,
+  html.dark .okiru-root .ok-foot-col-item a,
+  html.dark .okiru-root .ok-foot-linkbtn,
+  html.dark .okiru-root .ok-foot-frameworks .ok-foot-fw-list,
+  html.dark .okiru-root .ok-foot-c,
+  html.dark .okiru-root .ok-foot-link,
+  html.dark .okiru-root .ok-legal-meta,
+  html.dark .okiru-root .ok-legal-block p,
+  html.dark .okiru-root .ok-legal-block li,
+  html.dark .okiru-root .ok-social-handle,
+  html.dark .okiru-root .ok-hero-sub,
+  html.dark .okiru-root .ok-lead,
+  html.dark .okiru-root .ok-lead-l,
+  html.dark .okiru-root .ok-cta-sub { color: var(--body) !important; }
+  html.dark .okiru-root .ok-nav-div,
+  html.dark .okiru-root .ok-sc-track { background: rgba(255,255,255,0.12); }
+  html.dark .okiru-root .ok-mobile-menu,
+  html.dark .okiru-root .ok-modal,
+  html.dark .okiru-root .ok-cta-card,
+  html.dark .okiru-root .ok-demo-card,
+  html.dark .okiru-root .ok-dashboard,
+  html.dark .okiru-root .ok-arch-card,
+  html.dark .okiru-root .ok-toolkit-pillar,
+  html.dark .okiru-root .ok-outcome,
+  html.dark .okiru-root .ok-fw-card,
+  html.dark .okiru-root .ok-vs-edge,
+  html.dark .okiru-root .ok-ceo-card {
+    border-color: rgba(255,255,255,0.09) !important;
+    background:
+      radial-gradient(ellipse 100% 130% at 50% -30%, rgba(147,51,234,0.10) 0%, transparent 58%),
+      linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.012) 100%) !important;
+    box-shadow: 0 28px 80px -48px rgba(0,0,0,0.75);
+  }
+  html.dark .okiru-root .ok-input,
+  html.dark .okiru-root .ok-textarea {
+    color: var(--hi);
+    background: #0d1120;
+    border-color: rgba(255,255,255,0.12);
+  }
+  html.dark .okiru-root .ok-hero-glow,
+  html.dark .okiru-root .ok-hero-glow-2,
+  html.dark .okiru-root .ok-hero-beam,
+  html.dark .okiru-root .ok-hero-beam-2 { display: block; }
 `;
 
 /* ─────────────────────────────────────────────
