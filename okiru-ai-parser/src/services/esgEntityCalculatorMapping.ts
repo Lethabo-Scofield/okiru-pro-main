@@ -673,6 +673,46 @@ function esgMappableKeys(): MappableKey[] {
   return ESG_CALCULATOR_KEY_ALLOWLIST.map((spec) => ({ key: spec.key, description: spec.description }));
 }
 
+let keyHomes: Map<string, Set<EsgElement> | null> | null = null;
+
+/**
+ * The kinds of document each key is declared for, from the mapping table.
+ * `null` = a key some mapping fills from any document; absent = no declared
+ * mapping at all. Built on first use, after the table exists.
+ */
+function keyHomeElements(): Map<string, Set<EsgElement> | null> {
+  if (keyHomes) return keyHomes;
+  const homes = new Map<string, Set<EsgElement> | null>();
+  for (const mapping of FIELD_MAPPINGS) {
+    if (!mapping.elements) {
+      homes.set(mapping.calculatorKey, null);
+      continue;
+    }
+    const known = homes.get(mapping.calculatorKey);
+    if (known === null) continue;
+    const set = known ?? new Set<EsgElement>();
+    mapping.elements.forEach((element) => set.add(element));
+    homes.set(mapping.calculatorKey, set);
+  }
+  keyHomes = homes;
+  return homes;
+}
+
+/**
+ * May a field read from these kinds of document land on this key? A key
+ * declared for other kinds of document may not: the semantic pass once put a
+ * fleet fuel report's supplier ("Engen") into the supplier-assessment register
+ * as a supplier being rated. A field of unknown origin, or a key no mapping
+ * scopes, stays open — the allowlist still decides.
+ */
+function keyFitsElements(key: string, elements: ReadonlySet<EsgElement> | undefined): boolean {
+  if (!elements || elements.size === 0) return true;
+  const home = keyHomeElements().get(key);
+  if (home === undefined || home === null) return true;
+  for (const element of elements) if (home.has(element)) return true;
+  return false;
+}
+
 /**
  * Coercion for a key the SEMANTIC pass chose. Derived from the key's own
  * allowlist spec — a key whose description says "percentage" gets percentage
@@ -707,9 +747,29 @@ export async function mapEsgEntitiesToCalculatorWithSemantics(
   const orphans = base.unmapped.filter((u) => u.reason === 'no_mapping').map((u) => u.field);
   if (orphans.length === 0 || !model) return base;
 
-  const proposals = await proposeFieldMappings(model, orphans, esgMappableKeys(), {
-    context: 'an ESG evidence pack — environmental, social and governance disclosures, utility bills, registers',
-  });
+  // Each orphan is offered only the keys of its own kind of document, so the
+  // model chooses among places that field could belong — one question per
+  // group of documents of the same kind.
+  const groups = new Map<string, { elements: Set<EsgElement> | undefined; fields: string[] }>();
+  for (const field of orphans) {
+    const elements = fieldElements.get(field);
+    const signature = elements && elements.size > 0 ? Array.from(elements).sort().join('|') : '*';
+    const group = groups.get(signature) ?? { elements, fields: [] };
+    group.fields.push(field);
+    groups.set(signature, group);
+  }
+  const allKeys = esgMappableKeys();
+  const proposals: Record<string, string> = {};
+  for (const group of groups.values()) {
+    const keys = allKeys.filter((candidate) => keyFitsElements(candidate.key, group.elements));
+    if (keys.length === 0) continue;
+    Object.assign(
+      proposals,
+      await proposeFieldMappings(model, group.fields, keys, {
+        context: 'an ESG evidence pack — environmental, social and governance disclosures, utility bills, registers',
+      }),
+    );
+  }
   if (Object.keys(proposals).length === 0) return base;
 
   const payload = { ...base.payload };
@@ -717,7 +777,10 @@ export async function mapEsgEntitiesToCalculatorWithSemantics(
   const unmapped: EsgCalculatorMappingResult['unmapped'] = [];
 
   for (const orphan of base.unmapped) {
-    const key = orphan.reason === 'no_mapping' ? proposals[orphan.field] : undefined;
+    const proposed = orphan.reason === 'no_mapping' ? proposals[orphan.field] : undefined;
+    // Belt and braces: a cached answer from before the grouping is still
+    // refused if it points outside the field's own kind of document.
+    const key = proposed && keyFitsElements(proposed, fieldElements.get(orphan.field)) ? proposed : undefined;
     const resolved = key ? entities.fields[orphan.field] : undefined;
     if (!key || !resolved) {
       unmapped.push(orphan);
