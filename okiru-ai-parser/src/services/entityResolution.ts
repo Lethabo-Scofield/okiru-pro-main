@@ -104,6 +104,12 @@ function bucketValues(values: ExtractedValue[]): Array<{ value: unknown; sources
 export const ROW_SOURCE_KEY = '__source';
 
 /**
+ * Marks a register row read from a HIDDEN sheet: scratch copies and old lists
+ * whose rows may describe what is already known, but not what exists.
+ */
+export const ROW_HIDDEN_KEY = '__hidden';
+
+/**
  * A REGISTER adds up; it does not compete.
  *
  * Two sheets listing different vehicles are two halves of one fleet, not two

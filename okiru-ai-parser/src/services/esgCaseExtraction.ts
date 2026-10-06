@@ -36,7 +36,7 @@ import {
   type ExtractionModel,
 } from './aiExtraction.js';
 import { getExtractionModel, duplicateWorkbookException, type ResolveProgress } from './caseExtraction.js';
-import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
+import { ROW_HIDDEN_KEY, resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { billAsMonthlyRows } from './esgBillFacts.js';
 import { classifyDocument, routingElement } from './documentClassification.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
@@ -184,6 +184,16 @@ export async function extractEsgCaseEntities(
         rows: structuredRows(input.tables),
         sheetName,
       });
+    // A hidden sheet's register rows say so: scratch copies and old lists may
+    // add to what is known about a record, never add a record of their own.
+    if (sheetTable && input.metadata?.sheet_hidden === true) {
+      for (const value of sheetTable.values) {
+        if (Array.isArray(value.value)) {
+          value.value = value.value.map((row) =>
+            row && typeof row === 'object' ? { ...(row as Record<string, unknown>), [ROW_HIDDEN_KEY]: true } : row);
+        }
+      }
+    }
     // A sheet the code read in full is not read again by the model: the flat
     // pass could only return a truncated copy of the same rows (Super Group's
     // 132-vehicle fleet master came back as 15) at the price of a paid call.

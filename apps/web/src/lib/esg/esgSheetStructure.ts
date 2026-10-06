@@ -50,6 +50,46 @@ const E_DATA_SHEET_BLOCKS: ReadonlyArray<{
 /** Month columns C…K, as both the sheet and the grid spell them. */
 const MONTH_COLS = ["C", "D", "E", "F", "G", "H", "I", "J", "K"] as const;
 
+/** One monthly figure the v1.7 sheet layout has no cell for. */
+export type EDataOverflow = { prefix: string; rowIndex: number; column: string; value: unknown };
+
+/**
+ * The inverse of `eDataCellsFromSheetRefs`, for the .xlsx export: the app's
+ * monthly grid cells (`s1a_C14`) at the E_Data sheet addresses the v1.7 layout
+ * gives them, and each row's source note in column N.
+ *
+ * The export wrote section cells as they are stored, and a grid cell is not a
+ * sheet address — so every monthly figure entered in the app was left out of
+ * the downloaded workbook. A figure the layout has no room for (a sixth site,
+ * a tenth month: each block is five rows of nine months) is returned in
+ * `overflow` for the caller to write elsewhere, never dropped.
+ */
+export function eDataSheetRefsFromCells(cells: Cells): { sheet: Cells; overflow: EDataOverflow[] } {
+  const sheet: Cells = {};
+  const overflow: EDataOverflow[] = [];
+  const blocks = new Map(E_DATA_SHEET_BLOCKS.map((block) => [block.prefix, block]));
+  for (const [ref, value] of Object.entries(cells)) {
+    if (value === "" || value === null || value === undefined) continue;
+    const figure = /^([a-z0-9]+)_([C-Z])(\d+)$/i.exec(ref);
+    const note = /^([a-z0-9]+)_src_(\d+)$/i.exec(ref);
+    const block = blocks.get((figure ?? note)?.[1] ?? "");
+    if (!block) continue;
+    if (note) {
+      const rowIndex = Number(note[2]);
+      if (rowIndex < block.rowCount) sheet[`N${block.firstRow + rowIndex}`] = value;
+      continue;
+    }
+    const column = figure![2];
+    const rowIndex = Number(figure![3]) - GRID_ROW_BASE;
+    if (rowIndex >= 0 && rowIndex < block.rowCount && (MONTH_COLS as readonly string[]).includes(column)) {
+      sheet[`${column}${block.firstRow + rowIndex}`] = value;
+    } else if (rowIndex >= 0) {
+      overflow.push({ prefix: block.prefix, rowIndex, column, value });
+    }
+  }
+  return { sheet, overflow };
+}
+
 const GRID_ROW_BASE = 14;
 
 function isNumberLike(v: unknown): boolean {
