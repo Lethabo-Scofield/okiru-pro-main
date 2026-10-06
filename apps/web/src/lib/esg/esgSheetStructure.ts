@@ -164,6 +164,23 @@ const HEADCOUNT_LEVELS = 7;
  * Produces nothing when ANY `hc_` cell already exists: a half-translated matrix
  * mixing app entries with sheet values would double-count nobody can see.
  */
+/**
+ * The other way, for export: `hc_{row}_{col}` as their `S_Data!B5:K11`
+ * addresses. The export wrote section cells only where they were already
+ * sheet addresses, so the grid's `hc_` cells — the whole EEA2 workforce
+ * matrix — never reached the downloaded workbook, and a re-import lost it.
+ */
+export function headcountSheetRefsFromCells(cells: Cells): Cells {
+  const out: Cells = {};
+  for (let r = 0; r < HEADCOUNT_LEVELS; r++) {
+    for (let c = 0; c < HEADCOUNT_SHEET_COLS.length; c++) {
+      const v = cells[`hc_${r}_${c}`];
+      if (isNumberLike(v)) out[`${HEADCOUNT_SHEET_COLS[c]}${HEADCOUNT_SHEET_FIRST_ROW + r}`] = typeof v === "number" ? v : Number(v);
+    }
+  }
+  return out;
+}
+
 export function headcountCellsFromSheetRefs(raw: Cells): Cells {
   for (const ref of Object.keys(raw)) {
     if (ref.startsWith("hc_")) return {};
@@ -276,6 +293,36 @@ function namedFieldsFromSheetLabels(
 
 export function coverCellsFromSheetRefs(raw: Cells): Cells {
   return namedFieldsFromSheetLabels(raw, COVER_LABEL_TO_KEY);
+}
+
+/** What the Cover's rows are called on export — each one a label the import reads back. */
+const COVER_EXPORT_LABELS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: "entity", label: "Entity" },
+  { key: "period", label: "Reporting period" },
+  { key: "boundary", label: "Organisational boundary" },
+  { key: "baselineYear", label: "Baseline year" },
+  { key: "netZeroTargetYear", label: "Net-zero target year" },
+  { key: "sector", label: "Sector" },
+];
+
+/**
+ * The other way, for export: Company & Reporting Setup as the Cover's label /
+ * value rows. Its cells are named (`entity`, `boundary`…), never addressed, so
+ * the export dropped every one — the company, its period, its mandatory GHG
+ * boundary, baseline and net-zero years — and a re-import came back blank.
+ */
+export function coverSheetRefsFromCells(cells: Cells): Cells {
+  const out: Cells = {};
+  let row = 3;
+  for (const { key, label } of COVER_EXPORT_LABELS) {
+    const value = cells[key];
+    if (value === undefined || value === null || String(value).trim() === "") continue;
+    out[`A${row}`] = label;
+    out[`B${row}`] = value;
+    row += 1;
+  }
+  if (row > 3) out.A1 = "Company & reporting setup";
+  return out;
 }
 
 export function sDataNamedCellsFromSheetRefs(raw: Cells): Cells {

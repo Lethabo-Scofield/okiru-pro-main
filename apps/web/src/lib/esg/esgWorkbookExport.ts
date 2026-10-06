@@ -6,7 +6,7 @@ import { computeEsgScorecard } from "../../../EsgToolkit/src/lib/calculators";
 import { ESG_SECTION_IDS } from "./esgSections";
 import { countKing5Principles } from "./esgGridRows";
 import type { EsgWorkbookData } from "./esgWorkbookStorage";
-import { eDataSheetRefsFromCells } from "./esgSheetStructure";
+import { coverSheetRefsFromCells, eDataSheetRefsFromCells, headcountSheetRefsFromCells } from "./esgSheetStructure";
 import { esgWorkbookAxes } from "@/components/esg-workbook/esgDefaults";
 
 /** All sheets from workbook_inventory.json v1.7. */
@@ -232,6 +232,11 @@ export function buildEsgWorkbookXlsx(wb: EsgWorkbookData): Buffer {
     writeSectionCells(ensureSheet(book, sheetName), cells);
   }
   writeEDataMonthlyFigures(book, wb.sections?.["e-data"]?.cells ?? {});
+  // Two inputs the app keeps under names, not sheet addresses, written where
+  // the import reads them back: the company setup, and the EEA2 headcount
+  // matrix (after the section's own cells, so the grid the person sees wins).
+  writeSectionCells(ensureSheet(book, "Cover"), coverSheetRefsFromCells(wb.sections?.["company-reporting-setup"]?.cells ?? {}));
+  writeSectionCells(ensureSheet(book, "S_Data"), headcountSheetRefsFromCells(wb.sections?.["s-data"]?.cells ?? {}));
 
   const scorecard = computeEsgScorecard(wb);
   if (scorecard) {
