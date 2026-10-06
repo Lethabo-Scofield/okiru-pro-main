@@ -256,6 +256,7 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
   const [errors, setErrors] = useState<DemoFormErrors>({});
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
 
   const set = (k: keyof DemoFormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -276,15 +277,23 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setLoading(true);
+    setSendError(null);
+    // "Request received" only when it was: a request the team never gets is a
+    // client left waiting for a call, so a failure says so, with a way through.
     try {
-      await fetch("/api/demo-request", {
+      const res = await fetch("/api/demo-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+        setSendError(body?.error ?? body?.message ?? "We could not send your request just now.");
+        return;
+      }
       setSubmitted(true);
     } catch {
-      setSubmitted(true);
+      setSendError("We could not send your request — check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -350,6 +359,14 @@ export function DemoModal({ onClose }: { onClose: () => void }) {
                   <label className="ok-label">Anything specific you'd like to cover? <span style={{ opacity: .5, fontSize: 9 }}>(optional)</span></label>
                   <textarea className="ok-textarea" value={form.message} onChange={set("message")} placeholder="e.g. We need to submit our B-BBEE certificate in Q1 and want to understand our Scope 2 exposure…" />
                 </div>
+                {sendError && (
+                  <p className="ok-field-err" role="alert" data-testid="demo-request-error">
+                    {sendError} You can also write to us at{" "}
+                    <a href="mailto:contact@okiru.co.za?subject=Demo%20request" style={{ color: "inherit", textDecoration: "underline" }}>
+                      contact@okiru.co.za
+                    </a>.
+                  </p>
+                )}
                 <button type="submit" className="ok-form-submit" disabled={loading}>
                   {loading ? "Sending…" : <><span>Send request</span><span className="arr"><ArrowRight size={15} /></span></>}
                 </button>
