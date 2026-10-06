@@ -23,6 +23,7 @@ import { recordAudit } from "./securityAudit.js";
 import {
   authNamespaceLimiter,
   availabilityLimiter,
+  demoRequestLimiter,
   clearLoginFailures,
   isAccountLocked,
   loginLimiter,
@@ -417,15 +418,27 @@ export async function registerRoutes(
     });
   });
 
-  app.post('/api/demo-request', async (req: Request, res: Response) => {
-    const { name, company, email, phone, message } = req.body || {};
+  // The website's "Book a demo" form. Anonymous, so it is rate-limited and
+  // every field is bounded; the email escapes them (see sendDemoRequestEmail).
+  app.post('/api/demo-request', demoRequestLimiter, async (req: Request, res: Response) => {
+    const field = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+    const name = field(req.body?.name, 120);
+    const company = field(req.body?.company, 160);
+    const email = field(req.body?.email, 200);
+    const phone = field(req.body?.phone, 40);
+    const message = field(req.body?.message, 4000);
     if (!name || !company || !email) {
       return res.status(400).json({ error: 'name, company and email are required' });
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Invalid email address' });
     }
-    await sendDemoRequestEmail({ name: String(name).trim(), company: String(company).trim(), email: String(email).trim(), phone: phone ? String(phone).trim() : undefined, message: message ? String(message).trim() : undefined });
+    // A request the team never receives is a lost client: say so, so the
+    // visitor writes to us instead of waiting for a call that never comes.
+    const sent = await sendDemoRequestEmail({ name, company, email, phone: phone || undefined, message: message || undefined });
+    if (!sent) {
+      return res.status(503).json({ error: 'We could not send your request just now. Please email contact@okiru.co.za.' });
+    }
     return res.json({ ok: true });
   });
 
