@@ -171,6 +171,22 @@ export function esgCaseFileNames(caseResult: EsgParserCaseLike | null): string[]
   return Array.from(names);
 }
 
+/**
+ * The upload a parser source came from — the file itself, or the workbook a
+ * sheet was split out of. The parser names a split sheet "File.xlsx › Sheet",
+ * which matched no uploaded file, so every result read from a workbook was
+ * dropped instead of archived: a paid read with nothing in the library.
+ */
+export function esgUploadNameForSource(source: unknown, uploadNames: readonly string[]): string | null {
+  const name = String(source ?? "").trim();
+  if (!name) return null;
+  if (uploadNames.includes(name)) return name;
+  const marker = name.indexOf("›");
+  if (marker < 0) return null;
+  const workbook = name.slice(0, marker).trim();
+  return uploadNames.includes(workbook) ? workbook : null;
+}
+
 /** The value types an ESG workbook cell can hold. */
 export type EsgCellValue = string | number | boolean | null;
 

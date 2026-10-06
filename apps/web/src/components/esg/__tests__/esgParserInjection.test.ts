@@ -16,9 +16,33 @@ import {
   collectEsgExtractedValues,
   esgCaseFileNames,
   esgPatchCellCount,
+  esgUploadNameForSource,
   persistEsgSectionPatches,
   type EsgParserCaseLike,
 } from "../esgParserInjection";
+
+describe("esgUploadNameForSource — which upload a parser source came from", () => {
+  const uploads = ["DIESEL REPORT - Mar 2026.xlsx", "city-power-oct.pdf"];
+
+  it("matches a file to itself", () => {
+    expect(esgUploadNameForSource("city-power-oct.pdf", uploads)).toBe("city-power-oct.pdf");
+  });
+
+  it("matches a split sheet to the workbook it came from", () => {
+    expect(esgUploadNameForSource("DIESEL REPORT - Mar 2026.xlsx › NPN70541", uploads)).toBe(
+      "DIESEL REPORT - Mar 2026.xlsx",
+    );
+    expect(esgUploadNameForSource("DIESEL REPORT - Mar 2026.xlsx›Summary", uploads)).toBe(
+      "DIESEL REPORT - Mar 2026.xlsx",
+    );
+  });
+
+  it("matches nothing it cannot account for", () => {
+    expect(esgUploadNameForSource("someone-else.xlsx › Sheet1", uploads)).toBeNull();
+    expect(esgUploadNameForSource("", uploads)).toBeNull();
+    expect(esgUploadNameForSource(undefined, uploads)).toBeNull();
+  });
+});
 
 /** The ESG parser's own result shape — `documents`, not `documents_detected`. */
 const CASE: EsgParserCaseLike = {
