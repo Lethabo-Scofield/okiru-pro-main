@@ -29,7 +29,9 @@ describe("EsgToolkit App routes", () => {
     expect(hrefs).toContain("/import");
     // The GHG inventory — the figure a tender asks for first — has its own page.
     expect(hrefs).toContain("/emissions");
-    expect(hrefs.length).toBe(24);
+    // And the score has its breakdown: what each indicator scored and still needs.
+    expect(hrefs).toContain("/score-breakdown");
+    expect(hrefs.length).toBe(25);
   });
 
   it("uses app-root href for back to companies", () => {
