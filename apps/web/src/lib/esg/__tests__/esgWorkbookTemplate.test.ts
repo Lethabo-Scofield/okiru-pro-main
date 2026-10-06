@@ -135,6 +135,23 @@ describe("esgWorkbookTemplate", () => {
     }
   });
 
+  it("never imports its own 'Choose one' instructions as answers", () => {
+    // A blank Cover used to set the company's sector to "Choose one: Generic ·
+    // FMCG …" — and with imports now merging, that text would overwrite a
+    // sector already captured.
+    const preview = parseEsgWorkbookXlsx(buildEsgWorkbookTemplateXlsx());
+    const hints = Object.entries(preview.sections).flatMap(([id, s]) =>
+      Object.entries(s.cells)
+        .filter(([, v]) => typeof v === "string" && /choose one/i.test(v))
+        .map(([ref]) => `${id}.${ref}`),
+    );
+    expect(hints).toEqual([]);
+    expect(preview.sections["company-reporting-setup"]?.cells.sector).toBeUndefined();
+    expect(preview.sections.assumptions?.cells.B10).toBeUndefined();
+    // Its own Instructions sheet is not a client sheet the importer failed to place.
+    expect(preview.unmatchedSheets).not.toContain("Instructions");
+  });
+
   it("round-trips golden g-data through the full workbook export", () => {
     const wb = buildSgConsumerGoldenWorkbook();
     const preview = parseEsgWorkbookXlsx(buildEsgWorkbookXlsx(wb));
