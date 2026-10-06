@@ -249,6 +249,17 @@ export const feedbackLimiter = makeLimiter({
   message: "Thanks — that's a lot of feedback at once. Please try again in a little while.",
 });
 
+/**
+ * The website's "Book a demo" form: open to anyone, and each request emails
+ * the team through the same relay, so it gets the feedback widget's ceiling.
+ */
+export const demoRequestLimiter = makeLimiter({
+  prefix: "demo-request",
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: "Thanks — we already have your request. Please try again in a little while.",
+});
+
 /** Cheap availability probes used by the sign-up form. */
 export const availabilityLimiter = makeLimiter({
   prefix: "availability",
