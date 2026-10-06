@@ -48,6 +48,36 @@ describe("EsgScoreBreakdown", () => {
   });
 });
 
+describe("switching an indicator off, with a reason", () => {
+  it("saves the company's reason to the applicability section, and switches it back on", async () => {
+    const { default: userEvent } = await import("@testing-library/user-event");
+    const user = userEvent.setup();
+    seed({});
+    const saved: Array<[string, Record<string, unknown>]> = [];
+    useEsgStore.setState({
+      updateSectionCells: async (sectionId: string, cells: Record<string, unknown>) => {
+        saved.push([sectionId, cells]);
+        const wb = useEsgStore.getState().workbook!;
+        useEsgStore.setState({ workbook: { ...wb, sections: { ...wb.sections, [sectionId]: { cells } } } as never });
+      },
+    } as never);
+    render(<EsgScoreBreakdown />);
+
+    await user.click(screen.getByTestId("esg-not-applicable-environmental-d24"));
+    const form = screen.getByTestId("esg-not-applicable-form-environmental-d24");
+    const leaveOut = within(form).getByRole("button", { name: "Leave it out of the score" });
+    expect(leaveOut).toBeDisabled();
+    await user.type(within(form).getByRole("textbox"), "Our depots are on borehole water metered by the landlord.");
+    await user.click(leaveOut);
+    expect(saved[0]).toEqual(["applicability", { "e:d24": "Our depots are on borehole water metered by the landlord." }]);
+
+    // Now left out, with the company's own reason — and it can be counted again.
+    expect(screen.getByTestId("esg-indicator-environmental-d24")).toHaveTextContent("Left out of the score");
+    await user.click(screen.getByTestId("esg-applies-again-environmental-d24"));
+    expect(saved[1]).toEqual(["applicability", {}]);
+  });
+});
+
 describe("EsgFleetEmissions", () => {
   it("shows each vehicle's method and what is still needed", () => {
     const rows = [
