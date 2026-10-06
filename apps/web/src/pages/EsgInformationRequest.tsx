@@ -98,8 +98,12 @@ export default function EsgInformationRequest() {
    * there is nothing in the workbook to go back to (see `stage` below).
    */
   const startRouteRequested = location.endsWith("/start");
+  // `/start?with=documents` — the toolkit's upload hub sending someone
+  // straight to the document reader rather than the chooser in front of it.
+  const startWithDocuments =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("with") === "documents";
   const [stage, setStage] = useState<EsgStartStage>(
-    startRouteRequested ? "choose" : "deciding",
+    startRouteRequested ? (startWithDocuments ? "upload" : "choose") : "deciding",
   );
   /** True while the parsed sections are being written into the workbook. */
   const [injecting, setInjecting] = useState(false);
