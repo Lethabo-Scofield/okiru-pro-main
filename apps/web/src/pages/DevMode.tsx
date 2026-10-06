@@ -232,9 +232,17 @@ export default function DevMode() {
               Loading feedback…
             </div>
           ) : listQuery.isError ? (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-6 text-sm text-red-200">
-              Failed to load feedback. {listQuery.error instanceof Error ? listQuery.error.message : ''}
-            </div>
+            /^40[13]\b/.test(listQuery.error instanceof Error ? listQuery.error.message : '') ? (
+              // Feedback carries clients' names and emails: it is the team's to read.
+              <div className="rounded-lg border border-white/10 bg-black/20 px-4 py-6 text-sm text-zinc-300" data-testid="feedback-team-only">
+                Feedback is for the Okiru team — it holds clients' names and email addresses.{' '}
+                <a href="/auth" className="text-zinc-100 underline">Sign in with your team account</a> to see it.
+              </div>
+            ) : (
+              <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-6 text-sm text-red-200">
+                Failed to load feedback. {listQuery.error instanceof Error ? listQuery.error.message : ''}
+              </div>
+            )
           ) : filteredItems.length === 0 ? (
             <div className="rounded-lg border border-white/5 bg-black/20 py-16 text-center text-sm text-zinc-400" data-testid="empty-feedback">
               No feedback yet. Use the floating button on any page to send the first one.
