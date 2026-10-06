@@ -176,6 +176,8 @@ interface StubOptions {
   authorizeStatus?: number;
   authorizeBody?: Record<string, unknown>;
   frames?: string[];
+  /** What the server answers when the screen asks for its run to be settled. */
+  settlement?: Record<string, unknown>;
 }
 
 function stubFetch(options: StubOptions = {}) {
@@ -200,6 +202,7 @@ function stubFetch(options: StubOptions = {}) {
       sse("result", RESULT_CASE),
       sse("complete", {}),
     ],
+    settlement = { state: "settled", quoteId: "q-esg-1", chargedTokens: 120, refundedTokens: 0, reason: "Every document produced values." },
   } = options;
 
   const calls: string[] = [];
@@ -235,6 +238,9 @@ function stubFetch(options: StubOptions = {}) {
     }
     if (url.includes("/api/parser/esg/resolve-case-files-stream")) {
       return { ok: true, status: 200, body: streamBody(frames), json: async () => ({}) };
+    }
+    if (url.includes("/api/tokens/runs/") && url.endsWith("/settle-outcome")) {
+      return { ok: true, status: 200, json: async () => settlement };
     }
     throw new Error(`Unexpected fetch in test: ${url}`);
   });
@@ -490,5 +496,51 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
       "The extraction worker died",
     );
     expect(screen.queryByTestId("esg-extraction-phase")).not.toBeInTheDocument();
+  });
+
+  it("settles the paid run as it ends and shows what came back", async () => {
+    const { calls } = stubFetch({
+      frames: [
+        sse("doc-start", { fileName: "city-power-oct.pdf" }),
+        sse("error", { message: "The extraction worker died" }),
+      ],
+      settlement: {
+        state: "settled",
+        quoteId: "q-esg-1",
+        chargedTokens: 120,
+        refundedTokens: 120,
+        refundedNow: true,
+        balance: 5000,
+        reason: "The run failed, so every token was returned.",
+      },
+    });
+    renderUpload();
+    const user = await stageAFile();
+
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+
+    expect(await screen.findByTestId("esg-refund-notice", {}, { timeout: 10_000 })).toHaveTextContent(
+      "120 tokens were returned to your balance. The run failed, so every token was returned.",
+    );
+    // The screen names the run; the server decides the amount.
+    expect(calls).toContain("POST /api/tokens/runs/q-esg-1/settle-outcome");
+  });
+
+  it("says nothing about refunds when the run delivered and nothing is owed", async () => {
+    const { calls } = stubFetch();
+    renderUpload();
+    const user = await stageAFile();
+
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+
+    await screen.findByTestId("esg-extraction-summary", {}, { timeout: 10_000 });
+    await waitFor(() => expect(calls).toContain("POST /api/tokens/runs/q-esg-1/settle-outcome"));
+    expect(screen.queryByTestId("esg-refund-notice")).not.toBeInTheDocument();
   });
 });
