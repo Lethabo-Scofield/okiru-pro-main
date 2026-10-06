@@ -35,7 +35,7 @@ import {
 } from "@/lib/esgRoutes";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import { EsgImportPreviewModal } from "@/components/esg-workbook/EsgImportPreviewModal";
-import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
+import { esgImportHandover, type EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 import EsgCreateStartChoice from "@/components/esg/EsgCreateStartChoice";
 import EsgDocumentUploadStart from "@/components/esg/EsgDocumentUploadStart";
 import { esgWorkbookAxisState } from "@/lib/esg/esgCaseAxes";
@@ -86,6 +86,8 @@ export default function EsgInformationRequest() {
   const [reopening, setReopening] = useState(false);
   const [importPreview, setImportPreview] = useState<EsgImportPreview | null>(null);
   const [importOpen, setImportOpen] = useState(false);
+  /** A spreadsheet the template import could not place, handed to the document reader. */
+  const [handover, setHandover] = useState<File[] | null>(null);
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EsgWorkbookSectionEditorHandle>(null);
@@ -268,6 +270,16 @@ export default function EsgInformationRequest() {
         return;
       }
       const preview = (await res.json()) as EsgImportPreview;
+      // Not our template: placing nothing and then saying "Import complete" is
+      // what this did. The document reader maps a register by its columns —
+      // the same handover a new company's Excel route makes.
+      const handoverNote = esgImportHandover(preview);
+      if (handoverNote) {
+        toast({ title: "That is not the Okiru template", description: handoverNote });
+        setHandover([file]);
+        setStage("upload");
+        return;
+      }
       setImportPreview(preview);
       setImportOpen(true);
     } catch (err) {
@@ -568,9 +580,13 @@ export default function EsgInformationRequest() {
               companyId={companyId}
               companyName={companyName}
               busy={injecting}
-              onBack={() => setStage("choose")}
+              onBack={() => {
+                setHandover(null);
+                setStage("choose");
+              }}
               onComplete={handleParsedDocuments}
               workbookAxes={workbookAxes}
+              initialFiles={handover ?? undefined}
             />
           </div>
         ) : (
