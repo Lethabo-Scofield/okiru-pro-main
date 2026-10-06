@@ -382,13 +382,16 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
                   Missing a pillar? Add the documents that cover it — you’re quoted for the new files only, never for
                   anything we’ve already read.
                 </p>
+                {/* To THIS company's workbook with "Add documents" open. It used
+                    to go to /create-scorecard — a fresh flow for a NEW company,
+                    the opposite of what the line above promises. */}
                 <button
                   type="button"
-                  onClick={() => navigate("/create-scorecard")}
+                  onClick={() => navigate(`/create-scorecard/${encodeURIComponent(companyId)}?addDocuments=1`)}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-[#e5e5ea] text-black text-[13px] font-semibold shrink-0"
                   data-testid="button-add-documents-requote"
                 >
-                  Add documents &amp; requote
+                  Add documents
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
