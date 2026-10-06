@@ -2,6 +2,8 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { v4 as uuid } from "uuid";
 import mongoose from "mongoose";
 import { FeedbackModel } from "../shared/schema";
+import { FEEDBACK_PILLAR_OPTIONS } from "../src/lib/feedbackPillars";
+import { deliverFeedbackNotification, notifyUnstoredFeedback } from "./feedbackNotifier";
 import { createLogger } from "./logger";
 
 const logger = createLogger("FeedbackRoutes");
@@ -20,24 +22,16 @@ interface FeedbackRecord {
   userAgent: string | null;
   createdAt: string;
   updatedAt: string;
+  /** When it was emailed to the feedback list; null while still owed. */
+  notifiedAt?: string | null;
 }
 
 const memoryStore: FeedbackRecord[] = [];
 
 const VALID_CATEGORIES = new Set(['bug', 'feature', 'general', 'compliance']);
 const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved']);
-const VALID_PILLARS = new Set([
-  '',
-  'company',
-  'financial',
-  'ownership',
-  'management',
-  'employmentEquity',
-  'skills',
-  'procurement',
-  'supplierDevelopment',
-  'sed',
-]);
+// The widget's own list — a server copy drifted and dropped "AFS Additions".
+const VALID_PILLARS = new Set<string>(FEEDBACK_PILLAR_OPTIONS.map((p) => p.value));
 
 function normalizePillar(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
@@ -66,6 +60,7 @@ function toRecord(doc: any): FeedbackRecord {
     userAgent: obj.userAgent ?? null,
     createdAt: obj.createdAt instanceof Date ? obj.createdAt.toISOString() : String(obj.createdAt),
     updatedAt: obj.updatedAt instanceof Date ? obj.updatedAt.toISOString() : String(obj.updatedAt),
+    notifiedAt: obj.notifiedAt instanceof Date ? obj.notifiedAt.toISOString() : (obj.notifiedAt ?? null),
   };
 }
 
@@ -118,7 +113,13 @@ export function registerFeedbackRoutes(
           userId, organizationId, status: 'open', userAgent,
           createdAt: now, updatedAt: now,
         });
-        return res.status(201).json({ feedback: toRecord(created) });
+        res.status(201).json({ feedback: toRecord(created) });
+        // After the response: the person is not kept waiting on mail, and a
+        // failed send is retried by the notifier's sweep.
+        void deliverFeedbackNotification(feedbackId).catch((err) =>
+          logger.error('Feedback notification failed', err, { feedbackId }),
+        );
+        return;
       }
 
       const record: FeedbackRecord = {
@@ -127,7 +128,11 @@ export function registerFeedbackRoutes(
         createdAt: now.toISOString(), updatedAt: now.toISOString(),
       };
       memoryStore.unshift(record);
-      return res.status(201).json({ feedback: record });
+      res.status(201).json({ feedback: record });
+      void notifyUnstoredFeedback(record).catch((err) =>
+        logger.error('Feedback notification failed', err, { feedbackId }),
+      );
+      return;
     } catch (err) {
       return respondFeedbackWriteError(res, err);
     }

@@ -281,6 +281,160 @@ export function isSmtpConfigured(): boolean {
   return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
 }
 
+/**
+ * Who hears about feedback from the in-app widget. It used to be saved and
+ * nothing else — the team only saw it if someone happened to open DevMode, and
+ * a client's two reports sat unread for days. FEEDBACK_NOTIFY_EMAILS (comma or
+ * semicolon separated) replaces the list.
+ */
+export const DEFAULT_FEEDBACK_RECIPIENTS = [
+  "contact@okiru.co.za",
+  "lawubrian15@gmail.com",
+  "pm@webparam.co.za",
+];
+
+const PLAUSIBLE_EMAIL = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[^\s@<>"',;]+$/;
+
+export function getFeedbackRecipients(): string[] {
+  const configured = (process.env.FEEDBACK_NOTIFY_EMAILS || "")
+    .split(/[,;\s]+/)
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => PLAUSIBLE_EMAIL.test(s));
+  return configured.length ? Array.from(new Set(configured)) : [...DEFAULT_FEEDBACK_RECIPIENTS];
+}
+
+export interface FeedbackEmailContext {
+  feedbackId: string;
+  message: string;
+  category: string;
+  /** Display label of the area it was filed under, e.g. "Procurement". */
+  areaLabel: string;
+  pageUrl: string | null;
+  /** What the person typed into the widget — not verified. */
+  userName: string | null;
+  userEmail: string | null;
+  /** The signed-in account, when there was one. Verified. */
+  accountEmail: string | null;
+  organizationName: string | null;
+  createdAt: Date | string;
+}
+
+const FEEDBACK_CATEGORY_LABELS: Record<string, string> = {
+  bug: "Bug",
+  feature: "Idea",
+  compliance: "Compliance",
+  general: "Other",
+};
+
+function appBaseUrl(): string {
+  return (process.env.APP_BASE_URL || process.env.APP_URL || "https://okiru.pro").replace(/\/+$/, "");
+}
+
+export function buildFeedbackEmail(ctx: FeedbackEmailContext): {
+  subject: string;
+  html: string;
+  text: string;
+  replyTo: string | null;
+} {
+  const base = appBaseUrl();
+  const kind = FEEDBACK_CATEGORY_LABELS[ctx.category] || "Other";
+  const replyTo = [ctx.accountEmail, ctx.userEmail].find((e) => !!e && PLAUSIBLE_EMAIL.test(e)) || null;
+  const who = (ctx.userName || "").trim() || ctx.accountEmail || ctx.userEmail || "Someone who was not signed in";
+  const firstLine = ctx.message.split(/\r?\n/).find((l) => l.trim())?.trim() || ctx.message.trim();
+  const gist = firstLine.length > 70 ? `${firstLine.slice(0, 67).trimEnd()}…` : firstLine;
+  const subject = `[Okiru feedback] ${kind} · ${ctx.areaLabel} — ${gist}`;
+
+  const pageLink = ctx.pageUrl ? `${base}${ctx.pageUrl.startsWith("/") ? "" : "/"}${ctx.pageUrl}` : null;
+  const received = new Date(ctx.createdAt).toLocaleString("en-ZA", {
+    timeZone: "Africa/Johannesburg",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const identity = ctx.accountEmail
+    ? `Signed in as ${ctx.accountEmail}`
+    : "Not signed in — the email below was typed into the form and is unverified";
+
+  const rows: Array<[string, string]> = [
+    ["Type", escapeHtml(kind)],
+    ["Area", escapeHtml(ctx.areaLabel)],
+    ["From", escapeHtml(who)],
+    ["Account", escapeHtml(identity)],
+  ];
+  if (ctx.userEmail && ctx.userEmail !== ctx.accountEmail) rows.push(["Email given", escapeHtml(ctx.userEmail)]);
+  if (ctx.organizationName) rows.push(["Organisation", escapeHtml(ctx.organizationName)]);
+  if (pageLink) {
+    rows.push(["Page", `<a href="${escapeHtml(pageLink)}" style="color:#4f46e5;word-break:break-all;">${escapeHtml(ctx.pageUrl || "")}</a>`]);
+  }
+  rows.push(["Received", escapeHtml(received)]);
+  rows.push(["Reference", `<span style="font-family:'SF Mono',Monaco,monospace;font-size:12px;">${escapeHtml(ctx.feedbackId)}</span>`]);
+
+  const html = `
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1f2937;">
+      <p style="margin:0 0 6px;font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.06em;">${escapeHtml(kind)} · ${escapeHtml(ctx.areaLabel)}</p>
+      <h1 style="margin:0 0 16px;font-size:20px;font-weight:600;line-height:1.35;">New feedback from ${escapeHtml(who)}</h1>
+      <div style="border-left:3px solid #4f46e5;background:#f9fafb;padding:14px 16px;margin:0 0 20px;font-size:14px;line-height:1.6;white-space:pre-wrap;">${escapeHtml(ctx.message)}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 20px;">
+        ${rows
+          .map(
+            ([k, v]) =>
+              `<tr><td style="padding:6px 12px 6px 0;color:#6b7280;vertical-align:top;width:110px;">${k}</td><td style="padding:6px 0;color:#111827;">${v}</td></tr>`,
+          )
+          .join("")}
+      </table>
+      <div style="margin:0 0 20px;">
+        ${replyTo ? `<a href="mailto:${escapeHtml(replyTo)}?subject=${encodeURIComponent(`Re: your Okiru feedback`)}" style="display:inline-block;background:#4f46e5;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:13px;font-weight:600;margin-right:8px;">Reply to ${escapeHtml(who)}</a>` : ""}
+        <a href="${escapeHtml(`${base}/devmode`)}" style="display:inline-block;border:1px solid #d1d5db;color:#374151;text-decoration:none;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;">Open in DevMode</a>
+      </div>
+      <p style="margin:0;font-size:11px;color:#9ca3af;">Sent by okiru.pro to the feedback list. Replying to this email answers the person who sent it${replyTo ? "" : " — none was given, so a reply goes nowhere"}.</p>
+    </div>
+  `;
+
+  const text = [
+    `New feedback from ${who}`,
+    `${kind} · ${ctx.areaLabel}`,
+    "",
+    ctx.message,
+    "",
+    identity,
+    ...(ctx.userEmail && ctx.userEmail !== ctx.accountEmail ? [`Email given: ${ctx.userEmail}`] : []),
+    ...(ctx.organizationName ? [`Organisation: ${ctx.organizationName}`] : []),
+    ...(pageLink ? [`Page: ${pageLink}`] : []),
+    `Received: ${received}`,
+    `Reference: ${ctx.feedbackId}`,
+    "",
+    `Triage: ${base}/devmode`,
+  ].join("\n");
+
+  return { subject, html, text, replyTo };
+}
+
+/** Email the feedback list. Never throws; the caller records the outcome. */
+export async function sendFeedbackNotification(
+  ctx: FeedbackEmailContext,
+): Promise<{ sent: boolean; recipients: string[]; error?: string }> {
+  const recipients = getFeedbackRecipients();
+  const t = getTransporter();
+  if (!t) {
+    return { sent: false, recipients, error: "No mail transport configured (SMTP_HOST/SMTP_USER/SMTP_PASS)" };
+  }
+  const { subject, html, text, replyTo } = buildFeedbackEmail(ctx);
+  try {
+    await t.sendMail({
+      from: { name: "Okiru Feedback", address: process.env.SMTP_FROM || process.env.SMTP_USER! },
+      to: recipients,
+      replyTo: replyTo || undefined,
+      subject,
+      html,
+      text,
+    });
+    logger.info("Feedback notification sent", { feedbackId: ctx.feedbackId, recipients: recipients.length });
+    return { sent: true, recipients };
+  } catch (err: any) {
+    logger.error("Failed to send feedback notification", err, { feedbackId: ctx.feedbackId });
+    return { sent: false, recipients, error: String(err?.message || err).slice(0, 500) };
+  }
+}
+
 export async function sendLoginNotification(userEmail: string, fullName: string | null, orgName: string | null) {
   const t = getTransporter();
   if (!t) {

@@ -11,6 +11,7 @@ import { connectDB } from "./db";
 import { createLogger, requestContext } from "./logger";
 import { apiCeilingLimiter } from "./rateLimit";
 import { startAuditRetentionJob } from "./auditRetention";
+import { startFeedbackNotifier } from "./feedbackNotifier";
 import crypto from 'crypto';
 
 const logger = createLogger("WebServer");
@@ -138,6 +139,9 @@ app.use((req, res, next) => {
 
   // Seals each closed day of the audit trail and enforces the retention period.
   startAuditRetentionJob();
+
+  // Emails feedback the widget saved but nobody has been told about yet.
+  startFeedbackNotifier();
 
 
   // Session must be mounted BEFORE the proxy so the proxy can read
