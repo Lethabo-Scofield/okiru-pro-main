@@ -276,7 +276,7 @@ import { mergeParserCases } from "@/lib/parserCaseMerge";
 // The review that replaced the list under the Build button: each document,
 // side by side with what we took from it and why anything was not read.
 import { DocumentReview } from "@/components/review/DocumentReview";
-import { buildDocumentReview } from "@/lib/documentReview";
+import { applyReviewEdit, buildDocumentReview } from "@/lib/documentReview";
 
 /** workbook company-information meta value for each parser sector code. */
 const SECTOR_TO_WORKBOOK: Record<string, string> = {
@@ -583,7 +583,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     const timer = window.setTimeout(() => {
       const snap = readFlowSnapshot(snapshotScope);
       if (!snap) return;
-      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size, yearEnd }, snapshotScope);
+      // The case too: a value corrected in the review must survive leaving
+      // the page as surely as the read it corrects.
+      writeFlowSnapshot({ ...snap, parserCase, companyName, sector, subSector, size, yearEnd }, snapshotScope);
     }, 800);
     return () => window.clearTimeout(timer);
   }, [parserCase, companyName, sector, subSector, size, yearEnd]);
@@ -1515,9 +1517,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
         0,
       );
 
-  const valuesUp = useCountUp(totalMappedRows);
-  const suppliersUp = useCountUp(supplierCount);
-  const spendUp = useCountUp(spendCaptured, 1100);
 
   // `files.length` OR a restore: File objects never survive navigation, so a
   // rehydrated run must reveal from the case alone.
@@ -1795,10 +1794,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       <motion.div
         layout
         className={
-          quoteReady || bareUpload ? "grid gap-5" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"
+          quoteReady || bareUpload || revealed ? "grid gap-5" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"
         }
       >
-        {!quoteReady && !bareUpload && (
+        {!quoteReady && !bareUpload && !revealed && (
         <motion.aside layout className="rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)] p-4 lg:order-2 lg:self-start">
           <AnimatePresence initial={false}>
           {quote && !parserCase && (
@@ -2204,7 +2203,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
           );
         })()
       )}
-      {!quoteReady && (!quote || parserCase || quoting) && (
+      {!quoteReady && !revealed && (!quote || parserCase || quoting) && (
       <motion.div
         key={quoting ? "pricing-documents" : parserCase ? "parsed-upload" : "upload-documents"}
         layout
@@ -2505,7 +2504,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       )}
 
       {/* ACT 2 — scanning theatre */}
-      {files.length > 0 && !quoteReady && (!quote || parserCase || quoting) && (
+      {(revealed ? unreadFiles.length > 0 : files.length > 0) && !quoteReady && (!quote || parserCase || quoting) && (
         <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)]">
           <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--muted)] sm:grid">
             <span>File</span>
@@ -2513,7 +2512,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             <span>Type</span>
             <span />
           </div>
-          {files.map((f, i) => {
+          {(revealed ? unreadFiles : files).map((f, i) => {
             const detected = (parserCase?.documents_detected ?? []).find((d) => d.filename === f.name);
             const missing = parsing ? { fields: [], notes: [] } : docMissingContent(f.name);
             const hasGaps = missing.fields.length > 0 || missing.notes.length > 0;
@@ -2715,23 +2714,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             })}
           </div>
 
-          {/* Stat tiles — hero numbers count up */}
-          <div className="dus-fade-up grid grid-cols-3 gap-1.5 mb-4" style={{ animationDelay: "620ms" }}>
-            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
-              <div className="text-[22px] font-semibold text-white leading-none tabular-nums" data-testid="stat-values">{valuesUp}</div>
-              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Values extracted</div>
-            </div>
-            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
-              <div className="text-[22px] font-semibold text-white leading-none tabular-nums">{suppliersUp}</div>
-              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Suppliers found</div>
-            </div>
-            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
-              <div className="text-[22px] font-semibold text-white leading-none tabular-nums">
-                {spendUp >= 1_000_000 ? `R${(spendUp / 1_000_000).toFixed(1)}M` : spendUp >= 1_000 ? `R${Math.round(spendUp / 1_000)}k` : `R${spendUp}`}
-              </div>
-              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Spend captured</div>
-            </div>
-          </div>
 
           {/* ── THE ONE THING THAT NEEDS A DECISION ────────────────────────
               Figures the documents disagree on stay ABOVE the Build button and
@@ -2797,123 +2779,162 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             </div>
           )}
 
-          {/* Company name + create — always available once documents are
-              processed, even with partial or zero extraction. Missing docs or
-              missing content never block: the workbook scores on what we have. */}
-          <div className="dus-fade-up" style={{ animationDelay: "760ms" }}>
-            {/* The scorecard the company will be judged against — explicit,
-                never a silent default. Amber until sector + size are chosen. */}
-            {sector && size ? (
-              <p className="mb-2 text-[12px] text-[color:var(--body)]" data-testid="scoring-as-line">
-                Scoring as:{" "}
-                <span className="text-emerald-300/90 font-medium">
-                  {activeSector?.label ?? sector}
-                  {subSector ? ` · ${subSector}` : ""} · {sizeOptions.find((o) => o.value === size)?.label ?? size}
-                </span>
-              </p>
-            ) : (
-              <p className="mb-2 text-[12px] text-amber-300/90" data-testid="scoring-as-line">
-                Choose your sector and organisation size in the Company profile panel — they decide
-                which scorecard rules your documents are scored against.
-              </p>
-            )}
-            {/* A sector whose ladder was applied by analogy rather than
-                transcribed says so HERE, next to the button that builds the
-                scorecard — not in a footnote. A level nobody flagged is a level
-                someone will certify. */}
-            {activeSector?.provisional && (
-              <p
-                className="mb-2.5 flex items-start gap-1.5 rounded-lg px-3 py-2 text-[11.5px] leading-5 text-amber-200/80"
-                style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.2)" }}
-                data-testid="sector-provisional-note"
+          {/* BUILD — one compact bar, above the review. Everything the scorecard
+              needs to be built sits in a single row: the company, the rules it
+              is scored under and the year it is measured over. The side panel
+              that held sector and size is gone once the documents are read, so
+              they are editable here. Missing documents or missing content never
+              block building: the workbook scores on what we have. */}
+          <div
+            className="dus-fade-up rounded-2xl border border-white/[0.08] bg-[color:var(--ink-2)] p-3"
+            style={{ animationDelay: "300ms" }}
+            data-testid="build-bar"
+          >
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto] lg:items-end">
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Company</span>
+                <input
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  readOnly={addMode}
+                  placeholder="e.g. Acme Holdings (Pty) Ltd"
+                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-[13.5px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none transition-colors focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 read-only:text-[color:var(--body)]"
+                  data-testid="docs-company-name"
+                />
+              </label>
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Sector</span>
+                {/* Sector and sub-sector in one control: a second select that
+                    appears only for two sectors made the row jump. */}
+                <select
+                  value={activeSector?.subSectors && subSector ? `${sector}::${subSector}` : sector}
+                  onChange={(e) => {
+                    const [code, sub = ""] = e.target.value.split("::");
+                    setSector(code);
+                    setSubSector(sub);
+                  }}
+                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2.5 text-[13px] text-white outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10"
+                  data-testid="sector-select-build"
+                >
+                  <option value="">Select sector…</option>
+                  {sectorOptions.map((s) =>
+                    s.subSectors?.length ? (
+                      <optgroup key={s.code} label={s.label}>
+                        <option value={s.code}>{s.label}</option>
+                        {s.subSectors.map((ss) => (
+                          <option key={ss.value} value={`${s.code}::${ss.value}`}>
+                            {s.label} · {ss.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : (
+                      <option key={s.code} value={s.code}>{s.label}</option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Size</span>
+                <select
+                  value={size}
+                  onChange={(e) => setSize(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2.5 text-[13px] text-white outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10"
+                  data-testid="size-select-build"
+                >
+                  <option value="">Select size…</option>
+                  {sizeOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label} — {o.detail.replace(/^Annual turnover /, "")}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="min-w-0" data-testid="docs-year-end-field">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Financial year-end</span>
+                <input
+                  type="date"
+                  value={yearEnd}
+                  onChange={(e) => setYearEnd(e.target.value)}
+                  className={`h-10 w-full rounded-xl border bg-[color:var(--ink-3)] px-3 text-[13.5px] text-white outline-none transition-colors focus:ring-2 focus:ring-violet-500/10 [color-scheme:dark] ${
+                    yearEndValid ? "border-[color:var(--rule)] focus:border-violet-500/50" : "border-amber-400/40 focus:border-amber-400/60"
+                  }`}
+                  data-testid="docs-year-end"
+                />
+              </label>
+              <button
+                onClick={() => void handleCreate()}
+                disabled={!canCreate}
+                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-[13.5px] font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-2 lg:col-span-1"
+                style={{
+                  background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "var(--ink-3)",
+                  color: canCreate ? "#000" : "var(--muted)",
+                  boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
+                }}
+                data-testid="button-create-from-documents"
               >
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                <span>{activeSector.provisionalNote}</span>
+                {creating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    {addMode
+                      ? totalMappedRows > 0
+                        ? `Add ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""} to the workbook`
+                        : "Add these documents to the workbook"
+                      : totalMappedRows > 0
+                        ? `Build scorecard · ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""}`
+                        : "Continue to workbook"}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Only what stops the build, or what changes how it is scored —
+                said once, under the bar. The happy path shows nothing here. */}
+            {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid) && (
+              <div className="mt-2.5 space-y-1 border-t border-white/[0.05] pt-2.5 text-[11.5px] leading-5">
+                {(!sector || !size) && (
+                  <p className="text-amber-300/90" data-testid="scoring-as-line">
+                    Choose the sector and size — they decide which scorecard rules your documents are scored against.
+                  </p>
+                )}
+                {!yearEndValid && (
+                  <p className="text-amber-300/90" data-testid="docs-year-end-hint">
+                    Year-end required — Skills, Procurement, ESD and SED are measured over the twelve months ending on
+                    this date, so the score cannot be calculated without it.
+                  </p>
+                )}
+                {unreadFiles.length > 0 && (
+                  <p className="text-amber-300/90" data-testid="docs-unread-hint">
+                    {unreadFiles.length} document{unreadFiles.length === 1 ? " you added has" : "s you added have"} not
+                    been read yet — read {unreadFiles.length === 1 ? "it" : "them"} above, or remove{" "}
+                    {unreadFiles.length === 1 ? "it" : "them"}, before building.
+                  </p>
+                )}
+                {/* A sector whose ladder was applied by analogy rather than
+                    transcribed says so next to the button that builds the
+                    scorecard — not in a footnote. A level nobody flagged is a
+                    level someone will certify. */}
+                {activeSector?.provisional && (
+                  <p className="flex items-start gap-1.5 text-amber-200/80" data-testid="sector-provisional-note">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <span>{activeSector.provisionalNote}</span>
+                  </p>
+                )}
+              </div>
+            )}
+            {addMode && (
+              <p className="mt-2 text-[11px] leading-5 text-[color:var(--muted)]">
+                Blanks in the workbook take these values. Nothing already there is overwritten — where a document
+                disagrees, you’ll see both and we keep yours.
               </p>
             )}
-            <input
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Company name — e.g. Acme Holdings (Pty) Ltd"
-              className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
-              data-testid="docs-company-name"
-            />
-            <label className="mb-2.5 block" data-testid="docs-year-end-field">
-              <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--body)]">
-                Financial year-end
-              </span>
-              <input
-                type="date"
-                value={yearEnd}
-                onChange={(e) => setYearEnd(e.target.value)}
-                className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[15px] text-white outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 transition-colors [color-scheme:dark]"
-                data-testid="docs-year-end"
-              />
-              {unreadFiles.length > 0 && (
-                <span className="mt-1.5 block text-[11.5px] leading-5 text-amber-300/90" data-testid="docs-unread-hint">
-                  {unreadFiles.length} document{unreadFiles.length === 1 ? " you added has" : "s you added have"} not
-                  been read yet — read {unreadFiles.length === 1 ? "it" : "them"} above, or remove{" "}
-                  {unreadFiles.length === 1 ? "it" : "them"}, before building.
-                </span>
-              )}
-              {!yearEndValid && (
-                <span className="mt-1.5 block text-[11.5px] leading-5 text-amber-300/90" data-testid="docs-year-end-hint">
-                  Required — Skills, Procurement, ESD and SED are measured over the twelve months ending
-                  on this date, so the score cannot be calculated without it.
-                </span>
-              )}
-            </label>
-            <button
-              onClick={() => void handleCreate()}
-              disabled={!canCreate}
-              className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
-              style={{
-                background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "var(--ink-3)",
-                color: canCreate ? "#000" : "var(--muted)",
-                boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
-              }}
-              data-testid="button-create-from-documents"
-            >
-              {creating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : addMode ? (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  {totalMappedRows > 0
-                    ? `Add ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""} to the workbook`
-                    : "Add these documents to the workbook"}
-                </>
-              ) : totalMappedRows > 0 ? (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Build my scorecard from {totalMappedRows} extracted value{totalMappedRows !== 1 ? "s" : ""}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Continue to workbook &amp; complete it there
-                </>
-              )}
-            </button>
-            <p className="text-[11px] text-[color:var(--muted)] mt-2 text-center">
-              {addMode
-                ? "Blanks in the workbook take these values. Nothing already there is overwritten or deleted — where a document disagrees, you’ll see both and we keep yours."
-                : totalMappedRows > 0
-                ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
-                : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
-            </p>
           </div>
 
-          {/* ── THE DETAIL, BELOW THE BUTTON ───────────────────────────────
-              Everything here is worth reading and none of it blocks building.
-              As six always-open sibling panels it pushed the Build button off
-              the bottom of the screen on any real evidence pack; as counted,
-              collapsible groups it is a summary someone will actually open. */}
-          {/* The review — each document beside what we took from it, worst
-              first. It replaced a stack of collapsed sections ("What we read",
-              "Documents still worth adding", "Evidence that didn't reconcile"…)
-              that said the same things detached from the documents they were
-              about. Optional: Build above never waits for it. */}
+          {/* THE REVIEW — the main content after a read: each document beside
+              what we took from it, worst first, at a fixed height. It replaced
+              a stack of collapsed sections ("What we read", "Documents still
+              worth adding", "Evidence that didn't reconcile"…) that said the
+              same things detached from the documents they were about.
+              Optional: the Build bar above never waits for it. */}
           <DocumentReview
             documents={reviewDocuments}
             fileFor={(name) => files.find((f) => f.name === name) ?? null}
@@ -2923,6 +2944,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             needsDetail={needsDetailPillars.map(
               (c) => `${c.pillar}: we read ${c.extractedValue}, but it needs per-person rows to score.`,
             )}
+            // A correction here is what gets built: it rewrites the case the
+            // workbook is mapped from, and the parser's reading rides along.
+            onEditValue={(filename, edit, value) =>
+              setParserCase((current) => (current ? applyReviewEdit(current, filename, edit, value) : current))
+            }
           />
 
           <div className="mt-4 space-y-1.5" data-testid="extraction-review">

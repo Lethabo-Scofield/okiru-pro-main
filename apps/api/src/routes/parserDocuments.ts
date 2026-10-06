@@ -285,6 +285,18 @@ const patchSchema = z.object({
    * it (false). Takes it in and out of the company's "Needs review" queue.
    */
   reviewed: z.boolean().optional(),
+  /**
+   * Values a person read off the document themselves — a correction to a field
+   * the parser read, or a field it could not find. Keyed by the parser's field
+   * key; null withdraws an earlier correction.
+   */
+  fields: z
+    .record(
+      z.string().min(1).max(120).regex(/^[A-Za-z0-9_. -]+$/),
+      z.union([z.string().max(2000), z.number().finite(), z.null()]),
+    )
+    .refine((fields) => Object.keys(fields).length > 0 && Object.keys(fields).length <= 100, 'Between 1 and 100 fields')
+    .optional(),
 });
 
 /**
@@ -360,11 +372,43 @@ router.patch('/:id', async (req: Request, res: Response) => {
       }
     }
 
-    if (Object.keys(set).length === 0) return res.status(400).json({ message: 'Nothing to update' });
+    // Field corrections live beside the parser's reading, never over it — the
+    // same rule as a type correction. Each one names what the parser said, so
+    // the history shows both, and the latest event per field is the value.
+    let fieldsCorrected = false;
+    if (parsed.data.fields) {
+      const latestRunId = (doc as unknown as { latestParserRunId?: string }).latestParserRunId;
+      if (!latestRunId) {
+        return res.status(409).json({ message: 'This document has not been read yet, so there is nothing to correct.', code: 'NOT_READ' });
+      }
+      const latestRun = await ParserRunModel.findOne({ runId: latestRunId }).select('parserOutput').lean();
+      const extracted = ((latestRun as { parserOutput?: { extracted_fields?: Record<string, { normalized_value?: unknown; raw_value?: unknown }> } } | null)
+        ?.parserOutput?.extracted_fields ?? {});
+      const events = Object.entries(parsed.data.fields).map(([fieldKey, value]) => ({
+        fieldKey,
+        originalValue: extracted[fieldKey]?.normalized_value ?? extracted[fieldKey]?.raw_value ?? null,
+        correctedValue: typeof value === 'string' ? value.trim() || null : value,
+        reviewerUserId: owner.userId,
+        organizationId: owner.organizationId,
+        approvalState: 'corrected',
+        note: parsed.data.note ?? null,
+      }));
+      await ParserRunModel.updateOne({ runId: latestRunId }, { $push: { reviewHistory: { $each: events } } });
+      fieldsCorrected = true;
+    }
 
-    await Document.updateOne(documentFilter(req, documentId), { $set: set });
+    if (Object.keys(set).length === 0 && !fieldsCorrected) return res.status(400).json({ message: 'Nothing to update' });
+
+    if (Object.keys(set).length > 0) await Document.updateOne(documentFilter(req, documentId), { $set: set });
     const updated = await Document.findOne(documentFilter(req, documentId)).lean();
-    return res.json({ document: documentJson(updated as Record<string, any>) });
+    if (!fieldsCorrected) return res.json({ document: documentJson(updated as Record<string, any>) });
+    const runAfter = await ParserRunModel.findOne({ runId: (doc as unknown as { latestParserRunId: string }).latestParserRunId })
+      .select('reviewHistory')
+      .lean();
+    return res.json({
+      document: documentJson(updated as Record<string, any>),
+      reviewHistory: (runAfter as { reviewHistory?: unknown[] } | null)?.reviewHistory ?? [],
+    });
   } catch (error) {
     logger.error('Failed to update parser document', error as Error, { documentId });
     return res.status(500).json({ message: 'Could not update this document' });

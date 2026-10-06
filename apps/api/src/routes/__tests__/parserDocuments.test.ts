@@ -77,7 +77,8 @@ vi.mock('../../../models.js', () => ({
     async updateOne(filter: Record<string, any>, update: any) {
       const run = runs.find((r) => matches(r, filter));
       for (const [key, value] of Object.entries(update.$push ?? {})) {
-        if (run) (run[key] ??= []).push(value);
+        const each = value && typeof value === 'object' && '$each' in (value as object) ? (value as { $each: unknown[] }).$each : [value];
+        if (run) (run[key] ??= []).push(...each);
       }
       return { modifiedCount: run ? 1 : 0 };
     },
@@ -296,6 +297,33 @@ describe('re-reading, reviewing, and who may do either', () => {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reviewed: false }),
     });
     expect((await request('/api/parser-documents?status=review_required')).body.documents).toHaveLength(1);
+  });
+
+  it('records a corrected value and an added field beside the reading, never over it', async () => {
+    seedReadDocument();
+    runs[0].parserOutput = { extracted_fields: { bee_level: { normalized_value: 4, raw_value: 'Level 4' } } };
+
+    const res = await request('/api/parser-documents/doc-1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { bee_level: 2, registration_number: ' 2010/123456/07 ' } }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.reviewHistory).toEqual([
+      expect.objectContaining({ fieldKey: 'bee_level', originalValue: 4, correctedValue: 2, approvalState: 'corrected', reviewerUserId: 'user-a' }),
+      expect.objectContaining({ fieldKey: 'registration_number', originalValue: null, correctedValue: '2010/123456/07' }),
+    ]);
+    // The parser's own reading is untouched.
+    expect(runs[0].parserOutput.extracted_fields.bee_level.normalized_value).toBe(4);
+  });
+
+  it('refuses a correction to a document that was never read', async () => {
+    documents.push({ _id: 'doc-2', filename: 'x.pdf', source: 'parser', userId: 'user-a', organizationId: 'org-a' });
+    const res = await request('/api/parser-documents/doc-2', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: { bee_level: 2 } }),
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('NOT_READ');
   });
 
   it('lets a view-only member look, but not change, review or re-read', async () => {

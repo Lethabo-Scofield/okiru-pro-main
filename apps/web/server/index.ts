@@ -48,6 +48,10 @@ app.use(helmet({
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           connectSrc: ["'self'", "https:", "wss:"],
           workerSrc: ["'self'", "blob:"],
+          // The document review previews the user's own upload in an iframe of
+          // a blob: URL. Without this, frame-src fell back to default-src
+          // 'self' and every PDF preview rendered as a blank grey box.
+          frameSrc: ["'self'", "blob:"],
           // Nothing on this site is a frame target, and nothing loads a plugin.
           // Stated explicitly so a future widen of the defaults cannot reopen
           // clickjacking or a <base> injection.

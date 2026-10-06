@@ -22,11 +22,20 @@ import type { ParserCaseLike } from "./parserWorkbookMap";
 
 export type ReviewState = "read" | "needs-look" | "not-read";
 
+/** Where a value lives in the parser case, so a person can correct it in place. */
+export type ReviewEdit =
+  | { kind: "field"; field: string }
+  | { kind: "entity"; extraction: number; index: number };
+
 export interface ReviewValue {
   label: string;
   value: string;
   /** The text in the document the value was read from, when the parser kept it. */
   source?: string;
+  /** Present when the value can be corrected before building. */
+  edit?: ReviewEdit;
+  /** A person typed this, in the review — not the parser. */
+  entered?: boolean;
 }
 
 export interface ReviewProblem {
@@ -52,6 +61,8 @@ export interface ReviewDocument {
   problems: ReviewProblem[];
   /** Things this document should have carried and did not. */
   notFound: string[];
+  /** The same gaps with the parser's field key, so a person can fill them in. */
+  missing?: Array<{ label: string; field: string }>;
 }
 
 export interface ReviewInputs {
@@ -98,36 +109,42 @@ function sourceText(v: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+type Extraction = { sourceFile?: unknown; values?: Array<Record<string, unknown>> };
+const extractionsOf = (parserCase: ParserCaseLike): Extraction[] =>
+  (parserCase as { ai_entities?: { extractions?: Extraction[] } }).ai_entities?.extractions ?? [];
+
 /** Every value we can attribute to this file, from both extraction paths. */
 function valuesFor(parserCase: ParserCaseLike, filename: string): ReviewValue[] {
   const out: ReviewValue[] = [];
   const seen = new Set<string>();
-  const push = (label: string, value: string, source?: string) => {
+  const push = (label: string, value: string, source: string | undefined, edit?: ReviewEdit, entered = false) => {
     const key = `${label}\u0000${value}`;
     if (seen.has(key) || out.length >= MAX_VALUES) return;
     seen.add(key);
-    out.push(source ? { label, value, source } : { label, value });
+    out.push({
+      label,
+      value,
+      ...(entered ? { source: "Entered by you", entered: true } : source ? { source } : {}),
+      ...(edit ? { edit } : {}),
+    });
   };
 
-  const extractions =
-    (parserCase as { ai_entities?: { extractions?: Array<{ sourceFile?: unknown; values?: Array<Record<string, unknown>> }> } })
-      .ai_entities?.extractions ?? [];
-  for (const e of extractions) {
-    if (String(e.sourceFile ?? "") !== filename) continue;
-    for (const v of e.values ?? []) {
+  extractionsOf(parserCase).forEach((e, extraction) => {
+    if (String(e.sourceFile ?? "") !== filename) return;
+    (e.values ?? []).forEach((v, index) => {
       const shown = display(v.value);
-      if (shown) push(humanize(String(v.field ?? "")), shown, sourceText(v));
-    }
-  }
+      if (shown) push(humanize(String(v.field ?? "")), shown, sourceText(v), { kind: "entity", extraction, index }, v.entered_by_user === true);
+    });
+  });
 
   const fields = (parserCase.fields_extracted?.[filename] ?? {}) as Record<string, Record<string, unknown>>;
   for (const [field, f] of Object.entries(fields)) {
     const shown = display(f?.normalized_value ?? f?.raw_value);
-    if (shown) push(humanize(field), shown, sourceText(f ?? {}));
+    if (shown) push(humanize(field), shown, sourceText(f ?? {}), { kind: "field", field }, f?.entered_by_user === true);
   }
 
   const suppliers = (parserCase.supplier_rows ?? []).filter((r) => r.source_file === filename);
-  if (suppliers.length) push("Suppliers listed", suppliers.length.toLocaleString("en-ZA"));
+  if (suppliers.length) push("Suppliers listed", suppliers.length.toLocaleString("en-ZA"), undefined);
   return out;
 }
 
@@ -172,6 +189,10 @@ export function whyNotRead(texts: string[], documentType: string, couldNotOpen: 
   };
 }
 
+/** Words that mean a human genuinely has to look — anything else is parser noise. */
+const REAL_TROUBLE =
+  /\b(expired|expires? before|conflict|conflicting|disagree|mismatch|does not match|doesn't match|misread|checksum|invalid|outside the|duplicate|could not|unreadable|failed|hallucinat)/i;
+
 /** Real trouble on a document that DID give us something: conflicts, expiry, misreads. */
 function troubleFor(texts: string[]): ReviewProblem[] {
   const out: ReviewProblem[] = [];
@@ -179,7 +200,10 @@ function troubleFor(texts: string[]): ReviewProblem[] {
   for (const raw of texts) {
     const t = raw.trim();
     if (!t || seen.has(t) || isClassificationNote(t) || isInternalJargon(t) || isInternalArtifact(t)) continue;
-    if (/\smissing$/i.test(t)) continue; // a missing field is a gap, listed separately
+    // "X missing" / "x_field not found" is a gap, listed under Not found — not
+    // trouble. Counting it as trouble is what marked nearly every document
+    // "Needs a look". Only real trouble flags a document.
+    if (/\b(missing|not found)$/i.test(t) || !REAL_TROUBLE.test(t)) continue;
     seen.add(t);
     const expired = /\bexpired\b/i.test(t);
     out.push({
@@ -242,7 +266,28 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
 
     // Gaps are the missing fields; anything that is a sentence of trouble was
     // already said above.
-    const notFound = v.gaps.filter((g: string) => !/[.!?]$/.test(g) && g.length <= 60 && !problems.some((p) => p.detail === g));
+    // Plain field names only: "registration_number not found" becomes
+    // "Registration number"; sentences of trouble were said above.
+    const notFound = Array.from(
+      new Set(
+        v.gaps
+          .map((g: string) => {
+            const m = /^(.*?)\s+(?:not found|missing)$/i.exec(g.trim());
+            return m ? humanize(m[1]) : g.trim();
+          })
+          .filter((g: string) => g && !/[.!?]$/.test(g) && g.length <= 60 && !problems.some((p) => p.detail === g)),
+      ),
+    );
+    // The parser's own key for each gap, so filling one in lands where the
+    // workbook mapping reads it. A gap the parser never keyed gets a key made
+    // from its label.
+    const keyByLabel = new Map(
+      (detected?.validation?.missing_fields ?? []).map((f) => [squash(humanize(String(f))), String(f)] as const),
+    );
+    const missing = notFound.map((label) => ({
+      label,
+      field: keyByLabel.get(squash(label)) ?? label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, ""),
+    }));
 
     docs.push({
       filename: v.filename,
@@ -254,12 +299,93 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
       unplaced,
       problems,
       notFound,
+      missing,
     });
   }
 
   // Worst first: what needs the user is what they came to the review for.
   const rank: Record<ReviewState, number> = { "not-read": 0, "needs-look": 1, read: 2 };
   return docs.sort((a, b) => rank[a.state] - rank[b.state] || a.filename.localeCompare(b.filename));
+}
+
+/** Lowercase letters and digits only — "Signed date" and "signed_date" are the same key. */
+function squash(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * What a person typed, as the type the parser would have produced: a number
+ * where the parser read a number (so "R1 200 000" scores as 1200000), text
+ * everywhere else — an ID or registration number must keep its leading zeros.
+ */
+function coerceTyped(raw: string, parserValue: unknown): unknown {
+  if (typeof parserValue !== "number") return raw;
+  const n = Number(raw.replace(/[R\s,%]/g, ""));
+  return Number.isFinite(n) ? n : raw;
+}
+
+/** "X missing" / "x_field not found" about this field. */
+function isGapLine(text: unknown, key: string): boolean {
+  const m = /^(.*?)\s+(?:not found|missing)$/i.exec(String(text ?? "").trim());
+  return Boolean(m && squash(m[1]) === key);
+}
+
+/**
+ * Apply a correction made in the review to the parser case, so building uses
+ * it. The parser's reading is kept on the value (`parser_value`) and the value
+ * is marked `entered_by_user`, so the review can say a person typed it. A field
+ * that was missing stops being listed as missing.
+ */
+export function applyReviewEdit(parserCase: ParserCaseLike, filename: string, edit: ReviewEdit, raw: string): ParserCaseLike {
+  const typed = raw.trim();
+  if (!typed) return parserCase;
+
+  if (edit.kind === "entity") {
+    const ai = (parserCase as { ai_entities?: { extractions?: Extraction[] } }).ai_entities;
+    const extractions = [...(ai?.extractions ?? [])];
+    const e = extractions[edit.extraction];
+    const v = e?.values?.[edit.index];
+    if (!e || !v || String(e.sourceFile ?? "") !== filename) return parserCase;
+    const values = [...(e.values ?? [])];
+    const parserValue = v.entered_by_user === true ? v.parser_value : v.value;
+    values[edit.index] = { ...v, value: coerceTyped(typed, parserValue), entered_by_user: true, parser_value: parserValue ?? null };
+    extractions[edit.extraction] = { ...e, values };
+    return { ...parserCase, ai_entities: { ...ai, extractions } } as ParserCaseLike;
+  }
+
+  const before = parserCase.fields_extracted?.[filename]?.[edit.field] as Record<string, unknown> | undefined;
+  const parserValue = before?.entered_by_user === true ? before.parser_value : before?.normalized_value ?? before?.raw_value;
+  const corrected = {
+    ...(before ?? {}),
+    raw_value: typed,
+    normalized_value: coerceTyped(typed, parserValue),
+    confidence: 1,
+    entered_by_user: true,
+    parser_value: parserValue ?? null,
+  };
+  const fields_extracted = {
+    ...(parserCase.fields_extracted ?? {}),
+    [filename]: { ...(parserCase.fields_extracted?.[filename] ?? {}), [edit.field]: corrected },
+  } as ParserCaseLike["fields_extracted"];
+
+  const key = squash(edit.field);
+  const documents_detected = (parserCase.documents_detected ?? []).map((d) =>
+    d.filename !== filename || !d.validation
+      ? d
+      : {
+          ...d,
+          validation: {
+            ...d.validation,
+            missing_fields: (d.validation.missing_fields ?? []).filter((f) => squash(String(f)) !== key && squash(humanize(String(f))) !== key),
+            errors: (d.validation.errors ?? []).filter((t) => !isGapLine(t, key)),
+            warnings: (d.validation.warnings ?? []).filter((t) => !isGapLine(t, key)),
+          },
+        },
+  );
+  const documents_needing_review = (parserCase.documents_needing_review ?? []).map((r) =>
+    r.filename !== filename ? r : { ...r, reasons: (r.reasons ?? []).filter((t) => !isGapLine(t, key)) },
+  );
+  return { ...parserCase, fields_extracted, documents_detected, documents_needing_review };
 }
 
 export function reviewCounts(docs: ReviewDocument[]): Record<ReviewState, number> {
