@@ -294,16 +294,25 @@ export function EsgDocumentUploadStart({
   const [filedBatchByFile, setFiledBatchByFile] = useState<Record<string, string>>({});
   /** Files chosen but not yet confirmed. The double-check dialog owns these. */
   const [pendingUpload, setPendingUpload] = useState<(PendingUpload & { origin: EsgUploadOrigin }) | null>(null);
+  /** The case as of now, for the merge at the end of a read (which outlives the render it started in). */
+  const parserCaseRef = useRef<EsgParserCaseLike | null>(null);
+  useEffect(() => {
+    parserCaseRef.current = parserCase;
+  }, [parserCase]);
   /**
-   * Documents already extracted and paid for in a previous round.
+   * The files already read and paid for, by persistence key.
    *
-   * Always null today — a second paid round in one sitting is not reachable
-   * yet, exactly as on the B-BBEE side. It is threaded through `mergeEsgCases`
-   * and `removeFile` now so that when requoting lands, the rule "a requote
-   * never loses or re-charges an already-read document" is already enforced
-   * rather than bolted on afterwards.
+   * A second paid round in one sitting used to be unreachable: every gate keyed
+   * off `parserCase`, so a forgotten document could be staged after the read
+   * but never priced or read. Now only UNREAD files are priced and read, their
+   * result is merged through `mergeEsgCases`, and a read file is part of the
+   * case — it can't be removed and is never charged for again.
    */
-  const [keptCase] = useState<EsgParserCaseLike | null>(null);
+  const [readKeys, setReadKeys] = useState<Set<string>>(() => new Set());
+  const readKeysRef = useRef(readKeys);
+  useEffect(() => {
+    readKeysRef.current = readKeys;
+  }, [readKeys]);
   /** Files a folder upload could not read — a warning, not an error. */
   const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
 
@@ -344,6 +353,9 @@ export function EsgDocumentUploadStart({
   const quoted = (filename: string) => quote?.files.find((f) => f.filename === filename);
 
   const filePersistenceKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+  /** Not yet read — the only files a quote, a charge or a read may include. */
+  const isUnread = (file: File) => !readKeysRef.current.has(filePersistenceKey(file));
+  const unreadFiles = files.filter((f) => !readKeys.has(filePersistenceKey(f)));
 
   /** Persist the original file before any paid parser work begins. */
   const persistDocument = async (file: File): Promise<string> => {
@@ -422,14 +434,21 @@ export function EsgDocumentUploadStart({
     // priced for a different set of files. Claim the checking state and drop
     // the stale quote before anything async happens.
     const requestId = ++quoteRequestRef.current;
-    setQuoting(true);
+    // Price only what has not been read: a document read in an earlier round is
+    // paid for and already in the case.
+    const toPrice = list.filter(isUnread);
     setQuote(null);
+    if (toPrice.length === 0) {
+      setQuoting(false);
+      return;
+    }
+    setQuoting(true);
     try {
-      await persistSelectedDocuments(list);
+      await persistSelectedDocuments(toPrice);
       // A newer batch started while these files were saving — its pipeline
       // owns the quote now, and pricing this older list would race it.
       if (quoteRequestRef.current !== requestId) return;
-      await runQuote(list);
+      await runQuote(toPrice);
     } catch (error) {
       if (quoteRequestRef.current !== requestId) return; // superseded
       setQuote(null);
@@ -736,8 +755,17 @@ export function EsgDocumentUploadStart({
       }
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
-      const mergedCase = mergeEsgCases(keptCase, data);
+      const mergedCase = mergeEsgCases(parserCaseRef.current, data);
+      parserCaseRef.current = mergedCase;
       setParserCase(mergedCase);
+      // These files are now part of the case: never priced, charged or read again.
+      const nowRead = new Set(readKeysRef.current);
+      for (const f of list) nowRead.add(filePersistenceKey(f));
+      readKeysRef.current = nowRead;
+      setReadKeys(nowRead);
+      setQuote(null);
+      setTokenCost(null);
+      setDoneStaging(false);
       // Tokens have just been spent on this result — make it survive leaving
       // the flow, even before "continue to workbook" is pressed. The host flow
       // restores it (straight to review) on its next mount, and overwrites this
@@ -882,7 +910,8 @@ export function EsgDocumentUploadStart({
       }
       // Every header shows the balance, so it must move the moment it changes.
       window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
-      const delivered = await runExtraction(files, quote.quoteId);
+      // Exactly the files this quote priced: the unread ones.
+      const delivered = await runExtraction(unreadFiles, quote.quoteId);
       await settlePaidRun(quote.quoteId, delivered);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not start processing");
@@ -1011,6 +1040,9 @@ export function EsgDocumentUploadStart({
   }, [initialFiles]);
 
   const removeFile = (name: string) => {
+    // A read file is paid for and folded into the case; it stays.
+    const target = files.find((f) => f.name === name);
+    if (target && !isUnread(target)) return;
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
     setDoneStaging(false);
@@ -1021,8 +1053,9 @@ export function EsgDocumentUploadStart({
     });
     quoteRequestRef.current += 1;
     setQuote(null);
-    if (next.length === 0) setParserCase(keptCase);
-    else void prepareAndQuote(next);
+    // Re-price what is still unread; never reset the case (that threw a paid read away).
+    if (next.some(isUnread)) void prepareAndQuote(next);
+    else setQuoting(false);
   };
 
   /**
@@ -1051,7 +1084,16 @@ export function EsgDocumentUploadStart({
   // Requires `doneStaging`: collapsing the stage into the checkout the moment a
   // quote landed is what left people with "files appear but there is nowhere to
   // carry on".
-  const quoteReady = Boolean(quote && doneStaging && !parserCase && !quoting);
+  const quoteReady = Boolean(quote && doneStaging && unreadFiles.length > 0 && !quoting && !parsing);
+  /** Whether reading the unread files spends tokens, and whether the balance covers it. */
+  const readCharging = Boolean(quote && quote.paymentRequired !== false && tokenCost !== null);
+  const readUnaffordable = readCharging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
+  /** One click from the bar under the uploader — the breakdown stays one click away. */
+  const readNow = () => {
+    if (!quote) return;
+    if (readCharging) void spendAndExtract();
+    else void runExtraction(unreadFiles, quote.quoteId);
+  };
 
   const readCount = Object.values(docProgress).filter((s) => s === "done").length;
   const failedDocuments = Object.entries(docProgress)
@@ -1081,18 +1123,22 @@ export function EsgDocumentUploadStart({
         {/* Document scale, left aligned, matching the B-BBEE step exactly. A
             34px centred headline over a working step read like a landing page. */}
         <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--esg-text,#fff)]">
-          {quote && !parserCase
+          {quoteReady && quote
             ? quote.paymentRequired === false
               ? "Review your documents"
               : "Review and process"
-            : "Add your ESG evidence"}
+            : parserCase
+              ? "Your ESG evidence"
+              : "Add your ESG evidence"}
         </h3>
         <p className="mt-1.5 text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-          {quote && !parserCase
+          {quoteReady && quote
             ? quote.paymentRequired === false
               ? "Processing is free. Review the documents below, then continue."
               : "Nothing is read until you spend."
-            : `Utility bills, fuel statements, waste manifests, certificates, registers and policies${companyName ? ` for ${companyName}` : ""}. We identify what is present, what is missing and what needs review.`}
+            : parserCase
+              ? "Read and placed below. Forgot one? Add it — only the new documents are read and charged."
+              : `Utility bills, fuel statements, waste manifests, certificates, registers and policies${companyName ? ` for ${companyName}` : ""}. We identify what is present, what is missing and what needs review.`}
         </p>
       </div>
 
@@ -1358,7 +1404,7 @@ export function EsgDocumentUploadStart({
 
                 <div className="mt-5 space-y-2">
                   <button
-                    onClick={() => void (charging ? spendAndExtract() : runExtraction(files, quote!.quoteId))}
+                    onClick={() => void (charging ? spendAndExtract() : runExtraction(unreadFiles, quote!.quoteId))}
                     disabled={paying || parsing || cannotAfford}
                     className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
                     style={{ background: "var(--esg-acc-e, #1de9a0)", color: "#080e14" }}
@@ -1503,36 +1549,85 @@ export function EsgDocumentUploadStart({
           zone. It used to sit below the element batches, which put the one
           button that advances the flow beneath a long grid: you staged files
           and then had to go hunting for how to continue. */}
-      {!parserCase && !doneStaging && files.length > 0 && (
-        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--esg-text,#fff)]">
-              {files.length} document{files.length === 1 ? "" : "s"} staged
-              {quoting ? " · checking" : ""}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-              Keep adding — the buttons above, or any element batch below. Nothing is read, and
-              nothing is charged, until you review the cost on the next step.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={quoting}
-            onClick={() => setDoneStaging(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
-            data-testid="esg-button-done-staging"
+      {!doneStaging && unreadFiles.length > 0 && !parsing && (() => {
+        const n = unreadFiles.length;
+        const docs = `${n} ${parserCase ? "new " : ""}document${n === 1 ? "" : "s"}`;
+        const priceLine = quoting
+          ? "Working out the cost — nothing is read yet."
+          : !quote
+            ? "We could not work out the cost of these documents. Nothing has been read or charged."
+            : readCharging && tokenCost
+              ? `${tokenText(tokenCost.tokens)} tokens · you have ${tokenText(tokenCost.balance)}.`
+              : quote.paymentRequired === false
+                ? "Reading is free for this run."
+                : "Checking your balance…";
+        return (
+          <div
+            className="mt-3 flex flex-col gap-3 rounded-[18px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="esg-read-bar"
           >
-            {quoting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Done adding — review cost
-          </button>
-        </div>
-      )}
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-[var(--esg-text,#fff)]">{docs} ready to read</p>
+              <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-read-bar-price">
+                {priceLine}{" "}
+                {parserCase
+                  ? "Documents already read are not charged again."
+                  : "Keep adding if you have more — nothing is read until you press read."}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {!quoting && !quote && (
+                <button
+                  type="button"
+                  onClick={() => void prepareAndQuote(files)}
+                  className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
+                  data-testid="esg-button-retry-quote-inline"
+                >
+                  Try again
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={quoting}
+                onClick={() => setDoneStaging(true)}
+                className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white disabled:opacity-50"
+                data-testid="esg-button-done-staging"
+              >
+                See cost breakdown
+              </button>
+              {readUnaffordable && tokenCost ? (
+                <a
+                  href="/settings/billing"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
+                  data-testid="esg-button-add-tokens"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Add tokens — {tokenText(tokenCost.shortfall)} short
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!quote || quoting || paying}
+                  onClick={readNow}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
+                  data-testid="esg-button-read-now"
+                >
+                  {quoting || paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                  {readCharging && tokenCost && !tokenCost.alreadyAuthorized
+                    ? `Read ${n === 1 ? "it" : `all ${n}`} — ${tokenText(tokenCost.tokens)} tokens`
+                    : `Read ${n === 1 ? "it" : `all ${n}`}`}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* The dead end. "Done adding" hides the staging bar above, and the review
           panel only renders once a quote exists — so when pricing fails the
           button appears to do nothing at all. Say what went wrong where the
           button was, and offer both ways forward. */}
-      {!parserCase && doneStaging && !quote && !quoting && files.length > 0 && (
+      {doneStaging && !quote && !quoting && unreadFiles.length > 0 && (
         <div
           className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
           data-testid="esg-quote-unavailable"
@@ -1614,7 +1709,7 @@ export function EsgDocumentUploadStart({
                 ? resolveProgress
                   ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking sites, periods and figures across every file`
                   : "Cross-checking sites, periods and figures across every file"
-                : `${readCount} of ${files.length} read`}
+                : `${readCount} of ${unreadFiles.length} read`}
             </div>
           </div>
           {resolving && resolveProgress && resolveProgress.total > 0 && (
@@ -1647,7 +1742,9 @@ export function EsgDocumentUploadStart({
                 : (f.name.split(".").pop()?.toUpperCase() ?? "File");
             const perFile = docProgress[f.name];
             const isReadingThis = perFile === "parsing";
-            const statusLabel = parsing
+            const alreadyRead = !isUnread(f);
+            // A round reads only the new files; the ones already read keep their verdict.
+            const statusLabel = parsing && !alreadyRead
               ? perFile === "done"
                 ? "Read"
                 : perFile === "error"
@@ -1664,7 +1761,7 @@ export function EsgDocumentUploadStart({
                   : outcome === "none"
                     ? "Nothing read"
                     : quotedFile
-                      ? "Quoted"
+                      ? "Not read yet"
                       : quoting
                         ? "Pricing"
                         : "Queued";
@@ -1707,18 +1804,23 @@ export function EsgDocumentUploadStart({
                     {statusLabel}
                   </span>
                   <span className="text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">{fileType}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeFile(f.name);
-                    }}
-                    disabled={parsing}
-                    className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[var(--esg-text2,rgba(255,255,255,0.56))] disabled:opacity-30 sm:justify-self-end"
-                    aria-label={`Remove ${f.name}`}
-                    data-testid={`esg-remove-${f.name}`}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  {/* A read document is part of the workbook now — no remove. */}
+                  {alreadyRead ? (
+                    <span />
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(f.name);
+                      }}
+                      disabled={parsing}
+                      className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[var(--esg-text2,rgba(255,255,255,0.56))] disabled:opacity-30 sm:justify-self-end"
+                      aria-label={`Remove ${f.name}`}
+                      data-testid={`esg-remove-${f.name}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -1788,7 +1890,9 @@ export function EsgDocumentUploadStart({
                   documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
                 })
               }
-              disabled={busy}
+              // A document added after the read but never read would arrive with
+              // nothing taken from it — read it or remove it first.
+              disabled={busy || unreadFiles.length > 0}
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
               style={{ background: "var(--esg-acc-e, #1de9a0)", color: "#080e14" }}
               data-testid="esg-button-continue-to-workbook"
@@ -1798,6 +1902,13 @@ export function EsgDocumentUploadStart({
                 ? `Open the workbook with ${injection.placed.length} value${injection.placed.length === 1 ? "" : "s"} filled in`
                 : "Continue to the workbook"}
             </button>
+            {unreadFiles.length > 0 && (
+              <p className="mt-2 text-center text-[11.5px] leading-5 text-amber-300/90" data-testid="esg-unread-hint">
+                {unreadFiles.length} document{unreadFiles.length === 1 ? " you added has" : "s you added have"} not been
+                read yet — read {unreadFiles.length === 1 ? "it" : "them"} above, or remove{" "}
+                {unreadFiles.length === 1 ? "it" : "them"}, before continuing.
+              </p>
+            )}
             <p className="mt-2 text-center text-[11px] text-[color:var(--muted)]">
               {injection.implemented && injection.placed.length > 0
                 ? "You’ll land in a pre-filled workbook — review, complete anything missing, then continue to Summary."
