@@ -67,7 +67,9 @@ function summarise(
   const level = fieldValue(fields, 'bee_level');
   const black = fieldValue(fields, 'black_ownership');
   const blackWomen = fieldValue(fields, 'black_women_ownership');
-  const expiry = fieldValue(fields, 'expiry_date') || fieldValue(fields, 'signed_date');
+  const expiry = fieldValue(fields, 'expiry_date');
+  // A signed date is not an expiry: it used to be shown as "expires <signed date>".
+  const signed = expiry ? '' : fieldValue(fields, 'signed_date');
   const supplier = fieldValue(fields, 'supplier_name');
   const entity = fieldValue(fields, 'entity_name');
 
@@ -75,6 +77,7 @@ function summarise(
   if (black) bits.push(`${black}% black`);
   if (blackWomen) bits.push(`${blackWomen}% black women`);
   if (expiry) bits.push(`expires ${expiry}`);
+  if (signed) bits.push(`signed ${signed}`);
   if (!bits.length && (supplier || entity)) bits.push(supplier || entity);
 
   // A spend schedule's value is its rows, not a single field.
