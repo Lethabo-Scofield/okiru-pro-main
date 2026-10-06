@@ -91,8 +91,12 @@ describe("a remembered device", () => {
     expect(body).toMatch(/if \(secondFactorRequired && !rememberedDevice\)/);
   });
 
-  it("is recorded as a second factor in the audit trail", () => {
-    expect(login()).toMatch(/method: "password\+remembered-device", twoFactor: true/);
+  it("is audited as what it is — no code was checked on that sign-in", () => {
+    expect(login()).toMatch(/method: "password\+remembered-device", twoFactor: false, rememberedDevice: true/);
+  });
+
+  it("leaves a trail when a presented cookie is refused", () => {
+    expect(login()).toMatch(/user\.login\.remembered_device_rejected/);
   });
 
   it("is only remembered when the person asked for it, after a correct code", () => {

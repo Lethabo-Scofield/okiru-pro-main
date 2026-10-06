@@ -726,6 +726,18 @@ export async function registerRoutes(
       // to remember it, stands in for the code. The password was still checked.
       const rememberedDevice = secondFactorRequired && isRememberedDevice(req, user);
 
+      if (secondFactorRequired && !rememberedDevice && readCookie(req.headers.cookie, TRUSTED_DEVICE_COOKIE)) {
+        // Expired, reset, or not this account's — worth a line, it could be a stolen cookie.
+        await recordAudit(req, {
+          action: "user.login.remembered_device_rejected",
+          resourceType: "user",
+          resourceId: user.id,
+          result: "failure",
+          actorUserId: user.id,
+          organizationId: user.organizationId ?? null,
+        });
+      }
+
       if (secondFactorRequired && !rememberedDevice) {
         const otp = generateOtp();
         const expiryMinutes = getOtpExpiryMinutes();
@@ -758,8 +770,9 @@ export async function registerRoutes(
         result: "success",
         actorUserId: user.id,
         organizationId: user.organizationId ?? null,
+        // No code was checked on this sign-in, so it is not recorded as one.
         metadata: rememberedDevice
-          ? { method: "password+remembered-device", twoFactor: true }
+          ? { method: "password+remembered-device", twoFactor: false, rememberedDevice: true }
           : { method: "password", twoFactor: false },
       });
       res.json({ user: safeUser });

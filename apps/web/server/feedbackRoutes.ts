@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { FeedbackModel } from "../shared/schema";
 import { FEEDBACK_PILLAR_OPTIONS } from "../src/lib/feedbackPillars";
 import { deliverFeedbackNotification, notifyUnstoredFeedback } from "./feedbackNotifier";
+import { feedbackLimiter } from "./rateLimit";
 import { createLogger } from "./logger";
 
 const logger = createLogger("FeedbackRoutes");
@@ -27,6 +28,8 @@ interface FeedbackRecord {
 }
 
 const memoryStore: FeedbackRecord[] = [];
+/** Only used while the database is down; bounded so a flood cannot grow it forever. */
+const MEMORY_STORE_LIMIT = 500;
 
 const VALID_CATEGORIES = new Set(['bug', 'feature', 'general', 'compliance']);
 const VALID_STATUSES = new Set(['open', 'in-progress', 'resolved']);
@@ -84,7 +87,7 @@ export function registerFeedbackRoutes(
   app: Express,
   requireAuth: (req: Request, res: Response, next: NextFunction) => void | Promise<void>,
 ) {
-  app.post("/api/feedback", async (req: Request, res: Response) => {
+  app.post("/api/feedback", feedbackLimiter, async (req: Request, res: Response) => {
     try {
       const message = typeof req.body?.message === 'string' ? req.body.message.trim() : '';
       if (!message) return res.status(400).json({ message: 'Feedback message is required' });
@@ -128,6 +131,7 @@ export function registerFeedbackRoutes(
         createdAt: now.toISOString(), updatedAt: now.toISOString(),
       };
       memoryStore.unshift(record);
+      if (memoryStore.length > MEMORY_STORE_LIMIT) memoryStore.length = MEMORY_STORE_LIMIT;
       res.status(201).json({ feedback: record });
       void notifyUnstoredFeedback(record).catch((err) =>
         logger.error('Feedback notification failed', err, { feedbackId }),

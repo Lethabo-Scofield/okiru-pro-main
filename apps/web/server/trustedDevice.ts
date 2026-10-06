@@ -29,6 +29,8 @@ export const TRUSTED_DEVICE_COOKIE_PATH = "/api/auth";
 
 const VERSION = "td1";
 const MAX_DAYS = 90;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const CLOCK_SKEW_MS = 60 * 1000;
 
 export interface TrustedDeviceAccount {
   id: string;
@@ -66,7 +68,7 @@ export function issueTrustedDeviceToken(
   days: number = trustedDeviceDays(),
 ): { token: string; maxAgeMs: number } | null {
   if (!secret || !account?.id || !account?.password || days <= 0) return null;
-  const maxAgeMs = days * 24 * 60 * 60 * 1000;
+  const maxAgeMs = days * DAY_MS;
   const expiresAtSec = Math.floor((now + maxAgeMs) / 1000);
   const token = [
     VERSION,
@@ -84,7 +86,8 @@ export function verifyTrustedDeviceToken(
   now: number = Date.now(),
 ): boolean {
   if (!token || !secret || !account?.id || !account?.password) return false;
-  if (trustedDeviceDays() <= 0) return false;
+  const days = trustedDeviceDays();
+  if (days <= 0) return false;
 
   const parts = token.split(".");
   if (parts.length !== 4 || parts[0] !== VERSION) return false;
@@ -94,6 +97,8 @@ export function verifyTrustedDeviceToken(
 
   const expiresAtSec = Number(parts[2]);
   if (!Number.isInteger(expiresAtSec) || expiresAtSec * 1000 <= now) return false;
+  // Shortening TRUSTED_DEVICE_DAYS shortens cookies already handed out, too.
+  if (expiresAtSec * 1000 - now > days * DAY_MS + CLOCK_SKEW_MS) return false;
 
   const expected = Buffer.from(signature(secret, account, expiresAtSec));
   const given = Buffer.from(parts[3]);

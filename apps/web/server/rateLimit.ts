@@ -237,6 +237,18 @@ export const passwordResetLimiter = makeLimiter({
   },
 });
 
+/**
+ * The feedback widget. It is open to anyone and every submission emails the
+ * team through the relay that also carries sign-in codes, so a flood here must
+ * not be able to use that relay up.
+ */
+export const feedbackLimiter = makeLimiter({
+  prefix: "feedback",
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: "Thanks — that's a lot of feedback at once. Please try again in a little while.",
+});
+
 /** Cheap availability probes used by the sign-up form. */
 export const availabilityLimiter = makeLimiter({
   prefix: "availability",

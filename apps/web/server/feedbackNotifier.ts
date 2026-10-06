@@ -14,6 +14,12 @@
  * Two web replicas run this. A send is claimed atomically first, so the same
  * feedback is never emailed twice; a claim older than CLAIM_STALE_MS (a pod died
  * mid-send) may be taken over.
+ *
+ * The widget is open to anyone, and the relay it mails through also carries
+ * sign-in codes. So each replica spends at most FEEDBACK_EMAILS_PER_HOUR on
+ * feedback; anything over that is left unclaimed for a later sweep rather than
+ * sent, and a failed send backs off (5 min, doubling, up to 6 h) instead of
+ * hammering a relay that is already refusing.
  */
 import mongoose from "mongoose";
 import { FeedbackModel, OrganizationModel, UserModel } from "../shared/schema";
@@ -23,12 +29,50 @@ import { createLogger } from "./logger";
 
 const logger = createLogger("FeedbackNotifier");
 
-export const MAX_NOTIFY_ATTEMPTS = 5;
+/** With back-off doubling from 5 minutes, eight attempts span about ten hours. */
+export const MAX_NOTIFY_ATTEMPTS = 8;
 /** Older than this is no longer news; the sweep leaves it alone. */
 export const BACKFILL_WINDOW_DAYS = 30;
 const CLAIM_STALE_MS = 10 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const BACKOFF_BASE_MS = 5 * 60 * 1000;
+const BACKOFF_MAX_MS = 6 * HOUR_MS;
+
+function notificationsDisabled(): boolean {
+  return process.env.FEEDBACK_NOTIFY_DISABLED === "true";
+}
+
+/** When to try again after the `attempts`-th failure. */
+export function nextAttemptAfter(attempts: number, now: Date): Date {
+  const delay = Math.min(BACKOFF_BASE_MS * 2 ** Math.max(0, attempts - 1), BACKOFF_MAX_MS);
+  return new Date(now.getTime() + delay);
+}
+
+/* Per-replica send budget. Synchronous check-and-take, so concurrent calls in
+ * one process cannot both take the last slot. */
+const sentAt: number[] = [];
+
+function emailsPerHour(): number {
+  const n = Number(process.env.FEEDBACK_EMAILS_PER_HOUR);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 6;
+}
+
+function reserveSend(now: number): (() => void) | null {
+  while (sentAt.length && sentAt[0] <= now - HOUR_MS) sentAt.shift();
+  if (sentAt.length >= emailsPerHour()) return null;
+  sentAt.push(now);
+  return () => {
+    const i = sentAt.lastIndexOf(now);
+    if (i >= 0) sentAt.splice(i, 1);
+  };
+}
+
+/** Test seam: forget the budget between tests. */
+export function resetFeedbackSendBudget(): void {
+  sentAt.length = 0;
+}
 
 function unclaimed(now: Date) {
   return {
@@ -36,7 +80,11 @@ function unclaimed(now: Date) {
   };
 }
 
-/** Still owed an email, and nobody is sending it right now. */
+function due(now: Date) {
+  return { $or: [{ notifyNextAttemptAt: null }, { notifyNextAttemptAt: { $lte: now } }] };
+}
+
+/** Still owed an email, due, and nobody is sending it right now. */
 export function claimFilter(feedbackId: string, now: Date) {
   return {
     $and: [
@@ -44,6 +92,7 @@ export function claimFilter(feedbackId: string, now: Date) {
       { notifiedAt: null },
       // `$not` so records written before these fields existed still match.
       { notifyAttempts: { $not: { $gte: MAX_NOTIFY_ATTEMPTS } } },
+      due(now),
       unclaimed(now),
     ],
   };
@@ -55,6 +104,7 @@ export function pendingFilter(now: Date) {
       { notifiedAt: null },
       { notifyAttempts: { $not: { $gte: MAX_NOTIFY_ATTEMPTS } } },
       { createdAt: { $gte: new Date(now.getTime() - BACKFILL_WINDOW_DAYS * DAY_MS) } },
+      due(now),
       unclaimed(now),
     ],
   };
@@ -95,32 +145,62 @@ export type DeliveryOutcome = "sent" | "failed" | "skipped";
 
 /**
  * Email one feedback record if it is still owed. "skipped" means someone else
- * holds it, it was already sent, it ran out of attempts, or there is no mail
- * transport — in that last case nothing is claimed, so configuring mail later
- * still delivers it.
+ * holds it, it was already sent, it is not due yet, it ran out of attempts, the
+ * hour's budget is spent, notifications are switched off, or there is no mail
+ * transport — in none of those cases is anything claimed, so a later sweep (or
+ * configuring mail later) still delivers it.
  */
 export async function deliverFeedbackNotification(feedbackId: string, now: Date = new Date()): Promise<DeliveryOutcome> {
-  if (mongoose.connection.readyState !== 1 || !isSmtpConfigured()) return "skipped";
+  if (notificationsDisabled() || mongoose.connection.readyState !== 1 || !isSmtpConfigured()) return "skipped";
+
+  const release = reserveSend(now.getTime());
+  if (!release) return "skipped";
 
   const doc: any = await FeedbackModel.findOneAndUpdate(
     claimFilter(feedbackId, now),
     { $set: { notifyClaimedAt: now }, $inc: { notifyAttempts: 1 } },
     { new: true },
   ).lean();
-  if (!doc) return "skipped";
+  if (!doc) {
+    release();
+    return "skipped";
+  }
 
   const result = await sendFeedbackNotification(await emailContextFor(doc));
   if (result.sent) {
     await FeedbackModel.updateOne(
       { _id: doc._id },
-      { $set: { notifiedAt: new Date(), notifiedTo: result.recipients, notifyError: null, notifyClaimedAt: null } },
+      {
+        $set: {
+          notifiedAt: new Date(),
+          notifiedTo: result.recipients,
+          notifyError: null,
+          notifyClaimedAt: null,
+          notifyNextAttemptAt: null,
+        },
+      },
     );
     return "sent";
   }
+
+  const attempts = Number(doc.notifyAttempts) || 1;
   await FeedbackModel.updateOne(
     { _id: doc._id },
-    { $set: { notifyError: result.error ?? "unknown error", notifyClaimedAt: null } },
+    {
+      $set: {
+        notifyError: result.error ?? "unknown error",
+        notifyClaimedAt: null,
+        notifyNextAttemptAt: nextAttemptAfter(attempts, now),
+      },
+    },
   );
+  if (attempts >= MAX_NOTIFY_ATTEMPTS) {
+    logger.error("Feedback notification abandoned — nobody was emailed about this report", undefined, {
+      feedbackId,
+      attempts,
+      lastError: result.error,
+    });
+  }
   return "failed";
 }
 
@@ -135,6 +215,7 @@ export async function notifyUnstoredFeedback(record: {
   userEmail: string | null;
   createdAt: string;
 }): Promise<void> {
+  if (notificationsDisabled() || !reserveSend(Date.now())) return;
   await sendFeedbackNotification({
     feedbackId: record.id,
     message: record.message,
@@ -150,7 +231,9 @@ export async function notifyUnstoredFeedback(record: {
 }
 
 export async function sweepPendingFeedbackNotifications(limit = 25): Promise<{ sent: number; failed: number }> {
-  if (mongoose.connection.readyState !== 1 || !isSmtpConfigured()) return { sent: 0, failed: 0 };
+  if (notificationsDisabled() || mongoose.connection.readyState !== 1 || !isSmtpConfigured()) {
+    return { sent: 0, failed: 0 };
+  }
   const now = new Date();
   const pending: any[] = await FeedbackModel.find(pendingFilter(now), { feedbackId: 1, id: 1 })
     .sort({ createdAt: 1 })
@@ -171,7 +254,7 @@ let timer: NodeJS.Timeout | null = null;
 
 export function startFeedbackNotifier(): void {
   if (timer) return;
-  if (process.env.FEEDBACK_NOTIFY_DISABLED === "true") {
+  if (notificationsDisabled()) {
     logger.warn("Feedback email notifications disabled by configuration");
     return;
   }
