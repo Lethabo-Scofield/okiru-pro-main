@@ -23,6 +23,8 @@ export interface FlowSnapshot {
   sector: string;
   subSector: string;
   size: string;
+  /** Financial year-end as yyyy-mm-dd. Optional: snapshots written before it existed lack it. */
+  yearEnd?: string;
   fileNames: string[];
   filedBatchByFile: Record<string, string>;
   /** Library ids of the persisted uploads, so create can still file them under the company. */
