@@ -28,8 +28,11 @@
  *  - Cells that share a register's section but are not rows (the waste
  *    scorecard figures, King V's derived total) follow the value-cell rule.
  *
- * Nothing here deletes. Removing captured data is something a person does in
- * the editor, on purpose.
+ * Nothing here deletes on its own. Removing captured data is something a person
+ * does on purpose: in the editor, or by choosing — register by register, in the
+ * import preview — to REPLACE a register with the file's rows, for the client
+ * who sends a complete corrected list. A replace takes the file's rows as the
+ * register; a register sheet with no rows still never wipes anything.
  */
 import { ESG_GRID_SECTIONS, isEsgGridSection, type EsgGridSectionId } from "./esgGridSections";
 import { readEsgGridRows, refFor, writeEsgGridCells, type EsgGridRow } from "./esgGridRows";
@@ -172,6 +175,15 @@ export interface EsgRegisterMergeOutcome {
   updated: number;
   /** Rows the import carried that were already there unchanged. */
   alreadyThere: number;
+  /** The person chose to replace this register with the file's rows. */
+  replaced?: boolean;
+  /** Rows the register held that the replace removes. */
+  removed?: number;
+}
+
+export interface EsgMergeOptions {
+  /** Take the file's rows AS the register (never with an empty sheet). Registers only. */
+  replaceRows?: boolean;
 }
 
 export interface EsgSectionMergeResult {
@@ -185,6 +197,7 @@ export function mergeImportIntoSection(
   sectionId: string,
   existingCells: EsgCells | undefined,
   incomingCells: EsgCells | undefined,
+  options: EsgMergeOptions = {},
 ): EsgSectionMergeResult {
   const existing = existingCells ?? {};
   const incoming = incomingCells ?? {};
@@ -204,6 +217,24 @@ export function mergeImportIntoSection(
     return {
       cells: kept,
       register: { sectionId, existing: existingRows.length, incoming: 0, added: 0, updated: 0, alreadyThere: 0 },
+    };
+  }
+
+  if (options.replaceRows) {
+    // The person's choice for a complete, corrected list: the file's rows are
+    // the register now. Its other cells still merge by the value-cell rule.
+    return {
+      cells: writeEsgGridCells(sectionId, incomingRows, scalars),
+      register: {
+        sectionId,
+        existing: existingRows.length,
+        incoming: incomingRows.length,
+        added: incomingRows.length,
+        updated: 0,
+        alreadyThere: 0,
+        replaced: true,
+        removed: existingRows.length,
+      },
     };
   }
 
@@ -256,10 +287,14 @@ export function mergeImportIntoSection(
 export function mergeImportIntoSections(
   current: Record<string, { cells?: EsgCells } | undefined> | undefined,
   incoming: Record<string, { cells?: EsgCells } | undefined>,
+  /** Registers the person chose to replace with the file's rows. */
+  replace: ReadonlySet<string> = new Set(),
 ): Record<string, EsgSectionMergeResult> {
   const out: Record<string, EsgSectionMergeResult> = {};
   for (const [sectionId, section] of Object.entries(incoming)) {
-    out[sectionId] = mergeImportIntoSection(sectionId, current?.[sectionId]?.cells, section?.cells);
+    out[sectionId] = mergeImportIntoSection(sectionId, current?.[sectionId]?.cells, section?.cells, {
+      replaceRows: replace.has(sectionId),
+    });
   }
   return out;
 }

@@ -495,7 +495,13 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       }
       try {
         let buffer: Buffer | null = null;
-        const body = req.body as { fileBase64?: string; confirm?: boolean; sections?: Record<string, { cells: Record<string, unknown> }> };
+        const body = req.body as {
+          fileBase64?: string;
+          confirm?: boolean;
+          sections?: Record<string, { cells: Record<string, unknown> }>;
+          /** Registers the person chose to replace with the file's rows (the preview asks, register by register). */
+          replace?: unknown;
+        };
         if (body?.confirm && body.sections) {
           // Confirm replays cells the CLIENT sends, not the file we parsed, so
           // it is a write path in its own right and carries the same bounds as
@@ -516,14 +522,21 @@ export function registerEsgWorkbookRoutes(app: Express): void {
             }
             accepted.push([sectionKey, cells]);
           }
-          // MERGE, never replace. This endpoint used to set each section to
+          // MERGE by default. This endpoint used to set each section to
           // exactly what the import carried, so a document that placed two
           // figures erased every figure already captured beside them, and an
           // empty register sheet in a template wiped the register. See
-          // esgImportMerge.ts for the rules; nothing here deletes.
+          // esgImportMerge.ts for the rules. A register is replaced only when
+          // the person chose that for it in the preview — never by default,
+          // and never with an empty sheet.
+          const replace = new Set(
+            Array.isArray(body.replace) ? body.replace.filter((id): id is string => typeof id === "string") : [],
+          );
           const registers: EsgRegisterMergeOutcome[] = [];
           for (const [sectionKey, cells] of accepted) {
-            const merged = mergeImportIntoSection(sectionKey, wb.sections[sectionKey]?.cells, cells);
+            const merged = mergeImportIntoSection(sectionKey, wb.sections[sectionKey]?.cells, cells, {
+              replaceRows: replace.has(sectionKey),
+            });
             wb.sections[sectionKey] = { cells: merged.cells };
             if (merged.register) registers.push(merged.register);
           }

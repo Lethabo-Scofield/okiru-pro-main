@@ -172,12 +172,14 @@ function asWorkbookData(current: EsgWorkbookLike | null): EsgWorkbookData | null
 export function analyseEsgImport(
   preview: EsgImportPreview,
   current: EsgWorkbookLike | null,
+  /** Registers the person chose to replace with the file's rows. */
+  replace: ReadonlySet<string> = new Set(),
 ): EsgImportAnalysis {
   const overwrites: EsgCellChange[] = [];
   const additions: EsgCellChange[] = [];
   let unchanged = 0;
 
-  const merged = mergeImportIntoSections(current?.sections, preview.sections);
+  const merged = mergeImportIntoSections(current?.sections, preview.sections, replace);
   const registers = Object.values(merged)
     .map((result) => result.register)
     .filter((r): r is EsgRegisterMergeOutcome => !!r && r.incoming > 0);
