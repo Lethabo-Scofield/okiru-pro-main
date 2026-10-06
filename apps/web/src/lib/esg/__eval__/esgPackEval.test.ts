@@ -18,6 +18,9 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { applyEsgParserResult, type EsgParserCaseLike } from "@/components/esg/esgParserInjection";
 import { resolveEsgReportingAxes, type EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
+import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { computeEsgIndicatorCoverage } from "../esgIndicatorCoverage";
+import { computeFleetEmissions } from "../../../../EsgToolkit/src/lib/calculators/fleetEmissions";
 import { formatEsgPackScore, scoreEsgPlacement, type EsgExpectedCell } from "./esgPackScore";
 
 interface AnswerKey {
@@ -56,6 +59,15 @@ describe.skipIf(!CASE || !KEY)("ESG answer-key gate", () => {
       join(runDir, "placement.json"),
       JSON.stringify({ patches: injection.patches, unplaced: injection.unplaced }, null, 2),
     );
+    // What the pack scores, indicator by indicator, and the fleet's emissions
+    // vehicle by vehicle — read off the workbook the placement would make.
+    const workbook = {
+      companyId: "eval",
+      sections: Object.fromEntries(Object.entries(injection.patches).map(([id, section]) => [id, { cells: section?.cells ?? {} }])),
+      updatedAt: "",
+    } as unknown as EsgWorkbookData;
+    writeFileSync(join(runDir, "coverage.json"), JSON.stringify(computeEsgIndicatorCoverage(workbook), null, 2));
+    writeFileSync(join(runDir, "fleet.json"), JSON.stringify(computeFleetEmissions(workbook), null, 2));
 
     const baselinePath = join(dirname(KEY!), "baseline.json");
     if (!existsSync(baselinePath) || process.env.UPDATE_BASELINE === "1") {

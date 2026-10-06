@@ -79,6 +79,10 @@ export interface EsgCalculatorRowLike {
   droppedFields?: string[];
   /** Read from a hidden sheet: it may add to what is known, not to what exists. */
   hidden?: boolean;
+  /** The month ("YYYY-MM") the row's figures are for, when it states one month's figures. */
+  period?: string;
+  /** A vehicle's month rolled up from its fuel fills here — never set by the parser. */
+  fromFills?: boolean;
 }
 
 export interface EsgCalculatorResultLike {
@@ -417,6 +421,17 @@ export function mapEsgCalculatorToWorkbook(
     else rowsByGrid.set(row.grid, [row]);
   }
 
+  // A fuel log's or fuel card's fills have no register of their own: they are
+  // each vehicle's months, and join the fleet register as that.
+  const fills = rowsByGrid.get(FUEL_FILLS_FIELD);
+  const fillRollup = fills ? fillsAsVehicleMonths(fills, rows.length) : null;
+  if (fillRollup) {
+    rowsByGrid.delete(FUEL_FILLS_FIELD);
+    if (fillRollup.months.length > 0) {
+      rowsByGrid.set("fleet_vehicle_rows", [...(rowsByGrid.get("fleet_vehicle_rows") ?? []), ...fillRollup.months]);
+    }
+  }
+
   // Every site × month figure, whichever reader produced it, is settled in one
   // pass: in a one-row grid two documents' different sites add up, which they
   // could not do if each reader settled its own figures.
@@ -445,8 +460,10 @@ export function mapEsgCalculatorToWorkbook(
       });
       continue;
     }
-    applyRegisterRows(gridField, gridRows, target.sectionId, target.columns, gridCells, record, axes);
+    const fleet = applyRegisterRows(gridField, gridRows, target.sectionId, target.columns, gridCells, record, axes);
+    if (gridField === "fleet_vehicle_rows" && fillRollup) recordFills(fillRollup, fleet, record);
   }
+  if (fillRollup && !rowsByGrid.has("fleet_vehicle_rows")) recordFills(fillRollup, undefined, record);
   const monthlyFates = monthlyFacts.length > 0 ? applyMonthlyFacts(monthlyFacts, axes, builder, record) : [];
 
   /* ---------------- Supplier questionnaire ---------------- */
@@ -633,13 +650,16 @@ function applyRegisterRows(
   gridCells: Map<string, Record<string, EsgCellValue>>,
   record: (field: string, outcome: EsgFieldOutcome) => void,
   axes: EsgReportingAxes,
-): void {
+): FleetMerge | undefined {
   const def = ESG_GRID_SECTIONS[sectionId];
   let built: EsgGridRow[] = [];
   const builtSources: string[] = [];
   const builtHidden: boolean[] = [];
+  const builtPeriods: Array<string | undefined> = [];
+  const builtFromFills: boolean[] = [];
   const rejected: string[] = [];
   let fleetNote: string | undefined;
+  let fleet: FleetMerge | undefined;
 
   const ordered = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
@@ -662,14 +682,22 @@ function applyRegisterRows(
       built.push(gridRow);
       builtSources.push((row.sourceFiles ?? [])[0] ?? "");
       builtHidden.push(row.hidden === true);
+      builtPeriods.push(row.period);
+      builtFromFills.push(row.fromFills === true);
     }
   }
 
   if (sectionId === "fleet" && built.length > 0) {
-    const fleet = mergeFleetRows(built, builtSources, builtHidden);
+    fleet = mergeFleetRows(built, builtSources, builtHidden, builtPeriods, builtFromFills);
     built = fleet.rows;
     const said: string[] = [];
     if (fleet.duplicates > 0) said.push(`${fleet.duplicates} repeat listing(s) of the same vehicles were combined into ${built.length} vehicles`);
+    if (fleet.dated > 0) {
+      said.push(
+        `${fleet.dated} vehicle(s) take their month's kilometres and litres from the depots' fuel reports (${fleet.months.join(", ")})` +
+          (fleet.averaged > 0 ? `, ${fleet.averaged} averaged over the months reported` : ""),
+      );
+    }
     if (fleet.sold > 0) said.push(`${fleet.sold} vehicle(s) listed as sold or disposed were left out of the fleet`);
     if (fleet.hiddenOnly > 0) said.push(`${fleet.hiddenOnly} vehicle(s) that appear only on hidden sheets were not counted as fleet`);
     if (said.length) fleetNote = `${said.join("; ")}.`;
@@ -701,7 +729,7 @@ function applyRegisterRows(
           ? `None of these rows could be written as the register records them (${rejected[0]}).`
           : "These rows carried nothing the register holds.",
     });
-    return;
+    return fleet;
   }
 
   const cells = writeEsgGridCells(sectionId, built) as Record<string, EsgCellValue>;
@@ -736,6 +764,7 @@ function applyRegisterRows(
       ].filter(Boolean).join(" ") || undefined,
   });
   void lastColumn;
+  return fleet;
 }
 
 /** The most rows one register keeps from a read. */
@@ -763,43 +792,292 @@ const LEFT_THE_FLEET = /\b(sold|disposed|scrapped|written[ -]?off|decommissioned
  * column kept. Vehicles listed on a sheet of vehicles that have left the fleet
  * (sold, disposed, scrapped) are not counted in it.
  */
+/**
+ * A vehicle's month — what it drove, what it used, and the rate between them.
+ * One row's month, never assembled from two: a fleet list's kilometres beside a
+ * fuel report's litres is a rate no vehicle ever ran at, and the company's
+ * measured rates are what every vehicle without fuel records is estimated from.
+ */
+const MONTH_FIGURES = ["monthlyKm", "monthlyLitres", "l100Actual"] as const;
+
+const isBlank = (value: unknown) => value === undefined || value === null || value === "";
+const figureOf = (value: unknown): number | null => (typeof value === "number" && Number.isFinite(value) ? value : null);
+
+/** Fuel fills — a fuel log's or a fuel card's lines — a vehicle at a time. */
+const FUEL_FILLS_FIELD = "fleet_fuel_transaction_rows";
+
+interface FillRollup {
+  /** Each vehicle's months, as fleet rows stamped with the month. */
+  months: EsgCalculatorRowLike[];
+  fills: number;
+  /** Lines naming no vehicle or no litres: bowser deliveries, tank dips, totals. */
+  unattributed: number;
+  /** Fills whose month cannot be told: no date, and the vehicle's other fills span months. */
+  undated: number;
+  /** Undated lines that are a vehicle's stated total — the sum of its fills — and not one more fill. */
+  totals: number;
+}
+
+const previousMonth = (month: string): string => {
+  const [year, mon] = month.split("-").map(Number);
+  return mon === 1 ? `${year - 1}-12` : `${year}-${String(mon - 1).padStart(2, "0")}`;
+};
+
+/**
+ * Fuel fills, as each vehicle's months.
+ *
+ * Litres are every fill in the month — the fuel the vehicle drew, the basis
+ * the depots' own diesel figure is on. Kilometres are stated only where the
+ * data holds the month before: from the last fill of that month to the last
+ * fill of this one is exactly the distance this month's fills fuelled, so
+ * kilometres and litres are a true pair. A vehicle's first month in the data
+ * has its litres alone, never a rate it did not run at.
+ */
+function fillsAsVehicleMonths(fills: EsgCalculatorRowLike[], firstIndex: number): FillRollup {
+  type Fill = { month: string | null; odometer: number | null; litres: number };
+  const byPlate = new Map<string, { reg: string; source: string; fills: Fill[] }>();
+  let unattributed = 0;
+  for (const fill of fills) {
+    const reg = String(fill.cells["fleet.vehicle_registration"] ?? "").trim();
+    const litres = figureOf(fill.cells["fleet.fuel_litres"]);
+    const key = plateKey(reg);
+    if (!key || litres === null || litres <= 0) {
+      unattributed += 1;
+      continue;
+    }
+    const date = String(fill.cells["fleet.transaction_date"] ?? "");
+    const entry = byPlate.get(key) ?? { reg, source: (fill.sourceFiles ?? [])[0] ?? "", fills: [] };
+    entry.fills.push({
+      month: /^\d{4}-\d{2}/.test(date) ? date.slice(0, 7) : null,
+      odometer: figureOf(fill.cells["fleet.odometer_reading"]),
+      litres,
+    });
+    byPlate.set(key, entry);
+  }
+
+  let undated = 0;
+  let totals = 0;
+  const months: EsgCalculatorRowLike[] = [];
+  const lastReading = (these: Fill[]) => {
+    const readings = these.map((f) => f.odometer).filter((n): n is number => n !== null);
+    return readings.length > 0 ? Math.max(...readings) : null;
+  };
+  for (const { reg, source, fills: own } of Array.from(byPlate.values())) {
+    // An undated fill is the month the vehicle's other fills are in — when they are in one.
+    const dated = new Set(own.map((f) => f.month).filter((m): m is string => m !== null));
+    const only = dated.size === 1 ? Array.from(dated)[0] : null;
+    // An undated line holding exactly what the dated fills add to is the log's total line.
+    const datedLitres = own.reduce((sum, f) => sum + (f.month !== null ? f.litres : 0), 0);
+    const isTotal = (fill: Fill) =>
+      fill.month === null && datedLitres > 0 && Math.abs(fill.litres - datedLitres) <= Math.max(0.5, datedLitres * 0.005);
+    const byMonth = new Map<string, Fill[]>();
+    for (const fill of own) {
+      if (isTotal(fill)) {
+        totals += 1;
+        continue;
+      }
+      const month = fill.month ?? only;
+      if (!month) {
+        undated += 1;
+        continue;
+      }
+      byMonth.set(month, [...(byMonth.get(month) ?? []), fill]);
+    }
+    for (const month of Array.from(byMonth.keys()).sort()) {
+      const these = byMonth.get(month)!;
+      const litres = Math.round(these.reduce((sum, f) => sum + f.litres, 0) * 10) / 10;
+      const last = lastReading(these);
+      const before = byMonth.get(previousMonth(month));
+      const lastBefore = before ? lastReading(before) : null;
+      const km = last !== null && lastBefore !== null && last > lastBefore && last - lastBefore <= 30_000 ? last - lastBefore : null;
+      months.push({
+        grid: "fleet_vehicle_rows",
+        index: firstIndex + months.length,
+        cells: {
+          "fleet.vehicle_registration": reg,
+          "fleet.monthly_litres": litres,
+          ...(km !== null ? { "fleet.monthly_km": km } : {}),
+        },
+        sourceFiles: [source],
+        period: month,
+        fromFills: true,
+      });
+    }
+  }
+  return { months, fills: fills.length, unattributed, undated, totals };
+}
+
+/** What became of the fills, in words: which vehicles' months they gave, and what they could not. */
+function recordFills(
+  rollup: FillRollup,
+  fleet: FleetMerge | undefined,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): void {
+  const said: string[] = [];
+  const used = fleet?.fillVehicles ?? 0;
+  if (used > 0) said.push(`they give ${used} vehicle(s) their month's litres on the fleet register`);
+  if ((fleet?.covered ?? 0) > 0) {
+    said.push(`${fleet!.covered} vehicle-month(s) they cover are already stated by the depot's fuel report, whose figures are used`);
+  }
+  if (fleet && fleet.disagreements.length > 0) {
+    said.push(`they disagree with the report on ${fleet.disagreements.slice(0, 3).join("; ")}${fleet.disagreements.length > 3 ? ` and ${fleet.disagreements.length - 3} more` : ""}`);
+  }
+  if (fleet && fleet.notListed.length > 0) {
+    const named = fleet.notListed.slice(0, 4).join(", ");
+    said.push(`fuel filled into ${fleet.notListed.length} vehicle(s) no fleet list names (${named}${fleet.notListed.length > 4 ? ", …" : ""}) was not added to the fleet`);
+  }
+  if (rollup.unattributed > 0) {
+    said.push(`${rollup.unattributed} line(s) name no vehicle or no litres — bowser deliveries, tank dips, totals — and count only in the depot's own diesel figure`);
+  }
+  if (rollup.totals > 0) said.push(`${rollup.totals} vehicle total line(s) agree with their fills and were not counted again`);
+  if (rollup.undated > 0) said.push(`${rollup.undated} fill(s) have no date to tell their month by`);
+  const reason = `${rollup.fills} fuel line(s) read: ${said.join("; ") || "none of them name a vehicle and its litres"}.`;
+  const reached = used + (fleet?.covered ?? 0);
+  record(
+    FUEL_FILLS_FIELD,
+    reached > 0
+      ? { status: "placed", cells: [{ sectionId: "fleet", cellRef: "Monthly Litres", value: reached }], reason }
+      : { status: "unplaced", cells: [], rejection: "no_workbook_home", reason },
+  );
+}
+
+type MonthFigures = { km: number | null; litres: number | null; fromFills: boolean };
+
+export interface FleetMerge {
+  rows: EsgGridRow[];
+  duplicates: number;
+  sold: number;
+  hiddenOnly: number;
+  /** Vehicles whose month came from a dated document — a fuel report or their fills. */
+  dated: number;
+  averaged: number;
+  months: string[];
+  /** Vehicles whose month came from their own fuel fills. */
+  fillVehicles: number;
+  /** Vehicle-months the fills state that a depot's report already states, and its figure is used. */
+  covered: number;
+  /** Where the fills and the depot's report disagree on a vehicle's month, in words. */
+  disagreements: string[];
+  /** Vehicles whose fuel was filled but which no fleet list names. */
+  notListed: string[];
+}
+
 function mergeFleetRows(
   rows: EsgGridRow[],
   sources: string[],
   hidden: boolean[] = [],
-): { rows: EsgGridRow[]; duplicates: number; sold: number; hiddenOnly: number } {
+  periods: Array<string | undefined> = [],
+  fromFills: boolean[] = [],
+): FleetMerge {
   const sheetOf = (source: string) => source.slice(source.lastIndexOf("›") + 1);
   const gone = new Set(
     rows.filter((_, i) => LEFT_THE_FLEET.test(sheetOf(sources[i] ?? ""))).map((row) => plateKey(row.reg)),
   );
   // The fleet is what the visible sheets list. A hidden sheet — a scratch
   // copy, last year's list — adds what it knows about a listed vehicle (its
-  // month's km and fuel), but a vehicle only it lists is not counted.
-  const visible = rows.some((_, i) => !hidden[i]);
+  // month's km and fuel), but a vehicle only it lists is not counted. Fuel
+  // fills likewise: a depot fills other business units' vehicles too.
+  const visible = rows.some((_, i) => !hidden[i] && !fromFills[i]);
   const byPlate = new Map<string, EsgGridRow>();
   const hiddenOnly = new Set<string>();
+  const notListed = new Map<string, string>();
+  // Each vehicle's DATED months: its depot's fuel report, or its own fills.
+  const monthsOf = new Map<string, Map<string, MonthFigures>>();
   let duplicates = 0;
-  const order = rows.map((_, i) => i).sort((a, b) => Number(hidden[a] === true) - Number(hidden[b] === true));
+  let covered = 0;
+  const disagreements: string[] = [];
+  const whole = (n: number | null) => (n === null ? "—" : n.toLocaleString("en-ZA", { maximumFractionDigits: 1 }));
+  // The registers describe the vehicles first, then the dated months add to
+  // them (a fuel report before the fills it summarises), then the hidden sheets.
+  const rank = (i: number) => (hidden[i] ? 2 : periods[i] ? 1 : 0);
+  const order = rows.map((_, i) => i).sort((a, b) => rank(a) - rank(b));
   for (const i of order) {
     const row = rows[i];
     const key = plateKey(row.reg);
     if (!key || gone.has(key)) continue;
+    const period = periods[i];
+    if (period) {
+      const months = monthsOf.get(key) ?? new Map<string, MonthFigures>();
+      const stated: MonthFigures = { km: figureOf(row.monthlyKm), litres: figureOf(row.monthlyLitres), fromFills: fromFills[i] === true };
+      const prior = months.get(period);
+      if (!prior) {
+        months.set(period, stated);
+      } else if (!prior.fromFills && stated.fromFills) {
+        // The same month twice is one month — the report's — checked against the fills.
+        covered += 1;
+        const gap = prior.litres !== null && stated.litres !== null ? Math.abs(prior.litres - stated.litres) : 0;
+        if (prior.litres !== null && gap > Math.max(1, prior.litres * 0.01)) {
+          disagreements.push(`${String(row.reg ?? "").trim()} ${period}: the fills add to ${whole(stated.litres)} L, the report says ${whole(prior.litres)} L`);
+        }
+      }
+      monthsOf.set(key, months);
+    }
     const prior = byPlate.get(key);
     if (!prior) {
       if (visible && hidden[i]) {
         hiddenOnly.add(key);
         continue;
       }
+      if (visible && fromFills[i]) {
+        notListed.set(key, String(row.reg ?? "").trim());
+        continue;
+      }
       byPlate.set(key, { ...row });
       continue;
     }
     duplicates += 1;
+    const priorHasMonth = MONTH_FIGURES.some((column) => !isBlank(prior[column]));
     for (const [column, value] of Object.entries(row)) {
       if (column === "_id") continue;
-      if (prior[column] === undefined || prior[column] === null || prior[column] === "") prior[column] = value;
+      if (priorHasMonth && (MONTH_FIGURES as readonly string[]).includes(column)) continue;
+      if (isBlank(prior[column])) prior[column] = value;
     }
   }
-  return { rows: Array.from(byPlate.values()), duplicates, sold: gone.size, hiddenOnly: hiddenOnly.size };
+
+  // A dated month replaces an undated one, and several months make one
+  // average month: the register holds a month's figures, not a period's.
+  let dated = 0;
+  let averaged = 0;
+  let fillVehicles = 0;
+  const reported = new Set<string>();
+  const tenth = (n: number) => Math.round(n * 10) / 10;
+  for (const [key, months] of Array.from(monthsOf.entries())) {
+    const vehicle = byPlate.get(key);
+    if (!vehicle) continue;
+    const stated = Array.from(months.entries());
+    const complete = stated.filter(([, m]) => m.km !== null && m.litres !== null);
+    const fuelled = stated.filter(([, m]) => m.litres !== null);
+    const use = complete.length > 0 ? complete : fuelled.length > 0 ? fuelled : stated.filter(([, m]) => m.km !== null);
+    if (use.length === 0) continue;
+    const mean = (pick: (m: MonthFigures) => number | null) => {
+      const values = use.map(([, m]) => pick(m)).filter((n): n is number => n !== null);
+      return values.length === 0 ? null : tenth(values.reduce((sum, n) => sum + n, 0) / values.length);
+    };
+    const km = mean((m) => m.km);
+    const litres = mean((m) => m.litres);
+    for (const column of MONTH_FIGURES) delete vehicle[column];
+    if (km !== null) vehicle.monthlyKm = km;
+    if (litres !== null) vehicle.monthlyLitres = litres;
+    if (km !== null && litres !== null && km > 0) vehicle.l100Actual = tenth((litres / km) * 100);
+    dated += 1;
+    if (use.length > 1) averaged += 1;
+    if (use.some(([, m]) => m.fromFills)) fillVehicles += 1;
+    for (const [month] of use) reported.add(month);
+  }
+
+  return {
+    rows: Array.from(byPlate.values()),
+    duplicates,
+    sold: gone.size,
+    hiddenOnly: hiddenOnly.size,
+    dated,
+    averaged,
+    months: Array.from(reported).sort(),
+    fillVehicles,
+    covered,
+    disagreements,
+    notListed: Array.from(notListed.values()),
+  };
 }
 
 function gridColumnKind(type: string | undefined): EsgCellKind {

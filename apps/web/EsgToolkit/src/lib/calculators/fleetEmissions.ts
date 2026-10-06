@@ -67,6 +67,8 @@ export type FleetVehicle = {
   kgPerKm: number | null;
   /** What is still needed, in words, when the vehicle could not be counted. */
   missing?: string;
+  /** Did not run in the month: its month reads 0 km and 0 L. Counted, at zero. */
+  idle?: boolean;
 };
 
 export type FleetGroup = {
@@ -110,6 +112,8 @@ export type FleetEmissionsResult = {
     measured: number;
     estimated: number;
     electric: number;
+    /** Did not run in the month. */
+    idle: number;
     missing: number;
   };
   hasData: boolean;
@@ -223,9 +227,17 @@ export function computeFleetEmissions(workbook: EsgWorkbookData): FleetEmissions
       litres: litresIsMonth ? statedLitres : null,
       norm: num(row.l100Norm) ?? num(row.l100Actual),
       ev: /^(yes|y|true|1|ev|electric)$/i.test(String(row.isEv ?? "").trim()),
+      // Stated as nothing — not left blank: a vehicle that did not run.
+      zeroMonth: km === 0 && litres === 0,
       rejected,
     };
   });
+
+  // A month of 0 km and 0 L is a vehicle that stood — unless most of the fleet
+  // reads that way, which is a register whose month was never filled in.
+  const zeroMonths = base.filter((v) => v.zeroMonth).length;
+  const withMonths = base.filter((v) => v.zeroMonth || v.km !== null || v.litres !== null).length;
+  const zeroMeansIdle = zeroMonths * 2 < withMonths;
 
   // What the company's own vehicles burn per 100 km, by size class and overall.
   const measuredRates = base
@@ -253,6 +265,9 @@ export function computeFleetEmissions(workbook: EsgWorkbookData): FleetEmissions
         tco2e: 0,
         kgPerKm: v.km ? 0 : null,
       };
+    }
+    if (v.zeroMonth && zeroMeansIdle) {
+      return { ...shared, km: 0, litres: 0, method: "fuel", idle: true, lPer100km: null, litresUsed: 0, tco2e: 0, kgPerKm: null };
     }
     if (v.litres !== null) {
       const tco2e = (v.litres * factor) / 1000;
@@ -299,7 +314,11 @@ export function computeFleetEmissions(workbook: EsgWorkbookData): FleetEmissions
       litresUsed: 0,
       tco2e: 0,
       kgPerKm: null,
-      missing: v.rejected.length ? v.rejected.join(" ") : "Neither litres nor kilometres are recorded for this vehicle.",
+      missing: v.rejected.length
+        ? v.rejected.join(" ")
+        : v.zeroMonth
+          ? "Its month reads 0 km and 0 L, as do most of the fleet's — the register's month looks unfilled. Record the kilometres it drove and the litres it used."
+          : "Neither litres nor kilometres are recorded for this vehicle.",
     };
   });
 
@@ -317,9 +336,10 @@ export function computeFleetEmissions(workbook: EsgWorkbookData): FleetEmissions
     tco2e: vehicles.reduce((sum, v) => sum + v.tco2e, 0),
     fuelTco2e: vehicles.filter((v) => v.method === "fuel").reduce((sum, v) => sum + v.tco2e, 0),
     distanceTco2e: vehicles.filter((v) => v.method === "distance").reduce((sum, v) => sum + v.tco2e, 0),
-    measured: vehicles.filter((v) => v.method === "fuel").length,
+    measured: vehicles.filter((v) => v.method === "fuel" && !v.idle).length,
     estimated: vehicles.filter((v) => v.method === "distance").length,
     electric: vehicles.filter((v) => v.method === "electric").length,
+    idle: vehicles.filter((v) => v.idle).length,
     missing: vehicles.filter((v) => v.method === "missing").length,
   };
 
