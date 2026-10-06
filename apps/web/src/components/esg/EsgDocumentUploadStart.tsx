@@ -55,6 +55,8 @@ import EsgElementDocumentBatches, {
   type EsgUploadOrigin,
 } from "./EsgElementDocumentBatches";
 import EsgExtractionSummary from "./EsgExtractionSummary";
+import { DocumentReview } from "@/components/review/DocumentReview";
+import { buildEsgDocumentReview } from "./esgDocumentReview";
 import {
   applyEsgParserResult,
   esgCaseFileNames,
@@ -1104,6 +1106,30 @@ export function EsgDocumentUploadStart({
     .filter(([, status]) => status === "error")
     .map(([name]) => name);
 
+  /**
+   * The side-by-side review: one entry per uploaded file — what we took from
+   * it, what we read but could not place, and why anything was not read. The
+   * lists the summary used to carry now sit beside the document they are about.
+   */
+  const reviewDocuments = useMemo(
+    () =>
+      parserCase
+        ? buildEsgDocumentReview({
+            parserCase,
+            injection,
+            uploadNames: files.map((f) => f.name),
+            failedFiles: failedDocuments,
+          })
+        : [],
+    // failedDocuments is derived from docProgress on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [parserCase, injection, files, docProgress],
+  );
+  const documentIdFor = (name: string): string | null => {
+    const file = files.find((f) => f.name === name);
+    return file ? persistedDocumentsRef.current.get(filePersistenceKey(file)) ?? null : null;
+  };
+
   return (
     <div data-testid="esg-document-upload-start">
       <style>{`
@@ -1883,7 +1909,14 @@ export function EsgDocumentUploadStart({
       {/* ACT 3 — the reveal. */}
       {revealed && (
         <div className="mt-4">
-          <EsgExtractionSummary injection={injection} parserCase={parserCase} />
+          <EsgExtractionSummary injection={injection} parserCase={parserCase} compact />
+
+          <DocumentReview
+            documents={reviewDocuments}
+            fileFor={(name) => files.find((f) => f.name === name) ?? null}
+            documentIdFor={documentIdFor}
+            onAddDocuments={() => inputRef.current?.click()}
+          />
 
           <div className="esg-fade-up mt-4" style={{ animationDelay: "200ms" }}>
             <button
