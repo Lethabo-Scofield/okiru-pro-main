@@ -69,6 +69,20 @@ export class RedisQuoteStore implements QuoteStore {
    * fresh state rather than clobbering their change.
    */
   async update(quoteId: string, patch: Partial<QuoteRecord>): Promise<QuoteRecord | null> {
+    return (await this.updateIf(quoteId, patch, () => true)).record;
+  }
+
+  /**
+   * The guard is judged on the WATCHed read, so it holds at the instant of the
+   * write: if another replica changes the quote in between, EXEC aborts and the
+   * guard is judged again on the fresh state. That is what makes "consume" and
+   * "void" mutually exclusive across replicas.
+   */
+  async updateIf(
+    quoteId: string,
+    patch: Partial<QuoteRecord>,
+    guard: (current: QuoteRecord) => boolean,
+  ): Promise<{ applied: boolean; record: QuoteRecord | null }> {
     const key = keyFor(quoteId);
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -81,10 +95,15 @@ export class RedisQuoteStore implements QuoteStore {
         const raw = await tx.get(key);
         if (!raw) {
           await tx.unwatch();
-          return null;
+          return { applied: false, record: null };
         }
 
-        const next = { ...(JSON.parse(raw) as QuoteRecord), ...patch };
+        const current = JSON.parse(raw) as QuoteRecord;
+        if (!guard(current)) {
+          await tx.unwatch();
+          return { applied: false, record: current };
+        }
+        const next = { ...current, ...patch };
         const result = await tx
           .multi()
           .set(key, JSON.stringify(next), { EX: ttlSecondsFor(next) })
@@ -92,7 +111,7 @@ export class RedisQuoteStore implements QuoteStore {
 
         // A null result means the WATCH tripped — someone else won; retry.
         if (result === null) continue;
-        return next;
+        return { applied: true, record: next };
       } finally {
         await tx.quit().catch(() => undefined);
       }

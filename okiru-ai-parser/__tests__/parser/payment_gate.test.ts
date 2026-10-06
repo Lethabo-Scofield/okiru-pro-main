@@ -38,6 +38,13 @@ function freshStore(): QuoteStore {
       Object.assign(r, patch);
       return r;
     },
+    async updateIf(id, patch, guard) {
+      const r = map.get(id);
+      if (!r) return { applied: false, record: null };
+      if (!guard(r)) return { applied: false, record: r };
+      Object.assign(r, patch);
+      return { applied: true, record: r };
+    },
   };
 }
 

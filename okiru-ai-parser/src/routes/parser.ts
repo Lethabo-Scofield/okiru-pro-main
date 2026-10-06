@@ -13,7 +13,7 @@ import {
   upload,
 } from '../services/uploadPolicy.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
-import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
+import { authoriseExtraction, claimQuoteForRun, digestFile, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
 import {
   createPayfastCheckout,
   verifyPayfastItn,
@@ -274,8 +274,10 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
       logger.warn('Extraction refused by payment gate', { code: gate.code, quoteId });
       return res.status(gate.status).json(fail(gate.message, gate.code));
     }
-    // Burn the quote so one payment buys exactly one extraction.
-    await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
+    // Burn the quote so one payment buys exactly one extraction — atomically,
+    // so a second run or a refund cannot claim it in the same instant.
+    const claim = await claimQuoteForRun(gate.record.quoteId);
+    if (!claim.ok) return res.status(claim.status).json(fail(claim.message, claim.code));
   }
 
   // Fire-and-forget: persist the ORIGINAL uploaded files to durable blob
@@ -377,7 +379,8 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       logger.warn('Extraction refused by payment gate', { code: gate.code, quoteId });
       return res.status(gate.status).json(fail(gate.message, gate.code));
     }
-    await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
+    const claim = await claimQuoteForRun(gate.record.quoteId);
+    if (!claim.ok) return res.status(claim.status).json(fail(claim.message, claim.code));
   }
 
   // Fire-and-forget: persist the ORIGINAL uploaded files to durable blob
@@ -481,6 +484,7 @@ router.post('/quote-files', upload.array('files', 100), async (req: Request, res
     await getQuoteStore().put({
       quoteId: quote.quoteId,
       fingerprint: fingerprintFiles(files),
+      fileDigests: files.map(digestFile),
       currency: quote.currency,
       totalCents: quote.totals.totalCents,
       paymentStatus: 'not_started',
@@ -552,6 +556,8 @@ router.get('/quotes/:quoteId', async (req: Request, res: Response) => {
     totalCents: record.totalCents,
     expiresAt: new Date(record.expiresAt).toISOString(),
     consumed: Boolean(record.consumedAt),
+    // Refunded because it never ran: still "paid" on paper, but it buys nothing.
+    voided: Boolean(record.voidedAt),
     quote: record.quote,
   }));
 });
@@ -604,25 +610,6 @@ router.post('/webhooks/payfast', async (req: Request, res: Response) => {
 });
 
 /**
- * Settle a quote against the CREDIT WALLET instead of a card.
- *
- * The product now sells credit tokens up front rather than charging per upload,
- * so the thing that authorises extraction is no longer a PayFast ITN — it is a
- * successful token debit, which happens in apps/web (that is where the session,
- * the organisation and the balance live). This endpoint is how that debit is
- * reported back to the gate.
- *
- * It is strictly server-to-server. The browser must never be able to reach it,
- * because reaching it means free extraction — so it fails CLOSED in three ways:
- *   - no PARSER_INTERNAL_SECRET configured → 404 (the route may as well not exist)
- *   - wrong/absent secret → 403
- *   - constant-time compare, so the secret can't be discovered a byte at a time
- *
- * `authoriseExtraction` is untouched: it still demands a paid, unexpired,
- * unconsumed quote whose fingerprint matches the uploaded files. All that has
- * changed is who is allowed to say "paid".
- */
-/**
  * The server-to-server guard both internal quote routes share: 404 when no
  * secret is configured, 403 on a wrong or missing one, constant-time compare.
  * Answers the request itself and returns false when the caller may not pass.
@@ -645,6 +632,25 @@ function internalCallerAllowed(req: Request, res: Response, what: string): boole
   return true;
 }
 
+/**
+ * Settle a quote against the CREDIT WALLET instead of a card.
+ *
+ * The product now sells credit tokens up front rather than charging per upload,
+ * so the thing that authorises extraction is no longer a PayFast ITN — it is a
+ * successful token debit, which happens in apps/web (that is where the session,
+ * the organisation and the balance live). This endpoint is how that debit is
+ * reported back to the gate.
+ *
+ * It is strictly server-to-server. The browser must never be able to reach it,
+ * because reaching it means free extraction — so it fails CLOSED in three ways:
+ *   - no PARSER_INTERNAL_SECRET configured → 404 (the route may as well not exist)
+ *   - wrong/absent secret → 403
+ *   - constant-time compare, so the secret can't be discovered a byte at a time
+ *
+ * `authoriseExtraction` is untouched: it still demands a paid, unexpired,
+ * unconsumed quote whose fingerprint matches the uploaded files. All that has
+ * changed is who is allowed to say "paid".
+ */
 router.post('/quotes/:quoteId/settle', async (req: Request, res: Response) => {
   if (!internalCallerAllowed(req, res, 'wallet settle')) return;
 
@@ -653,6 +659,9 @@ router.post('/quotes/:quoteId/settle', async (req: Request, res: Response) => {
   if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
   if (record.consumedAt) {
     return res.status(409).json(fail('This quote has already been used for an extraction.', 'QUOTE_ALREADY_USED'));
+  }
+  if (record.voidedAt) {
+    return res.status(409).json(fail('This quote was refunded and can no longer be used.', 'QUOTE_VOIDED'));
   }
   if (record.paymentStatus !== 'paid' && Date.now() > record.expiresAt) {
     return res.status(410).json(fail('That quote has expired. Request a new quote.', 'QUOTE_EXPIRED'));
@@ -688,6 +697,8 @@ router.get('/quotes/:quoteId/outcome', async (req: Request, res: Response) => {
     paymentStatus: record.paymentStatus,
     paidAt: record.paidAt ?? null,
     consumedAt: record.consumedAt ?? null,
+    voidedAt: record.voidedAt ?? null,
+    recordsOutcome: Boolean(record.recordsOutcome),
     outcome: record.outcome ?? null,
     totalCents: record.totalCents,
     files: (record.quote?.files ?? []).map((file) => ({
@@ -695,6 +706,32 @@ router.get('/quotes/:quoteId/outcome', async (req: Request, res: Response) => {
       extractionCents: file.pricing?.extractionCents ?? 0,
     })),
   }));
+});
+
+/**
+ * Void a paid quote that never ran, so the wallet can refund it.
+ *
+ * Refunding a quote that could still be redeemed would hand out a free
+ * extraction, so the wallet refunds only after this succeeds, and the gate
+ * refuses a voided quote. A quote a run has consumed cannot be voided: that run
+ * is judged by its outcome instead.
+ */
+router.post('/quotes/:quoteId/void', async (req: Request, res: Response) => {
+  if (!internalCallerAllowed(req, res, 'quote void')) return;
+  const quoteId = String(req.params.quoteId);
+  // Compare-and-set against a run claiming the same quote (claimQuoteForRun):
+  // whichever writes first wins, and the other is refused. Never both.
+  const { applied, record } = await getQuoteStore().updateIf(
+    quoteId,
+    { voidedAt: Date.now() },
+    (current) => !current.consumedAt,
+  );
+  if (!record) return res.status(404).json(fail('Unknown quote', 'QUOTE_NOT_FOUND'));
+  if (!applied) {
+    return res.status(409).json(fail('This quote has already been used for an extraction.', 'QUOTE_ALREADY_USED'));
+  }
+  logger.info('Unused paid quote voided for a refund', { quoteId });
+  return res.json(ok({ quoteId, voidedAt: record.voidedAt ?? null }));
 });
 
 /**
