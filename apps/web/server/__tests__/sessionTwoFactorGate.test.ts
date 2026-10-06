@@ -68,3 +68,39 @@ describe("the second-factor gate", () => {
     expect(gate).toBeGreaterThan(demoReturn);
   });
 });
+
+/**
+ * "Remember this device" replaces the emailed code, never the password. The
+ * cookie is a second factor only, so sign-in must have proved the password
+ * before it is even looked at.
+ */
+describe("a remembered device", () => {
+  const login = () => handlerBody('app.post("/api/auth/login"', 140);
+
+  it("is consulted only after the password has been verified", () => {
+    const body = login();
+    const passwordCheck = body.indexOf("if (!user || !valid)");
+    const deviceCheck = body.indexOf("isRememberedDevice(req, user)");
+    expect(passwordCheck).toBeGreaterThan(-1);
+    expect(deviceCheck).toBeGreaterThan(passwordCheck);
+  });
+
+  it("only skips the code for an account that would otherwise be asked for one", () => {
+    const body = login();
+    expect(body).toMatch(/const rememberedDevice = secondFactorRequired && isRememberedDevice\(req, user\)/);
+    expect(body).toMatch(/if \(secondFactorRequired && !rememberedDevice\)/);
+  });
+
+  it("is recorded as a second factor in the audit trail", () => {
+    expect(login()).toMatch(/method: "password\+remembered-device", twoFactor: true/);
+  });
+
+  it("is only remembered when the person asked for it, after a correct code", () => {
+    const body = handlerBody('app.post("/api/auth/verify-otp"', 90);
+    const codeCheck = body.indexOf("if (!verifyOtp(otp, user.otpCode))");
+    const remember = body.indexOf("rememberThisDevice(res,");
+    expect(body).toMatch(/req\.body\?\.rememberDevice === true/);
+    expect(codeCheck).toBeGreaterThan(-1);
+    expect(remember).toBeGreaterThan(codeCheck);
+  });
+});

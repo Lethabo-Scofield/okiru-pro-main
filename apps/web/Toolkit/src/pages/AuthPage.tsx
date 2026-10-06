@@ -5,6 +5,7 @@ import { Card, CardContent } from "@toolkit/components/ui/card";
 import { Button } from "@toolkit/components/ui/button";
 import { Input } from "@toolkit/components/ui/input";
 import { Label } from "@toolkit/components/ui/label";
+import { Checkbox } from "@toolkit/components/ui/checkbox";
 import { Loader2, ArrowLeft, Check, Shield, Mail, RefreshCw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@toolkit/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
@@ -150,6 +151,10 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
   const [otpValue, setOtpValue] = useState('');
   const [emailHint, setEmailHint] = useState('');
+  // "Remember this device": offered when the server says it supports it, on by
+  // default — being asked for a code on every sign-in was the complaint.
+  const [rememberDeviceDays, setRememberDeviceDays] = useState(0);
+  const [rememberDevice, setRememberDevice] = useState(true);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [resetEmail, setResetEmail] = useState('');
   const [resetToken, setResetToken] = useState('');
@@ -263,7 +268,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       }
       setIsLoading(true);
       try {
-        await verifyOtp(otpValue);
+        await verifyOtp(otpValue, { rememberDevice: rememberDeviceDays > 0 && rememberDevice });
         markAuthSessionJustCompleted();
       } catch (error: any) {
         toast({ title: "Verification Failed", description: error.message, variant: "destructive" });
@@ -287,6 +292,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
         const result = await login(form.loginEmail.trim(), form.password);
         if (result.requires2FA) {
           setEmailHint(result.emailHint || '');
+          setRememberDeviceDays(result.rememberDeviceDays ?? 0);
           setOtpValue('');
           setResendCooldown(30);
           setMode('otp');
@@ -318,6 +324,7 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
       });
       if (result?.requiresVerification) {
         setEmailHint(result.emailHint || form.email);
+        setRememberDeviceDays(result.rememberDeviceDays ?? 0);
         setMode('otp');
         setOtpValue('');
         toast({ title: "Verify Your Email", description: result.message || "Check your email for the code." });
@@ -515,6 +522,21 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
                         <OtpInput value={otpValue} onChange={setOtpValue} />
                         {fieldErrors.otp && (
                           <p className="text-[11px] text-destructive text-center" data-testid="error-otp">{fieldErrors.otp}</p>
+                        )}
+
+                        {rememberDeviceDays > 0 && (
+                          <div className="flex items-start justify-center gap-2">
+                            <Checkbox
+                              id="remember-device"
+                              checked={rememberDevice}
+                              onCheckedChange={(v) => setRememberDevice(v === true)}
+                              className="mt-0.5"
+                              data-testid="checkbox-remember-device"
+                            />
+                            <Label htmlFor="remember-device" className="text-[12px] font-normal text-muted-foreground leading-snug cursor-pointer">
+                              Don't ask for a code on this device for {rememberDeviceDays} days
+                            </Label>
+                          </div>
                         )}
 
                         <Button
