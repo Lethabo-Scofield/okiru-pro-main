@@ -113,6 +113,10 @@ export interface EsgFieldOutcome {
   /** Plain-language, shown to the user verbatim. */
   reason?: string;
   rejection?: EsgRejectionReason;
+  /** A figure a person can place by answering one question — its site, its month. */
+  choice?: EsgPlacementChoice;
+  /** The site or period of the figure with this choice id: placed when that figure is. */
+  partOf?: string;
 }
 
 export interface EsgCellConflict {
@@ -1175,15 +1179,41 @@ const EXTERNAL_DIESEL_ISSUED = "fleet.external_diesel_issued_litres";
  * the workbook keeps as one row (Scope 1C LPG, Scope 1D business cars).
  * Measures with no grid here (fleet distance) are read and reported, not written.
  */
-const MONTHLY_MEASURE_GRIDS: Record<string, { prefix: string; perSite: boolean; unit: string }> = {
-  "fleet.diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.fleetDiesel, perSite: true, unit: "litres" },
-  "energy.generator_diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.generatorDiesel, perSite: true, unit: "litres" },
-  "energy.lpg_kg": { prefix: ESG_MONTHLY_PREFIXES.lpg, perSite: false, unit: "kg" },
-  "fleet.business_car_petrol_litres": { prefix: ESG_MONTHLY_PREFIXES.businessCars, perSite: false, unit: "litres" },
-  "energy.electricity_kwh": { prefix: ESG_MONTHLY_PREFIXES.electricity, perSite: true, unit: "kWh" },
-  "energy.solar_kwh_generated": { prefix: ESG_MONTHLY_PREFIXES.solar, perSite: true, unit: "kWh" },
-  "water.kl": { prefix: ESG_MONTHLY_PREFIXES.water, perSite: true, unit: "kL" },
+const MONTHLY_MEASURE_GRIDS: Record<string, { prefix: string; perSite: boolean; unit: string; label: string }> = {
+  "fleet.diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.fleetDiesel, perSite: true, unit: "litres", label: "Fleet diesel" },
+  "energy.generator_diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.generatorDiesel, perSite: true, unit: "litres", label: "Generator diesel" },
+  "energy.lpg_kg": { prefix: ESG_MONTHLY_PREFIXES.lpg, perSite: false, unit: "kg", label: "LPG" },
+  "fleet.business_car_petrol_litres": { prefix: ESG_MONTHLY_PREFIXES.businessCars, perSite: false, unit: "litres", label: "Business car fuel" },
+  "energy.electricity_kwh": { prefix: ESG_MONTHLY_PREFIXES.electricity, perSite: true, unit: "kWh", label: "Electricity" },
+  "energy.solar_kwh_generated": { prefix: ESG_MONTHLY_PREFIXES.solar, perSite: true, unit: "kWh", label: "Solar generated" },
+  "water.kl": { prefix: ESG_MONTHLY_PREFIXES.water, perSite: true, unit: "kL", label: "Water" },
 };
+
+/**
+ * Where an unplaced figure goes once a person answers what its document did
+ * not say: which of the company's sites a bill's address is, or which month a
+ * figure is for. The figure, its unit and its grid are known — only the cell
+ * is not — so the answer places it, and nothing is guessed meanwhile.
+ */
+export interface EsgPlacementChoice {
+  /** The figure, by what it says — stable when more documents are added. */
+  id: string;
+  kind: "monthly";
+  /** The E_Data monthly grid, e.g. "s2" for electricity. */
+  prefix: string;
+  /** What the figure is: "Electricity". */
+  measure: string;
+  value: number;
+  unit: string;
+  /** What is still needed: a site row, a month column, or both. */
+  needs: Array<"site" | "month">;
+  /** The month column, when the document stated a month inside the reporting year. */
+  month?: string;
+  /** The site's row, when the document named one of the company's sites (0 for a one-row grid). */
+  siteRow?: number;
+  /** The site as the document names it, shown beside the question. */
+  statedSite?: string;
+}
 
 /** One figure for one month, as one document states it. */
 interface MonthlyFact {
@@ -1251,11 +1281,28 @@ interface PartReading {
 }
 
 /** What became of one figure. */
+/**
+ * A month a document states just outside the reporting year: a bill whose
+ * period ends days before the year begins, which the company may book in the
+ * year's first month. One month either side only — further out is another
+ * year's figure, and is not offered for placing.
+ */
+function adjacentToYear(periodEnd: unknown, axes: EsgReportingAxes): boolean {
+  const stated = /^(\d{4})-(\d{2})/.exec(String(periodEnd ?? ""));
+  if (!stated) return false;
+  return [1, -1].some((shift) => {
+    const moved = new Date(Date.UTC(Number(stated[1]), Number(stated[2]) - 1 + shift, 15));
+    return esgMonthColumnFor(moved.toISOString().slice(0, 10), axes) !== null;
+  });
+}
+
 interface MonthlyFactFate {
   status: "placed" | "unplaced";
   /** The cell it was proposed for; settling may still contest it. */
   cellRef?: string;
   reason?: string;
+  /** Held for want of a site or a month a person can supply. */
+  choice?: EsgPlacementChoice;
 }
 
 const uniq = (items: string[]): string[] => Array.from(new Set(items.filter(Boolean)));
@@ -1299,9 +1346,31 @@ function applyMonthlyFacts(
   record: (field: string, outcome: EsgFieldOutcome) => void,
 ): MonthlyFactFate[] {
   const fates: MonthlyFactFate[] = facts.map(() => ({ status: "unplaced", reason: "Not placed." }));
-  const hold = (ids: number[], reason: string): void => {
-    for (const id of ids) fates[id] = { status: "unplaced", reason };
+  const hold = (ids: number[], reason: string, choice?: EsgPlacementChoice): void => {
+    for (const id of ids) fates[id] = { status: "unplaced", reason, ...(choice ? { choice } : {}) };
   };
+  // The question that places a held figure: its grid and value are known,
+  // its site or month is what the document did not settle.
+  const ask = (
+    fact: MonthlyFact,
+    grid: { prefix: string; unit: string; label: string },
+    needs: Array<"site" | "month">,
+    month: string | null,
+    siteRow?: number,
+  ): EsgPlacementChoice => ({
+    // One figure is its document, measure, period and value — read twice with
+    // its address worded two ways, it is still one figure and one question.
+    id: [fact.sources[0] ?? "", fact.measure, String(fact.periodEnd ?? ""), fact.value].join("|"),
+    kind: "monthly",
+    prefix: grid.prefix,
+    measure: grid.label,
+    value: fact.value,
+    unit: grid.unit,
+    needs,
+    ...(month ? { month } : {}),
+    ...(siteRow !== undefined ? { siteRow } : {}),
+    ...(String(fact.site ?? "").trim() ? { statedSite: String(fact.site).trim() } : {}),
+  });
   type Cell = {
     prefix: string;
     month: string;
@@ -1385,18 +1454,36 @@ function applyMonthlyFacts(
       hold([factId], "This is a company-wide total and the workbook records this per site, so the sites' own figures are used instead.");
       return;
     }
+    const month = esgMonthColumnFor(fact.periodEnd, axes);
+    // A month the document does not state is a question for the user, and so
+    // is one just outside the year (a bill booked a month late); one further
+    // out is another year's figure.
+    const statedMonth = String(fact.periodEnd ?? "").slice(0, 7);
+    const nearYear = !month && Boolean(statedMonth) && adjacentToYear(fact.periodEnd, axes);
+    const year = `${axes.months[0]} to ${axes.months[axes.months.length - 1]}`;
     if (where === "unknown") {
       unknownSites.add(String(fact.site));
-      hold([factId], `Site "${String(fact.site)}" is not a site this workbook reports on (${axes.depots.join(", ")}). Add it to the workbook's sites to place it.`);
+      // A zero (no water on an electricity bill) is not a figure worth placing.
+      const answerable = fact.value !== 0 && (Boolean(month) || !statedMonth || nearYear);
+      hold(
+        [factId],
+        `Site "${String(fact.site)}" is not a site this workbook reports on (${axes.depots.join(", ")}). Say which of your sites it is, or add it to the workbook's sites.` +
+          (nearYear ? ` Its period ends in ${statedMonth}, just outside the reporting year (${year}) — say which month your company books it in.` : ""),
+        answerable ? ask(fact, grid, month ? ["site"] : ["site", "month"], month) : undefined,
+      );
       return;
     }
-    const month = esgMonthColumnFor(fact.periodEnd, axes);
     if (!month) {
-      const stated = String(fact.periodEnd ?? "").slice(0, 7);
-      outsideYear.add(stated);
-      hold([factId], stated
-        ? `${stated} falls outside the workbook's reporting year (${axes.months[0]} to ${axes.months[axes.months.length - 1]}).`
-        : "The figure states no month we could read.");
+      outsideYear.add(statedMonth);
+      hold(
+        [factId],
+        !statedMonth
+          ? "The figure states no month we could read — say which month it is for."
+          : nearYear
+            ? `${statedMonth} falls just outside the workbook's reporting year (${year}). If your company books it in a month of this year, say which.`
+            : `${statedMonth} falls outside the workbook's reporting year (${year}).`,
+        fact.value !== 0 && (!statedMonth || nearYear) ? ask(fact, grid, ["month"], null, where.rowIndex) : undefined,
+      );
       return;
     }
 
@@ -1566,9 +1653,15 @@ function monthlyFactOutcomes(
     }
     const source = fact.sources[0] ?? "";
     for (const field of [fact.field, ...fact.context]) {
+      // The figure carries the question; its site and period readings follow it.
+      const own = fate?.choice && outcome.status === "unplaced"
+        ? field === fact.field
+          ? { ...outcome, choice: fate.choice }
+          : { ...outcome, partOf: fate.choice.id }
+        : outcome;
       const bySource = out[field] ?? (out[field] = {});
       const prior = bySource[source];
-      if (!prior || rank[outcome.status] > rank[prior.status]) bySource[source] = outcome;
+      if (!prior || rank[own.status] > rank[prior.status]) bySource[source] = own;
     }
   });
   return out;
@@ -1584,41 +1677,63 @@ function applyMonthlyScalar(
   builder: PatchBuilder,
   record: (field: string, outcome: EsgFieldOutcome) => void,
 ): void {
+  // The month and the site, each settled from the figure's own document — or
+  // left to the one question a person can answer.
+  let month: string | null = null;
+  let statedPeriod: unknown = null;
+  for (const periodKey of spec.periodKeys) {
+    const periodEntry = byKey.get(periodKey);
+    if (!sharesOneSource(entry, periodEntry)) continue;
+    statedPeriod = statedPeriod ?? periodEntry?.value ?? null;
+    month = esgMonthColumnFor(periodEntry?.value, axes);
+    if (month) break;
+  }
+  let rowIndex: number | null = 0;
+  let siteProblem = "";
+  const siteEntry = spec.siteKey ? byKey.get(spec.siteKey) : undefined;
+  // A company that reports as one row needs no site to place a bill.
+  if (spec.siteKey && !axes.companyWide) {
+    if (!sharesOneSource(entry, siteEntry)) {
+      rowIndex = null;
+      siteProblem = "We could not tell which site this figure belongs to: the site name and the figure did not come from the same single document.";
+    } else {
+      rowIndex = esgDepotRowIndex(siteEntry?.value, axes);
+      if (rowIndex === null) {
+        siteProblem = `"${String(siteEntry?.value ?? "")}" is not one of the sites this workbook reports on (${axes.depots.join(", ")}), and we do not file it under the nearest one.`;
+      }
+    }
+  }
+  const figure = typeof entry.value === "number" && Number.isFinite(entry.value) && entry.value !== 0 ? entry.value : null;
+  const monthAnswerable = month !== null || statedPeriod === null || adjacentToYear(statedPeriod, axes);
+  const grid = MONTHLY_MEASURE_GRIDS[key];
+  const choice: EsgPlacementChoice | undefined =
+    figure !== null && monthAnswerable && (rowIndex === null || month === null)
+      ? {
+        id: [(entry.sourceFiles ?? [])[0] ?? "", key, String(statedPeriod ?? ""), figure].join("|"),
+        kind: "monthly",
+        prefix: spec.prefix,
+        measure: grid?.label ?? cellLabel("e-data", esgMonthlyCellRef(spec.prefix, 0, "C"), key),
+        value: figure,
+        unit: spec.unit,
+        needs: [...(rowIndex === null ? (["site"] as const) : []), ...(month === null ? (["month"] as const) : [])],
+        ...(month ? { month } : {}),
+        ...(rowIndex !== null ? { siteRow: rowIndex } : {}),
+        ...(String(siteEntry?.value ?? "").trim() ? { statedSite: String(siteEntry?.value).trim() } : {}),
+      }
+      : undefined;
   const needsContext = (detail: string): void => {
     record(field, {
       status: "unplaced",
       cells: [],
       rejection: "needs_context",
       reason: `The environmental sheet records this in ${spec.unit} per site per month. ${detail}`,
+      ...(choice ? { choice } : {}),
     });
   };
 
-  let rowIndex = 0;
-  // A company that reports as one row needs no site to place a bill.
-  if (spec.siteKey && !axes.companyWide) {
-    const siteEntry = byKey.get(spec.siteKey);
-    if (!sharesOneSource(entry, siteEntry)) {
-      needsContext(
-        "We could not tell which site this figure belongs to: the site name and the figure did not come from the same single document.",
-      );
-      return;
-    }
-    const resolved = esgDepotRowIndex(siteEntry?.value, axes);
-    if (resolved === null) {
-      needsContext(
-        `"${String(siteEntry?.value ?? "")}" is not one of the sites this workbook reports on (${axes.depots.join(", ")}), and we do not file it under the nearest one.`,
-      );
-      return;
-    }
-    rowIndex = resolved;
-  }
-
-  let month: string | null = null;
-  for (const periodKey of spec.periodKeys) {
-    const periodEntry = byKey.get(periodKey);
-    if (!sharesOneSource(entry, periodEntry)) continue;
-    month = esgMonthColumnFor(periodEntry?.value, axes);
-    if (month) break;
+  if (rowIndex === null) {
+    needsContext(siteProblem);
+    return;
   }
   if (!month) {
     needsContext(

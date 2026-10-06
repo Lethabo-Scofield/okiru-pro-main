@@ -108,3 +108,50 @@ describe("DocumentReview", () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe("a value waiting for an answer", () => {
+  const question = {
+    id: "bkt-bill",
+    prompt: "Which of your sites is this — the document says “1 EXAMPLE STREET”?",
+    fields: [{ key: "site", label: "Site", options: [{ value: "0", label: "ALDER" }, { value: "1", label: "BKT" }] }],
+  };
+  const bill = (extra: Partial<ReviewDocument["unplaced"][number]> = {}): ReviewDocument => ({
+    filename: "BKT JULY 2025.pdf",
+    documentType: "Municipal electricity bill",
+    state: "needs-look",
+    summary: "0 placed · 4 read · 1 to place",
+    values: [{ label: "Electricity kWh", value: "87412.6" }],
+    unplaced: [
+      { label: "Electricity", value: "87 412,60 kWh", source: "Site is not one of yours.", ask: question, ...extra },
+      { label: "Utility Account Number", value: "900000001", source: "No cell holds this.", evidence: true },
+    ],
+    problems: [],
+    notFound: [],
+  });
+
+  it("asks where it goes, and places it on the answer", () => {
+    const onAnswer = vi.fn();
+    render(<DocumentReview documents={[bill()]} fileFor={() => null} documentIdFor={() => null} onAnswer={onAnswer} />);
+    const row = screen.getByTestId("review-question");
+    expect(row).toHaveTextContent(question.prompt);
+    const put = within(row).getByRole("button", { name: "Put it here" });
+    expect(put).toBeDisabled();
+    fireEvent.change(within(row).getByLabelText("Site"), { target: { value: "1" } });
+    fireEvent.click(put);
+    expect(onAnswer).toHaveBeenCalledWith("BKT JULY 2025.pdf", question, { site: "1" });
+    // Evidence is kept apart, folded — not a failure to place.
+    expect(screen.getByTestId("review-evidence")).toHaveTextContent("Kept as evidence · 1");
+    expect(screen.queryByTestId("review-unplaced")).toBeNull();
+  });
+
+  it("shows where an answered figure went, and takes it back", () => {
+    const onAnswer = vi.fn();
+    render(
+      <DocumentReview documents={[bill({ answered: "BKT, Aug-25" })]} fileFor={() => null} documentIdFor={() => null} onAnswer={onAnswer} />,
+    );
+    const row = screen.getByTestId("review-question");
+    expect(row).toHaveTextContent("Placed by you in BKT, Aug-25");
+    fireEvent.click(within(row).getByRole("button", { name: "Undo" }));
+    expect(onAnswer).toHaveBeenCalledWith("BKT JULY 2025.pdf", question, null);
+  });
+});

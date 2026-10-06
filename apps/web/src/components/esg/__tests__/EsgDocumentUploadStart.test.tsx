@@ -248,7 +248,14 @@ function stubFetch(options: StubOptions = {}) {
   return { calls, fetchMock };
 }
 
-type CompleteArg = { injection: { implemented: boolean; patches: unknown; valuesRead: number } };
+type CompleteArg = {
+  injection: {
+    implemented: boolean;
+    patches: Record<string, { cells: Record<string, unknown> } | undefined>;
+    valuesRead: number;
+  };
+  parserCase: { manual_placements?: unknown[] } | null;
+};
 
 function renderUpload(onComplete = vi.fn(async (_result: CompleteArg) => {})) {
   render(
@@ -324,9 +331,12 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // workbook later.
     expect(screen.queryByTestId("esg-mapping-not-implemented")).not.toBeInTheDocument();
     // And the real values are listed rather than swallowed — beside the
-    // document they came from, in the side-by-side review.
+    // document they came from, in the side-by-side review. A bill that names
+    // its site but no billing period is one question away from its cell.
     const review = screen.getByTestId("document-review");
-    expect(within(review).getByTestId("review-unplaced")).toHaveTextContent(/35\s?332/);
+    const question = within(review).getByTestId("review-question");
+    expect(question).toHaveTextContent(/35\s?332/);
+    expect(question).toHaveTextContent("Which month is it for?");
     // The extraction's own exception reaches the user — this is the line an
     // assurance provider will ask about.
     expect(
@@ -352,6 +362,30 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // Still empty, and now for a stated reason rather than a missing layer.
     expect(handed.injection.patches).toEqual({});
     expect(handed.injection.valuesRead).toBe(2);
+  });
+
+  it("puts a held figure where the person says, and hands it to the workbook", async () => {
+    stubFetch();
+    const onComplete = renderUpload();
+    const user = await stageAFile();
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+
+    const question = await screen.findByTestId("review-question", {}, { timeout: 10_000 });
+    const month = within(question).getByLabelText("Month") as HTMLSelectElement;
+    await user.selectOptions(month, month.options[1].value);
+    await user.click(within(question).getByRole("button", { name: "Put it here" }));
+    expect(await screen.findByText(/Placed by you in/)).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("esg-button-continue-to-workbook"));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    const handed = onComplete.mock.calls[0]![0];
+    const written = Object.entries(handed.injection.patches["e-data"]?.cells ?? {}).filter(([ref]) => /^s2_/.test(ref));
+    expect(written).toEqual([[expect.stringMatching(/^s2_C\d+$/), 35332]]);
+    // The answer travels on the case, so a restored flow keeps it too.
+    expect(handed.parserCase?.manual_placements).toHaveLength(1);
   });
 
   it("names the shortfall instead of failing vaguely when tokens run out", async () => {

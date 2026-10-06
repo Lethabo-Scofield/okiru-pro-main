@@ -12,12 +12,24 @@
  *  - placement is decided by `applyEsgParserResult`, so "placed", "unplaced"
  *    and "conflicts" come from the injection result, never re-derived here.
  */
-import { display, humanize, whyNotRead, type ReviewDocument, type ReviewProblem, type ReviewValue } from "@/lib/documentReview";
 import {
+  display,
+  humanize,
+  whyNotRead,
+  type ReviewDocument,
+  type ReviewProblem,
+  type ReviewQuestion,
+  type ReviewValue,
+} from "@/lib/documentReview";
+import type { EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
+import type { EsgPlacementChoice } from "@/lib/esg/esgParserToWorkbook";
+import {
+  ESG_NO_CELL_REJECTIONS,
   esgCaseFileNames,
   esgUploadNameForSource,
   type EsgInjectionResult,
   type EsgParserCaseLike,
+  type EsgUnplacedValue,
 } from "./esgParserInjection";
 
 const PRODUCT = "your ESG workbook";
@@ -30,6 +42,49 @@ export interface EsgReviewInputs {
   uploadNames: string[];
   /** Files the stream reported an error for. */
   failedFiles?: string[];
+}
+
+/** A held figure, as a person reads it: "87 412,60 kWh". */
+function figureText(choice: EsgPlacementChoice): string {
+  return `${new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(choice.value)} ${choice.unit}`;
+}
+
+/**
+ * The question that places a held figure, with the company's own sites and
+ * months to answer from. None when the workbook has nothing to offer.
+ */
+export function esgPlacementQuestion(choice: EsgPlacementChoice, axes: EsgReportingAxes | undefined): ReviewQuestion | undefined {
+  if (!axes) return undefined;
+  const fields: ReviewQuestion["fields"] = [];
+  if (choice.needs.includes("site")) {
+    if (axes.depots.length === 0) return undefined;
+    fields.push({ key: "site", label: "Site", options: axes.depots.map((site, i) => ({ value: String(i), label: site })) });
+  }
+  if (choice.needs.includes("month")) {
+    if (axes.months.length === 0) return undefined;
+    fields.push({
+      key: "month",
+      label: "Month",
+      options: axes.months.slice(0, 24).map((month, i) => ({ value: String.fromCharCode(67 + i), label: month })),
+    });
+  }
+  const site = choice.needs.includes("site")
+    ? `Which of your sites is this${choice.statedSite ? ` — the document says “${choice.statedSite}”` : ""}?`
+    : "";
+  const month = choice.needs.includes("month") ? (site ? "And which month is it for?" : "Which month is it for?") : "";
+  return { id: choice.id, prompt: [site, month].filter(Boolean).join(" "), fields };
+}
+
+/** One unplaced reading for the review: a question to answer, evidence, or a value to enter by hand. */
+function unplacedValue(u: EsgUnplacedValue, axes: EsgReportingAxes | undefined): ReviewValue {
+  const ask = u.choice ? esgPlacementQuestion(u.choice, axes) : undefined;
+  if (u.choice && ask) return { label: u.choice.measure, value: figureText(u.choice), source: u.reason, ask };
+  return {
+    label: humanize(u.field),
+    value: display(u.value) ?? "—",
+    source: u.reason,
+    ...(u.rejection && ESG_NO_CELL_REJECTIONS.has(u.rejection) ? { evidence: true } : {}),
+  };
 }
 
 /** "Fuel.xlsx › Darwin" → { upload: "Fuel.xlsx", sheet: "Darwin" }. */
@@ -69,10 +124,26 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
     }
 
     const placed = injection.placed.filter((p) => splitSource(p.sourceFile, uploadNames).upload === name);
-    const unplaced: ReviewValue[] = injection.unplaced
-      .filter((u) => splitSource(u.sourceFile, uploadNames).upload === name)
-      .slice(0, MAX_VALUES)
-      .map((u) => ({ label: humanize(u.field), value: display(u.value) ?? "—", source: u.reason }));
+    // A figure's site and period travel with it, so they are not listed twice.
+    const unplaced: ReviewValue[] = [
+      ...injection.unplaced
+        .filter((u) => splitSource(u.sourceFile, uploadNames).upload === name && !u.partOf)
+        // A figure read twice is one figure, asked about once.
+        .filter((u, i, all) => !u.choice || all.findIndex((v) => v.choice?.id === u.choice!.id) === i)
+        .slice(0, MAX_VALUES)
+        .map((u) => unplacedValue(u, injection.axes)),
+      // Figures a person placed: where they went, and the way back.
+      ...(injection.answered ?? [])
+        .filter((a) => splitSource(a.sourceFile, uploadNames).upload === name)
+        .map((a): ReviewValue => ({
+          label: a.choice.measure,
+          value: figureText(a.choice),
+          answered: a.placement.where,
+          ask: esgPlacementQuestion(a.choice, injection.axes) ?? { id: a.choice.id, prompt: "", fields: [] },
+        })),
+    ];
+    const toPlace = unplaced.filter((v) => v.ask && !v.answered).length;
+    const forAPerson = unplaced.filter((v) => !v.evidence && !v.answered).length;
 
     const problems: ReviewProblem[] = [];
     // Figures this document disagrees with another on — left blank, not guessed.
@@ -109,24 +180,33 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
       problems.unshift(
         whyNotRead(unreadableReason ? [String(unreadableReason)] : [], "", failedFiles.includes(name), PRODUCT),
       );
-    } else if (placed.length === 0 && unplaced.length > 0) {
+    } else if (placed.length === 0 && forAPerson > 0) {
       state = "needs-look";
       problems.unshift({
-        headline: `We read ${values.length} value${values.length === 1 ? "" : "s"} from this document but could place none of them in the workbook.`,
-        detail: "They are listed below with the reason for each.",
-        fix: "Enter them yourself, or check the document covers your sites and reporting period.",
+        headline: toPlace > 0
+          ? `${toPlace} figure${toPlace === 1 ? "" : "s"} from this document need${toPlace === 1 ? "s" : ""} you to say where ${toPlace === 1 ? "it goes" : "they go"}.`
+          : `We read ${values.length} value${values.length === 1 ? "" : "s"} from this document but could place none of them in the workbook.`,
+        detail: toPlace > 0 ? "Answer each question below and the figure goes into the workbook." : "They are listed below with the reason for each.",
+        fix: toPlace > 0 ? "Nothing is guessed meanwhile." : "Enter them yourself, or check the document covers your sites and reporting period.",
         replace: false,
       });
     } else {
-      state = problems.length > 0 ? "needs-look" : "read";
+      state = problems.length > 0 || toPlace > 0 ? "needs-look" : "read";
     }
 
     const notFound = Array.from(new Set(own.flatMap((e) => (e.missingFields ?? []).map((f) => humanize(String(f)))))).slice(0, 12);
     const documentType = own.map((e) => e.documentName).find(Boolean) ?? "";
+    const kept = unplaced.filter((v) => v.evidence).length;
     const summary =
       values.length === 0
         ? ""
-        : `${placed.length} placed · ${values.length} read${own.length > 1 ? ` · ${own.length} sheets` : ""}`;
+        : [
+          `${placed.length} placed`,
+          `${values.length} read`,
+          toPlace > 0 ? `${toPlace} to place` : "",
+          kept > 0 ? `${kept} kept as evidence` : "",
+          own.length > 1 ? `${own.length} sheets` : "",
+        ].filter(Boolean).join(" · ");
 
     docs.push({ filename: name, documentType: String(documentType), state, summary, values, unplaced, problems, notFound });
   }

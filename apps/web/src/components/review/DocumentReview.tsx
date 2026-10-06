@@ -13,7 +13,14 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, Check, CircleSlash, Plus, Upload } from "lucide-react";
 import { DocumentPreview } from "./DocumentPreview";
 import { EditableValue } from "./EditableValue";
-import { reviewCounts, type ReviewDocument, type ReviewEdit, type ReviewState } from "@/lib/documentReview";
+import {
+  reviewCounts,
+  type ReviewDocument,
+  type ReviewEdit,
+  type ReviewQuestion,
+  type ReviewState,
+  type ReviewValue,
+} from "@/lib/documentReview";
 
 const STATE_LABEL: Record<ReviewState, string> = {
   read: "Read",
@@ -45,6 +52,78 @@ export interface DocumentReviewProps {
    * the review is read-only (the values are already in a workbook).
    */
   onEditValue?: (filename: string, edit: ReviewEdit, value: string) => void;
+  /**
+   * Place a value by answering its question ("which site is this?"), or take
+   * a placement back with `null`. Absent where nothing can be placed from here.
+   */
+  onAnswer?: (filename: string, question: ReviewQuestion, answer: Record<string, string> | null) => void;
+}
+
+/**
+ * One value waiting for an answer: the figure, why it was not placed, and the
+ * question that places it — or, once answered, where it went and the way back.
+ */
+function QuestionRow({
+  value,
+  onAnswer,
+}: {
+  value: ReviewValue;
+  onAnswer?: (answer: Record<string, string> | null) => void;
+}) {
+  const question = value.ask!;
+  const [answer, setAnswer] = useState<Record<string, string>>({});
+  const complete = question.fields.every((field) => answer[field.key]);
+  return (
+    <li className="rounded-lg border border-amber-400/20 bg-amber-500/[0.04] px-3 py-2 text-[11.5px] leading-5" data-testid="review-question">
+      <span className="text-[color:var(--muted)]">{value.label}:</span> <span className="font-medium text-[#e5e5ea]">{value.value}</span>
+      {value.answered ? (
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 text-emerald-300">
+            <Check className="h-3.5 w-3.5" aria-hidden /> Placed by you in {value.answered}
+          </span>
+          {onAnswer && (
+            <button type="button" onClick={() => onAnswer(null)} className="text-[11px] text-[color:var(--muted)] underline hover:text-white">
+              Undo
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          {value.source && <span className="block text-[11px] text-amber-200/75">{value.source}</span>}
+          <p className="mt-1 text-[11.5px] text-white">{question.prompt}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {question.fields.map((field) => (
+              <select
+                key={field.key}
+                aria-label={field.label}
+                value={answer[field.key] ?? ""}
+                onChange={(e) => setAnswer((prior) => ({ ...prior, [field.key]: e.target.value }))}
+                className="rounded-md border border-white/[0.12] bg-[color:var(--ink-2)] px-2 py-1 text-[11.5px] text-white"
+                disabled={!onAnswer}
+              >
+                <option value="">{field.label}…</option>
+                {field.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ))}
+            {onAnswer && (
+              <button
+                type="button"
+                disabled={!complete}
+                onClick={() => onAnswer(answer)}
+                className="rounded-full bg-white px-3 py-1 text-[11.5px] font-semibold text-[#0e0e10] hover:bg-[#f2f2f7] disabled:opacity-40"
+              >
+                Put it here
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </li>
+  );
 }
 
 export function DocumentReview({
@@ -55,6 +134,7 @@ export function DocumentReview({
   stillToAdd = [],
   needsDetail = [],
   onEditValue,
+  onAnswer,
 }: DocumentReviewProps) {
   const [selected, setSelected] = useState<string | null>(documents[0]?.filename ?? null);
   const counts = useMemo(() => reviewCounts(documents), [documents]);
@@ -65,6 +145,12 @@ export function DocumentReview({
   const doc = documents.find((d) => d.filename === selected) ?? documents[0] ?? null;
 
   if (documents.length === 0) return null;
+
+  // What was read but not placed, by what it needs: an answer, a person's own
+  // entry in the workbook, or nothing at all (evidence no cell needs).
+  const asks = doc?.unplaced.filter((v) => v.ask) ?? [];
+  const evidence = doc?.unplaced.filter((v) => !v.ask && v.evidence) ?? [];
+  const unplacedOther = doc?.unplaced.filter((v) => !v.ask && !v.evidence) ?? [];
 
   return (
     <section className="mt-4" data-testid="document-review" aria-label="Review your documents">
@@ -209,12 +295,30 @@ export function DocumentReview({
                   </div>
                 )}
 
-                {doc.unplaced.length > 0 && (
+                {asks.length > 0 && (
+                  <div className="mt-3" data-testid="review-decisions">
+                    <p className="text-[12px] font-semibold text-white">Tell us where these go</p>
+                    <p className="mb-1.5 text-[11px] leading-5 text-[color:var(--body)]">
+                      Each is a real figure the document did not place for us. Answer, and it goes into the workbook.
+                    </p>
+                    <ul className="space-y-1.5">
+                      {asks.map((v, i) => (
+                        <QuestionRow
+                          key={v.ask?.id ?? i}
+                          value={v}
+                          onAnswer={onAnswer ? (answer) => onAnswer(doc.filename, v.ask!, answer) : undefined}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {unplacedOther.length > 0 && (
                   <div className="mt-3" data-testid="review-unplaced">
                     <p className="text-[12px] font-semibold text-white">Read, but not placed in the workbook</p>
                     <p className="mb-1.5 text-[11px] leading-5 text-[color:var(--body)]">Left blank rather than guessed — place these yourself in the workbook.</p>
                     <ul className="space-y-1">
-                      {doc.unplaced.map((v, i) => (
+                      {unplacedOther.map((v, i) => (
                         <li key={i} className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-[11.5px] leading-5">
                           <span className="text-[color:var(--muted)]">{v.label}:</span> <span className="text-[#e5e5ea]">{v.value}</span>
                           {v.source && <span className="block text-[11px] text-amber-200/75">{v.source}</span>}
@@ -222,6 +326,23 @@ export function DocumentReview({
                       ))}
                     </ul>
                   </div>
+                )}
+
+                {evidence.length > 0 && (
+                  <details className="mt-3" data-testid="review-evidence">
+                    <summary className="cursor-pointer list-none text-[12px] font-semibold text-white">
+                      Kept as evidence · {evidence.length}
+                      <span className="ml-1.5 text-[11px] font-normal text-[color:var(--muted)]">no cell in the workbook needs these</span>
+                    </summary>
+                    <ul className="mt-1.5 space-y-1">
+                      {evidence.map((v, i) => (
+                        <li key={i} className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-[11.5px] leading-5">
+                          <span className="text-[color:var(--muted)]">{v.label}:</span> <span className="text-[#e5e5ea]">{v.value}</span>
+                          {v.source && <span className="block text-[11px] text-[color:var(--muted)]">{v.source}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 )}
 
                 {doc.notFound.length > 0 &&

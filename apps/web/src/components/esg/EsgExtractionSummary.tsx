@@ -27,6 +27,7 @@ import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, FileWarning, HelpCircle } from "lucide-react";
 import {
   esgCaseFileNames,
+  esgUnplacedKinds,
   type EsgInjectionResult,
   type EsgParserCaseLike,
   type EsgUnplacedValue,
@@ -200,6 +201,10 @@ function ElementGroup({
 
 export function EsgExtractionSummary({ injection, parserCase, compact = false }: Props) {
   const { placed, unplaced, conflicts, valuesRead } = injection;
+  // What needs a person: figures to place, values to check, disagreements.
+  // Evidence no cell needs is not outstanding — it is kept, and said so.
+  const kinds = esgUnplacedKinds(unplaced);
+  const outstanding = kinds.toPlace + kinds.toCheck + conflicts.length;
 
   // Which elements the evidence actually covered, and how many values each
   // contributed. Counted from the extraction itself — never from a wish list.
@@ -262,16 +267,24 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false }:
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/[0.12] px-3 py-1.5 text-[12px] font-medium text-amber-300">
             <AlertTriangle className="h-3.5 w-3.5" /> Nothing extracted
           </span>
-        ) : unplaced.length === 0 && conflicts.length === 0 ? (
+        ) : outstanding === 0 ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[#30d158]/[0.12] px-3 py-1.5 text-[12px] font-medium text-[#30d158]">
             <CheckCircle2 className="h-3.5 w-3.5" /> Nothing outstanding
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/[0.12] px-3 py-1.5 text-[12px] font-medium text-amber-300">
-            <AlertTriangle className="h-3.5 w-3.5" /> {unplaced.length + conflicts.length} to review
+            <AlertTriangle className="h-3.5 w-3.5" /> {outstanding} to review
           </span>
         )}
       </div>
+      {(kinds.toPlace > 0 || kinds.evidence > 0) && (
+        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-unplaced-kinds">
+          {[
+            kinds.toPlace > 0 ? `${kinds.toPlace} figure${kinds.toPlace === 1 ? "" : "s"} need${kinds.toPlace === 1 ? "s" : ""} you to say where ${kinds.toPlace === 1 ? "it goes" : "they go"}` : "",
+            kinds.evidence > 0 ? `${kinds.evidence} value${kinds.evidence === 1 ? " is" : "s are"} kept as evidence — no cell in the workbook needs ${kinds.evidence === 1 ? "it" : "them"}` : "",
+          ].filter(Boolean).join(" · ")}
+        </p>
+      )}
 
       {/* ZERO EXTRACTION. The documents were read and produced nothing we can
           use — say it, and say what to do, rather than showing an empty panel
