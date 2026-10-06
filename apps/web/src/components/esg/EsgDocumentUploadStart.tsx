@@ -266,6 +266,8 @@ export function EsgDocumentUploadStart({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
+  /** What the server refunded for the run that just ended, in its own words. */
+  const [refundNotice, setRefundNotice] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<EsgParserCaseLike | null>(null);
   const persistedDocumentsRef = useRef<Map<string, string>>(new Map());
   /** The phase banner reporting the paid read — scrolled to when it starts. */
@@ -594,9 +596,10 @@ export function EsgDocumentUploadStart({
   /**
    * The paid work. Only runs once the quote is authorised, and sends the quote
    * id so the server can verify payment and that these are the exact files that
-   * were paid for.
+   * were paid for. Resolves whether a result came back.
    */
-  const runExtraction = async (list: File[], quoteId: string) => {
+  const runExtraction = async (list: File[], quoteId: string): Promise<boolean> => {
+    let delivered = false;
     setParsing(true);
     setResolving(false);
     setResolveProgress(null);
@@ -718,6 +721,7 @@ export function EsgDocumentUploadStart({
 
       if (streamError) throw new Error(streamError);
       if (!data) throw new Error("The parser did not return a result.");
+      delivered = true;
 
       try {
         await persistParserRuns(data, list, docErrors);
@@ -798,6 +802,42 @@ export function EsgDocumentUploadStart({
       setParsing(false);
       setResolving(false);
     }
+    return delivered;
+  };
+
+  /**
+   * Ask the server to settle the run that just ended. Whatever the run failed
+   * to deliver is refunded there — decided from the parser's own record of the
+   * run, never from anything this screen reports — and the answer says what
+   * came back, so a refund shows the moment it happens.
+   */
+  const settlePaidRun = async (quoteId: string, delivered: boolean) => {
+    try {
+      const res = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => null);
+      if (body?.state === "settled" && Number(body.refundedTokens) > 0) {
+        setRefundNotice(
+          `${Number(body.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance. ${body.reason ?? ""}`.trim(),
+        );
+        if (typeof body.balance === "number") {
+          setTokenCost((prev) => (prev ? { ...prev, balance: body.balance } : prev));
+        }
+        window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+      } else if (body?.state === "pending" && body.queued && body.reason) {
+        // Owed, and waiting on the organisation's daily refund allowance.
+        setRefundNotice(String(body.reason));
+      } else if (body?.state === "pending" && !delivered) {
+        setRefundNotice(
+          "If this run delivered nothing, its tokens come back to your balance automatically — there is nothing you need to do.",
+        );
+      }
+    } catch {
+      // The server settles every paid run on its own sweep regardless.
+    }
   };
 
   /**
@@ -811,6 +851,7 @@ export function EsgDocumentUploadStart({
     if (!quote) return;
     setPaying(true);
     setParseError(null);
+    setRefundNotice(null);
     try {
       const res = await fetch("/api/tokens/authorize", {
         method: "POST",
@@ -841,7 +882,8 @@ export function EsgDocumentUploadStart({
       }
       // Every header shows the balance, so it must move the moment it changes.
       window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
-      await runExtraction(files, quote.quoteId);
+      const delivered = await runExtraction(files, quote.quoteId);
+      await settlePaidRun(quote.quoteId, delivered);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not start processing");
     } finally {
@@ -1713,6 +1755,15 @@ export function EsgDocumentUploadStart({
       {libraryWarning && (
         <p className="mt-3 text-[12px] text-amber-300" role="alert" data-testid="esg-library-warning">
           {libraryWarning}
+        </p>
+      )}
+      {refundNotice && (
+        <p
+          className="mt-3 text-[12px] text-[var(--esg-acc-e,#1de9a0)]"
+          role="status"
+          data-testid="esg-refund-notice"
+        >
+          {refundNotice}
         </p>
       )}
 

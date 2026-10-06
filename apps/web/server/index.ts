@@ -12,6 +12,7 @@ import { createLogger, requestContext } from "./logger";
 import { apiCeilingLimiter } from "./rateLimit";
 import { startAuditRetentionJob } from "./auditRetention";
 import { startFeedbackNotifier } from "./feedbackNotifier";
+import { startExtractionRefundSweep } from "./extractionRefunds";
 import crypto from 'crypto';
 
 const logger = createLogger("WebServer");
@@ -142,6 +143,9 @@ app.use((req, res, next) => {
 
   // Emails feedback the widget saved but nobody has been told about yet.
   startFeedbackNotifier();
+
+  // Refunds paid runs that delivered nothing and that no upload screen settled.
+  startExtractionRefundSweep();
 
 
   // Session must be mounted BEFORE the proxy so the proxy can read
