@@ -14,7 +14,6 @@ import { buildEsgAssistantContext } from "../src/lib/esg/esgAssistantContext";
 import OpenAI, { AzureOpenAI } from "openai";
 import { createChatCompletion } from "./openaiCompat";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
-import { buildGoldenSections } from "./esgGoldenFixture";
 import {
   applyEsgWorkbookReopen,
   applyEsgWorkbookSubmit,
@@ -330,32 +329,9 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     res.send(buf);
   });
 
-  app.post("/api/esg/workbook/:companyId/seed-demo", requireAuth, async (req, res) => {
-    const wb = await authorizeEsgWorkbook(req, res);
-    if (!wb) return;
-    if (wb.submittedAt) {
-      return res.status(423).json({ error: "Workbook is submitted and locked" });
-    }
-    // Sample seeding REPLACES every section, so it is admin-only and needs an
-    // explicit confirm — a stray click must never wipe a client's entered data.
-    const role = (req as any).user?.role;
-    if (role !== "admin" && role !== "super_admin") {
-      return res.status(403).json({ error: "Sample data can only be loaded by an administrator" });
-    }
-    if ((req.body as { confirm?: boolean } | undefined)?.confirm !== true) {
-      return res.status(400).json({
-        error: "Loading sample data replaces every section of this workbook. Resend with confirm: true.",
-      });
-    }
-    try {
-      wb.sections = buildGoldenSections();
-      await persistEsgWorkbook(wb);
-      res.json({ ok: true, sectionCount: Object.keys(wb.sections).length, updatedAt: wb.updatedAt });
-    } catch (err) {
-      logger.error("Failed to seed ESG demo", err);
-      res.status(500).json({ error: "Failed to seed demo workbook" });
-    }
-  });
+  // There is no "load sample data" route: it replaced every section of a real
+  // company's workbook with another client's figures. Sample workbooks are
+  // test fixtures only (src/lib/esg/__fixtures__/esgSampleSections.ts).
 
   app.post(
     "/api/esg/workbook/:companyId/import",

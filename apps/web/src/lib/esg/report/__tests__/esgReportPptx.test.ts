@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
-import { buildGoldenSections } from "../../../../../server/esgGoldenFixture";
+import { buildGoldenSections } from "../../__fixtures__/esgSampleSections";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { buildEsgReportModel } from "../esgReportModel";
 import { buildBoardPack } from "../esgReportSlides";

@@ -6,7 +6,7 @@ import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { formatEsgPercent } from "@/lib/esgCalculators";
 import { useAuth } from "@toolkit/lib/auth";
 import { validateEsgWorkbookForSubmit } from "@/lib/esgValidation";
-import { canSeedEsgSampleData } from "@/lib/esg/esgAccess";
+import { isEsgWorkbookAdmin } from "@/lib/esg/esgAccess";
 import {
   ESG_SELECTED_TOPICS_CELL,
   computeScopedSummary,
@@ -49,9 +49,9 @@ function PillarTable({ rows }: { rows: EsgPillarRow[] }) {
 }
 
 export default function EsgDashboard() {
-  const { companyId, companyName, workbook, scorecard, submittedAt, seedDemo, load } = useEsgStore();
+  const { companyId, companyName, workbook, scorecard, submittedAt, load } = useEsgStore();
   const { user } = useAuth();
-  const isEsgAdmin = canSeedEsgSampleData(user);
+  const isEsgAdmin = isEsgWorkbookAdmin(user);
   const reportMode = useEsgStore((s) => s.getReportMode());
   const topicsCsv = useEsgStore(
     (s) => s.workbook?.sections?.assumptions?.cells?.[ESG_SELECTED_TOPICS_CELL],
@@ -82,20 +82,6 @@ export default function EsgDashboard() {
     () => (reportMode === "topic" ? computeScopedSummary(scorecard, selectedTopics) : null),
     [reportMode, scorecard, selectedTopics],
   );
-
-  const loadGolden = async () => {
-    if (!companyId) return;
-    const ok = window.confirm(
-      "Load sample data?\n\nThis REPLACES every section of this workbook with sample figures. Anything already captured for this company will be lost.",
-    );
-    if (!ok) return;
-    try {
-      await seedDemo(companyId);
-      await load(companyId, undefined, { force: true });
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not load sample data");
-    }
-  };
 
   const submit = async () => {
     if (!companyId) return;
@@ -267,18 +253,6 @@ export default function EsgDashboard() {
       ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {isEsgAdmin ? (
-          <button
-            type="button"
-            onClick={() => void loadGolden()}
-            disabled={Boolean(submittedAt)}
-            title="Replaces every section with sample figures"
-            className="text-[12px] px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
-            data-testid="esg-load-golden-demo"
-          >
-            Load sample data
-          </button>
-        ) : null}
         <button
           type="button"
           onClick={() => void submit()}
