@@ -17,6 +17,7 @@ import { requireAuth } from "./routes";
 import { recordAudit } from "./securityAudit";
 import { TokenOrderModel } from "../shared/schema";
 import { TOKEN_PACKS, findTokenPack } from "../shared/tokenPacks";
+import { authorizeRefusal, settleRun } from "./extractionRefunds";
 import {
   FREE_TOKEN_GRANT,
   TOKENS_PER_CENT,
@@ -87,6 +88,8 @@ interface ParserQuoteState {
   totalCents: number;
   currency: string;
   consumed: boolean;
+  /** Refunded because it never ran — it can no longer buy an extraction. */
+  voided: boolean;
   files: ParserQuoteFileState[];
 }
 
@@ -146,6 +149,7 @@ async function readParserQuote(quoteId: string): Promise<ParserQuoteState | null
     totalCents: Number(data.totalCents ?? 0),
     currency: String(data.currency ?? "ZAR"),
     consumed: Boolean(data.consumed),
+    voided: Boolean(data.voided),
     files: quoteFiles.map((f) => ({
       filename: String(f?.filename ?? ""),
       extractionCents: Number(f?.pricing?.extractionCents ?? 0),
@@ -266,7 +270,7 @@ export function registerTokenRoutes(app: Express): void {
         // there is nowhere to buy tokens until PayFast is live.
         sufficient: !charging || wallet.balance >= tokens,
         shortfall: charging ? Math.max(0, tokens - wallet.balance) : 0,
-        alreadyAuthorized: quote.paymentStatus === "paid",
+        alreadyAuthorized: quote.paymentStatus === "paid" && !quote.voided,
         free: !charging,
       });
     } catch (err) {
@@ -295,6 +299,14 @@ export function registerTokenRoutes(app: Express): void {
       if (!quote) return res.status(404).json({ message: "That quote is unknown or has expired. Upload the batch again." });
       if (quote.consumed) {
         return res.status(409).json({ message: "This batch has already been processed." });
+      }
+      // Its tokens already came back. Re-debiting under the same reference would
+      // read as "already paid" and buy nothing, so say what to do instead.
+      if (quote.voided) {
+        return res.status(409).json({
+          message: "This batch never ran, so its tokens were refunded. Upload the documents again for a new price.",
+          code: "QUOTE_VOIDED",
+        });
       }
 
       const tokens = centsToTokens(quote.totalCents);
@@ -334,6 +346,9 @@ export function registerTokenRoutes(app: Express): void {
         });
       }
 
+      const refusal = await authorizeRefusal(quoteId, orgId);
+      if (refusal) return res.status(refusal.status).json({ message: refusal.message, code: refusal.code });
+
       const debit = await debitTokens({
         organizationId: orgId,
         userId: user?.id ?? null,
@@ -355,7 +370,17 @@ export function registerTokenRoutes(app: Express): void {
 
       const settled = await settleParserQuote(quoteId, reference);
       if (!settled) {
-        // Give the tokens back. They bought processing we could not authorise.
+        // Give back only what THIS call took. A retry whose debit was already
+        // applied took nothing; refunding it would return tokens for a quote
+        // that an earlier call paid for and that may be running right now.
+        if (debit.alreadyApplied) {
+          return res.status(502).json({
+            message: "We could not start processing. Try again in a moment.",
+            balance: debit.balance,
+          });
+        }
+        // They bought processing we could not authorise. The refund closes this
+        // quote for good (authorizeRefusal), so trying again means a new upload.
         const refunded = await creditTokens({
           organizationId: orgId,
           userId: user?.id ?? null,
@@ -366,7 +391,7 @@ export function registerTokenRoutes(app: Express): void {
           metadata: { quoteId },
         });
         return res.status(502).json({
-          message: "We could not start processing, so your tokens were not spent. Try again in a moment.",
+          message: "We could not start processing, so your tokens were returned. Upload the documents again to try once more.",
           balance: refunded.balance,
         });
       }
@@ -389,6 +414,40 @@ export function registerTokenRoutes(app: Express): void {
     } catch (err) {
       logger.error("POST /api/tokens/authorize failed", err as Error);
       res.status(500).json({ message: "Could not authorise this batch" });
+    }
+  });
+
+  /**
+   * Settle a run that has just ended: refund whatever it failed to deliver.
+   *
+   * The upload screen calls this as its run ends so a refund shows at once;
+   * the background sweep settles every run nobody asks about. Either way the
+   * decision is made from the parser's record of the run and the wallet's own
+   * debit — the browser names a run, never an amount, and asking twice refunds
+   * once. Another organisation's run answers as "not charged".
+   */
+  app.post("/api/tokens/runs/:quoteId/settle-outcome", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const orgId = orgOf(req, res);
+      if (!orgId) return;
+      const quoteId = String(req.params.quoteId ?? "").trim();
+      if (!quoteId) return res.status(400).json({ message: "quoteId is required" });
+
+      const settlement = await settleRun(quoteId, { organizationId: orgId });
+      if (settlement.refundedNow) {
+        await recordAudit(req, {
+          action: "tokens.refund",
+          resourceType: "organization",
+          resourceId: orgId,
+          result: "success",
+          metadata: { quoteId, tokens: settlement.refundedTokens, emptyFiles: settlement.emptyFiles.length },
+        });
+      }
+      res.json(settlement);
+    } catch (err) {
+      logger.error("POST /api/tokens/runs/:quoteId/settle-outcome failed", err as Error);
+      // Nothing is lost: the sweep settles the run on its next pass.
+      res.status(503).json({ message: "Could not settle this run right now. Any refund it is owed follows automatically." });
     }
   });
 
