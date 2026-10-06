@@ -155,11 +155,14 @@ export async function extractEsgCaseEntities(
       matrix,
       hidden: input.metadata?.sheet_hidden === true,
     });
+    // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
+    // in the tab's name and title, and never on its rows.
+    const loggedVehicle = vehicleOfSheet(sheetName, matrix);
     // A depot's monthly report — a row per vehicle under a title naming the
     // depot and the month — is that depot's figure for that month, added up by
-    // the code. Asked only of a sheet whose top states a date: a sheet per
-    // vehicle ("Fleet Number:-") never pays for the question.
-    const period = !monthly && input.metadata?.sheet_hidden !== true && topOfSheetIsDated(matrix)
+    // the code. Asked only of a sheet whose top states a date, and never of one
+    // vehicle's own log: that is the vehicle's month, not the depot's.
+    const period = !monthly && !loggedVehicle && input.metadata?.sheet_hidden !== true && topOfSheetIsDated(matrix)
       ? await extractEsgPeriodSummary(model, {
         filename: input.filename,
         sheetName,
@@ -183,11 +186,10 @@ export async function extractEsgCaseEntities(
         filename: input.filename,
         rows: structuredRows(input.tables),
         sheetName,
+        // Twenty tabs of one template are one question, asked once.
+        template: loggedVehicle ? 'Vehicle fuel log' : undefined,
       });
-    // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
-    // in the tab's name and title, and never on its rows. Each fill is that
-    // vehicle's, or it could never reach the vehicle's month.
-    const loggedVehicle = sheetTable ? vehicleOfSheet(sheetName, matrix) : null;
+    // Each fill is that vehicle's, or it could never reach the vehicle's month.
     if (sheetTable && loggedVehicle) {
       for (const value of sheetTable.values) {
         if (value.field === 'fleet_fuel_transaction_rows' && Array.isArray(value.value)) {

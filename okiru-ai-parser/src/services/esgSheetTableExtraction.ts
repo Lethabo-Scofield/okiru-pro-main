@@ -50,6 +50,12 @@ export interface EsgSheetInput {
   rows?: Array<Record<string, unknown>>;
   /** Sheet name when the input came from a split workbook. */
   sheetName?: string;
+  /**
+   * A name the sheet shares with every sheet of its template — one tab per
+   * vehicle in a depot's fuel report. The model's decisions are keyed by it,
+   * so the first tab's answer serves the other twenty.
+   */
+  template?: string;
 }
 
 /**
@@ -299,7 +305,7 @@ export async function extractEsgSheetTable(
   if (!rows || rows.length === 0) return null;
 
   const sheetName = input.sheetName ?? esgSheetNameOf(input.filename);
-  const chosen = await chooseEsgSheetGrid(model, sheetName, rows);
+  const chosen = await chooseEsgSheetGrid(model, input.template ?? sheetName, rows);
   if (!chosen) return null;
 
   const { documentId, grid } = chosen;
@@ -308,7 +314,7 @@ export async function extractEsgSheetTable(
     what: whatOneRowIs(documentId, grid),
   };
 
-  const mapped = await mapSheetColumns(model, shape, input.filename, rows);
+  const mapped = await mapSheetColumns(model, shape, input.template ?? input.filename, rows);
   // What the model read a column AS, checked against what the column holds.
   const checked = mapped ? checkEsgColumnMeaning(rows, mapped) : null;
   const mapping = checked?.mapping ?? null;

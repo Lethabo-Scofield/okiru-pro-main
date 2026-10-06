@@ -279,6 +279,10 @@ function namesAVehicle(label: string): boolean {
  */
 export function vehicleOfSheet(sheetName: string | undefined, matrix: unknown[][] | undefined): string | null {
   if (!sheetName || !matrix || !namesAVehicle(sheetName.trim())) return null;
+  // A period or a page mixes letters and digits too ("FY2025", "Q1-2026", "Mar26", "Sheet2").
+  if (/^(fy|q[1-4]|h[12]|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|wk|week|sheet|table|page|detail|data|report|rev|v\d)/i.test(sheetName.trim())) {
+    return null;
+  }
   const compact = (text: string) => text.replace(/[\s-]/g, '').toUpperCase();
   const name = compact(sheetName);
   const titled = matrix.slice(0, 6).some((row) => row.some((cell) => typeof cell === 'string' && compact(cell) === name));
