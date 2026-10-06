@@ -1,5 +1,14 @@
 # Prod ingress: explicit okiru.pro host rules (server-alias does not apply path rules to aliased domains).
 # Base paths: ../../base/ingress/ingress.yaml
+#
+# KEEP IN STEP WITH THE LIVE INGRESS. Every /api prefix the web server owns
+# must be listed here, longer than the /api catch-all, or nginx sends it to the
+# api service and it 404s ("Cannot POST") — /api/tokens was dead for three
+# weeks that way, and the website's demo requests were all lost. Synced with
+# the live okiru-ingress on 2026-10-07 (sprint task H1): sign-in moved wholly
+# to web (/api/auth), and tokens, telemetry, vocabulary, activity, scorecards,
+# audit and privacy were missing here — re-applying the old copy would have
+# broken payments, telemetry and sign-in.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -25,34 +34,14 @@ spec:
     - host: okiru.pro
       http:
         paths:
-          - path: /api/auth/login
-            pathType: Exact
+          # Sign-in, sign-up, codes and sessions all live on web.
+          - path: /api/auth
+            pathType: Prefix
             backend:
               service:
-                name: api
+                name: web
                 port:
-                  number: 5000
-          - path: /api/auth/me
-            pathType: Exact
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
-          - path: /api/auth/logout
-            pathType: Exact
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
-          - path: /api/auth/register
-            pathType: Exact
-            backend:
-              service:
-                name: api
-                port:
-                  number: 5000
+                  number: 5001
           - path: /api/onboarding/me
             pathType: Prefix
             backend:
@@ -161,15 +150,66 @@ spec:
                 name: web
                 port:
                   number: 5001
-          - path: /api/auth/check-username
+          - path: /api/sector-templates
             pathType: Exact
             backend:
               service:
                 name: web
                 port:
                   number: 5001
-          - path: /api/sector-templates
+          # The website's "Book a demo" form.
+          - path: /api/demo-request
             pathType: Exact
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          # Token wallet and payments.
+          - path: /api/tokens
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/telemetry
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/vocabulary
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/activity
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/scorecards
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/audit
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 5001
+          - path: /api/privacy
+            pathType: Prefix
             backend:
               service:
                 name: web
