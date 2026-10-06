@@ -77,6 +77,8 @@ export interface EsgCalculatorRowLike {
   cells: Record<string, unknown>;
   sourceFiles?: string[];
   droppedFields?: string[];
+  /** Read from a hidden sheet: it may add to what is known, not to what exists. */
+  hidden?: boolean;
 }
 
 export interface EsgCalculatorResultLike {
@@ -635,6 +637,7 @@ function applyRegisterRows(
   const def = ESG_GRID_SECTIONS[sectionId];
   let built: EsgGridRow[] = [];
   const builtSources: string[] = [];
+  const builtHidden: boolean[] = [];
   const rejected: string[] = [];
   let fleetNote: string | undefined;
 
@@ -658,16 +661,34 @@ function applyRegisterRows(
     if (filled) {
       built.push(gridRow);
       builtSources.push((row.sourceFiles ?? [])[0] ?? "");
+      builtHidden.push(row.hidden === true);
     }
   }
 
   if (sectionId === "fleet" && built.length > 0) {
-    const fleet = mergeFleetRows(built, builtSources);
+    const fleet = mergeFleetRows(built, builtSources, builtHidden);
     built = fleet.rows;
     const said: string[] = [];
     if (fleet.duplicates > 0) said.push(`${fleet.duplicates} repeat listing(s) of the same vehicles were combined into ${built.length} vehicles`);
     if (fleet.sold > 0) said.push(`${fleet.sold} vehicle(s) listed as sold or disposed were left out of the fleet`);
+    if (fleet.hiddenOnly > 0) said.push(`${fleet.hiddenOnly} vehicle(s) that appear only on hidden sheets were not counted as fleet`);
     if (said.length) fleetNote = `${said.join("; ")}.`;
+  }
+
+  // A register is a record to read and correct, not a data lake: a year of
+  // trips (Acme Group's driver debrief: 20,000 rows, 140,000 cells) would
+  // make the workbook too heavy to store or open. The most recent rows are
+  // kept, and the note says how many were read.
+  if (built.length > MAX_REGISTER_ROWS) {
+    const read = built.length;
+    const dateKey = def.columns.find((c) => c.type === "date")?.key;
+    if (dateKey) {
+      built = [...built].sort((a, b) => String(b[dateKey] ?? "").localeCompare(String(a[dateKey] ?? "")));
+    }
+    built = built.slice(0, MAX_REGISTER_ROWS);
+    fleetNote = [fleetNote, `${read.toLocaleString("en-ZA")} rows were read; the register keeps the ${dateKey ? "most recent " : "first "}${MAX_REGISTER_ROWS.toLocaleString("en-ZA")}.`]
+      .filter(Boolean)
+      .join(" ");
   }
 
   if (built.length === 0) {
@@ -717,6 +738,9 @@ function applyRegisterRows(
   void lastColumn;
 }
 
+/** The most rows one register keeps from a read. */
+const MAX_REGISTER_ROWS = 1_000;
+
 /** "AB34EFGP PERMIT" → "AB34EFGP": the first token that reads as a plate. */
 function plateKey(reg: unknown): string {
   const text = String(reg ?? "").toUpperCase();
@@ -739,18 +763,33 @@ const LEFT_THE_FLEET = /\b(sold|disposed|scrapped|written[ -]?off|decommissioned
  * column kept. Vehicles listed on a sheet of vehicles that have left the fleet
  * (sold, disposed, scrapped) are not counted in it.
  */
-function mergeFleetRows(rows: EsgGridRow[], sources: string[]): { rows: EsgGridRow[]; duplicates: number; sold: number } {
+function mergeFleetRows(
+  rows: EsgGridRow[],
+  sources: string[],
+  hidden: boolean[] = [],
+): { rows: EsgGridRow[]; duplicates: number; sold: number; hiddenOnly: number } {
   const sheetOf = (source: string) => source.slice(source.lastIndexOf("›") + 1);
   const gone = new Set(
     rows.filter((_, i) => LEFT_THE_FLEET.test(sheetOf(sources[i] ?? ""))).map((row) => plateKey(row.reg)),
   );
+  // The fleet is what the visible sheets list. A hidden sheet — a scratch
+  // copy, last year's list — adds what it knows about a listed vehicle (its
+  // month's km and fuel), but a vehicle only it lists is not counted.
+  const visible = rows.some((_, i) => !hidden[i]);
   const byPlate = new Map<string, EsgGridRow>();
+  const hiddenOnly = new Set<string>();
   let duplicates = 0;
-  for (const row of rows) {
+  const order = rows.map((_, i) => i).sort((a, b) => Number(hidden[a] === true) - Number(hidden[b] === true));
+  for (const i of order) {
+    const row = rows[i];
     const key = plateKey(row.reg);
     if (!key || gone.has(key)) continue;
     const prior = byPlate.get(key);
     if (!prior) {
+      if (visible && hidden[i]) {
+        hiddenOnly.add(key);
+        continue;
+      }
       byPlate.set(key, { ...row });
       continue;
     }
@@ -760,7 +799,7 @@ function mergeFleetRows(rows: EsgGridRow[], sources: string[]): { rows: EsgGridR
       if (prior[column] === undefined || prior[column] === null || prior[column] === "") prior[column] = value;
     }
   }
-  return { rows: Array.from(byPlate.values()), duplicates, sold: gone.size };
+  return { rows: Array.from(byPlate.values()), duplicates, sold: gone.size, hiddenOnly: hiddenOnly.size };
 }
 
 function gridColumnKind(type: string | undefined): EsgCellKind {
