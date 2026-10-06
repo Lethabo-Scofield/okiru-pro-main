@@ -7,6 +7,9 @@ import { esgOverallPercent } from "@/lib/esgScoringDefaults";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import type { EsgExclusion, EsgPillarResult } from "./esgApplicability";
 import { computeCarbonTax } from "./carbonTax";
+import { computeGhgInventory } from "./ghgInventory";
+import { computeNetZeroRoadmap } from "./netZero";
+import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import { scoreEnvironmental } from "./environmental";
 import { scoreGovernance } from "./governance";
 import { scoreSocial } from "./social";
@@ -104,7 +107,26 @@ function pillar(r: EsgPillarResult): EsgDashboardPillar {
   };
 }
 
-export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis {
+/** 0.911 or 91.1 → "91.1%": the waste register states diversion either way. */
+function asPercentText(value: number): string {
+  const pct = value <= 1 ? value * 100 : value;
+  return `${pct.toFixed(1)}%`;
+}
+
+/**
+ * Every figure on the dashboard, from ONE derived workbook.
+ *
+ * The page used to hand this the raw workbook while the hero figures above it
+ * came from the derived one, and the tiles read sheet cells that are not what
+ * their labels say: "Scope 1 tCO₂e" showed E_Data!L75 — the litres of fleet
+ * diesel — and "Scope 2 tCO₂e" L82, kilowatt-hours plus solar kilowatt-hours.
+ * Tonnes now come from the GHG inventory (activity × factor), the LTIFR from the
+ * derived per-million-hours figure, the net-zero gap from the roadmap, and the
+ * pillar percentages against the same denominators as the overall score.
+ * Deriving is idempotent, so a caller that already derived loses nothing.
+ */
+export function computeEsgDashboard(rawWorkbook: EsgWorkbookData): EsgDashboardKpis {
+  const workbook = deriveEsgSummaryCells(rawWorkbook);
   const e = scoreEnvironmental(workbook);
   const s = scoreSocial(workbook);
   const g = scoreGovernance(workbook);
@@ -115,11 +137,18 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
   });
   const tax = computeCarbonTax(workbook);
 
-  const scope1 = (workbook.sections?.["e-data"]?.cells?.["L75"] as number) ?? undefined;
-  const scope2 = (workbook.sections?.["e-data"]?.cells?.["L82"] as number) ?? undefined;
-  const water = (workbook.sections?.["e-data"]?.cells?.["L63"] as number) ?? undefined;
-  const wasteDiv = (workbook.sections?.waste?.cells?.["B16"] as number) ?? undefined;
-  const ltifr = workbook.sections?.["s-data"]?.cells?.["G35"];
+  const ghg = computeGhgInventory(workbook);
+  const scope1 = ghg.hasData ? ghg.scope1 : undefined;
+  const scope2 = ghg.hasData ? ghg.scope2 : undefined;
+  const water = readNum(workbook, "e-data", "L63") ?? undefined;
+  const wasteDiv = readNum(workbook, "waste", "B16") ?? undefined;
+  // G35 as the derive layer forces it: lost-time injuries per 1,000,000 hours.
+  const ltifr = readNum(workbook, "s-data", "G35") ?? undefined;
+  const netZero = computeNetZeroRoadmap(workbook);
+  const pct = (p: EsgDashboardPillar) => `${(p.percent * 100).toFixed(1)}%`;
+  const ePillar = pillar(e);
+  const sPillar = pillar(s);
+  const gPillar = pillar(g);
 
   const kpis: EsgDashboardKpi[] = [
     { id: "overall", label: "Overall ESG", value: `${(overallPercent * 100).toFixed(1)}%` },
@@ -129,27 +158,30 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
     {
       id: "scope1",
       label: "Scope 1 tCO₂e (YTD)",
-      value: scope1 != null ? scope1.toLocaleString("en-ZA") : "—",
+      value: scope1 != null ? scope1.toLocaleString("en-ZA", { maximumFractionDigits: 1 }) : "—",
+      sub: scope1 != null ? "Fuel, generators, LPG and business cars × their factors" : undefined,
     },
     {
       id: "scope2",
       label: "Scope 2 tCO₂e (YTD)",
-      value: scope2 != null ? scope2.toLocaleString("en-ZA") : "—",
+      value: scope2 != null ? scope2.toLocaleString("en-ZA", { maximumFractionDigits: 1 }) : "—",
+      sub: scope2 != null ? "Grid electricity, net of solar, location-based" : undefined,
     },
     {
       id: "water",
       label: "Water kL YTD",
-      value: water != null ? water.toLocaleString("en-ZA") : "—",
+      value: water != null ? water.toLocaleString("en-ZA", { maximumFractionDigits: 0 }) : "—",
     },
     {
       id: "waste",
       label: "Waste diversion %",
-      value: wasteDiv != null ? `${wasteDiv}%` : "—",
+      value: wasteDiv != null ? asPercentText(wasteDiv) : "—",
     },
     {
       id: "ltifr",
       label: "LTIFR",
-      value: ltifr != null && ltifr !== "" ? String(ltifr) : "—",
+      value: ltifr != null ? ltifr.toLocaleString("en-ZA", { maximumFractionDigits: 2 }) : "—",
+      sub: ltifr != null ? "Lost-time injuries per 1,000,000 hours worked" : undefined,
     },
     {
       id: "carbon-tax",
@@ -171,40 +203,39 @@ export function computeEsgDashboard(workbook: EsgWorkbookData): EsgDashboardKpis
     {
       id: "nz-gap",
       label: "Net-zero gap tCO₂e",
-      value: String(
-        Math.max(
-          0,
-          (readNum(workbook, "e-data", "F90") ?? 0) - (readNum(workbook, "e-data", "B90") ?? 0),
-        ),
-      ),
+      // The roadmap's own gap: this period's Scope 1 + 2 tonnes against the
+      // final milestone of the company's pathway — not F90 − B90, which
+      // subtracted a baseline in tonnes from litres plus kilowatt-hours.
+      value: netZero.available ? netZero.gapTco2e.toLocaleString("en-ZA", { maximumFractionDigits: 1 }) : "—",
+      sub: netZero.available ? `Against the ${netZero.targetYear || "final"} milestone` : "Set a baseline to measure the gap",
     },
     {
       id: "rating-e",
       label: "E pillar %",
-      value: `${((e.score / e.max) * 100).toFixed(1)}%`,
+      value: pct(ePillar),
     },
     {
       id: "rating-s",
       label: "S pillar %",
-      value: `${((s.score / s.max) * 100).toFixed(1)}%`,
+      value: pct(sPillar),
     },
     {
       id: "rating-g",
       label: "G pillar %",
-      value: `${((g.score / g.max) * 100).toFixed(1)}%`,
+      value: pct(gPillar),
     },
   ];
 
   return {
-    environmental: pillar(e),
-    social: pillar(s),
-    governance: pillar(g),
+    environmental: ePillar,
+    social: sPillar,
+    governance: gPillar,
     overallPercent,
     scope1Tco2e: scope1,
     scope2Tco2e: scope2,
     waterKl: water,
     wasteDiversionPct: wasteDiv,
-    ltifr: ltifr as number | string | undefined,
+    ltifr,
     carbonTaxTier1: tax.liable ? tax.liabilityZar : 0,
     kpis,
     pillarRows: {

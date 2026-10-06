@@ -20,6 +20,7 @@ import {
   THR_WASTE,
   stanceFloorFromWorkbook,
 } from "../esgConfig/consumer-goods";
+import { computeGhgInventory } from "./ghgInventory";
 import { minCap, pr, scoringMode, yesPartialNo, type EsgScoringOptions } from "./shared";
 import {
   applicableMaxFor,
@@ -73,7 +74,19 @@ export function scoreEnvironmental(
 
   // C6 = =IFERROR(IF(B90=0,0,IF((B90-F90)/B90>=B43,10,
   //        IF((B90-F90)/B90>=B43*B9,10*((B90-F90)/B90)/B43,0))),0)
-  const d6 = b90 > 0 ? pr((b90 - f90) / b90, thrGhgYoy, 10, floor) : 0;
+  //
+  // F90 = L79 + L82 adds litres, kilograms and kilowatt-hours, so the sheet
+  // measured a baseline in tonnes against a sum of mixed units. Corrected mode
+  // compares tonnes with tonnes — this period's Scope 1 + 2 from the GHG
+  // inventory, as the net-zero roadmap does — pro-rated to a year when the
+  // period is shorter (Assumptions!B111), the way the carbon tax is: nine
+  // months against a full-year baseline is not a 25% reduction.
+  const inventory = mode === "workbook-parity" ? null : computeGhgInventory(workbook);
+  const months = inventory?.dataMonths ?? null;
+  const currentTco2e = inventory
+    ? inventory.scope1And2 * (months && months > 0 && months < 12 ? 12 / months : 1)
+    : f90;
+  const d6 = b90 > 0 ? pr((b90 - currentTco2e) / b90, thrGhgYoy, 10, floor) : 0;
 
   /*
    * C7 = =IFERROR(IF(M80=0,0,IF(-M81/M80>=B44,8,
