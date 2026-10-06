@@ -50,7 +50,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [clients, setClients] = useState<ClientRow[]>([]);
-  const [busy, setBusy] = useState<null | "type" | "company" | "reparse">(null);
+  const [busy, setBusy] = useState<null | "type" | "company" | "reparse" | "review">(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [typeDraft, setTypeDraft] = useState("");
   const replaceRef = useRef<HTMLInputElement>(null);
@@ -116,7 +116,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     if (res.ok) setRun(body.run);
   };
 
-  const patch = async (payload: Record<string, unknown>, kind: "type" | "company", message: string) => {
+  const patch = async (payload: Record<string, unknown>, kind: "type" | "company" | "review", message: string) => {
     setBusy(kind);
     setNotice(null);
     try {
@@ -154,7 +154,13 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       if (!res.ok) throw new Error(body?.message ?? "The parser could not read this file");
       await load();
       if (replacement) setPreviewFile(replacement);
-      setNotice(replacement ? `Re-read from ${replacement.name}.` : "Re-read from the stored file.");
+      setNotice(
+        replacement
+          ? `Re-read from ${replacement.name}.`
+          : body?.reused
+            ? "This file hasn't changed, so this is its stored reading — nothing was read again, and nothing was charged."
+            : "Re-read from the stored file.",
+      );
     } catch (caught) {
       setNotice(caught instanceof Error ? caught.message : "Could not re-read this document");
     } finally {
@@ -199,6 +205,36 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       </div>
 
       {notice && <div className="mb-4 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-2.5 text-[12.5px] text-[color:var(--body)]" data-testid="document-notice">{notice}</div>}
+
+      {/* The team handoff: whoever uploaded may leave the checking to someone
+          else. Signing it off takes it out of the company's "Needs review". */}
+      <div className="mb-4 flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-review-state">
+        <p className="text-[12.5px] text-[color:var(--body)]">
+          {document.reviewedAt
+            ? `Reviewed ${new Date(document.reviewedAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} — checked against the document by your team.`
+            : document.status === "review_required" || document.status === "failed"
+              ? "Waiting for a review — check what was read against the document, fix anything wrong, then sign it off."
+              : "Not reviewed yet. Signing off is optional for a document that read cleanly."}
+        </p>
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() =>
+            void patch(
+              { reviewed: !document.reviewedAt },
+              "review",
+              document.reviewedAt ? "Reopened — it's back in the company's Needs review." : "Signed off — it has left the company's Needs review.",
+            )
+          }
+          className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold disabled:opacity-40 ${
+            document.reviewedAt ? "border border-white/[0.12] text-[color:var(--body)] hover:bg-white/[0.06]" : "bg-white text-black"
+          }`}
+          data-testid="document-mark-reviewed"
+        >
+          {busy === "review" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+          {document.reviewedAt ? "Reopen" : "Mark as reviewed"}
+        </button>
+      </div>
 
       {/* The three things a person can do here. */}
       <div className="mb-6 grid gap-3 lg:grid-cols-3">

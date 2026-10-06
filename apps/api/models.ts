@@ -346,6 +346,13 @@ const documentSchema = new Schema({
   parserMissingFields: { type: [String], default: [] },
   parserLowConfidenceFields: { type: [String], default: [] },
   parserLastRunAt: { type: Date, default: null, index: true },
+  /**
+   * A person looked at this document's read and signed it off. Takes it out
+   * of the company's "Needs review" queue without rewriting what the parser
+   * saw — the run stays as read; this is a separate, attributable fact.
+   */
+  reviewedAt: { type: Date, default: null },
+  reviewedByUserId: { type: String, default: null },
 }, { collection: "documents" });
 
 documentSchema.index({ organizationId: 1, source: 1, parserLastRunAt: -1 });

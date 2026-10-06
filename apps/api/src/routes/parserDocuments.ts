@@ -6,7 +6,7 @@ import { Document, ParserRunModel } from '../../models.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
 import { resolveFileWithParser } from '../services/parserClient.js';
-import { applyDocumentScopeFilter, resolveClientScopeIds } from '../services/clientScopes.js';
+import { applyDocumentScopeFilter, isViewOnlyMember, resolveClientScopeIds } from '../services/clientScopes.js';
 
 const logger = createLogger('ParserDocuments');
 const router = Router();
@@ -69,7 +69,18 @@ function documentJson(doc: Record<string, any>): Record<string, unknown> {
     lowConfidenceFields: doc.parserLowConfidenceFields ?? [],
     latestRunId: doc.latestParserRunId ?? null,
     lastRunAt: doc.parserLastRunAt ?? null,
+    reviewedAt: doc.reviewedAt ?? null,
+    reviewedByUserId: doc.reviewedByUserId ?? null,
   };
+}
+
+/** View-only members may read the library but never change it. */
+async function refuseViewOnly(req: Request, res: Response): Promise<boolean> {
+  if (await isViewOnlyMember(identity(req).userId)) {
+    res.status(403).json({ message: 'Your role in this team is view-only, so you can look at documents but not change them.' });
+    return true;
+  }
+  return false;
 }
 
 function runSummary(run: Record<string, any>): Record<string, unknown> {
@@ -269,6 +280,11 @@ const patchSchema = z.object({
   documentType: z.string().min(1).max(200).optional(),
   /** Why the type was changed — kept with the correction, not instead of it. */
   note: z.string().max(2000).optional(),
+  /**
+   * A teammate has looked at this read and signed it off (true), or reopened
+   * it (false). Takes it in and out of the company's "Needs review" queue.
+   */
+  reviewed: z.boolean().optional(),
 });
 
 /**
@@ -287,6 +303,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
   if (!parsed.success) return res.status(400).json({ message: 'Invalid update', issues: parsed.error.issues });
   const owner = identity(req);
   const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
 
   try {
     const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
@@ -294,6 +311,30 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
     const set: Record<string, unknown> = {};
     if ('entityId' in parsed.data) set.entityId = parsed.data.entityId ?? null;
+
+    if (typeof parsed.data.reviewed === 'boolean') {
+      set.reviewedAt = parsed.data.reviewed ? new Date() : null;
+      set.reviewedByUserId = parsed.data.reviewed ? owner.userId : null;
+      const latestRunId = (doc as unknown as { latestParserRunId?: string }).latestParserRunId;
+      if (latestRunId) {
+        await ParserRunModel.updateOne(
+          { runId: latestRunId },
+          {
+            $push: {
+              reviewHistory: {
+                fieldKey: 'document',
+                originalValue: null,
+                correctedValue: null,
+                reviewerUserId: owner.userId,
+                organizationId: owner.organizationId,
+                approvalState: parsed.data.reviewed ? 'approved' : 'pending',
+                note: parsed.data.note ?? null,
+              },
+            },
+          },
+        );
+      }
+    }
 
     if (parsed.data.documentType) {
       set.parserDocumentType = parsed.data.documentType;
@@ -343,12 +384,32 @@ router.patch('/:id', async (req: Request, res: Response) => {
 router.post('/:id/reparse', upload.single('file'), async (req: Request, res: Response) => {
   const owner = identity(req);
   const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
 
   try {
     const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
 
     const replacement = req.file;
+
+    // The same bytes read again give the same reading — so an unchanged file
+    // returns the stored run, instantly, and nobody pays for it: not the
+    // user, and not Okiru's model bill. Every "Re-read" used to run the full
+    // extraction chain again (text layer, Document Intelligence, the model).
+    // `fresh=1` is for a reading the parser itself has since improved on.
+    const fresh = req.query.fresh === '1' || (req.body as { fresh?: unknown } | undefined)?.fresh === 'true';
+    const latestRunId = (doc as unknown as { latestParserRunId?: string }).latestParserRunId;
+    if (!replacement && !fresh && latestRunId) {
+      const stored = await ParserRunModel.findOne({ documentId: (doc as unknown as { _id: unknown })._id, runId: latestRunId, ...tenantFilter(owner) }).lean();
+      if (stored) {
+        const plain = doc as unknown as { toObject?: () => Record<string, any> } & Record<string, any>;
+        return res.status(200).json({
+          document: documentJson(typeof plain.toObject === 'function' ? plain.toObject() : plain),
+          run: runSummary(stored as Record<string, any>),
+          reused: true,
+        });
+      }
+    }
     const raw = replacement?.buffer ?? (doc as unknown as { rawContent?: Buffer }).rawContent;
     if (!raw || raw.length === 0) {
       return res.status(409).json({
@@ -412,6 +473,8 @@ router.get('/', async (req: Request, res: Response) => {
   const search = String(req.query.search || '').trim();
   if (search) filter.filename = { $regex: escapeRegex(search), $options: 'i' };
   if (['passed', 'review_required', 'failed'].includes(String(req.query.status))) filter.parserStatus = String(req.query.status);
+  // "Needs review" is a queue: a document a teammate has signed off has left it.
+  if (String(req.query.status) === 'review_required') filter.reviewedAt = null;
   if (req.query.documentType) filter.parserDocumentType = String(req.query.documentType);
   if (req.query.reviewRequired === 'true') filter.parserReviewRequired = true;
   if (req.query.missingField) filter.parserMissingFields = String(req.query.missingField);
