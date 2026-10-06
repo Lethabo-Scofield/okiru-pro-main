@@ -36,6 +36,24 @@ export interface ReviewValue {
   edit?: ReviewEdit;
   /** A person typed this, in the review — not the parser. */
   entered?: boolean;
+  /** The question that places an unplaced value — "put it here" — when a person can answer it. */
+  ask?: ReviewQuestion;
+  /** Where a person placed it, in words; the question stays so it can be taken back. */
+  answered?: string;
+  /** Kept as evidence: no cell in the workbook needs this value. Not a failure to place. */
+  evidence?: boolean;
+}
+
+/**
+ * One question that places a value: what the document did not say (which
+ * site, which month), each with the options a person picks from.
+ */
+export interface ReviewQuestion {
+  /** Identifies the question to whoever asked it. */
+  id: string;
+  /** "Which of your sites is this for?" */
+  prompt: string;
+  fields: Array<{ key: string; label: string; options: Array<{ value: string; label: string }> }>;
 }
 
 export interface ReviewProblem {
@@ -56,7 +74,11 @@ export interface ReviewDocument {
   /** e.g. "12 managers · Level 2". */
   summary: string;
   values: ReviewValue[];
-  /** Read, but not placed in the workbook — with the reason, so it can be placed by hand. */
+  /**
+   * Read, but not placed in the workbook — with the reason, so it can be placed
+   * by hand. Values carrying `ask` wait for an answer; `evidence` values need
+   * no cell at all.
+   */
   unplaced: ReviewValue[];
   problems: ReviewProblem[];
   /** Things this document should have carried and did not. */
