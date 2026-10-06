@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDocumentReview, reviewCounts } from "../documentReview";
+import { applyReviewEdit, buildDocumentReview, reviewCounts } from "../documentReview";
 import type { ParserCaseLike } from "../parserWorkbookMap";
 
 const CASE = {
@@ -75,8 +75,13 @@ describe("buildDocumentReview", () => {
     expect(shareholders.state).toBe("read");
     expect(shareholders.values).toEqual(
       expect.arrayContaining([
-        { label: "Shareholder name", value: "T Dlamini", source: "Thandi Dlamini — 51 ordinary shares" },
-        { label: "Voting rights percentage", value: "51" },
+        {
+          label: "Shareholder name",
+          value: "T Dlamini",
+          source: "Thandi Dlamini — 51 ordinary shares",
+          edit: { kind: "entity", extraction: 0, index: 0 },
+        },
+        { label: "Voting rights percentage", value: "51", edit: { kind: "entity", extraction: 0, index: 1 } },
       ]),
     );
     // Read but not placed — kept, with the reason, so it can be placed by hand.
@@ -88,7 +93,38 @@ describe("buildDocumentReview", () => {
     expect(cert.state).toBe("needs-look");
     expect(cert.problems[0].headline).toBe("This document has expired.");
     expect(cert.problems[0].detail).toBe("Certificate expired on 2025-01-31");
-    expect(cert.values).toEqual([{ label: "Bee level", value: "2", source: "B-BBEE Level 2 Contributor" }]);
+    expect(cert.values).toEqual([
+      { label: "Bee level", value: "2", source: "B-BBEE Level 2 Contributor", edit: { kind: "field", field: "bee_level" } },
+    ]);
     expect(cert.notFound).toEqual(["Signed Date"]);
+    expect(cert.missing).toEqual([{ label: "Signed Date", field: "signed_date" }]);
+  });
+});
+
+describe("applyReviewEdit — a correction made in the review is what gets built", () => {
+  it("corrects a read value, keeps the parser's reading, and keeps its type", () => {
+    const edited = applyReviewEdit(CASE, "certificate.pdf", { kind: "field", field: "bee_level" }, "1");
+    const field = edited.fields_extracted!["certificate.pdf"].bee_level as Record<string, unknown>;
+    expect(field).toMatchObject({ normalized_value: 1, raw_value: "1", entered_by_user: true, parser_value: 2 });
+    // The original case is untouched.
+    expect(CASE.fields_extracted!["certificate.pdf"].bee_level.normalized_value).toBe(2);
+
+    const [cert] = buildDocumentReview({ parserCase: edited }).filter((d) => d.filename === "certificate.pdf");
+    expect(cert.values[0]).toMatchObject({ label: "Bee level", value: "1", source: "Entered by you", entered: true });
+  });
+
+  it("fills in a missing field, which then stops being listed as missing", () => {
+    const edited = applyReviewEdit(CASE, "certificate.pdf", { kind: "field", field: "signed_date" }, "2024-02-01");
+    const [cert] = buildDocumentReview({ parserCase: edited }).filter((d) => d.filename === "certificate.pdf");
+    expect(cert.notFound).toEqual([]);
+    expect(cert.values).toEqual(expect.arrayContaining([expect.objectContaining({ label: "Signed date", value: "2024-02-01", entered: true })]));
+  });
+
+  it("corrects a value inside a schedule the AI read", () => {
+    const edited = applyReviewEdit(CASE, "shareholders.pdf", { kind: "entity", extraction: 0, index: 1 }, "60");
+    const values = (edited as unknown as { ai_entities: { extractions: Array<{ values: Array<Record<string, unknown>> }> } }).ai_entities.extractions[0].values;
+    expect(values[1]).toMatchObject({ value: 60, parser_value: 51, entered_by_user: true });
+    // An edit addressed to another file is refused rather than misapplied.
+    expect(applyReviewEdit(CASE, "certificate.pdf", { kind: "entity", extraction: 0, index: 1 }, "60")).toBe(CASE);
   });
 });
