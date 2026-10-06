@@ -16,7 +16,8 @@
     "lint:fix": "eslint . --ext .ts --fix",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
-    "ingest:certificates": "tsx scripts/ingestCertificates.ts"
+    "ingest:certificates": "tsx scripts/ingestCertificates.ts",
+    "enrich:certificate-metadata": "tsx scripts/enrichCertificateMetadata.ts"
   },
   "dependencies": {
     "@azure/ai-form-recognizer": "^5.0.0",

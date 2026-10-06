@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts } from '../email';
+import { generateOtp, getOtpExpiryMinutes, getMaxOtpAttempts, classifySmtpError, isSmtpConfigured } from '../email';
 
 describe('generateOtp', () => {
   it('should generate a 6-digit OTP by default', () => {
@@ -99,5 +99,79 @@ describe('OTP security properties', () => {
       expect(num).toBeGreaterThanOrEqual(0);
       expect(num).toBeLessThanOrEqual(999999);
     }
+  });
+});
+
+describe('classifySmtpError (Microsoft 365)', () => {
+  it('detects SMTP AUTH disabled for the tenant', () => {
+    const f = classifySmtpError({
+      code: 'EAUTH',
+      responseCode: 535,
+      response: '535 5.7.139 Authentication unsuccessful, SmtpClientAuthentication is disabled for the Tenant.',
+    });
+    expect(f.category).toBe('SMTP_AUTH_DISABLED');
+    expect(f.hint).toMatch(/Authenticated SMTP/);
+  });
+
+  it('detects a plain wrong username/password', () => {
+    const f = classifySmtpError({ code: 'EAUTH', responseCode: 535, response: '535 5.7.3 Authentication unsuccessful' });
+    expect(f.category).toBe('AUTH_FAILED');
+  });
+
+  it('detects a sender the mailbox may not send as', () => {
+    const f = classifySmtpError({
+      code: 'EENVELOPE',
+      responseCode: 554,
+      response: '554 5.2.252 SendAsDenied; contact@okiru.co.za not allowed to send as other@okiru.co.za',
+    });
+    expect(f.category).toBe('INVALID_SENDER');
+  });
+
+  it('detects TLS failures', () => {
+    expect(classifySmtpError({ code: 'ESOCKET', message: 'write EPROTO error:0A00010B:SSL routines::wrong version number' }).category).toBe('TLS_FAILED');
+    expect(classifySmtpError({ code: 'ETLS', message: 'Error upgrading connection with STARTTLS' }).category).toBe('TLS_FAILED');
+  });
+
+  it('detects connection failures', () => {
+    expect(classifySmtpError({ code: 'ECONNECTION', message: 'Connection timeout' }).category).toBe('CONNECTION_FAILED');
+    expect(classifySmtpError({ code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND smtp.office365.com' }).category).toBe('CONNECTION_FAILED');
+  });
+
+  it('falls back to UNKNOWN', () => {
+    expect(classifySmtpError(new Error('something odd')).category).toBe('UNKNOWN');
+    expect(classifySmtpError(undefined).category).toBe('UNKNOWN');
+  });
+
+  it('never echoes the SMTP password back in a message', () => {
+    process.env.SMTP_PASSWORD = 'Sup3r-Secret-Pw!';
+    try {
+      const f = classifySmtpError({ code: 'EAUTH', response: '535 Invalid login for Sup3r-Secret-Pw!' });
+      expect(f.message).not.toContain('Sup3r-Secret-Pw!');
+      expect(JSON.stringify(f)).not.toContain('Sup3r-Secret-Pw!');
+    } finally {
+      delete process.env.SMTP_PASSWORD;
+    }
+  });
+});
+
+describe('isSmtpConfigured', () => {
+  const keys = ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_PASS'] as const;
+  const saved: Record<string, string | undefined> = {};
+  beforeEach(() => { for (const k of keys) { saved[k] = process.env[k]; delete process.env[k]; } });
+  afterEach(() => { for (const k of keys) { if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k]; } });
+
+  it('is false until host, user and password are all set', () => {
+    process.env.SMTP_HOST = 'smtp.office365.com';
+    process.env.SMTP_USER = 'contact@okiru.co.za';
+    expect(isSmtpConfigured()).toBe(false);
+    process.env.SMTP_PASSWORD = 'x';
+    expect(isSmtpConfigured()).toBe(true);
+  });
+
+  it('still honours the legacy SMTP_PASS name', () => {
+    process.env.SMTP_HOST = 'h';
+    process.env.SMTP_USER = 'u';
+    process.env.SMTP_PASS = 'x';
+    expect(isSmtpConfigured()).toBe(true);
   });
 });

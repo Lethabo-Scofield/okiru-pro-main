@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from 'react';
 import { Link, useLocation } from 'wouter';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import logoCircle from '@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png';
 import { UserAccountMenu } from '@/components/UserAccountMenu';
 import { useAuth } from '@toolkit/lib/auth';
@@ -32,24 +32,48 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const crumbs = buildCrumbs(location);
   const onHub = crumbs.length === 1;
+  const isCreateScorecard =
+    location.startsWith('/bbbee/new') || location.startsWith('/create-scorecard');
+  const display = user?.fullName || user?.username || 'Account';
+  const initial = display.charAt(0).toUpperCase();
 
   return (
-    <div className="okiru-app">
+    <div
+      className={`okiru-app${isCreateScorecard ? ' okiru-create-scorecard-shell' : ''}`}
+      style={
+        onHub
+          ? {
+              backgroundImage: 'var(--hub-bg-image)',
+              backgroundPosition: 'center top',
+              backgroundSize: 'cover',
+              backgroundAttachment: 'fixed',
+            }
+          : undefined
+      }
+    >
       {/* The grain sits above the wash and below everything else, so the page
           has the same surface the marketing site does. */}
       <div className="okiru-app-grain" aria-hidden />
       <header
         className="relative z-20 h-12 sticky top-0 flex items-center justify-between gap-4 px-4 sm:px-6"
-        style={{
-          background: 'rgba(8,9,11,0.78)',
-          backdropFilter: 'blur(20px) saturate(1.3)',
-          WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
-          borderBottom: '1px solid var(--rule)',
-          boxShadow: '0 1px 0 rgba(255,255,255,0.03), 0 8px 24px -16px rgba(0,0,0,0.9)',
-        }}
+        style={
+          onHub
+            ? {
+                background: 'transparent',
+                borderBottom: '0',
+                boxShadow: 'none',
+              }
+            : {
+                background: 'rgba(255,255,255,0.92)',
+                backdropFilter: 'blur(20px) saturate(1.3)',
+                WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
+                borderBottom: '1px solid var(--rule)',
+                boxShadow: '0 8px 24px -20px rgba(24,24,27,0.28)',
+              }
+        }
         data-testid="shell-topbar"
       >
-        <span className="ok-rule-brand" aria-hidden />
+        {!onHub && <span className="ok-rule-brand" aria-hidden />}
         <div className="flex items-center gap-3 min-w-0">
           <Link
             href="/hub"
@@ -87,7 +111,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                           {c.href && !last ? (
                             <Link
                               href={c.href}
-                              className="ok-eyebrow truncate transition-colors hover:!text-[rgba(255,255,255,0.75)]"
+                              className="ok-eyebrow truncate transition-colors hover:!text-[#18181b]"
                             >
                               {c.label}
                             </Link>
@@ -110,7 +134,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
         </div>
 
-        <UserAccountMenu variant="dashboard" />
+        <UserAccountMenu
+          variant="dashboard"
+          trigger={
+            onHub ? (
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full border border-white/65 bg-white/55 px-3 py-1.5 text-[12px] text-zinc-700 shadow-[0_10px_26px_-22px_rgba(24,24,27,0.45)] backdrop-blur-xl transition hover:bg-white/75"
+                data-testid="user-menu"
+              >
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-950 text-[9px] font-semibold text-white">
+                  {initial}
+                </span>
+                <span className="max-w-[160px] truncate font-medium">{display}</span>
+                <ChevronDown className="h-3.5 w-3.5 text-[color:var(--body)]" />
+              </button>
+            ) : undefined
+          }
+        />
       </header>
 
       <main className="relative z-10">{children}</main>
