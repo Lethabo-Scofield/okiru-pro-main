@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { Download, FileSpreadsheet, FileText, ImageIcon, Loader2 } from "lucide-react";
+import { PdfPages } from "./PdfPages";
 
 type Kind = "pdf" | "image" | "spreadsheet" | "text" | "other";
 
@@ -60,6 +61,8 @@ export function DocumentPreview({
   const [sheets, setSheets] = useState<Sheet[] | null>(null);
   const [sheetIndex, setSheetIndex] = useState(0);
   const [text, setText] = useState<string | null>(null);
+  /** pdf.js could not open it — fall back to the browser's own viewer. */
+  const [pdfFallback, setPdfFallback] = useState(false);
 
   // The bytes: this session's upload, or the library copy.
   useEffect(() => {
@@ -67,6 +70,7 @@ export function DocumentPreview({
     setText(null);
     setSheetIndex(0);
     setFailed(false);
+    setPdfFallback(false);
     if (file) {
       setBlob(file);
       return;
@@ -151,7 +155,8 @@ export function DocumentPreview({
               : "The preview isn't available here — the document is saved in your documents library."}
           </div>
         )}
-        {kind === "pdf" && url && <iframe title={name} src={url} className="min-h-[420px] w-full flex-1 bg-[#111]" />}
+        {kind === "pdf" && blob && !pdfFallback && <PdfPages blob={blob} name={name} onFail={() => setPdfFallback(true)} />}
+        {kind === "pdf" && url && pdfFallback && <iframe title={name} src={url} className="min-h-[420px] w-full flex-1 bg-[#111]" />}
         {kind === "image" && url && (
           <div className="flex flex-1 items-start justify-center overflow-auto p-3">
             <img src={url} alt={name} className="max-w-full rounded-md" />
