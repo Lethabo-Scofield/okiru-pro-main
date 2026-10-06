@@ -51,6 +51,12 @@ import {
   type EsgGridSectionId,
 } from "./esgGridSections";
 import { esgColumnRef } from "./esgGridRows";
+import {
+  ESG_TEMPLATE_WHOLE,
+  esgTemplatePart,
+  type EsgTemplatePart,
+  type EsgTemplateSheet,
+} from "./esgTemplateParts";
 
 export const ESG_BULK_TEMPLATE_SHEETS = [
   "Instructions",
@@ -251,11 +257,26 @@ function writeRegisterValueGuide(
 /* Sheets                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function instructionsSheet(): XLSX.WorkSheet {
+/**
+ * The cover note, describing only the sheets this file carries.
+ *
+ * A part says it is a part, and what importing it does to the rest of the
+ * workbook — nothing — because "will this wipe my other figures?" is the first
+ * thing a person handed one sheet asks.
+ */
+function instructionsSheet(part: EsgTemplatePart): XLSX.WorkSheet {
   const sheet = newSheet();
+  const whole = part.id === ESG_TEMPLATE_WHOLE;
   const lines = [
-    "Okiru ESG information request",
+    whole ? "Okiru ESG information request" : `Okiru ESG information request - ${part.title}`,
     "",
+    ...(whole
+      ? []
+      : [
+          "This file is one part of the Okiru ESG workbook. Importing it fills in the sheets it",
+          "carries; everything already captured on the other sheets stays as it is.",
+          "",
+        ]),
     "HOW TO USE THIS FILE",
     "1. Fill in the blank cell to the RIGHT of each label. Do not move, rename or re-order rows -",
     "   every cell address in this file is the address Okiru reads it back from.",
@@ -265,21 +286,11 @@ function instructionsSheet(): XLSX.WorkSheet {
     "4. In Okiru: ESG -> Import Excel workbook -> select this file. You will see a preview of",
     "   everything matched before anything is saved.",
     "",
-    "WHAT EACH SHEET COLLECTS",
-    "  Cover            Entity, reporting period, organisational boundary, sector, baseline year",
-    "  Assumptions      Scoring stance, reporting standard and the scoring thresholds",
-    "  E_Data           Monthly diesel, electricity, solar and water by site; annual GHG totals",
-    "  S_Data           Headcount, health and safety, training, payroll, OFO codes, CSI",
-    "  G_Data           Governance maturity, board composition, penalties, policies",
-    "  EE_Scorecard     Employment equity",
-    "  Waste_Register   One row per waste stream per month, plus the annual totals",
-    "  Fleet_Register   One row per vehicle",
-    "  Driver_Debrief   One row per trip",
-    "  ISO_Tracker      ISO 14001 clause-by-clause status",
-    "  King5_Scorecard  The 17 King V principles",
-    "  IFRS_S1_S2       IFRS S1/S2 disclosure readiness",
-    "  GARP_GRAP        ESG risk register",
-    "  SAQ_Supplier     Supplier self-assessment, 1-5 per criterion",
+    whole ? "WHAT EACH SHEET COLLECTS" : "WHAT THIS FILE COLLECTS",
+    ...ESG_BULK_TEMPLATE_SHEETS.flatMap((name) => {
+      const entry = part.sheets.find((s) => s.sheet === name);
+      return entry ? [`  ${name.padEnd(17)}${entry.collects}`] : [];
+    }),
     "",
     "Leaving something blank is not the same as entering a zero. A blank means 'not reported'",
     "and scores nothing; an explicit 0 is an assertion, and some indicators award points for it.",
@@ -460,30 +471,45 @@ function wasteSheet(): XLSX.WorkSheet {
 
 /* -------------------------------------------------------------------------- */
 
-/** Registers that get a plain sheet of their own, in workbook order. */
-const STANDALONE_REGISTERS: ReadonlyArray<EsgGridSectionId> = [
-  "fleet",
-  "driver-debrief",
-  "iso-tracker",
-  "king5",
-  "ifrs",
-  "garp",
-  "saq",
-];
+/** A register that gets a plain sheet of its own. */
+const register = (id: EsgGridSectionId) => () => registerSheet(id);
 
-export function buildEsgWorkbookTemplateXlsx(): Buffer {
+/** Every sheet's builder — typed, so a sheet without one does not compile. */
+const SHEET_BUILDERS: Record<EsgTemplateSheet, () => XLSX.WorkSheet> = {
+  Cover: coverSheet,
+  Assumptions: assumptionsSheet,
+  E_Data: eDataSheet,
+  S_Data: sDataSheet,
+  G_Data: () => maturitySheet("GOVERNANCE DATA", G_DATA_MATURITY_ROWS),
+  EE_Scorecard: () => maturitySheet("EMPLOYMENT EQUITY", EE_MATURITY_ROWS),
+  Waste_Register: wasteSheet,
+  Fleet_Register: register("fleet"),
+  Driver_Debrief: register("driver-debrief"),
+  ISO_Tracker: register("iso-tracker"),
+  King5_Scorecard: register("king5"),
+  IFRS_S1_S2: register("ifrs"),
+  GARP_GRAP: register("garp"),
+  SAQ_Supplier: register("saq"),
+};
+
+/**
+ * The template, whole or in part (`esgTemplateParts`).
+ *
+ * A part is the same sheets the whole workbook carries, built by the same
+ * builders, in the same order — so a part cannot import differently from the
+ * sheet it was cut from. Throws for a part that names nothing; the route
+ * answers that with a 400 before it gets here.
+ */
+export function buildEsgWorkbookTemplateXlsx(partId?: string): Buffer {
+  const part = esgTemplatePart(partId);
+  if (!part) throw new Error(`Unknown ESG template part: ${partId}`);
+  const carried = new Set<string>(part.sheets.map((s) => s.sheet));
   const book = XLSX.utils.book_new();
 
-  appendSheet(book, "Instructions", instructionsSheet());
-  appendSheet(book, "Cover", coverSheet());
-  appendSheet(book, "Assumptions", assumptionsSheet());
-  appendSheet(book, "E_Data", eDataSheet());
-  appendSheet(book, "S_Data", sDataSheet());
-  appendSheet(book, "G_Data", maturitySheet("GOVERNANCE DATA", G_DATA_MATURITY_ROWS));
-  appendSheet(book, "EE_Scorecard", maturitySheet("EMPLOYMENT EQUITY", EE_MATURITY_ROWS));
-  appendSheet(book, "Waste_Register", wasteSheet());
-  for (const id of STANDALONE_REGISTERS) {
-    appendSheet(book, ESG_GRID_SECTIONS[id].sheet, registerSheet(id));
+  appendSheet(book, "Instructions", instructionsSheet(part));
+  for (const name of ESG_BULK_TEMPLATE_SHEETS) {
+    if (name === "Instructions" || !carried.has(name)) continue;
+    appendSheet(book, name, SHEET_BUILDERS[name]());
   }
 
   return XLSX.write(book, { type: "buffer", bookType: "xlsx" }) as Buffer;

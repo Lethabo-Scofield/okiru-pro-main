@@ -5,7 +5,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import EsgImport from "../pages/EsgImport";
 import { useEsgStore } from "../lib/esgStore";
 
@@ -18,8 +18,13 @@ describe("EsgImport — the upload hub", () => {
     const href = (id: string) => screen.getByTestId(id).getAttribute("href") ?? "";
     expect(href("esg-import-documents")).toBe("/esg/create/co%201/start?with=documents");
     expect(href("esg-import-workbook")).toBe("/esg/create/co%201/start");
-    expect(href("esg-import-template")).toMatch(/\/api\/esg\/workbook\/template$/);
     expect(href("esg-import-export")).toMatch(/\/api\/esg\/workbook\/co%201\/export$/);
+
+    // The blank template comes whole, by pillar or by sheet (C3).
+    fireEvent.click(screen.getByTestId("esg-import-template"));
+    expect(href("esg-template-all")).toMatch(/\/api\/esg\/workbook\/template$/);
+    expect(href("esg-template-environmental")).toContain("/api/esg/workbook/template?part=environmental");
+    expect(href("esg-template-fleet")).toContain("/api/esg/workbook/template?part=fleet");
   });
 
   it("asks for a company first when none is open", () => {
