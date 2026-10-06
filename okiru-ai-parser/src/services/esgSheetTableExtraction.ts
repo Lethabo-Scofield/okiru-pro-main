@@ -156,6 +156,103 @@ const ROW_FIELD_MEANINGS: Record<string, string> = {
   fuel_litres: 'litres in this transaction',
 };
 
+/**
+ * A unit word in a column's header that the field cannot carry. The model maps
+ * a column by its header, so a header that SAYS hours, a date or a body
+ * dimension is not kilometres, litres or a fuel rate, whatever the model chose.
+ */
+const HEADER_CONTRADICTS: Record<string, RegExp> = {
+  monthly_km: /\b(hours?|hrs|dates?|height|width|length|cubes?|tyres?|kg|tons?|tonnage)\b/i,
+  monthly_litres: /\b(hours?|hrs|dates?|height|width|length|cubes?|tyres?|kg|tons?|tonnage|capacity|tank)\b/i,
+  fuel_litres: /\b(hours?|hrs|dates?|height|width|length|cubes?|capacity|tank)\b/i,
+  l_per_100km_actual: /\b(height|width|length|cubes?|tyres?|hours?|dates?|kg|tons?)\b/i,
+  l_per_100km_norm: /\b(height|width|length|cubes?|tyres?|hours?|dates?|kg|tons?)\b/i,
+  gvm_kg: /\b(hours?|hrs|dates?|height|width|length|km|kms|litres?)\b/i,
+  tare_kg: /\b(hours?|hrs|dates?|height|width|length|km|kms|litres?)\b/i,
+  payload_kg: /\b(hours?|hrs|dates?|height|width|length|km|kms|litres?)\b/i,
+};
+
+/** Values no column of this field can typically hold. */
+const MEDIAN_OUT_OF_RANGE: Record<string, { test: (median: number) => boolean; reads: string }> = {
+  monthly_km: { test: (m) => m > 30_000, reads: 'odometer readings' },
+  monthly_litres: { test: (m) => m > 20_000, reads: "figures far beyond one vehicle's month of diesel" },
+  l_per_100km_actual: { test: (m) => m < 3 || m > 100, reads: 'figures that are not litres per 100 km' },
+  l_per_100km_norm: { test: (m) => m < 3 || m > 100, reads: 'figures that are not litres per 100 km' },
+  gvm_kg: { test: (m) => m < 300, reads: 'figures too small to be kilograms' },
+  tare_kg: { test: (m) => m < 300, reads: 'figures too small to be kilograms' },
+  payload_kg: { test: (m) => m < 100, reads: 'figures too small to be kilograms' },
+};
+
+const FIELD_WORDS: Record<string, string> = {
+  monthly_km: 'kilometres driven in the month',
+  monthly_litres: 'litres used in the month',
+  fuel_litres: 'litres',
+  l_per_100km_actual: 'litres per 100 km',
+  l_per_100km_norm: 'a litres-per-100-km norm',
+  gvm_kg: 'the GVM',
+  tare_kg: 'the tare mass',
+  payload_kg: 'the payload',
+};
+
+const KM_PER_LITRE = /\bkm\s*\/\s*l(itre)?s?\b|\bkpl\b|\bkm per l(itre)?\b/i;
+
+function numeric(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const cleaned = value.replace(/[\s,]/g, '');
+  return /^-?\d+(\.\d+)?$/.test(cleaned) ? Number(cleaned) : null;
+}
+
+/**
+ * The model maps a column by its HEADER; the code checks its VALUES can mean
+ * the field. Super Group's fleet list mapped "Monthly Update - Current KM" — an
+ * odometer, median 70,735 km — to the kilometres driven in the month; a fridge
+ * unit's diesel hours to kilometres and its electric-test date to litres; a
+ * truck body's height and width (2.73 m, 2.6 m) to litres per 100 km. Added up
+ * the fleet "used" 80 times the diesel its depots bought.
+ *
+ * A column whose header or values contradict its field is not read as it, and
+ * the document says which and why. A km-per-litre column mapped to a fuel rate
+ * is converted, not dropped.
+ */
+export function checkEsgColumnMeaning(
+  rows: Array<Record<string, unknown>>,
+  mapping: Record<string, string>,
+): { mapping: Record<string, string>; perLitreFields: string[]; exceptions: string[] } {
+  const kept: Record<string, string> = {};
+  const perLitreFields: string[] = [];
+  const exceptions: string[] = [];
+  for (const [header, field] of Object.entries(mapping)) {
+    const words = FIELD_WORDS[field];
+    if (!words) {
+      kept[header] = field;
+      continue;
+    }
+    if ((field === 'l_per_100km_actual' || field === 'l_per_100km_norm') && KM_PER_LITRE.test(header)) {
+      kept[header] = field;
+      perLitreFields.push(field);
+      exceptions.push(`Column "${header}" is kilometres per litre; it was converted to litres per 100 km.`);
+      continue;
+    }
+    if (HEADER_CONTRADICTS[field]?.test(header)) {
+      exceptions.push(`Column "${header}" was not read as ${words}: its heading names a different measure.`);
+      continue;
+    }
+    const values = rows.map((row) => numeric(row[header])).filter((n): n is number => n !== null && n !== 0);
+    const range = MEDIAN_OUT_OF_RANGE[field];
+    if (range && values.length > 0) {
+      const sorted = [...values].sort((a, b) => a - b);
+      const median = sorted[Math.floor(sorted.length / 2)];
+      if (range.test(median)) {
+        exceptions.push(`Column "${header}" holds ${range.reads} (typically ${Math.round(median * 100) / 100}), so it was not read as ${words}.`);
+        continue;
+      }
+    }
+    kept[header] = field;
+  }
+  return { mapping: kept, perLitreFields, exceptions };
+}
+
 /** Human phrasing of one row, for the column-mapping question. */
 function whatOneRowIs(documentId: string, grid: DocumentGrid): string {
   const subject = documentId.split('__')[1]?.replace(/_/g, ' ') ?? 'record';
@@ -189,7 +286,10 @@ export async function extractEsgSheetTable(
     what: whatOneRowIs(documentId, grid),
   };
 
-  const mapping = await mapSheetColumns(model, shape, input.filename, rows);
+  const mapped = await mapSheetColumns(model, shape, input.filename, rows);
+  // What the model read a column AS, checked against what the column holds.
+  const checked = mapped ? checkEsgColumnMeaning(rows, mapped) : null;
+  const mapping = checked?.mapping ?? null;
   // The FIRST column is the row's identity (vehicle_registration, driver_name).
   // Without it every row is anonymous and `applyColumnMapping` drops them all,
   // so an unmapped key field means "not this register" rather than "no rows" —
@@ -205,6 +305,12 @@ export async function extractEsgSheetTable(
 
   const table = applyColumnMapping(rows, mapping, shape);
   if (table.rows.length === 0) return null;
+  for (const field of checked?.perLitreFields ?? []) {
+    for (const row of table.rows) {
+      const kmPerLitre = numeric(row[field]);
+      if (kmPerLitre !== null && kmPerLitre > 0) row[field] = Math.round((100 / kmPerLitre) * 100) / 100;
+    }
+  }
 
   logger.info('Extracted ESG register deterministically', {
     sheet: sheetName,
@@ -226,6 +332,6 @@ export async function extractEsgSheetTable(
     }],
     missingFields: [],
     unexpectedFields: [],
-    exceptions: table.exceptions,
+    exceptions: [...table.exceptions, ...(checked?.exceptions ?? [])],
   };
 }
