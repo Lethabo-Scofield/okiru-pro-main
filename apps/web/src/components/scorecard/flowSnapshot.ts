@@ -29,6 +29,8 @@ export interface FlowSnapshot {
   filedBatchByFile: Record<string, string>;
   /** Library ids of the persisted uploads, so create can still file them under the company. */
   documentIds: string[];
+  /** Library id per file name — the review's preview once the uploads themselves are gone. */
+  documentIdsByName?: Record<string, string>;
   parserCase: ParserCaseLike;
 }
 
