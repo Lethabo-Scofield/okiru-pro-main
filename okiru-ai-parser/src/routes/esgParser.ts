@@ -42,6 +42,7 @@ import {
 } from '../services/uploadPolicy.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
 import { authoriseExtraction, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
+import { recordExtractionOutcome, valuesByUploadedFile } from '../services/extractionOutcome.js';
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
@@ -188,6 +189,9 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
   }
 
+  // The paid quote, so how this run ends can be recorded against it (refunds).
+  let paidQuoteId: string | undefined;
+  const uploadNames = files.map((f) => f.originalname);
   if (extractionRequiresPayment()) {
     const quoteId = typeof req.body?.quote_id === 'string' ? req.body.quote_id : undefined;
     const gate = await authoriseExtraction(quoteId, files);
@@ -197,6 +201,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     }
     // Burn the quote so one payment buys exactly one extraction.
     await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
+    paidQuoteId = gate.record.quoteId;
   }
 
   // Fire-and-forget: persist the ORIGINAL uploaded files to durable blob storage
@@ -234,6 +239,11 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     ];
 
     if (rawInputs.length === 0) {
+      await recordExtractionOutcome(paidQuoteId, {
+        status: 'failed',
+        valuesByFile: valuesByUploadedFile(uploadNames, []),
+        reason: 'None of the uploaded files could be read',
+      });
       return res.status(400).json(fail(
         `None of the uploaded files could be read (${unreadableFiles.map((u) => u.file_name).join(', ')})`,
         'CASE_FILE_PARSE_FAILED',
@@ -242,6 +252,10 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
 
     const entities = await extractEsgCaseEntities(rawInputs);
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
+    await recordExtractionOutcome(paidQuoteId, {
+      status: entities ? 'resolved' : 'failed',
+      valuesByFile: valuesByUploadedFile(uploadNames, (entities as { extractions?: [] } | null)?.extractions),
+    });
 
     return res.status(entities ? 200 : 422).json({
       status: entities ? 'resolved' : 'failed',
@@ -257,6 +271,11 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     });
   } catch (err) {
     logger.error('ESG case file resolve failed', err as Error);
+    await recordExtractionOutcome(paidQuoteId, {
+      status: 'error',
+      valuesByFile: valuesByUploadedFile(uploadNames, []),
+      reason: (err as Error).message,
+    });
     return res.status(400).json(fail((err as Error).message, 'CASE_FILE_PARSE_FAILED'));
   }
 });
@@ -281,6 +300,8 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
   if (batchTooLarge(files)) {
     return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
   }
+  let paidQuoteId: string | undefined;
+  const uploadNames = files.map((f) => f.originalname);
   if (extractionRequiresPayment()) {
     const quoteId = typeof req.body?.quote_id === 'string' ? req.body.quote_id : undefined;
     const gate = await authoriseExtraction(quoteId, files);
@@ -289,6 +310,7 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       return res.status(gate.status).json(fail(gate.message, gate.code));
     }
     await getQuoteStore().update(gate.record.quoteId, { consumedAt: Date.now() });
+    paidQuoteId = gate.record.quoteId;
   }
 
   void persistCaseFiles(
@@ -346,6 +368,10 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     send('resolving', { total: rawInputs.length });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     const entities = await extractEsgCaseEntities(rawInputs, undefined, (p) => send('resolve-progress', p));
+    await recordExtractionOutcome(paidQuoteId, {
+      status: entities ? 'resolved' : 'failed',
+      valuesByFile: valuesByUploadedFile(uploadNames, (entities as { extractions?: [] } | null)?.extractions),
+    });
 
     send('result', {
       status: entities ? 'resolved' : 'failed',
@@ -358,6 +384,11 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     send('complete', {});
   } catch (err) {
     logger.error('ESG case file resolve (stream) failed', err as Error);
+    await recordExtractionOutcome(paidQuoteId, {
+      status: 'error',
+      valuesByFile: valuesByUploadedFile(uploadNames, []),
+      reason: (err as Error).message,
+    });
     send('error', { message: (err as Error).message || 'CASE_FILE_PARSE_FAILED' });
   } finally {
     clearInterval(heartbeat);

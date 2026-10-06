@@ -42,7 +42,18 @@ export interface QuoteRecord {
   paidAt?: number;
   /** Set once extraction has consumed the quote, so it can't be reused. */
   consumedAt?: number;
+  /** What the paid run produced, recorded when it ends — the evidence a refund is decided on. */
+  outcome?: ExtractionOutcome;
   quote: PricingQuote;
+}
+
+export interface ExtractionOutcome {
+  finishedAt: number;
+  /** resolved = a case came back; failed = it came back empty; error = the run threw. */
+  status: 'resolved' | 'failed' | 'error';
+  /** Uploaded file name → values read from it, a workbook's sheets folded into it. */
+  valuesByFile: Record<string, number>;
+  reason?: string;
 }
 
 export interface QuoteStore {
