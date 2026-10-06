@@ -214,7 +214,7 @@
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
 }
 .okiru-app .ok-btn:hover {
-  background: #f4f4f5;
+  background: var(--ink-3);
   border-color: var(--rule-strong);
 }
 .okiru-app .ok-btn:active {
@@ -261,7 +261,7 @@
   color: var(--muted);
   text-align: left;
   padding: 9px 16px;
-  background: #f4f4f5;
+  background: var(--ink-3);
   border-bottom: 1px solid var(--rule);
   white-space: nowrap;
 }
@@ -278,7 +278,7 @@
   transition: background 0.16s ease;
 }
 .okiru-app .ok-table tbody tr:hover {
-  background: #f4f4f5;
+  background: var(--ink-3);
 }
 
 .okiru-app .ok-chip {
@@ -294,7 +294,7 @@
 }
 .okiru-app .ok-chip-neutral {
   color: var(--body);
-  background: #f4f4f5;
+  background: var(--ink-3);
   border-color: var(--rule);
 }
 .okiru-app .ok-chip-good {
@@ -315,47 +315,47 @@
 
 /* Compatibility while older pages are moved off the previous dark utility
    classes. Keep this scoped to the signed-in app shell. */
-.okiru-app [class~="bg-black"],
-.okiru-app [class~="bg-zinc-950"],
-.okiru-app [class~="bg-zinc-900"],
-.okiru-app [class~="bg-neutral-950"],
-.okiru-app [class~="bg-neutral-900"],
-.okiru-app [class~="bg-slate-950"],
-.okiru-app [class~="bg-slate-900"],
-.okiru-app [class~="bg-[#08090b]"],
-.okiru-app [class~="bg-[#0d0d10]"],
-.okiru-app [class~="bg-[#101012]"],
-.okiru-app [class~="bg-[#101114]"],
-.okiru-app [class~="bg-[#111114]"],
-.okiru-app [class~="bg-[#111216]"],
-.okiru-app [class~="bg-[#16181c]"],
-.okiru-app [class~="bg-[#18191d]"],
-.okiru-app [class~="bg-[#1c1c1e]"],
-.okiru-app [class*="bg-[color:var(--ink"] {
+html.light .okiru-app [class~="bg-black"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-zinc-950"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-zinc-900"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-neutral-950"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-neutral-900"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-slate-950"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-slate-900"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#08090b]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#0d0d10]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#101012]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#101114]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#111114]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#111216]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#16181c]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#18191d]"]:not(.esg-theme *),
+html.light .okiru-app [class~="bg-[#1c1c1e]"]:not(.esg-theme *),
+html.light .okiru-app [class*="bg-[color:var(--ink"]:not(.esg-theme *) {
   background-color: #ffffff !important;
 }
 
-.okiru-app [class~="text-white"]:not([class*="bg-"]),
-.okiru-app [class~="text-zinc-50"]:not([class*="bg-"]),
-.okiru-app [class~="text-zinc-100"]:not([class*="bg-"]),
-.okiru-app [class~="text-neutral-50"]:not([class*="bg-"]),
-.okiru-app [class~="text-[#e5e5ea]"]:not([class*="bg-"]) {
+html.light .okiru-app [class~="text-white"]:not([class*="bg-"]):not(.esg-theme *),
+html.light .okiru-app [class~="text-zinc-50"]:not([class*="bg-"]):not(.esg-theme *),
+html.light .okiru-app [class~="text-zinc-100"]:not([class*="bg-"]):not(.esg-theme *),
+html.light .okiru-app [class~="text-neutral-50"]:not([class*="bg-"]):not(.esg-theme *),
+html.light .okiru-app [class~="text-[#e5e5ea]"]:not([class*="bg-"]):not(.esg-theme *) {
   color: #18181b !important;
 }
 
-.okiru-app [class*="border-white/"],
-.okiru-app [class*="border-[rgba(255,255,255"] {
+html.light .okiru-app [class*="border-white/"]:not(.esg-theme *),
+html.light .okiru-app [class*="border-[rgba(255,255,255"]:not(.esg-theme *) {
   border-color: #e4e4e7 !important;
 }
 
-.okiru-app [class*="divide-white/"] > :not([hidden]) ~ :not([hidden]) {
+html.light .okiru-app [class*="divide-white/"] > :not([hidden]) ~ :not([hidden]):not(.esg-theme *) {
   border-color: #e4e4e7 !important;
 }
 
-.okiru-app [class*="hover:bg-white/"]:hover,
-.okiru-app [class*="hover:bg-[rgba(255,255,255"]:hover,
-.okiru-app [class~="hover:bg-[#18191d]"]:hover,
-.okiru-app [class~="hover:bg-[#202126]"]:hover {
+html.light .okiru-app [class*="hover:bg-white/"]:hover:not(.esg-theme *),
+html.light .okiru-app [class*="hover:bg-[rgba(255,255,255"]:hover:not(.esg-theme *),
+html.light .okiru-app [class~="hover:bg-[#18191d]"]:hover:not(.esg-theme *),
+html.light .okiru-app [class~="hover:bg-[#202126]"]:hover:not(.esg-theme *) {
   background-color: #f4f4f5 !important;
 }
 
@@ -401,6 +401,272 @@
 .okiru-create-scorecard-shell [class~="bg-[#111114]"],
 .okiru-create-scorecard-shell [class*="bg-[color:var(--ink"] {
   background-color: #ffffff !important;
+}
+
+html.dark .okiru-app,
+/* ESG pages carry their own dark theme; the bar and breadcrumbs around them follow it
+   whichever mode the rest of the app is in, instead of a white bar over a black page. */
+html:is(.light, .dark) .okiru-app:has(.esg-theme) {
+  --ink: #08090b;
+  --ink-2: #101114;
+  --ink-3: #16181c;
+  --ink-4: #1d1f24;
+  --rule: rgba(255, 255, 255, 0.08);
+  --rule-strong: rgba(255, 255, 255, 0.16);
+  --hi: rgba(255, 255, 255, 0.94);
+  --body: rgba(255, 255, 255, 0.64);
+  --muted: rgba(255, 255, 255, 0.42);
+  --e1: 0 1px 2px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --e2: 0 2px 4px rgba(0, 0, 0, 0.42), 0 10px 28px -14px rgba(0, 0, 0, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --e3: 0 4px 8px rgba(0, 0, 0, 0.45), 0 18px 48px -16px rgba(0, 0, 0, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: var(--body);
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -8%, rgba(255, 255, 255, 0.045), transparent 62%),
+    radial-gradient(ellipse 60% 40% at 96% 30%, rgba(255, 255, 255, 0.022), transparent 60%),
+    var(--ink) !important;
+}
+
+html.dark .okiru-app-grain {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-size: 256px;
+}
+
+html.dark .okiru-app header,
+html:is(.light, .dark) .okiru-app:has(.esg-theme) header {
+  background: rgba(8, 9, 11, 0.88) !important;
+  border-bottom-color: var(--rule) !important;
+  box-shadow: 0 12px 30px -24px rgba(0, 0, 0, 0.85) !important;
+}
+
+/* The account control in that bar is built from light utility classes (a white
+   pill, a dark avatar). On the ESG bar it takes the same dark treatment as the rest. */
+html:is(.light, .dark) .okiru-app:has(.esg-theme) header button[class*="bg-white"] {
+  background-color: var(--ink-3) !important;
+  border-color: var(--rule-strong) !important;
+  color: var(--hi) !important;
+}
+html:is(.light, .dark) .okiru-app:has(.esg-theme) header [class*="bg-zinc-900"] {
+  background-color: var(--hi) !important;
+  color: var(--ink) !important;
+}
+
+html.dark .okiru-app .ok-panel:not(.esg-theme *),
+html.dark .okiru-app .ok-panel-flush:not(.esg-theme *),
+html.dark .okiru-app section[class*="bg-[color:var(--ink"]:not(.esg-theme *),
+html.dark .okiru-app div[class*="bg-[color:var(--ink"]:not(.esg-theme *),
+html.dark .okiru-app [class~="bg-white"]:not(.esg-theme *),
+html.dark .okiru-app [class*="bg-white/"]:not(.esg-theme *),
+html.dark .okiru-app [class*="bg-white\\["]:not(.esg-theme *),
+html.dark .okiru-app [class~="bg-zinc-50"]:not(.esg-theme *),
+html.dark .okiru-app [class~="bg-zinc-100"]:not(.esg-theme *),
+html.dark .okiru-app [class~="bg-neutral-50"]:not(.esg-theme *),
+html.dark .okiru-app [class~="bg-neutral-100"]:not(.esg-theme *),
+html.dark .okiru-app [class~="bg-slate-50"]:not(.esg-theme *),
+html.dark .okiru-app [class~="bg-slate-100"]:not(.esg-theme *) {
+  background-color: var(--ink-2) !important;
+  border-color: var(--rule) !important;
+}
+
+html.dark .okiru-app [class~="text-white"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-zinc-50"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-zinc-100"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-zinc-900"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-zinc-950"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-neutral-900"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-neutral-950"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-slate-900"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-slate-950"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-black"]:not(.esg-theme *),
+html.dark .okiru-app [class*="text-[#0"]:not(.esg-theme *),
+html.dark .okiru-app [class*="text-[#1"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-[#e5e5ea]"]:not(.esg-theme *),
+html.dark .okiru-app [style*="--hi"]:not(.esg-theme *),
+html.dark .okiru-app [aria-current="page"]:not(.esg-theme *) {
+  color: var(--hi) !important;
+}
+
+html.dark .okiru-app [class*="text-[color:var(--body)]"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-zinc-500"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-zinc-600"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-zinc-700"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-neutral-500"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-neutral-600"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-neutral-700"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-slate-500"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-slate-600"]:not(.esg-theme *),
+html.dark .okiru-app [class~="text-slate-700"]:not(.esg-theme *),
+html.dark .okiru-app .ok-eyebrow {
+  color: var(--body) !important;
+}
+
+html.dark .okiru-app [class*="border-zinc-"]:not(.esg-theme *),
+html.dark .okiru-app [class*="border-neutral-"]:not(.esg-theme *),
+html.dark .okiru-app [class*="border-slate-"]:not(.esg-theme *),
+html.dark .okiru-app [class*="border-black/"]:not(.esg-theme *),
+html.dark .okiru-app [class*="border-white/"]:not(.esg-theme *) {
+  border-color: var(--rule) !important;
+}
+
+html.dark .okiru-app input,
+html.dark .okiru-app select,
+html.dark .okiru-app textarea,
+html.dark .okiru-app .ok-input {
+  background-color: var(--ink-2) !important;
+  border-color: var(--rule-strong) !important;
+  color: var(--hi) !important;
+}
+
+html.dark .okiru-app button[class*="bg-white"],
+html.dark .okiru-app a[class*="bg-white"] {
+  background-color: var(--ink-3) !important;
+  border-color: var(--rule-strong) !important;
+  color: var(--hi) !important;
+}
+
+html.dark .okiru-app button[class*="bg-white"]:hover,
+html.dark .okiru-app a[class*="bg-white"]:hover {
+  background-color: var(--ink-4) !important;
+}
+
+html.dark .okiru-app option {
+  background: var(--ink-2) !important;
+  color: var(--hi) !important;
+}
+
+/* Product workspaces need visible actions in light mode. Keep them in Okiru's
+   operational black / white / grey palette, not product accent colours. */
+.okiru-app .okiru-product-workspace .workspace-action-secondary,
+.okiru-app .okiru-product-workspace .workspace-action-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 13px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease,
+    transform 0.12s ease, box-shadow 0.18s ease;
+}
+
+.okiru-app .okiru-product-workspace .workspace-action-secondary {
+  color: #18181b;
+  background: #f4f4f5;
+  border: 1px solid #d4d4d8;
+  box-shadow: 0 8px 18px -16px rgba(24, 24, 27, 0.42);
+}
+
+.okiru-app .okiru-product-workspace .workspace-action-secondary:hover {
+  color: #09090b;
+  background: #e4e4e7;
+  border-color: #a1a1aa;
+  transform: translateY(-1px);
+}
+
+.okiru-app .okiru-product-workspace .workspace-action-primary {
+  color: #ffffff;
+  background: #18181b;
+  border: 1px solid #09090b;
+  box-shadow: 0 12px 26px -18px rgba(24, 24, 27, 0.82);
+}
+
+.okiru-app .okiru-product-workspace .workspace-action-primary:hover {
+  background: #000000;
+  transform: translateY(-1px);
+}
+
+.okiru-app .okiru-product-workspace .workspace-action-secondary:active,
+.okiru-app .okiru-product-workspace .workspace-action-primary:active {
+  transform: scale(0.98);
+}
+
+.okiru-app .okiru-product-workspace .workspace-start-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  background:
+    linear-gradient(
+      180deg,
+      #fafafa 0%,
+      #ffffff 100%
+    );
+  border-color: #e4e4e7;
+}
+
+.okiru-app .okiru-product-workspace .workspace-start-card:hover {
+  background:
+    linear-gradient(
+      180deg,
+      #f4f4f5 0%,
+      #ffffff 100%
+    );
+  border-color: #d4d4d8;
+}
+
+.okiru-app .okiru-product-workspace .workspace-cost-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--app-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #3f3f46;
+  background: #f4f4f5;
+  border: 1px solid #e4e4e7;
+}
+
+html.dark .okiru-app .okiru-product-workspace .workspace-action-secondary {
+  color: var(--hi);
+  background: var(--ink-3);
+  border-color: var(--rule-strong);
+}
+
+html.dark .okiru-app .okiru-product-workspace .workspace-action-secondary:hover {
+  color: var(--hi);
+  background: var(--ink-4);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+html.dark .okiru-app .okiru-product-workspace .workspace-start-card {
+  background:
+    linear-gradient(
+      180deg,
+      var(--ink-3) 0%,
+      var(--ink-2) 100%
+    ) !important;
+  border-color: var(--rule) !important;
+}
+
+html.dark .okiru-app .okiru-product-workspace .workspace-start-card:hover {
+  background:
+    linear-gradient(
+      180deg,
+      var(--ink-4) 0%,
+      var(--ink-2) 100%
+    ) !important;
+  border-color: var(--rule-strong) !important;
+}
+
+html.dark .okiru-app .okiru-product-workspace .workspace-cost-pill {
+  color: var(--body);
+  background: var(--ink-3);
+  border-color: var(--rule);
 }
 
 /* Motion is meaning, not decoration — and never forced on. */
