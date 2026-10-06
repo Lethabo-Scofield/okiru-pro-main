@@ -726,7 +726,8 @@ export async function registerRoutes(
       sendLoginNotification(
         user.email || loginId,
         user.fullName || null,
-        user.organizationName || null
+        user.organizationName || null,
+        { timestamp: new Date(), ipAddress: req.ip, userAgent: req.get("user-agent") }
       ).catch(() => {});
     } catch (error: any) {
       logger.error("Login failed", error);
@@ -817,7 +818,8 @@ export async function registerRoutes(
       sendLoginNotification(
         user.email || user.username,
         user.fullName || null,
-        user.organizationName || null
+        user.organizationName || null,
+        { timestamp: new Date(), ipAddress: req.ip, userAgent: req.get("user-agent") }
       ).catch(() => {});
     } catch (error: any) {
       logger.error("OTP verification failed", error);

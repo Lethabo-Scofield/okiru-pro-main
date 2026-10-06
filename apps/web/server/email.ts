@@ -8,13 +8,22 @@ const ADMIN_EMAIL = "cmyezwa@okiru.co.za";
 
 let transporter: nodemailer.Transporter | null = null;
 
+/**
+ * The SMTP password only ever comes from the environment (a local, git-ignored
+ * .env or the host's secret store). `SMTP_PASS` is still honoured so existing
+ * deployments keep working, but `SMTP_PASSWORD` is the documented name.
+ */
+function getSmtpPassword(): string | undefined {
+  return process.env.SMTP_PASSWORD || process.env.SMTP_PASS || undefined;
+}
+
 function getTransporter() {
   if (transporter) return transporter;
 
   const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || "587", 10);
   const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const pass = getSmtpPassword();
 
   if (!host || !user || !pass) {
     logger.debug("SMTP not configured - email transport unavailable", { host: !!host, user: !!user, pass: !!pass });
@@ -25,11 +34,140 @@ function getTransporter() {
   transporter = nodemailer.createTransport({
     host,
     port,
+    // 465 = implicit TLS. Anything else (Microsoft 365 uses 587) starts in plain
+    // text and MUST upgrade via STARTTLS — requireTLS makes the send fail rather
+    // than silently fall back to an unencrypted session.
     secure: port === 465,
+    requireTLS: port !== 465,
     auth: { user, pass },
+    tls: { minVersion: "TLSv1.2", servername: host },
+    connectionTimeout: 15_000,
+    greetingTimeout: 15_000,
+    socketTimeout: 30_000,
   });
 
   return transporter;
+}
+
+export type SmtpErrorCategory =
+  | "SMTP_AUTH_DISABLED"
+  | "AUTH_FAILED"
+  | "INVALID_SENDER"
+  | "TLS_FAILED"
+  | "CONNECTION_FAILED"
+  | "UNKNOWN";
+
+export interface SmtpFailure {
+  category: SmtpErrorCategory;
+  /** Safe to log or print: never contains the password. */
+  message: string;
+  /** What to check / change to fix it. */
+  hint: string;
+  code?: string;
+  responseCode?: number;
+}
+
+function scrubSecrets(text: string): string {
+  const pass = getSmtpPassword();
+  return pass && pass.length >= 3 ? text.split(pass).join("***") : text;
+}
+
+/**
+ * Turn a nodemailer/Microsoft 365 error into a category, a safe message and a
+ * fix hint. Order matters: Microsoft's auth/sender rejections are checked before
+ * the generic socket and TLS codes, because nodemailer wraps several failures in
+ * ESOCKET / ECONNECTION.
+ */
+export function classifySmtpError(err: unknown): SmtpFailure {
+  const e = (err ?? {}) as { code?: string; responseCode?: number; response?: string; message?: string };
+  const code = e.code;
+  const responseCode = e.responseCode;
+  const raw = `${e.response ?? ""} ${e.message ?? ""}`;
+  const text = raw.toLowerCase();
+  const base = { code, responseCode };
+  const safe = scrubSecrets(raw.replace(/\s+/g, " ").trim()).slice(0, 300);
+
+  // Microsoft 365: SMTP AUTH switched off for the tenant or the mailbox.
+  if (
+    /smtpclientauthentication is disabled|5\.7\.139|5\.7\.57|basic authentication is disabled|authentication unsuccessful.*disabled/.test(text)
+  ) {
+    return {
+      ...base,
+      category: "SMTP_AUTH_DISABLED",
+      message: safe || "Microsoft 365 rejected the login because SMTP AUTH is disabled.",
+      hint:
+        "Enable 'Authenticated SMTP' for the mailbox: Microsoft 365 admin center > Users > Active users > contact@okiru.co.za > Mail > Manage email apps > tick 'Authenticated SMTP'. " +
+        "If the whole tenant blocks it, an admin must turn off 'Security defaults' or add a Conditional Access exception, and run `Set-TransportConfig -SmtpClientAuthenticationDisabled $false` in Exchange Online PowerShell.",
+    };
+  }
+
+  // Wrong user/password, or MFA on the account (needs an app password).
+  if (code === "EAUTH" || responseCode === 535 || /5\.7\.3\b|invalid login|authentication (failed|unsuccessful)|bad credentials/.test(text)) {
+    return {
+      ...base,
+      category: "AUTH_FAILED",
+      message: safe || "Microsoft 365 rejected the username or password.",
+      hint:
+        "Check SMTP_USER and SMTP_PASSWORD. If the account has MFA, the normal password is rejected — create an app password (or exempt the mailbox) and use that. Also confirm the mailbox is licensed and not blocked.",
+    };
+  }
+
+  // The From address isn't allowed for the authenticated mailbox.
+  if (
+    code === "EENVELOPE" ||
+    /5\.7\.60|sendasdenied|not allowed to send as|5\.2\.252|5\.1\.7|invalid (sender|from)|sender address rejected/.test(text)
+  ) {
+    return {
+      ...base,
+      category: "INVALID_SENDER",
+      message: safe || "Microsoft 365 rejected the sender address.",
+      hint:
+        "SMTP_FROM must be the authenticated mailbox (SMTP_USER) or an alias/shared mailbox it has 'Send As' permission on. Use SMTP_FROM=\"Okiru Pro <contact@okiru.co.za>\" with SMTP_USER=contact@okiru.co.za.",
+    };
+  }
+
+  // TLS / STARTTLS negotiation.
+  if (
+    code === "ETLS" ||
+    /tls|ssl|certificate|starttls|wrong version number|handshake|self[- ]signed|cert_/.test(text)
+  ) {
+    return {
+      ...base,
+      category: "TLS_FAILED",
+      message: safe || "TLS negotiation with the mail server failed.",
+      hint:
+        "Use SMTP_HOST=smtp.office365.com and SMTP_PORT=587 (STARTTLS). Port 465 is not offered by Microsoft 365. A corporate proxy or antivirus that intercepts TLS can also break this — try another network.",
+    };
+  }
+
+  // Couldn't reach the server at all.
+  if (
+    code === "ECONNECTION" ||
+    code === "ETIMEDOUT" ||
+    code === "ESOCKET" ||
+    code === "ECONNREFUSED" ||
+    code === "ENOTFOUND" ||
+    code === "EDNS" ||
+    code === "ECONNRESET"
+  ) {
+    return {
+      ...base,
+      category: "CONNECTION_FAILED",
+      message: safe || "Could not connect to the mail server.",
+      hint:
+        "Check SMTP_HOST (smtp.office365.com) and SMTP_PORT (587), your internet connection, and that your network/firewall allows outbound traffic on port 587.",
+    };
+  }
+
+  return { ...base, category: "UNKNOWN", message: safe || "Unknown SMTP error.", hint: "See the message above; enable LOG_LEVEL=debug for more detail." };
+}
+
+/** An Error that is safe to hand to the logger (no password, no transport options). */
+function toSafeError(err: unknown): Error {
+  const f = classifySmtpError(err);
+  const safe = new Error(`[${f.category}] ${f.message}`);
+  safe.stack = undefined;
+  return safe;
 }
 
 export function generateOtp(length?: number): string {
@@ -85,7 +223,7 @@ export async function sendOtpEmail(toEmail: string, otpCode: string, userName?: 
     logger.info("OTP email sent successfully", { to: toEmail });
     return true;
   } catch (err: any) {
-    logger.error("Failed to send OTP email", err, { to: toEmail });
+    logger.error("Failed to send OTP email", toSafeError(err), { to: toEmail });
     return false;
   }
 }
@@ -126,7 +264,7 @@ export async function sendPasswordResetEmail(toEmail: string, resetToken: string
     logger.info("Password reset email sent", { to: toEmail });
     return true;
   } catch (err: any) {
-    logger.error("Failed to send password reset email", err, { to: toEmail });
+    logger.error("Failed to send password reset email", toSafeError(err), { to: toEmail });
     return false;
   }
 }
@@ -272,16 +410,33 @@ export async function sendWorkspaceInviteEmail(ctx: WorkspaceInviteEmailContext)
     });
     return true;
   } catch (err: any) {
-    logger.error("Failed to send workspace invite email", err, { to: ctx.inviteeEmail });
+    logger.error("Failed to send workspace invite email", toSafeError(err), { to: ctx.inviteeEmail });
     return false;
   }
 }
 
 export function isSmtpConfigured(): boolean {
-  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+  return !!(process.env.SMTP_HOST && process.env.SMTP_USER && getSmtpPassword());
 }
 
-export async function sendLoginNotification(userEmail: string, fullName: string | null, orgName: string | null) {
+/** Extra, non-sensitive context for a login notification. Never pass tokens, cookies or credentials here. */
+export interface LoginNotificationContext {
+  timestamp?: Date;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+/** Where login notifications go. Override with LOGIN_NOTIFICATION_TO; defaults to the long-standing admin address. */
+function getLoginNotificationRecipient(): string {
+  return (process.env.LOGIN_NOTIFICATION_TO || "").trim() || ADMIN_EMAIL;
+}
+
+export async function sendLoginNotification(
+  userEmail: string,
+  fullName: string | null,
+  orgName: string | null,
+  context: LoginNotificationContext = {},
+) {
   const t = getTransporter();
   if (!t) {
     logger.debug("SMTP not configured - skipping login notification", { user: userEmail });
@@ -289,15 +444,20 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
   }
   logger.debug("Sending login notification", { user: userEmail, org: orgName });
 
-  const displayName = fullName || userEmail;
-  const org = orgName || "Unknown Organization";
-  const loginTime = new Date().toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" });
+  // Everything below is attacker-influenced (name, org, UA header), so escape it
+  // before it goes into the admin's inbox.
+  const displayName = escapeHtml(fullName || userEmail);
+  const safeEmail = escapeHtml(userEmail);
+  const org = escapeHtml(orgName || "Unknown Organization");
+  const loginTime = (context.timestamp ?? new Date()).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" });
+  const ip = escapeHtml((context.ipAddress || "Unknown").slice(0, 64));
+  const userAgent = escapeHtml((context.userAgent || "Unknown").slice(0, 200));
 
   try {
     await t.sendMail({
       from: process.env.SMTP_FROM || process.env.SMTP_USER,
-      to: ADMIN_EMAIL,
-      subject: `Staff Login - ${displayName}`,
+      to: getLoginNotificationRecipient(),
+      subject: `Staff Login - ${(fullName || userEmail).replace(/[\r\n]+/g, " ").slice(0, 120)}`,
       html: `
         <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
           <div style="background: #1a1a2e; border-radius: 12px; padding: 24px; color: #ffffff;">
@@ -309,7 +469,7 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
               </tr>
               <tr>
                 <td style="padding: 8px 0; color: #9ca3af; font-size: 13px;">Email</td>
-                <td style="padding: 8px 0; color: #ffffff; font-size: 13px;">${userEmail}</td>
+                <td style="padding: 8px 0; color: #ffffff; font-size: 13px;">${safeEmail}</td>
               </tr>
               <tr>
                 <td style="padding: 8px 0; color: #9ca3af; font-size: 13px;">Organization</td>
@@ -318,6 +478,14 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
               <tr>
                 <td style="padding: 8px 0; color: #9ca3af; font-size: 13px;">Login Time</td>
                 <td style="padding: 8px 0; color: #ffffff; font-size: 13px;">${loginTime}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #9ca3af; font-size: 13px;">IP Address</td>
+                <td style="padding: 8px 0; color: #ffffff; font-size: 13px;">${ip}</td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #9ca3af; font-size: 13px; vertical-align: top;">Device</td>
+                <td style="padding: 8px 0; color: #ffffff; font-size: 12px; word-break: break-word;">${userAgent}</td>
               </tr>
             </table>
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid #2d2d4a;">
@@ -329,7 +497,7 @@ export async function sendLoginNotification(userEmail: string, fullName: string 
     });
     logger.info("Login notification sent", { user: userEmail });
   } catch (err: any) {
-    logger.error("Failed to send login notification", err, { user: userEmail });
+    logger.error("Failed to send login notification", toSafeError(err), { user: userEmail });
   }
 }
 
@@ -405,7 +573,55 @@ export async function sendDemoRequestEmail(params: {
     logger.info("Demo request emails sent", { to: params.email });
     return true;
   } catch (err: any) {
-    logger.error("Failed to send demo request email", err, params);
+    logger.error("Failed to send demo request email", toSafeError(err), params);
     return false;
+  }
+}
+
+export type SmtpTestResult =
+  | { ok: true; messageId: string; to: string; from: string }
+  | { ok: false; failure: SmtpFailure };
+
+/** What the test sends. Exposed so the script can print it without duplicating strings. */
+export function getSmtpTestTarget(): { to: string; from: string } {
+  return {
+    to: (process.env.SMTP_TEST_TO || "").trim() || "contact@okiru.co.za",
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || "",
+  };
+}
+
+/**
+ * Local smoke test for the mail setup. Connects, upgrades to TLS, logs in, then
+ * sends one plain message — independent of any login/OTP flow. Never returns or
+ * logs the password; failures come back classified with a fix hint.
+ */
+export async function sendSmtpTestEmail(): Promise<SmtpTestResult> {
+  const t = getTransporter();
+  if (!t) {
+    return {
+      ok: false,
+      failure: {
+        category: "UNKNOWN",
+        message: "SMTP is not configured: SMTP_HOST, SMTP_USER and SMTP_PASSWORD must all be set.",
+        hint: "Add them to apps/web/.env (see apps/web/.env.example), then run again.",
+      },
+    };
+  }
+
+  const { to, from } = getSmtpTestTarget();
+  try {
+    await t.verify(); // connection + STARTTLS + AUTH, no mail sent yet
+    const info = await t.sendMail({
+      from,
+      to,
+      subject: "Okiru SMTP Test",
+      text: "Microsoft 365 SMTP is working correctly.",
+      html: "<p>Microsoft 365 SMTP is working correctly.</p>",
+    });
+    return { ok: true, messageId: String(info.messageId ?? ""), to, from };
+  } catch (err) {
+    // A failed attempt may have left a half-open connection; rebuild next time.
+    transporter = null;
+    return { ok: false, failure: classifySmtpError(err) };
   }
 }
