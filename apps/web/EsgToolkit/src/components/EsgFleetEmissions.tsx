@@ -98,6 +98,7 @@ export function EsgFleetEmissions({ fleet }: { fleet: FleetEmissionsResult }) {
           <div className="text-[11px] text-[var(--esg-text3)]">
             {totals.measured} from fuel · {totals.estimated} from distance × size
             {totals.electric ? ` · ${totals.electric} electric` : ""}
+            {totals.idle ? ` · ${totals.idle} did not run` : ""}
           </div>
         </div>
         <div>
@@ -184,7 +185,7 @@ export function EsgFleetEmissions({ fleet }: { fleet: FleetEmissionsResult }) {
                   {v.lPer100km === null ? "—" : num(v.lPer100km, 1)}
                 </td>
                 <td className="py-2 text-[var(--esg-text3)]" title={v.rateSource ? `Rate: ${RATE_SOURCE_LABELS[v.rateSource]}` : v.missing}>
-                  {METHOD_LABELS[v.method]}
+                  {v.idle ? "Did not run" : METHOD_LABELS[v.method]}
                 </td>
                 <td className="py-2 text-right tabular-nums font-medium text-[var(--esg-text)]">
                   {v.method === "missing" ? "—" : num(v.tco2e)}

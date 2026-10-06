@@ -346,7 +346,10 @@ describe("registers — one array field, N rows", () => {
 
     expect(result.patches).toEqual({});
     expect(result.outcomes.board_director_rows.status).toBe("unplaced");
-    expect(result.outcomes.fleet_fuel_transaction_rows.reason).toMatch(/no register/i);
+    expect(result.outcomes.board_director_rows.reason).toMatch(/no register/i);
+    // A fuel line's home is its vehicle's month — this one names no vehicle, and says so.
+    expect(result.outcomes.fleet_fuel_transaction_rows.status).toBe("unplaced");
+    expect(result.outcomes.fleet_fuel_transaction_rows.reason).toMatch(/name no vehicle or no litres/);
   });
 });
 

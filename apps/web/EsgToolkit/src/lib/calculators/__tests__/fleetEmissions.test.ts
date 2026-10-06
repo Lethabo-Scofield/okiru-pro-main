@@ -111,4 +111,27 @@ describe("computeFleetEmissions", () => {
     expect(fleet.reconciliation).toMatchObject({ depotLitresPerMonth: 2_000, depotMonths: 2 });
     expect(fleet.reconciliation!.ratio).toBeCloseTo(3_450 / 2_000, 6);
   });
+
+  it("counts a vehicle whose month reads 0 km and 0 L as one that did not run, not as missing data", () => {
+    const fleet = computeFleetEmissions(workbook([
+      ...rows,
+      { reg: "AA77BBGP", depot: "BFN", model: "HINO 500 1627", gvm: 26_000, monthlyKm: 0, monthlyLitres: 0 },
+    ]));
+    const stood = fleet.vehicles.find((v) => v.reg === "AA77BBGP")!;
+    expect(stood).toMatchObject({ idle: true, method: "fuel", litresUsed: 0, tco2e: 0 });
+    expect(stood.missing).toBeUndefined();
+    expect(fleet.totals).toMatchObject({ idle: 1, measured: 3, missing: 1 });
+    // A standing vehicle measures no rate: the heavy class is still 35 L/100 km.
+    expect(fleet.classRates.heavy).toEqual({ lPer100km: 35, basis: 3 });
+  });
+
+  it("reads a fleet whose months are mostly 0 / 0 as unfilled, and asks for the figures", () => {
+    const fleet = computeFleetEmissions(workbook([
+      { reg: "AA11BBGP", gvm: 26_000, monthlyKm: 4_000, monthlyLitres: 1_200 },
+      { reg: "AA22BBGP", gvm: 26_000, monthlyKm: 0, monthlyLitres: 0 },
+      { reg: "AA33BBGP", gvm: 26_000, monthlyKm: 0, monthlyLitres: 0 },
+    ]));
+    expect(fleet.totals).toMatchObject({ idle: 0, missing: 2 });
+    expect(fleet.vehicles[1].missing).toMatch(/looks unfilled/);
+  });
 });
