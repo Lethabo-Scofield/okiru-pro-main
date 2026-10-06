@@ -235,6 +235,22 @@ function withoutTemplateHints(cells: Record<string, unknown>): Record<string, un
   return out;
 }
 
+/**
+ * A spreadsheet the template import cannot place — not our template, so not
+ * one of its tabs matched a workbook section — is the document reader's job
+ * instead: the parser maps a register by its COLUMNS, where the template
+ * import can only match a tab NAME. Returns what to tell the person, or null
+ * when the template import has something to place. Both doors use it: a new
+ * company's Excel route, and the workbook's own Import.
+ */
+export function esgImportHandover(preview: { sections?: Record<string, unknown>; unmatchedSheets?: string[] }): string | null {
+  if (Object.keys(preview.sections ?? {}).length > 0) return null;
+  const sheets = preview.unmatchedSheets ?? [];
+  return sheets.length > 0
+    ? `Reading it as evidence instead — none of its sheets (${sheets.slice(0, 3).join(", ")}) match a workbook section. You will see the token cost before anything is read.`
+    : "Reading it as evidence instead. You will see the token cost before anything is read.";
+}
+
 export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPreview {
   const book = XLSX.read(buffer, { type: "buffer" });
   const sections: Record<string, { cells: Record<string, unknown> }> = {};
