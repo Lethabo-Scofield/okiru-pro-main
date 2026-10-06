@@ -406,6 +406,10 @@ export function mapEsgCalculatorToWorkbook(
   }
 
   for (const [gridField, gridRows] of rowsByGrid) {
+    if (gridField === ESG_MONTHLY_FACTS_FIELD) {
+      applyMonthlyFacts(gridRows, axes, builder, record);
+      continue;
+    }
     if (ESG_ROW_MONTHLY_GRIDS[gridField]) {
       applyMonthlyRows(gridField, gridRows, axes, builder, record);
       continue;
@@ -819,6 +823,196 @@ function applyMonthlyRows(
       ? `${unaddressed.length} row(s) named a site or period the workbook does not carry and were left for you to enter.`
       : undefined,
   });
+}
+
+/* ------------------------------------------------------------------ *
+ * Monthly figures from dashboard tables
+ * ------------------------------------------------------------------ */
+
+/** The parser's rows of site × month figures (okiru-ai-parser esgMonthlyTables.ts). */
+export const ESG_MONTHLY_FACTS_FIELD = "esg_monthly_rows";
+
+/** Diesel from the company's tanks into vehicles outside its fleet: reported, never gridded. */
+const EXTERNAL_DIESEL_ISSUED = "fleet.external_diesel_issued_litres";
+
+/**
+ * Which grid each monthly measure lands in. `perSite: false` marks the blocks
+ * the workbook keeps as one row (Scope 1C LPG, Scope 1D business cars).
+ * Measures with no grid here (fleet distance) are read and reported, not written.
+ */
+const MONTHLY_MEASURE_GRIDS: Record<string, { prefix: string; perSite: boolean; unit: string }> = {
+  "fleet.diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.fleetDiesel, perSite: true, unit: "litres" },
+  "energy.generator_diesel_litres": { prefix: ESG_MONTHLY_PREFIXES.generatorDiesel, perSite: true, unit: "litres" },
+  "energy.lpg_kg": { prefix: ESG_MONTHLY_PREFIXES.lpg, perSite: false, unit: "kg" },
+  "fleet.business_car_petrol_litres": { prefix: ESG_MONTHLY_PREFIXES.businessCars, perSite: false, unit: "litres" },
+  "energy.electricity_kwh": { prefix: ESG_MONTHLY_PREFIXES.electricity, perSite: true, unit: "kWh" },
+  "energy.solar_kwh_generated": { prefix: ESG_MONTHLY_PREFIXES.solar, perSite: true, unit: "kWh" },
+  "water.kl": { prefix: ESG_MONTHLY_PREFIXES.water, perSite: true, unit: "kL" },
+};
+
+/**
+ * Site × month figures → the environmental grids.
+ *
+ * The measure picks the grid, the site picks the row against the workbook's OWN
+ * sites, the month picks the column against its OWN reporting year. Within one
+ * document, figures for the same cell ADD UP — two meters at one depot are one
+ * depot's consumption. Between documents they must AGREE: the settle step turns
+ * a difference into a conflict for the user, never a pick.
+ *
+ * A company-wide line (a summary sheet's monthly total) has no depot, so it
+ * fills only the one-row blocks; it never lands on a depot's row.
+ */
+function applyMonthlyFacts(
+  rows: EsgCalculatorRowLike[],
+  axes: EsgReportingAxes,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): void {
+  const sums = new Map<string, {
+    cellRef: string;
+    prefix: string;
+    at: string;
+    value: number;
+    label: string;
+    sources: string[];
+  }>();
+  const unknownSites = new Set<string>();
+  const outsideYear = new Set<string>();
+  const noGrid = new Set<string>();
+  /**
+   * Diesel issued to vehicles outside the fleet, by document AND depot-month.
+   * Per document: a depot's fuel report and its external-issue detail both
+   * state the same 640 L, and adding the two made 1,280 — which then matched
+   * nothing.
+   */
+  const external = new Map<string, { at: string; value: number; site: string; month: string; sources: string[] }>();
+  let companyWide = 0;
+
+  for (const row of rows) {
+    const measure = String(row.cells["monthly.measure"] ?? "");
+    const value = Number(row.cells["monthly.value"]);
+    if (measure === EXTERNAL_DIESEL_ISSUED) {
+      // Never written to a grid — whether it is Scope 1 is the company's call —
+      // but kept to catch the same litres booked as something they are not.
+      const rowIndex = esgDepotRowIndex(row.cells["monthly.site"], axes);
+      const month = esgMonthColumnFor(row.cells["monthly.period_end"], axes);
+      if (rowIndex !== null && month && Number.isFinite(value)) {
+        const at = `${rowIndex}|${month}`;
+        const key = `${(row.sourceFiles ?? [])[0] ?? ""}\u0000${at}`;
+        const prior = external.get(key);
+        if (prior) prior.value += value;
+        else {
+          external.set(key, {
+            at,
+            value,
+            site: String(row.cells["monthly.site"]),
+            month: String(row.cells["monthly.period_end"] ?? "").slice(0, 7),
+            sources: row.sourceFiles ?? [],
+          });
+        }
+      }
+      continue;
+    }
+    const grid = MONTHLY_MEASURE_GRIDS[measure];
+    if (!grid) {
+      if (measure) noGrid.add(measure);
+      continue;
+    }
+    if (!Number.isFinite(value)) continue;
+
+    let rowIndex = 0;
+    const site = row.cells["monthly.site"];
+    if (grid.perSite) {
+      if (site === undefined || site === null || String(site).trim() === "") {
+        companyWide += 1;
+        continue;
+      }
+      const resolved = esgDepotRowIndex(site, axes);
+      if (resolved === null) {
+        unknownSites.add(String(site));
+        continue;
+      }
+      rowIndex = resolved;
+    }
+    const month = esgMonthColumnFor(row.cells["monthly.period_end"], axes);
+    if (!month) {
+      outsideYear.add(String(row.cells["monthly.period_end"] ?? "").slice(0, 7));
+      continue;
+    }
+
+    const cellRef = esgMonthlyCellRef(grid.prefix, rowIndex, month);
+    const source = (row.sourceFiles ?? [])[0] ?? "";
+    const key = `${source}\u0000${cellRef}`;
+    const sum = sums.get(key);
+    if (sum) sum.value += value;
+    else {
+      sums.set(key, {
+        cellRef,
+        prefix: grid.prefix,
+        at: `${rowIndex}|${month}`,
+        value,
+        label: `${measure} for ${grid.perSite ? String(site) : "the company"}`,
+        sources: row.sourceFiles ?? [],
+      });
+    }
+  }
+
+  const notes: string[] = [];
+  const told = new Set<string>();
+  for (const issue of Array.from(external.values())) {
+    // Two documents stating one issue is one issue to tell the user about.
+    const said = `${issue.at}|${Math.round(issue.value * 100)}`;
+    if (told.has(said)) continue;
+    told.add(said);
+    notes.push(
+      `${issue.site}, ${issue.month}: ${Math.round(issue.value * 100) / 100} L of diesel was issued to vehicles outside the fleet. It is not written to a grid — decide whether it belongs in your Scope 1 (it may be invoiced to whoever drove it).`,
+    );
+  }
+
+  for (const sum of Array.from(sums.values())) {
+    // The same litres a fuel report shows going into outside vehicles, booked
+    // by another document as GENERATOR fuel for that depot and month: road
+    // diesel misfiled. Held back with the reason rather than written.
+    const issue = sum.prefix === ESG_MONTHLY_PREFIXES.generatorDiesel
+      ? Array.from(external.values()).find((candidate) => candidate.at === sum.at && Math.abs(candidate.value - sum.value) <= 0.5)
+      : undefined;
+    if (issue) {
+      notes.push(
+        `${sum.sources[0] ?? "A document"} books ${Math.round(sum.value * 100) / 100} L as generator diesel for ${issue.site} in ${issue.month}, but ${issue.sources[0] ?? "the fuel report"} shows exactly that diesel issued to vehicles outside the fleet — road diesel, not generator fuel. It was not written; check where it belongs.`,
+      );
+      continue;
+    }
+    builder.propose({
+      sectionId: "e-data",
+      cellRef: sum.cellRef,
+      // Summed floats carry noise; four places keep two documents that state
+      // the same figure in agreement.
+      value: Math.round(sum.value * 1e4) / 1e4,
+      label: sum.label,
+      field: ESG_MONTHLY_FACTS_FIELD,
+      sources: sum.sources,
+    });
+  }
+
+  if (unknownSites.size) {
+    notes.push(
+      `${unknownSites.size} site name(s) are not sites this workbook reports on (${axes.depots.join(", ")}) and were left for you: ${Array.from(unknownSites).slice(0, 4).join("; ")}.`,
+    );
+  }
+  if (outsideYear.size) {
+    notes.push(`Figures for ${Array.from(outsideYear).sort().slice(0, 3).join(", ")}${outsideYear.size > 3 ? "…" : ""} fall outside the workbook's reporting year.`);
+  }
+  if (companyWide) notes.push(`${companyWide} company-wide monthly total(s) have no depot row to go in; the depot figures are used instead.`);
+  if (noGrid.size) notes.push(`Read but not recorded on a grid: ${Array.from(noGrid).join(", ")}.`);
+
+  record(ESG_MONTHLY_FACTS_FIELD, sums.size > 0
+    ? { status: "placed", cells: [], reason: notes.length ? notes.join(" ") : undefined }
+    : {
+      status: "unplaced",
+      cells: [],
+      rejection: "needs_context",
+      reason: notes.join(" ") || "These monthly figures had no grid, site or month in this workbook to go in.",
+    });
 }
 
 function firstMonthColumn(candidates: unknown[], axes: EsgReportingAxes): string | null {

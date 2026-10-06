@@ -490,13 +490,66 @@ export function esgDepotRowIndex(
   siteName: unknown,
   axes: EsgReportingAxes = ESG_FALLBACK_REPORTING_AXES,
 ): number | null {
-  const key = String(siteName ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
-  if (!key) return null;
-  const index = axes.depots.findIndex(
-    (depot) => depot.toLowerCase().replace(/[^a-z0-9]+/g, "") === key,
-  );
-  return index >= 0 ? index : null;
+  const label = String(siteName ?? "").trim();
+  if (!label) return null;
+  // Strongest evidence first; at the first kind of evidence that names any
+  // depot, exactly one must be named — two candidates is a guess, and a guess
+  // here credits one depot with another's consumption.
+  for (const matches of SITE_MATCH_RULES) {
+    const hits = axes.depots
+      .map((depot, index) => ({ depot, index }))
+      .filter(({ depot }) => matches(siteWords(label), siteWords(depot)));
+    if (hits.length === 1) return hits[0].index;
+    if (hits.length > 1) return null;
+  }
+  return null;
 }
+
+/** "ACME CONSUMER - ALDERWOOD" → ["ACME", "CONSUMER", "ALDERWOOD"]. */
+function siteWords(text: string): string[] {
+  return text.toUpperCase().replace(/[^A-Z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+}
+
+/** `short`'s letters appear in `long` in order, starting with its first letter. */
+function abbreviates(short: string, long: string): boolean {
+  if (short.length < 3 || short.length >= long.length || short[0] !== long[0]) return false;
+  let at = 0;
+  for (const letter of long) if (letter === short[at]) at += 1;
+  return at === short.length;
+}
+
+/**
+ * How a document's site label is matched to a depot on the workbook's axis, in
+ * order of strength. Documents name sites their own way — "ACME CONSUMER -
+ * ALDERWOOD" for a depot the workbook calls ALDER, "BROOK TOWN" for BKT — and
+ * an exact-name test filed none of them.
+ */
+const SITE_MATCH_RULES: Array<(label: string[], depot: string[]) => boolean> = [
+  // The same name.
+  (label, depot) => label.join("") === depot.join(""),
+  // The depot is a word of the label, or the start of one long enough to mean
+  // it: ALDER → ALDERWOOD; FENWICK → "ACME CONSUMER - FENWICK".
+  (label, depot) =>
+    depot.length === 1 && label.some((word) => word === depot[0] || (depot[0].length >= 4 && word.startsWith(depot[0]))),
+  // Initials of consecutive words: GH → GREEN HARBOUR.
+  (label, depot) => {
+    const initials = (words: string[]) => words.map((w) => w[0]).join("");
+    const one = (short: string[], long: string[]) => {
+      if (short.length !== 1 || short[0].length < 2) return false;
+      const n = short[0].length;
+      return long.some((_, i) => i + n <= long.length && initials(long.slice(i, i + n)) === short[0]);
+    };
+    return one(depot, label) || one(label, depot);
+  },
+  // An abbreviation in order, within a word or across two: BKT → BROOK TOWN,
+  // DRN → DARWIN, WDL → WOODLANDS.
+  (label, depot) => {
+    const spans = (words: string[]) =>
+      words.flatMap((w, i) => (i + 1 < words.length ? [w, w + words[i + 1]] : [w]));
+    const one = (short: string[], long: string[]) => short.length === 1 && spans(long).some((span) => abbreviates(short[0], span));
+    return one(depot, label) || one(label, depot);
+  },
+];
 
 /** `s2_F17` — the monthly cell for a block, site row and month column. */
 export function esgMonthlyCellRef(prefix: string, rowIndex: number, monthColumn: string): string {
