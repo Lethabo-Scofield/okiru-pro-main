@@ -21,7 +21,7 @@ import {
   type EsgWorkbookSectionEditorHandle,
 } from "@/components/esg-workbook/EsgWorkbookSectionEditor";
 import { useAuth } from "@toolkit/lib/auth";
-import { canSeedEsgSampleData } from "@/lib/esg/esgAccess";
+import { isEsgWorkbookAdmin } from "@/lib/esg/esgAccess";
 import { useEsgStore } from "../../EsgToolkit/src/lib/esgStore";
 import { EsgReportScopePanel } from "../../EsgToolkit/src/components/EsgReportScopePanel";
 import { API_BASE } from "@toolkit/lib/config";
@@ -69,7 +69,7 @@ export default function EsgInformationRequest() {
   const [location, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const isEsgAdmin = canSeedEsgSampleData(user);
+  const isEsgAdmin = isEsgWorkbookAdmin(user);
   const load = useEsgStore((s) => s.load);
   const setCompanyName = useEsgStore((s) => s.setCompanyName);
   const companyName = useEsgStore((s) => s.companyName);
@@ -77,7 +77,6 @@ export default function EsgInformationRequest() {
   const loading = useEsgStore((s) => s.loading);
   const saving = useEsgStore((s) => s.saving);
   const submittedAt = useEsgStore((s) => s.submittedAt);
-  const seedDemo = useEsgStore((s) => s.seedDemo);
   const unlockWorkbook = useEsgStore((s) => s.unlockWorkbook);
   const setSubmitAttempted = useEsgStore((s) => s.setSubmitAttempted);
   const touched = useEsgStore((s) => s.touched);
@@ -226,24 +225,6 @@ export default function EsgInformationRequest() {
   );
 
   const sectionStatus = (sectionId: string) => (cellCount(sectionId) > 0 ? "filled" : "empty");
-
-  const loadSampleData = async () => {
-    const ok = window.confirm(
-      "Load sample data?\n\nThis REPLACES every section of this workbook with sample figures. Anything already captured for this company will be lost.",
-    );
-    if (!ok) return;
-    try {
-      await seedDemo(companyId);
-      await load(companyId, companyName, { force: true });
-      toast({ title: "Sample data loaded", description: "Every section was replaced with sample figures." });
-    } catch (err) {
-      toast({
-        title: "Could not load sample data",
-        description: err instanceof Error ? err.message : undefined,
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleImportFile = async (file: File) => {
     // `importing` also drives the entry choice's spinner: parsing a 20-tab
@@ -490,18 +471,6 @@ export default function EsgInformationRequest() {
             >
               <Save className="h-3.5 w-3.5" /> Save
             </button>
-            {isEsgAdmin ? (
-              <button
-                type="button"
-                onClick={() => void loadSampleData()}
-                disabled={Boolean(submittedAt) || loading}
-                title="Replaces every section with sample figures"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
-                data-testid="button-esg-load-demo"
-              >
-                Load sample data
-              </button>
-            ) : null}
             <input
               ref={fileInputRef}
               type="file"

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import * as path from "node:path";
-import { buildGoldenSections } from "../../../../server/esgGoldenFixture";
-import { canSeedEsgSampleData } from "../esgAccess";
+import { buildGoldenSections } from "../__fixtures__/esgSampleSections";
+import { isEsgWorkbookAdmin } from "../esgAccess";
 import { ESG_INPUT_SECTIONS } from "../esgSections";
 import { ESG_GRID_SECTIONS } from "../esgGridSections";
 
@@ -65,33 +65,28 @@ describe("sample data never carries client identity", () => {
   });
 });
 
-describe("sample-data seeding is admin-gated", () => {
-  it("only admins may seed on the client", () => {
-    expect(canSeedEsgSampleData({ role: "admin" })).toBe(true);
-    expect(canSeedEsgSampleData({ role: "super_admin" })).toBe(true);
-    expect(canSeedEsgSampleData({ role: "user" })).toBe(false);
-    expect(canSeedEsgSampleData({ role: null })).toBe(false);
-    expect(canSeedEsgSampleData(null)).toBe(false);
+describe("there is no way to load sample data into a real workbook", () => {
+  // "Load sample data" replaced every section of a company's workbook with
+  // another client's figures. It was removed on request; these keep it gone.
+  it("the server has no seeding route", () => {
+    expect(read("server/esgWorkbookRoutes.ts")).not.toMatch(/app\.(post|put)\([^)]*seed-demo/);
   });
 
-  it("the server route requires an admin role and an explicit confirm", () => {
-    const src = read("server/esgWorkbookRoutes.ts");
-    const seedBlock = src.slice(src.indexOf("/seed-demo"), src.indexOf("/seed-demo") + 1200);
-    expect(seedBlock).toMatch(/role !== "admin"/);
-    expect(seedBlock).toMatch(/confirm !== true/);
-    expect(seedBlock).toMatch(/403/);
-  });
-
-  it("both demo buttons are admin-gated and confirm before replacing data", () => {
-    for (const rel of [
-      "src/pages/EsgInformationRequest.tsx",
-      "EsgToolkit/src/pages/EsgDashboard.tsx",
-    ]) {
+  it("neither page offers the button", () => {
+    for (const rel of ["src/pages/EsgInformationRequest.tsx", "EsgToolkit/src/pages/EsgDashboard.tsx"]) {
       const src = read(rel);
-      expect(src, rel).toMatch(/isEsgAdmin \?/);
-      expect(src, rel).toMatch(/window\.confirm\(/);
-      expect(src, rel).not.toMatch(/SG Consumer/);
+      expect(src, rel).not.toMatch(/Load sample data/);
+      expect(src, rel).not.toMatch(/seedDemo/);
     }
+    expect(read("EsgToolkit/src/lib/esgStore.ts")).not.toMatch(/seed-demo|seedDemo/);
+  });
+
+  it("only admins may reopen a submitted workbook", () => {
+    expect(isEsgWorkbookAdmin({ role: "admin" })).toBe(true);
+    expect(isEsgWorkbookAdmin({ role: "super_admin" })).toBe(true);
+    expect(isEsgWorkbookAdmin({ role: "user" })).toBe(false);
+    expect(isEsgWorkbookAdmin({ role: null })).toBe(false);
+    expect(isEsgWorkbookAdmin(null)).toBe(false);
   });
 });
 
