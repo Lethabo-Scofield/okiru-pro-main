@@ -36,6 +36,7 @@ import { readEsgGridRows } from "@/lib/esg/esgGridRows";
 import type { EsgGridSectionId } from "@/lib/esg/esgGridSections";
 import {
   SCORECARD_INDICATORS,
+  esgIndicatorLabel,
   type EsgScorecardPillar,
 } from "@/lib/esg/esgScorecardDefinitions";
 import { ESG_TOOLKIT_PILLAR_NAV } from "@/lib/esg/esgToolkitNav";
@@ -888,7 +889,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
         topic: topicForKey(pillar, def.key),
         subtopic: "Scored indicator",
         tier: "Core",
-        metricName: def.indicator,
+        metricName: esgIndicatorLabel(pillar, def.key),
         value: scored ? Number(score!.toFixed(1)) : null,
         unit: `points of ${def.maxPoints}`,
         periodStart: meta.periodStart,
@@ -913,7 +914,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
           ? "Grey"
           : ragFor(achievement != null && achievement >= 1, achievement != null && achievement >= 0.9, dq),
         omissionCode: scored && score! > 0 ? null : "DATA_UNAVAILABLE",
-        omissionDetail: scored && score! > 0 ? null : `no evidence has been captured against "${def.indicator}"`,
+        omissionDetail: scored && score! > 0 ? null : `no evidence has been captured against "${esgIndicatorLabel(pillar, def.key)}"`,
         evidenceIds: (pillar === "environmental"
           ? [evGhgActivity, evElectricity, evWaste, evIso]
           : pillar === "social"
@@ -922,7 +923,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
         ).filter(Boolean) as string[],
         commentary:
           scored && score! > 0
-            ? `${def.indicator} scored ${num(score!, 1)} of ${def.maxPoints} points (${pct(achievement)} of the available allocation).`
+            ? `${esgIndicatorLabel(pillar, def.key)} scored ${num(score!, 1)} of ${def.maxPoints} points (${pct(achievement)} of the available allocation).`
             : null,
         frameworkRefs:
           pillar === "governance"

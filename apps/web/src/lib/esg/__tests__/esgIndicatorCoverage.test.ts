@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { computeEsgIndicatorCoverage } from "../esgIndicatorCoverage";
-import { SCORECARD_INDICATORS } from "../esgScorecardDefinitions";
+import { SCORECARD_INDICATORS, esgIndicatorLabel } from "../esgScorecardDefinitions";
 
 const wb = (sections: Record<string, Record<string, unknown>>): EsgWorkbookData =>
   ({ sections: Object.fromEntries(Object.entries(sections).map(([k, cells]) => [k, { cells }])) }) as unknown as EsgWorkbookData;
@@ -57,6 +57,15 @@ describe("computeEsgIndicatorCoverage", () => {
 
     const answered = computeEsgIndicatorCoverage(wb({ "g-data": { B25: 0 } }));
     expect(find(answered, "governance", "d25")).toMatchObject({ status: "full", points: 5 });
+  });
+
+  it("shows every indicator in generic words — no client's depots, systems or fixed targets", () => {
+    for (const pillar of ["environmental", "social", "governance"] as const) {
+      for (const def of SCORECARD_INDICATORS[pillar]) {
+        const label = esgIndicatorLabel(pillar, def.key);
+        expect(label, `${pillar} ${def.key}`).not.toMatch(/Cority|IMS-T|depots|≥|≤|\d+\s?%|\d+ hours|2\.0/);
+      }
+    }
   });
 
   it("calls a zero on present data a result, not a gap", () => {

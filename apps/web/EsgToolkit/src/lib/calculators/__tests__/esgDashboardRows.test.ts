@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
-import { SCORECARD_INDICATORS } from "@/lib/esg/esgScorecardDefinitions";
+import { SCORECARD_INDICATORS, esgIndicatorLabel } from "@/lib/esg/esgScorecardDefinitions";
 import { ESG_PILLAR_MAX } from "@/lib/esgScoringDefaults";
 import { buildSgConsumerGoldenWorkbook } from "../../fixtures/esg-consumer-golden";
 import { computeEsgDashboard } from "../dashboard";
@@ -23,8 +23,10 @@ describe("computeEsgDashboard pillar rows derive from esgScorecardDefinitions", 
     expect(
       dash.pillarRows[pillar].map((r) => ({ indicator: r.indicator, maxPoints: r.maxPoints })),
     ).toEqual(
+      // Shown by their generic display label (the workbook's verbatim wording
+      // names one client's depots, systems and targets).
       SCORECARD_INDICATORS[pillar].map((d) => ({
-        indicator: d.indicator,
+        indicator: esgIndicatorLabel(pillar, d.key),
         maxPoints: d.maxPoints,
       })),
     );

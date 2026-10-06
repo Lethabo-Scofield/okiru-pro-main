@@ -18,7 +18,7 @@ import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { readEsgCell } from "@/lib/esgWorkbookStorage";
 import { deriveEsgSummaryCells } from "./esgDeriveSummary";
 import { readEsgGridRows } from "./esgGridRows";
-import { SCORECARD_INDICATORS, type EsgScorecardPillar } from "./esgScorecardDefinitions";
+import { SCORECARD_INDICATORS, esgIndicatorLabel, type EsgScorecardPillar } from "./esgScorecardDefinitions";
 import { ESG_TOOLKIT_PILLAR_NAV } from "./esgToolkitNav";
 import { esgOverallPercent } from "@/lib/esgScoringDefaults";
 import { scoreEnvironmental } from "../../../EsgToolkit/src/lib/calculators/environmental";
@@ -438,7 +438,7 @@ export function computeEsgIndicatorCoverage(rawWorkbook: EsgWorkbookData): EsgCo
       return {
         pillar,
         key: def.key,
-        indicator: def.indicator,
+        indicator: esgIndicatorLabel(pillar, def.key),
         meaning: spec.meaning,
         points,
         maxPoints: def.maxPoints,

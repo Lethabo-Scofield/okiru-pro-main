@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { EsgAppLink } from "@/components/EsgAppLink";
 import { esgCreateHref } from "@/lib/esgRoutes";
-import type { EsgScorecardIndicator } from "@/lib/esg/esgScorecardDefinitions";
+import { esgIndicatorLabel, type EsgScorecardIndicator } from "@/lib/esg/esgScorecardDefinitions";
 import { useEsgStore } from "../lib/esgStore";
 
 export type EsgScorecardRow = {
@@ -40,7 +40,7 @@ export function EsgScorecardPage({
     return indicators.map((ind) => {
       const score = scores?.[ind.key] ?? 0;
       return {
-        indicator: ind.indicator,
+        indicator: esgIndicatorLabel(pillar, ind.key),
         actual: score.toFixed(1),
         target: String(ind.maxPoints),
         maxPoints: ind.maxPoints,

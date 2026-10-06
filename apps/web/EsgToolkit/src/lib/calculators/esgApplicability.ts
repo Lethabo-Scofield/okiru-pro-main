@@ -28,6 +28,7 @@
  */
 import {
   SCORECARD_INDICATORS,
+  esgIndicatorLabel,
   esgIndicatorMaxPoints,
   type EsgScorecardPillar,
 } from "@/lib/esg/esgScorecardDefinitions";
@@ -70,7 +71,7 @@ export function exclude(
 ): EsgExclusion | null {
   const def = SCORECARD_INDICATORS[pillar].find((d) => d.key === key);
   if (!def) return null;
-  return { key, indicator: def.indicator, maxPoints: def.maxPoints, reason };
+  return { key, indicator: esgIndicatorLabel(pillar, key), maxPoints: def.maxPoints, reason };
 }
 
 /**
@@ -121,7 +122,7 @@ export function readDeclaredExclusions(
     const def = SCORECARD_INDICATORS[pillar].find((d) => d.key === key);
     out.push({
       key,
-      indicator: def?.indicator ?? key,
+      indicator: def ? esgIndicatorLabel(pillar, key) : key,
       maxPoints,
       reason: `Declared not applicable by the company: ${reason}`,
     });
