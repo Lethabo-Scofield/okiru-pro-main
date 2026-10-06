@@ -246,7 +246,8 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
 
     docs.push({
       filename: v.filename,
-      documentType: v.documentType,
+      // The parser's "Unknown" is a classifier state, not a document type.
+      documentType: /^(unknown|unrecognised document)$/i.test(v.documentType.trim()) ? "" : v.documentType,
       state,
       summary: state === "not-read" ? "" : v.summary,
       values,
