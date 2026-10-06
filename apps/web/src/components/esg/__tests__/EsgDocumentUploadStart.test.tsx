@@ -17,7 +17,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import EsgDocumentUploadStart from "../EsgDocumentUploadStart";
 
@@ -323,13 +323,15 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // go in. The user is told that in the panel, not by discovering an empty
     // workbook later.
     expect(screen.queryByTestId("esg-mapping-not-implemented")).not.toBeInTheDocument();
-    // And the real values are listed rather than swallowed.
-    expect(screen.getByTestId("esg-unplaced-values")).toHaveTextContent("35332");
+    // And the real values are listed rather than swallowed — beside the
+    // document they came from, in the side-by-side review.
+    const review = screen.getByTestId("document-review");
+    expect(within(review).getByTestId("review-unplaced")).toHaveTextContent(/35\s?332/);
     // The extraction's own exception reaches the user — this is the line an
     // assurance provider will ask about.
-    expect(screen.getByTestId("esg-extraction-exceptions")).toHaveTextContent(
-      /one day outside the reporting period/i,
-    );
+    expect(
+      within(review).getAllByTestId("review-problem").some((p) => /one day outside the reporting period/i.test(p.textContent ?? "")),
+    ).toBe(true);
     // The file's verdict is derived from its extraction, not from a key the
     // ESG parser does not send.
     expect(screen.getByTestId("esg-docs-file-input").closest("div")).toBeTruthy();

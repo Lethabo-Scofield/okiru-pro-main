@@ -68,7 +68,7 @@ export interface ReviewInputs {
 
 const MAX_VALUES = 60;
 
-function humanize(field: string): string {
+export function humanize(field: string): string {
   return field
     .replace(/^(current_year_|cy_)/i, "")
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -78,7 +78,7 @@ function humanize(field: string): string {
     .replace(/^\w/, (c) => c.toUpperCase());
 }
 
-function display(value: unknown): string | null {
+export function display(value: unknown): string | null {
   if (value == null) return null;
   if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString("en-ZA") : null;
   if (typeof value === "boolean") return value ? "Yes" : "No";
@@ -132,7 +132,7 @@ function valuesFor(parserCase: ParserCaseLike, filename: string): ReviewValue[] 
 }
 
 /** Why nothing came out of a document, as the client should hear it. */
-function whyNotRead(texts: string[], documentType: string, couldNotOpen: boolean, productNoun: string): ReviewProblem {
+export function whyNotRead(texts: string[], documentType: string, couldNotOpen: boolean, productNoun: string): ReviewProblem {
   const all = texts.join(" \n ");
   if (couldNotOpen) {
     return {

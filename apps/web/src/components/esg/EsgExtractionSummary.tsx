@@ -35,6 +35,13 @@ import {
 interface Props {
   injection: EsgInjectionResult;
   parserCase: EsgParserCaseLike | null;
+  /**
+   * Headline only — counts, the nothing-read warning and element coverage.
+   * The lists (disagreements, unplaced values, exceptions, unread files) are
+   * shown per document in the side-by-side review instead, beside the
+   * document they are about.
+   */
+  compact?: boolean;
 }
 
 /** Element code → the wording a practitioner would recognise. */
@@ -191,7 +198,7 @@ function ElementGroup({
   );
 }
 
-export function EsgExtractionSummary({ injection, parserCase }: Props) {
+export function EsgExtractionSummary({ injection, parserCase, compact = false }: Props) {
   const { placed, unplaced, conflicts, valuesRead } = injection;
 
   // Which elements the evidence actually covered, and how many values each
@@ -309,7 +316,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       {/* FIGURES THE DOCUMENTS DISAGREE ON. Left blank rather than guessed.
           One candidate per line: `a (src) vs b (src)` on one wrapping line was
           unreadable at exactly the moment the user had to choose between them. */}
-      {conflicts.length > 0 && (
+      {!compact && conflicts.length > 0 && (
         <div className="mt-4" data-testid="esg-value-conflicts">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
@@ -346,7 +353,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       {/* THE VALUES THEMSELVES, grouped by element and collapsible. Forty
           readings in one flat list is a wall; the same forty behind four
           element headings is a summary someone will actually open. */}
-      {unplaced.length > 0 && (
+      {!compact && unplaced.length > 0 && (
         <div className="mt-4">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <FileWarning className="h-4 w-4 text-amber-300" />
@@ -374,7 +381,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
           the rows do not sum to is exactly the thing an assurance provider will
           ask about, and the person who can answer is standing here with the
           documents open. */}
-      {exceptions.length > 0 && (
+      {!compact && exceptions.length > 0 && (
         <div className="mt-4" data-testid="esg-extraction-exceptions">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <AlertTriangle className="h-4 w-4 text-amber-300" />
@@ -403,7 +410,7 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       {/* Documents that produced nothing. Named one per line, so the user can
           replace the specific file rather than re-uploading everything — a
           comma-joined run of filenames truncated exactly where it mattered. */}
-      {readNothing.length > 0 && (
+      {!compact && readNothing.length > 0 && (
         <div className="mt-4">
           <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
             <HelpCircle className="h-4 w-4 text-amber-300" />
@@ -429,8 +436,9 @@ export function EsgExtractionSummary({ injection, parserCase }: Props) {
       )}
 
       <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-        Everything above is editable in the workbook. A value we could not place is left blank
-        rather than guessed — a wrong entry would score as nothing without telling you.
+        {compact
+          ? "Each document is reviewed below — what we took from it, what we couldn't place, and why anything wasn't read."
+          : "Everything above is editable in the workbook. A value we could not place is left blank rather than guessed — a wrong entry would score as nothing without telling you."}
       </p>
     </div>
   );

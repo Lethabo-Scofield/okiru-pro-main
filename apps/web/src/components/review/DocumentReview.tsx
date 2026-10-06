@@ -33,8 +33,8 @@ export interface DocumentReviewProps {
   fileFor: (filename: string) => File | null;
   /** The library id for a document, for the preview once the upload is gone. */
   documentIdFor: (filename: string) => string | null;
-  /** Open the file picker — a replacement or a forgotten document. */
-  onAddDocuments: () => void;
+  /** Open the file picker — a replacement or a forgotten document. Absent where no upload is possible. */
+  onAddDocuments?: () => void;
   /** Documents the scorecard usually needs that this pack doesn't have. */
   stillToAdd?: string[];
   /** Totals that were read but need per-person rows to score. */
@@ -110,15 +110,19 @@ export function DocumentReview({ documents, fileFor, documentIdFor, onAddDocumen
                   <li key={line} className="text-[11.5px] leading-5 text-amber-200/80">{line}</li>
                 ))}
               </ul>
-              <button
-                type="button"
-                onClick={onAddDocuments}
-                className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-medium text-[color:var(--body)] hover:bg-white/[0.05]"
-                data-testid="review-add-documents"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add documents
-              </button>
-              <p className="mt-1.5 text-[10.5px] text-[color:var(--muted)]">Only new documents are read and charged.</p>
+              {onAddDocuments && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onAddDocuments}
+                    className="mt-2.5 inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-medium text-[color:var(--body)] hover:bg-white/[0.05]"
+                    data-testid="review-add-documents"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add documents
+                  </button>
+                  <p className="mt-1.5 text-[10.5px] text-[color:var(--muted)]">Only new documents are read and charged.</p>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -154,7 +158,7 @@ export function DocumentReview({ documents, fileFor, documentIdFor, onAddDocumen
                       <p className="text-[12.5px] font-semibold text-white">{p.headline}</p>
                       {p.detail && <p className="mt-0.5 text-[11.5px] leading-5 text-[color:var(--body)]">{p.detail}</p>}
                       <p className="mt-1 text-[11.5px] leading-5 text-[color:var(--body)]">{p.fix}</p>
-                      {p.replace && (
+                      {p.replace && onAddDocuments && (
                         <button
                           type="button"
                           onClick={onAddDocuments}
