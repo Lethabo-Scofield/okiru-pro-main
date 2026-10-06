@@ -37,6 +37,7 @@ import {
 } from './aiExtraction.js';
 import { getExtractionModel, duplicateWorkbookException, type ResolveProgress } from './caseExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
+import { billAsMonthlyRows } from './esgBillFacts.js';
 import { classifyDocument, routingElement } from './documentClassification.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { elementFromHint } from './specRetrieval.js';
@@ -237,7 +238,11 @@ export async function extractEsgCaseEntities(
 
   if (extractions.length === 0) return null;
 
-  const resolved = resolveCaseEntities(extractions, {
+  // Each bill is its own site × month figure, never a rival answer to every
+  // other bill. Only the resolution sees the rows; the extractions handed back
+  // keep the bill's own fields, which is what the user reads per document.
+  const forResolution = extractions.map(billAsMonthlyRows);
+  const resolved = resolveCaseEntities(forResolution, {
     allFiles: inputs.map((input) => input.filename),
     // Registers from different sheets are halves of one record, not rival answers.
     additiveFields: ESG_REGISTER_FIELDS,
@@ -248,7 +253,7 @@ export async function extractEsgCaseEntities(
   // because ESG is not the lesser product.
   const calculator = await mapEsgEntitiesToCalculatorWithSemantics(
     resolved,
-    esgFieldElementIndex(extractions),
+    esgFieldElementIndex(forResolution),
     model,
   );
 
