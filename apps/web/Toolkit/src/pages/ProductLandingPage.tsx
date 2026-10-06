@@ -94,7 +94,6 @@ const PRODUCT_CSS = `
     --wave-border: rgba(147,51,234,0.32);
     --wave-shadow: rgba(147,51,234,0.12);
   }
-  .okiru-purple .ok-hero-tag-dot { background: #a855f7; box-shadow: 0 0 10px rgba(168,85,247,0.7); }
   .okiru-purple .ok-hero-glow   { background: radial-gradient(circle, rgba(147,51,234,0.14) 0%, rgba(168,85,247,0.06) 42%, transparent 70%); }
   .okiru-purple .ok-hero-glow-2 { background: radial-gradient(circle, rgba(249,115,22,0.06) 0%, transparent 65%); }
   .okiru-purple .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(147,51,234,0.12) 14deg, rgba(168,85,247,0.09) 22deg, rgba(249,115,22,0.05) 30deg, transparent 40deg); }
@@ -120,7 +119,6 @@ const PRODUCT_CSS = `
     --wave-border: rgba(37,99,235,0.30);
     --wave-shadow: rgba(37,99,235,0.12);
   }
-  .okiru-blue .ok-hero-tag-dot { background: #3b82f6; box-shadow: 0 0 10px rgba(59,130,246,0.7); }
   .okiru-blue .ok-hero-glow   { background: radial-gradient(circle, rgba(37,99,235,0.15) 0%, rgba(59,130,246,0.06) 42%, transparent 70%); }
   .okiru-blue .ok-hero-glow-2 { background: radial-gradient(circle, rgba(147,51,234,0.06) 0%, transparent 65%); }
   .okiru-blue .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(37,99,235,0.12) 14deg, rgba(59,130,246,0.09) 22deg, rgba(147,51,234,0.05) 30deg, transparent 40deg); }
@@ -148,7 +146,6 @@ const PRODUCT_CSS = `
     --wave-border: rgba(22,163,74,0.30);
     --wave-shadow: rgba(22,163,74,0.12);
   }
-  .okiru-green .ok-hero-tag-dot { background: #22c55e; box-shadow: 0 0 10px rgba(34,197,94,0.7); }
   .okiru-green .ok-hero-glow   { background: radial-gradient(circle, rgba(22,163,74,0.15) 0%, rgba(34,197,94,0.06) 42%, transparent 70%); }
   .okiru-green .ok-hero-glow-2 { background: radial-gradient(circle, rgba(14,165,233,0.06) 0%, transparent 65%); }
   .okiru-green .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(22,163,74,0.12) 14deg, rgba(34,197,94,0.09) 22deg, rgba(14,165,233,0.05) 30deg, transparent 40deg); }
@@ -176,7 +173,6 @@ const PRODUCT_CSS = `
     --wave-border: rgba(249,115,22,0.32);
     --wave-shadow: rgba(249,115,22,0.12);
   }
-  .okiru-orange .ok-hero-tag-dot { background: #fb923c; box-shadow: 0 0 10px rgba(251,146,60,0.7); }
   .okiru-orange .ok-hero-glow   { background: radial-gradient(circle, rgba(249,115,22,0.14) 0%, rgba(251,146,60,0.06) 42%, transparent 70%); }
   .okiru-orange .ok-hero-glow-2 { background: radial-gradient(circle, rgba(37,99,235,0.06) 0%, transparent 65%); }
   .okiru-orange .ok-hero-beam   { background: conic-gradient(from 195deg at 85% 20%, transparent 0deg, rgba(249,115,22,0.11) 14deg, rgba(251,146,60,0.08) 22deg, rgba(37,99,235,0.05) 30deg, transparent 40deg); }
@@ -363,7 +359,6 @@ export default function ProductLandingPage({
         {/* ── FEATURES ── */}
         <section className="ok-section" id="product-features">
           <div className="ok-w">
-            <span className="ok-sec-num">{product.overviewNum}</span>
             <h2 className="ok-h2" style={{ marginBottom: 12 }}>{product.overviewTitle}</h2>
             <p className="ok-lead-l">{product.overviewLead}</p>
             <div className="ok-feat-grid">
@@ -389,7 +384,6 @@ export default function ProductLandingPage({
         {/* ── HOW IT WORKS ── */}
         <section className="ok-section">
           <div className="ok-w">
-            <span className="ok-sec-num">02</span>
             <h2 className="ok-h2" style={{ marginBottom: 12 }}>{product.howTitle}</h2>
             <p className="ok-lead-l">{product.howLead}</p>
             <div style={{ display: "flex", flexDirection: "column", marginTop: 40 }}>

@@ -371,15 +371,6 @@ export const GLOBAL_CSS = `
   }
   @media (prefers-reduced-motion: reduce) { .okiru-root .ok-hero-glow { animation: none; } }
 
-  .okiru-root .ok-hero-tag-dot {
-    width: 6px; height: 6px; border-radius: 50%; background: #34d399;
-    box-shadow: 0 0 8px rgba(52,211,153,0.6); flex-shrink: 0;
-    animation: okiru-tagPulse 2.4s ease-in-out infinite;
-  }
-  @keyframes okiru-tagPulse {
-    0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(52,211,153,0.6); }
-    50% { opacity: .5; box-shadow: 0 0 3px rgba(52,211,153,0.3); }
-  }
 
   .okiru-root .ok-h1 {
     font-family: var(--serif); font-size: clamp(3.7rem, 8vw, 7.8rem);
@@ -409,18 +400,6 @@ export const GLOBAL_CSS = `
   .okiru-root .ok-hero-sub strong { color: rgba(255,255,255,0.92); font-weight: 500; }
   .okiru-root .ok-hero-btns { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 
-  .okiru-root .ok-hero-kicker {
-    margin-bottom: 18px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--mono);
-    font-size: 10.5px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #52525b;
-  }
 
   /* ── HERO PROOF STATS ── */
   .okiru-root .ok-hero-stats {
@@ -456,7 +435,6 @@ export const GLOBAL_CSS = `
   /* ── PRODUCT SHOWCASE ── */
   .okiru-root .ok-showcase { position: relative; padding: 48px 0 96px; }
   .okiru-root .ok-showcase-head { text-align: center; margin-bottom: 44px; }
-  .okiru-root .ok-showcase-tag { display: inline-flex; align-items: center; gap: 9px; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.5); margin-bottom: 16px; }
   .okiru-root .ok-showcase-h { font-family: var(--serif); font-weight: 700; font-size: clamp(1.7rem, 3.2vw, 2.6rem); letter-spacing: -0.02em; color: #fff; }
   .okiru-root .ok-showcase-stack { display: flex; flex-direction: column; gap: 88px; }
   .okiru-root .ok-showcase-label {
@@ -556,11 +534,6 @@ export const GLOBAL_CSS = `
 
   .okiru-root .ok-section { padding: 96px 0; border-bottom: 1px solid var(--rule); }
   .okiru-root .ok-section.ok-page-top { padding-top: 140px; }
-  .okiru-root .ok-sec-num {
-    font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
-    background: var(--grad-text); -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; margin-bottom: 10px; display: inline-block;
-  }
   .okiru-root .ok-eyebrow {
     font-family: var(--mono); font-size: 10px; text-transform: uppercase;
     letter-spacing: 0.14em; color: var(--accent); margin-bottom: 16px; display: block;
@@ -1330,10 +1303,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           </div>
           <div className="ok-w ok-hero-w" style={{ position:"relative", zIndex:1, width:"100%" }}>
             <div className="ok-hero-content">
-              <div className="ok-hero-kicker ok-anim-1">
-                <span className="ok-hero-tag-dot" aria-hidden />
-                Compliance workspace for South Africa
-              </div>
               <h1 className="ok-h1 ok-anim-2">
                 Make{" "}
                 <span className="ok-h1-switch" aria-live="polite">
@@ -1386,10 +1355,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         <section className="ok-showcase">
           <div className="ok-w">
             <Reveal className="ok-showcase-head">
-              <span className="ok-showcase-tag">
-                <span className="ok-hero-tag-dot" aria-hidden />
-                Inside the platform
-              </span>
               <h2 className="ok-showcase-h">One workspace. Every scorecard.</h2>
             </Reveal>
             <div className="ok-showcase-stack">
@@ -1418,7 +1383,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         <section className="ok-section" id="sec-challenge">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">02</span>
               <h2 className="ok-h2" style={{ marginBottom:8 }}>Three gaps to Net Zero</h2>
               <p className="ok-lead-l">Okiru closes all three.</p>
             </Reveal>
@@ -1444,7 +1408,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         <section className="ok-section" id="sec-products">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">03</span>
               <h2 className="ok-h2">Our Products</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Three toolkits, one methodology. Pick a starting point.</p>
             </Reveal>
@@ -1473,7 +1436,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
         <section className="ok-trusted" id="sec-trusted">
           <div className="ok-w">
             <Reveal className="ok-trusted-head">
-              <span className="ok-sec-num">05</span>
               <h2 className="ok-trusted-title">Trusted By Leading South African Organisations</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>From transport and water to pharmacy, food and financial services, organisations across the country rely on Okiru for compliance they can defend.</p>
             </Reveal>
@@ -1503,7 +1465,6 @@ export default function OkiruLanding({ onNavigateAuth, onNavigateRegister, onNav
           <div className="ok-w">
             <Reveal className="ok-cta-card">
               <div className="ok-cta-inner">
-                <span className="ok-eyebrow">Ready when you are</span>
                 <h2 className="ok-cta-h">Make your next disclosure the one that compounds.</h2>
                 <p className="ok-cta-sub">
                   ESG, B-BBEE and Skills Development in one toolkit. Progress you can

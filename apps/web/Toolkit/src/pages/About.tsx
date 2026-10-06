@@ -51,7 +51,6 @@ export default function OkiruAbout({
         <section className="ok-section ok-page-top" id="sec-about">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">01</span>
               <h2 className="ok-h2">Who We Are</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>A South African transformation advisory. Methodology specialists. Disclosure-fluent.</p>
             </Reveal>
@@ -131,7 +130,6 @@ export default function OkiruAbout({
         <section className="ok-section">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">02</span>
               <h2 className="ok-h2">The Okiru Difference</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Six reasons leading South African organisations choose our Transformation Toolkit.</p>
             </Reveal>
@@ -166,7 +164,6 @@ export default function OkiruAbout({
         <section className="ok-section">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">03</span>
               <h2 className="ok-h2">Operational Outcomes</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Four shifts that change how your ESG function works, permanently.</p>
             </Reveal>
@@ -195,7 +192,6 @@ export default function OkiruAbout({
           <div className="ok-w">
             <div className="ok-eng-hdr">
               <Reveal>
-                <span className="ok-sec-num">04</span>
                 <h2 className="ok-h2">Engagement Model</h2>
               </Reveal>
               <Reveal delay="ok-d1">
@@ -228,7 +224,6 @@ export default function OkiruAbout({
         <section className="ok-section">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">05</span>
               <h2 className="ok-h2">Okiru vs the Market</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>We don't compete on cheaper software. We compete on what we own.</p>
             </Reveal>
@@ -291,7 +286,6 @@ export default function OkiruAbout({
         <section className="ok-section" id="sec-sectors">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">06</span>
               <h2 className="ok-h2">Sectors We Serve</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Cross-sector advisory across South Africa's transformation economy. Client names withheld pending consent.</p>
             </Reveal>
