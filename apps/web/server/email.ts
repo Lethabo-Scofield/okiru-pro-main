@@ -286,11 +286,16 @@ export function isSmtpConfigured(): boolean {
  * nothing else — the team only saw it if someone happened to open DevMode, and
  * a client's two reports sat unread for days. FEEDBACK_NOTIFY_EMAILS (comma or
  * semicolon separated) replaces the list.
+ *
+ * The project manager's address is webparam.ORG — the account on okiru.pro.
+ * webparam.co.za has no mail server (no MX, no A record), so the first sends
+ * hard-bounced with 550 5.4.310 "domain does not exist" while the relay
+ * reported success.
  */
 export const DEFAULT_FEEDBACK_RECIPIENTS = [
   "contact@okiru.co.za",
   "lawubrian15@gmail.com",
-  "pm@webparam.co.za",
+  "pm@webparam.org",
 ];
 
 /**
@@ -426,11 +431,14 @@ export function buildFeedbackEmail(ctx: FeedbackEmailContext): {
   return { subject, html, text, replyTo };
 }
 
-/** Email the feedback list. Never throws; the caller records the outcome. */
+/**
+ * Email the feedback list — or the part of it that has not had this report yet.
+ * Never throws; the caller records the outcome.
+ */
 export async function sendFeedbackNotification(
   ctx: FeedbackEmailContext,
+  recipients: string[] = getFeedbackRecipients(),
 ): Promise<{ sent: boolean; recipients: string[]; error?: string }> {
-  const recipients = getFeedbackRecipients();
   const t = getTransporter();
   if (!t) {
     return { sent: false, recipients, error: "No mail transport configured (SMTP_HOST/SMTP_USER/SMTP_PASS)" };
