@@ -13,7 +13,8 @@ import {
   upload,
 } from '../services/uploadPolicy.js';
 import { quoteUploadedFiles } from '../services/pricingQuote.js';
-import { authoriseExtraction, claimQuoteForRun, digestFile, fingerprintFiles, getQuoteStore } from '../services/quoteStore.js';
+import { authoriseExtraction, claimQuoteForRun, digestFile, fingerprintFiles, getQuoteStore, type QuoteRecord } from '../services/quoteStore.js';
+import { quotedNameByUpload, recordExtractionOutcome, watchClient } from '../services/extractionOutcome.js';
 import {
   createPayfastCheckout,
   verifyPayfastItn,
@@ -223,6 +224,99 @@ router.post('/resolve-file', upload.single('file'), async (req: Request, res: Re
     return res.status(result.status === 'failed' ? 422 : 200).json(result);
   } catch (err) {
     logger.error('Parser file resolve failed', err as Error);
+    return res.status(400).json(fail((err as Error).message, 'FILE_PARSE_FAILED'));
+  } finally {
+    await repository.close?.();
+  }
+});
+
+/** Values actually read: extracted fields carrying a normalised or raw value. */
+function countReadValues(extracted: Record<string, unknown> | undefined): number {
+  let n = 0;
+  for (const field of Object.values(extracted ?? {})) {
+    const f = field as { normalized_value?: unknown; raw_value?: unknown } | null;
+    const v = f?.normalized_value ?? f?.raw_value;
+    if (v !== null && v !== undefined && String(v).trim() !== '') n += 1;
+  }
+  return n;
+}
+
+/**
+ * POST /resolve-file-paid — read ONE stored or replacement document again,
+ * against a paid quote. The document library's "read again from scratch" and
+ * "replace the file" come here; an unchanged file never does (apps/api serves
+ * its stored run for free).
+ *
+ * `/resolve-file` has no payment gate at all, so every re-read was free to the
+ * user and a full model bill to us. This is the same gate the case routes use,
+ * and the same accounting the ESG routes keep:
+ *  - the quote must be paid, unexpired, unvoided, unused, and for THESE bytes;
+ *    a quote priced at nothing is refused — a paid route never runs on a
+ *    0-cent quote (the MIME-fallback hole);
+ *  - it is claimed (compare-and-set, once) BEFORE the read starts;
+ *  - how the run ended is recorded — values read, attributed to the one quoted
+ *    file by content, and whether the caller was still there — including on
+ *    failure, so a read that delivered nothing is refunded by the settlement
+ *    every paid run gets, not two hours later by the sweep.
+ */
+router.post('/resolve-file-paid', upload.single('file'), async (req: Request, res: Response) => {
+  if (!req.file) {
+    const summary = skippedUploadSummary(req);
+    return res.status(400).json(summary
+      ? fail(`That file is not a type we can read: ${summary}.`, 'UNSUPPORTED_FILES_ONLY')
+      : fail('Upload a file using multipart field name "file"', 'FILE_REQUIRED'));
+  }
+  const file = req.file;
+
+  let paidQuote: QuoteRecord | undefined;
+  if (extractionRequiresPayment()) {
+    const quoteId = typeof req.body?.quote_id === 'string' ? req.body.quote_id : undefined;
+    const gate = await authoriseExtraction(quoteId, [file]);
+    if (gate.ok && !(Number(gate.record.totalCents) > 0)) {
+      logger.warn('Paid re-read refused: the quote was priced at nothing', { quoteId });
+      return res.status(402).json(fail(
+        'We could not price this file, so it cannot be read on a paid run. Ask for a new price.',
+        'QUOTE_UNPRICED',
+      ));
+    }
+    const claim = gate.ok ? await claimQuoteForRun(gate.record.quoteId, { recordsOutcome: true }) : gate;
+    if (!claim.ok) {
+      logger.warn('Paid re-read refused by payment gate', { code: claim.code, quoteId });
+      return res.status(claim.status).json(fail(claim.message, claim.code));
+    }
+    paidQuote = claim.record;
+  }
+
+  const clientStillThere = watchClient(res);
+  // Keyed by the QUOTED name, matched by content — never by whatever the
+  // output or the upload happens to call the file.
+  const quotedName = paidQuote ? quotedNameByUpload([file], paidQuote)?.get(file.originalname) : undefined;
+  const attribution = (n: number) => ({
+    valuesByFile: Object.fromEntries(
+      (paidQuote?.quote?.files ?? []).map((quoted) => [quoted.filename, quoted.filename === quotedName ? n : 0]),
+    ),
+    attributed: quotedName !== undefined,
+    totalValues: n,
+  });
+
+  const repository = await getParserRepository();
+  try {
+    const rawInput = await rawExtractionInputFromUpload(file);
+    const service = new ParserService(repository, { adjudicator: modelTypeAdjudicator() });
+    const result = await service.resolve(rawInput);
+    await recordExtractionOutcome(paidQuote?.quoteId, {
+      status: result.status === 'failed' ? 'failed' : 'resolved',
+      ...attribution(countReadValues(result.extracted_fields as Record<string, unknown>)),
+      delivered: clientStillThere(),
+    });
+    return res.status(result.status === 'failed' ? 422 : 200).json(result);
+  } catch (err) {
+    logger.error('Paid file re-read failed', err as Error);
+    await recordExtractionOutcome(paidQuote?.quoteId, {
+      status: 'error',
+      ...attribution(0),
+      reason: (err as Error).message,
+    });
     return res.status(400).json(fail((err as Error).message, 'FILE_PARSE_FAILED'));
   } finally {
     await repository.close?.();
