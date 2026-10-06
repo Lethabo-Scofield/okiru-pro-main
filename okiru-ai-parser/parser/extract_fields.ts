@@ -1,7 +1,12 @@
 import type { FieldKnowledge } from '../graph/ontology_models.js';
 import type { ExtractedFieldOutput, RawExtractionInput } from '../schemas/parser_output.js';
 import { normalizeValue } from './normalize.js';
-import { checksumForField } from './checksums.js';
+import {
+  checksumForField,
+  isCompanyRegistrationField,
+  isSaIdField,
+  isVatNumberField,
+} from './checksums.js';
 
 // Confidence a value earns when its own checksum/format validates, and the ceiling
 // an invalid checksum forces it under (below validate.ts's 0.85 pass threshold, so
@@ -25,13 +30,16 @@ function fallbackRegexForField(name: string): RegExp {
 function findHeuristicValue(fieldName: string, text: string): { rawValue: string; confidence: number; start: number; end: number; pattern: string } | null {
   const candidates: Array<{ pattern: string; regex: RegExp; confidence: number }> = [];
 
-  if (/id_number|identity|sa_id/.test(fieldName)) {
+  // The same classifiers as the checksum. Matching the fragment "vat" here
+  // offered the VAT-number pattern to claimed_spend_ex_vat, so a supplier's
+  // VAT number could be read back as its spend.
+  if (isSaIdField(fieldName)) {
     candidates.push({ pattern: 'sa_id_number', regex: /\b(\d{13})\b/, confidence: 0.88 });
   }
-  if (/registration_number|cipc|company_number/.test(fieldName)) {
+  if (isCompanyRegistrationField(fieldName)) {
     candidates.push({ pattern: 'registration_number', regex: /\b(\d{4}\/\d{6}\/\d{2})\b/, confidence: 0.88 });
   }
-  if (/vat/.test(fieldName)) {
+  if (isVatNumberField(fieldName)) {
     candidates.push({ pattern: 'vat_number', regex: /\b(4\d{9})\b/, confidence: 0.86 });
   }
   if (/expiry/.test(fieldName)) {

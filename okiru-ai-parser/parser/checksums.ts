@@ -77,12 +77,45 @@ export function validateVatNumber(raw: unknown): ChecksumResult {
 }
 
 /**
+ * Money, whatever else the name contains. "Excluding VAT" is the commonest
+ * suffix on an amount in South African paperwork — claimed_spend_ex_vat on
+ * every supplier row, fuel_rand_excl_vat on every vehicle sheet — and matching
+ * the fragment "vat" sent each of those amounts through the VAT-number check,
+ * which reported every one as "likely misread".
+ */
+const MONEY_FIELD =
+  /(^|_)(ex|excl|incl|exclusive|inclusive)_vat(_|$)|(^|_)(rand|zar|amount|spend|cost|price|total|value|fee|charge|tariff)(_|$)/;
+
+function plainName(fieldName: string): string {
+  return String(fieldName ?? '').toLowerCase();
+}
+
+export function isSaIdField(fieldName: string): boolean {
+  const f = plainName(fieldName);
+  return !MONEY_FIELD.test(f) && /id_number|identity|sa_id/.test(f);
+}
+
+/** A VAT REGISTRATION number — a field that names the number, not one that mentions VAT. */
+export function isVatNumberField(fieldName: string): boolean {
+  const f = plainName(fieldName);
+  return !MONEY_FIELD.test(f) && /(^|_)vat_?(number|no|nr|reg|registration)(_|$)/.test(f);
+}
+
+/** A company registration (CIPC) — never a vehicle's, and never a VAT registration. */
+export function isCompanyRegistrationField(fieldName: string): boolean {
+  const f = plainName(fieldName);
+  if (MONEY_FIELD.test(f) || /vehicle|licen[cs]e|plate/.test(f) || isVatNumberField(f)) return false;
+  return /registration_number|cipc|company_number/.test(f);
+}
+
+/**
  * Pick the checksum validator for a field by name, or null if the field carries
- * no checksummable identifier. Mirrors the field-name cues extract_fields uses.
+ * no checksummable identifier. extract_fields picks its identifier patterns
+ * with the same three classifiers, so the two cannot drift apart again.
  */
 export function checksumForField(fieldName: string, value: unknown): ChecksumResult | null {
-  if (/id_number|identity|sa_id/.test(fieldName)) return validateSaId(value);
-  if (/registration_number|cipc|company_number/.test(fieldName)) return validateCipcRegistration(value);
-  if (/vat/.test(fieldName)) return validateVatNumber(value);
+  if (isSaIdField(fieldName)) return validateSaId(value);
+  if (isCompanyRegistrationField(fieldName)) return validateCipcRegistration(value);
+  if (isVatNumberField(fieldName)) return validateVatNumber(value);
   return null;
 }
