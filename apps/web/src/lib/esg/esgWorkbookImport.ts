@@ -217,6 +217,24 @@ export type EsgImportPreview = {
   unmatchedSheets: string[];
 };
 
+/**
+ * Our own template writes "Choose one: A · B · C" beside every dropdown. It is
+ * an instruction, never an answer — but a Cover left blank had its label bridge
+ * pick the hint up as the value, so a company's sector became "Choose one:
+ * Generic · FMCG …". Now that imports merge into what is already captured, that
+ * text would also overwrite a real sector. It is dropped as the sheet is read.
+ */
+const TEMPLATE_HINT = /^\s*choose one\s*:/i;
+
+function withoutTemplateHints(cells: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [ref, value] of Object.entries(cells)) {
+    if (typeof value === "string" && TEMPLATE_HINT.test(value)) continue;
+    out[ref] = value;
+  }
+  return out;
+}
+
 export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPreview {
   const book = XLSX.read(buffer, { type: "buffer" });
   const sections: Record<string, { cells: Record<string, unknown> }> = {};
@@ -226,14 +244,15 @@ export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPre
   for (const sheetName of book.SheetNames) {
     const sectionId = SHEET_TO_SECTION[normSheetName(sheetName)];
     if (!sectionId || !ESG_SECTION_IDS.includes(sectionId)) {
-      if (!["escorecard", "sscorecard", "gscorecard", "esgdashboard", "validation", "auditlog", "glossary", "standardsmap", "datastatus", "carbontax", "netzeroroadmap", "materialitymatrix", "bbbeeesg", "iso14083"].includes(normSheetName(sheetName))) {
+      // "instructions" is our own template's cover note, not a client sheet.
+      if (!["instructions", "escorecard", "sscorecard", "gscorecard", "esgdashboard", "validation", "auditlog", "glossary", "standardsmap", "datastatus", "carbontax", "netzeroroadmap", "materialitymatrix", "bbbeeesg", "iso14083"].includes(normSheetName(sheetName))) {
         unmatchedSheets.push(sheetName);
       }
       continue;
     }
     const sheet = book.Sheets[sheetName];
     if (!sheet) continue;
-    const raw = sheetToCellMap(sheet);
+    const raw = withoutTemplateHints(sheetToCellMap(sheet));
 
     let cells = raw;
     if (isEsgGridSection(sectionId)) {
