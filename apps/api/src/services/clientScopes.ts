@@ -28,6 +28,26 @@ const logger = createLogger('ClientScopes');
  * nothing here and their access to those companies' documents comes from
  * having uploaded them or from an explicit scope.
  */
+/**
+ * True when every team this user belongs to has them as a viewer.
+ *
+ * Viewers could PATCH, re-read and replace documents: the document routes
+ * checked which companies a user may SEE and never what they may DO. Someone
+ * with no membership is a solo account or a founder, never a viewer.
+ */
+export async function isViewOnlyMember(userId: string): Promise<boolean> {
+  if (mongoose.connection.readyState !== 1) return false;
+  try {
+    const memberships = (await WorkspaceMemberModel.find({ userId }, { _id: 0, role: 1 }).lean()) as Array<{
+      role?: string;
+    }>;
+    return memberships.length > 0 && memberships.every((m) => m.role === 'viewer');
+  } catch (error) {
+    logger.error('Failed to resolve membership roles', error as Error, { userId });
+    return false;
+  }
+}
+
 export async function resolveClientScopeIds(userId: string): Promise<string[] | null> {
   if (mongoose.connection.readyState !== 1) return null;
   try {
