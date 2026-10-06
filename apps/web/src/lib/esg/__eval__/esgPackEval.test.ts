@@ -16,7 +16,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { applyEsgParserResult, type EsgParserCaseLike } from "@/components/esg/esgParserInjection";
+import { applyEsgParserResult, esgUnplacedKinds, type EsgParserCaseLike } from "@/components/esg/esgParserInjection";
 import { resolveEsgReportingAxes, type EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { computeEsgIndicatorCoverage } from "../esgIndicatorCoverage";
@@ -40,10 +40,14 @@ describe.skipIf(!CASE || !KEY)("ESG answer-key gate", () => {
 
     const injection = applyEsgParserResult(caseResult, { axes });
     const score = scoreEsgPlacement(injection.patches, key.cells);
+    const kinds = esgUnplacedKinds(injection.unplaced);
     const context = {
       "Values read": injection.valuesRead,
       "Placed (any cell)": injection.placed.length,
       "Not placed": injection.unplaced.length,
+      "… of which a person places by answering": kinds.toPlace,
+      "… of which to check by hand": kinds.toCheck,
+      "… of which kept as evidence (no cell)": kinds.evidence,
       Conflicts: injection.conflicts.length,
     };
 

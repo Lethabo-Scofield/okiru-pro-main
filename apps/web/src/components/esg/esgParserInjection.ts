@@ -63,7 +63,10 @@ import type { EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
 import {
   mapEsgCalculatorToWorkbook,
   type EsgCalculatorResultLike,
+  type EsgPlacementChoice,
 } from "@/lib/esg/esgParserToWorkbook";
+import type { EsgRejectionReason } from "@/lib/esg/esgWorkbookInjection";
+import { esgMonthlyCellRef } from "@/lib/esg/esgParserFieldBridge";
 import {
   esgPlacementAxes,
   esgWorkbookAxisState,
@@ -154,6 +157,8 @@ export interface EsgParserCaseLike {
      */
     calculator?: EsgCalculatorResultLike | null;
   } | null;
+  /** Figures a person placed in the review — see `EsgManualPlacement`. Never set by the parser. */
+  manual_placements?: EsgManualPlacement[];
   [key: string]: unknown;
 }
 
@@ -260,6 +265,35 @@ export interface EsgUnplacedValue {
   element: string;
   /** Plain-language reason, shown to the user verbatim. */
   reason: string;
+  /** Why, typed: what tells a figure waiting for an answer from evidence no cell needs. */
+  rejection?: EsgRejectionReason;
+  /** The one question that places this figure, when a person can answer it. */
+  choice?: EsgPlacementChoice;
+  /** This reading is the site or period of the figure with this choice id. */
+  partOf?: string;
+}
+
+/**
+ * A figure a person placed in the review: the answer to its question, kept
+ * ON the case (`manual_placements`) so it travels wherever the case does —
+ * into the saved flow, through added documents, into the workbook.
+ */
+export interface EsgManualPlacement {
+  /** The choice it answers (`EsgPlacementChoice.id`). */
+  choiceId: string;
+  sectionId: string;
+  cellRef: string;
+  value: number;
+  /** Where it went, in words: "CPT, Jun-25". */
+  where: string;
+}
+
+/** A figure placed by a person, as the review shows it — with the way back. */
+export interface EsgAnsweredValue {
+  placement: EsgManualPlacement;
+  choice: EsgPlacementChoice;
+  field: string;
+  sourceFile: string;
 }
 
 /** One cell two or more documents disagree about. Left blank, never guessed. */
@@ -284,6 +318,10 @@ export interface EsgInjectionResult {
   conflicts: EsgValueConflict[];
   /** placed + unplaced + conflicting values. The reconciliation invariant. */
   valuesRead: number;
+  /** Figures a person placed by answering their question, with what they answered. */
+  answered?: EsgAnsweredValue[];
+  /** The sites and months the figures were placed on — the answers a question offers. */
+  axes?: EsgReportingAxes;
   /**
    * Figures actually written to the workbook — one per cell. A dashboard is
    * ONE reading holding hundreds of figures, so `placed` (readings) said "32
@@ -412,15 +450,6 @@ export function applyEsgParserResult(
     ? { axes: options.axes, cells: {} as Record<string, string | number> }
     : esgPlacementAxes(caseResult, options.workbook);
   const mapped = mapEsgCalculatorToWorkbook(calculator, { axes: placement.axes });
-  // The axes the figures were placed on travel WITH them: a workbook that
-  // later read its axes from anywhere else would re-point every cell. With no
-  // monthly figure placed there is nothing to anchor, and the workbook's axes
-  // stay open for the documents that do place one.
-  const placedMonthly = esgWorkbookAxisState(mapped.patches["e-data"]?.cells).filled;
-  if (placedMonthly && Object.keys(placement.cells).length > 0) {
-    const eData = mapped.patches["e-data"] ?? (mapped.patches["e-data"] = { cells: {} });
-    eData.cells = { ...placement.cells, ...eData.cells };
-  }
 
   const placed: EsgPlacedValue[] = [];
   const unplaced: EsgUnplacedValue[] = [];
@@ -457,7 +486,47 @@ export function applyEsgParserResult(
     unplaced.push({
       ...reading,
       reason: outcome?.reason ?? ESG_UNTRACKED_REASON,
+      // A reading the scoring layer never received has no cell either.
+      ...(outcome?.rejection ? { rejection: outcome.rejection } : outcome ? {} : { rejection: "no_workbook_home" as const }),
+      ...(outcome?.choice ? { choice: outcome.choice } : {}),
+      ...(outcome?.partOf ? { partOf: outcome.partOf } : {}),
     });
+  }
+
+  // What a person answered in the review: each placed figure moves, with its
+  // site and period, from "could not be placed" to the cell they chose.
+  const answered: EsgAnsweredValue[] = [];
+  for (const placement of esgManualPlacements(caseResult)) {
+    const figure = unplaced.find((u) => u.choice?.id === placement.choiceId);
+    if (!figure?.choice) continue; // the figure is no longer held: its document was replaced, or it now places itself
+    const section = mapped.patches[placement.sectionId] ?? (mapped.patches[placement.sectionId] = { cells: {} });
+    section.cells[placement.cellRef] = placement.value;
+    answered.push({ placement, choice: figure.choice, field: figure.field, sourceFile: figure.sourceFile });
+    for (let i = unplaced.length - 1; i >= 0; i -= 1) {
+      const u = unplaced[i];
+      // The figure — however many times it was read — and its site and period.
+      if (u.choice?.id !== placement.choiceId && u.partOf !== placement.choiceId) continue;
+      placed.push({
+        sectionId: placement.sectionId,
+        cellRef: placement.cellRef,
+        field: u.field,
+        value: placement.value,
+        sourceFile: u.sourceFile,
+        documentId: u.documentId,
+      });
+      unplaced.splice(i, 1);
+    }
+  }
+
+  // The axes the figures were placed on travel WITH them: a workbook that
+  // later read its axes from anywhere else would re-point every cell. With no
+  // monthly figure placed — by the documents or by a person — there is
+  // nothing to anchor, and the workbook's axes stay open for the documents
+  // that do place one.
+  const placedMonthly = esgWorkbookAxisState(mapped.patches["e-data"]?.cells).filled;
+  if (placedMonthly && Object.keys(placement.cells).length > 0) {
+    const eData = mapped.patches["e-data"] ?? (mapped.patches["e-data"] = { cells: {} });
+    eData.cells = { ...placement.cells, ...eData.cells };
   }
 
   return {
@@ -465,6 +534,8 @@ export function applyEsgParserResult(
     patches: mapped.patches,
     placed,
     unplaced,
+    answered,
+    axes: placement.axes,
     conflicts: mapped.conflicts.map((conflict) => ({
       sectionId: conflict.sectionId,
       cellRef: conflict.cellRef,
@@ -474,6 +545,68 @@ export function applyEsgParserResult(
     valuesRead: readings.length,
     figuresPlaced: esgFigureCount(mapped.patches),
   };
+}
+
+/** Why a value has no cell at all: evidence a person reads, not a failure to place. */
+export const ESG_NO_CELL_REJECTIONS: ReadonlySet<string> = new Set(["no_workbook_home", "derived_cell", "unknown_field"]);
+
+/**
+ * What the unplaced values ask of a person: figures to place by answering a
+ * question, values to check or enter by hand, and evidence no cell needs.
+ * A figure's site and period travel with it, and a figure read twice is one.
+ */
+export function esgUnplacedKinds(unplaced: EsgUnplacedValue[]): { toPlace: number; toCheck: number; evidence: number } {
+  const questions = new Set<string>();
+  let toCheck = 0;
+  let evidence = 0;
+  for (const u of unplaced) {
+    if (u.partOf) continue;
+    if (u.choice) questions.add(u.choice.id);
+    else if (u.rejection && ESG_NO_CELL_REJECTIONS.has(u.rejection)) evidence += 1;
+    else toCheck += 1;
+  }
+  return { toPlace: questions.size, toCheck, evidence };
+}
+
+/** The placements a person made in the review, as the case carries them. */
+export function esgManualPlacements(caseResult: EsgParserCaseLike | null): EsgManualPlacement[] {
+  const raw = caseResult?.manual_placements;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (p): p is EsgManualPlacement =>
+      !!p && typeof p === "object" &&
+      typeof (p as EsgManualPlacement).choiceId === "string" &&
+      typeof (p as EsgManualPlacement).sectionId === "string" &&
+      typeof (p as EsgManualPlacement).cellRef === "string" &&
+      typeof (p as EsgManualPlacement).value === "number" && Number.isFinite((p as EsgManualPlacement).value),
+  );
+}
+
+/**
+ * The cell a figure's answer puts it in: the site's row and the month's column
+ * of its grid. Null until every question it asks is answered.
+ */
+export function esgChoiceCell(
+  choice: EsgPlacementChoice,
+  answer: { siteRow?: number; month?: string },
+): { sectionId: string; cellRef: string } | null {
+  const siteRow = answer.siteRow ?? choice.siteRow ?? (choice.needs.includes("site") ? undefined : 0);
+  const month = answer.month ?? choice.month;
+  if (siteRow === undefined || siteRow < 0 || !month || !/^[A-Z]$/.test(month)) return null;
+  return { sectionId: "e-data", cellRef: esgMonthlyCellRef(choice.prefix, siteRow, month) };
+}
+
+/**
+ * The case with a figure placed where a person said — or, with no cell, its
+ * placement taken back. Replaces any earlier answer to the same question.
+ */
+export function withEsgManualPlacement(
+  caseResult: EsgParserCaseLike,
+  choiceId: string,
+  placement: Omit<EsgManualPlacement, "choiceId"> | null,
+): EsgParserCaseLike {
+  const kept = esgManualPlacements(caseResult).filter((p) => p.choiceId !== choiceId);
+  return { ...caseResult, manual_placements: placement ? [...kept, { choiceId, ...placement }] : kept };
 }
 
 /**

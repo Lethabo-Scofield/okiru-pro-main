@@ -61,8 +61,10 @@ import { buildEsgDocumentReview } from "./esgDocumentReview";
 import {
   applyEsgParserResult,
   esgCaseFileNames,
+  esgChoiceCell,
   esgUploadNameForSource,
   mergeEsgCalculators,
+  withEsgManualPlacement,
   type EsgInjectionResult,
   type EsgParserCaseLike,
 } from "./esgParserInjection";
@@ -1138,6 +1140,58 @@ export function EsgDocumentUploadStart({
     return file ? persistedDocumentsRef.current.get(filePersistenceKey(file)) ?? null : null;
   };
 
+  /**
+   * "Put it here": a held figure placed where the person says — its site,
+   * its month — or, with no answer, taken back. Kept on the case, so it
+   * survives leaving the flow and reaches the workbook with everything else.
+   */
+  const answerPlacement = (choiceId: string, answer: Record<string, string> | null) => {
+    const current = parserCaseRef.current;
+    if (!current) return;
+    let next: EsgParserCaseLike;
+    if (!answer) {
+      next = withEsgManualPlacement(current, choiceId, null);
+    } else {
+      const choice = injection.unplaced.find((u) => u.choice?.id === choiceId)?.choice;
+      if (!choice) return;
+      const siteRow = answer.site !== undefined ? Number(answer.site) : choice.siteRow;
+      const cell = esgChoiceCell(choice, { siteRow, month: answer.month });
+      if (!cell) return;
+      const axes = injection.axes;
+      const month = answer.month ?? choice.month;
+      const monthLabel = month && axes ? axes.months[month.charCodeAt(0) - 67] : undefined;
+      // A cell the documents already filled is replaced — said, so it can be undone.
+      const held = injection.patches[cell.sectionId]?.cells[cell.cellRef];
+      const where = [
+        siteRow !== undefined && choice.needs.includes("site") ? axes?.depots[siteRow] : undefined,
+        monthLabel,
+      ].filter(Boolean).join(", ");
+      next = withEsgManualPlacement(current, choiceId, {
+        ...cell,
+        value: choice.value,
+        where: typeof held === "number"
+          ? `${where} (replacing ${new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(held)} from the documents)`
+          : where,
+      });
+    }
+    parserCaseRef.current = next;
+    setParserCase(next);
+    const snapshotInjection = applyEsgParserResult(next, { workbook: workbookAxes });
+    writeEsgFlowSnapshot({
+      savedAt: new Date().toISOString(),
+      entityName: "",
+      nameSource: "none",
+      work: {
+        route: "documents",
+        patches: snapshotInjection.patches,
+        injection: snapshotInjection,
+        parserCase: next,
+        documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
+        excel: null,
+      },
+    });
+  };
+
   return (
     <div data-testid="esg-document-upload-start">
       <style>{`
@@ -1924,6 +1978,7 @@ export function EsgDocumentUploadStart({
             fileFor={(name) => files.find((f) => f.name === name) ?? null}
             documentIdFor={documentIdFor}
             onAddDocuments={() => inputRef.current?.click()}
+            onAnswer={(_filename, question, answer) => answerPlacement(question.id, answer)}
           />
 
           <div className="esg-fade-up mt-4" style={{ animationDelay: "200ms" }}>
