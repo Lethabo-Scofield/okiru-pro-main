@@ -42,7 +42,9 @@ app.use(helmet({
     ? {
         useDefaults: true,
         directives: {
-          scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com"],
+          // clarity.ms: Microsoft Clarity's loader (www.) and recorder (scripts.),
+          // present only when CLARITY_PROJECT_ID is set — see server/clarity.ts.
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", "https://*.clarity.ms"],
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           connectSrc: ["'self'", "https:", "wss:"],
           workerSrc: ["'self'", "blob:"],
