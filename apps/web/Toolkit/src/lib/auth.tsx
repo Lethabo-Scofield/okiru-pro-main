@@ -35,15 +35,17 @@ interface LoginResult {
   requires2FA?: boolean;
   message?: string;
   emailHint?: string;
+  /** How long "remember this device" lasts; 0 when the server does not offer it. */
+  rememberDeviceDays?: number;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
-  register: (data: RegisterData) => Promise<{ requiresVerification?: boolean; message?: string; emailHint?: string }>;
+  register: (data: RegisterData) => Promise<{ requiresVerification?: boolean; message?: string; emailHint?: string; rememberDeviceDays?: number }>;
   logout: () => Promise<void>;
-  verifyOtp: (otp: string) => Promise<void>;
+  verifyOtp: (otp: string, options?: { rememberDevice?: boolean }) => Promise<void>;
   resendOtp: () => Promise<string>;
   toggle2FA: (enabled: boolean) => Promise<{ requiresVerification?: boolean; message: string }>;
   confirm2FA: (otp: string) => Promise<void>;
@@ -96,7 +98,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const data = await res.json().catch(() => null);
 
     if (data?.requires2FA) {
-      return { requires2FA: true, message: data.message, emailHint: data.emailHint };
+      return {
+        requires2FA: true,
+        message: data.message,
+        emailHint: data.emailHint,
+        rememberDeviceDays: Number(data.rememberDeviceDays) || 0,
+      };
     }
 
     if (!data?.user) {
@@ -107,14 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { user: data.user };
   }, [queryClient]);
 
-  const verifyOtp = useCallback(async (otp: string) => {
+  const verifyOtp = useCallback(async (otp: string, options?: { rememberDevice?: boolean }) => {
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/api/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ otp }),
+        body: JSON.stringify({ otp, rememberDevice: options?.rememberDevice === true }),
       });
     } catch {
       throw new Error('Network error. Please try again.');
@@ -170,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data?.user) setUser(data.user);
   }, []);
 
-  const register = useCallback(async (regData: RegisterData): Promise<{ requiresVerification?: boolean; message?: string; emailHint?: string }> => {
+  const register = useCallback(async (regData: RegisterData): Promise<{ requiresVerification?: boolean; message?: string; emailHint?: string; rememberDeviceDays?: number }> => {
     let res: Response;
     try {
       res = await fetch(`${API_BASE}/api/auth/register`, {
@@ -188,7 +195,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const result = await res.json().catch(() => null);
     if (result?.requiresVerification) {
-      return { requiresVerification: true, message: result.message, emailHint: result.emailHint };
+      return {
+        requiresVerification: true,
+        message: result.message,
+        emailHint: result.emailHint,
+        rememberDeviceDays: Number(result.rememberDeviceDays) || 0,
+      };
     }
     if (result?.user) {
       setUser(result.user);
