@@ -11,7 +11,11 @@ import {
   esgFieldElementIndex,
   mapEsgEntitiesToCalculator,
 } from '../../src/services/esgEntityCalculatorMapping.js';
-import type { DocumentExtraction } from '../../src/services/aiExtraction.js';
+import { extractEsgSheetTable } from '../../src/services/esgSheetTableExtraction.js';
+import type { DocumentExtraction, ExtractionModel } from '../../src/services/aiExtraction.js';
+
+/** Decisions are remembered per process: a fresh template name per run keeps this test's own. */
+const TEMPLATE_RUN = Date.now();
 
 const TAB_TITLE: unknown[][] = [
   ['Summary'],
@@ -32,6 +36,43 @@ describe('vehicleOfSheet', () => {
     expect(vehicleOfSheet('Detail3', [['Detail3 summary'], ['Name', 'Value']])).toBeNull();
     expect(vehicleOfSheet('XY12ZZGP', TAB_TITLE)).toBeNull();
     expect(vehicleOfSheet('Daily Summary', TAB_TITLE)).toBeNull();
+  });
+
+  it('never takes a period or a page for a vehicle, even when its title repeats it', () => {
+    for (const name of ['FY2025', 'Q1-2026', 'Mar26', 'Sheet2', 'Week14', 'Rev2']) {
+      expect(vehicleOfSheet(name, [[name], ['Date', 'Litres']]), name).toBeNull();
+    }
+  });
+});
+
+describe('a tab per vehicle', () => {
+  it('is one question, asked once: twenty tabs of a template share its answers', async () => {
+    const calls: string[] = [];
+    const model: ExtractionModel = {
+      name: 'fake',
+      async complete(system: string) {
+        calls.push(system.includes('"register"') ? 'register' : 'columns');
+        return system.includes('"register"')
+          ? '{"register": "fleet__fuel_card_statement"}'
+          : '{"Date": "transaction_date", "Ode Reading": "odometer_reading", "Total liters": "fuel_litres"}';
+      },
+    };
+    const tab = (plate: string) => ({
+      filename: `DIESEL REPORT.xlsx › ${plate}`,
+      sheetName: plate,
+      template: `Vehicle fuel log ${TEMPLATE_RUN}`,
+      rows: [
+        { Date: '02-03-2026', 'Ode Reading': 217971, 'Total liters': 148 },
+        { Date: '05-03-2026', 'Ode Reading': 218526, 'Total liters': 165 },
+      ],
+    });
+    const first = await extractEsgSheetTable(model, tab('AB45CDGP'));
+    const second = await extractEsgSheetTable(model, tab('AB46CDGP'));
+    expect(calls).toEqual(['register', 'columns']);
+    // Each tab is still its own document, its rows its own.
+    expect(first?.sourceFile).toBe('DIESEL REPORT.xlsx › AB45CDGP');
+    expect(second?.sourceFile).toBe('DIESEL REPORT.xlsx › AB46CDGP');
+    expect((second?.values[0].value as unknown[]).length).toBe(2);
   });
 });
 
