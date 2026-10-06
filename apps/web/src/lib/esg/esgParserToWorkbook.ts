@@ -633,8 +633,10 @@ function applyRegisterRows(
   axes: EsgReportingAxes,
 ): void {
   const def = ESG_GRID_SECTIONS[sectionId];
-  const built: EsgGridRow[] = [];
+  let built: EsgGridRow[] = [];
+  const builtSources: string[] = [];
   const rejected: string[] = [];
+  let fleetNote: string | undefined;
 
   const ordered = [...rows].sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
@@ -653,7 +655,19 @@ function applyRegisterRows(
       gridRow[columnKey] = result.value;
       filled = true;
     }
-    if (filled) built.push(gridRow);
+    if (filled) {
+      built.push(gridRow);
+      builtSources.push((row.sourceFiles ?? [])[0] ?? "");
+    }
+  }
+
+  if (sectionId === "fleet" && built.length > 0) {
+    const fleet = mergeFleetRows(built, builtSources);
+    built = fleet.rows;
+    const said: string[] = [];
+    if (fleet.duplicates > 0) said.push(`${fleet.duplicates} repeat listing(s) of the same vehicles were combined into ${built.length} vehicles`);
+    if (fleet.sold > 0) said.push(`${fleet.sold} vehicle(s) listed as sold or disposed were left out of the fleet`);
+    if (said.length) fleetNote = `${said.join("; ")}.`;
   }
 
   if (built.length === 0) {
@@ -693,11 +707,60 @@ function applyRegisterRows(
       },
     ],
     reason:
-      rejected.length > 0
-        ? `${built.length} row(s) written; ${rejected.length} value(s) did not match what the register accepts.`
-        : undefined,
+      [
+        fleetNote,
+        rejected.length > 0
+          ? `${built.length} row(s) written; ${rejected.length} value(s) did not match what the register accepts.`
+          : undefined,
+      ].filter(Boolean).join(" ") || undefined,
   });
   void lastColumn;
+}
+
+/** "LB45BXGP PERMIT" → "LB45BXGP": the first token that reads as a plate. */
+function plateKey(reg: unknown): string {
+  const text = String(reg ?? "").toUpperCase();
+  const token = text.split(/\s+/).find((t) => /[A-Z]/.test(t) && /\d/.test(t)) ?? text;
+  return token.replace(/[^A-Z0-9]/g, "");
+}
+
+/** A sheet of vehicles that have left the fleet. */
+const LEFT_THE_FLEET = /\b(sold|disposed|scrapped|written[ -]?off|decommissioned)\b/i;
+
+/**
+ * One vehicle, one row. A client's fleet list holds the same vehicles on many
+ * sheets — the master, this month's list, last August's, pivots and scratch
+ * copies — each knowing part of what is known about them: GVM on one, depot
+ * and tank on another, the month's kilometres and fuel on a third. Added as
+ * separate rows, Super Group's ~130 trucks became 800 rows; counted, the fleet
+ * was six times its size.
+ *
+ * Rows are matched by plate and combined, the first value known for each
+ * column kept. Vehicles listed on a sheet of vehicles that have left the fleet
+ * (sold, disposed, scrapped) are not counted in it.
+ */
+function mergeFleetRows(rows: EsgGridRow[], sources: string[]): { rows: EsgGridRow[]; duplicates: number; sold: number } {
+  const sheetOf = (source: string) => source.slice(source.lastIndexOf("›") + 1);
+  const gone = new Set(
+    rows.filter((_, i) => LEFT_THE_FLEET.test(sheetOf(sources[i] ?? ""))).map((row) => plateKey(row.reg)),
+  );
+  const byPlate = new Map<string, EsgGridRow>();
+  let duplicates = 0;
+  for (const row of rows) {
+    const key = plateKey(row.reg);
+    if (!key || gone.has(key)) continue;
+    const prior = byPlate.get(key);
+    if (!prior) {
+      byPlate.set(key, { ...row });
+      continue;
+    }
+    duplicates += 1;
+    for (const [column, value] of Object.entries(row)) {
+      if (column === "_id") continue;
+      if (prior[column] === undefined || prior[column] === null || prior[column] === "") prior[column] = value;
+    }
+  }
+  return { rows: Array.from(byPlate.values()), duplicates, sold: gone.size };
 }
 
 function gridColumnKind(type: string | undefined): EsgCellKind {
