@@ -172,6 +172,44 @@ export function esgCaseFileNames(caseResult: EsgParserCaseLike | null): string[]
 }
 
 /**
+ * Fold a later round's calculator into an earlier one's — the half of a case
+ * the workbook is actually filled from.
+ *
+ * The case merge spread `ai_entities` as one object, so a second round's
+ * calculator REPLACED the first's: add a forgotten document and every value
+ * read in round one — its monthly figures, its registers — silently left the
+ * workbook. Now an earlier entry or row survives unless the new round re-read
+ * the file it came from (the fresh read of that file stands); a key both
+ * rounds mapped takes the new round's value, the rule the merge already
+ * applies to extractions.
+ */
+export function mergeEsgCalculators(
+  kept: EsgCalculatorResultLike | null | undefined,
+  fresh: EsgCalculatorResultLike | null | undefined,
+  rereadSources: ReadonlySet<string>,
+): EsgCalculatorResultLike | null | undefined {
+  if (!kept) return fresh;
+  if (!fresh) return kept;
+  const reread = (sources?: string[]) =>
+    (sources ?? []).length > 0 && (sources ?? []).every((source) => rereadSources.has(String(source)));
+  const freshKeys = new Set((fresh.entries ?? []).map((entry) => entry.key));
+  const entries = [
+    ...(kept.entries ?? []).filter((entry) => !freshKeys.has(entry.key) && !reread(entry.sourceFiles)),
+    ...(fresh.entries ?? []),
+  ];
+  const freshReview = new Set((fresh.needsReview ?? []).map((item) => item.field));
+  const freshUnmapped = new Set((fresh.unmapped ?? []).map((item) => item.field));
+  return {
+    // The payload mirrors the entries; rebuilt so a dropped entry's key goes with it.
+    payload: Object.fromEntries(entries.map((entry) => [entry.key, entry.value])),
+    entries,
+    rows: [...(kept.rows ?? []).filter((row) => !reread(row.sourceFiles)), ...(fresh.rows ?? [])],
+    unmapped: [...(kept.unmapped ?? []).filter((item) => !freshUnmapped.has(item.field)), ...(fresh.unmapped ?? [])],
+    needsReview: [...(kept.needsReview ?? []).filter((item) => !freshReview.has(item.field)), ...(fresh.needsReview ?? [])],
+  };
+}
+
+/**
  * The upload a parser source came from — the file itself, or the workbook a
  * sheet was split out of. The parser names a split sheet "File.xlsx › Sheet",
  * which matched no uploaded file, so every result read from a workbook was

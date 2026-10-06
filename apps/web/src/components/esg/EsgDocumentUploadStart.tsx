@@ -59,6 +59,7 @@ import {
   applyEsgParserResult,
   esgCaseFileNames,
   esgUploadNameForSource,
+  mergeEsgCalculators,
   type EsgInjectionResult,
   type EsgParserCaseLike,
 } from "./esgParserInjection";
@@ -206,6 +207,9 @@ function mergeEsgCases(kept: EsgParserCaseLike | null, fresh: EsgParserCaseLike)
         ),
         ...(fresh.ai_entities?.extractions ?? []),
       ],
+      // The workbook is filled from the calculator: spread with the rest, the
+      // new round's replaced the earlier one and round one's values vanished.
+      calculator: mergeEsgCalculators(kept.ai_entities?.calculator, fresh.ai_entities?.calculator, freshFiles),
     },
   };
 }
