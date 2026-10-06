@@ -98,6 +98,12 @@ describe("EsgInformationRequest wiring", () => {
     expect(PAGE).not.toMatch(/updateSectionCells\(/);
   });
 
+  it("hands a spreadsheet that is not our template to the document reader, never \"Import complete\" over nothing", () => {
+    expect(PAGE).toContain("esgImportHandover(preview)");
+    expect(PAGE).toContain("setHandover([file])");
+    expect(PAGE).toContain("initialFiles={handover ?? undefined}");
+  });
+
   it("still lands the user on the summary the same way", () => {
     expect(PAGE).toMatch(/handleContinueToSummary/);
     expect(PAGE).toMatch(/esgSummaryHref\(companyId\)/);
