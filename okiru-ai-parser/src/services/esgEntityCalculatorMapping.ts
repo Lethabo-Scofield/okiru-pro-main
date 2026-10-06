@@ -115,6 +115,9 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
   { field: 'monthly_period_end', calculatorKey: 'monthly.period_end', elements: ['GHG_ENERGY'], coerce: 'iso_date' },
   { field: 'monthly_value', calculatorKey: 'monthly.value', elements: ['GHG_ENERGY'], coerce: 'number' },
   { field: 'monthly_unit', calculatorKey: 'monthly.unit', elements: ['GHG_ENERGY'], coerce: 'text' },
+  // A bill turned into a row (esgBillFacts.ts) names the field it was read as.
+  { field: 'monthly_field', calculatorKey: 'monthly.field', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'monthly_context', calculatorKey: 'monthly.context', elements: ['GHG_ENERGY'], coerce: 'text' },
 
   // ── Emissions and carbon tax ───────────────────────────────────────────
   { field: 'carbon_tax_licence_number', calculatorKey: 'emissions.carbon_tax_licence_number', elements: ['GHG_ENERGY'], coerce: 'text' },
