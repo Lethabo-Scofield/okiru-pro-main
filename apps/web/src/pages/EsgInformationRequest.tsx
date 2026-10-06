@@ -38,6 +38,7 @@ import { EsgImportPreviewModal } from "@/components/esg-workbook/EsgImportPrevie
 import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 import EsgCreateStartChoice from "@/components/esg/EsgCreateStartChoice";
 import EsgDocumentUploadStart from "@/components/esg/EsgDocumentUploadStart";
+import { esgWorkbookAxisState } from "@/lib/esg/esgCaseAxes";
 import EsgFlowSteps from "@/components/esg/EsgFlowSteps";
 import {
   esgPatchCellCount,
@@ -145,6 +146,15 @@ export default function EsgInformationRequest() {
       cancelled = true;
     };
   }, [companyId, load, navigate, setCompanyName]);
+
+  /**
+   * The sites and reporting months this workbook places figures on. Its own
+   * when it states them; kept as they are once it holds monthly figures.
+   */
+  const workbookAxes = useMemo(
+    () => esgWorkbookAxisState(workbook?.sections?.["e-data"]?.cells as Record<string, unknown> | undefined),
+    [workbook],
+  );
 
   /** Every captured cell across every section — the "is this workbook empty" test. */
   const totalCapturedCells = useMemo(
@@ -560,6 +570,7 @@ export default function EsgInformationRequest() {
               busy={injecting}
               onBack={() => setStage("choose")}
               onComplete={handleParsedDocuments}
+              workbookAxes={workbookAxes}
             />
           </div>
         ) : (

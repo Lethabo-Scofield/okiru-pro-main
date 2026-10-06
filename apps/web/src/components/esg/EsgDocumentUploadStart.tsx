@@ -55,6 +55,7 @@ import EsgElementDocumentBatches, {
   type EsgUploadOrigin,
 } from "./EsgElementDocumentBatches";
 import EsgExtractionSummary from "./EsgExtractionSummary";
+import type { EsgWorkbookAxisState } from "@/lib/esg/esgCaseAxes";
 import { DocumentReview } from "@/components/review/DocumentReview";
 import { buildEsgDocumentReview } from "./esgDocumentReview";
 import {
@@ -257,6 +258,12 @@ export interface EsgDocumentUploadStartProps {
    * there is a file for them to organise.
    */
   focused?: boolean;
+  /**
+   * The workbook these documents fill: the sites and reporting months it states,
+   * and whether it already holds monthly figures (then its axes stay). Absent
+   * for a company being created — its axes come from its own documents.
+   */
+  workbookAxes?: EsgWorkbookAxisState | null;
 }
 
 export function EsgDocumentUploadStart({
@@ -267,6 +274,7 @@ export function EsgDocumentUploadStart({
   busy = false,
   onBack,
   initialFiles,
+  workbookAxes = null,
 }: EsgDocumentUploadStartProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -336,8 +344,8 @@ export function EsgDocumentUploadStart({
    * extracted value as unplaced and writes nothing — see `esgParserInjection`.
    */
   const injection = useMemo<EsgInjectionResult>(
-    () => applyEsgParserResult(parserCase),
-    [parserCase],
+    () => applyEsgParserResult(parserCase, { workbook: workbookAxes }),
+    [parserCase, workbookAxes],
   );
 
   /**
@@ -776,7 +784,7 @@ export function EsgDocumentUploadStart({
       // the flow, even before "continue to workbook" is pressed. The host flow
       // restores it (straight to review) on its next mount, and overwrites this
       // with the proposed entity name once the user does continue.
-      const snapshotInjection = applyEsgParserResult(mergedCase);
+      const snapshotInjection = applyEsgParserResult(mergedCase, { workbook: workbookAxes });
       // The honest not-placed list IS the improvement backlog — record it
       // server-side (fire-and-forget) so "what should the mapper learn next?"
       // is answerable from data instead of memory. Never blocks the flow.
