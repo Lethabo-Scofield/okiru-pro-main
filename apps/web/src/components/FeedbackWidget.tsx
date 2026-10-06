@@ -111,7 +111,7 @@ export function FeedbackWidget() {
       setMessage('');
       toast({
         title: 'Feedback sent',
-        description: 'Thanks — it has gone to the Okiru team by email.',
+        description: "Thanks — it's on its way to the Okiru team.",
       });
       setTimeout(() => {
         setOpen(false);
