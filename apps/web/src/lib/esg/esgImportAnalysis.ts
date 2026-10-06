@@ -33,6 +33,8 @@ import { ESG_INPUT_SECTIONS } from "./esgSections";
 import type { EsgImportPreview } from "./esgWorkbookImport";
 import { validateEsgWorkbook, type EsgValidationIssue } from "./esgValidation";
 import type { EsgWorkbookData } from "./esgWorkbookStorage";
+import { isEsgGridSection } from "./esgGridSections";
+import { mergeImportIntoSections, nonRowCells, type EsgRegisterMergeOutcome } from "./esgImportMerge";
 
 /** The workbook we compare against. `EsgWorkbookData` satisfies this. */
 export interface EsgWorkbookLike {
@@ -64,6 +66,12 @@ export interface EsgImportDuplicate {
 export interface EsgImportAnalysis {
   /** Cells that will replace an existing, DIFFERENT value. The consent question. */
   overwrites: EsgCellChange[];
+  /**
+   * Registers the import carries rows for. Rows are ADDED to a register, never
+   * swapped in over it (esgImportMerge.ts), so they are counted here rather
+   * than as cell overwrites.
+   */
+  registers: EsgRegisterMergeOutcome[];
   /** Cells that are empty today and will be filled. */
   additions: EsgCellChange[];
   /** Cells whose incoming value equals what is already there — a no-op. */
@@ -125,22 +133,18 @@ function identifierLike(value: unknown): string | null {
 
 /**
  * The workbook as it WOULD be after the import — the only way to ask the rules
- * what this upload changes rather than what the workbook already lacked.
+ * what this upload changes rather than what the workbook already lacked. Built
+ * with the server's own merge, so the preview and the write cannot disagree.
  */
 function mergedWorkbook(
   current: EsgWorkbookLike | null,
-  preview: EsgImportPreview,
+  merged: ReturnType<typeof mergeImportIntoSections>,
 ): EsgWorkbookData {
   const sections: Record<string, { cells: Record<string, EsgCellValue> }> = {};
-  const put = (id: string, cells: Record<string, unknown>) => {
-    const target = sections[id] ?? { cells: {} };
-    for (const [cell, value] of Object.entries(cells)) {
-      target.cells[cell] = value as EsgCellValue;
-    }
-    sections[id] = target;
-  };
-  for (const [id, section] of Object.entries(current?.sections ?? {})) put(id, section?.cells ?? {});
-  for (const [id, section] of Object.entries(preview.sections)) put(id, section?.cells ?? {});
+  for (const [id, section] of Object.entries(current?.sections ?? {})) {
+    sections[id] = { cells: { ...(section?.cells ?? {}) } as Record<string, EsgCellValue> };
+  }
+  for (const [id, result] of Object.entries(merged)) sections[id] = { cells: result.cells };
   return {
     companyId: "",
     sections,
@@ -173,9 +177,19 @@ export function analyseEsgImport(
   const additions: EsgCellChange[] = [];
   let unchanged = 0;
 
+  const merged = mergeImportIntoSections(current?.sections, preview.sections);
+  const registers = Object.values(merged)
+    .map((result) => result.register)
+    .filter((r): r is EsgRegisterMergeOutcome => !!r && r.incoming > 0);
+
   for (const [sectionId, section] of Object.entries(preview.sections)) {
     const existing = current?.sections?.[sectionId]?.cells ?? {};
-    for (const [cell, after] of Object.entries(section?.cells ?? {})) {
+    // A register's rows are appended, not written over the rows at the same
+    // addresses, so only its non-row cells can replace anything.
+    const incoming = isEsgGridSection(sectionId)
+      ? nonRowCells(sectionId, section?.cells ?? {})
+      : section?.cells ?? {};
+    for (const [cell, after] of Object.entries(incoming)) {
       if (cell.startsWith("_")) continue; // pipeline metadata, not a user cell
       if (isEmpty(after)) continue; // an import never blanks a cell
       const before = existing[cell];
@@ -217,7 +231,7 @@ export function analyseEsgImport(
   // Validation is a BEFORE/AFTER diff so the panel can say what this upload
   // changes rather than restating every gap the workbook already had.
   const before = validateEsgWorkbook(asWorkbookData(current), undefined, "live");
-  const after = validateEsgWorkbook(mergedWorkbook(current, preview), undefined, "live");
+  const after = validateEsgWorkbook(mergedWorkbook(current, merged), undefined, "live");
   const failingBefore = new Set(before.filter((i) => !i.pass).map((i) => i.id));
   const failingAfter = new Set(after.filter((i) => !i.pass).map((i) => i.id));
 
@@ -226,6 +240,7 @@ export function analyseEsgImport(
 
   return {
     overwrites,
+    registers,
     additions,
     unchanged,
     sectionsCovered,
@@ -245,6 +260,10 @@ export function describeEsgImport(analysis: EsgImportAnalysis): string {
   if (analysis.additions.length) parts.push(`${analysis.additions.length} new`);
   if (analysis.overwrites.length) parts.push(`${analysis.overwrites.length} replaced`);
   if (analysis.unchanged) parts.push(`${analysis.unchanged} unchanged`);
+  const rowsAdded = (analysis.registers ?? []).reduce((n, r) => n + r.added, 0);
+  const rowsUpdated = (analysis.registers ?? []).reduce((n, r) => n + r.updated, 0);
+  if (rowsAdded) parts.push(`${rowsAdded} register row${rowsAdded === 1 ? "" : "s"} added`);
+  if (rowsUpdated) parts.push(`${rowsUpdated} register row${rowsUpdated === 1 ? "" : "s"} updated`);
   const cells = parts.length ? parts.join(", ") : "no cells";
   const scope = analysis.isPartial
     ? `${analysis.sectionsCovered.length} of ${analysis.sectionsCovered.length + analysis.sectionsUntouched.length} sections`

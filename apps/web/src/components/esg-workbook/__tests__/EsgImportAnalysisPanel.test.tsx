@@ -30,10 +30,10 @@ describe("EsgImportAnalysisPanel", () => {
   it("shows a replacement as before AND after, not as a count", () => {
     // "300 cells changed" is not a decision. "1,240 → 1,310" is.
     const analysis = analyseEsgImport(
-      preview({ fleet: { B4: 1310 } }),
-      workbook({ fleet: { B4: 1240 } }),
+      preview({ "e-data": { B4: 1310 } }),
+      workbook({ "e-data": { B4: 1240 } }),
     );
-    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ fleet: "Fleet" }} />);
+    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ "e-data": "Environmental" }} />);
 
     const block = screen.getByTestId("esg-import-overwrites");
     expect(block).toHaveTextContent("1240");
@@ -77,11 +77,31 @@ describe("EsgImportAnalysisPanel", () => {
 
   it("never uses colour as the only signal — each warning carries words", () => {
     const analysis = analyseEsgImport(
-      preview({ fleet: { B4: 1310, B5: "JR45DZGP", B6: "JR45DZGP" } }),
-      workbook({ fleet: { B4: 1240 } }),
+      preview({ "e-data": { B4: 1310, B5: "JR45DZGP", B6: "JR45DZGP" } }),
+      workbook({ "e-data": { B4: 1240 } }),
     );
-    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ fleet: "Fleet" }} />);
+    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ "e-data": "Environmental" }} />);
     expect(screen.getByTestId("esg-import-overwrites")).toHaveTextContent(/replaced/i);
     expect(screen.getByTestId("esg-import-duplicates")).toHaveTextContent(/more than once/i);
+  });
+
+  it("says what happens to a register in words: rows updated and added, none removed", () => {
+    const fleetRow = (reg: string, km: number) => ({ A: reg, I: km });
+    const cells = (rows: Array<{ A: string; I: number }>) => {
+      const out: Record<string, unknown> = { _row_count: rows.length };
+      rows.forEach((r, i) => {
+        out[`A${4 + i}`] = r.A;
+        out[`I${4 + i}`] = r.I;
+      });
+      return out;
+    };
+    const analysis = analyseEsgImport(
+      preview({ fleet: cells([fleetRow("JR45DZGP", 1300), fleetRow("NEW001GP", 400)]) }),
+      workbook({ fleet: cells([fleetRow("JR45DZGP", 1200), fleetRow("KX11AAGP", 900)]) }),
+    );
+    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ fleet: "Fleet" }} />);
+    const block = screen.getByTestId("esg-import-registers");
+    expect(block).toHaveTextContent(/none removed/i);
+    expect(block).toHaveTextContent("Fleet: 1 row added, 1 updated (2 already there)");
   });
 });

@@ -21,6 +21,7 @@ import {
   canReopenEsgWorkbook,
 } from "./esgWorkbookLock";
 import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
+import { mergeImportIntoSection, type EsgRegisterMergeOutcome } from "../src/lib/esg/esgImportMerge";
 import { answerEsgQuestionWithAi } from "./esgKnowledge";
 
 const logger = createLogger("EsgWorkbook");
@@ -378,12 +379,20 @@ export function registerEsgWorkbookRoutes(app: Express): void {
         let buffer: Buffer | null = null;
         const body = req.body as { fileBase64?: string; confirm?: boolean; sections?: Record<string, { cells: Record<string, unknown> }> };
         if (body?.confirm && body.sections) {
+          // MERGE, never replace. This endpoint used to set each section to
+          // exactly what the import carried, so a document that placed two
+          // figures erased every figure already captured beside them, and an
+          // empty register sheet in a template wiped the register. See
+          // esgImportMerge.ts for the rules; nothing here deletes.
+          const registers: EsgRegisterMergeOutcome[] = [];
           for (const [sectionKey, payload] of Object.entries(body.sections)) {
             if (!SECTION_KEYS.includes(sectionKey)) continue;
-            wb.sections[sectionKey] = { cells: payload.cells ?? {} };
+            const merged = mergeImportIntoSection(sectionKey, wb.sections[sectionKey]?.cells, payload?.cells ?? {});
+            wb.sections[sectionKey] = { cells: merged.cells };
+            if (merged.register) registers.push(merged.register);
           }
           await persistEsgWorkbook(wb);
-          return res.json({ ok: true, updatedAt: wb.updatedAt });
+          return res.json({ ok: true, updatedAt: wb.updatedAt, registers });
         }
         if (Buffer.isBuffer(req.body) && req.body.length > 0) {
           buffer = req.body;

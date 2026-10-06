@@ -27,17 +27,19 @@ const workbook = (sections: Record<string, Record<string, unknown>>) => ({
 describe("analyseEsgImport", () => {
   it("separates replacing a value from filling an empty one", () => {
     // The consent question. Replacing 1240 with 1310 is a decision the user has
-    // to make; filling an empty cell is not.
+    // to make; filling an empty cell is not. (A value section: a register's rows
+    // are matched by what identifies them, not by address — see
+    // esgImportMerge.test.ts.)
     const a = analyseEsgImport(
-      preview({ fleet: { B4: 1310, B5: "HINO", B6: 99 } }),
-      workbook({ fleet: { B4: 1240, B5: "", B6: 99 } }),
+      preview({ "e-data": { B4: 1310, B5: "HINO", B6: 99 } }),
+      workbook({ "e-data": { B4: 1240, B5: "", B6: 99 } }),
     );
 
     expect(a.overwrites).toEqual([
-      { sectionId: "fleet", cell: "B4", before: 1240, after: 1310 },
+      { sectionId: "e-data", cell: "B4", before: 1240, after: 1310 },
     ]);
     expect(a.additions).toEqual([
-      { sectionId: "fleet", cell: "B5", before: null, after: "HINO" },
+      { sectionId: "e-data", cell: "B5", before: null, after: "HINO" },
     ]);
     expect(a.unchanged).toBe(1);
   });
@@ -75,7 +77,7 @@ describe("analyseEsgImport", () => {
   });
 
   it("treats a create-flow import (no workbook yet) as all additions", () => {
-    const a = analyseEsgImport(preview({ fleet: { B4: 1310, B5: "HINO" } }), null);
+    const a = analyseEsgImport(preview({ "e-data": { B4: 1310, B5: "HINO" } }), null);
     expect(a.overwrites).toEqual([]);
     expect(a.additions).toHaveLength(2);
   });
@@ -121,8 +123,8 @@ describe("analyseEsgImport", () => {
 describe("describeEsgImport", () => {
   it("states the shape of the change in words", () => {
     const a = analyseEsgImport(
-      preview({ fleet: { B4: 1310, B5: "HINO" } }),
-      workbook({ fleet: { B4: 1240 } }),
+      preview({ "e-data": { B4: 1310, B5: "HINO" } }),
+      workbook({ "e-data": { B4: 1240 } }),
     );
     const line = describeEsgImport(a);
     expect(line).toContain("1 new");
