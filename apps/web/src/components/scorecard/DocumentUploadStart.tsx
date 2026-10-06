@@ -375,9 +375,33 @@ export interface DocumentUploadStartProps {
    * the quote, and the batches are how a long pack gets organised.
    */
   focused?: boolean;
+  /**
+   * Adding documents to a company that already exists, rather than creating
+   * one. Its profile is known, so it is filled in; Build becomes "Add to the
+   * workbook", and the host MERGES the result (`onCreate` receives the
+   * sections as usual). The paid read is kept under its own session key.
+   */
+  existingCompany?: {
+    id: string;
+    name: string;
+    /** Workbook sector code (RCOGP, TRANSPORT, …). */
+    sectorCode: string;
+    scorecardType: string;
+    /** yyyy-mm-dd or dd/mm/yyyy. */
+    financialYearEnd: string;
+  };
 }
 
-export function DocumentUploadStart({ onCreate, creating, focused = false }: DocumentUploadStartProps) {
+/** The workbook's dd/mm/yyyy (or ISO) year end, as the date input's yyyy-mm-dd. */
+function isoDate(value: string): string {
+  const d = parseWorkbookDate(value);
+  return d ? d.toISOString().slice(0, 10) : "";
+}
+
+export function DocumentUploadStart({ onCreate, creating, focused = false, existingCompany }: DocumentUploadStartProps) {
+  const addMode = Boolean(existingCompany);
+  /** Where this run's paid read is kept for the session — never shared with the create flow. */
+  const snapshotScope = existingCompany ? `add:${existingCompany.id}` : undefined;
   const [catalog, setCatalog] = useState<ExpectedDocsCatalog | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -426,21 +450,21 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // The "what we read / still needed / didn't reconcile" detail is long; keep it
   // collapsed so it never pushes the Build button off-screen. The pillar rack
   // above it is the at-a-glance summary.
-  const [companyName, setCompanyName] = useState("");
+  const [companyName, setCompanyName] = useState(existingCompany?.name ?? "");
   const [dragActive, setDragActive] = useState(false);
   // Deliberately UNSET: the sector/size choice decides which scorecard rules
   // apply, and a silent Generic default once scored a real Transport QSE
   // dozens of points too low. Create stays disabled until both are chosen.
-  const [sector, setSector] = useState("");
+  const [sector, setSector] = useState(existingCompany?.sectorCode ?? "");
   const [subSector, setSubSector] = useState("");
-  const [size, setSize] = useState(""); // Generic | QSE | EME
+  const [size, setSize] = useState(existingCompany?.scorecardType ?? ""); // Generic | QSE | EME
   // Financial year-end, yyyy-mm-dd. REQUIRED, and asked for here because the
   // documents never supply it: the B-BBEE parser does not read one. Without it
   // the workbook's submit refuses to calculate (every dated pillar is measured
   // over the twelve months ending on it), and a refused submit used to land on
   // a provisional score of 0 — that is how a fully-uploaded evidence pack
   // scored nothing. Also unset by default: a guessed year end is a wrong period.
-  const [yearEnd, setYearEnd] = useState("");
+  const [yearEnd, setYearEnd] = useState(existingCompany ? isoDate(existingCompany.financialYearEnd) : "");
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -536,7 +560,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // Rehydrate a previous run's paid extraction. Runs once, on mount, before
   // any interaction — so it can never clobber work done in this mount.
   useEffect(() => {
-    const snap = readFlowSnapshot();
+    const snap = readFlowSnapshot(snapshotScope);
     if (!snap) return;
     setParserCase(snap.parserCase);
     setCompanyName((prev) => prev.trim() || snap.companyName);
@@ -557,9 +581,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   useEffect(() => {
     if (!parserCase) return;
     const timer = window.setTimeout(() => {
-      const snap = readFlowSnapshot();
+      const snap = readFlowSnapshot(snapshotScope);
       if (!snap) return;
-      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size, yearEnd });
+      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size, yearEnd }, snapshotScope);
     }, 800);
     return () => window.clearTimeout(timer);
   }, [parserCase, companyName, sector, subSector, size, yearEnd]);
@@ -1170,7 +1194,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       setTokenCost(null);
       setDoneStaging(false);
       const readNames = Array.from(
-        new Set([...(readFlowSnapshot()?.fileNames ?? []), ...list.map((f) => f.name)]),
+        new Set([...(readFlowSnapshot(snapshotScope)?.fileNames ?? []), ...list.map((f) => f.name)]),
       );
       // Auto-fill the company name from the extracted entity name — the
       // resolved ai_entities field first (clean), then the raw extractions,
@@ -1193,7 +1217,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         documentIds: allDocumentIds(),
         documentIdsByName: documentIdsByName(),
         parserCase: mergedCase,
-      });
+      }, snapshotScope);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not read the documents");
     } finally {
@@ -1616,7 +1640,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       });
       // The run is now a company; the snapshot has served its purpose. Cleared
       // only after create resolves so a failure leaves the restore intact.
-      clearFlowSnapshot();
+      clearFlowSnapshot(snapshotScope);
     } catch {
       // The host surfaces its own create errors; keeping the snapshot means
       // the paid extraction survives to try again.
@@ -1625,7 +1649,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
 
   /** Throw the restored (or just-extracted) run away and start clean. */
   const discardRun = () => {
-    clearFlowSnapshot();
+    clearFlowSnapshot(snapshotScope);
     setParserCase(null);
     setReadKeys(new Set());
     setRestoredAt(null);
@@ -1714,7 +1738,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
               : "Review and pay"
             : parserCase
               ? "Your documents"
-              : "Add your documents"}
+              : addMode
+                ? `Add documents to ${existingCompany!.name}`
+                : "Add your documents"}
         </h3>
         <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
           {quoteReady && quote
@@ -2850,6 +2876,13 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             >
               {creating ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
+              ) : addMode ? (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  {totalMappedRows > 0
+                    ? `Add ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""} to the workbook`
+                    : "Add these documents to the workbook"}
+                </>
               ) : totalMappedRows > 0 ? (
                 <>
                   <Sparkles className="h-4 w-4" />
@@ -2863,7 +2896,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
               )}
             </button>
             <p className="text-[11px] text-[color:var(--muted)] mt-2 text-center">
-              {totalMappedRows > 0
+              {addMode
+                ? "Blanks in the workbook take these values. Nothing already there is overwritten or deleted — where a document disagrees, you’ll see both and we keep yours."
+                : totalMappedRows > 0
                 ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
                 : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
             </p>

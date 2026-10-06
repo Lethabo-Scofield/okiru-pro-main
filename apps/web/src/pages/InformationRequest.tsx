@@ -1595,6 +1595,20 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const workbookRef = useRef<Workbook | null>(null);
   const inFlight = useRef(0);
   const { toast } = useToast();
+  /**
+   * Documents added to this company after it was set up. Opened by the toolbar
+   * button, or arriving from the score page's "Add documents" (?addDocuments=1).
+   */
+  const [addingDocuments, setAddingDocuments] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("addDocuments") === "1",
+  );
+  const [merging, setMerging] = useState(false);
+  const [mergeReport, setMergeReport] = useState<{
+    added: Record<string, number>;
+    filled: number;
+    conflicts: Array<{ section: string; field: string; kept: unknown; offered: unknown; row?: string }>;
+    blocked: string[];
+  } | null>(null);
 
   useEffect(() => {
     workbookRef.current = workbook;
@@ -1996,6 +2010,72 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     void syncWorkbookToScorecard({ quiet: true, skipFlush: true });
   }, [companyId, flushAllPending, waitForInFlight, saveError, navigate, syncWorkbookToScorecard, toast]);
 
+  /**
+   * Documents added after the company exists: merged, never replaced. Blanks
+   * take the documents' values; nothing already in the workbook is
+   * overwritten or deleted, and every disagreement comes back in the report so
+   * the user sees both figures. Then the score re-syncs.
+   */
+  const mergeDocuments = useCallback(
+    async (
+      sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>,
+      documentIds: string[] = [],
+    ) => {
+      setMerging(true);
+      try {
+        await flushAllPending();
+        const res = await fetch(`${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/merge-documents`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sections }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast({
+            title: "Couldn't add the documents",
+            description: body?.error ?? `The workbook was left exactly as it was (error ${res.status}).`,
+            variant: "destructive",
+          });
+          return;
+        }
+        // File the uploads under this company, as creating one does.
+        void Promise.allSettled(
+          documentIds.map((documentId) =>
+            fetch(`/api/parser-documents/${encodeURIComponent(documentId)}`, {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ entityId: companyId }),
+            }),
+          ),
+        );
+        const fresh = await fetch(`${API_BASE}/api/workbook/${encodeURIComponent(companyId)}`, { credentials: "include" })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        if (fresh) {
+          workbookRef.current = fresh;
+          setWorkbook(fresh);
+          setSavedAt(fresh.updatedAt);
+        }
+        const report = body.report as NonNullable<typeof mergeReport>;
+        setMergeReport(report);
+        setAddingDocuments(false);
+        const added = Object.values(report?.added ?? {}).reduce((n, k) => n + k, 0);
+        toast({
+          title: "Documents added to the workbook",
+          description: `${added} row${added === 1 ? "" : "s"} added · ${report?.filled ?? 0} blank${report?.filled === 1 ? "" : "s"} filled${
+            report?.conflicts?.length ? ` · ${report.conflicts.length} disagreement${report.conflicts.length === 1 ? "" : "s"} kept as they were` : ""
+          }`,
+        });
+        void syncWorkbookToScorecard({ quiet: true, skipFlush: true });
+      } finally {
+        setMerging(false);
+      }
+    },
+    [companyId, flushAllPending, syncWorkbookToScorecard, toast],
+  );
+
   const handleExcelImport = useCallback(
     async (file: File) => {
       try {
@@ -2335,6 +2415,18 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           >
             <Download className="h-3.5 w-3.5" /> Download Excel
           </button>
+          {/* A document that arrives after the company was set up — the
+              forgotten payroll, the late certificate. Read on its own and
+              merged in; nothing already here is overwritten. */}
+          <button
+            type="button"
+            onClick={() => setAddingDocuments(true)}
+            disabled={loading || !workbook || addingDocuments}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] text-[color:var(--body)] smooth press-sm disabled:opacity-50"
+            data-testid="button-add-documents"
+          >
+            <Upload className="h-3.5 w-3.5" /> Add documents
+          </button>
           <ExcelImportButton onImport={handleExcelImport} disabled={loading || !workbook} />
           <button
             onClick={() => void handleContinueToSummary()}
@@ -2350,6 +2442,79 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           )}
         </div>
       </div>
+
+      {addingDocuments && workbook && (() => {
+        const info = (workbook.sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
+        return (
+          <div className="mb-6 rounded-[24px] border border-violet-300/20 bg-[#17151d] p-4" data-testid="add-documents-panel">
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setAddingDocuments(false)}
+                disabled={merging}
+                className="text-[12px] text-[color:var(--body)] hover:text-white disabled:opacity-50"
+                data-testid="button-cancel-add-documents"
+              >
+                Close
+              </button>
+            </div>
+            <DocumentUploadStart
+              existingCompany={{
+                id: companyId,
+                name: company.name,
+                sectorCode: String(info.industrySector ?? ""),
+                scorecardType: String(info.scorecardType ?? ""),
+                financialYearEnd: String(info.financialYearEnd ?? ""),
+              }}
+              creating={merging}
+              onCreate={async (_name, sections, extras) => {
+                await mergeDocuments(sections, extras?.documentIds ?? []);
+              }}
+            />
+          </div>
+        );
+      })()}
+
+      {/* What adding documents did — including every place a document
+          disagreed with the workbook, where the workbook's value was kept. */}
+      {mergeReport && (mergeReport.conflicts.length > 0 || mergeReport.blocked.length > 0) && (
+        <div className="mb-6 rounded-2xl border border-amber-400/25 bg-amber-500/[0.06] p-4" data-testid="merge-report">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[13px] font-semibold text-white">
+                {mergeReport.conflicts.length} place{mergeReport.conflicts.length === 1 ? "" : "s"} where the new documents
+                disagree with the workbook
+              </p>
+              <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
+                We kept what was already in the workbook. Change any of these yourself if the document is right.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMergeReport(null)}
+              className="shrink-0 text-[12px] text-[color:var(--body)] hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ul className="mt-2 space-y-1">
+            {mergeReport.conflicts.slice(0, 12).map((c, i) => (
+              <li key={i} className="text-[12px] leading-5 text-[color:var(--body)]">
+                <span className="text-amber-200/90">{c.row ? `${c.row} — ` : ""}{c.field}:</span> workbook says{" "}
+                <span className="text-white">{String(c.kept)}</span>, document says <span className="text-white">{String(c.offered)}</span>
+              </li>
+            ))}
+            {mergeReport.conflicts.length > 12 && (
+              <li className="text-[11.5px] text-[color:var(--muted)]">…and {mergeReport.conflicts.length - 12} more</li>
+            )}
+            {mergeReport.blocked.length > 0 && (
+              <li className="text-[12px] text-[color:var(--body)]">
+                Not added — you don't have edit access to: {mergeReport.blocked.join(", ")}.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       {/* The AI reasoning surface: what was read, grounded fills to confirm,
           conflicts to decide, missing fields grouped into single decisions.
