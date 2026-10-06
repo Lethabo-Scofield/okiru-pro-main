@@ -141,10 +141,13 @@ export function buildEsgAssistantContext(
     parts.push(
       [
         "### Scores (computed now, same engine as the dashboard)",
-        `- Environmental: ${fmt(scorecard.environmental.score)} / ${fmt(scorecard.environmental.max, 0)}`,
-        `- Social: ${fmt(scorecard.social.score)} / ${fmt(scorecard.social.max, 0)}`,
-        `- Governance: ${fmt(scorecard.governance.score)} / ${fmt(scorecard.governance.max, 0)}`,
-        `- Overall: ${fmt(scorecard.overallPercent)}%`,
+        // Out of what each pillar can reach after exclusions, as the dashboard
+        // states it; overallPercent is a 0–1 fraction ("0.34%" read 34% as a
+        // third of one percent).
+        `- Environmental: ${fmt(scorecard.environmental.score)} / ${fmt(scorecard.environmental.scoringDenominator, 0)}`,
+        `- Social: ${fmt(scorecard.social.score)} / ${fmt(scorecard.social.scoringDenominator, 0)}`,
+        `- Governance: ${fmt(scorecard.governance.score)} / ${fmt(scorecard.governance.scoringDenominator, 0)}`,
+        `- Overall: ${fmt(scorecard.overallPercent * 100, 1)}%`,
       ].join("\n"),
     );
   } else {

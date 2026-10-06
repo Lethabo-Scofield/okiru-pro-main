@@ -9,7 +9,8 @@ export default function EsgNetZero() {
     <div className="space-y-5" data-testid="esg-net-zero">
       <h1 className="text-[22px] font-semibold text-[var(--esg-text)]">Net-Zero Roadmap</h1>
       <p className="text-[12px] text-[var(--esg-text2)]">
-        SBTi CNZS 2.0 milestones — gap from E_Data baseline vs current (F90 − B90).
+        SBTi CNZS 2.0 milestones — this period's Scope 1 + 2 tonnes, from the GHG inventory, against
+        each milestone of the pathway from the company's own baseline.
       </p>
       {nz ? (
         <div className="esg-glass p-4 grid gap-3 sm:grid-cols-3 text-[12px]">
