@@ -144,10 +144,25 @@ export async function chooseEsgSheetGrid(
   return decision.value ? byId.get(decision.value) ?? null : null;
 }
 
+/**
+ * What a few easily-confused row columns MEAN. A fuel report splits litres into
+ * "Internal" (from the company's bowser) and "External" (bought on the road)
+ * beside a total; mapped to "monthly_litres" without this, the model picked
+ * Internal and a vehicle that took 1,676 L was recorded as 1,396.
+ */
+const ROW_FIELD_MEANINGS: Record<string, string> = {
+  monthly_litres: 'ALL fuel the vehicle took in the month — the TOTAL column when the sheet splits internal and external',
+  monthly_km: 'kilometres driven in the month',
+  fuel_litres: 'litres in this transaction',
+};
+
 /** Human phrasing of one row, for the column-mapping question. */
 function whatOneRowIs(documentId: string, grid: DocumentGrid): string {
   const subject = documentId.split('__')[1]?.replace(/_/g, ' ') ?? 'record';
-  return `one ${subject} row. Columns wanted: ${grid.rowFields.join(', ')}`;
+  const meanings = grid.rowFields
+    .filter((field) => ROW_FIELD_MEANINGS[field])
+    .map((field) => `${field} = ${ROW_FIELD_MEANINGS[field]}`);
+  return `one ${subject} row. Columns wanted: ${grid.rowFields.join(', ')}${meanings.length ? `. Where it matters: ${meanings.join('; ')}` : ''}`;
 }
 
 /**

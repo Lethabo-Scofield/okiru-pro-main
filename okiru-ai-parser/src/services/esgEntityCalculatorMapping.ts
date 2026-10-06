@@ -48,7 +48,7 @@ import {
 } from '../../schemas/esg_calculator_allowlist.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { findEsgDocumentById } from '../../schemas/esg_document_matrix.js';
-import type { CaseEntities } from './entityResolution.js';
+import { ROW_SOURCE_KEY, type CaseEntities } from './entityResolution.js';
 import type { ExtractionModel } from './aiExtraction.js';
 import { proposeFieldMappings, type MappableKey } from './semanticFieldMapping.js';
 
@@ -109,6 +109,12 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
   { field: 'generator_diesel_litres', calculatorKey: 'energy.generator_diesel_litres', elements: ['GHG_ENERGY'], coerce: 'number' },
   { field: 'generator_run_hours', calculatorKey: 'energy.generator_run_hours', elements: ['GHG_ENERGY'], coerce: 'number' },
   { field: 'lpg_kg', calculatorKey: 'energy.lpg_kg', elements: ['GHG_ENERGY'], coerce: 'number' },
+  // One site × month figure from a dashboard table (esgMonthlyTables.ts).
+  { field: 'monthly_measure', calculatorKey: 'monthly.measure', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'monthly_site', calculatorKey: 'monthly.site', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'monthly_period_end', calculatorKey: 'monthly.period_end', elements: ['GHG_ENERGY'], coerce: 'iso_date' },
+  { field: 'monthly_value', calculatorKey: 'monthly.value', elements: ['GHG_ENERGY'], coerce: 'number' },
+  { field: 'monthly_unit', calculatorKey: 'monthly.unit', elements: ['GHG_ENERGY'], coerce: 'text' },
 
   // ── Emissions and carbon tax ───────────────────────────────────────────
   { field: 'carbon_tax_licence_number', calculatorKey: 'emissions.carbon_tax_licence_number', elements: ['GHG_ENERGY'], coerce: 'text' },
@@ -494,6 +500,8 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
  * the scalar mappings carry one.
  */
 const GRID_ELEMENTS: Record<string, EsgElement> = {
+  // Site × month figures read from dashboard tables (esgMonthlyTables.ts).
+  esg_monthly_rows: 'GHG_ENERGY',
   energy_site_rows: 'GHG_ENERGY',
   fleet_fuel_transaction_rows: 'FLEET',
   fleet_vehicle_rows: 'FLEET',
@@ -511,6 +519,12 @@ const GRID_ELEMENTS: Record<string, EsgElement> = {
   risk_register_rows: 'RISK_ASSURANCE',
   risk_ifrs_requirement_rows: 'RISK_ASSURANCE',
 };
+
+/**
+ * Every register field: their rows add up across documents (resolveCaseEntities
+ * `additiveFields`) instead of competing as one value.
+ */
+export const ESG_REGISTER_FIELDS: ReadonlySet<string> = new Set(Object.keys(GRID_ELEMENTS));
 
 const MONTHS: Record<string, string> = {
   jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
@@ -854,8 +868,14 @@ function expandRows(
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
     const cells: Record<string, unknown> = {};
     const droppedFields: string[] = [];
+    // A register merged across documents names each row's own file, which is
+    // what lets the workbook total within one document and see a conflict only
+    // between two.
+    const stated = (raw as Record<string, unknown>)[ROW_SOURCE_KEY];
+    const rowSources = typeof stated === 'string' && stated ? [stated] : sourceFiles;
 
     for (const [field, cellValue] of Object.entries(raw as Record<string, unknown>)) {
+      if (field === ROW_SOURCE_KEY) continue;
       if (cellValue === null || cellValue === undefined || String(cellValue).trim() === '') continue;
       const mapping = mappingFor(field, elements);
       if (!mapping) {
@@ -876,7 +896,7 @@ function expandRows(
     }
 
     if (Object.keys(cells).length === 0) return;
-    rows.push({ grid: gridField, index, cells, sourceFiles, droppedFields });
+    rows.push({ grid: gridField, index, cells, sourceFiles: rowSources, droppedFields });
   });
 
   return rows;
