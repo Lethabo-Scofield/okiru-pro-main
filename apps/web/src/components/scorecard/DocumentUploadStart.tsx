@@ -271,39 +271,9 @@ const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workboo
 // The flow snapshot — how a paid extraction survives navigation. Shared with
 // the Hub's "continue where you left off" strip, so it lives in its own module.
 import { clearFlowSnapshot, readFlowSnapshot, writeFlowSnapshot } from "./flowSnapshot";
-
-/**
- * Fold a newly-read case into what we already had.
- *
- * A requote only ever pays for NEW documents, so the previously-extracted ones
- * must survive: their detections, fields, supplier rows and calculator payload
- * all carry forward. The new round wins on conflicts (it is the more recent
- * read of that filename), but it can never delete an earlier good document.
- */
-function mergeCases(kept: ParserCaseLike | null, fresh: ParserCaseLike): ParserCaseLike {
-  if (!kept) return fresh;
-  const byName = <T extends { filename?: string }>(a: T[] = [], b: T[] = []): T[] => {
-    const out = new Map<string, T>();
-    for (const item of a) out.set(String(item.filename), item);
-    for (const item of b) out.set(String(item.filename), item);
-    return Array.from(out.values());
-  };
-  return {
-    ...kept,
-    ...fresh,
-    documents_detected: byName(kept.documents_detected, fresh.documents_detected),
-    documents_needing_review: byName(kept.documents_needing_review, fresh.documents_needing_review),
-    fields_extracted: { ...(kept.fields_extracted ?? {}), ...(fresh.fields_extracted ?? {}) },
-    calculator_payload: { ...(kept.calculator_payload ?? {}), ...(fresh.calculator_payload ?? {}) },
-    supplier_rows: [
-      // Keep earlier suppliers, drop any whose source file was re-read.
-      ...(kept.supplier_rows ?? []).filter(
-        (r) => !(fresh.documents_detected ?? []).some((d) => d.filename === r.source_file),
-      ),
-      ...(fresh.supplier_rows ?? []),
-    ],
-  };
-}
+// Each "Add documents" round reads only its new files; this folds the result
+// into what earlier rounds already read, without losing any of it.
+import { mergeParserCases } from "@/lib/parserCaseMerge";
 
 /** workbook company-information meta value for each parser sector code. */
 const SECTOR_TO_WORKBOOK: Record<string, string> = {
@@ -410,7 +380,29 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
+  /** What the server returned for a paid run that delivered less than it cost. */
+  const [refundNotice, setRefundNotice] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
+  /** The case as of now, for the merge at the end of a read (which outlives the render it started in). */
+  const parserCaseRef = useRef<ParserCaseLike | null>(null);
+  useEffect(() => {
+    parserCaseRef.current = parserCase;
+  }, [parserCase]);
+  /**
+   * The files already read and paid for, by persistence key.
+   *
+   * This is what makes "Add documents" work after a read. Every gate used to
+   * key off `parserCase` — "has anything been read yet" — so once one batch
+   * was read, a forgotten document could be staged but never priced or read.
+   * Now only UNREAD files are priced and read, their result is merged into
+   * the case, and a read file is part of that case: it can't be removed, and
+   * it is never charged for again.
+   */
+  const [readKeys, setReadKeys] = useState<Set<string>>(() => new Set());
+  const readKeysRef = useRef(readKeys);
+  useEffect(() => {
+    readKeysRef.current = readKeys;
+  }, [readKeys]);
   const persistedDocumentsRef = useRef<Map<string, string>>(new Map());
   /**
    * The phase banner that reports the paid read.
@@ -476,11 +468,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   /** Files chosen but not yet confirmed. The double-check dialog owns these. */
   const [pendingUpload, setPendingUpload] = useState<(PendingUpload & { origin: UploadOrigin }) | null>(null);
   /**
-   * Documents already extracted and paid for in a previous round. A requote
-   * must never lose or re-charge these — they carry straight through.
-   */
-  const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
-  /**
    * Closed-vocabulary decisions from the server (model-backed, remembered).
    * A dropdown value the local maps cannot place is asked about ONCE, and the
    * answer is applied on the next mapping pass, exactly like a synonym.
@@ -537,7 +524,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     const snap = readFlowSnapshot();
     if (!snap) return;
     setParserCase(snap.parserCase);
-    setKeptCase(snap.parserCase);
     setCompanyName((prev) => prev.trim() || snap.companyName);
     if (snap.sector) setSector(snap.sector);
     if (snap.subSector) setSubSector(snap.subSector);
@@ -942,6 +928,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   }, [parsing]);
 
   const filePersistenceKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+  /** Not yet read — the only files a quote, a charge or a read may include. */
+  const isUnread = (file: File) => !readKeysRef.current.has(filePersistenceKey(file));
+  const unreadFiles = files.filter((f) => !readKeys.has(filePersistenceKey(f)));
 
   /** Persist the original file before any paid parser work begins. */
   const persistDocument = async (file: File): Promise<string> => {
@@ -978,14 +967,22 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     // priced for a different set of files. Claim the checking state and drop
     // the stale quote before anything async happens.
     const requestId = ++quoteRequestRef.current;
-    setQuoting(true);
+    // Price only what has not been read. A document read in an earlier round
+    // is paid for and already in the case; quoting it again is how adding one
+    // forgotten file would have re-charged the whole pack.
+    const toPrice = list.filter(isUnread);
     setQuote(null);
+    if (toPrice.length === 0) {
+      setQuoting(false);
+      return;
+    }
+    setQuoting(true);
     try {
-      await persistSelectedDocuments(list);
+      await persistSelectedDocuments(toPrice);
       // A newer batch started while these files were saving — its pipeline
       // owns the quote now, and pricing this older list would race it.
       if (quoteRequestRef.current !== requestId) return;
-      await runQuote(list);
+      await runQuote(toPrice);
     } catch (error) {
       if (quoteRequestRef.current !== requestId) return; // superseded
       setQuote(null);
@@ -1052,7 +1049,8 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
    * quote id so the server can verify payment and that these are the exact
    * files that were paid for.
    */
-  const runExtraction = async (list: File[], quoteId: string) => {
+  const runExtraction = async (list: File[], quoteId: string): Promise<boolean> => {
+    let delivered = false;
     setParsing(true);
     setResolving(false);
     setResolveProgress(null);
@@ -1143,8 +1141,21 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       }
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
-      const mergedCase = mergeCases(keptCase, data);
+      const mergedCase = mergeParserCases(parserCaseRef.current, data);
+      parserCaseRef.current = mergedCase;
       setParserCase(mergedCase);
+      delivered = true;
+      // These files are now part of the case: never priced, charged or read again.
+      const nowRead = new Set(readKeysRef.current);
+      for (const f of list) nowRead.add(filePersistenceKey(f));
+      readKeysRef.current = nowRead;
+      setReadKeys(nowRead);
+      setQuote(null);
+      setTokenCost(null);
+      setDoneStaging(false);
+      const readNames = Array.from(
+        new Set([...(readFlowSnapshot()?.fileNames ?? []), ...list.map((f) => f.name)]),
+      );
       // Auto-fill the company name from the extracted entity name — the
       // resolved ai_entities field first (clean), then the raw extractions,
       // then the legacy payload key. This both saves the user typing it and,
@@ -1161,7 +1172,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         subSector,
         size,
         yearEnd,
-        fileNames: list.map((f) => f.name),
+        fileNames: readNames,
         filedBatchByFile,
         documentIds: allDocumentIds(),
         parserCase: mergedCase,
@@ -1171,6 +1182,37 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     } finally {
       setParsing(false);
       setResolving(false);
+    }
+    return delivered;
+  };
+
+  /**
+   * Ask the server to settle the paid run that just ended — the same call the
+   * ESG flow makes. Whatever the run failed to deliver is refunded there,
+   * decided from the parser's own record of the run, never from this screen.
+   */
+  const settlePaidRun = async (quoteId: string, delivered: boolean) => {
+    try {
+      const res = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => null);
+      if (body?.state === "settled" && Number(body.refundedTokens) > 0) {
+        setRefundNotice(
+          `${Number(body.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance. ${body.reason ?? ""}`.trim(),
+        );
+        window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+      } else if (body?.state === "pending" && body.queued && body.reason) {
+        setRefundNotice(String(body.reason));
+      } else if (body?.state === "pending" && !delivered) {
+        setRefundNotice(
+          "If this run delivered nothing, its tokens come back to your balance automatically — there is nothing you need to do.",
+        );
+      }
+    } catch {
+      // The server settles every paid run on its own sweep regardless.
     }
   };
 
@@ -1190,6 +1232,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     if (!quote) return;
     setPaying(true);
     setParseError(null);
+    setRefundNotice(null);
     try {
       const res = await fetch("/api/tokens/authorize", {
         method: "POST",
@@ -1211,7 +1254,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       }
       // Every header shows the balance, so it must move the moment it changes.
       window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
-      await runExtraction(files, quote.quoteId);
+      // Exactly the files this quote priced: the unread ones.
+      const delivered = await runExtraction(unreadFiles, quote.quoteId);
+      await settlePaidRun(quote.quoteId, delivered);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not start processing");
     } finally {
@@ -1326,6 +1371,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   };
 
   const removeFile = (name: string) => {
+    // A read file is paid for and folded into the case; taking it off the list
+    // would leave its values in the scorecard with no document behind them.
+    const target = files.find((f) => f.name === name);
+    if (target && !isUnread(target)) return;
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
     // A batch you have just changed is a batch you are still working on, so
@@ -1339,8 +1388,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     });
     quoteRequestRef.current += 1;
     setQuote(null);
-    if (next.length === 0) setParserCase(keptCase);
-    else void prepareAndQuote(next);
+    // Re-price what is still unread. This used to reset the case to an earlier
+    // round when the list emptied — after a read, that threw the paid result away.
+    if (next.some(isUnread)) void prepareAndQuote(next);
+    else setQuoting(false);
   };
 
   const groupSatisfied = (g: { types: string[] }) => g.types.some((t) => docTypeSatisfied(t));
@@ -1410,7 +1461,23 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // Requires `doneStaging`: this flag collapses the stage into the checkout
   // layout, and doing that the moment a quote landed is what left people with
   // "files appear but there is nowhere to carry on".
-  const quoteReady = Boolean(quote && doneStaging && !parserCase && !quoting);
+  const quoteReady = Boolean(quote && doneStaging && unreadFiles.length > 0 && !quoting && !parsing);
+  /** Whether reading the unread files spends tokens, and whether the balance covers it. */
+  const readCharging = Boolean(quote && quote.paymentRequired !== false && tokenCost !== null);
+  const readUnaffordable = readCharging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
+  /**
+   * Read the unread files — one click from the bar under the uploader.
+   *
+   * There used to be two money gates: "Done adding — review cost", then a
+   * checkout page with its own "Read my documents". The price is known the
+   * moment the files are staged, so the bar shows it and reads from there; the
+   * full breakdown is still one click away for anyone who wants it.
+   */
+  const readNow = () => {
+    if (!quote) return;
+    if (readCharging) void spendAndExtract();
+    else void runExtraction(unreadFiles, quote.quoteId);
+  };
   /**
    * Nothing on screen but the dropzone: the state a user lands in when they
    * chose "upload documents" and have not yet added one. The company profile
@@ -1425,8 +1492,12 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // required for the same reason — it picks the period every dated pillar is
   // measured over, and the workbook will not calculate without one.
   const yearEndValid = parseWorkbookDate(yearEnd) !== null;
+  // A document added after the read but never read would be filed under the
+  // company with nothing taken from it — the forgotten document, forgotten
+  // again. Read it or remove it first.
   const canCreate =
-    Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && yearEndValid && !parsing && !creating;
+    Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && yearEndValid &&
+    unreadFiles.length === 0 && !parsing && !creating;
 
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
@@ -1516,7 +1587,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   const discardRun = () => {
     clearFlowSnapshot();
     setParserCase(null);
-    setKeptCase(null);
+    setReadKeys(new Set());
     setRestoredAt(null);
     restoredDocumentIdsRef.current = [];
     setFiles([]);
@@ -1597,18 +1668,22 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           assessment, which is what made the flow feel unserious. */}
       <div className="mb-5">
         <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
-          {quote && !parserCase
+          {quoteReady && quote
             ? quote.paymentRequired === false
               ? "Review your documents"
               : "Review and pay"
-            : "Add your documents"}
+            : parserCase
+              ? "Your documents"
+              : "Add your documents"}
         </h3>
         <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
-          {quote && !parserCase
+          {quoteReady && quote
             ? quote.paymentRequired === false
               ? "Processing is free. Review the documents below, then continue."
               : "Nothing is read until you pay."
-            : "We identify what is present, what is missing and what needs review."}
+            : parserCase
+              ? "Read and placed below. Forgot one? Add it — only the new documents are read and charged."
+              : "We identify what is present, what is missing and what needs review."}
         </p>
       </div>
 
@@ -1806,7 +1881,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             data-testid="docs-folder-input"
           />
       <AnimatePresence mode="wait" initial={false}>
-      {quote && doneStaging && !parserCase && !quoting && (
+      {quoteReady && quote && (
         (() => {
           const totalPages = quote.files.reduce((sum, file) => sum + (file.structure.pages ?? 0), 0);
           const spreadsheetCount = quote.files.filter((file) => (file.structure.sheets ?? 0) > 0).length;
@@ -2034,7 +2109,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
 
               <div className="mt-5 space-y-2">
                 <button
-                  onClick={() => void (charging ? spendAndExtract() : runExtraction(files, quote.quoteId))}
+                  onClick={() => void (charging ? spendAndExtract() : runExtraction(unreadFiles, quote.quoteId))}
                   disabled={paying || parsing || cannotAfford}
                   className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
                   style={{ background: "#0e6fff", color: "#ffffff" }}
@@ -2063,7 +2138,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           );
         })()
       )}
-      {(!quote || parserCase || quoting) && (
+      {!quoteReady && (!quote || parserCase || quoting) && (
       <motion.div
         key={quoting ? "pricing-documents" : parserCase ? "parsed-upload" : "upload-documents"}
         layout
@@ -2148,7 +2223,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         ) : (
           <div className="flex items-center justify-center gap-2 text-[color:var(--body)] hover:text-violet-300 transition-colors">
             <Sparkles className="w-3.5 h-3.5" />
-            <span className="text-[13px] font-medium">Add more documents</span>
+            <span className="text-[13px] font-medium" data-testid="add-more-documents-label">
+              {parserCase
+                ? "Add a document you forgot — only new ones are read and charged"
+                : "Add more documents"}
+            </span>
           </div>
         )}
       </motion.div>
@@ -2185,30 +2264,79 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           Whether the documents arrived through the main button or a pillar
           batch is irrelevant here: both stage into the same list, so both end
           at the same control. */}
-      {!parserCase && !doneStaging && files.length > 0 && (
-        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-white">
-              {files.length} document{files.length === 1 ? "" : "s"} staged
-              {quoting ? " · checking" : ""}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
-              Keep adding — the buttons above, or any pillar batch below. Nothing is read, and
-              nothing is charged, until you review the cost on the next step.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={quoting}
-            onClick={() => setDoneStaging(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
-            data-testid="button-done-staging"
+      {!doneStaging && unreadFiles.length > 0 && !parsing && (() => {
+        const n = unreadFiles.length;
+        const docs = `${n} ${parserCase ? "new " : ""}document${n === 1 ? "" : "s"}`;
+        const priceLine = quoting
+          ? "Working out the cost — nothing is read yet."
+          : !quote
+            ? "We could not work out the cost of these documents. Nothing has been read or charged."
+            : readCharging && tokenCost
+              ? `${tokenText(tokenCost.tokens)} tokens · you have ${tokenText(tokenCost.balance)}.`
+              : quote.paymentRequired === false
+                ? "Reading is free for this run."
+                : "Checking your balance…";
+        return (
+          <div
+            className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="read-bar"
           >
-            {quoting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Done adding — review cost
-          </button>
-        </div>
-      )}
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-white">{docs} ready to read</p>
+              <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]" data-testid="read-bar-price">
+                {priceLine}{" "}
+                {parserCase
+                  ? "Documents already read are not charged again."
+                  : "Keep adding if you have more — nothing is read until you press read."}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {!quoting && !quote && (
+                <button
+                  type="button"
+                  onClick={() => void prepareAndQuote(files)}
+                  className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white"
+                  data-testid="button-retry-quote-inline"
+                >
+                  Try again
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={quoting}
+                onClick={() => setDoneStaging(true)}
+                className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white disabled:opacity-50"
+                data-testid="button-done-staging"
+              >
+                See cost breakdown
+              </button>
+              {readUnaffordable && tokenCost ? (
+                <a
+                  href="/settings/billing"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
+                  data-testid="button-add-tokens"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Add tokens — {tokenText(tokenCost.shortfall)} short
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!quote || quoting || paying}
+                  onClick={readNow}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
+                  data-testid="button-read-now"
+                >
+                  {quoting || paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                  {readCharging && tokenCost && !tokenCost.alreadyAuthorized
+                    ? `Read ${n === 1 ? "it" : `all ${n}`} — ${tokenText(tokenCost.tokens)} tokens`
+                    : `Read ${n === 1 ? "it" : `all ${n}`}`}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* The dead end. "Done adding" hides the staging bar above, and the review
           panel below only renders once a quote exists — so when pricing failed
@@ -2217,7 +2345,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           (which resets doneStaging), and the only clue was a red line far below
           the fold. Say what went wrong where the button was, and offer both
           ways forward. */}
-      {!parserCase && doneStaging && !quote && !quoting && files.length > 0 && (
+      {doneStaging && !quote && !quoting && unreadFiles.length > 0 && (
         <div
           className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
           data-testid="quote-unavailable"
@@ -2299,7 +2427,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
                 ? resolveProgress
                   ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking names, IDs and figures across every file`
                   : "Cross-checking names, IDs and figures across every file"
-                : `${Object.values(docProgress).filter((s) => s === "done").length} of ${files.length} read`}
+                : `${Object.values(docProgress).filter((s) => s === "done").length} of ${unreadFiles.length} read`}
             </div>
           </div>
           {resolving && resolveProgress && resolveProgress.total > 0 && (
@@ -2311,7 +2439,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       )}
 
       {/* ACT 2 — scanning theatre */}
-      {files.length > 0 && (!quote || parserCase || quoting) && (
+      {files.length > 0 && !quoteReady && (!quote || parserCase || quoting) && (
         <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)]">
           <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--muted)] sm:grid">
             <span>File</span>
@@ -2329,7 +2457,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             // not a single spinner across the whole batch.
             const perFile = docProgress[f.name];
             const isReadingThis = perFile === "parsing";
-            const statusLabel = parsing
+            const alreadyRead = !isUnread(f);
+            // A round reads only the new files; the ones already read keep their verdict.
+            const statusLabel = parsing && !alreadyRead
               ? perFile === "done"
                 ? "Read"
                 : perFile === "error"
@@ -2346,7 +2476,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
                     ? "Review"
                     : "Failed"
                 : quotedFile
-                  ? "Quoted"
+                  ? "Not read yet"
                   : quoting
                     ? "Pricing"
                     : "Queued";
@@ -2419,13 +2549,19 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
-                    className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[color:var(--body)] sm:justify-self-end"
-                    data-testid={`remove-${f.name}`}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  {/* A read document is part of the scorecard now — no remove. */}
+                  {alreadyRead ? (
+                    <span />
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
+                      className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[color:var(--body)] sm:justify-self-end"
+                      data-testid={`remove-${f.name}`}
+                      aria-label={`Remove ${f.name}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Gaps WITHIN this document — one compact line, no per-row
@@ -2469,12 +2605,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         </div>
       )}
 
-      {/* Reading — the paid work, after payment only. */}
-      {parsing && (
-        <div className="mt-3 flex items-center gap-2 text-[12px] text-violet-200">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-300" />
-          Paid — reading your documents, normalising and mapping entities…
-        </div>
+      {/* A paid run that delivered less than it cost — the server says what came back. */}
+      {refundNotice && (
+        <p className="mt-3 text-[12px] leading-5 text-emerald-200/90" data-testid="bbbee-refund-notice">
+          {refundNotice}
+        </p>
       )}
 
       {revealed && mapped && (
@@ -2648,6 +2783,13 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
                 className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[15px] text-white outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 transition-colors [color-scheme:dark]"
                 data-testid="docs-year-end"
               />
+              {unreadFiles.length > 0 && (
+                <span className="mt-1.5 block text-[11.5px] leading-5 text-amber-300/90" data-testid="docs-unread-hint">
+                  {unreadFiles.length} document{unreadFiles.length === 1 ? " you added has" : "s you added have"} not
+                  been read yet — read {unreadFiles.length === 1 ? "it" : "them"} above, or remove{" "}
+                  {unreadFiles.length === 1 ? "it" : "them"}, before building.
+                </span>
+              )}
               {!yearEndValid && (
                 <span className="mt-1.5 block text-[11.5px] leading-5 text-amber-300/90" data-testid="docs-year-end-hint">
                   Required — Skills, Procurement, ESD and SED are measured over the twelve months ending
