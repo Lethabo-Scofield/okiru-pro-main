@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { boundWorkbookSheets, sheetBoundsLosses } from "../sheetBounds";
 import { ESG_SECTION_IDS } from "./esgSections";
 import {
   classifyEsgGridRow,
@@ -254,7 +255,8 @@ export function esgImportHandover(preview: { sections?: Record<string, unknown>;
 export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPreview {
   const book = XLSX.read(buffer, { type: "buffer" });
   const sections: Record<string, { cells: Record<string, unknown> }> = {};
-  const warnings: string[] = [];
+  // A sheet's declared size is a claim, not a fact — checked before anything reads rows.
+  const warnings: string[] = sheetBoundsLosses(boundWorkbookSheets(book));
   const unmatchedSheets: string[] = [];
 
   for (const sheetName of book.SheetNames) {
