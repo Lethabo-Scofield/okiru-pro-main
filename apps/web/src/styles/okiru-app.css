@@ -362,44 +362,44 @@ html.light .okiru-app [class~="hover:bg-[#202126]"]:hover:not(.esg-theme *) {
 /* The new scorecard flow sits inside the shared app shell. Keep the full
    route surface light so breadcrumbs and outer prompt sections do not inherit
    older dark page utilities. */
-.okiru-create-scorecard-shell,
-.okiru-create-scorecard-shell > main {
+html.light .okiru-create-scorecard-shell,
+html.light .okiru-create-scorecard-shell > main {
   background: #ffffff !important;
   color: #18181b !important;
 }
 
-.okiru-create-scorecard-shell header {
+html.light .okiru-create-scorecard-shell header {
   background: rgba(255, 255, 255, 0.94) !important;
   border-bottom: 1px solid var(--rule) !important;
   box-shadow: 0 8px 24px -20px rgba(24, 24, 27, 0.28) !important;
 }
 
-.okiru-create-scorecard-shell .ok-eyebrow {
+html.light .okiru-create-scorecard-shell .ok-eyebrow {
   color: #71717a !important;
 }
 
-.okiru-create-scorecard-shell [aria-current="page"],
-.okiru-create-scorecard-shell [style*="--hi"] {
+html.light .okiru-create-scorecard-shell [aria-current="page"],
+html.light .okiru-create-scorecard-shell [style*="--hi"] {
   color: #18181b !important;
 }
 
-.okiru-create-scorecard-shell [class~="text-white"]:not([class*="bg-"]),
-.okiru-create-scorecard-shell [class~="text-zinc-50"]:not([class*="bg-"]),
-.okiru-create-scorecard-shell [class~="text-zinc-100"]:not([class*="bg-"]),
-.okiru-create-scorecard-shell [class~="text-[#e5e5ea]"]:not([class*="bg-"]) {
+html.light .okiru-create-scorecard-shell [class~="text-white"]:not([class*="bg-"]),
+html.light .okiru-create-scorecard-shell [class~="text-zinc-50"]:not([class*="bg-"]),
+html.light .okiru-create-scorecard-shell [class~="text-zinc-100"]:not([class*="bg-"]),
+html.light .okiru-create-scorecard-shell [class~="text-[#e5e5ea]"]:not([class*="bg-"]) {
   color: #18181b !important;
 }
 
-.okiru-create-scorecard-shell [class~="bg-black"],
-.okiru-create-scorecard-shell [class~="bg-zinc-950"],
-.okiru-create-scorecard-shell [class~="bg-zinc-900"],
-.okiru-create-scorecard-shell [class~="bg-neutral-950"],
-.okiru-create-scorecard-shell [class~="bg-neutral-900"],
-.okiru-create-scorecard-shell [class~="bg-[#08090b]"],
-.okiru-create-scorecard-shell [class~="bg-[#0d0d10]"],
-.okiru-create-scorecard-shell [class~="bg-[#101012]"],
-.okiru-create-scorecard-shell [class~="bg-[#111114]"],
-.okiru-create-scorecard-shell [class*="bg-[color:var(--ink"] {
+html.light .okiru-create-scorecard-shell [class~="bg-black"],
+html.light .okiru-create-scorecard-shell [class~="bg-zinc-950"],
+html.light .okiru-create-scorecard-shell [class~="bg-zinc-900"],
+html.light .okiru-create-scorecard-shell [class~="bg-neutral-950"],
+html.light .okiru-create-scorecard-shell [class~="bg-neutral-900"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#08090b]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#0d0d10]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#101012]"],
+html.light .okiru-create-scorecard-shell [class~="bg-[#111114]"],
+html.light .okiru-create-scorecard-shell [class*="bg-[color:var(--ink"] {
   background-color: #ffffff !important;
 }
 

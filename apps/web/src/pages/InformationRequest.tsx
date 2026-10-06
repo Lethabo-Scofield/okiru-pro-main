@@ -96,8 +96,10 @@ function buildSectionSummary(sections: WorkbookSectionsInput) {
     .filter((s) => s.rowCount > 0 || s.fieldCount > 0);
 }
 
+/* Light mode only: in dark mode the flow keeps its own dark design and the shell's dark
+   rules, instead of being forced white. */
 const CREATE_SCORECARD_LIGHT_CSS = `
-  .bbbee-create-light {
+  html.light .bbbee-create-light {
     --ink: #ffffff;
     --ink-2: rgba(255,255,255,0.9);
     --ink-3: rgba(255,255,255,0.82);
@@ -107,93 +109,93 @@ const CREATE_SCORECARD_LIGHT_CSS = `
     --rule-strong: rgba(24,24,27,0.18);
     color: #18181b;
   }
-  .bbbee-create-light [class~="text-white"]:not([class*="bg-"]) {
+  html.light .bbbee-create-light [class~="text-white"]:not([class*="bg-"]) {
     color: #18181b !important;
   }
-  .bbbee-create-light [class~="text-[#f2f2f7]"],
-  .bbbee-create-light [class~="text-[#e5e5ea]"] {
+  html.light .bbbee-create-light [class~="text-[#f2f2f7]"],
+  html.light .bbbee-create-light [class~="text-[#e5e5ea]"] {
     color: #27272a !important;
   }
-  .bbbee-create-light [class*="text-amber-100"],
-  .bbbee-create-light [class*="text-amber-200"] {
+  html.light .bbbee-create-light [class*="text-amber-100"],
+  html.light .bbbee-create-light [class*="text-amber-200"] {
     color: #92400e !important;
   }
-  .bbbee-create-light [class*="text-emerald-200"] {
+  html.light .bbbee-create-light [class*="text-emerald-200"] {
     color: #047857 !important;
   }
-  .bbbee-create-light [class*="border-white/"],
-  .bbbee-create-light [class*="border-white\\["] {
+  html.light .bbbee-create-light [class*="border-white/"],
+  html.light .bbbee-create-light [class*="border-white\\["] {
     border-color: rgba(24,24,27,0.1) !important;
   }
-  .bbbee-create-light [class*="bg-white/"],
-  .bbbee-create-light [class*="bg-white\\["] {
+  html.light .bbbee-create-light [class*="bg-white/"],
+  html.light .bbbee-create-light [class*="bg-white\\["] {
     background-color: rgba(24,24,27,0.035) !important;
   }
-  .bbbee-create-light [class*="bg-[#0"],
-  .bbbee-create-light [class*="bg-[#1"],
-  .bbbee-create-light [class*="bg-[color:var(--ink"] {
+  html.light .bbbee-create-light [class*="bg-[#0"],
+  html.light .bbbee-create-light [class*="bg-[#1"],
+  html.light .bbbee-create-light [class*="bg-[color:var(--ink"] {
     background-color: rgba(255,255,255,0.88) !important;
   }
-  .bbbee-create-light [class*="hover:bg-[#222225]"]:hover,
-  .bbbee-create-light [class*="hover:bg-[rgba(255,255,255"]:hover {
+  html.light .bbbee-create-light [class*="hover:bg-[#222225]"]:hover,
+  html.light .bbbee-create-light [class*="hover:bg-[rgba(255,255,255"]:hover {
     background-color: #f4f4f5 !important;
   }
-  .bbbee-create-light [class*="hover:text-white"]:hover {
+  html.light .bbbee-create-light [class*="hover:text-white"]:hover {
     color: #18181b !important;
   }
-  .bbbee-create-light input,
-  .bbbee-create-light select,
-  .bbbee-create-light textarea {
+  html.light .bbbee-create-light input,
+  html.light .bbbee-create-light select,
+  html.light .bbbee-create-light textarea {
     background: #ffffff !important;
     border-color: rgba(24,24,27,0.14) !important;
     color: #18181b !important;
   }
-  .bbbee-create-light input::placeholder,
-  .bbbee-create-light textarea::placeholder {
+  html.light .bbbee-create-light input::placeholder,
+  html.light .bbbee-create-light textarea::placeholder {
     color: #a1a1aa !important;
   }
-  .bbbee-create-light option {
+  html.light .bbbee-create-light option {
     background: #ffffff !important;
     color: #18181b !important;
   }
-  .bbbee-create-light button[class*="bg-white"],
-  .bbbee-create-light a[class*="bg-white"] {
+  html.light .bbbee-create-light button[class*="bg-white"],
+  html.light .bbbee-create-light a[class*="bg-white"] {
     background-color: #18181b !important;
     border-color: #18181b !important;
     color: #ffffff !important;
   }
-  .bbbee-create-light button[class*="bg-white"]:hover,
-  .bbbee-create-light a[class*="bg-white"]:hover {
+  html.light .bbbee-create-light button[class*="bg-white"]:hover,
+  html.light .bbbee-create-light a[class*="bg-white"]:hover {
     background-color: #000000 !important;
     color: #ffffff !important;
   }
-  .bbbee-create-light .bg-violet-500,
-  .bbbee-create-light [class*="bg-violet-"] {
+  html.light .bbbee-create-light .bg-violet-500,
+  html.light .bbbee-create-light [class*="bg-violet-"] {
     background-color: #18181b !important;
     color: #ffffff !important;
     box-shadow: none !important;
   }
-  .bbbee-create-light .bg-violet-500:hover,
-  .bbbee-create-light [class*="hover:bg-violet-"]:hover {
+  html.light .bbbee-create-light .bg-violet-500:hover,
+  html.light .bbbee-create-light [class*="hover:bg-violet-"]:hover {
     background-color: #000000 !important;
   }
-  .bbbee-create-light [class*="bg-[#107C41]"] {
+  html.light .bbbee-create-light [class*="bg-[#107C41]"] {
     background-color: #107C41 !important;
     color: #ffffff !important;
   }
-  .bbbee-create-light [class*="hover:bg-[#185C37]"]:hover {
+  html.light .bbbee-create-light [class*="hover:bg-[#185C37]"]:hover {
     background-color: #185C37 !important;
     color: #ffffff !important;
   }
-  .bbbee-create-light [class*="bg-amber-500"] {
+  html.light .bbbee-create-light [class*="bg-amber-500"] {
     background-color: #f59e0b !important;
     color: #18181b !important;
   }
-  .bbbee-create-light [class*="shadow-[0_24px_80px"],
-  .bbbee-create-light [class*="shadow-[0_22px_70px"] {
+  html.light .bbbee-create-light [class*="shadow-[0_24px_80px"],
+  html.light .bbbee-create-light [class*="shadow-[0_22px_70px"] {
     box-shadow: 0 24px 70px rgba(24,24,27,0.08) !important;
   }
-  .bbbee-create-light [class*="ring-white/"] {
+  html.light .bbbee-create-light [class*="ring-white/"] {
     --tw-ring-color: rgba(24,24,27,0.1) !important;
   }
 `;
