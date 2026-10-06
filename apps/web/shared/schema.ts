@@ -879,6 +879,13 @@ const feedbackSchema = new Schema({
   userAgent: { type: String, default: null },
   createdAt: { type: Date, default: Date.now, index: true },
   updatedAt: { type: Date, default: Date.now },
+  /** Email delivery to the feedback list (server/feedbackNotifier.ts). Null until sent. */
+  notifiedAt: { type: Date, default: null },
+  notifiedTo: { type: [String], default: undefined },
+  /** Set while one web replica is sending, so the other does not send it too. */
+  notifyClaimedAt: { type: Date, default: null },
+  notifyAttempts: { type: Number, default: 0 },
+  notifyError: { type: String, default: null },
 }, { collection: "feedback", id: false });
 
 feedbackSchema.set("toJSON", {
