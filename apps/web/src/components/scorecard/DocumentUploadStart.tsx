@@ -156,7 +156,6 @@ function collectEntityAliases(data: any): string[] {
   }
   return Array.from(out);
 }
-import ExtractionConfidence from "./ExtractionConfidence";
 import ReviewSection from "./ReviewSection";
 
 interface RequiredGroup {
@@ -274,6 +273,10 @@ import { clearFlowSnapshot, readFlowSnapshot, writeFlowSnapshot } from "./flowSn
 // Each "Add documents" round reads only its new files; this folds the result
 // into what earlier rounds already read, without losing any of it.
 import { mergeParserCases } from "@/lib/parserCaseMerge";
+// The review that replaced the list under the Build button: each document,
+// side by side with what we took from it and why anything was not read.
+import { DocumentReview } from "@/components/review/DocumentReview";
+import { buildDocumentReview } from "@/lib/documentReview";
 
 /** workbook company-information meta value for each parser sector code. */
 const SECTOR_TO_WORKBOOK: Record<string, string> = {
@@ -484,6 +487,18 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   /** Library ids carried by a restored snapshot — the File objects are gone
       but the uploads still exist and must still be filed under the company. */
   const restoredDocumentIdsRef = useRef<string[]>([]);
+  /** Library id per file name from a restored snapshot — the preview's source once the uploads are gone. */
+  const restoredIdsByNameRef = useRef<Record<string, string>>({});
+
+  /** Library id per file name: this mount's uploads, then whatever a restore carried. */
+  const documentIdsByName = (): Record<string, string> => {
+    const out: Record<string, string> = { ...restoredIdsByNameRef.current };
+    for (const f of files) {
+      const id = persistedDocumentsRef.current.get(`${f.name}:${f.size}:${f.lastModified}`);
+      if (id) out[f.name] = id;
+    }
+    return out;
+  };
 
   /** Every library id this run owns: restored ones plus this mount's uploads. */
   const allDocumentIds = () =>
@@ -531,6 +546,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     if (snap.yearEnd) setYearEnd(snap.yearEnd);
     setFiledBatchByFile(snap.filedBatchByFile ?? {});
     restoredDocumentIdsRef.current = snap.documentIds ?? [];
+    restoredIdsByNameRef.current = snap.documentIdsByName ?? {};
     setRestoredAt(snap.savedAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1175,6 +1191,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         fileNames: readNames,
         filedBatchByFile,
         documentIds: allDocumentIds(),
+        documentIdsByName: documentIdsByName(),
         parserCase: mergedCase,
       });
     } catch (err) {
@@ -1434,6 +1451,29 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     () => (mapped?.coverage ?? []).filter((c) => c.status === "needs-detail" && c.extractedValue),
     [mapped],
   );
+
+  /**
+   * The review: one entry per document — what we took, what we read but could
+   * not place, and why anything was not read — built from the same merged
+   * sections the Build button creates the workbook from.
+   */
+  const reviewDocuments = useMemo(() => {
+    if (!parserCase) return [];
+    const sections = mergeWorkbookSections(mapped?.sections ?? {}, injected ? toWorkbookSections(injected) : {});
+    const failedFiles = Object.entries(docProgress)
+      .filter(([, status]) => status === "error")
+      .map(([name]) => name);
+    return buildDocumentReview(
+      {
+        parserCase,
+        sections: sections as Record<string, { rows?: unknown[] }>,
+        rejected: injected?.rejected ?? [],
+        flags: reconciliationFlags,
+        failedFiles,
+      },
+      "a B-BBEE scorecard",
+    );
+  }, [parserCase, mapped, injected, reconciliationFlags, docProgress]);
 
   // Suppliers + spend come from whichever path actually read the procurement
   // schedule: the AI-entity path is authoritative where it has rows (it is what
@@ -2834,116 +2874,48 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
               As six always-open sibling panels it pushed the Build button off
               the bottom of the screen on any real evidence pack; as counted,
               collapsible groups it is a summary someone will actually open. */}
+          {/* The review — each document beside what we took from it, worst
+              first. It replaced a stack of collapsed sections ("What we read",
+              "Documents still worth adding", "Evidence that didn't reconcile"…)
+              that said the same things detached from the documents they were
+              about. Optional: Build above never waits for it. */}
+          <DocumentReview
+            documents={reviewDocuments}
+            fileFor={(name) => files.find((f) => f.name === name) ?? null}
+            documentIdFor={(name) => documentIdsByName()[name] ?? null}
+            onAddDocuments={() => inputRef.current?.click()}
+            stillToAdd={missingDocGroups.detectable.map((g) => g.label)}
+            needsDetail={needsDetailPillars.map(
+              (c) => `${c.pillar}: we read ${c.extractedValue}, but it needs per-person rows to score.`,
+            )}
+          />
+
           <div className="mt-4 space-y-1.5" data-testid="extraction-review">
-            {missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length > 0 && (
-              <ReviewSection
-                title="Documents still worth adding"
-                meta={`${missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length}`}
-                tone="check"
-                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                summary="You can add these now or in the workbook — neither blocks you from continuing."
-                testId="missing-docs-review"
-              >
-                {missingDocGroups.detectable.length > 0 && (
-                  <>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
-                      We can read these automatically
-                    </p>
-                    <ul className="mb-2 mt-1 space-y-0.5">
-                      {missingDocGroups.detectable.map((g) => (
-                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                          {g.label}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {missingDocGroups.evidenceOnly.length > 0 && (
-                  <>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
-                      Have ready for your verifier
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {missingDocGroups.evidenceOnly.map((g) => (
-                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                          {g.label}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </ReviewSection>
-            )}
-
-            {needsDetailPillars.length > 0 && (
-              <ReviewSection
-                title="Extracted, but needs per-person rows to score"
-                meta={`${needsDetailPillars.length}`}
-                tone="check"
-                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                testId="needs-detail-review"
-              >
-                <ul className="space-y-1">
-                  {needsDetailPillars.map((c) => (
-                    <li key={c.pillar} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                      <span className="text-amber-300/80">{c.pillar}:</span> we extracted{" "}
-                      {c.extractedValue} — it needs per-person rows in the workbook to score.
-                    </li>
-                  ))}
-                </ul>
-              </ReviewSection>
-            )}
-
-            {reconciliationFlags.length > 0 && (
-              <ReviewSection
-                title="Evidence that didn’t reconcile"
-                meta={`${reconciliationFlags.length}`}
-                tone="check"
-                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                summary="A total the rows don’t sum to is the first thing a verifier asks about."
-                testId="reconciliation-flags"
-              >
-                <ul className="space-y-1">
-                  {reconciliationFlags.map((flag, i) => (
-                    <li key={i} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                      <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
-                    </li>
-                  ))}
-                </ul>
-              </ReviewSection>
-            )}
-
-            {(injected?.metaCorroboration.length ?? 0) > 0 && (
-              <ReviewSection
-                title="Confirmed by more than one document"
-                meta={`${injected!.metaCorroboration.length}`}
-                tone="good"
-                icon={<Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
-                summary="Corroboration is the cheapest evidence there is — these figures agreed across files."
-                testId="meta-corroboration"
-              >
-                <ul className="space-y-1">
-                  {injected!.metaCorroboration.map((c) => (
-                    <li key={`${c.section}.${c.column}`} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                      <span className="text-[color:var(--body)]">{c.column}</span> — {String(c.value)}, agreed
-                      by {c.agreementCount} documents ({c.sources.join(", ")})
-                    </li>
-                  ))}
-                </ul>
-              </ReviewSection>
-            )}
-
-            {injected && (
-              <ReviewSection
-                title="What we read from your documents"
-                meta={`${totalMappedRows} placed`}
-                tone="neutral"
-                icon={<FileText className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />}
-                testId="toggle-read-details"
-              >
-                <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
-              </ReviewSection>
-            )}
+            {/* Disagreements found while linking documents to each other — they
+                belong to no single document, so they are not in the review. */}
+            {(() => {
+              const crossDocument = reconciliationFlags.filter(
+                (f) => !reviewDocuments.some((d) => d.filename === f.sourceFile),
+              );
+              return crossDocument.length > 0 ? (
+                <ReviewSection
+                  title="Figures your documents disagree on"
+                  meta={`${crossDocument.length}`}
+                  tone="check"
+                  icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                  summary="Where two documents describe the same thing differently, the lower figure is scored."
+                  testId="reconciliation-flags"
+                >
+                  <ul className="space-y-1">
+                    {crossDocument.map((flag, i) => (
+                      <li key={i} className="text-[11.5px] leading-5 text-[color:var(--body)]">
+                        <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
+                      </li>
+                    ))}
+                  </ul>
+                </ReviewSection>
+              ) : null;
+            })()}
 
             {certificateFill && (
               <ReviewSection
