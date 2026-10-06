@@ -173,27 +173,28 @@ export async function extractEsgCaseEntities(
     const readByCode = monthly ?? period;
     const flatRead = !readByCode && input.metadata?.sheet_hidden !== true;
 
-    const [specResults, sheetTable] = await Promise.all([
-      flatRead
-        ? extractDocument(model, {
-          filename: input.filename,
-          markdown: input.markdown,
-          raw_text: input.raw_text,
-          elementHint: sheetName,
-        }, { elementOverride, domain: 'esg' })
-        : Promise.resolve([] as DocumentExtraction[]),
-      // A register that arrived as a spreadsheet: the model maps its columns
-      // once, the code reads every row. Returns null for anything that is not a
-      // register, so the spec pass above remains the reader for PDFs, scans and
-      // narrative documents — this is additive, never a replacement.
-      readByCode
-        ? Promise.resolve(null)
-        : extractEsgSheetTable(model, {
-          filename: input.filename,
-          rows: structuredRows(input.tables),
-          sheetName,
-        }),
-    ]);
+    // A register that arrived as a spreadsheet: the model maps its columns
+    // once, the code reads every row. Returns null for anything that is not a
+    // register — PDFs, scans, narrative documents — which the spec pass below
+    // still reads.
+    const sheetTable = readByCode
+      ? null
+      : await extractEsgSheetTable(model, {
+        filename: input.filename,
+        rows: structuredRows(input.tables),
+        sheetName,
+      });
+    // A sheet the code read in full is not read again by the model: the flat
+    // pass could only return a truncated copy of the same rows (Acme Group's
+    // 132-vehicle fleet master came back as 15) at the price of a paid call.
+    const specResults = flatRead && !sheetTable
+      ? await extractDocument(model, {
+        filename: input.filename,
+        markdown: input.markdown,
+        raw_text: input.raw_text,
+        elementHint: sheetName,
+      }, { elementOverride, domain: 'esg' })
+      : ([] as DocumentExtraction[]);
 
     const results = [...specResults];
     if (readByCode) results.push(readByCode);
