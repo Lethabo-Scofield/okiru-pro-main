@@ -37,6 +37,7 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
     newIssues, resolvedIssues, unmatchedSheets, warnings,
     sectionsCovered, sectionsUntouched, isPartial,
   } = analysis;
+  const registers = analysis.registers ?? [];
 
   return (
     <div className="space-y-3" data-testid="esg-import-analysis">
@@ -139,6 +140,27 @@ export function EsgImportAnalysisPanel({ analysis, sectionLabels = {}, sampleLim
           ) : null}
         </p>
       </section>
+
+      {registers.length > 0 ? (
+        <section
+          className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3"
+          data-testid="esg-import-registers"
+        >
+          <p className="text-[13px] font-medium text-[#e5e5ea]">
+            Registers — matching rows are updated, new rows added, none removed
+          </p>
+          <ul className="mt-1 space-y-0.5 text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+            {registers.map((r) => (
+              <li key={r.sectionId}>
+                {label(r.sectionId)}: {r.added} row{r.added === 1 ? "" : "s"} added
+                {r.updated > 0 ? `, ${r.updated} updated` : ""}
+                {r.existing > 0 ? ` (${r.existing} already there)` : ""}
+                {r.alreadyThere > 0 ? ` · ${r.alreadyThere} unchanged` : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {resolvedIssues.length > 0 ? (
         <p
