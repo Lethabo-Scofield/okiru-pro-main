@@ -58,6 +58,7 @@ import EsgExtractionSummary from "./EsgExtractionSummary";
 import {
   applyEsgParserResult,
   esgCaseFileNames,
+  esgUploadNameForSource,
   type EsgInjectionResult,
   type EsgParserCaseLike,
 } from "./esgParserInjection";
@@ -498,24 +499,39 @@ export function EsgDocumentUploadStart({
     docErrors: Map<string, string>,
   ): Promise<void> => {
     const extractions = data.ai_entities?.extractions ?? [];
-    const unreadable = new Map(
-      (data.unreadable_files ?? []).map((u) => [String(u.file_name ?? ""), String(u.reason ?? "")]),
-    );
     const reviewRows = data.documents_needing_review ?? [];
     const fileNames = esgCaseFileNames(data);
     if (fileNames.length === 0) return;
 
-    const tasks = fileNames.map(async (filename) => {
+    // A workbook comes back as one source per sheet ("File.xlsx › Sheet"); its
+    // run belongs to the file that was uploaded, carrying every sheet.
+    const uploadNames = list.map((candidate) => candidate.name);
+    const uploadOf = (source: unknown) => esgUploadNameForSource(source, uploadNames);
+    const problems = [
+      ...(data.unreadable_files ?? []).map((u) => [String(u.file_name ?? ""), String(u.reason ?? "")] as const),
+      ...Array.from(docErrors.entries()),
+    ];
+    const filesInCase = Array.from(
+      new Set(fileNames.map(uploadOf).filter((name): name is string => Boolean(name))),
+    );
+
+    const tasks = filesInCase.map(async (filename) => {
       const file = list.find((candidate) => candidate.name === filename);
-      // An extraction can name a source we never staged (a sheet inside a
-      // workbook). There is no upload to attach a run to, so skip it rather
-      // than failing the batch.
       if (!file) return;
       const documentId = await persistDocument(file);
-      const mine = extractions.filter((e) => String(e.sourceFile ?? "") === filename);
-      const detected = (data.documents_detected ?? []).find((d) => d.filename === filename);
-      const failure = unreadable.get(filename) ?? docErrors.get(filename) ?? null;
-      const exceptions = mine.flatMap((e) => (e.exceptions ?? []).map((x) => String(x)));
+      const mine = extractions.filter((e) => uploadOf(e.sourceFile) === filename);
+      const detected = (data.documents_detected ?? []).find((d) => uploadOf(d.filename) === filename);
+      const readSomething = mine.some((e) => (e.values?.length ?? 0) > 0);
+      const partProblems = problems
+        .filter(([source]) => uploadOf(source) === filename)
+        .map(([source, reason]) => (source === filename ? reason : `${source}: ${reason}`));
+      // A workbook failed only if nothing in it was read; one unreadable sheet
+      // in an otherwise-read workbook is a warning on that workbook.
+      const failure = !readSomething && partProblems.length > 0 ? partProblems.join("; ") : null;
+      const exceptions = [
+        ...mine.flatMap((e) => (e.exceptions ?? []).map((x) => String(x))),
+        ...(failure ? [] : partProblems),
+      ];
       const missingFields = Array.from(new Set(mine.flatMap((e) => e.missingFields ?? [])));
 
       const parserOutput = {
@@ -533,7 +549,7 @@ export function EsgDocumentUploadStart({
         // back to the prompt that found it.
         extractions: mine,
         validation: {
-          passed: !failure && mine.some((e) => (e.values?.length ?? 0) > 0),
+          passed: !failure && readSomething,
           warnings: exceptions,
           errors: failure ? [failure] : (detected?.validation?.errors ?? []),
           missing_fields: missingFields.length > 0
@@ -551,7 +567,7 @@ export function EsgDocumentUploadStart({
         },
       };
       const reviewReasons = [
-        ...(reviewRows.find((row) => row.filename === filename)?.reasons ?? []),
+        ...reviewRows.filter((row) => uploadOf(row.filename) === filename).flatMap((row) => row.reasons ?? []),
         ...(failure ? [failure] : []),
         ...exceptions,
       ];
@@ -587,9 +603,10 @@ export function EsgDocumentUploadStart({
     setParseError(null);
     setDocProgress({});
 
-    // A stream that has gone quiet is a stream that has died. Every SSE event
-    // resets this; if none arrives inside the window we abort and say so rather
-    // than spinning forever.
+    // A stream that has gone quiet is a stream that has died. ANY bytes reset
+    // this — the parser's 15-second ": ping" keep-alive included. Resetting only
+    // on named events let a long workbook (one sheet per vehicle, minutes per
+    // sheet) time out while the parser was still working and still paid for.
     const controller = new AbortController();
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     let timedOut = false;
@@ -678,6 +695,7 @@ export function EsgDocumentUploadStart({
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
+        resetIdleTimer();
         buffer += decoder.decode(value, { stream: true });
         const blocks = buffer.split(/\r?\n\r?\n/);
         buffer = blocks.pop() ?? "";
@@ -767,8 +785,10 @@ export function EsgDocumentUploadStart({
       });
     } catch (err) {
       if (timedOut || (err as Error)?.name === "AbortError") {
+        // Results are only saved once the whole batch comes back, so nothing
+        // from this run is in the library — the old copy said otherwise.
         setParseError(
-          "Reading your documents stopped responding, so we stopped waiting. Your tokens were spent on the documents that finished — those are saved in your document library. Try the remaining documents in a smaller batch.",
+          "The document reader stopped responding for 10 minutes, so we stopped waiting. No results came back, so nothing was placed in your workbook or saved to your document library. Try the documents again in a smaller batch.",
         );
       } else {
         setParseError(err instanceof Error ? err.message : "Could not read the documents");

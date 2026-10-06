@@ -14,6 +14,8 @@
  *     plausible-looking cell or implying a workbook was filled in.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import "@testing-library/jest-dom/vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -422,6 +424,51 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // The paid read still leaves an archive: a failure that is not recorded is
     // a failure the user cannot show anyone.
     expect(calls).toContain("POST /api/parser-documents/doc-1/runs");
+  });
+
+  it("archives a workbook read sheet by sheet under the file that was uploaded", async () => {
+    // The parser splits a workbook and names each sheet "File › Sheet". None of
+    // those names is an upload, so every sheet's result used to be dropped: a
+    // paid read of a workbook left nothing in the document library.
+    const base = RESULT_CASE.ai_entities.extractions[0];
+    const sheetCase = {
+      ...RESULT_CASE,
+      documents: [
+        { file_name: "city-power-oct.pdf › Depot A" },
+        { file_name: "city-power-oct.pdf › Depot B" },
+      ],
+      ai_entities: {
+        ...RESULT_CASE.ai_entities,
+        extractions: [
+          { ...base, sourceFile: "city-power-oct.pdf › Depot A" },
+          { ...base, sourceFile: "city-power-oct.pdf › Depot B", exceptions: [] },
+        ],
+      },
+    };
+    const { fetchMock } = stubFetch({ frames: [sse("result", sheetCase), sse("complete", {})] });
+    renderUpload();
+    const user = await stageAFile();
+
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+    await screen.findByTestId("esg-extraction-summary", {}, { timeout: 10_000 });
+
+    const runCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/runs"));
+    expect(runCalls).toHaveLength(1);
+    const body = JSON.parse(String((runCalls[0]![1] as RequestInit).body));
+    expect(body.parserOutput.filename).toBe("city-power-oct.pdf");
+    expect(body.parserOutput.extractions).toHaveLength(2);
+    expect(body.parserOutput.validation.passed).toBe(true);
+  });
+
+  it("keeps waiting while the reader's keep-alive arrives", () => {
+    // The parser sends ": ping" every 15 s while it works. Only named events
+    // used to reset the 10-minute idle timer, so a long workbook timed out mid-read.
+    const src = readFileSync(resolve(__dirname, "../EsgDocumentUploadStart.tsx"), "utf8");
+    expect(src).toMatch(/const \{ done, value \} = await reader\.read\(\);\s*if \(done\) break;\s*resetIdleTimer\(\);/);
+    expect(src).not.toMatch(/those are saved in your document library/);
   });
 
   it("surfaces a stream error rather than spinning forever", async () => {
