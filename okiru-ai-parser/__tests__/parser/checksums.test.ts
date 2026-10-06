@@ -47,7 +47,31 @@ describe('checksumForField dispatch', () => {
     expect(checksumForField('director_id_number', '8001015009087')?.valid).toBe(true);
     expect(checksumForField('company_registration_number', '2019/111222/07')?.valid).toBe(true);
     expect(checksumForField('vat_number', '4123456789')?.valid).toBe(true);
+    expect(checksumForField('supplier_vat_number', '4123456789')?.valid).toBe(true);
+    expect(checksumForField('vat_registration_number', '4123456789')?.valid).toBe(true);
     expect(checksumForField('supplier_name', 'ABC')).toBeNull();
+  });
+
+  it('never checks an amount "excluding VAT" as a VAT number', () => {
+    // Every one of these fired "VAT number must be 10 digits — likely misread"
+    // on real uploads: once per vehicle sheet, once per supplier row.
+    for (const field of [
+      'claimed_spend_ex_vat',
+      'amount_ex_vat',
+      'fuel_rand_excl_vat',
+      'electricity_rand_excl_vat',
+      'water_rand_excl_vat',
+      'total_fuel_rand_excl_vat',
+      'vat_amount',
+      'private_sector_spend',
+    ]) {
+      expect(checksumForField(field, '25 914.50'), field).toBeNull();
+    }
+  });
+
+  it('never checks a vehicle registration as a company registration', () => {
+    expect(checksumForField('vehicle_registration_number', 'AB56STGP')).toBeNull();
+    expect(checksumForField('licence_registration_number', 'AB56STGP')).toBeNull();
   });
 });
 
