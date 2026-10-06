@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
   computeEsgIndicatorCoverage,
@@ -6,7 +6,92 @@ import {
   type EsgIndicatorStatus,
   type EsgPillarCoverage,
 } from "@/lib/esg/esgIndicatorCoverage";
+import { ESG_APPLICABILITY_SECTION, PILLAR_LETTER } from "../lib/calculators/esgApplicability";
 import { useEsgStore } from "../lib/esgStore";
+
+const DECLARED = "Declared not applicable by the company: ";
+
+/**
+ * "This does not apply to us", with the reason — the company's call, stated
+ * on the record. An indicator switched off leaves the score's numerator and
+ * denominator together, and the reason is what the report says about it.
+ */
+function ApplicabilityControl({ x }: { x: EsgIndicatorCoverage }) {
+  const workbook = useEsgStore((s) => s.workbook);
+  const locked = useEsgStore((s) => Boolean(s.submittedAt));
+  const updateSectionCells = useEsgStore((s) => s.updateSectionCells);
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const declared = x.status === "excluded" && (x.excludedReason ?? "").startsWith(DECLARED);
+  if (locked || (x.status === "excluded" && !declared)) return null;
+
+  const cellKey = `${PILLAR_LETTER[x.pillar]}:${x.key}`;
+  const save = async (value: string) => {
+    const current = (workbook?.sections?.[ESG_APPLICABILITY_SECTION]?.cells ?? {}) as Record<string, string | number | boolean | null>;
+    const next = { ...current };
+    if (value) next[cellKey] = value;
+    else delete next[cellKey];
+    try {
+      setError(null);
+      await updateSectionCells(ESG_APPLICABILITY_SECTION, next);
+      setOpen(false);
+      setReason("");
+    } catch {
+      setError("Not saved — try again.");
+    }
+  };
+
+  if (declared) {
+    return (
+      <button
+        type="button"
+        className="text-[11px] text-[var(--esg-acc-blue)] hover:underline"
+        onClick={() => void save("")}
+        data-testid={`esg-applies-again-${x.pillar}-${x.key}`}
+      >
+        It applies to us — count it again
+      </button>
+    );
+  }
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="text-[11px] text-[var(--esg-text3)] hover:text-[var(--esg-text2)] hover:underline"
+        onClick={() => setOpen(true)}
+        data-testid={`esg-not-applicable-${x.pillar}-${x.key}`}
+      >
+        Does not apply to us
+      </button>
+    );
+  }
+  return (
+    <div className="space-y-1.5" data-testid={`esg-not-applicable-form-${x.pillar}-${x.key}`}>
+      <textarea
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Why it does not apply — this is what the report will say"
+        className="w-full rounded-md border border-white/10 bg-black/20 p-2 text-[11px] text-[var(--esg-text)]"
+        rows={2}
+      />
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={reason.trim().length < 10}
+          className="rounded-md bg-[var(--esg-acc-blue)] px-2.5 py-1 text-[11px] text-white disabled:opacity-40"
+          onClick={() => void save(reason.trim())}
+        >
+          Leave it out of the score
+        </button>
+        <button type="button" className="text-[11px] text-[var(--esg-text3)]" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
+      {error ? <p className="text-[11px] text-amber-300">{error}</p> : null}
+    </div>
+  );
+}
 
 /**
  * Score breakdown — the structure behind the ESG score.
@@ -58,6 +143,7 @@ function IndicatorRow({ x }: { x: EsgIndicatorCoverage }) {
             Open {x.topic.label}
           </Link>
         ) : null}
+        <ApplicabilityControl x={x} />
       </div>
     </details>
   );

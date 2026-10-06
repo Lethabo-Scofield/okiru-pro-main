@@ -14,6 +14,7 @@ import { buildEsgAssistantContext } from "../src/lib/esg/esgAssistantContext";
 import OpenAI, { AzureOpenAI } from "openai";
 import { createChatCompletion } from "./openaiCompat";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
+import { ESG_APPLICABILITY_SECTION } from "../EsgToolkit/src/lib/calculators/esgApplicability";
 import {
   applyEsgWorkbookReopen,
   applyEsgWorkbookSubmit,
@@ -35,7 +36,14 @@ export type EsgWorkbookData = {
   submittedAt?: string | null;
 };
 
-const SECTION_KEYS = ESG_SECTION_IDS;
+/*
+ * The input pages, plus the sections the calculators read that are not input
+ * pages: the company's own declarations of what does not apply to it
+ * (`esgApplicability.ts`) and its net-zero reduction levers (`netZero.ts`).
+ * Refused here, neither could ever be saved, so the scorers' support for them
+ * was unreachable.
+ */
+const SECTION_KEYS = [...ESG_SECTION_IDS, ESG_APPLICABILITY_SECTION, "netzero"];
 
 const esgWorkbookSchema = new mongoose.Schema(
   {

@@ -143,4 +143,20 @@ describe("ESG workbook routes", () => {
       .send({ cells: {} });
     expect(res.status).toBe(400);
   });
+
+  it("saves what the calculators read beyond the input pages: declared exclusions and net-zero levers", async () => {
+    // A company's "this does not apply to us", with its reason.
+    const declared = await esgAgent
+      .put(`/api/esg/workbook/${companyId}/section/applicability`)
+      .send({ cells: { "e:d24": "Water is metered and billed by the landlord." } });
+    expect(declared.status).toBe(200);
+    const levers = await esgAgent
+      .put(`/api/esg/workbook/${companyId}/section/netzero`)
+      .send({ cells: { A20: "Fleet renewal", B20: "Replace 20 trucks with Euro VI" } });
+    expect(levers.status).toBe(200);
+
+    const get = await esgAgent.get(`/api/esg/workbook/${companyId}`);
+    expect(get.body.sections.applicability.cells["e:d24"]).toBe("Water is metered and billed by the landlord.");
+    expect(get.body.sections.netzero.cells.A20).toBe("Fleet renewal");
+  });
 });
