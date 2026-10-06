@@ -4,6 +4,7 @@
  * Pipeline: parse → map sheets → map columns → normalize types → structure → validate
  */
 import * as XLSX from "xlsx";
+import { boundWorkbookSheets } from "./sheetBounds";
 import { v4 as uuidv4 } from "uuid";
 import {
   SECTIONS,
@@ -878,6 +879,7 @@ export function readSectionSheet(
   opts: { sectionKey?: string; sheetName?: string; sheetHints?: string[] } = {},
 ): SectionSheetRead {
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const sheetNames = wb.SheetNames ?? [];
   // `sheetHints` names the sheets for a register that is NOT a workbook
   // section. YES is the case: its sheet holds a staff register whose columns
@@ -949,6 +951,7 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const sections = emptySections();
 
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   for (const sheetName of wb.SheetNames) {
     const sectionKey = matchSheetName(sheetName);
     if (!sectionKey) {
@@ -1125,6 +1128,7 @@ export async function normalizeExcelFileWithAi(
   const base = normalizeExcelBuffer(buffer);
 
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const unmapped = wb.SheetNames.filter((n) => !base.mappedSheets[n]);
   if (unmapped.length === 0) return base;
 

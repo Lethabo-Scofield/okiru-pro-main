@@ -4,6 +4,7 @@
  * AI normalization is server-side validation only — never invents values.
  */
 import * as XLSX from "xlsx";
+import { boundWorkbookSheets } from "./sheetBounds";
 import { v4 as uuidv4 } from "uuid";
 import {
   resolveScorecardTypeForSector,
@@ -1383,6 +1384,7 @@ export function extractBeeGatheringBuffer(buffer: ArrayBuffer): ExcelExtractionR
     cellNF: false,
     cellStyles: false,
   });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const isBee = isBeeGatheringWorkbook(wb);
   const mappedSheets: string[] = [];
   const allCandidates: FieldCandidate[] = [];
@@ -2231,6 +2233,7 @@ export async function importBeeGatheringExcel(
     cellNF: false,
     cellStyles: false,
   });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const sections = mapExtractedToWorkbookSections(
     extraction.data,
     wb,
