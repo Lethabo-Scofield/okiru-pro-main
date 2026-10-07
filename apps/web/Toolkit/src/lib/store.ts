@@ -336,7 +336,7 @@ export interface CalculatorConfigErrorInfo {
   fscSubSector?: string;
 }
 
-interface BbeeState extends PillarState {
+export interface BbeeState extends PillarState {
   isLoaded: boolean;
   activeClientId: string | null;
   pipelineOverrides: PipelineOverrides | null;

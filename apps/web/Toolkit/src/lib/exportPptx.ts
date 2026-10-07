@@ -1,4 +1,6 @@
 import pptxgen from "pptxgenjs";
+import { subMinimumLabel, subMinimumFailed } from "./sectors/sector-labels";
+import type { BbeeState } from "./store";
 import { OKIRU_LOGO_BASE64 } from "./logo";
 
 interface ExportOptions {
@@ -102,7 +104,7 @@ function addProgressBar(slide: any, pres: pptxgen, x: number, y: number, w: numb
   }
 }
 
-export const exportStrategyPptx = async (state: any, options: ExportOptions = {}) => {
+export const exportStrategyPptx = async (state: BbeeState, options: ExportOptions = {}) => {
   const pres = new pptxgen();
   pres.layout = 'LAYOUT_16x9';
   pres.author = options.analystName || "Okiru.Pro";
@@ -276,7 +278,7 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
         ["Outstanding Debt", formatCurrency(state.ownership?.outstandingDebt || 0)],
         ["Net Value", formatCurrency((state.ownership?.companyValue || 0) - (state.ownership?.outstandingDebt || 0))],
         ["Shareholders", `${state.ownership?.shareholders?.length || 0}`],
-        ["Sub-minimum", state.scorecard.ownership.subMinimumMet ? "Met (\u226540%)" : "Not Met (<40%)"],
+        ["Sub-minimum", subMinimumLabel(state.scorecard.ownership.subMinimumMet, { met: "Met (≥40%)", notMet: "Not Met (<40%)", notApplicable: "No sub-minimum for this sector" })],
       ],
       recommendation: state.scorecard.ownership.score < 15 ? "Consider increasing black shareholding through share schemes, broad-based trusts, or new equity partners." : "Ownership performance is solid. Focus on maintaining or improving economic interest recognition.",
     },
@@ -305,7 +307,7 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
         ["Target Spend (3.5%)", formatCurrency((state.skills?.leviableAmount || 0) * 0.035)],
         ["Actual Spend", formatCurrency((state.skills?.trainingPrograms || []).reduce((s: number, p: any) => s + (p.totalCost || p.cost || 0), 0))],
         ["Training Programs", `${state.skills?.trainingPrograms?.length || 0}`],
-        ["Sub-minimum", state.scorecard.skillsDevelopment.subMinimumMet ? "Met (\u226540%)" : "Not Met (<40%)"],
+        ["Sub-minimum", subMinimumLabel(state.scorecard.skillsDevelopment.subMinimumMet, { met: "Met (≥40%)", notMet: "Not Met (<40%)", notApplicable: "No sub-minimum for this sector" })],
       ],
       recommendation: state.scorecard.skillsDevelopment.score < 15 ? "Invest in accredited learnerships, bursaries and workplace skills plans targeting black employees. Ensure spend is properly documented." : "Skills spend is on track. Ensure training is accredited and properly recorded.",
     },
@@ -319,7 +321,7 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
         ["Total Suppliers", `${state.procurement?.suppliers?.length || 0}`],
         ["Total Spend", formatCurrency((state.procurement?.suppliers || []).reduce((s: number, sup: any) => s + sup.spend, 0))],
         ["Designated Group Bonus", "Max 2 pts (51%+ BO suppliers)"],
-        ["Sub-minimum", state.scorecard.procurement.subMinimumMet ? "Met (base \u226511.6 pts)" : "Not Met (base <11.6 pts)"],
+        ["Sub-minimum", subMinimumLabel(state.scorecard.procurement.subMinimumMet, { met: "Met (base ≥11.6 pts)", notMet: "Not Met (base <11.6 pts)", notApplicable: "No sub-minimum for this sector" })],
       ],
       recommendation: state.scorecard.procurement.score < 17 ? "Source from Level 1-2 B-BBEE suppliers, prioritise >51% black-owned and black women-owned vendors." : "Procurement strategy is effective. Maintain supplier diversity initiatives.",
     },
@@ -449,9 +451,9 @@ export const exportStrategyPptx = async (state: any, options: ExportOptions = {}
   addMasterFooter(nextSlide, entityName);
 
   const actions: Array<{ text: string; priority: boolean }> = [];
-  if (!state.scorecard.ownership.subMinimumMet) actions.push({ text: "Address Ownership sub-minimum failure to avoid level discounting", priority: true });
-  if (!state.scorecard.skillsDevelopment.subMinimumMet) actions.push({ text: "Increase Skills Development to meet 40% sub-minimum threshold", priority: true });
-  if (!state.scorecard.procurement.subMinimumMet) actions.push({ text: "Improve Preferential Procurement base score to meet 40% sub-minimum threshold (\u226511.6 pts)", priority: true });
+  if (subMinimumFailed(state.scorecard.ownership.subMinimumMet)) actions.push({ text: "Address Ownership sub-minimum failure to avoid level discounting", priority: true });
+  if (subMinimumFailed(state.scorecard.skillsDevelopment.subMinimumMet)) actions.push({ text: "Increase Skills Development to meet 40% sub-minimum threshold", priority: true });
+  if (subMinimumFailed(state.scorecard.procurement.subMinimumMet)) actions.push({ text: "Improve Preferential Procurement base score to meet 40% sub-minimum threshold (\u226511.6 pts)", priority: true });
   if (state.scorecard.managementControl.score < 15) actions.push({ text: "Appoint black individuals at executive and senior management levels", priority: false });
   if (state.scorecard.enterpriseDevelopment.score < 8) actions.push({ text: "Increase ESD contributions to meet NPAT-based targets", priority: false });
   if (state.scorecard.socioEconomicDevelopment.score < 3) actions.push({ text: "Identify community projects for SED contributions", priority: false });
