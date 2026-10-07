@@ -279,7 +279,7 @@ function tablesAcross(matrix: unknown[][]): MonthTable[] {
 
 /** Tables whose months run DOWN a column (a summary sheet: a row per month, a column per measure). */
 function tablesDown(matrix: unknown[][]): MonthTable[] {
-  const width = Math.max(0, ...matrix.map((row) => row.length));
+  const width = matrix.reduce((w, row) => Math.max(w, row.length), 0); // not Math.max(...rows): spreading every row as an argument overflows the stack past ~120k rows
   for (let c = 0; c < width; c += 1) {
     const run = monthRun(matrix.map((row) => row[c]), true);
     if (!run) continue;
