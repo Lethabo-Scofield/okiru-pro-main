@@ -44,3 +44,41 @@ describe("dashboard tiles", () => {
     expect(tile("nz-gap").sub).toMatch(/Set a baseline/);
   });
 });
+
+/** E2/E3 — each headline opens onto how it was made, and the parts add up to the tile. */
+describe("each headline carries its calculation", () => {
+  const dash = computeEsgDashboard(workbook);
+
+  it("gives every tile a rule in words", () => {
+    for (const k of dash.kpis) {
+      expect(k.calc, k.id).toBeTruthy();
+      expect(k.calc!.rule.length, k.id).toBeGreaterThan(20);
+    }
+  });
+
+  it("lists Scope 1 fuel by fuel, and the lines add up to the tile", () => {
+    const calc = tile("scope1").calc!;
+    expect(calc.rule).toMatch(/quantity .* emission factor/);
+    const sum = calc.inputs.reduce((a, i) => a + Number(i.value), 0);
+    expect(sum).toBeCloseTo(dash.scope1Tco2e!, 1);
+    // Each line says what was multiplied by what.
+    expect(calc.inputs[0]!.label).toMatch(/×/);
+  });
+
+  it("shows the LTIFR's injuries and hours, not just the rate", () => {
+    const values = Object.fromEntries(tile("ltifr").calc!.inputs.map((i) => [i.ref, i.value]));
+    expect(values["S_Data!C29:F29"]).toBe(2);
+    expect(values["S_Data!C27:F27"]).toBe(1_000_000);
+    expect(values["S_Data!G35"]).toBeCloseTo(2, 6);
+  });
+
+  it("explains the overall score pillar by pillar", () => {
+    const calc = tile("overall").calc!;
+    expect(calc.rule).toMatch(/average of the three pillars/);
+    expect(calc.inputs.map((i) => i.ref)).toEqual(["Environmental", "Social", "Governance"]);
+  });
+
+  it("says why there is no carbon tax figure when the screen is unanswered", () => {
+    expect(tile("carbon-tax").calc!.rule).toMatch(/activity, not by emissions/);
+  });
+});

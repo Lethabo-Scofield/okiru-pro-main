@@ -14,12 +14,15 @@ import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import { scoreEnvironmental } from "./environmental";
 import { scoreGovernance } from "./governance";
 import { scoreSocial } from "./social";
+import { cell as traceCell, type EsgTraceInput } from "./esgTrace";
 
 export type EsgDashboardKpi = {
   id: string;
   label: string;
   value: string;
   sub?: string;
+  /** How the headline was made (E2): the rule in words and what went into it. */
+  calc?: { rule: string; inputs: EsgTraceInput[] };
 };
 
 export type EsgPillarRow = {
@@ -227,6 +230,101 @@ export function computeEsgDashboard(rawWorkbook: EsgWorkbookData): EsgDashboardK
       value: pct(gPillar),
     },
   ];
+
+  /* ---------------- How each headline was made (E2, E3 tiles) ---------------- */
+  // Read off the same results the tiles print, so a tile and its explanation
+  // cannot disagree.
+  const za = (n: number, digits = 1) => n.toLocaleString("en-ZA", { maximumFractionDigits: digits });
+  const pillarCalc = (name: string, p: EsgPillarResult) => ({
+    rule: `The sum of the ${name} rows — open the scorecard for how each one was scored. A row left out of the total also leaves the points it is scored out of, so this score is read against ${za(p.scoringDenominator)}, not ${p.max}.`,
+    inputs: [
+      { ref: `${name} scorecard`, label: "Points scored", value: Math.round(p.score * 10) / 10 },
+      { ref: `${name} scorecard`, label: "Points it can reach after exclusions", value: p.scoringDenominator },
+      { ref: `${name} scorecard`, label: "Rows left out of the total", value: p.excluded.length },
+    ],
+  });
+  const ghgCalc = (scope: 1 | 2) => ({
+    rule:
+      scope === 1
+        ? "Each fuel's quantity for the period × its emission factor, summed."
+        : "Grid electricity × the grid emission factor, less the electricity solar replaced — location-based.",
+    inputs: ghg.lines
+      .filter((l) => l.scope === scope)
+      .map((l) => ({
+        ref: l.label,
+        label: `${za(l.activity, 0)} ${l.unit} × ${l.factor} ${l.factorUnit}`,
+        value: Math.round(l.tco2e * 100) / 100,
+      })),
+  });
+  const quarters = (row: number) =>
+    ["C", "D", "E", "F"].reduce((a, col) => a + (readNum(workbook, "s-data", `${col}${row}`) ?? 0), 0);
+  const finalMilestone = netZero.milestones[netZero.milestones.length - 1];
+  const calcs: Record<string, EsgDashboardKpi["calc"]> = {
+    overall: {
+      rule: "The average of the three pillars' percentages, weighted equally. Each pillar is scored out of the points it can reach once the rows left out of its total are removed.",
+      inputs: [
+        { ref: "Environmental", label: `${za(e.score)} of ${za(e.scoringDenominator)}`, value: `${za(ePillar.percent * 100)}%` },
+        { ref: "Social", label: `${za(s.score)} of ${za(s.scoringDenominator)}`, value: `${za(sPillar.percent * 100)}%` },
+        { ref: "Governance", label: `${za(g.score)} of ${za(g.scoringDenominator)}`, value: `${za(gPillar.percent * 100)}%` },
+      ],
+    },
+    "e-score": pillarCalc("Environmental", e),
+    "s-score": pillarCalc("Social", s),
+    "g-score": pillarCalc("Governance", g),
+    "rating-e": pillarCalc("Environmental", e),
+    "rating-s": pillarCalc("Social", s),
+    "rating-g": pillarCalc("Governance", g),
+    scope1: ghg.hasData ? ghgCalc(1) : undefined,
+    scope2: ghg.hasData ? ghgCalc(2) : undefined,
+    water: {
+      rule: "The period's metered water across all sites.",
+      inputs: [traceCell("E_Data", "L63", "Water — kilolitres, period total", water ?? null)],
+    },
+    waste: {
+      rule: "The share of the waste generated that was diverted from landfill.",
+      inputs: [traceCell("Waste_Register", "B16", "Waste diverted (share)", wasteDiv ?? null)],
+    },
+    ltifr: {
+      rule: "Lost-time injuries × 1,000,000 ÷ hours worked — the South African convention.",
+      inputs: [
+        traceCell("S_Data", "C29:F29", "Lost-time injuries, four quarters", quarters(29)),
+        traceCell("S_Data", "C27:F27", "Hours worked, four quarters", quarters(27)),
+        traceCell("S_Data", "G35", "LTIFR", ltifr ?? null),
+      ],
+    },
+    "carbon-tax": tax.screenIncomplete
+      ? {
+          rule: "Liability is decided by activity, not by emissions: the Schedule 2 screening questions (stationary combustion of 10 MW(th) or more, a listed industrial process, fugitive emissions) are not all answered, so nothing is assessed yet.",
+          inputs: [],
+        }
+      : tax.liable
+        ? {
+            rule: `The taxable tonnes from Schedule 2 activities × the rate for the tax year (R${tax.rateZar} a tonne).`,
+            inputs: [
+              { ref: "Carbon tax", label: "Taxable tCO₂e", value: Math.round(tax.taxableTco2e) },
+              { ref: "Carbon tax", label: "Rate (R per tonne)", value: tax.rateZar },
+              { ref: "Carbon tax", label: "Liability (R)", value: Math.round(tax.liabilityZar) },
+            ],
+          }
+        : {
+            rule: "No Schedule 2 activity applies, so the company is not a carbon taxpayer and has nothing to file. Road transport cannot create liability on its own — the fuel levy already prices it.",
+            inputs: [],
+          },
+    "nz-gap": netZero.available
+      ? {
+          rule: `This period's Scope 1 + 2 tonnes less the target at the final milestone (${finalMilestone?.year ?? netZero.targetYear}) of ${netZero.pathwayIsOwn ? "the company's own pathway" : "the template pathway — the company has not set its own yet"}.`,
+          inputs: [
+            { ref: "GHG inventory", label: "This period's Scope 1 + 2 (tCO₂e)", value: Math.round(netZero.currentTco2e * 10) / 10 },
+            { ref: "Net-zero roadmap", label: "Target at the final milestone (tCO₂e)", value: Math.round((finalMilestone?.targetTco2e ?? 0) * 10) / 10 },
+            traceCell("E_Data", "B90", "Baseline (tCO₂e)", netZero.baselineTco2e),
+          ],
+        }
+      : { rule: "No baseline is set (E_Data B90), so there is nothing to measure a gap against.", inputs: [] },
+  };
+  for (const k of kpis) {
+    const calc = calcs[k.id];
+    if (calc) k.calc = calc;
+  }
 
   return {
     environmental: ePillar,
