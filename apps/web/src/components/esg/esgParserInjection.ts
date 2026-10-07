@@ -330,6 +330,13 @@ export interface EsgInjectionResult {
    * Absent on a result restored from before it existed.
    */
   figuresPlaced?: number;
+  /**
+   * Figures kept out of the workbook because their section lies outside the
+   * one the documents were added from (C1), by the section they belong in. A
+   * monthly grid or dashboard writes cells no single reading stands behind,
+   * so this — not the unplaced list — is the count of what was not written.
+   */
+  outsideFocus?: Array<{ sectionId: string; figures: number }>;
 }
 
 /**
@@ -548,8 +555,71 @@ export function applyEsgParserResult(
   };
 }
 
-/** Why a value has no cell at all: evidence a person reads, not a failure to place. */
-export const ESG_NO_CELL_REJECTIONS: ReadonlySet<string> = new Set(["no_workbook_home", "derived_cell", "unknown_field"]);
+/**
+ * Keep a document read to the sections it was added for (C1).
+ *
+ * "Add documents" from inside a section fills that section's pillar
+ * (`esgSectionElements.ts`) and nothing else. A figure whose cell lies in
+ * another section is not written; it stays with its document as evidence and
+ * says where it would have gone, so adding it from there is one step. A
+ * question about a monthly cell (always Environmental data) is held back the
+ * same way when that section is outside the focus. Conflicts stay as they are:
+ * nothing is written for a contested cell anyway, and the disagreement is
+ * worth seeing wherever it lies.
+ */
+export function restrictEsgInjection(
+  result: EsgInjectionResult,
+  allowed: ReadonlySet<string>,
+  sectionLabel: (sectionId: string) => string = (id) => id,
+): EsgInjectionResult {
+  if (allowed.size === 0) return result;
+  const elsewhere = (sectionId: string) =>
+    `This belongs in ${sectionLabel(sectionId)}, outside the part of the workbook these documents were added to — kept with the document, not written. Add the document there, or to the whole workbook, to place it.`;
+
+  const patches: EsgSectionPatches = {};
+  for (const [sectionId, patch] of Object.entries(result.patches)) {
+    if (allowed.has(sectionId)) patches[sectionId] = patch;
+  }
+  const placed = result.placed.filter((p) => allowed.has(p.sectionId));
+  const movedOut: EsgUnplacedValue[] = result.placed
+    .filter((p) => !allowed.has(p.sectionId))
+    .map((p) => ({
+      field: p.field,
+      value: p.value,
+      sourceFile: p.sourceFile,
+      documentId: p.documentId,
+      element: "",
+      reason: elsewhere(p.sectionId),
+      rejection: "outside_focus" as const,
+    }));
+  const monthlyOutside = !allowed.has("e-data");
+  // The question's own figure and the site/period readings that are part of it.
+  const unplaced = result.unplaced.map((u) =>
+    (u.choice || u.partOf) && monthlyOutside
+      ? { ...u, choice: undefined, partOf: undefined, reason: elsewhere("e-data"), rejection: "outside_focus" as const }
+      : u,
+  );
+  // Counted from the patches: a monthly grid's cells have no reading each to move.
+  const outsideFocus = Object.entries(result.patches)
+    .filter(([sectionId]) => !allowed.has(sectionId))
+    .map(([sectionId, patch]) => ({ sectionId, figures: esgFigureCount({ [sectionId]: patch }) }))
+    .filter((held) => held.figures > 0);
+  return {
+    ...result,
+    patches,
+    placed,
+    unplaced: [...unplaced, ...movedOut],
+    figuresPlaced: esgFigureCount(patches),
+    outsideFocus,
+  };
+}
+
+/**
+ * Why a value has no cell here at all: evidence a person reads, not a failure
+ * to place. `outside_focus` has a cell — in another section than the one the
+ * documents were added for — and reads the same way from where the person is.
+ */
+export const ESG_NO_CELL_REJECTIONS: ReadonlySet<string> = new Set(["no_workbook_home", "derived_cell", "unknown_field", "outside_focus"]);
 
 /**
  * What the unplaced values ask of a person: figures to place by answering a

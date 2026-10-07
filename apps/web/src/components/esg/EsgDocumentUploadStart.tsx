@@ -52,6 +52,7 @@ import {
 import ConfirmUploadDialog, { type PendingUpload } from "@/components/scorecard/ConfirmUploadDialog";
 import EsgElementDocumentBatches, {
   esgBatchLabel,
+  esgFocusElements,
   type EsgUploadOrigin,
 } from "./EsgElementDocumentBatches";
 import EsgExtractionSummary from "./EsgExtractionSummary";
@@ -64,11 +65,14 @@ import {
   esgChoiceCell,
   esgUploadNameForSource,
   mergeEsgCalculators,
+  restrictEsgInjection,
   withEsgManualPlacement,
   type EsgInjectionResult,
   type EsgParserCaseLike,
 } from "./esgParserInjection";
 import { writeEsgFlowSnapshot } from "./esgFlowSnapshot";
+import type { EsgUploadFocus } from "@/lib/esg/esgSectionElements";
+import { esgSectionById } from "@/lib/esg/esgSections";
 
 /** The free, structure-only price scan (POST /api/parser/esg/quote-files). */
 interface ParserQuote {
@@ -266,6 +270,12 @@ export interface EsgDocumentUploadStartProps {
    * for a company being created — its axes come from its own documents.
    */
   workbookAxes?: EsgWorkbookAxisState | null;
+  /**
+   * Documents added from inside one workbook section (C1): read for that
+   * section's elements and written only to its pillar's sections. Absent — the
+   * whole workbook — everything goes where it belongs.
+   */
+  focus?: EsgUploadFocus | null;
 }
 
 export function EsgDocumentUploadStart({
@@ -277,6 +287,7 @@ export function EsgDocumentUploadStart({
   onBack,
   initialFiles,
   workbookAxes = null,
+  focus = null,
 }: EsgDocumentUploadStartProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
@@ -306,7 +317,7 @@ export function EsgDocumentUploadStart({
   const [doneStaging, setDoneStaging] = useState(false);
   const [paying, setPaying] = useState(false);
   const [tokenCost, setTokenCost] = useState<TokenCost | null>(null);
-  /** Which batch each staged file was filed under. Presentation only. */
+  /** Which batch each staged file was filed under — sent to the reader as a hint (C1). */
   const [filedBatchByFile, setFiledBatchByFile] = useState<Record<string, string>>({});
   /** Files chosen but not yet confirmed. The double-check dialog owns these. */
   const [pendingUpload, setPendingUpload] = useState<(PendingUpload & { origin: EsgUploadOrigin }) | null>(null);
@@ -342,12 +353,42 @@ export function EsgDocumentUploadStart({
   const quoteRequestRef = useRef(0);
 
   /**
+   * Keep a paid read alive across navigation — for the create flow only, the
+   * one place that restores it (`esgFlowSnapshot`). Inside an existing
+   * company's workbook the read lands in that workbook; a snapshot there was
+   * offered back by the Hub and the create flow as a NEW company built from
+   * the other company's documents.
+   */
+  const saveCreateFlowSnapshot = (caseResult: EsgParserCaseLike, result: EsgInjectionResult) => {
+    if (companyId) return;
+    writeEsgFlowSnapshot({
+      savedAt: new Date().toISOString(),
+      entityName: "",
+      nameSource: "none",
+      work: {
+        route: "documents",
+        patches: result.patches,
+        injection: result,
+        parserCase: caseResult,
+        documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
+        excel: null,
+      },
+    });
+  };
+  /** Kept to the focus section's pillar when documents are added from inside a section (C1). */
+  const withinFocus = (result: EsgInjectionResult): EsgInjectionResult =>
+    focus ? restrictEsgInjection(result, new Set(focus.sections), (id) => esgSectionById(id)?.title ?? id) : result;
+  /** The injection for a case, as this upload writes it. */
+  const injectFor = (caseResult: EsgParserCaseLike | null): EsgInjectionResult =>
+    withinFocus(applyEsgParserResult(caseResult, { workbook: workbookAxes }));
+  /**
    * The mapping seam. While `applyEsgParserResult` is a stub this reports every
    * extracted value as unplaced and writes nothing — see `esgParserInjection`.
    */
   const injection = useMemo<EsgInjectionResult>(
-    () => applyEsgParserResult(parserCase, { workbook: workbookAxes }),
-    [parserCase, workbookAxes],
+    () => injectFor(parserCase),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- injectFor reads exactly these
+    [parserCase, workbookAxes, focus],
   );
 
   /**
@@ -663,6 +704,15 @@ export function EsgDocumentUploadStart({
       form.append("case_id", `esg_workbook_${companyId || "unknown"}_${Date.now()}`);
       form.append("quote_id", quoteId);
       if (companyId) form.append("company_id", companyId);
+      // The element batch each file was filed under (C1): a hint the reader
+      // uses where its own classifier is unsure. Added from inside a section
+      // with a single element, every unfiled file carries that element.
+      const soleElement = focus && focus.elements.length === 1 ? focus.elements[0] : null;
+      const filed = soleElement
+        ? Object.fromEntries(list.map((f) => [f.name, filedBatchByFile[f.name] ?? soleElement]))
+        : filedBatchByFile;
+      const focusElements = esgFocusElements(list.map((f) => f.name), filed);
+      if (Object.keys(focusElements).length > 0) form.append("focus_elements", JSON.stringify(focusElements));
 
       resetIdleTimer();
       // Streaming endpoint: emits per-file doc-start/doc-done SSE events so the
@@ -786,13 +836,16 @@ export function EsgDocumentUploadStart({
       // the flow, even before "continue to workbook" is pressed. The host flow
       // restores it (straight to review) on its next mount, and overwrites this
       // with the proposed entity name once the user does continue.
-      const snapshotInjection = applyEsgParserResult(mergedCase, { workbook: workbookAxes });
+      // The backlog below measures the mapper, so it reads the unrestricted result: what a
+      // section's focus (C1) holds back was placed fine, just not written from here.
+      const mappedInjection = applyEsgParserResult(mergedCase, { workbook: workbookAxes });
+      const snapshotInjection = withinFocus(mappedInjection);
       // The honest not-placed list IS the improvement backlog — record it
       // server-side (fire-and-forget) so "what should the mapper learn next?"
       // is answerable from data instead of memory. Never blocks the flow.
       try {
         const byKey = new Map<string, { field: string; context: string; reason: string; count: number }>();
-        for (const u of snapshotInjection.unplaced) {
+        for (const u of mappedInjection.unplaced) {
           const key = `${u.field}::${u.reason}`;
           const row = byKey.get(key) ?? { field: u.field, context: u.element, reason: u.reason, count: 0 };
           row.count += 1;
@@ -807,10 +860,10 @@ export function EsgDocumentUploadStart({
               domain: "esg",
               caseId: (data as { case_id?: string } | null)?.case_id ?? null,
               fileCount: list.length,
-              valuesRead: snapshotInjection.valuesRead,
-              placedCount: snapshotInjection.placed.length,
-              unplacedCount: snapshotInjection.unplaced.length,
-              conflictCount: snapshotInjection.conflicts.length,
+              valuesRead: mappedInjection.valuesRead,
+              placedCount: mappedInjection.placed.length,
+              unplacedCount: mappedInjection.unplaced.length,
+              conflictCount: mappedInjection.conflicts.length,
               unplaced: Array.from(byKey.values()),
             }),
           }),
@@ -818,19 +871,7 @@ export function EsgDocumentUploadStart({
       } catch {
         // telemetry must never cost a user their extraction
       }
-      writeEsgFlowSnapshot({
-        savedAt: new Date().toISOString(),
-        entityName: "",
-        nameSource: "none",
-        work: {
-          route: "documents",
-          patches: snapshotInjection.patches,
-          injection: snapshotInjection,
-          parserCase: mergedCase,
-          documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
-          excel: null,
-        },
-      });
+      saveCreateFlowSnapshot(mergedCase, snapshotInjection);
     } catch (err) {
       if (timedOut || (err as Error)?.name === "AbortError") {
         // Results are only saved once the whole batch comes back, so nothing
@@ -1176,20 +1217,7 @@ export function EsgDocumentUploadStart({
     }
     parserCaseRef.current = next;
     setParserCase(next);
-    const snapshotInjection = applyEsgParserResult(next, { workbook: workbookAxes });
-    writeEsgFlowSnapshot({
-      savedAt: new Date().toISOString(),
-      entityName: "",
-      nameSource: "none",
-      work: {
-        route: "documents",
-        patches: snapshotInjection.patches,
-        injection: snapshotInjection,
-        parserCase: next,
-        documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
-        excel: null,
-      },
-    });
+    saveCreateFlowSnapshot(next, injectFor(next));
   };
 
   return (
@@ -1232,6 +1260,20 @@ export function EsgDocumentUploadStart({
               ? "Read and placed below. Forgot one? Add it — only the new documents are read and charged."
               : `Utility bills, fuel statements, waste manifests, certificates, registers and policies${companyName ? ` for ${companyName}` : ""}. We identify what is present, what is missing and what needs review.`}
         </p>
+        {focus ? (
+          // Added from inside one section (C1): say what that means before anything is read.
+          <p
+            className="mt-3 rounded-lg border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-white/[0.03] px-3 py-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]"
+            data-testid="esg-upload-focus"
+          >
+            Adding documents to <span className="font-semibold text-[var(--esg-text,#fff)]">{focus.title}</span>. Figures
+            are written to{" "}
+            {focus.sections.length > 1
+              ? focus.sections.map((id) => esgSectionById(id)?.title ?? id).join(", ")
+              : "this section"}{" "}
+            only; anything that belongs elsewhere is kept with its document and listed, not written.
+          </p>
+        ) : null}
       </div>
 
       <input
