@@ -37,6 +37,18 @@ import { pageImageProviderFor } from '../services/agentExtraction.js';
 import { modelTypeAdjudicator } from '../services/documentTypeAdjudication.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
+import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
+import {
+  aiValuesForUpload,
+  bbbeeRunRecords,
+  contentSha256,
+  esgRunRecords,
+  recordValueCount,
+  signParserRuns,
+  uploadNameResolver,
+  verifiedQuoteId,
+  type RunRecord,
+} from '../services/runAttestation.js';
 import esgRouter from './esgParser.js';
 
 const logger = createLogger('ParserRoutes');
@@ -243,6 +255,80 @@ function countReadValues(extracted: Record<string, unknown> | undefined): number
 }
 
 /**
+ * The whole per-document read of ONE file, as a create-flow upload gets it —
+ * not the rule layer alone, which is all a library re-read used to run.
+ *
+ *  - B-BBEE: the case parser's rule layer, then the case extraction the
+ *    stream route runs (model classification, the spec reads, the table and
+ *    financials readers, and the agent pass when PARSER_AGENT_EXTRACTION
+ *    allows it), filed exactly as `bbbeeRunRecords` files a create-flow upload.
+ *  - ESG: the ESG case extraction for this one file. An ESG bill through the
+ *    B-BBEE reader came back as B-BBEE fields, which is why the library used to
+ *    refuse ESG re-reads outright.
+ *
+ * A file that cannot be read at all throws, as the rule-only read did.
+ */
+async function readOneFileFully(
+  file: Express.Multer.File,
+  domain: 'bbbee' | 'esg',
+  repository: OntologyRepository,
+  signal: AbortSignal,
+): Promise<RunRecord> {
+  if (domain === 'esg') {
+    const inputs = await extractionInputsFromUpload(file, { domain: 'esg' });
+    const entities = await extractEsgCaseEntities(inputs);
+    const [record] = esgRunRecords({
+      files: [file],
+      inputs,
+      extractions: entities?.extractions ?? null,
+      readErrors: new Map(),
+    });
+    return record;
+  }
+
+  const inputs = await extractionInputsFromUpload(file);
+  const service = new CaseParserService(repository, { adjudicator: modelTypeAdjudicator() });
+  const result = await service.resolveCase(inputs);
+  const entities = await extractCaseEntities(inputs, undefined, undefined, {
+    agent: {
+      deterministic: result.documents_detected,
+      pageImages: pageImageProviderFor([file]),
+      signal,
+    },
+  });
+  const [record] = bbbeeRunRecords(result, [file], { extractions: entities?.extractions ?? null, inputs });
+  if (record) return record;
+  // Nothing was detected as this upload (every input unreadable by the rules):
+  // still a record of the read, carrying whatever the model found.
+  const uploadOf = uploadNameResolver(new Set([file.originalname]), inputs);
+  return {
+    filename: file.originalname,
+    contentSha256: contentSha256(file.buffer),
+    parserOutput: {
+      filename: file.originalname,
+      document_type: 'Unknown',
+      pillar: '',
+      overall_confidence: 0,
+      status: 'failed',
+      extracted_fields: {},
+      calculator_payload: {},
+      validation: { passed: false, warnings: [], errors: ['The rules could not classify this document.'], missing_fields: [] },
+      audit_trail: {
+        source_file: file.originalname,
+        matched_patterns: [],
+        rules_applied: [],
+        graph_version: 'unknown',
+        requires_human_review: true,
+        classification_candidates: [],
+        rejected_calculator_keys: [],
+      },
+    },
+    reviewReasons: [],
+    aiValues: aiValuesForUpload(entities?.extractions ?? null, file.originalname, uploadOf),
+  };
+}
+
+/**
  * POST /resolve-file-paid — read ONE stored or replacement document again,
  * against a paid quote. The document library's "read again from scratch" and
  * "replace the file" come here; an unchanged file never does (apps/api serves
@@ -259,6 +345,11 @@ function countReadValues(extracted: Record<string, unknown> | undefined): number
  *    file by content, and whether the caller was still there — including on
  *    failure, so a read that delivered nothing is refunded by the settlement
  *    every paid run gets, not two hours later by the sweep.
+ *
+ * With `read=full` (and `domain=bbbee|esg`) it runs the whole per-document
+ * read (`readOneFileFully`) and returns the signed run record beside the rule
+ * layer; the values counted for the settlement are both layers'. Without it,
+ * the rule layer only, exactly as before. The gate above is the same for both.
  */
 router.post('/resolve-file-paid', upload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) {
@@ -300,8 +391,42 @@ router.post('/resolve-file-paid', upload.single('file'), async (req: Request, re
     totalValues: n,
   });
 
+  // `read=full` is the library's re-read since it learned to store both layers:
+  // the same per-document read a create-flow upload gets, signed. Without it
+  // (an api that predates it) the read is the rule layer only, as it was, so
+  // an older api's shorter timeout is never outrun by a longer read.
+  const fullRead = req.body?.read === 'full';
+  const domain = req.body?.domain === 'esg' ? 'esg' : 'bbbee';
+
   const repository = await getParserRepository();
   try {
+    if (fullRead) {
+      // A caller that gives up stops the agent's runs (and their retries).
+      const clientGone = new AbortController();
+      res.on('close', () => {
+        if (!res.writableEnded) clientGone.abort();
+      });
+      const record = await readOneFileFully(file, domain, repository, clientGone.signal);
+      const values = recordValueCount(record);
+      const status = String(record.parserOutput.status ?? 'failed');
+      await recordExtractionOutcome(paidQuote?.quoteId, {
+        status: status === 'failed' && values === 0 ? 'failed' : 'resolved',
+        ...attribution(values),
+        delivered: clientStillThere(),
+      });
+      const [signed] = signParserRuns(domain, [record], {
+        caseId: null,
+        quoteId: verifiedQuoteId(req.body, extractionRequiresPayment()),
+      }) ?? [];
+      return res.status(status === 'failed' && values === 0 ? 422 : 200).json({
+        ...record.parserOutput,
+        // The signed record — the rule layer above plus every model and agent
+        // value — is what the library stores. Null when this parser cannot sign.
+        run_attestation: signed ?? null,
+        ai_value_count: record.aiValues?.length ?? 0,
+      });
+    }
+
     const rawInput = await rawExtractionInputFromUpload(file);
     const service = new ParserService(repository, { adjudicator: modelTypeAdjudicator() });
     const result = await service.resolve(rawInput);
@@ -435,6 +560,15 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
       ...result,
       ai_entities: entities,
       unreadable_files: unreadableFiles,
+      // One signed record per uploaded file — both layers of its read — the
+      // only form the document library accepts.
+      run_attestations: signParserRuns('bbbee', bbbeeRunRecords(result, files, {
+        extractions: entities?.extractions ?? null,
+        inputs: rawInputs,
+      }), {
+        caseId: result.case_id,
+        quoteId: verifiedQuoteId(req.body, extractionRequiresPayment()),
+      }),
     });
   } catch (err) {
     logger.error('Parser case file resolve failed', err as Error);
@@ -564,7 +698,19 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       },
     });
 
-    send('result', { ...result, ai_entities: entities });
+    send('result', {
+      ...result,
+      ai_entities: entities,
+      // One signed record per uploaded file — both layers of its read — the
+      // only form the document library accepts.
+      run_attestations: signParserRuns('bbbee', bbbeeRunRecords(result, files, {
+        extractions: entities?.extractions ?? null,
+        inputs: rawInputs,
+      }), {
+        caseId: result.case_id,
+        quoteId: verifiedQuoteId(req.body, extractionRequiresPayment()),
+      }),
+    });
     send('complete', {});
   } catch (err) {
     logger.error('Parser case file resolve (stream) failed', err as Error);

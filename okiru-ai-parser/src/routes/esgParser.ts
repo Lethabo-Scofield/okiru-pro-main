@@ -54,6 +54,7 @@ import { recordExtractionOutcome, valuesByQuotedFile, watchClient } from '../ser
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
+import { esgRunRecords, signParserRuns, verifiedQuoteId } from '../services/runAttestation.js';
 import { parseEsgFocus } from '../services/esgFocus.js';
 import { elementFromHint } from '../services/specRetrieval.js';
 import {
@@ -300,6 +301,13 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
       ai_entities: entities,
       esg_entities: entities,
       unreadable_files: unreadableFiles,
+      // One signed record per uploaded file: the only form the library accepts.
+      run_attestations: signParserRuns('esg', esgRunRecords({
+        files,
+        inputs: rawInputs,
+        extractions: entities?.extractions ?? null,
+        readErrors: new Map(settled.flatMap((s) => (s.ok ? [] : [[s.fileName, s.message] as const]))),
+      }), { caseId: caseId ?? null, quoteId: verifiedQuoteId(req.body, extractionRequiresPayment()) }),
     });
   } catch (err) {
     logger.error('ESG case file resolve failed', err as Error);
@@ -374,6 +382,8 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       const configured = Number(process.env.PARSER_FILE_CONCURRENCY);
       return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 3;
     })();
+    // Why each unreadable file failed, for its signed run.
+    const readErrors = new Map<string, string>();
     const settled = await concurrentMap(files, fileLanes, async (file, i) => {
       send('doc-start', { index: i, fileName: file.originalname });
       try {
@@ -382,6 +392,7 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
         return inputs;
       } catch (err) {
         send('doc-error', { index: i, fileName: file.originalname, message: (err as Error).message });
+        readErrors.set(file.originalname, (err as Error).message);
         return [];
       }
     });
@@ -408,6 +419,13 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       documents: rawInputs.map((input) => ({ file_name: input.filename })),
       ai_entities: entities,
       esg_entities: entities,
+      // One signed record per uploaded file: the only form the library accepts.
+      run_attestations: signParserRuns('esg', esgRunRecords({
+        files,
+        inputs: rawInputs,
+        extractions: entities?.extractions ?? null,
+        readErrors,
+      }), { caseId: caseId ?? null, quoteId: verifiedQuoteId(req.body, extractionRequiresPayment()) }),
     });
     send('complete', {});
   } catch (err) {
