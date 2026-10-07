@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { boundWorkbookSheets } from "@/lib/sheetBounds";
 import { v4 as uuidv4 } from "uuid";
 import { toFractionOrZero, toPercentOrZero } from "../../../../api/pipeline/units/percentage";
 
@@ -473,6 +474,7 @@ export async function parseExcelClientSide(file: File): Promise<ClientSideImport
 
   const buffer = await file.arrayBuffer();
   const workbook = XLSX.read(buffer, { type: "array" });
+  boundWorkbookSheets(workbook); // a sheet's declared size is a claim, not a fact
 
   logs.push({ message: `Found ${workbook.SheetNames.length} sheets: ${workbook.SheetNames.join(", ")}`, type: "info", timestamp: ts() });
 

@@ -70,6 +70,19 @@ export const ESG_CALCULATOR_KEY_ALLOWLIST: readonly EsgCalculatorKeySpec[] = [
   { key: 'energy.generator_run_hours', type: 'number', description: 'Generator run hours in the period' },
   { key: 'energy.lpg_kg', type: 'number', description: 'LPG combusted, kilograms (Scope 1C)' },
 
+  // ── One site × month figure from a dashboard table (E_Data monthly grids) ──
+  // The workbook decides the grid (from the measure), the depot row (from the
+  // site, against its own sites) and the month column (from the period).
+  { key: 'monthly.measure', type: 'string', description: 'Which monthly measure: fleet.diesel_litres, energy.electricity_kwh, water.kl, …' },
+  { key: 'monthly.site', type: 'string', description: 'The site as the document names it' },
+  { key: 'monthly.period_end', type: 'iso_date', description: 'Last day of the month the figure covers' },
+  { key: 'monthly.value', type: 'number', description: 'The figure, in the measure\'s stored unit' },
+  { key: 'monthly.unit', type: 'string', description: 'The stored unit (L, kL, kWh, kg, km)' },
+  // A bill's figure carries the field it was read as, and the fields that gave
+  // it its site and month, so the workbook accounts for each of them.
+  { key: 'monthly.field', type: 'string', description: 'The extracted field the figure was read as (electricity_kwh, water_kl, …)' },
+  { key: 'monthly.context', type: 'string', description: 'Comma-separated fields that gave the figure its site and month' },
+
   // ── Emissions and carbon tax (E_Data rows 73-90, Carbon_Tax) ──
   { key: 'emissions.scope1_fleet_tco2e', type: 'number', description: 'Scope 1A fleet diesel emissions, tCO2e' },
   { key: 'emissions.scope1_generator_tco2e', type: 'number', description: 'Scope 1B generator diesel emissions, tCO2e' },

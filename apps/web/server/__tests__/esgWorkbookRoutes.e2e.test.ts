@@ -17,9 +17,11 @@ import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import request from "supertest";
 import bcrypt from "bcryptjs";
+import * as XLSX from "xlsx";
 import { storage, MemoryStorage } from "../storage";
 import { registerRoutes } from "../routes";
 import { withStorageReportedAvailable } from "./memoryStorageSession";
+import { mergeEsgSectionCells, readEsgGridRows } from "../../src/lib/esg/esgGridRows";
 
 async function seedVerifiedUser(opts: {
   username: string;
@@ -142,5 +144,84 @@ describe("ESG workbook routes", () => {
       .put(`/api/esg/workbook/${companyId}/section/not-a-section`)
       .send({ cells: {} });
     expect(res.status).toBe(400);
+  });
+
+  it("saves what the calculators read beyond the input pages: declared exclusions and net-zero levers", async () => {
+    // A company's "this does not apply to us", with its reason.
+    const declared = await esgAgent
+      .put(`/api/esg/workbook/${companyId}/section/applicability`)
+      .send({ cells: { "e:d24": "Water is metered and billed by the landlord." } });
+    expect(declared.status).toBe(200);
+    const levers = await esgAgent
+      .put(`/api/esg/workbook/${companyId}/section/netzero`)
+      .send({ cells: { A20: "Fleet renewal", B20: "Replace 20 trucks with Euro VI" } });
+    expect(levers.status).toBe(200);
+
+    const get = await esgAgent.get(`/api/esg/workbook/${companyId}`);
+    expect(get.body.sections.applicability.cells["e:d24"]).toBe("Water is metered and billed by the landlord.");
+    expect(get.body.sections.netzero.cells.A20).toBe("Fleet renewal");
+  });
+
+  it("serves the template whole or one part of it, and refuses a part that names nothing", async () => {
+    const binary = (res: request.Response, cb: (err: Error | null, body: Buffer) => void) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (c: Buffer) => chunks.push(c));
+      res.on("end", () => cb(null, Buffer.concat(chunks)));
+    };
+    const sheetsOf = (body: Buffer) => XLSX.read(body, { type: "buffer" }).SheetNames;
+
+    const whole = await esgAgent.get("/api/esg/workbook/template").buffer(true).parse(binary);
+    expect(whole.status).toBe(200);
+    expect(whole.headers["content-disposition"]).toContain("esg-bulk-input-template.xlsx");
+    expect(sheetsOf(whole.body)).toContain("SAQ_Supplier");
+
+    const fleet = await esgAgent.get("/api/esg/workbook/template?part=fleet").buffer(true).parse(binary);
+    expect(fleet.status).toBe(200);
+    expect(fleet.headers["content-disposition"]).toContain("esg-template-fleet.xlsx");
+    expect(sheetsOf(fleet.body)).toEqual(["Instructions", "Fleet_Register"]);
+
+    const bad = await esgAgent.get("/api/esg/workbook/template?part=..%2F..%2Fsecrets");
+    expect(bad.status).toBe(400);
+  });
+
+  it("keeps which document placed each value, merging record by record (E4)", async () => {
+    const record = (file: string, v: number) => JSON.stringify({ f: file, d: `doc-${file}`, t: "2026-10-07", v });
+    const first = await esgAgent.post(`/api/esg/workbook/${companyId}/import`).send({
+      confirm: true,
+      sections: {
+        "e-data": { cells: { s1a_C14: 1200 } },
+        provenance: { cells: { "e-data!s1a_C14": record("DIESEL.xlsx", 1200) } },
+      },
+    });
+    expect(first.status).toBe(200);
+    await esgAgent.post(`/api/esg/workbook/${companyId}/import`).send({
+      confirm: true,
+      sections: {
+        "e-data": { cells: { s2_C41: 41000 } },
+        provenance: { cells: { "e-data!s2_C41": record("ESKOM.pdf", 41000) } },
+      },
+    });
+
+    const stored = (await esgAgent.get(`/api/esg/workbook/${companyId}`)).body.sections.provenance.cells;
+    // The second upload added its record; it did not erase the first.
+    expect(Object.keys(stored).sort()).toEqual(["e-data!s1a_C14", "e-data!s2_C41"]);
+    expect(JSON.parse(stored["e-data!s1a_C14"]).f).toBe("DIESEL.xlsx");
+  });
+
+  it("merges an import by default, and replaces a register only when the person chose to", async () => {
+    const fleet = (regs: string[]) => ({ cells: mergeEsgSectionCells("fleet", regs.map((reg, i) => ({ _id: `r${i}`, reg })), {}) });
+    const rowsNow = async () => readEsgGridRows((await esgAgent.get(`/api/esg/workbook/${companyId}`)).body.sections.fleet.cells, "fleet").map((r) => r.reg);
+
+    await esgAgent.put(`/api/esg/workbook/${companyId}/section/fleet`).send(fleet(["AA11BBGP", "CC22DDGP"]));
+    const merged = await esgAgent.post(`/api/esg/workbook/${companyId}/import`).send({ confirm: true, sections: { fleet: fleet(["EE33FFGP"]) } });
+    expect(merged.status).toBe(200);
+    expect(await rowsNow()).toEqual(["AA11BBGP", "CC22DDGP", "EE33FFGP"]);
+
+    const replaced = await esgAgent
+      .post(`/api/esg/workbook/${companyId}/import`)
+      .send({ confirm: true, sections: { fleet: fleet(["EE33FFGP"]) }, replace: ["fleet"] });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.registers).toEqual([expect.objectContaining({ sectionId: "fleet", replaced: true, removed: 3 })]);
+    expect(await rowsNow()).toEqual(["EE33FFGP"]);
   });
 });

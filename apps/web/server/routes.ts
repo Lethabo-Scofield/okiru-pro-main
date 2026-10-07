@@ -23,6 +23,7 @@ import { recordAudit } from "./securityAudit.js";
 import {
   authNamespaceLimiter,
   availabilityLimiter,
+  demoRequestLimiter,
   clearLoginFailures,
   isAccountLocked,
   loginLimiter,
@@ -45,6 +46,14 @@ import { registerExcelImportRoutes } from "./excelImportRoute";
 import { registerAiMappingRoutes } from "./aiMappingRoutes";
 import { SECTOR_CODE_OPTIONS } from "../src/components/workbook/workbookValidation";
 import { registerFeedbackRoutes } from "./feedbackRoutes";
+import {
+  issueTrustedDeviceToken,
+  readCookie,
+  TRUSTED_DEVICE_COOKIE,
+  TRUSTED_DEVICE_COOKIE_PATH,
+  trustedDeviceDays,
+  verifyTrustedDeviceToken,
+} from "./trustedDevice";
 import { registerAuditRoutes } from "./auditRoutes";
 import { registerPrivacyRoutes } from "./privacyRoutes";
 import { registerTokenRoutes } from "./tokenRoutes";
@@ -346,6 +355,30 @@ export async function registerRoutes(
   // working if registerRoutes is ever used standalone (e.g. in tests).
   configureSession(app);
 
+  // "Remember this device" for the emailed code (see trustedDevice.ts). Signed
+  // with the session secret, falling back the way sessionConfig does outside
+  // production so it can be exercised locally.
+  const trustedDeviceSecret =
+    process.env.SESSION_SECRET || (isProduction ? "" : "okiru-entity-studio-dev-secret");
+  const isRememberedDevice = (req: Request, account: { id: string; password?: string | null }): boolean =>
+    verifyTrustedDeviceToken(
+      readCookie(req.headers.cookie, TRUSTED_DEVICE_COOKIE),
+      account.password ? { id: account.id, password: account.password } : null,
+      trustedDeviceSecret,
+    );
+  const rememberThisDevice = (res: Response, account: { id: string; password?: string | null }): void => {
+    if (!account.password) return;
+    const issued = issueTrustedDeviceToken({ id: account.id, password: account.password }, trustedDeviceSecret);
+    if (!issued) return;
+    res.cookie(TRUSTED_DEVICE_COOKIE, issued.token, {
+      httpOnly: true,
+      secure: isProduction || isReplit,
+      sameSite: isReplit ? "none" : "lax",
+      path: TRUSTED_DEVICE_COOKIE_PATH,
+      maxAge: issued.maxAgeMs,
+    });
+  };
+
   app.get('/api/health', (_req: Request, res: Response) => {
     res.json({
       status: 'ok',
@@ -385,15 +418,27 @@ export async function registerRoutes(
     });
   });
 
-  app.post('/api/demo-request', async (req: Request, res: Response) => {
-    const { name, company, email, phone, message } = req.body || {};
+  // The website's "Book a demo" form. Anonymous, so it is rate-limited and
+  // every field is bounded; the email escapes them (see sendDemoRequestEmail).
+  app.post('/api/demo-request', demoRequestLimiter, async (req: Request, res: Response) => {
+    const field = (value: unknown, max: number) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
+    const name = field(req.body?.name, 120);
+    const company = field(req.body?.company, 160);
+    const email = field(req.body?.email, 200);
+    const phone = field(req.body?.phone, 40);
+    const message = field(req.body?.message, 4000);
     if (!name || !company || !email) {
       return res.status(400).json({ error: 'name, company and email are required' });
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return res.status(400).json({ error: 'Invalid email address' });
     }
-    await sendDemoRequestEmail({ name: String(name).trim(), company: String(company).trim(), email: String(email).trim(), phone: phone ? String(phone).trim() : undefined, message: message ? String(message).trim() : undefined });
+    // A request the team never receives is a lost client: say so, so the
+    // visitor writes to us instead of waiting for a call that never comes.
+    const sent = await sendDemoRequestEmail({ name, company, email, phone: phone || undefined, message: message || undefined });
+    if (!sent) {
+      return res.status(503).json({ error: 'We could not send your request just now. Please email contact@okiru.co.za.' });
+    }
     return res.json({ ok: true });
   });
 
@@ -594,6 +639,7 @@ export async function registerRoutes(
 
       res.json({
         requiresVerification: true,
+        rememberDeviceDays: trustedDeviceDays(),
         message: sent
           ? "Account created! A verification code has been sent to your email."
           : "Account created but we couldn't send the verification email. Please try resending.",
@@ -688,7 +734,24 @@ export async function registerRoutes(
           );
       }
 
-      if (user.twofaEnabled || twoFactorRequiredFor(user)) {
+      const secondFactorRequired = user.twofaEnabled || twoFactorRequiredFor(user);
+      // A browser that completed a code for this account before, and was asked
+      // to remember it, stands in for the code. The password was still checked.
+      const rememberedDevice = secondFactorRequired && isRememberedDevice(req, user);
+
+      if (secondFactorRequired && !rememberedDevice && readCookie(req.headers.cookie, TRUSTED_DEVICE_COOKIE)) {
+        // Expired, reset, or not this account's — worth a line, it could be a stolen cookie.
+        await recordAudit(req, {
+          action: "user.login.remembered_device_rejected",
+          resourceType: "user",
+          resourceId: user.id,
+          result: "failure",
+          actorUserId: user.id,
+          organizationId: user.organizationId ?? null,
+        });
+      }
+
+      if (secondFactorRequired && !rememberedDevice) {
         const otp = generateOtp();
         const expiryMinutes = getOtpExpiryMinutes();
         const expiry = new Date(Date.now() + expiryMinutes * 60 * 1000);
@@ -703,6 +766,7 @@ export async function registerRoutes(
         return res.json({
           requires2FA: true,
           enforced: !user.twofaEnabled,
+          rememberDeviceDays: trustedDeviceDays(),
           message: sent ? "Verification code sent to your email" : "Could not send verification code. Please try again.",
           emailHint: emailTarget.replace(/(.{2})(.*)(@.*)/, "$1***$3"),
         });
@@ -711,7 +775,7 @@ export async function registerRoutes(
       const safeUser = sanitizeUser(user);
       establishSession(req, user as any, safeUser);
       await storage.setLastLogin(user.id);
-      logger.info('User logged in', { userId: user.id, durationMs: Date.now() - start });
+      logger.info('User logged in', { userId: user.id, rememberedDevice, durationMs: Date.now() - start });
       await recordAudit(req, {
         action: "user.login",
         resourceType: "user",
@@ -719,14 +783,18 @@ export async function registerRoutes(
         result: "success",
         actorUserId: user.id,
         organizationId: user.organizationId ?? null,
-        metadata: { method: "password", twoFactor: false },
+        // No code was checked on this sign-in, so it is not recorded as one.
+        metadata: rememberedDevice
+          ? { method: "password+remembered-device", twoFactor: false, rememberedDevice: true }
+          : { method: "password", twoFactor: false },
       });
       res.json({ user: safeUser });
 
       sendLoginNotification(
         user.email || loginId,
         user.fullName || null,
-        user.organizationName || null
+        user.organizationName || null,
+        { timestamp: new Date(), ipAddress: req.ip, userAgent: req.get("user-agent") }
       ).catch(() => {});
     } catch (error: any) {
       logger.error("Login failed", error);
@@ -803,6 +871,8 @@ export async function registerRoutes(
       const updatedUser = await storage.getUserById(user.id);
       const safeUser = sanitizeUser(updatedUser || user);
       establishSession(req, (updatedUser || user) as any, safeUser);
+      const rememberDevice = req.body?.rememberDevice === true;
+      if (rememberDevice) rememberThisDevice(res, (updatedUser || user) as any);
       await recordAudit(req, {
         action: "user.login",
         resourceType: "user",
@@ -810,14 +880,15 @@ export async function registerRoutes(
         result: "success",
         actorUserId: user.id,
         organizationId: user.organizationId ?? null,
-        metadata: { method: "password+otp", twoFactor: true },
+        metadata: { method: "password+otp", twoFactor: true, rememberDevice },
       });
       res.json({ user: safeUser });
 
       sendLoginNotification(
         user.email || user.username,
         user.fullName || null,
-        user.organizationName || null
+        user.organizationName || null,
+        { timestamp: new Date(), ipAddress: req.ip, userAgent: req.get("user-agent") }
       ).catch(() => {});
     } catch (error: any) {
       logger.error("OTP verification failed", error);
@@ -2684,7 +2755,7 @@ export async function registerRoutes(
       // not forward PATCH /api/clients/:id, so it is never reached.
       const patchAccess = await resolveClientPillarAccess(
         String(req.params.clientId),
-        String(req.session.userId),
+        String((req.session as any).userId),
       );
       if (patchAccess && patchAccess.mode !== "full" && patchAccess.mode !== "owner_override") {
         return res.status(403).json({

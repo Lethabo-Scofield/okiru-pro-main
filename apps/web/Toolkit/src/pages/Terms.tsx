@@ -167,7 +167,6 @@ export default function OkiruTerms({
           <div className="ok-w">
             <Reveal>
               <div className="ok-legal">
-                <span className="ok-sec-num">Legal</span>
                 <h2 className="ok-h2">Terms of Service</h2>
                 <div className="ok-legal-meta">Last updated July 2026</div>
                 <p className="ok-legal-intro">

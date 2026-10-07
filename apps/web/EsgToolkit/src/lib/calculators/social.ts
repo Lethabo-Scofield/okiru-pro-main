@@ -6,16 +6,8 @@ import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
  * workbook are catalogued in `docs/esg/ESG_SCORING_DELTA.md`.
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
-import {
-  ESG_CONSUMER_GOODS_CONFIG,
-  PILLAR_MAX_SOCIAL,
-  THR_BLACK_EE,
-  THR_CSI_INITIATIVES,
-  THR_LEVY_SPEND,
-  THR_LTIFR,
-  THR_PWD,
-  THR_TRAINING_HOURS,
-} from "../esgConfig/consumer-goods";
+import { PILLAR_MAX_SOCIAL } from "../esgConfig/consumer-goods";
+import { esgSectorConfigForWorkbook } from "../esgConfig";
 import {
   minCap,
   pr,
@@ -38,10 +30,16 @@ import {
   TARGET_BASIS_REASON,
 } from "./esgTargets";
 import type { EsgExclusion } from "./esgApplicability";
+import {
+  answerRule,
+  bandedRule,
+  cell as traceCell,
+  inverseBandedRule,
+  targetSource,
+  type EsgTraceUnit,
+} from "./esgTrace";
 
 export type SocialScoreResult = EsgPillarResult;
-
-const THRESHOLDS = ESG_CONSUMER_GOODS_CONFIG.thresholds;
 
 /**
  * `S_Data!F5,F6,G5,G6,H5,H6` — African / Coloured / Indian FEMALE headcount at
@@ -54,15 +52,6 @@ const BLACK_FEMALE_MGMT_CELLS = ["F5", "F6", "G5", "G6", "H5", "H6"] as const;
 const MGMT_HEADCOUNT_CELLS = ["L5", "L6"] as const;
 /** `S_Data!G29:G33` — LTI / MTI / near-miss / vehicle / property incident totals. */
 const INCIDENT_ROWS = ["G29", "G30", "G31", "G32", "G33"] as const;
-
-/**
- * `THR_SUP_HS` — `Assumptions!B58`, the supplier-compliance minimum, 0.8 in the
- * v1.7 workbook (ledger §5.2). Only a FALLBACK: `B58` is a real input, and it
- * had no reader at all until the two supplier indicators below were wired up.
- * It has no `esgConfig` threshold of its own because the workbook does not
- * treat it as a sector parameter.
- */
-const THR_SUPPLIER_COMPLIANCE = 0.8;
 
 function num(wb: EsgWorkbookData, ref: string, section = "s-data"): number {
   return readEsgCell(wb, section, ref) ?? 0;
@@ -117,14 +106,15 @@ export function scoreSocial(
     return resolved;
   };
 
-  const thrBlack = target("d5", "B50", THR_BLACK_EE, "black employee representation");
-  const thrBfm = target("d6", "B51", THRESHOLDS.blackFemaleManagement, "black women in management");
-  const thrPwd = target("d8", "B52", THR_PWD, "employees with disabilities");
-  const thrTraining = target("d14", "B53", THR_TRAINING_HOURS, "training hours per employee");
-  const thrGrant = target("d15", "B54", THR_LEVY_SPEND, "mandatory grant recovery");
-  const thrLtifr = target("d17", "B55", THR_LTIFR, "lost-time injury frequency rate");
-  const thrCsiSpend = target("d22", "B56", THRESHOLDS.csiSpendOfNpat, "community investment");
-  const thrLocal = target("d24", "B57", THRESHOLDS.localLabourProcurement, "local procurement");
+  const thresholds = esgSectorConfigForWorkbook(workbook).thresholds;
+  const thrBlack = target("d5", "B50", thresholds.blackEmployees, "black employee representation");
+  const thrBfm = target("d6", "B51", thresholds.blackFemaleManagement, "black women in management");
+  const thrPwd = target("d8", "B52", thresholds.personsWithDisabilities, "employees with disabilities");
+  const thrTraining = target("d14", "B53", thresholds.trainingHoursPerEmployee, "training hours per employee");
+  const thrGrant = target("d15", "B54", thresholds.mandatoryGrantRecovery, "mandatory grant recovery");
+  const thrLtifr = target("d17", "B55", thresholds.ltifrMax, "lost-time injury frequency rate");
+  const thrCsiSpend = target("d22", "B56", thresholds.csiSpendOfNpat, "community investment");
+  const thrLocal = target("d24", "B57", thresholds.localLabourProcurement, "local procurement");
 
   /* -------------------------- Employment Equity -------------------- */
 
@@ -282,7 +272,36 @@ export function scoreSocial(
    * The threshold 6 is hardcoded in the workbook — there is no Assumptions cell.
    */
   const initiatives = readEsgCell(workbook, "s-data", "_initiatives_count") ?? 0;
-  const d23 = pr(initiatives, THR_CSI_INITIATIVES, 5, floor);
+  /*
+   * That hardcoded 6 was the last target here nobody had set: every other
+   * Social target already followed the declared basis. It now does too — the
+   * company's own figure (`Assumptions!_csiInitiativesTarget`), or the row
+   * leaves the total with its reason. A B-BBEE election does not supply one:
+   * B-BBEE measures community investment as spend (d22), never as a count.
+   * Parity mode keeps the workbook's 6.
+   */
+  const thrInitiatives =
+    mode === "workbook-parity"
+      ? thresholds.csiInitiativesPerYear
+      : resolveTarget(
+          workbook,
+          "_csiInitiativesTarget",
+          thresholds.csiInitiativesPerYear,
+          basis === "bbbee" ? "own" : basis,
+        );
+  if (mode !== "workbook-parity" && thrInitiatives == null) {
+    const x = exclude(
+      "social",
+      "d23",
+      basis === "own"
+        ? targetNotSetReason("community initiatives a year")
+        : basis === "bbbee"
+          ? "B-BBEE measures community investment as spend, not as a count of initiatives, and the company has not set one for community initiatives a year, so there is nothing to score against. The figure is still reported."
+          : TARGET_BASIS_REASON[basis as "undeclared" | "trend"],
+    );
+    if (x) targetExclusions.push(x);
+  }
+  const d23 = thrInitiatives == null ? 0 : pr(initiatives, thrInitiatives, 5, floor);
 
   /*
    * C24 — MANUAL_ZERO in the workbook. `S_Data!B86` (local procurement spend)
@@ -324,7 +343,7 @@ export function scoreSocial(
   const thrSupplier = target(
     "d26",
     "B58",
-    THR_SUPPLIER_COMPLIANCE,
+    thresholds.supplierHsCompliance,
     "supplier health, safety and food-safety compliance",
   );
   const supplierCount = readEsgCell(workbook, "saq", "_supplier_count") ?? 0;
@@ -351,6 +370,165 @@ export function scoreSocial(
 
   const d26 = supplierBand("_hs_mean", 5);
   const d27 = supplierBand("_fs_mean", 5);
+
+  /* ----------------------- How each row was made (E2) ---------------------- */
+  // Observes the values above; computes nothing the score depends on.
+  const trace = options?.trace;
+  if (trace) {
+    const parity = mode === "workbook-parity";
+    const PARITY_ZERO = "Workbook-parity scoring: the client workbook holds a literal 0 in this row.";
+    const traceTarget = (ref: string, value: number | null, unit: EsgTraceUnit) => {
+      if (value == null) return null;
+      const stated = readEsgCell(workbook, "assumptions", ref) != null;
+      const source = parity
+        ? stated
+          ? targetSource("workbook", `Assumptions!${ref}`)
+          : targetSource("workbook-default")
+        : basis === "bbbee"
+          ? stated
+            ? targetSource("bbbee-stated", `Assumptions!${ref}`)
+            : targetSource("bbbee-default")
+          : targetSource("company", `Assumptions!${ref}`);
+      return { value, unit, source };
+    };
+    const answer = (sheet: string, ref: string, section: string, label: string) => {
+      const value = str(workbook, ref, section);
+      return {
+        measured: value ? { value, unit: "answer" as const, label } : null,
+        inputs: [traceCell(sheet, ref, label, value || null)],
+      };
+    };
+    const record = trace.record.bind(trace);
+    const blackShare = readEsgCell(workbook, "ee", "B5");
+    const pwdShare = readEsgCell(workbook, "ee", "B8");
+
+    record({
+      key: "d5",
+      measured: blackShare == null ? null : { value: blackShare, unit: "ratio", label: "Black employees, share of headcount" },
+      target: traceTarget("B50", thrBlack, "ratio"),
+      inputs: [traceCell("EE_Scorecard", "B5", "Black employees (share of headcount), from the S_Data headcount matrix", blackShare)],
+      rule: bandedRule(8, floor, "the black share of the workforce"),
+    });
+    record({
+      key: "d6",
+      measured: mgmtHeadcount > 0 ? { value: blackFemaleMgmt / mgmtHeadcount, unit: "ratio", label: "Black women in top and senior management" } : null,
+      target: traceTarget("B51", thrBfm, "ratio"),
+      inputs: [
+        traceCell("S_Data", "F5:H6", "Black women in top and senior management", blackFemaleMgmt),
+        traceCell("S_Data", "L5:L6", "Top and senior management headcount", mgmtHeadcount),
+      ],
+      rule: bandedRule(6, floor, "the share of black women in management"),
+    });
+    record({ key: "d7", target: null, rule: answerRule(5, "An Employment Equity plan submitted"), ...answer("EE_Scorecard", "B9", "ee", "Employment Equity plan submitted") });
+    record({
+      key: "d8",
+      measured: pwdShare == null ? null : { value: pwdShare, unit: "ratio", label: "Employees with disabilities, share of headcount" },
+      target: traceTarget("B52", thrPwd, "ratio"),
+      inputs: [traceCell("EE_Scorecard", "B8", "Employees with disabilities (share of headcount)", pwdShare)],
+      rule: bandedRule(5, floor, "the share of employees with disabilities"),
+    });
+    record({ key: "d9", target: null, rule: answerRule(3, "The Employment Equity forum consulted"), ...answer("EE_Scorecard", "B10", "ee", "Employment Equity forum consulted") });
+    record({ key: "d10", target: null, rule: answerRule(3, "Numerical targets set per level, race and gender"), ...answer("EE_Scorecard", "B12", "ee", "Numerical EE targets set") });
+    record({ key: "d12", target: null, rule: "5 points when the Workplace Skills Plan is submitted (Yes); nothing otherwise — the workbook has no Partial here.", ...answer("S_Data", "B45", "s-data", "Workplace Skills Plan submitted") });
+    record({ key: "d13", target: null, rule: "5 points when the Annual Training Report is submitted (Yes); nothing otherwise.", ...answer("S_Data", "B46", "s-data", "Annual Training Report submitted") });
+    record({
+      key: "d14",
+      measured: headcount > 0 ? { value: num(workbook, "B49") / headcount, unit: "hours", label: "Training hours per employee" } : null,
+      target: traceTarget("B53", thrTraining, "hours"),
+      inputs: [traceCell("S_Data", "B49", "Total training hours delivered", num(workbook, "B49")), traceCell("S_Data", "L12", "Total headcount", headcount)],
+      rule: bandedRule(5, floor, "training hours per employee"),
+    });
+    record({
+      key: "d15",
+      measured: levy > 0 ? { value: num(workbook, "B47") / levy, unit: "ratio", label: "Mandatory grant recovered, share of the skills levy" } : null,
+      target: traceTarget("B54", thrGrant, "ratio"),
+      inputs: [traceCell("S_Data", "B47", "Mandatory grant claimed (R)", num(workbook, "B47")), traceCell("S_Data", "B44", "Skills development levy (R), derived", levy)],
+      rule: bandedRule(5, floor, "the grant recovered"),
+    });
+    record({
+      key: "d17",
+      measured: readEsgCell(workbook, "s-data", "G35") == null ? null : { value: readEsgCell(workbook, "s-data", "G35"), unit: "rate", label: "Lost-time injury frequency rate (per 1,000,000 hours)" },
+      target: traceTarget("B55", thrLtifr, "rate"),
+      inputs: [traceCell("S_Data", "G35", "LTIFR, from lost-time injuries and hours worked", readEsgCell(workbook, "s-data", "G35"))],
+      rule: inverseBandedRule(8, floor, "the injury rate"),
+    });
+    record({
+      key: "d18",
+      measured: { value: parity ? (g28 == null ? null : String(g28)) : readEsgCell(workbook, "s-data", "G28"), unit: "count", label: "Fatalities reported this period" },
+      target: null,
+      inputs: [traceCell("S_Data", "G28", "Fatalities (sum of the four quarters)", g28)],
+      rule: parity
+        ? "Workbook-parity scoring: 8 points when the cell is 0, a dash or blank — the workbook's own rule."
+        : "8 points when the company reports zero fatalities for the period; nothing when it reports one or reports nothing.",
+    });
+    record({
+      key: "d19",
+      measured: { value: driverActive, unit: "answer", label: "Driver fatigue programme in place" },
+      target: null,
+      inputs: [
+        traceCell("Driver_Debrief", "rows", "Driver debrief register in use", readEsgCell(workbook, "driver-debrief", "_active") ?? 0),
+        traceCell("S_Data", "C59", "OFO learners on the fatigue programme", num(workbook, "C59")),
+      ],
+      rule: "5 points when the driver debrief register is in use or learners are on the fatigue programme; nothing otherwise.",
+    });
+    record({
+      key: "d20",
+      measured: { value: incidents, unit: "count", label: "Health and safety incidents recorded" },
+      target: null,
+      inputs: [
+        traceCell("S_Data", "G29:G33", "Incidents recorded (injuries, near-misses, vehicle and property)", incidents),
+        traceCell("S_Data", "_hsTracking", "Does the company track incidents?", hsTracking || null),
+      ],
+      rule: "4 points when incidents are recorded, or when the company declares it tracks them and had a clean year; nothing when it does not track them. With neither, the row waits for the company to say which.",
+    });
+    record({
+      key: "d22",
+      measured: !parity && npat > 0 ? { value: csiSpend / npat, unit: "ratio", label: "Community investment, share of net profit after tax" } : null,
+      target: traceTarget("B56", thrCsiSpend, "ratio"),
+      inputs: [traceCell("S_Data", "D82", "Community investment spend (R), from the CSI register", csiSpend), traceCell("S_Data", "B84", "Net profit after tax (R)", npat)],
+      rule: parity ? PARITY_ZERO : bandedRule(5, floor, "community investment as a share of profit"),
+    });
+    record({
+      key: "d23",
+      measured: { value: initiatives, unit: "count", label: "Community initiatives this period" },
+      target:
+        thrInitiatives == null
+          ? null
+          : {
+              value: thrInitiatives,
+              unit: "count",
+              source: parity ? targetSource("workbook-default") : targetSource("company", "Assumptions!_csiInitiativesTarget"),
+            },
+      inputs: [traceCell("S_Data", "A72:A79", "Community initiatives in the CSI register", initiatives)],
+      rule: bandedRule(5, floor, "the number of community initiatives"),
+    });
+    record({
+      key: "d24",
+      measured: !parity && procurementTotal > 0 ? { value: procurementLocal / procurementTotal, unit: "ratio", label: "Local procurement, share of measured spend" } : null,
+      target: traceTarget("B57", thrLocal, "ratio"),
+      inputs: [traceCell("S_Data", "B86", "Local procurement spend (R)", procurementLocal), traceCell("S_Data", "B87", "Total measured procurement spend (R)", procurementTotal)],
+      rule: parity ? PARITY_ZERO : bandedRule(5, floor, "the local share of procurement"),
+    });
+    for (const [key, meanRef, what] of [
+      ["d26", "_hs_mean", "health and safety"],
+      ["d27", "_fs_mean", "food safety"],
+    ] as const) {
+      const mean = readEsgCell(workbook, "saq", meanRef);
+      record({
+        key,
+        measured: !parity && mean != null && supplierRatingMax > 0 ? { value: mean / supplierRatingMax, unit: "ratio", label: `Suppliers' ${what} rating, as a share of the top rating` } : null,
+        target: traceTarget("B58", thrSupplier, "ratio"),
+        inputs: [
+          traceCell("SAQ_Supplier", meanRef === "_hs_mean" ? "D:D" : "F:F", `Mean supplier ${what} rating`, mean),
+          traceCell("SAQ_Supplier", "rows", "Suppliers assessed", supplierCount),
+          traceCell("S_Data", "B89", "Assessed share of the supplier population (blank = not declared)", supplierCoverage),
+        ],
+        rule: parity
+          ? PARITY_ZERO
+          : `${bandedRule(5, floor, `the mean ${what} rating`)} Scaled by the share of suppliers assessed once the company declares how many it has.`,
+      });
+    }
+  }
 
   const rows = {
     d5, d6, d7, d8, d9, d10, d12, d13, d14, d15,
@@ -387,8 +565,11 @@ export function scoreSocial(
       ? []
       : mergeExclusions(
           readDeclaredExclusions(workbook, "social"),
-          targetExclusions,
+          // The first reason for a key is the one stated, so the permanent one
+          // goes before the resolvable: declaring a target basis does not bring
+          // mandatory grant recovery back into an ESG score.
           notEsgExclusions,
+          targetExclusions,
         );
   const scored = Object.entries(rows)
     .filter(([key]) => !excluded.some((x) => x.key === key))

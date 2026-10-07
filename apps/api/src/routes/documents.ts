@@ -10,6 +10,7 @@ import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import crypto from 'crypto';
 import * as XLSX from 'xlsx';
+import { boundWorkbookSheets } from '../../pipeline/sheetBounds.js';
 import { Document, DocumentChunk } from '../../models.js';
 import { DocumentChunker } from '../../pipeline/extraction/documentChunker.js';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -34,6 +35,8 @@ async function parseFileToPages(
   // CSV / Excel
   if (mimetype === 'text/csv' || ext === 'csv' || mimetype.includes('excel') || ext === 'xlsx' || ext === 'xls') {
     const workbook = XLSX.read(buffer, { type: 'buffer' });
+    // A file's declared sheet size is checked against its cells before anything walks it.
+    boundWorkbookSheets(workbook);
     const pages: Array<{ pageId: string; text: string; metadata?: Record<string, any> }> = [];
 
     for (const sheetName of workbook.SheetNames) {

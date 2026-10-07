@@ -39,7 +39,7 @@ import {
 } from "@/lib/parserWorkbookMap";
 import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
 import { vocabularyDecisionKey, type VocabularyDecisions } from "@/lib/workbookInjection";
-import { getSection } from "@/components/workbook/sections";
+import { getSection, parseWorkbookDate } from "@/components/workbook/sections";
 import PillarDocumentBatches, { batchLabel, type UploadOrigin } from "./PillarDocumentBatches";
 import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
@@ -156,7 +156,6 @@ function collectEntityAliases(data: any): string[] {
   }
   return Array.from(out);
 }
-import ExtractionConfidence from "./ExtractionConfidence";
 import ReviewSection from "./ReviewSection";
 
 interface RequiredGroup {
@@ -271,39 +270,13 @@ const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workboo
 // The flow snapshot — how a paid extraction survives navigation. Shared with
 // the Hub's "continue where you left off" strip, so it lives in its own module.
 import { clearFlowSnapshot, readFlowSnapshot, writeFlowSnapshot } from "./flowSnapshot";
-
-/**
- * Fold a newly-read case into what we already had.
- *
- * A requote only ever pays for NEW documents, so the previously-extracted ones
- * must survive: their detections, fields, supplier rows and calculator payload
- * all carry forward. The new round wins on conflicts (it is the more recent
- * read of that filename), but it can never delete an earlier good document.
- */
-function mergeCases(kept: ParserCaseLike | null, fresh: ParserCaseLike): ParserCaseLike {
-  if (!kept) return fresh;
-  const byName = <T extends { filename?: string }>(a: T[] = [], b: T[] = []): T[] => {
-    const out = new Map<string, T>();
-    for (const item of a) out.set(String(item.filename), item);
-    for (const item of b) out.set(String(item.filename), item);
-    return Array.from(out.values());
-  };
-  return {
-    ...kept,
-    ...fresh,
-    documents_detected: byName(kept.documents_detected, fresh.documents_detected),
-    documents_needing_review: byName(kept.documents_needing_review, fresh.documents_needing_review),
-    fields_extracted: { ...(kept.fields_extracted ?? {}), ...(fresh.fields_extracted ?? {}) },
-    calculator_payload: { ...(kept.calculator_payload ?? {}), ...(fresh.calculator_payload ?? {}) },
-    supplier_rows: [
-      // Keep earlier suppliers, drop any whose source file was re-read.
-      ...(kept.supplier_rows ?? []).filter(
-        (r) => !(fresh.documents_detected ?? []).some((d) => d.filename === r.source_file),
-      ),
-      ...(fresh.supplier_rows ?? []),
-    ],
-  };
-}
+// Each "Add documents" round reads only its new files; this folds the result
+// into what earlier rounds already read, without losing any of it.
+import { mergeParserCases } from "@/lib/parserCaseMerge";
+// The review that replaced the list under the Build button: each document,
+// side by side with what we took from it and why anything was not read.
+import { DocumentReview } from "@/components/review/DocumentReview";
+import { applyReviewEdit, buildDocumentReview } from "@/lib/documentReview";
 
 /** workbook company-information meta value for each parser sector code. */
 const SECTOR_TO_WORKBOOK: Record<string, string> = {
@@ -402,15 +375,61 @@ export interface DocumentUploadStartProps {
    * the quote, and the batches are how a long pack gets organised.
    */
   focused?: boolean;
+  /**
+   * Adding documents to a company that already exists, rather than creating
+   * one. Its profile is known, so it is filled in; Build becomes "Add to the
+   * workbook", and the host MERGES the result (`onCreate` receives the
+   * sections as usual). The paid read is kept under its own session key.
+   */
+  existingCompany?: {
+    id: string;
+    name: string;
+    /** Workbook sector code (RCOGP, TRANSPORT, …). */
+    sectorCode: string;
+    scorecardType: string;
+    /** yyyy-mm-dd or dd/mm/yyyy. */
+    financialYearEnd: string;
+  };
 }
 
-export function DocumentUploadStart({ onCreate, creating, focused = false }: DocumentUploadStartProps) {
+/** The workbook's dd/mm/yyyy (or ISO) year end, as the date input's yyyy-mm-dd. */
+function isoDate(value: string): string {
+  const d = parseWorkbookDate(value);
+  return d ? d.toISOString().slice(0, 10) : "";
+}
+
+export function DocumentUploadStart({ onCreate, creating, focused = false, existingCompany }: DocumentUploadStartProps) {
+  const addMode = Boolean(existingCompany);
+  /** Where this run's paid read is kept for the session — never shared with the create flow. */
+  const snapshotScope = existingCompany ? `add:${existingCompany.id}` : undefined;
   const [catalog, setCatalog] = useState<ExpectedDocsCatalog | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
+  /** What the server returned for a paid run that delivered less than it cost. */
+  const [refundNotice, setRefundNotice] = useState<string | null>(null);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
+  /** The case as of now, for the merge at the end of a read (which outlives the render it started in). */
+  const parserCaseRef = useRef<ParserCaseLike | null>(null);
+  useEffect(() => {
+    parserCaseRef.current = parserCase;
+  }, [parserCase]);
+  /**
+   * The files already read and paid for, by persistence key.
+   *
+   * This is what makes "Add documents" work after a read. Every gate used to
+   * key off `parserCase` — "has anything been read yet" — so once one batch
+   * was read, a forgotten document could be staged but never priced or read.
+   * Now only UNREAD files are priced and read, their result is merged into
+   * the case, and a read file is part of that case: it can't be removed, and
+   * it is never charged for again.
+   */
+  const [readKeys, setReadKeys] = useState<Set<string>>(() => new Set());
+  const readKeysRef = useRef(readKeys);
+  useEffect(() => {
+    readKeysRef.current = readKeys;
+  }, [readKeys]);
   const persistedDocumentsRef = useRef<Map<string, string>>(new Map());
   /**
    * The phase banner that reports the paid read.
@@ -431,14 +450,21 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // The "what we read / still needed / didn't reconcile" detail is long; keep it
   // collapsed so it never pushes the Build button off-screen. The pillar rack
   // above it is the at-a-glance summary.
-  const [companyName, setCompanyName] = useState("");
+  const [companyName, setCompanyName] = useState(existingCompany?.name ?? "");
   const [dragActive, setDragActive] = useState(false);
   // Deliberately UNSET: the sector/size choice decides which scorecard rules
   // apply, and a silent Generic default once scored a real Transport QSE
   // dozens of points too low. Create stays disabled until both are chosen.
-  const [sector, setSector] = useState("");
+  const [sector, setSector] = useState(existingCompany?.sectorCode ?? "");
   const [subSector, setSubSector] = useState("");
-  const [size, setSize] = useState(""); // Generic | QSE | EME
+  const [size, setSize] = useState(existingCompany?.scorecardType ?? ""); // Generic | QSE | EME
+  // Financial year-end, yyyy-mm-dd. REQUIRED, and asked for here because the
+  // documents never supply it: the B-BBEE parser does not read one. Without it
+  // the workbook's submit refuses to calculate (every dated pillar is measured
+  // over the twelve months ending on it), and a refused submit used to land on
+  // a provisional score of 0 — that is how a fully-uploaded evidence pack
+  // scored nothing. Also unset by default: a guessed year end is a wrong period.
+  const [yearEnd, setYearEnd] = useState(existingCompany ? isoDate(existingCompany.financialYearEnd) : "");
   // Quote + payment (flow steps 3–6). Nothing is read until the quote is paid.
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -469,11 +495,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   /** Files chosen but not yet confirmed. The double-check dialog owns these. */
   const [pendingUpload, setPendingUpload] = useState<(PendingUpload & { origin: UploadOrigin }) | null>(null);
   /**
-   * Documents already extracted and paid for in a previous round. A requote
-   * must never lose or re-charge these — they carry straight through.
-   */
-  const [keptCase, setKeptCase] = useState<ParserCaseLike | null>(null);
-  /**
    * Closed-vocabulary decisions from the server (model-backed, remembered).
    * A dropdown value the local maps cannot place is asked about ONCE, and the
    * answer is applied on the next mapping pass, exactly like a synonym.
@@ -490,6 +511,18 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   /** Library ids carried by a restored snapshot — the File objects are gone
       but the uploads still exist and must still be filed under the company. */
   const restoredDocumentIdsRef = useRef<string[]>([]);
+  /** Library id per file name from a restored snapshot — the preview's source once the uploads are gone. */
+  const restoredIdsByNameRef = useRef<Record<string, string>>({});
+
+  /** Library id per file name: this mount's uploads, then whatever a restore carried. */
+  const documentIdsByName = (): Record<string, string> => {
+    const out: Record<string, string> = { ...restoredIdsByNameRef.current };
+    for (const f of files) {
+      const id = persistedDocumentsRef.current.get(`${f.name}:${f.size}:${f.lastModified}`);
+      if (id) out[f.name] = id;
+    }
+    return out;
+  };
 
   /** Every library id this run owns: restored ones plus this mount's uploads. */
   const allDocumentIds = () =>
@@ -527,16 +560,17 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // Rehydrate a previous run's paid extraction. Runs once, on mount, before
   // any interaction — so it can never clobber work done in this mount.
   useEffect(() => {
-    const snap = readFlowSnapshot();
+    const snap = readFlowSnapshot(snapshotScope);
     if (!snap) return;
     setParserCase(snap.parserCase);
-    setKeptCase(snap.parserCase);
     setCompanyName((prev) => prev.trim() || snap.companyName);
     if (snap.sector) setSector(snap.sector);
     if (snap.subSector) setSubSector(snap.subSector);
     if (snap.size) setSize(snap.size);
+    if (snap.yearEnd) setYearEnd(snap.yearEnd);
     setFiledBatchByFile(snap.filedBatchByFile ?? {});
     restoredDocumentIdsRef.current = snap.documentIds ?? [];
+    restoredIdsByNameRef.current = snap.documentIdsByName ?? {};
     setRestoredAt(snap.savedAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -547,12 +581,14 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   useEffect(() => {
     if (!parserCase) return;
     const timer = window.setTimeout(() => {
-      const snap = readFlowSnapshot();
+      const snap = readFlowSnapshot(snapshotScope);
       if (!snap) return;
-      writeFlowSnapshot({ ...snap, companyName, sector, subSector, size });
+      // The case too: a value corrected in the review must survive leaving
+      // the page as surely as the read it corrects.
+      writeFlowSnapshot({ ...snap, parserCase, companyName, sector, subSector, size, yearEnd }, snapshotScope);
     }, 800);
     return () => window.clearTimeout(timer);
-  }, [parserCase, companyName, sector, subSector, size]);
+  }, [parserCase, companyName, sector, subSector, size, yearEnd]);
 
   // Re-fetch the expected-documents checklist whenever the sector context
   // changes — the required documents differ by sector code and entity size.
@@ -934,6 +970,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   }, [parsing]);
 
   const filePersistenceKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+  /** Not yet read — the only files a quote, a charge or a read may include. */
+  const isUnread = (file: File) => !readKeysRef.current.has(filePersistenceKey(file));
+  const unreadFiles = files.filter((f) => !readKeys.has(filePersistenceKey(f)));
 
   /** Persist the original file before any paid parser work begins. */
   const persistDocument = async (file: File): Promise<string> => {
@@ -970,14 +1009,22 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     // priced for a different set of files. Claim the checking state and drop
     // the stale quote before anything async happens.
     const requestId = ++quoteRequestRef.current;
-    setQuoting(true);
+    // Price only what has not been read. A document read in an earlier round
+    // is paid for and already in the case; quoting it again is how adding one
+    // forgotten file would have re-charged the whole pack.
+    const toPrice = list.filter(isUnread);
     setQuote(null);
+    if (toPrice.length === 0) {
+      setQuoting(false);
+      return;
+    }
+    setQuoting(true);
     try {
-      await persistSelectedDocuments(list);
+      await persistSelectedDocuments(toPrice);
       // A newer batch started while these files were saving — its pipeline
       // owns the quote now, and pricing this older list would race it.
       if (quoteRequestRef.current !== requestId) return;
-      await runQuote(list);
+      await runQuote(toPrice);
     } catch (error) {
       if (quoteRequestRef.current !== requestId) return; // superseded
       setQuote(null);
@@ -1044,7 +1091,8 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
    * quote id so the server can verify payment and that these are the exact
    * files that were paid for.
    */
-  const runExtraction = async (list: File[], quoteId: string) => {
+  const runExtraction = async (list: File[], quoteId: string): Promise<boolean> => {
+    let delivered = false;
     setParsing(true);
     setResolving(false);
     setResolveProgress(null);
@@ -1135,8 +1183,21 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       }
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
-      const mergedCase = mergeCases(keptCase, data);
+      const mergedCase = mergeParserCases(parserCaseRef.current, data);
+      parserCaseRef.current = mergedCase;
       setParserCase(mergedCase);
+      delivered = true;
+      // These files are now part of the case: never priced, charged or read again.
+      const nowRead = new Set(readKeysRef.current);
+      for (const f of list) nowRead.add(filePersistenceKey(f));
+      readKeysRef.current = nowRead;
+      setReadKeys(nowRead);
+      setQuote(null);
+      setTokenCost(null);
+      setDoneStaging(false);
+      const readNames = Array.from(
+        new Set([...(readFlowSnapshot(snapshotScope)?.fileNames ?? []), ...list.map((f) => f.name)]),
+      );
       // Auto-fill the company name from the extracted entity name — the
       // resolved ai_entities field first (clean), then the raw extractions,
       // then the legacy payload key. This both saves the user typing it and,
@@ -1152,16 +1213,49 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         sector,
         subSector,
         size,
-        fileNames: list.map((f) => f.name),
+        yearEnd,
+        fileNames: readNames,
         filedBatchByFile,
         documentIds: allDocumentIds(),
+        documentIdsByName: documentIdsByName(),
         parserCase: mergedCase,
-      });
+      }, snapshotScope);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not read the documents");
     } finally {
       setParsing(false);
       setResolving(false);
+    }
+    return delivered;
+  };
+
+  /**
+   * Ask the server to settle the paid run that just ended — the same call the
+   * ESG flow makes. Whatever the run failed to deliver is refunded there,
+   * decided from the parser's own record of the run, never from this screen.
+   */
+  const settlePaidRun = async (quoteId: string, delivered: boolean) => {
+    try {
+      const res = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => null);
+      if (body?.state === "settled" && Number(body.refundedTokens) > 0) {
+        setRefundNotice(
+          `${Number(body.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance. ${body.reason ?? ""}`.trim(),
+        );
+        window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+      } else if (body?.state === "pending" && body.queued && body.reason) {
+        setRefundNotice(String(body.reason));
+      } else if (body?.state === "pending" && !delivered) {
+        setRefundNotice(
+          "If this run delivered nothing, its tokens come back to your balance automatically — there is nothing you need to do.",
+        );
+      }
+    } catch {
+      // The server settles every paid run on its own sweep regardless.
     }
   };
 
@@ -1181,6 +1275,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     if (!quote) return;
     setPaying(true);
     setParseError(null);
+    setRefundNotice(null);
     try {
       const res = await fetch("/api/tokens/authorize", {
         method: "POST",
@@ -1202,7 +1297,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       }
       // Every header shows the balance, so it must move the moment it changes.
       window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
-      await runExtraction(files, quote.quoteId);
+      // Exactly the files this quote priced: the unread ones.
+      const delivered = await runExtraction(unreadFiles, quote.quoteId);
+      await settlePaidRun(quote.quoteId, delivered);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not start processing");
     } finally {
@@ -1317,6 +1414,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   };
 
   const removeFile = (name: string) => {
+    // A read file is paid for and folded into the case; taking it off the list
+    // would leave its values in the scorecard with no document behind them.
+    const target = files.find((f) => f.name === name);
+    if (target && !isUnread(target)) return;
     const next = files.filter((f) => f.name !== name);
     setFiles(next);
     // A batch you have just changed is a batch you are still working on, so
@@ -1330,8 +1431,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     });
     quoteRequestRef.current += 1;
     setQuote(null);
-    if (next.length === 0) setParserCase(keptCase);
-    else void prepareAndQuote(next);
+    // Re-price what is still unread. This used to reset the case to an earlier
+    // round when the list emptied — after a read, that threw the paid result away.
+    if (next.some(isUnread)) void prepareAndQuote(next);
+    else setQuoting(false);
   };
 
   const groupSatisfied = (g: { types: string[] }) => g.types.some((t) => docTypeSatisfied(t));
@@ -1375,6 +1478,29 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
     [mapped],
   );
 
+  /**
+   * The review: one entry per document — what we took, what we read but could
+   * not place, and why anything was not read — built from the same merged
+   * sections the Build button creates the workbook from.
+   */
+  const reviewDocuments = useMemo(() => {
+    if (!parserCase) return [];
+    const sections = mergeWorkbookSections(mapped?.sections ?? {}, injected ? toWorkbookSections(injected) : {});
+    const failedFiles = Object.entries(docProgress)
+      .filter(([, status]) => status === "error")
+      .map(([name]) => name);
+    return buildDocumentReview(
+      {
+        parserCase,
+        sections: sections as Record<string, { rows?: unknown[] }>,
+        rejected: injected?.rejected ?? [],
+        flags: reconciliationFlags,
+        failedFiles,
+      },
+      "a B-BBEE scorecard",
+    );
+  }, [parserCase, mapped, injected, reconciliationFlags, docProgress]);
+
   // Suppliers + spend come from whichever path actually read the procurement
   // schedule: the AI-entity path is authoritative where it has rows (it is what
   // scores), the legacy supplier_rows are the fallback. Reading only the legacy
@@ -1391,9 +1517,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         0,
       );
 
-  const valuesUp = useCountUp(totalMappedRows);
-  const suppliersUp = useCountUp(supplierCount);
-  const spendUp = useCountUp(spendCaptured, 1100);
 
   // `files.length` OR a restore: File objects never survive navigation, so a
   // rehydrated run must reveal from the case alone.
@@ -1401,7 +1524,23 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // Requires `doneStaging`: this flag collapses the stage into the checkout
   // layout, and doing that the moment a quote landed is what left people with
   // "files appear but there is nowhere to carry on".
-  const quoteReady = Boolean(quote && doneStaging && !parserCase && !quoting);
+  const quoteReady = Boolean(quote && doneStaging && unreadFiles.length > 0 && !quoting && !parsing);
+  /** Whether reading the unread files spends tokens, and whether the balance covers it. */
+  const readCharging = Boolean(quote && quote.paymentRequired !== false && tokenCost !== null);
+  const readUnaffordable = readCharging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
+  /**
+   * Read the unread files — one click from the bar under the uploader.
+   *
+   * There used to be two money gates: "Done adding — review cost", then a
+   * checkout page with its own "Read my documents". The price is known the
+   * moment the files are staged, so the bar shows it and reads from there; the
+   * full breakdown is still one click away for anyone who wants it.
+   */
+  const readNow = () => {
+    if (!quote) return;
+    if (readCharging) void spendAndExtract();
+    else void runExtraction(unreadFiles, quote.quoteId);
+  };
   /**
    * Nothing on screen but the dropzone: the state a user lands in when they
    * chose "upload documents" and have not yet added one. The company profile
@@ -1412,8 +1551,16 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
   // Missing documents never block: the user can always proceed and the workbook
   // scores on whatever was extracted (even nothing — they complete it manually).
   // Sector + size are REQUIRED: they pick the scorecard the company is judged
-  // against, so creating without them is never a safe default.
-  const canCreate = Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && !parsing && !creating;
+  // against, so creating without them is never a safe default. The year end is
+  // required for the same reason — it picks the period every dated pillar is
+  // measured over, and the workbook will not calculate without one.
+  const yearEndValid = parseWorkbookDate(yearEnd) !== null;
+  // A document added after the read but never read would be filed under the
+  // company with nothing taken from it — the forgotten document, forgotten
+  // again. Read it or remove it first.
+  const canCreate =
+    Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && yearEndValid &&
+    unreadFiles.length === 0 && !parsing && !creating;
 
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
@@ -1436,6 +1583,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       companyName: companyName.trim(),
       industrySector: SECTOR_TO_WORKBOOK[sector] ?? "Generic",
       scorecardType: size,
+      financialYearEnd: yearEnd,
     };
     if (sector === "CONSTRUCTION" && subSector) companyMeta.constructionSubSector = subSector;
     if (sector === "FSC" && subSector) companyMeta.fscSubSector = subSector;
@@ -1491,7 +1639,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       });
       // The run is now a company; the snapshot has served its purpose. Cleared
       // only after create resolves so a failure leaves the restore intact.
-      clearFlowSnapshot();
+      clearFlowSnapshot(snapshotScope);
     } catch {
       // The host surfaces its own create errors; keeping the snapshot means
       // the paid extraction survives to try again.
@@ -1500,9 +1648,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
 
   /** Throw the restored (or just-extracted) run away and start clean. */
   const discardRun = () => {
-    clearFlowSnapshot();
+    clearFlowSnapshot(snapshotScope);
     setParserCase(null);
-    setKeptCase(null);
+    setReadKeys(new Set());
     setRestoredAt(null);
     restoredDocumentIdsRef.current = [];
     setFiles([]);
@@ -1583,18 +1731,24 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           assessment, which is what made the flow feel unserious. */}
       <div className="mb-5">
         <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
-          {quote && !parserCase
+          {quoteReady && quote
             ? quote.paymentRequired === false
               ? "Review your documents"
               : "Review and pay"
-            : "Add your documents"}
+            : parserCase
+              ? "Your documents"
+              : addMode
+                ? `Add documents to ${existingCompany!.name}`
+                : "Add your documents"}
         </h3>
         <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
-          {quote && !parserCase
+          {quoteReady && quote
             ? quote.paymentRequired === false
               ? "Processing is free. Review the documents below, then continue."
               : "Nothing is read until you pay."
-            : "We identify what is present, what is missing and what needs review."}
+            : parserCase
+              ? "Read and placed below. Forgot one? Add it — only the new documents are read and charged."
+              : "We identify what is present, what is missing and what needs review."}
         </p>
       </div>
 
@@ -1640,10 +1794,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       <motion.div
         layout
         className={
-          quoteReady || bareUpload ? "grid gap-5" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"
+          quoteReady || bareUpload || revealed ? "grid gap-5" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"
         }
       >
-        {!quoteReady && !bareUpload && (
+        {!quoteReady && !bareUpload && !revealed && (
         <motion.aside layout className="rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)] p-4 lg:order-2 lg:self-start">
           <AnimatePresence initial={false}>
           {quote && !parserCase && (
@@ -1792,7 +1946,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             data-testid="docs-folder-input"
           />
       <AnimatePresence mode="wait" initial={false}>
-      {quote && doneStaging && !parserCase && !quoting && (
+      {quoteReady && quote && (
         (() => {
           const totalPages = quote.files.reduce((sum, file) => sum + (file.structure.pages ?? 0), 0);
           const spreadsheetCount = quote.files.filter((file) => (file.structure.sheets ?? 0) > 0).length;
@@ -2020,7 +2174,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
 
               <div className="mt-5 space-y-2">
                 <button
-                  onClick={() => void (charging ? spendAndExtract() : runExtraction(files, quote.quoteId))}
+                  onClick={() => void (charging ? spendAndExtract() : runExtraction(unreadFiles, quote.quoteId))}
                   disabled={paying || parsing || cannotAfford}
                   className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
                   style={{ background: "#0e6fff", color: "#ffffff" }}
@@ -2049,7 +2203,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           );
         })()
       )}
-      {(!quote || parserCase || quoting) && (
+      {!quoteReady && !revealed && (!quote || parserCase || quoting) && (
       <motion.div
         key={quoting ? "pricing-documents" : parserCase ? "parsed-upload" : "upload-documents"}
         layout
@@ -2134,7 +2288,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         ) : (
           <div className="flex items-center justify-center gap-2 text-[color:var(--body)] hover:text-violet-300 transition-colors">
             <Sparkles className="w-3.5 h-3.5" />
-            <span className="text-[13px] font-medium">Add more documents</span>
+            <span className="text-[13px] font-medium" data-testid="add-more-documents-label">
+              {parserCase
+                ? "Add a document you forgot — only new ones are read and charged"
+                : "Add more documents"}
+            </span>
           </div>
         )}
       </motion.div>
@@ -2171,30 +2329,79 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           Whether the documents arrived through the main button or a pillar
           batch is irrelevant here: both stage into the same list, so both end
           at the same control. */}
-      {!parserCase && !doneStaging && files.length > 0 && (
-        <div className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-white">
-              {files.length} document{files.length === 1 ? "" : "s"} staged
-              {quoting ? " · checking" : ""}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
-              Keep adding — the buttons above, or any pillar batch below. Nothing is read, and
-              nothing is charged, until you review the cost on the next step.
-            </p>
-          </div>
-          <button
-            type="button"
-            disabled={quoting}
-            onClick={() => setDoneStaging(true)}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
-            data-testid="button-done-staging"
+      {!doneStaging && unreadFiles.length > 0 && !parsing && (() => {
+        const n = unreadFiles.length;
+        const docs = `${n} ${parserCase ? "new " : ""}document${n === 1 ? "" : "s"}`;
+        const priceLine = quoting
+          ? "Working out the cost — nothing is read yet."
+          : !quote
+            ? "We could not work out the cost of these documents. Nothing has been read or charged."
+            : readCharging && tokenCost
+              ? `${tokenText(tokenCost.tokens)} tokens · you have ${tokenText(tokenCost.balance)}.`
+              : quote.paymentRequired === false
+                ? "Reading is free for this run."
+                : "Checking your balance…";
+        return (
+          <div
+            className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
+            data-testid="read-bar"
           >
-            {quoting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Done adding — review cost
-          </button>
-        </div>
-      )}
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-white">{docs} ready to read</p>
+              <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]" data-testid="read-bar-price">
+                {priceLine}{" "}
+                {parserCase
+                  ? "Documents already read are not charged again."
+                  : "Keep adding if you have more — nothing is read until you press read."}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {!quoting && !quote && (
+                <button
+                  type="button"
+                  onClick={() => void prepareAndQuote(files)}
+                  className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white"
+                  data-testid="button-retry-quote-inline"
+                >
+                  Try again
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={quoting}
+                onClick={() => setDoneStaging(true)}
+                className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white disabled:opacity-50"
+                data-testid="button-done-staging"
+              >
+                See cost breakdown
+              </button>
+              {readUnaffordable && tokenCost ? (
+                <a
+                  href="/settings/billing"
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
+                  data-testid="button-add-tokens"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  Add tokens — {tokenText(tokenCost.shortfall)} short
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!quote || quoting || paying}
+                  onClick={readNow}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
+                  data-testid="button-read-now"
+                >
+                  {quoting || paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                  {readCharging && tokenCost && !tokenCost.alreadyAuthorized
+                    ? `Read ${n === 1 ? "it" : `all ${n}`} — ${tokenText(tokenCost.tokens)} tokens`
+                    : `Read ${n === 1 ? "it" : `all ${n}`}`}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* The dead end. "Done adding" hides the staging bar above, and the review
           panel below only renders once a quote exists — so when pricing failed
@@ -2203,7 +2410,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
           (which resets doneStaging), and the only clue was a red line far below
           the fold. Say what went wrong where the button was, and offer both
           ways forward. */}
-      {!parserCase && doneStaging && !quote && !quoting && files.length > 0 && (
+      {doneStaging && !quote && !quoting && unreadFiles.length > 0 && (
         <div
           className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
           data-testid="quote-unavailable"
@@ -2285,7 +2492,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
                 ? resolveProgress
                   ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking names, IDs and figures across every file`
                   : "Cross-checking names, IDs and figures across every file"
-                : `${Object.values(docProgress).filter((s) => s === "done").length} of ${files.length} read`}
+                : `${Object.values(docProgress).filter((s) => s === "done").length} of ${unreadFiles.length} read`}
             </div>
           </div>
           {resolving && resolveProgress && resolveProgress.total > 0 && (
@@ -2297,7 +2504,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
       )}
 
       {/* ACT 2 — scanning theatre */}
-      {files.length > 0 && (!quote || parserCase || quoting) && (
+      {(revealed ? unreadFiles.length > 0 : files.length > 0) && !quoteReady && (!quote || parserCase || quoting) && (
         <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)]">
           <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--muted)] sm:grid">
             <span>File</span>
@@ -2305,7 +2512,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             <span>Type</span>
             <span />
           </div>
-          {files.map((f, i) => {
+          {(revealed ? unreadFiles : files).map((f, i) => {
             const detected = (parserCase?.documents_detected ?? []).find((d) => d.filename === f.name);
             const missing = parsing ? { fields: [], notes: [] } : docMissingContent(f.name);
             const hasGaps = missing.fields.length > 0 || missing.notes.length > 0;
@@ -2315,7 +2522,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             // not a single spinner across the whole batch.
             const perFile = docProgress[f.name];
             const isReadingThis = perFile === "parsing";
-            const statusLabel = parsing
+            const alreadyRead = !isUnread(f);
+            // A round reads only the new files; the ones already read keep their verdict.
+            const statusLabel = parsing && !alreadyRead
               ? perFile === "done"
                 ? "Read"
                 : perFile === "error"
@@ -2332,7 +2541,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
                     ? "Review"
                     : "Failed"
                 : quotedFile
-                  ? "Quoted"
+                  ? "Not read yet"
                   : quoting
                     ? "Pricing"
                     : "Queued";
@@ -2405,13 +2614,19 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
-                    className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[color:var(--body)] sm:justify-self-end"
-                    data-testid={`remove-${f.name}`}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  {/* A read document is part of the scorecard now — no remove. */}
+                  {alreadyRead ? (
+                    <span />
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
+                      className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[color:var(--body)] sm:justify-self-end"
+                      data-testid={`remove-${f.name}`}
+                      aria-label={`Remove ${f.name}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
 
                 {/* Gaps WITHIN this document — one compact line, no per-row
@@ -2455,12 +2670,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
         </div>
       )}
 
-      {/* Reading — the paid work, after payment only. */}
-      {parsing && (
-        <div className="mt-3 flex items-center gap-2 text-[12px] text-violet-200">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-300" />
-          Paid — reading your documents, normalising and mapping entities…
-        </div>
+      {/* A paid run that delivered less than it cost — the server says what came back. */}
+      {refundNotice && (
+        <p className="mt-3 text-[12px] leading-5 text-emerald-200/90" data-testid="bbbee-refund-notice">
+          {refundNotice}
+        </p>
       )}
 
       {revealed && mapped && (
@@ -2500,23 +2714,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             })}
           </div>
 
-          {/* Stat tiles — hero numbers count up */}
-          <div className="dus-fade-up grid grid-cols-3 gap-1.5 mb-4" style={{ animationDelay: "620ms" }}>
-            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
-              <div className="text-[22px] font-semibold text-white leading-none tabular-nums" data-testid="stat-values">{valuesUp}</div>
-              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Values extracted</div>
-            </div>
-            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
-              <div className="text-[22px] font-semibold text-white leading-none tabular-nums">{suppliersUp}</div>
-              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Suppliers found</div>
-            </div>
-            <div className="rounded-lg px-3 py-2.5 text-center" style={{ background: "#111113", border: "1px solid #1f1f21" }}>
-              <div className="text-[22px] font-semibold text-white leading-none tabular-nums">
-                {spendUp >= 1_000_000 ? `R${(spendUp / 1_000_000).toFixed(1)}M` : spendUp >= 1_000 ? `R${Math.round(spendUp / 1_000)}k` : `R${spendUp}`}
-              </div>
-              <div className="text-[10px] text-[color:var(--muted)] mt-1 uppercase tracking-wider">Spend captured</div>
-            </div>
-          </div>
 
           {/* ── THE ONE THING THAT NEEDS A DECISION ────────────────────────
               Figures the documents disagree on stay ABOVE the Build button and
@@ -2582,194 +2779,204 @@ export function DocumentUploadStart({ onCreate, creating, focused = false }: Doc
             </div>
           )}
 
-          {/* Company name + create — always available once documents are
-              processed, even with partial or zero extraction. Missing docs or
-              missing content never block: the workbook scores on what we have. */}
-          <div className="dus-fade-up" style={{ animationDelay: "760ms" }}>
-            {/* The scorecard the company will be judged against — explicit,
-                never a silent default. Amber until sector + size are chosen. */}
-            {sector && size ? (
-              <p className="mb-2 text-[12px] text-[color:var(--body)]" data-testid="scoring-as-line">
-                Scoring as:{" "}
-                <span className="text-emerald-300/90 font-medium">
-                  {activeSector?.label ?? sector}
-                  {subSector ? ` · ${subSector}` : ""} · {sizeOptions.find((o) => o.value === size)?.label ?? size}
-                </span>
-              </p>
-            ) : (
-              <p className="mb-2 text-[12px] text-amber-300/90" data-testid="scoring-as-line">
-                Choose your sector and organisation size in the Company profile panel — they decide
-                which scorecard rules your documents are scored against.
-              </p>
-            )}
-            {/* A sector whose ladder was applied by analogy rather than
-                transcribed says so HERE, next to the button that builds the
-                scorecard — not in a footnote. A level nobody flagged is a level
-                someone will certify. */}
-            {activeSector?.provisional && (
-              <p
-                className="mb-2.5 flex items-start gap-1.5 rounded-lg px-3 py-2 text-[11.5px] leading-5 text-amber-200/80"
-                style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.2)" }}
-                data-testid="sector-provisional-note"
+          {/* BUILD — one compact bar, above the review. Everything the scorecard
+              needs to be built sits in a single row: the company, the rules it
+              is scored under and the year it is measured over. The side panel
+              that held sector and size is gone once the documents are read, so
+              they are editable here. Missing documents or missing content never
+              block building: the workbook scores on what we have. */}
+          <div
+            className="dus-fade-up rounded-2xl border border-white/[0.08] bg-[color:var(--ink-2)] p-3"
+            style={{ animationDelay: "300ms" }}
+            data-testid="build-bar"
+          >
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto] lg:items-end">
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Company</span>
+                <input
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  readOnly={addMode}
+                  placeholder="e.g. Acme Holdings (Pty) Ltd"
+                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-[13.5px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none transition-colors focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 read-only:text-[color:var(--body)]"
+                  data-testid="docs-company-name"
+                />
+              </label>
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Sector</span>
+                {/* Sector and sub-sector in one control: a second select that
+                    appears only for two sectors made the row jump. */}
+                <select
+                  value={activeSector?.subSectors && subSector ? `${sector}::${subSector}` : sector}
+                  onChange={(e) => {
+                    const [code, sub = ""] = e.target.value.split("::");
+                    setSector(code);
+                    setSubSector(sub);
+                  }}
+                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2.5 text-[13px] text-white outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10"
+                  data-testid="sector-select-build"
+                >
+                  <option value="">Select sector…</option>
+                  {sectorOptions.map((s) =>
+                    s.subSectors?.length ? (
+                      <optgroup key={s.code} label={s.label}>
+                        <option value={s.code}>{s.label}</option>
+                        {s.subSectors.map((ss) => (
+                          <option key={ss.value} value={`${s.code}::${ss.value}`}>
+                            {s.label} · {ss.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : (
+                      <option key={s.code} value={s.code}>{s.label}</option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="min-w-0">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Size</span>
+                <select
+                  value={size}
+                  onChange={(e) => setSize(e.target.value)}
+                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2.5 text-[13px] text-white outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10"
+                  data-testid="size-select-build"
+                >
+                  <option value="">Select size…</option>
+                  {sizeOptions.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label} — {o.detail.replace(/^Annual turnover /, "")}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="min-w-0" data-testid="docs-year-end-field">
+                <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Financial year-end</span>
+                <input
+                  type="date"
+                  value={yearEnd}
+                  onChange={(e) => setYearEnd(e.target.value)}
+                  className={`h-10 w-full rounded-xl border bg-[color:var(--ink-3)] px-3 text-[13.5px] text-white outline-none transition-colors focus:ring-2 focus:ring-violet-500/10 [color-scheme:dark] ${
+                    yearEndValid ? "border-[color:var(--rule)] focus:border-violet-500/50" : "border-amber-400/40 focus:border-amber-400/60"
+                  }`}
+                  data-testid="docs-year-end"
+                />
+              </label>
+              <button
+                onClick={() => void handleCreate()}
+                disabled={!canCreate}
+                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-[13.5px] font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-2 lg:col-span-1"
+                style={{
+                  background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "var(--ink-3)",
+                  color: canCreate ? "#000" : "var(--muted)",
+                  boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
+                }}
+                data-testid="button-create-from-documents"
               >
-                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
-                <span>{activeSector.provisionalNote}</span>
+                {creating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    {addMode
+                      ? totalMappedRows > 0
+                        ? `Add ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""} to the workbook`
+                        : "Add these documents to the workbook"
+                      : totalMappedRows > 0
+                        ? `Build scorecard · ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""}`
+                        : "Continue to workbook"}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Only what stops the build, or what changes how it is scored —
+                said once, under the bar. The happy path shows nothing here. */}
+            {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid) && (
+              <div className="mt-2.5 space-y-1 border-t border-white/[0.05] pt-2.5 text-[11.5px] leading-5">
+                {(!sector || !size) && (
+                  <p className="text-amber-300/90" data-testid="scoring-as-line">
+                    Choose the sector and size — they decide which scorecard rules your documents are scored against.
+                  </p>
+                )}
+                {!yearEndValid && (
+                  <p className="text-amber-300/90" data-testid="docs-year-end-hint">
+                    Year-end required — Skills, Procurement, ESD and SED are measured over the twelve months ending on
+                    this date, so the score cannot be calculated without it.
+                  </p>
+                )}
+                {unreadFiles.length > 0 && (
+                  <p className="text-amber-300/90" data-testid="docs-unread-hint">
+                    {unreadFiles.length} document{unreadFiles.length === 1 ? " you added has" : "s you added have"} not
+                    been read yet — read {unreadFiles.length === 1 ? "it" : "them"} above, or remove{" "}
+                    {unreadFiles.length === 1 ? "it" : "them"}, before building.
+                  </p>
+                )}
+                {/* A sector whose ladder was applied by analogy rather than
+                    transcribed says so next to the button that builds the
+                    scorecard — not in a footnote. A level nobody flagged is a
+                    level someone will certify. */}
+                {activeSector?.provisional && (
+                  <p className="flex items-start gap-1.5 text-amber-200/80" data-testid="sector-provisional-note">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <span>{activeSector.provisionalNote}</span>
+                  </p>
+                )}
+              </div>
+            )}
+            {addMode && (
+              <p className="mt-2 text-[11px] leading-5 text-[color:var(--muted)]">
+                Blanks in the workbook take these values. Nothing already there is overwritten — where a document
+                disagrees, you’ll see both and we keep yours.
               </p>
             )}
-            <input
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Company name — e.g. Acme Holdings (Pty) Ltd"
-              className="w-full bg-[color:var(--ink-2)] border border-[color:var(--rule)] rounded-xl px-4 py-2.5 text-[15px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 mb-2.5 transition-colors"
-              data-testid="docs-company-name"
-            />
-            <button
-              onClick={() => void handleCreate()}
-              disabled={!canCreate}
-              className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
-              style={{
-                background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "var(--ink-3)",
-                color: canCreate ? "#000" : "var(--muted)",
-                boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
-              }}
-              data-testid="button-create-from-documents"
-            >
-              {creating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : totalMappedRows > 0 ? (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Build my scorecard from {totalMappedRows} extracted value{totalMappedRows !== 1 ? "s" : ""}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Continue to workbook &amp; complete it there
-                </>
-              )}
-            </button>
-            <p className="text-[11px] text-[color:var(--muted)] mt-2 text-center">
-              {totalMappedRows > 0
-                ? "You’ll land in a pre-filled workbook — review, complete anything missing, and the score computes the same way as manual entry."
-                : "We couldn’t extract scorable values yet — you’ll land in the workbook to fill them in. You can also add more documents above."}
-            </p>
           </div>
 
-          {/* ── THE DETAIL, BELOW THE BUTTON ───────────────────────────────
-              Everything here is worth reading and none of it blocks building.
-              As six always-open sibling panels it pushed the Build button off
-              the bottom of the screen on any real evidence pack; as counted,
-              collapsible groups it is a summary someone will actually open. */}
+          {/* THE REVIEW — the main content after a read: each document beside
+              what we took from it, worst first, at a fixed height. It replaced
+              a stack of collapsed sections ("What we read", "Documents still
+              worth adding", "Evidence that didn't reconcile"…) that said the
+              same things detached from the documents they were about.
+              Optional: the Build bar above never waits for it. */}
+          <DocumentReview
+            documents={reviewDocuments}
+            fileFor={(name) => files.find((f) => f.name === name) ?? null}
+            documentIdFor={(name) => documentIdsByName()[name] ?? null}
+            onAddDocuments={() => inputRef.current?.click()}
+            stillToAdd={missingDocGroups.detectable.map((g) => g.label)}
+            needsDetail={needsDetailPillars.map(
+              (c) => `${c.pillar}: we read ${c.extractedValue}, but it needs per-person rows to score.`,
+            )}
+            // A correction here is what gets built: it rewrites the case the
+            // workbook is mapped from, and the parser's reading rides along.
+            onEditValue={(filename, edit, value) =>
+              setParserCase((current) => (current ? applyReviewEdit(current, filename, edit, value) : current))
+            }
+          />
+
           <div className="mt-4 space-y-1.5" data-testid="extraction-review">
-            {missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length > 0 && (
-              <ReviewSection
-                title="Documents still worth adding"
-                meta={`${missingDocGroups.detectable.length + missingDocGroups.evidenceOnly.length}`}
-                tone="check"
-                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                summary="You can add these now or in the workbook — neither blocks you from continuing."
-                testId="missing-docs-review"
-              >
-                {missingDocGroups.detectable.length > 0 && (
-                  <>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
-                      We can read these automatically
-                    </p>
-                    <ul className="mb-2 mt-1 space-y-0.5">
-                      {missingDocGroups.detectable.map((g) => (
-                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                          {g.label}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-                {missingDocGroups.evidenceOnly.length > 0 && (
-                  <>
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-[color:var(--muted)]">
-                      Have ready for your verifier
-                    </p>
-                    <ul className="mt-1 space-y-0.5">
-                      {missingDocGroups.evidenceOnly.map((g) => (
-                        <li key={g.key ?? g.label} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                          {g.label}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </ReviewSection>
-            )}
-
-            {needsDetailPillars.length > 0 && (
-              <ReviewSection
-                title="Extracted, but needs per-person rows to score"
-                meta={`${needsDetailPillars.length}`}
-                tone="check"
-                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                testId="needs-detail-review"
-              >
-                <ul className="space-y-1">
-                  {needsDetailPillars.map((c) => (
-                    <li key={c.pillar} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                      <span className="text-amber-300/80">{c.pillar}:</span> we extracted{" "}
-                      {c.extractedValue} — it needs per-person rows in the workbook to score.
-                    </li>
-                  ))}
-                </ul>
-              </ReviewSection>
-            )}
-
-            {reconciliationFlags.length > 0 && (
-              <ReviewSection
-                title="Evidence that didn’t reconcile"
-                meta={`${reconciliationFlags.length}`}
-                tone="check"
-                icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
-                summary="A total the rows don’t sum to is the first thing a verifier asks about."
-                testId="reconciliation-flags"
-              >
-                <ul className="space-y-1">
-                  {reconciliationFlags.map((flag, i) => (
-                    <li key={i} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                      <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
-                    </li>
-                  ))}
-                </ul>
-              </ReviewSection>
-            )}
-
-            {(injected?.metaCorroboration.length ?? 0) > 0 && (
-              <ReviewSection
-                title="Confirmed by more than one document"
-                meta={`${injected!.metaCorroboration.length}`}
-                tone="good"
-                icon={<Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
-                summary="Corroboration is the cheapest evidence there is — these figures agreed across files."
-                testId="meta-corroboration"
-              >
-                <ul className="space-y-1">
-                  {injected!.metaCorroboration.map((c) => (
-                    <li key={`${c.section}.${c.column}`} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                      <span className="text-[color:var(--body)]">{c.column}</span> — {String(c.value)}, agreed
-                      by {c.agreementCount} documents ({c.sources.join(", ")})
-                    </li>
-                  ))}
-                </ul>
-              </ReviewSection>
-            )}
-
-            {injected && (
-              <ReviewSection
-                title="What we read from your documents"
-                meta={`${totalMappedRows} placed`}
-                tone="neutral"
-                icon={<FileText className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />}
-                testId="toggle-read-details"
-              >
-                <ExtractionConfidence injected={injected} rowCount={injectedRowCount} />
-              </ReviewSection>
-            )}
+            {/* Disagreements found while linking documents to each other — they
+                belong to no single document, so they are not in the review. */}
+            {(() => {
+              const crossDocument = reconciliationFlags.filter(
+                (f) => !reviewDocuments.some((d) => d.filename === f.sourceFile),
+              );
+              return crossDocument.length > 0 ? (
+                <ReviewSection
+                  title="Figures your documents disagree on"
+                  meta={`${crossDocument.length}`}
+                  tone="check"
+                  icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
+                  summary="Where two documents describe the same thing differently, the lower figure is scored."
+                  testId="reconciliation-flags"
+                >
+                  <ul className="space-y-1">
+                    {crossDocument.map((flag, i) => (
+                      <li key={i} className="text-[11.5px] leading-5 text-[color:var(--body)]">
+                        <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
+                      </li>
+                    ))}
+                  </ul>
+                </ReviewSection>
+              ) : null;
+            })()}
 
             {certificateFill && (
               <ReviewSection

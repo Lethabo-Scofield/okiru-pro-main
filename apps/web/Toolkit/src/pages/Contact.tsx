@@ -18,9 +18,13 @@ export default function OkiruContact({
 }) {
   useEffect(() => {
     const id = "okiru-styles";
-    if (!document.getElementById(id)) {
-      const s = document.createElement("style"); s.id = id; s.textContent = GLOBAL_CSS; document.head.appendChild(s);
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = id;
+      document.head.appendChild(style);
     }
+    style.textContent = GLOBAL_CSS;
     return () => { const el = document.getElementById(id); if (el) el.remove(); };
   }, []);
 
@@ -44,7 +48,6 @@ export default function OkiruContact({
         <section className="ok-section ok-page-top" id="sec-contact">
           <div className="ok-w">
             <Reveal>
-              <span className="ok-sec-num">Contact</span>
               <h2 className="ok-h2" style={{ marginTop:8 }}>Let's make your transformation measurable.</h2>
               <p className="ok-lead-l" style={{ marginTop:8 }}>Questions about the toolkit, a sector code, or your reporting cycle? Reach out. We usually reply within one business day.</p>
             </Reveal>

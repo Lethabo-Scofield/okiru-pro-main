@@ -50,6 +50,46 @@ const E_DATA_SHEET_BLOCKS: ReadonlyArray<{
 /** Month columns C…K, as both the sheet and the grid spell them. */
 const MONTH_COLS = ["C", "D", "E", "F", "G", "H", "I", "J", "K"] as const;
 
+/** One monthly figure the v1.7 sheet layout has no cell for. */
+export type EDataOverflow = { prefix: string; rowIndex: number; column: string; value: unknown };
+
+/**
+ * The inverse of `eDataCellsFromSheetRefs`, for the .xlsx export: the app's
+ * monthly grid cells (`s1a_C14`) at the E_Data sheet addresses the v1.7 layout
+ * gives them, and each row's source note in column N.
+ *
+ * The export wrote section cells as they are stored, and a grid cell is not a
+ * sheet address — so every monthly figure entered in the app was left out of
+ * the downloaded workbook. A figure the layout has no room for (a sixth site,
+ * a tenth month: each block is five rows of nine months) is returned in
+ * `overflow` for the caller to write elsewhere, never dropped.
+ */
+export function eDataSheetRefsFromCells(cells: Cells): { sheet: Cells; overflow: EDataOverflow[] } {
+  const sheet: Cells = {};
+  const overflow: EDataOverflow[] = [];
+  const blocks = new Map(E_DATA_SHEET_BLOCKS.map((block) => [block.prefix, block]));
+  for (const [ref, value] of Object.entries(cells)) {
+    if (value === "" || value === null || value === undefined) continue;
+    const figure = /^([a-z0-9]+)_([C-Z])(\d+)$/i.exec(ref);
+    const note = /^([a-z0-9]+)_src_(\d+)$/i.exec(ref);
+    const block = blocks.get((figure ?? note)?.[1] ?? "");
+    if (!block) continue;
+    if (note) {
+      const rowIndex = Number(note[2]);
+      if (rowIndex < block.rowCount) sheet[`N${block.firstRow + rowIndex}`] = value;
+      continue;
+    }
+    const column = figure![2];
+    const rowIndex = Number(figure![3]) - GRID_ROW_BASE;
+    if (rowIndex >= 0 && rowIndex < block.rowCount && (MONTH_COLS as readonly string[]).includes(column)) {
+      sheet[`${column}${block.firstRow + rowIndex}`] = value;
+    } else if (rowIndex >= 0) {
+      overflow.push({ prefix: block.prefix, rowIndex, column, value });
+    }
+  }
+  return { sheet, overflow };
+}
+
 const GRID_ROW_BASE = 14;
 
 function isNumberLike(v: unknown): boolean {
@@ -124,6 +164,23 @@ const HEADCOUNT_LEVELS = 7;
  * Produces nothing when ANY `hc_` cell already exists: a half-translated matrix
  * mixing app entries with sheet values would double-count nobody can see.
  */
+/**
+ * The other way, for export: `hc_{row}_{col}` as their `S_Data!B5:K11`
+ * addresses. The export wrote section cells only where they were already
+ * sheet addresses, so the grid's `hc_` cells — the whole EEA2 workforce
+ * matrix — never reached the downloaded workbook, and a re-import lost it.
+ */
+export function headcountSheetRefsFromCells(cells: Cells): Cells {
+  const out: Cells = {};
+  for (let r = 0; r < HEADCOUNT_LEVELS; r++) {
+    for (let c = 0; c < HEADCOUNT_SHEET_COLS.length; c++) {
+      const v = cells[`hc_${r}_${c}`];
+      if (isNumberLike(v)) out[`${HEADCOUNT_SHEET_COLS[c]}${HEADCOUNT_SHEET_FIRST_ROW + r}`] = typeof v === "number" ? v : Number(v);
+    }
+  }
+  return out;
+}
+
 export function headcountCellsFromSheetRefs(raw: Cells): Cells {
   for (const ref of Object.keys(raw)) {
     if (ref.startsWith("hc_")) return {};
@@ -214,7 +271,7 @@ function namedFieldsFromSheetLabels(
     if (m) rows.add(Number(m[1]));
   }
 
-  for (const row of rows) {
+  for (const row of Array.from(rows)) {
     for (let i = 0; i < LABEL_COLUMN_SCAN.length; i++) {
       const label = normaliseLabel(raw[`${LABEL_COLUMN_SCAN[i]}${row}`]);
       if (!label) continue;
@@ -236,6 +293,36 @@ function namedFieldsFromSheetLabels(
 
 export function coverCellsFromSheetRefs(raw: Cells): Cells {
   return namedFieldsFromSheetLabels(raw, COVER_LABEL_TO_KEY);
+}
+
+/** What the Cover's rows are called on export — each one a label the import reads back. */
+const COVER_EXPORT_LABELS: ReadonlyArray<{ key: string; label: string }> = [
+  { key: "entity", label: "Entity" },
+  { key: "period", label: "Reporting period" },
+  { key: "boundary", label: "Organisational boundary" },
+  { key: "baselineYear", label: "Baseline year" },
+  { key: "netZeroTargetYear", label: "Net-zero target year" },
+  { key: "sector", label: "Sector" },
+];
+
+/**
+ * The other way, for export: Company & Reporting Setup as the Cover's label /
+ * value rows. Its cells are named (`entity`, `boundary`…), never addressed, so
+ * the export dropped every one — the company, its period, its mandatory GHG
+ * boundary, baseline and net-zero years — and a re-import came back blank.
+ */
+export function coverSheetRefsFromCells(cells: Cells): Cells {
+  const out: Cells = {};
+  let row = 3;
+  for (const { key, label } of COVER_EXPORT_LABELS) {
+    const value = cells[key];
+    if (value === undefined || value === null || String(value).trim() === "") continue;
+    out[`A${row}`] = label;
+    out[`B${row}`] = value;
+    row += 1;
+  }
+  if (row > 3) out.A1 = "Company & reporting setup";
+  return out;
 }
 
 export function sDataNamedCellsFromSheetRefs(raw: Cells): Cells {

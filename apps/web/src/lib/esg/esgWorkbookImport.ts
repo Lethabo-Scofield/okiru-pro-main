@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { boundWorkbookSheets, sheetBoundsLosses } from "../sheetBounds";
 import { ESG_SECTION_IDS } from "./esgSections";
 import {
   classifyEsgGridRow,
@@ -217,23 +218,59 @@ export type EsgImportPreview = {
   unmatchedSheets: string[];
 };
 
+/**
+ * Our own template writes "Choose one: A · B · C" beside every dropdown. It is
+ * an instruction, never an answer — but a Cover left blank had its label bridge
+ * pick the hint up as the value, so a company's sector became "Choose one:
+ * Generic · FMCG …". Now that imports merge into what is already captured, that
+ * text would also overwrite a real sector. It is dropped as the sheet is read.
+ */
+const TEMPLATE_HINT = /^\s*choose one\s*:/i;
+
+function withoutTemplateHints(cells: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [ref, value] of Object.entries(cells)) {
+    if (typeof value === "string" && TEMPLATE_HINT.test(value)) continue;
+    out[ref] = value;
+  }
+  return out;
+}
+
+/**
+ * A spreadsheet the template import cannot place — not our template, so not
+ * one of its tabs matched a workbook section — is the document reader's job
+ * instead: the parser maps a register by its COLUMNS, where the template
+ * import can only match a tab NAME. Returns what to tell the person, or null
+ * when the template import has something to place. Both doors use it: a new
+ * company's Excel route, and the workbook's own Import.
+ */
+export function esgImportHandover(preview: { sections?: Record<string, unknown>; unmatchedSheets?: string[] }): string | null {
+  if (Object.keys(preview.sections ?? {}).length > 0) return null;
+  const sheets = preview.unmatchedSheets ?? [];
+  return sheets.length > 0
+    ? `Reading it as evidence instead — none of its sheets (${sheets.slice(0, 3).join(", ")}) match a workbook section. You will see the token cost before anything is read.`
+    : "Reading it as evidence instead. You will see the token cost before anything is read.";
+}
+
 export function parseEsgWorkbookXlsx(buffer: ArrayBuffer | Buffer): EsgImportPreview {
   const book = XLSX.read(buffer, { type: "buffer" });
   const sections: Record<string, { cells: Record<string, unknown> }> = {};
-  const warnings: string[] = [];
+  // A sheet's declared size is a claim, not a fact — checked before anything reads rows.
+  const warnings: string[] = sheetBoundsLosses(boundWorkbookSheets(book));
   const unmatchedSheets: string[] = [];
 
   for (const sheetName of book.SheetNames) {
     const sectionId = SHEET_TO_SECTION[normSheetName(sheetName)];
     if (!sectionId || !ESG_SECTION_IDS.includes(sectionId)) {
-      if (!["escorecard", "sscorecard", "gscorecard", "esgdashboard", "validation", "auditlog", "glossary", "standardsmap", "datastatus", "carbontax", "netzeroroadmap", "materialitymatrix", "bbbeeesg", "iso14083"].includes(normSheetName(sheetName))) {
+      // "instructions" is our own template's cover note, not a client sheet.
+      if (!["instructions", "escorecard", "sscorecard", "gscorecard", "esgdashboard", "validation", "auditlog", "glossary", "standardsmap", "datastatus", "carbontax", "netzeroroadmap", "materialitymatrix", "bbbeeesg", "iso14083"].includes(normSheetName(sheetName))) {
         unmatchedSheets.push(sheetName);
       }
       continue;
     }
     const sheet = book.Sheets[sheetName];
     if (!sheet) continue;
-    const raw = sheetToCellMap(sheet);
+    const raw = withoutTemplateHints(sheetToCellMap(sheet));
 
     let cells = raw;
     if (isEsgGridSection(sectionId)) {

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react"
+import { useLocation } from "wouter"
 
 type Theme = "dark" | "light" | "system"
 
@@ -6,6 +7,12 @@ type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: Theme
   storageKey?: string
+  /**
+   * Paths that always render in light mode, whatever the saved theme is — the
+   * public marketing site. The saved choice is left untouched, so the signed-in
+   * app still opens in the user's own light/dark preference.
+   */
+  lightOnlyPaths?: (path: string) => boolean
 }
 
 type ThemeProviderState = {
@@ -13,8 +20,10 @@ type ThemeProviderState = {
   setTheme: (theme: Theme) => void
 }
 
+// Dark is the signed-in app's default (Brian, 7 October 2026); light is for
+// the public pages (`lightOnlyPaths`) and for whoever saved it.
 const initialState: ThemeProviderState = {
-  theme: "light",
+  theme: "dark",
   setTheme: () => null,
 }
 
@@ -41,21 +50,40 @@ const lightCssVars: Record<string, string> = {
   '--ef-overlay': '#ffffff',
 }
 
-const darkCssVars: Record<string, string> = lightCssVars
+const darkCssVars: Record<string, string> = {
+  '--ef-bg': '#08090b',
+  '--ef-bg-alt': '#101114',
+  '--ef-card': '#111216',
+  '--ef-card-hover': '#18191d',
+  '--ef-surface': '#101114',
+  '--ef-surface-hover': '#18191d',
+  '--ef-border': 'rgba(255,255,255,0.08)',
+  '--ef-border-light': 'rgba(255,255,255,0.05)',
+  '--ef-border-med': 'rgba(255,255,255,0.14)',
+  '--ef-border-heavy': 'rgba(255,255,255,0.22)',
+  '--ef-text': '#f4f4f5',
+  '--ef-text-secondary': '#d4d4d8',
+  '--ef-text-muted': '#a1a1aa',
+  '--ef-text-dim': '#71717a',
+  '--ef-text-faint': '#52525b',
+  '--ef-input-bg': '#101114',
+  '--ef-input-border': 'rgba(255,255,255,0.14)',
+  '--ef-overlay': '#08090b',
+}
 
 export function ThemeProvider({
   children,
-  defaultTheme = "light",
+  defaultTheme = "dark",
   storageKey = "vite-ui-theme",
+  lightOnlyPaths,
   ...props
 }: ThemeProviderProps) {
+  const [location] = useLocation()
+  const forceLight = !!lightOnlyPaths && lightOnlyPaths(location)
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const stored = localStorage.getItem(storageKey) as Theme | null;
-      if (stored === "light" || stored === "system") return stored;
-      if (stored === "dark") {
-        localStorage.removeItem(storageKey);
-      }
+      if (stored === "light" || stored === "dark" || stored === "system") return stored;
     } catch {
       // Private mode / blocked site data. Fall through to the default.
     }
@@ -68,8 +96,10 @@ export function ThemeProvider({
 
     let resolvedTheme = theme
     if (theme === "system") {
-      resolvedTheme = "light"
+      resolvedTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
     }
+    // Public marketing pages never go dark; the saved preference is not changed.
+    if (forceLight) resolvedTheme = "light"
 
     root.classList.add(resolvedTheme)
 
@@ -77,7 +107,7 @@ export function ThemeProvider({
     Object.entries(vars).forEach(([key, value]) => {
       root.style.setProperty(key, value)
     })
-  }, [theme])
+  }, [theme, forceLight])
 
   const value = {
     theme,

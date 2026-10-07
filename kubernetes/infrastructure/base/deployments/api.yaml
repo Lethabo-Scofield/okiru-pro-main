@@ -136,6 +136,11 @@ spec:
             # Internal URL apps/api uses to reach apps/web (cluster DNS).
             - name: WEB_INTERNAL_URL
               value: "http://web:5001"
+            # Internal URL apps/api uses to reach the parser (document-library
+            # re-reads, paid fresh reads). Unset, parserClient falls back to
+            # 127.0.0.1:3200 — inside the api pod, where nothing listens.
+            - name: PARSER_SERVICE_URL
+              value: "http://parser:3200"
             # Must match the web service: both write into one auditLogs
             # collection and the daily seal verifies every record in it.
             - name: AUDIT_SIGNING_KEY

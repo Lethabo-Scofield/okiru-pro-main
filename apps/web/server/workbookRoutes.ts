@@ -15,6 +15,7 @@ import {
 } from "./pillarAccess";
 import { handleBackSync, rebuildWorkbookFromEntities } from "./workbookBackSync";
 import { reconcileRegisters } from "./registerReconcile";
+import { mergeDocumentSections } from "./workbookDocumentMerge";
 import {
   validateWorkbook,
   validateWorkbookForSubmit,
@@ -1566,6 +1567,47 @@ export function registerWorkbookRoutes(app: Express): void {
       } catch (err: any) {
         logger.error("Failed to import workbook sections", err);
         res.status(500).json({ error: "Failed to import workbook" });
+      }
+    },
+  );
+
+  // Documents added to a workbook that already exists. Unlike /import, which
+  // replaces each section it is given, this MERGES: blanks take the document's
+  // value, existing values and rows are never overwritten or deleted, and
+  // every disagreement is reported. See workbookDocumentMerge.ts.
+  app.post(
+    "/api/workbook/:companyId/merge-documents",
+    requireAuth,
+    async (req: Request, res: Response) => {
+      const wb = await authorizeWorkbookAccess(req, res);
+      if (!wb) return;
+      const incoming = (req.body as any)?.sections;
+      if (!incoming || typeof incoming !== "object") {
+        return res.status(400).json({ error: "Missing sections payload." });
+      }
+      const mergerId: string = (req as any).user?.id || (req.session as any)?.userId;
+      const access = await resolveWorkbookPillarAccess(String(req.params.companyId), mergerId);
+      const offered: Record<string, { rows?: Record<string, unknown>[]; meta?: Record<string, unknown> }> = {};
+      for (const key of Object.keys(incoming)) {
+        if (!SECTION_KEYS.includes(key as (typeof SECTION_KEYS)[number])) continue;
+        const sec = incoming[key];
+        offered[key] = {
+          rows: sanitizeRows(sec?.rows),
+          ...(sec?.meta && typeof sec.meta === "object" ? { meta: sec.meta as Record<string, unknown> } : {}),
+        };
+      }
+      try {
+        const { changed, report } = mergeDocumentSections(wb.sections ?? {}, offered, (key) =>
+          canWriteSection(access, key),
+        );
+        let next = wb;
+        for (const [key, section] of Object.entries(changed)) {
+          next = await persistSection(next, key, section as WorkbookSection);
+        }
+        res.json({ ok: true, updatedAt: next.updatedAt, report });
+      } catch (err: any) {
+        logger.error("Failed to merge documents into workbook", err);
+        res.status(500).json({ error: "Failed to add the documents to the workbook" });
       }
     },
   );

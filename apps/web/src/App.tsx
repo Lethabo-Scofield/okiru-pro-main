@@ -50,6 +50,7 @@ import { FeedbackWidget } from "@/components/FeedbackWidget";
 import { useAuth } from "@toolkit/lib/auth";
 import { hasAnyRole, isSuperAdmin } from "@/lib/roles";
 import { usePageViewTracking } from "@/lib/gaTracker";
+import { useClarityContext } from "@/lib/clarityContext";
 import { ScorecardAdviceChat } from "@toolkit/components/scorecard/ScorecardAdviceChat";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 
@@ -171,6 +172,7 @@ function ToolkitAuthRedirect() {
 
 function AppRouter() {
   usePageViewTracking();
+  useClarityContext();
   return (
     <Switch>
       <Route path="/">
@@ -456,9 +458,24 @@ function GlobalScorecardAdvisor() {
   );
 }
 
+/**
+ * The public marketing site is always light; dark mode belongs to the signed-in
+ * app. Passed to ThemeProvider, which renders these paths light without touching
+ * the saved preference.
+ *
+ * The signed-in app opens dark: it is designed dark, and there is no theme
+ * switch yet, so a light default would leave no way back to it. The light
+ * rules (html.light …) stay ready for when a switch is added.
+ */
+const MARKETING_PATHS = ["/about", "/contact", "/privacy", "/terms", "/auth"];
+const isMarketingPath = (path: string) => {
+  const p = path.length > 1 ? path.replace(/\/+$/, "") : path;
+  return p === "/" || p === "/products" || p.startsWith("/products/") || MARKETING_PATHS.includes(p);
+};
+
 function App() {
   return (
-    <ThemeProvider defaultTheme="light" storageKey="okiru-pro-theme">
+    <ThemeProvider defaultTheme="dark" storageKey="okiru-pro-theme" lightOnlyPaths={isMarketingPath}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>

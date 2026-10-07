@@ -63,7 +63,17 @@ import type { EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
 import {
   mapEsgCalculatorToWorkbook,
   type EsgCalculatorResultLike,
+  type EsgPlacementChoice,
 } from "@/lib/esg/esgParserToWorkbook";
+import type { EsgRejectionReason } from "@/lib/esg/esgWorkbookInjection";
+import { esgMonthlyCellRef } from "@/lib/esg/esgParserFieldBridge";
+import { ESG_PROVENANCE_SECTION, provenanceCells } from "@/lib/esg/esgProvenance";
+import {
+  esgPlacementAxes,
+  esgWorkbookAxisState,
+  isEsgAxisCell,
+  type EsgWorkbookAxisState,
+} from "@/lib/esg/esgCaseAxes";
 
 /** One field the parser read out of one document. */
 export interface EsgParserValue {
@@ -148,6 +158,8 @@ export interface EsgParserCaseLike {
      */
     calculator?: EsgCalculatorResultLike | null;
   } | null;
+  /** Figures a person placed in the review — see `EsgManualPlacement`. Never set by the parser. */
+  manual_placements?: EsgManualPlacement[];
   [key: string]: unknown;
 }
 
@@ -169,6 +181,60 @@ export function esgCaseFileNames(caseResult: EsgParserCaseLike | null): string[]
   for (const doc of caseResult?.documents_detected ?? []) add(doc?.filename);
   for (const extraction of caseResult?.ai_entities?.extractions ?? []) add(extraction?.sourceFile);
   return Array.from(names);
+}
+
+/**
+ * Fold a later round's calculator into an earlier one's — the half of a case
+ * the workbook is actually filled from.
+ *
+ * The case merge spread `ai_entities` as one object, so a second round's
+ * calculator REPLACED the first's: add a forgotten document and every value
+ * read in round one — its monthly figures, its registers — silently left the
+ * workbook. Now an earlier entry or row survives unless the new round re-read
+ * the file it came from (the fresh read of that file stands); a key both
+ * rounds mapped takes the new round's value, the rule the merge already
+ * applies to extractions.
+ */
+export function mergeEsgCalculators(
+  kept: EsgCalculatorResultLike | null | undefined,
+  fresh: EsgCalculatorResultLike | null | undefined,
+  rereadSources: ReadonlySet<string>,
+): EsgCalculatorResultLike | null | undefined {
+  if (!kept) return fresh;
+  if (!fresh) return kept;
+  const reread = (sources?: string[]) =>
+    (sources ?? []).length > 0 && (sources ?? []).every((source) => rereadSources.has(String(source)));
+  const freshKeys = new Set((fresh.entries ?? []).map((entry) => entry.key));
+  const entries = [
+    ...(kept.entries ?? []).filter((entry) => !freshKeys.has(entry.key) && !reread(entry.sourceFiles)),
+    ...(fresh.entries ?? []),
+  ];
+  const freshReview = new Set((fresh.needsReview ?? []).map((item) => item.field));
+  const freshUnmapped = new Set((fresh.unmapped ?? []).map((item) => item.field));
+  return {
+    // The payload mirrors the entries; rebuilt so a dropped entry's key goes with it.
+    payload: Object.fromEntries(entries.map((entry) => [entry.key, entry.value])),
+    entries,
+    rows: [...(kept.rows ?? []).filter((row) => !reread(row.sourceFiles)), ...(fresh.rows ?? [])],
+    unmapped: [...(kept.unmapped ?? []).filter((item) => !freshUnmapped.has(item.field)), ...(fresh.unmapped ?? [])],
+    needsReview: [...(kept.needsReview ?? []).filter((item) => !freshReview.has(item.field)), ...(fresh.needsReview ?? [])],
+  };
+}
+
+/**
+ * The upload a parser source came from — the file itself, or the workbook a
+ * sheet was split out of. The parser names a split sheet "File.xlsx › Sheet",
+ * which matched no uploaded file, so every result read from a workbook was
+ * dropped instead of archived: a paid read with nothing in the library.
+ */
+export function esgUploadNameForSource(source: unknown, uploadNames: readonly string[]): string | null {
+  const name = String(source ?? "").trim();
+  if (!name) return null;
+  if (uploadNames.includes(name)) return name;
+  const marker = name.indexOf("›");
+  if (marker < 0) return null;
+  const workbook = name.slice(0, marker).trim();
+  return uploadNames.includes(workbook) ? workbook : null;
 }
 
 /** The value types an ESG workbook cell can hold. */
@@ -200,6 +266,35 @@ export interface EsgUnplacedValue {
   element: string;
   /** Plain-language reason, shown to the user verbatim. */
   reason: string;
+  /** Why, typed: what tells a figure waiting for an answer from evidence no cell needs. */
+  rejection?: EsgRejectionReason;
+  /** The one question that places this figure, when a person can answer it. */
+  choice?: EsgPlacementChoice;
+  /** This reading is the site or period of the figure with this choice id. */
+  partOf?: string;
+}
+
+/**
+ * A figure a person placed in the review: the answer to its question, kept
+ * ON the case (`manual_placements`) so it travels wherever the case does —
+ * into the saved flow, through added documents, into the workbook.
+ */
+export interface EsgManualPlacement {
+  /** The choice it answers (`EsgPlacementChoice.id`). */
+  choiceId: string;
+  sectionId: string;
+  cellRef: string;
+  value: number;
+  /** Where it went, in words: "CPT, Jun-25". */
+  where: string;
+}
+
+/** A figure placed by a person, as the review shows it — with the way back. */
+export interface EsgAnsweredValue {
+  placement: EsgManualPlacement;
+  choice: EsgPlacementChoice;
+  field: string;
+  sourceFile: string;
 }
 
 /** One cell two or more documents disagree about. Left blank, never guessed. */
@@ -224,6 +319,24 @@ export interface EsgInjectionResult {
   conflicts: EsgValueConflict[];
   /** placed + unplaced + conflicting values. The reconciliation invariant. */
   valuesRead: number;
+  /** Figures a person placed by answering their question, with what they answered. */
+  answered?: EsgAnsweredValue[];
+  /** The sites and months the figures were placed on — the answers a question offers. */
+  axes?: EsgReportingAxes;
+  /**
+   * Figures actually written to the workbook — one per cell. A dashboard is
+   * ONE reading holding hundreds of figures, so `placed` (readings) said "32
+   * placed" for a read that filled 1,600 cells; this is the number to show.
+   * Absent on a result restored from before it existed.
+   */
+  figuresPlaced?: number;
+  /**
+   * Figures kept out of the workbook because their section lies outside the
+   * one the documents were added from (C1), by the section they belong in. A
+   * monthly grid or dashboard writes cells no single reading stands behind,
+   * so this — not the unplaced list — is the count of what was not written.
+   */
+  outsideFocus?: Array<{ sectionId: string; figures: number }>;
 }
 
 /**
@@ -311,7 +424,17 @@ export function collectEsgExtractedValues(
  */
 export function applyEsgParserResult(
   caseResult: EsgParserCaseLike | null,
-  options: { axes?: EsgReportingAxes } = {},
+  options: {
+    /** Place on exactly these axes (the answer-key run). */
+    axes?: EsgReportingAxes;
+    /**
+     * The workbook being filled. What it states about its sites and months
+     * wins, and a workbook holding monthly figures keeps its axes; whatever
+     * it leaves open is taken from the documents and recorded with the
+     * figures. Absent — a company being created — everything is.
+     */
+    workbook?: EsgWorkbookAxisState | null;
+  } = {},
 ): EsgInjectionResult {
   const readings = collectEsgExtractedValues(caseResult);
   const calculator = caseResult?.ai_entities?.calculator ?? null;
@@ -327,16 +450,23 @@ export function applyEsgParserResult(
       unplaced: readings,
       conflicts: [],
       valuesRead: readings.length,
+      figuresPlaced: 0,
     };
   }
 
-  const mapped = mapEsgCalculatorToWorkbook(calculator, { axes: options.axes });
+  const placement = options.axes
+    ? { axes: options.axes, cells: {} as Record<string, string | number> }
+    : esgPlacementAxes(caseResult, options.workbook);
+  const mapped = mapEsgCalculatorToWorkbook(calculator, { axes: placement.axes });
 
   const placed: EsgPlacedValue[] = [];
   const unplaced: EsgUnplacedValue[] = [];
 
   for (const reading of readings) {
-    const outcome = mapped.outcomes[reading.field];
+    // A reading whose fate is known for its own document (a bill's figure, the
+    // site and period that placed it) answers for itself; the rest share their
+    // field's fate.
+    const outcome = mapped.sourceOutcomes?.[reading.field]?.[reading.sourceFile] ?? mapped.outcomes[reading.field];
 
     if (outcome?.status === "conflict") continue; // accounted for by `conflicts`
 
@@ -364,7 +494,47 @@ export function applyEsgParserResult(
     unplaced.push({
       ...reading,
       reason: outcome?.reason ?? ESG_UNTRACKED_REASON,
+      // A reading the scoring layer never received has no cell either.
+      ...(outcome?.rejection ? { rejection: outcome.rejection } : outcome ? {} : { rejection: "no_workbook_home" as const }),
+      ...(outcome?.choice ? { choice: outcome.choice } : {}),
+      ...(outcome?.partOf ? { partOf: outcome.partOf } : {}),
     });
+  }
+
+  // What a person answered in the review: each placed figure moves, with its
+  // site and period, from "could not be placed" to the cell they chose.
+  const answered: EsgAnsweredValue[] = [];
+  for (const placement of esgManualPlacements(caseResult)) {
+    const figure = unplaced.find((u) => u.choice?.id === placement.choiceId);
+    if (!figure?.choice) continue; // the figure is no longer held: its document was replaced, or it now places itself
+    const section = mapped.patches[placement.sectionId] ?? (mapped.patches[placement.sectionId] = { cells: {} });
+    section.cells[placement.cellRef] = placement.value;
+    answered.push({ placement, choice: figure.choice, field: figure.field, sourceFile: figure.sourceFile });
+    for (let i = unplaced.length - 1; i >= 0; i -= 1) {
+      const u = unplaced[i];
+      // The figure — however many times it was read — and its site and period.
+      if (u.choice?.id !== placement.choiceId && u.partOf !== placement.choiceId) continue;
+      placed.push({
+        sectionId: placement.sectionId,
+        cellRef: placement.cellRef,
+        field: u.field,
+        value: placement.value,
+        sourceFile: u.sourceFile,
+        documentId: u.documentId,
+      });
+      unplaced.splice(i, 1);
+    }
+  }
+
+  // The axes the figures were placed on travel WITH them: a workbook that
+  // later read its axes from anywhere else would re-point every cell. With no
+  // monthly figure placed — by the documents or by a person — there is
+  // nothing to anchor, and the workbook's axes stay open for the documents
+  // that do place one.
+  const placedMonthly = esgWorkbookAxisState(mapped.patches["e-data"]?.cells).filled;
+  if (placedMonthly && Object.keys(placement.cells).length > 0) {
+    const eData = mapped.patches["e-data"] ?? (mapped.patches["e-data"] = { cells: {} });
+    eData.cells = { ...placement.cells, ...eData.cells };
   }
 
   return {
@@ -372,6 +542,8 @@ export function applyEsgParserResult(
     patches: mapped.patches,
     placed,
     unplaced,
+    answered,
+    axes: placement.axes,
     conflicts: mapped.conflicts.map((conflict) => ({
       sectionId: conflict.sectionId,
       cellRef: conflict.cellRef,
@@ -379,13 +551,156 @@ export function applyEsgParserResult(
       candidates: conflict.candidates,
     })),
     valuesRead: readings.length,
+    figuresPlaced: esgFigureCount(mapped.patches),
   };
+}
+
+/**
+ * Keep a document read to the sections it was added for (C1).
+ *
+ * "Add documents" from inside a section fills that section's pillar
+ * (`esgSectionElements.ts`) and nothing else. A figure whose cell lies in
+ * another section is not written; it stays with its document as evidence and
+ * says where it would have gone, so adding it from there is one step. A
+ * question about a monthly cell (always Environmental data) is held back the
+ * same way when that section is outside the focus. Conflicts stay as they are:
+ * nothing is written for a contested cell anyway, and the disagreement is
+ * worth seeing wherever it lies.
+ */
+export function restrictEsgInjection(
+  result: EsgInjectionResult,
+  allowed: ReadonlySet<string>,
+  sectionLabel: (sectionId: string) => string = (id) => id,
+): EsgInjectionResult {
+  if (allowed.size === 0) return result;
+  const elsewhere = (sectionId: string) =>
+    `This belongs in ${sectionLabel(sectionId)}, outside the part of the workbook these documents were added to — kept with the document, not written. Add the document there, or to the whole workbook, to place it.`;
+
+  const patches: EsgSectionPatches = {};
+  for (const [sectionId, patch] of Object.entries(result.patches)) {
+    if (allowed.has(sectionId)) patches[sectionId] = patch;
+  }
+  const placed = result.placed.filter((p) => allowed.has(p.sectionId));
+  const movedOut: EsgUnplacedValue[] = result.placed
+    .filter((p) => !allowed.has(p.sectionId))
+    .map((p) => ({
+      field: p.field,
+      value: p.value,
+      sourceFile: p.sourceFile,
+      documentId: p.documentId,
+      element: "",
+      reason: elsewhere(p.sectionId),
+      rejection: "outside_focus" as const,
+    }));
+  const monthlyOutside = !allowed.has("e-data");
+  // The question's own figure and the site/period readings that are part of it.
+  const unplaced = result.unplaced.map((u) =>
+    (u.choice || u.partOf) && monthlyOutside
+      ? { ...u, choice: undefined, partOf: undefined, reason: elsewhere("e-data"), rejection: "outside_focus" as const }
+      : u,
+  );
+  // Counted from the patches: a monthly grid's cells have no reading each to move.
+  const outsideFocus = Object.entries(result.patches)
+    .filter(([sectionId]) => !allowed.has(sectionId))
+    .map(([sectionId, patch]) => ({ sectionId, figures: esgFigureCount({ [sectionId]: patch }) }))
+    .filter((held) => held.figures > 0);
+  return {
+    ...result,
+    patches,
+    placed,
+    unplaced: [...unplaced, ...movedOut],
+    figuresPlaced: esgFigureCount(patches),
+    outsideFocus,
+  };
+}
+
+/**
+ * Why a value has no cell here at all: evidence a person reads, not a failure
+ * to place. `outside_focus` has a cell — in another section than the one the
+ * documents were added for — and reads the same way from where the person is.
+ */
+export const ESG_NO_CELL_REJECTIONS: ReadonlySet<string> = new Set(["no_workbook_home", "derived_cell", "unknown_field", "outside_focus"]);
+
+/**
+ * What the unplaced values ask of a person: figures to place by answering a
+ * question, values to check or enter by hand, and evidence no cell needs.
+ * A figure's site and period travel with it, and a figure read twice is one.
+ */
+export function esgUnplacedKinds(unplaced: EsgUnplacedValue[]): { toPlace: number; toCheck: number; evidence: number } {
+  const questions = new Set<string>();
+  let toCheck = 0;
+  let evidence = 0;
+  for (const u of unplaced) {
+    if (u.partOf) continue;
+    if (u.choice) questions.add(u.choice.id);
+    else if (u.rejection && ESG_NO_CELL_REJECTIONS.has(u.rejection)) evidence += 1;
+    else toCheck += 1;
+  }
+  return { toPlace: questions.size, toCheck, evidence };
+}
+
+/** The placements a person made in the review, as the case carries them. */
+export function esgManualPlacements(caseResult: EsgParserCaseLike | null): EsgManualPlacement[] {
+  const raw = caseResult?.manual_placements;
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (p): p is EsgManualPlacement =>
+      !!p && typeof p === "object" &&
+      typeof (p as EsgManualPlacement).choiceId === "string" &&
+      typeof (p as EsgManualPlacement).sectionId === "string" &&
+      typeof (p as EsgManualPlacement).cellRef === "string" &&
+      typeof (p as EsgManualPlacement).value === "number" && Number.isFinite((p as EsgManualPlacement).value),
+  );
+}
+
+/**
+ * The cell a figure's answer puts it in: the site's row and the month's column
+ * of its grid. Null until every question it asks is answered.
+ */
+export function esgChoiceCell(
+  choice: EsgPlacementChoice,
+  answer: { siteRow?: number; month?: string },
+): { sectionId: string; cellRef: string } | null {
+  const siteRow = answer.siteRow ?? choice.siteRow ?? (choice.needs.includes("site") ? undefined : 0);
+  const month = answer.month ?? choice.month;
+  if (siteRow === undefined || siteRow < 0 || !month || !/^[A-Z]$/.test(month)) return null;
+  return { sectionId: "e-data", cellRef: esgMonthlyCellRef(choice.prefix, siteRow, month) };
+}
+
+/**
+ * The case with a figure placed where a person said — or, with no cell, its
+ * placement taken back. Replaces any earlier answer to the same question.
+ */
+export function withEsgManualPlacement(
+  caseResult: EsgParserCaseLike,
+  choiceId: string,
+  placement: Omit<EsgManualPlacement, "choiceId"> | null,
+): EsgParserCaseLike {
+  const kept = esgManualPlacements(caseResult).filter((p) => p.choiceId !== choiceId);
+  return { ...caseResult, manual_placements: placement ? [...kept, { choiceId, ...placement }] : kept };
+}
+
+/**
+ * Figures a patch set writes: its cells, less the furniture — register meta
+ * (`_row_count`) and the sites and months recorded with the figures.
+ */
+export function esgFigureCount(patches: EsgSectionPatches): number {
+  return Object.entries(patches).reduce(
+    (sum, [sectionId, section]) =>
+      sum +
+      Object.keys(section?.cells ?? {}).filter(
+        (ref) => !ref.startsWith("_") && (sectionId !== "e-data" || !isEsgAxisCell(ref)),
+      ).length,
+    0,
+  );
 }
 
 /** How many cells a patch set would write. Used for honest UI counts. */
 export function esgPatchCellCount(patches: EsgSectionPatches): number {
-  return Object.values(patches).reduce(
-    (sum, section) => sum + Object.keys(section?.cells ?? {}).length,
+  // The sites and months recorded with the figures are settings, not values.
+  return Object.entries(patches).reduce(
+    (sum, [sectionId, section]) =>
+      sum + Object.keys(section?.cells ?? {}).filter((ref) => sectionId !== "e-data" || !isEsgAxisCell(ref)).length,
     0,
   );
 }
@@ -401,15 +716,22 @@ export function esgPatchCellCount(patches: EsgSectionPatches): number {
 export async function persistEsgSectionPatches(
   companyId: string,
   patches: EsgSectionPatches,
+  /** The placements behind these patches: recorded so each cell keeps its source document (E4). */
+  placed: ReadonlyArray<EsgPlacedValue> = [],
 ): Promise<boolean> {
   if (!companyId || esgPatchCellCount(patches) === 0) return false;
+  const provenance = provenanceCells(placed);
+  const sections: Record<string, { cells: Record<string, EsgCellValue> }> =
+    Object.keys(provenance).length > 0
+      ? { ...patches, [ESG_PROVENANCE_SECTION]: { cells: provenance } }
+      : patches;
   const res = await fetch(
     `${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/import`,
     {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirm: true, sections: patches }),
+      body: JSON.stringify({ confirm: true, sections }),
     },
   );
   if (!res.ok) {

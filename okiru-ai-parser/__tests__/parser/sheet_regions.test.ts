@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sheetGridToMarkdown } from '../../src/services/sheetRegions.js';
+import { columnRegions, mainColumnRegion, sheetGridToMarkdown } from '../../src/services/sheetRegions.js';
 
 /**
  * Fixture mirrors the real Thandanani SED sheet that produced 68 phantom
@@ -68,5 +68,18 @@ describe('sheetGridToMarkdown — table understanding', () => {
     expect(simple).toContain('| Supplier | Spend |');
     expect(simple).toContain('| Alpha | 1000 |');
     expect(simple).not.toContain('Reference options');
+  });
+});
+
+describe('a sheet longer than an argument list', () => {
+  // `Math.max(0, ...rows.map(...))` passed every row as an argument, and past
+  // ~120k rows that overflows the call stack: every uploaded B-BBEE Toolkit
+  // (whose template sheet claims 1,048,576 rows) failed in the parser with
+  // "Maximum call stack size exceeded". A long honest sheet would too.
+  it('measures 200,000 rows without overflowing', () => {
+    const grid: string[][] = Array.from({ length: 200_000 }, (_, i) => (i === 0 ? ['Plate', 'Litres'] : ['', '']));
+    grid[199_999] = ['JR45DZGP', '412'];
+    expect(columnRegions(grid)).toEqual([{ start: 0, end: 1 }]);
+    expect(mainColumnRegion(grid)).toEqual({ start: 0, end: 1 });
   });
 });

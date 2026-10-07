@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { Document, ParserRunModel } from '../../models.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
-import { resolveFileWithParser } from '../services/parserClient.js';
-import { applyDocumentScopeFilter, resolveClientScopeIds } from '../services/clientScopes.js';
+import { isParserConfigured, quoteFileWithParser, resolvePaidFileWithParser } from '../services/parserClient.js';
+import { applyDocumentScopeFilter, isViewOnlyMember, resolveClientScopeIds } from '../services/clientScopes.js';
 
 const logger = createLogger('ParserDocuments');
 const router = Router();
@@ -69,7 +69,18 @@ function documentJson(doc: Record<string, any>): Record<string, unknown> {
     lowConfidenceFields: doc.parserLowConfidenceFields ?? [],
     latestRunId: doc.latestParserRunId ?? null,
     lastRunAt: doc.parserLastRunAt ?? null,
+    reviewedAt: doc.reviewedAt ?? null,
+    reviewedByUserId: doc.reviewedByUserId ?? null,
   };
+}
+
+/** View-only members may read the library but never change it. */
+async function refuseViewOnly(req: Request, res: Response): Promise<boolean> {
+  if (await isViewOnlyMember(identity(req).userId)) {
+    res.status(403).json({ message: 'Your role in this team is view-only, so you can look at documents but not change them.' });
+    return true;
+  }
+  return false;
 }
 
 function runSummary(run: Record<string, any>): Record<string, unknown> {
@@ -163,6 +174,14 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
     }
     return res.status(201).json({ document: documentJson(doc.toObject()) });
   } catch (error) {
+    // The same bytes uploaded twice at once — a folder holding two copies of
+    // one ledger under different names does exactly this — both miss the
+    // lookup above and race to insert. The loser used to get a 500 and its
+    // file dropped out of the library. The winner's record IS this upload.
+    if ((error as { code?: number })?.code === 11000) {
+      const existing = await Document.findOne({ source: 'parser', fileHash, ...tenantFilter(owner) }).select('-rawContent').lean();
+      if (existing) return res.status(201).json({ document: documentJson(existing as Record<string, any>) });
+    }
     logger.error('Failed to persist parser document', error as Error);
     return res.status(500).json({ message: 'Could not persist document' });
   }
@@ -261,6 +280,23 @@ const patchSchema = z.object({
   documentType: z.string().min(1).max(200).optional(),
   /** Why the type was changed — kept with the correction, not instead of it. */
   note: z.string().max(2000).optional(),
+  /**
+   * A teammate has looked at this read and signed it off (true), or reopened
+   * it (false). Takes it in and out of the company's "Needs review" queue.
+   */
+  reviewed: z.boolean().optional(),
+  /**
+   * Values a person read off the document themselves — a correction to a field
+   * the parser read, or a field it could not find. Keyed by the parser's field
+   * key; null withdraws an earlier correction.
+   */
+  fields: z
+    .record(
+      z.string().min(1).max(120).regex(/^[A-Za-z0-9_. -]+$/),
+      z.union([z.string().max(2000), z.number().finite(), z.null()]),
+    )
+    .refine((fields) => Object.keys(fields).length > 0 && Object.keys(fields).length <= 100, 'Between 1 and 100 fields')
+    .optional(),
 });
 
 /**
@@ -279,6 +315,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
   if (!parsed.success) return res.status(400).json({ message: 'Invalid update', issues: parsed.error.issues });
   const owner = identity(req);
   const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
 
   try {
     const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
@@ -286,6 +323,30 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
     const set: Record<string, unknown> = {};
     if ('entityId' in parsed.data) set.entityId = parsed.data.entityId ?? null;
+
+    if (typeof parsed.data.reviewed === 'boolean') {
+      set.reviewedAt = parsed.data.reviewed ? new Date() : null;
+      set.reviewedByUserId = parsed.data.reviewed ? owner.userId : null;
+      const latestRunId = (doc as unknown as { latestParserRunId?: string }).latestParserRunId;
+      if (latestRunId) {
+        await ParserRunModel.updateOne(
+          { runId: latestRunId },
+          {
+            $push: {
+              reviewHistory: {
+                fieldKey: 'document',
+                originalValue: null,
+                correctedValue: null,
+                reviewerUserId: owner.userId,
+                organizationId: owner.organizationId,
+                approvalState: parsed.data.reviewed ? 'approved' : 'pending',
+                note: parsed.data.note ?? null,
+              },
+            },
+          },
+        );
+      }
+    }
 
     if (parsed.data.documentType) {
       set.parserDocumentType = parsed.data.documentType;
@@ -311,11 +372,43 @@ router.patch('/:id', async (req: Request, res: Response) => {
       }
     }
 
-    if (Object.keys(set).length === 0) return res.status(400).json({ message: 'Nothing to update' });
+    // Field corrections live beside the parser's reading, never over it — the
+    // same rule as a type correction. Each one names what the parser said, so
+    // the history shows both, and the latest event per field is the value.
+    let fieldsCorrected = false;
+    if (parsed.data.fields) {
+      const latestRunId = (doc as unknown as { latestParserRunId?: string }).latestParserRunId;
+      if (!latestRunId) {
+        return res.status(409).json({ message: 'This document has not been read yet, so there is nothing to correct.', code: 'NOT_READ' });
+      }
+      const latestRun = await ParserRunModel.findOne({ runId: latestRunId }).select('parserOutput').lean();
+      const extracted = ((latestRun as { parserOutput?: { extracted_fields?: Record<string, { normalized_value?: unknown; raw_value?: unknown }> } } | null)
+        ?.parserOutput?.extracted_fields ?? {});
+      const events = Object.entries(parsed.data.fields).map(([fieldKey, value]) => ({
+        fieldKey,
+        originalValue: extracted[fieldKey]?.normalized_value ?? extracted[fieldKey]?.raw_value ?? null,
+        correctedValue: typeof value === 'string' ? value.trim() || null : value,
+        reviewerUserId: owner.userId,
+        organizationId: owner.organizationId,
+        approvalState: 'corrected',
+        note: parsed.data.note ?? null,
+      }));
+      await ParserRunModel.updateOne({ runId: latestRunId }, { $push: { reviewHistory: { $each: events } } });
+      fieldsCorrected = true;
+    }
 
-    await Document.updateOne(documentFilter(req, documentId), { $set: set });
+    if (Object.keys(set).length === 0 && !fieldsCorrected) return res.status(400).json({ message: 'Nothing to update' });
+
+    if (Object.keys(set).length > 0) await Document.updateOne(documentFilter(req, documentId), { $set: set });
     const updated = await Document.findOne(documentFilter(req, documentId)).lean();
-    return res.json({ document: documentJson(updated as Record<string, any>) });
+    if (!fieldsCorrected) return res.json({ document: documentJson(updated as Record<string, any>) });
+    const runAfter = await ParserRunModel.findOne({ runId: (doc as unknown as { latestParserRunId: string }).latestParserRunId })
+      .select('reviewHistory')
+      .lean();
+    return res.json({
+      document: documentJson(updated as Record<string, any>),
+      reviewHistory: (runAfter as { reviewHistory?: unknown[] } | null)?.reviewHistory ?? [],
+    });
   } catch (error) {
     logger.error('Failed to update parser document', error as Error, { documentId });
     return res.status(500).json({ message: 'Could not update this document' });
@@ -335,56 +428,172 @@ router.patch('/:id', async (req: Request, res: Response) => {
 router.post('/:id/reparse', upload.single('file'), async (req: Request, res: Response) => {
   const owner = identity(req);
   const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
 
   try {
     const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
 
     const replacement = req.file;
-    const raw = replacement?.buffer ?? (doc as unknown as { rawContent?: Buffer }).rawContent;
-    if (!raw || raw.length === 0) {
-      return res.status(409).json({
-        message: 'The original file is not stored for this document, so it cannot be re-read. Upload the file again.',
-      });
+
+    // The same bytes read again give the same reading — so an unchanged file
+    // returns the stored run, instantly, and nobody pays for it: not the
+    // user, and not Okiru's model bill. Every "Re-read" used to run the full
+    // extraction chain again (text layer, Document Intelligence, the model).
+    // `fresh=1` is for a reading the parser itself has since improved on.
+    const fresh = req.query.fresh === '1' || (req.body as { fresh?: unknown } | undefined)?.fresh === 'true';
+    const latestRunId = (doc as unknown as { latestParserRunId?: string }).latestParserRunId;
+    if (!replacement && !fresh && latestRunId) {
+      const stored = await ParserRunModel.findOne({ documentId: (doc as unknown as { _id: unknown })._id, runId: latestRunId, ...tenantFilter(owner) }).lean();
+      if (stored) {
+        const plain = doc as unknown as { toObject?: () => Record<string, any> } & Record<string, any>;
+        return res.status(200).json({
+          document: documentJson(typeof plain.toObject === 'function' ? plain.toObject() : plain),
+          run: runSummary(stored as Record<string, any>),
+          reused: true,
+        });
+      }
     }
-
-    const filename = replacement?.originalname ?? String((doc as unknown as { filename: string }).filename);
-    const mimeType = replacement?.mimetype ?? String((doc as unknown as { fileType?: string }).fileType ?? '');
-
-    const outcome = await resolveFileWithParser({ buffer: Buffer.from(raw), filename, mimeType });
-    if (!outcome.ok || !outcome.result) {
-      return res.status(502).json({ message: outcome.error ?? 'The parser could not read this file' });
-    }
-
-    // Swap the stored bytes only once the new file has actually been read —
-    // a failed re-parse must not leave the document holding a file nobody has
-    // successfully parsed and no copy of the one that worked.
-    if (replacement) {
-      await Document.updateOne(documentFilter(req, documentId), {
-        $set: {
-          rawContent: replacement.buffer,
-          filename: replacement.originalname,
-          fileType: replacement.mimetype,
-          fileSize: replacement.size,
-          contentHash: crypto.createHash('sha256').update(replacement.buffer).digest('hex'),
-        },
-      });
-    }
-
-    const output = outcome.result as unknown as Record<string, any>;
-    const run = await appendRun(doc as unknown as { _id: unknown }, owner, output, {
-      reviewReasons: replacement ? ['Re-read after the file was replaced by a user.'] : ['Re-read on request.'],
-    });
-    await Document.updateOne(documentFilter(req, documentId), { $set: documentSetFromRun(run.toObject()) });
-
-    const updated = await Document.findOne(documentFilter(req, documentId)).lean();
-    return res.status(201).json({
-      document: documentJson(updated as Record<string, any>),
-      run: runSummary(run.toObject()),
+    // Anything else is a real read — from scratch, or of a replacement — and
+    // a real read is priced and paid first (POST /:id/reread/quote, then the
+    // wallet, then POST /:id/reread). This route used to run it for free.
+    return res.status(402).json({
+      message: 'Reading this document again from scratch is charged — get its price first.',
+      code: 'PRICE_FIRST',
     });
   } catch (error) {
     logger.error('Failed to re-parse document', error as Error, { documentId });
     return res.status(500).json({ message: 'Could not re-read this document' });
+  }
+});
+
+/**
+ * ESG evidence is read by the ESG case reader into the ESG workbook. The paid
+ * single-file read is the B-BBEE reader: an ESG bill through it would come back
+ * as B-BBEE fields and reach no workbook. Refused rather than read wrongly.
+ */
+async function isEsgDocument(doc: Record<string, any>, owner: SessionIdentity): Promise<boolean> {
+  if (!doc.latestParserRunId) return false;
+  const run = await ParserRunModel.findOne({ documentId: doc._id, runId: doc.latestParserRunId, ...tenantFilter(owner) })
+    .select('parserOutput')
+    .lean() as { parserOutput?: { domain?: unknown } } | null;
+  return run?.parserOutput?.domain === 'esg';
+}
+
+const ESG_REREAD = {
+  message: 'ESG documents are read again from the ESG workbook — use Add documents there.',
+  code: 'ESG_REREAD_FROM_WORKBOOK',
+};
+
+/** The bytes a fresh read would use: a replacement, or what is stored. */
+function rereadBytes(doc: Record<string, any>, replacement: Express.Multer.File | undefined) {
+  const raw: Buffer | undefined = replacement?.buffer ?? doc.rawContent;
+  if (!raw || raw.length === 0) return null;
+  return {
+    buffer: Buffer.from(raw),
+    filename: replacement?.originalname ?? String(doc.filename),
+    mimeType: replacement?.mimetype ?? String(doc.fileType ?? ''),
+    sha256: crypto.createHash('sha256').update(raw).digest('hex'),
+  };
+}
+
+/**
+ * POST /:id/reread/quote — price a fresh read of this document (multipart
+ * `file` to price a replacement instead). Free: a structure scan, nothing
+ * read. The quote is pinned to this document AND these exact bytes; the
+ * browser then pays it through the wallet (/api/tokens/authorize), exactly as
+ * a bulk upload is paid.
+ */
+router.post('/:id/reread/quote', upload.single('file'), async (req: Request, res: Response) => {
+  const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
+  if (!isParserConfigured()) return res.status(503).json({ message: 'Fresh reads are not available right now.' });
+  try {
+    const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+    if (await isEsgDocument(doc as unknown as Record<string, any>, identity(req))) return res.status(409).json(ESG_REREAD);
+    const bytes = rereadBytes(doc as unknown as Record<string, any>, req.file);
+    if (!bytes) {
+      return res.status(409).json({ message: 'The original file is not stored for this document. Upload it again as a replacement.' });
+    }
+    const quote = await quoteFileWithParser(bytes);
+    if (!quote.ok || !quote.quoteId) {
+      return res.status(502).json({ message: quote.error ?? 'We could not price this file.' });
+    }
+    await Document.updateOne(documentFilter(req, documentId), {
+      $set: { pendingRereadQuoteId: quote.quoteId, pendingRereadSha256: bytes.sha256 },
+    });
+    return res.status(201).json({ quoteId: quote.quoteId });
+  } catch (error) {
+    logger.error('Failed to price a fresh read', error as Error, { documentId });
+    return res.status(500).json({ message: 'Could not price a fresh read of this document' });
+  }
+});
+
+/**
+ * POST /:id/reread — the paid fresh read itself, after the wallet authorised
+ * `quoteId`. Same bytes as were priced (a replacement is sent again), checked
+ * here against the pending quote and again by the parser's gate, which claims
+ * the quote once and records how the read ended — the wallet's settlement
+ * (/api/tokens/runs/:quoteId/settle-outcome) refunds a read that delivered
+ * nothing. Appended as a new run: the earlier readings stay in the history.
+ */
+router.post('/:id/reread', upload.single('file'), async (req: Request, res: Response) => {
+  const owner = identity(req);
+  const documentId = routeParam(req.params.id);
+  if (await refuseViewOnly(req, res)) return;
+  if (!isParserConfigured()) return res.status(503).json({ message: 'Fresh reads are not available right now.' });
+  const quoteId = typeof req.body?.quoteId === 'string' ? req.body.quoteId : '';
+  try {
+    const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
+    if (!doc) return res.status(404).json({ message: 'Document not found' });
+    const plain = doc as unknown as Record<string, any>;
+    if (await isEsgDocument(plain, owner)) return res.status(409).json(ESG_REREAD);
+    if (!quoteId || plain.pendingRereadQuoteId !== quoteId) {
+      return res.status(409).json({ message: 'That price was for a different read. Get a new price.', code: 'QUOTE_NOT_FOR_THIS_DOCUMENT' });
+    }
+    const bytes = rereadBytes(plain, req.file);
+    if (!bytes || bytes.sha256 !== plain.pendingRereadSha256) {
+      return res.status(409).json({ message: 'These are not the bytes that were priced. Get a new price.', code: 'QUOTE_FILE_MISMATCH' });
+    }
+
+    const outcome = await resolvePaidFileWithParser(bytes, quoteId);
+    if (!outcome.ok || !outcome.result) {
+      if (outcome.status === 404) {
+        return res.status(503).json({ message: 'Fresh reads are not available yet. Nothing was read.', code: 'PAID_READ_UNAVAILABLE' });
+      }
+      if (outcome.status && [402, 409, 410].includes(outcome.status)) {
+        return res.status(outcome.status).json({ message: outcome.error, code: outcome.code });
+      }
+      return res.status(502).json({ message: outcome.error ?? 'The parser could not read this file', code: outcome.code });
+    }
+
+    // Swap the stored bytes only once the new file has actually been read —
+    // a failed read must not leave the document holding a file nobody has
+    // successfully parsed and no copy of the one that worked.
+    if (req.file) {
+      await Document.updateOne(documentFilter(req, documentId), {
+        $set: {
+          rawContent: req.file.buffer,
+          filename: req.file.originalname,
+          fileType: req.file.mimetype,
+          fileSize: req.file.size,
+          contentHash: bytes.sha256,
+        },
+      });
+    }
+
+    const run = await appendRun(doc as unknown as { _id: unknown }, owner, outcome.result as unknown as Record<string, any>, {
+      reviewReasons: req.file ? ['Read again after the file was replaced by a user.'] : ['Read again from scratch on request.'],
+    });
+    await Document.updateOne(documentFilter(req, documentId), {
+      $set: { ...documentSetFromRun(run.toObject()), pendingRereadQuoteId: null, pendingRereadSha256: null },
+    });
+    const updated = await Document.findOne(documentFilter(req, documentId)).lean();
+    return res.status(201).json({ document: documentJson(updated as Record<string, any>), run: runSummary(run.toObject()) });
+  } catch (error) {
+    logger.error('Failed to run a paid fresh read', error as Error, { documentId, quoteId });
+    return res.status(500).json({ message: 'Could not read this document again' });
   }
 });
 
@@ -404,6 +613,8 @@ router.get('/', async (req: Request, res: Response) => {
   const search = String(req.query.search || '').trim();
   if (search) filter.filename = { $regex: escapeRegex(search), $options: 'i' };
   if (['passed', 'review_required', 'failed'].includes(String(req.query.status))) filter.parserStatus = String(req.query.status);
+  // "Needs review" is a queue: a document a teammate has signed off has left it.
+  if (String(req.query.status) === 'review_required') filter.reviewedAt = null;
   if (req.query.documentType) filter.parserDocumentType = String(req.query.documentType);
   if (req.query.reviewRequired === 'true') filter.parserReviewRequired = true;
   if (req.query.missingField) filter.parserMissingFields = String(req.query.missingField);
@@ -460,12 +671,32 @@ router.get('/:id/runs/:runId', async (req: Request, res: Response) => {
   return res.json({ run: { ...runSummary(run as Record<string, any>), parserOutput: run.parserOutput, reviewHistory: run.reviewHistory ?? [] } });
 });
 
+/**
+ * Types a browser can display from our own origin without running anything.
+ *
+ * The stored type is whatever the uploader's browser claimed, and the original
+ * used to be served under it, inline, from okiru.pro: an uploaded .html (or
+ * .svg, which carries script) ran with the session of whoever opened it. Only
+ * these are shown inline now; everything else is a download of opaque bytes.
+ */
+const INLINE_SAFE_TYPES = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'text/plain']);
+
+export function downloadHeaders(fileType: unknown, filename: unknown): Record<string, string> {
+  const type = String(fileType ?? '').split(';')[0].trim().toLowerCase();
+  const name = encodeURIComponent(String(filename || 'document'));
+  const inline = INLINE_SAFE_TYPES.has(type);
+  return {
+    'Content-Type': inline ? (type === 'text/plain' ? 'text/plain; charset=utf-8' : type) : 'application/octet-stream',
+    'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${name}`,
+    'X-Content-Type-Options': 'nosniff',
+  };
+}
+
 router.get('/:id/download', async (req: Request, res: Response) => {
   const doc = await Document.findOne(await scopedDocumentFilter(req, routeParam(req.params.id))).select('filename fileType rawContent').lean() as any;
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   if (!doc.rawContent) return res.status(404).json({ message: 'Original file is unavailable' });
-  res.setHeader('Content-Type', doc.fileType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(doc.filename)}`);
+  res.set(downloadHeaders(doc.fileType, doc.filename));
   return res.send(doc.rawContent);
 });
 

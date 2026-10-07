@@ -36,14 +36,19 @@ import {
   type ExtractionModel,
 } from './aiExtraction.js';
 import { getExtractionModel, duplicateWorkbookException, type ResolveProgress } from './caseExtraction.js';
-import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
+import { ROW_HIDDEN_KEY, resolveCaseEntities, type CaseEntities } from './entityResolution.js';
+import { billAsMonthlyRows } from './esgBillFacts.js';
 import { classifyDocument, routingElement } from './documentClassification.js';
+import { focusForInput } from './esgFocus.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { elementFromHint } from './specRetrieval.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
+import { extractEsgMonthlyTables } from './esgMonthlyTables.js';
+import { extractEsgPeriodSummary, fillsOfVehicle, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
 import {
+  ESG_REGISTER_FIELDS,
   esgFieldElementIndex,
   mapEsgEntitiesToCalculator,
   mapEsgEntitiesToCalculatorWithSemantics,
@@ -82,10 +87,39 @@ function structuredRows(tables: unknown[] | undefined): Array<Record<string, unk
   return rows as Array<Record<string, unknown>>;
 }
 
+/**
+ * The model's own notes ("exceptions" in its reply) are the document's
+ * exceptions, never a value. Left as a field, every document's notes were a
+ * rival answer to one question, and the user was shown "exceptions — your
+ * documents disagree" with thirty-four candidates.
+ */
+export function notesAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const notes = extraction.values.filter((value) => value.field === 'exceptions');
+  if (notes.length === 0) return extraction;
+  const said = notes.flatMap((note) => (Array.isArray(note.value) ? note.value : [note.value]))
+    .map((note) => String(note ?? '').trim())
+    .filter(Boolean);
+  return {
+    ...extraction,
+    values: extraction.values.filter((value) => value.field !== 'exceptions'),
+    exceptions: [...extraction.exceptions, ...said.filter((note) => !extraction.exceptions.includes(note))],
+  };
+}
+
+/** The raw cell layout a split workbook sheet carries, when it carries one. */
+function sheetMatrixOf(tables: unknown[] | undefined): unknown[][] | undefined {
+  const matrix = (tables?.[0] as { matrix?: unknown } | undefined)?.matrix;
+  return Array.isArray(matrix) && matrix.every(Array.isArray) ? (matrix as unknown[][]) : undefined;
+}
+
 export async function extractEsgCaseEntities(
   inputs: RawExtractionInput[],
   model: ExtractionModel | null = getExtractionModel(),
   onProgress?: (p: ResolveProgress) => void,
+  options: {
+    /** The element each upload was filed under, by file name (C1, `esgFocus.ts`). */
+    focusByFile?: Readonly<Record<string, EsgElement>>;
+  } = {},
 ): Promise<EsgCaseExtractionResult | null> {
   if (!model || inputs.length === 0) return null;
   let done = 0;
@@ -112,27 +146,89 @@ export async function extractEsgCaseEntities(
           raw_text: input.raw_text,
         }, { domain: 'esg' })
       : null;
-    const elementOverride = routingElement(classification) ?? undefined;
+    // A confident classification says what the document IS; below that, the
+    // element the person filed it under beats a keyword guess (C1).
+    const elementOverride =
+      routingElement(classification) ?? focusForInput(input.filename, options.focusByFile) ?? undefined;
 
-    const [specResults, sheetTable] = await Promise.all([
-      extractDocument(model, {
+    // A dashboard sheet — sites down the side, months across — is read by the
+    // code, figure by figure. When it is, the flat spec pass is skipped for that
+    // sheet: it can only answer "one fuel_litres, one site" for a sheet holding
+    // forty-five, and those single answers were what turned a dashboard into a
+    // wall of false "your documents disagree" conflicts.
+    const matrix = sheetMatrixOf(input.tables);
+    const monthly = await extractEsgMonthlyTables(model, {
+      filename: input.filename,
+      sheetName,
+      matrix,
+      hidden: input.metadata?.sheet_hidden === true,
+    });
+    // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
+    // in the tab's name and title, and never on its rows.
+    const loggedVehicle = vehicleOfSheet(sheetName, matrix);
+    // A depot's monthly report — a row per vehicle under a title naming the
+    // depot and the month — is that depot's figure for that month, added up by
+    // the code. Asked only of a sheet whose top states a date, and never of one
+    // vehicle's own log: that is the vehicle's month, not the depot's.
+    const period = !monthly && !loggedVehicle && input.metadata?.sheet_hidden !== true && topOfSheetIsDated(matrix)
+      ? await extractEsgPeriodSummary(model, {
+        filename: input.filename,
+        sheetName,
+        matrix,
+        rows: structuredRows(input.tables),
+      })
+      : null;
+    // A HIDDEN sheet gets the code readers only, never a paid model read: hidden
+    // tabs are mostly template copies and scratch work (a diesel report hides a
+    // dozen), and what real data they hold is reached by the readers above.
+    const readByCode = monthly ?? period;
+    const flatRead = !readByCode && input.metadata?.sheet_hidden !== true;
+
+    // A register that arrived as a spreadsheet: the model maps its columns
+    // once, the code reads every row. Returns null for anything that is not a
+    // register — PDFs, scans, narrative documents — which the spec pass below
+    // still reads.
+    const sheetTable = readByCode
+      ? null
+      : await extractEsgSheetTable(model, {
+        filename: input.filename,
+        rows: structuredRows(input.tables),
+        sheetName,
+        // Twenty tabs of one template are one question, asked once.
+        template: loggedVehicle ? 'Vehicle fuel log' : undefined,
+      });
+    // Each fill is that vehicle's, or it could never reach the vehicle's month.
+    if (sheetTable && loggedVehicle) {
+      for (const value of sheetTable.values) {
+        if (value.field === 'fleet_fuel_transaction_rows' && Array.isArray(value.value)) {
+          value.value = fillsOfVehicle(value.value, loggedVehicle);
+        }
+      }
+    }
+    // A hidden sheet's register rows say so: scratch copies and old lists may
+    // add to what is known about a record, never add a record of their own.
+    if (sheetTable && input.metadata?.sheet_hidden === true) {
+      for (const value of sheetTable.values) {
+        if (Array.isArray(value.value)) {
+          value.value = value.value.map((row) =>
+            row && typeof row === 'object' ? { ...(row as Record<string, unknown>), [ROW_HIDDEN_KEY]: true } : row);
+        }
+      }
+    }
+    // A sheet the code read in full is not read again by the model: the flat
+    // pass could only return a truncated copy of the same rows (Super Group's
+    // 132-vehicle fleet master came back as 15) at the price of a paid call.
+    const specResults = flatRead && !sheetTable
+      ? await extractDocument(model, {
         filename: input.filename,
         markdown: input.markdown,
         raw_text: input.raw_text,
         elementHint: sheetName,
-      }, { elementOverride, domain: 'esg' }),
-      // A register that arrived as a spreadsheet: the model maps its columns
-      // once, the code reads every row. Returns null for anything that is not a
-      // register, so the spec pass above remains the reader for PDFs, scans and
-      // narrative documents — this is additive, never a replacement.
-      extractEsgSheetTable(model, {
-        filename: input.filename,
-        rows: structuredRows(input.tables),
-        sheetName,
-      }),
-    ]);
+      }, { elementOverride, domain: 'esg' })
+      : ([] as DocumentExtraction[]);
 
     const results = [...specResults];
+    if (readByCode) results.push(readByCode);
     if (sheetTable) results.push(sheetTable);
 
     done += 1;
@@ -143,7 +239,7 @@ export async function extractEsgCaseEntities(
   const extractions: DocumentExtraction[] = [];
   for (const result of settled) {
     if (result.status === 'fulfilled' && result.value) {
-      extractions.push(...result.value);
+      extractions.push(...result.value.map(notesAsExceptions));
     } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they
       // have already paid to extract.
@@ -174,8 +270,14 @@ export async function extractEsgCaseEntities(
 
   if (extractions.length === 0) return null;
 
-  const resolved = resolveCaseEntities(extractions, {
+  // Each bill is its own site × month figure, never a rival answer to every
+  // other bill. Only the resolution sees the rows; the extractions handed back
+  // keep the bill's own fields, which is what the user reads per document.
+  const forResolution = extractions.map(billAsMonthlyRows);
+  const resolved = resolveCaseEntities(forResolution, {
     allFiles: inputs.map((input) => input.filename),
+    // Registers from different sheets are halves of one record, not rival answers.
+    additiveFields: ESG_REGISTER_FIELDS,
   });
 
   // Declared table first, one semantic pass over what it did not cover, then
@@ -183,7 +285,7 @@ export async function extractEsgCaseEntities(
   // because ESG is not the lesser product.
   const calculator = await mapEsgEntitiesToCalculatorWithSemantics(
     resolved,
-    esgFieldElementIndex(extractions),
+    esgFieldElementIndex(forResolution),
     model,
   );
 

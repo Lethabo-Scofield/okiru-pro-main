@@ -23,16 +23,27 @@ export interface FlowSnapshot {
   sector: string;
   subSector: string;
   size: string;
+  /** Financial year-end as yyyy-mm-dd. Optional: snapshots written before it existed lack it. */
+  yearEnd?: string;
   fileNames: string[];
   filedBatchByFile: Record<string, string>;
   /** Library ids of the persisted uploads, so create can still file them under the company. */
   documentIds: string[];
+  /** Library id per file name — the review's preview once the uploads themselves are gone. */
+  documentIdsByName?: Record<string, string>;
   parserCase: ParserCaseLike;
 }
 
-export function readFlowSnapshot(): FlowSnapshot | null {
+/**
+ * `scope` keeps separate runs apart: adding documents to an existing company
+ * (scope `add:<companyId>`) must never restore into — or overwrite — a new
+ * company's create flow in the same tab. No scope is the create flow.
+ */
+const keyFor = (scope?: string) => (scope ? `${FLOW_SNAPSHOT_KEY}:${scope}` : FLOW_SNAPSHOT_KEY);
+
+export function readFlowSnapshot(scope?: string): FlowSnapshot | null {
   try {
-    const raw = sessionStorage.getItem(FLOW_SNAPSHOT_KEY);
+    const raw = sessionStorage.getItem(keyFor(scope));
     if (!raw) return null;
     const snap = JSON.parse(raw) as FlowSnapshot;
     return snap && typeof snap === "object" && snap.parserCase ? snap : null;
@@ -41,18 +52,18 @@ export function readFlowSnapshot(): FlowSnapshot | null {
   }
 }
 
-export function writeFlowSnapshot(snapshot: FlowSnapshot): void {
+export function writeFlowSnapshot(snapshot: FlowSnapshot, scope?: string): void {
   try {
-    sessionStorage.setItem(FLOW_SNAPSHOT_KEY, JSON.stringify(snapshot));
+    sessionStorage.setItem(keyFor(scope), JSON.stringify(snapshot));
   } catch {
     // Quota or private mode. The parser runs are still in the document
     // library; losing only the convenience restore is the acceptable failure.
   }
 }
 
-export function clearFlowSnapshot(): void {
+export function clearFlowSnapshot(scope?: string): void {
   try {
-    sessionStorage.removeItem(FLOW_SNAPSHOT_KEY);
+    sessionStorage.removeItem(keyFor(scope));
   } catch {
     // ignore
   }

@@ -10,19 +10,23 @@ import { ESG_SECTION_IDS } from "../src/lib/esgSections";
 import { validateEsgWorkbookForSubmit } from "../src/lib/esgValidation";
 import { buildEsgWorkbookXlsx } from "../src/lib/esgWorkbookExport";
 import { buildEsgWorkbookTemplateXlsx } from "../src/lib/esg/esgWorkbookTemplate";
+import { esgTemplatePart } from "../src/lib/esg/esgTemplateParts";
 import { buildEsgAssistantContext } from "../src/lib/esg/esgAssistantContext";
 import OpenAI, { AzureOpenAI } from "openai";
 import { createChatCompletion } from "./openaiCompat";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
 import { computeEsgScorecard } from "../EsgToolkit/src/lib/calculators";
-import { buildGoldenSections } from "./esgGoldenFixture";
+import { ESG_APPLICABILITY_SECTION } from "../EsgToolkit/src/lib/calculators/esgApplicability";
+import { ESG_PROVENANCE_SECTION } from "../src/lib/esg/esgProvenance";
 import {
   applyEsgWorkbookReopen,
   applyEsgWorkbookSubmit,
   canReopenEsgWorkbook,
 } from "./esgWorkbookLock";
 import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
+import { mergeImportIntoSection, type EsgRegisterMergeOutcome } from "../src/lib/esg/esgImportMerge";
 import { answerEsgQuestionWithAi } from "./esgKnowledge";
+import type { EsgWorkbookData as EsgScorableWorkbook } from "../src/lib/esg/esgWorkbookStorage";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -36,7 +40,17 @@ export type EsgWorkbookData = {
   submittedAt?: string | null;
 };
 
-const SECTION_KEYS = ESG_SECTION_IDS;
+/*
+ * The input pages, plus the sections the calculators read that are not input
+ * pages: the company's own declarations of what does not apply to it
+ * (`esgApplicability.ts`) and its net-zero reduction levers (`netZero.ts`).
+ * Refused here, neither could ever be saved, so the scorers' support for them
+ * was unreachable.
+ */
+// `provenance` records which document placed each value (E4); it merges cell
+// by cell through the import confirm like any other section, under the same
+// payload bounds.
+const SECTION_KEYS = [...ESG_SECTION_IDS, ESG_APPLICABILITY_SECTION, "netzero", ESG_PROVENANCE_SECTION];
 
 const esgWorkbookSchema = new mongoose.Schema(
   {
@@ -174,8 +188,20 @@ async function persistEsgWorkbook(wb: EsgWorkbookData): Promise<void> {
  * Deliberately the same shape the client used to send, so `esgKnowledge.ts`
  * needs no change — what moved is WHO produces it.
  */
+/**
+ * The stored workbook as the scorers, the validator, the export and the
+ * assistant take it. An assertion, not a conversion: the write paths admit
+ * only what a cell holds (`cellPayloadProblem`: text, a number, true/false,
+ * nothing) plus the `_rows` register array, which its readers cast for
+ * themselves. Filtering here would drop `_rows` and change every register's
+ * score.
+ */
+function scorable(workbook: EsgWorkbookData): EsgScorableWorkbook {
+  return workbook as unknown as EsgScorableWorkbook;
+}
+
 function buildRuntimeSnapshot(workbook: EsgWorkbookData): unknown {
-  const scorecard = computeEsgScorecard(workbook);
+  const scorecard = computeEsgScorecard(scorable(workbook));
   if (!scorecard) return {};
   const pillar = (p: { score: number; max: number; percent: number }) => ({
     score: p.score,
@@ -339,10 +365,20 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     }
   }
 
+  /**
+   * The template, whole or one part of it: `?part=` names a pillar
+   * (`environmental`) or one sheet's section (`fleet`). No `part` is the whole
+   * workbook, under the file name it always had.
+   */
   app.get("/api/esg/workbook/template", requireAuth, async (req, res) => {
     if (!requireEsgAccess(req, res)) return;
-    const buf = buildEsgWorkbookTemplateXlsx();
-    res.setHeader("Content-Disposition", 'attachment; filename="esg-bulk-input-template.xlsx"');
+    const part = esgTemplatePart(typeof req.query.part === "string" ? req.query.part : undefined);
+    if (!part) {
+      return res.status(400).json({ error: "Unknown template part" });
+    }
+    const buf = buildEsgWorkbookTemplateXlsx(part.id);
+    // The name comes from the parts list, never from the request.
+    res.setHeader("Content-Disposition", `attachment; filename="${part.fileName}"`);
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -398,7 +434,7 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     if (wb.submittedAt) {
       return res.json({ ok: true, submittedAt: wb.submittedAt });
     }
-    const validation = validateEsgWorkbookForSubmit(wb);
+    const validation = validateEsgWorkbookForSubmit(scorable(wb));
     if (!validation.ok) {
       return res.status(400).json({
         error: "Workbook validation failed",
@@ -444,14 +480,14 @@ export function registerEsgWorkbookRoutes(app: Express): void {
   app.get("/api/esg/workbook/:companyId/scores", requireAuth, async (req, res) => {
     const wb = await authorizeEsgWorkbook(req, res);
     if (!wb) return;
-    const scores = computeEsgScores(wb);
+    const scores = computeEsgScores(scorable(wb));
     res.json({ companyId: wb.companyId, scores });
   });
 
   app.get("/api/esg/workbook/:companyId/export", requireAuth, async (req, res) => {
     const wb = await authorizeEsgWorkbook(req, res);
     if (!wb) return;
-    const buf = buildEsgWorkbookXlsx(wb);
+    const buf = buildEsgWorkbookXlsx(scorable(wb));
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="esg-workbook-${wb.companyId}.xlsx"`,
@@ -463,32 +499,9 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     res.send(buf);
   });
 
-  app.post("/api/esg/workbook/:companyId/seed-demo", requireAuth, async (req, res) => {
-    const wb = await authorizeEsgWorkbook(req, res);
-    if (!wb) return;
-    if (wb.submittedAt) {
-      return res.status(423).json({ error: "Workbook is submitted and locked" });
-    }
-    // Sample seeding REPLACES every section, so it is admin-only and needs an
-    // explicit confirm — a stray click must never wipe a client's entered data.
-    const role = (req as any).user?.role;
-    if (role !== "admin" && role !== "super_admin") {
-      return res.status(403).json({ error: "Sample data can only be loaded by an administrator" });
-    }
-    if ((req.body as { confirm?: boolean } | undefined)?.confirm !== true) {
-      return res.status(400).json({
-        error: "Loading sample data replaces every section of this workbook. Resend with confirm: true.",
-      });
-    }
-    try {
-      wb.sections = buildGoldenSections();
-      await persistEsgWorkbook(wb);
-      res.json({ ok: true, sectionCount: Object.keys(wb.sections).length, updatedAt: wb.updatedAt });
-    } catch (err) {
-      logger.error("Failed to seed ESG demo", err);
-      res.status(500).json({ error: "Failed to seed demo workbook" });
-    }
-  });
+  // There is no "load sample data" route: it replaced every section of a real
+  // company's workbook with another client's figures. Sample workbooks are
+  // test fixtures only (src/lib/esg/__fixtures__/esgSampleSections.ts).
 
   app.post(
     "/api/esg/workbook/:companyId/import",
@@ -510,7 +523,13 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       }
       try {
         let buffer: Buffer | null = null;
-        const body = req.body as { fileBase64?: string; confirm?: boolean; sections?: Record<string, { cells: Record<string, unknown> }> };
+        const body = req.body as {
+          fileBase64?: string;
+          confirm?: boolean;
+          sections?: Record<string, { cells: Record<string, unknown> }>;
+          /** Registers the person chose to replace with the file's rows (the preview asks, register by register). */
+          replace?: unknown;
+        };
         if (body?.confirm && body.sections) {
           // Confirm replays cells the CLIENT sends, not the file we parsed, so
           // it is a write path in its own right and carries the same bounds as
@@ -531,11 +550,26 @@ export function registerEsgWorkbookRoutes(app: Express): void {
             }
             accepted.push([sectionKey, cells]);
           }
+          // MERGE by default. This endpoint used to set each section to
+          // exactly what the import carried, so a document that placed two
+          // figures erased every figure already captured beside them, and an
+          // empty register sheet in a template wiped the register. See
+          // esgImportMerge.ts for the rules. A register is replaced only when
+          // the person chose that for it in the preview — never by default,
+          // and never with an empty sheet.
+          const replace = new Set(
+            Array.isArray(body.replace) ? body.replace.filter((id): id is string => typeof id === "string") : [],
+          );
+          const registers: EsgRegisterMergeOutcome[] = [];
           for (const [sectionKey, cells] of accepted) {
-            wb.sections[sectionKey] = { cells };
+            const merged = mergeImportIntoSection(sectionKey, wb.sections[sectionKey]?.cells, cells, {
+              replaceRows: replace.has(sectionKey),
+            });
+            wb.sections[sectionKey] = { cells: merged.cells };
+            if (merged.register) registers.push(merged.register);
           }
           await persistEsgWorkbook(wb);
-          return res.json({ ok: true, updatedAt: wb.updatedAt });
+          return res.json({ ok: true, updatedAt: wb.updatedAt, registers });
         }
         if (Buffer.isBuffer(req.body) && req.body.length > 0) {
           buffer = req.body;
@@ -600,7 +634,7 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       typeof body?.activeSectionId === "string" ? body.activeSectionId : undefined;
 
     try {
-      const grounding = buildEsgAssistantContext(wb, activeSectionId);
+      const grounding = buildEsgAssistantContext(scorable(wb), activeSectionId);
       const system = [
         "You are the Okiru ESG workbook assistant. You help the user understand and complete ONE company's ESG workbook.",
         "The grounding document below is your ONLY source of truth about this workbook. Never invent figures, rows or scores; when the document does not contain an answer, say exactly what is missing and which section would hold it.",

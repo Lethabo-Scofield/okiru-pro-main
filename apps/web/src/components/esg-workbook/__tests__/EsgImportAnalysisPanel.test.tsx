@@ -11,9 +11,10 @@
  */
 import { describe, expect, it } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { EsgImportAnalysisPanel } from "../EsgImportAnalysisPanel";
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
+import { mergeEsgSectionCells } from "@/lib/esg/esgGridRows";
 import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
 
 const preview = (sections: Record<string, Record<string, unknown>>): EsgImportPreview => ({
@@ -30,10 +31,10 @@ describe("EsgImportAnalysisPanel", () => {
   it("shows a replacement as before AND after, not as a count", () => {
     // "300 cells changed" is not a decision. "1,240 → 1,310" is.
     const analysis = analyseEsgImport(
-      preview({ fleet: { B4: 1310 } }),
-      workbook({ fleet: { B4: 1240 } }),
+      preview({ "e-data": { B4: 1310 } }),
+      workbook({ "e-data": { B4: 1240 } }),
     );
-    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ fleet: "Fleet" }} />);
+    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ "e-data": "Environmental" }} />);
 
     const block = screen.getByTestId("esg-import-overwrites");
     expect(block).toHaveTextContent("1240");
@@ -77,11 +78,64 @@ describe("EsgImportAnalysisPanel", () => {
 
   it("never uses colour as the only signal — each warning carries words", () => {
     const analysis = analyseEsgImport(
-      preview({ fleet: { B4: 1310, B5: "JR45DZGP", B6: "JR45DZGP" } }),
-      workbook({ fleet: { B4: 1240 } }),
+      preview({ "e-data": { B4: 1310, B5: "JR45DZGP", B6: "JR45DZGP" } }),
+      workbook({ "e-data": { B4: 1240 } }),
     );
-    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ fleet: "Fleet" }} />);
+    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ "e-data": "Environmental" }} />);
     expect(screen.getByTestId("esg-import-overwrites")).toHaveTextContent(/replaced/i);
     expect(screen.getByTestId("esg-import-duplicates")).toHaveTextContent(/more than once/i);
+  });
+
+  it("says what happens to a register in words: rows updated and added, none removed", () => {
+    const fleetRow = (reg: string, km: number) => ({ A: reg, I: km });
+    const cells = (rows: Array<{ A: string; I: number }>) => {
+      const out: Record<string, unknown> = { _row_count: rows.length };
+      rows.forEach((r, i) => {
+        out[`A${4 + i}`] = r.A;
+        out[`I${4 + i}`] = r.I;
+      });
+      return out;
+    };
+    const analysis = analyseEsgImport(
+      preview({ fleet: cells([fleetRow("JR45DZGP", 1300), fleetRow("NEW001GP", 400)]) }),
+      workbook({ fleet: cells([fleetRow("JR45DZGP", 1200), fleetRow("KX11AAGP", 900)]) }),
+    );
+    render(<EsgImportAnalysisPanel analysis={analysis} sectionLabels={{ fleet: "Fleet" }} />);
+    const block = screen.getByTestId("esg-import-registers");
+    expect(block).toHaveTextContent(/none removed/i);
+    expect(block).toHaveTextContent("Fleet: 1 row added, 1 updated (2 already there)");
+  });
+
+  it("offers to replace a register that already has rows, and says plainly what a replace removes", () => {
+    const rows = (regs: string[]) =>
+      mergeEsgSectionCells("fleet", regs.map((reg, i) => ({ _id: String(i), reg })), {});
+    const imported = preview({ fleet: rows(["AA11BBGP"]) });
+    const current = workbook({ fleet: rows(["AA11BBGP", "CC22DDGP", "EE33FFGP"]) });
+    const choices: Array<[string, boolean]> = [];
+
+    const { unmount } = render(
+      <EsgImportAnalysisPanel
+        analysis={analyseEsgImport(imported, current)}
+        sectionLabels={{ fleet: "Fleet" }}
+        onReplaceChange={(id, on) => choices.push([id, on])}
+      />,
+    );
+    const choose = screen.getByLabelText("How to import Fleet");
+    expect(choose).toHaveValue("merge");
+    fireEvent.change(choose, { target: { value: "replace" } });
+    expect(choices).toEqual([["fleet", true]]);
+    unmount();
+
+    render(
+      <EsgImportAnalysisPanel
+        analysis={analyseEsgImport(imported, current, new Set(["fleet"]))}
+        sectionLabels={{ fleet: "Fleet" }}
+        replace={new Set(["fleet"])}
+        onReplaceChange={() => {}}
+      />,
+    );
+    expect(screen.getByTestId("esg-import-register-fleet")).toHaveTextContent(
+      "Fleet: replaced with the file's 1 row — the 3 rows in the workbook now go",
+    );
   });
 });

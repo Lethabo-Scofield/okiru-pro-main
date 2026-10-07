@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import fs from "fs";
 import path from "path";
 import { createLogger } from "./logger";
+import { clarityProjectId, withClarity } from "./clarity";
 
 const logger = createLogger("Static");
 
@@ -44,8 +45,17 @@ export function serveStatic(app: Express) {
     fallthrough: false,
   }));
 
-  // Serve remaining static files
-  app.use(express.static(distPath));
+  // The page every route serves, read once. Clarity's loader is added here when
+  // CLARITY_PROJECT_ID is set, so switching it on is a restart, not a rebuild.
+  const indexHtml = withClarity(
+    fs.readFileSync(path.join(distPath, "index.html"), "utf8"),
+    process.env.CLARITY_PROJECT_ID,
+  );
+  logger.info("Clarity", { enabled: clarityProjectId(process.env.CLARITY_PROJECT_ID) !== null });
+
+  // Serve remaining static files. `index: false` so "/" reaches the handler
+  // below and gets the same page as every other route, not the raw file.
+  app.use(express.static(distPath, { index: false }));
 
   // SPA fallback - any unmatched route returns index.html
   // Note: Express 5 requires named wildcard - "/*path" not "*"
@@ -56,6 +66,9 @@ export function serveStatic(app: Express) {
       res.status(404).end();
       return;
     }
-    res.sendFile(path.join(distPath!, "index.html"));
+    // Revalidate every time: the page names the current hashed bundle, and a
+    // cached copy after a deploy points at chunks that no longer exist.
+    res.set("Cache-Control", "no-cache");
+    res.type("html").send(indexHtml);
   });
 }

@@ -4,6 +4,7 @@
  * Pipeline: parse → map sheets → map columns → normalize types → structure → validate
  */
 import * as XLSX from "xlsx";
+import { boundWorkbookSheets } from "./sheetBounds";
 import { v4 as uuidv4 } from "uuid";
 import {
   SECTIONS,
@@ -22,6 +23,7 @@ import {
   type WorkbookValidationIssue,
 } from "@/components/workbook/workbookValidation";
 import { BOOLEAN_TRUE, BOOLEAN_FALSE } from "@/lib/tabularNormalize";
+import { headerIsWordsOfAlias } from "@/lib/columnMatch";
 
 export type WorkbookRow = Record<string, unknown> & { _id: string };
 export type WorkbookSectionPayload = { rows: WorkbookRow[]; meta?: Record<string, unknown> };
@@ -151,7 +153,9 @@ function mapHeaderToKey(header: string, columns: ColumnDef[], excludeKeys?: Set<
     for (const alias of buildColumnAliases(col)) {
       const a = norm(alias);
       if (!a) continue;
-      if (h.includes(a) || a.includes(h)) return col.key;
+      // A header inside an alias counts only as whole words: "Age" is not
+      // "Wages" (see headerIsWordsOfAlias).
+      if (h.includes(a) || (a.includes(h) && headerIsWordsOfAlias(header, alias))) return col.key;
     }
   }
   return null;
@@ -878,6 +882,7 @@ export function readSectionSheet(
   opts: { sectionKey?: string; sheetName?: string; sheetHints?: string[] } = {},
 ): SectionSheetRead {
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const sheetNames = wb.SheetNames ?? [];
   // `sheetHints` names the sheets for a register that is NOT a workbook
   // section. YES is the case: its sheet holds a staff register whose columns
@@ -949,6 +954,7 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const sections = emptySections();
 
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   for (const sheetName of wb.SheetNames) {
     const sectionKey = matchSheetName(sheetName);
     if (!sectionKey) {
@@ -1125,6 +1131,7 @@ export async function normalizeExcelFileWithAi(
   const base = normalizeExcelBuffer(buffer);
 
   const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const unmapped = wb.SheetNames.filter((n) => !base.mappedSheets[n]);
   if (unmapped.length === 0) return base;
 

@@ -11,6 +11,7 @@ import {
 import { esgCreateHref, esgToolkitHref, setEsgActiveCompany } from "@/lib/esgRoutes";
 import { fetchEsgWorkbook, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { EsgReportExportPanel } from "@/components/esg/EsgReportExportPanel";
+import { EsgCoreValuesPanel } from "@/components/esg/EsgCoreValuesPanel";
 import { computeEsgScorecard } from "../../EsgToolkit/src/lib/calculators";
 import "@/styles/esg-glass.css";
 
@@ -213,6 +214,9 @@ export default function EsgScoreSummary() {
                   </p>
                 </div>
               ) : null}
+
+              {/* The figures a client signs off, each traceable to its documents (E4). */}
+              <EsgCoreValuesPanel workbook={workbook} />
 
               <EsgReportExportPanel
                 workbook={workbook}

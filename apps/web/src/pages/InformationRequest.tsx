@@ -95,6 +95,110 @@ function buildSectionSummary(sections: WorkbookSectionsInput) {
     }))
     .filter((s) => s.rowCount > 0 || s.fieldCount > 0);
 }
+
+/* Light mode only: in dark mode the flow keeps its own dark design and the shell's dark
+   rules, instead of being forced white. */
+const CREATE_SCORECARD_LIGHT_CSS = `
+  html.light .bbbee-create-light {
+    --ink: #ffffff;
+    --ink-2: rgba(255,255,255,0.9);
+    --ink-3: rgba(255,255,255,0.82);
+    --body: #52525b;
+    --muted: #71717a;
+    --rule: rgba(24,24,27,0.1);
+    --rule-strong: rgba(24,24,27,0.18);
+    color: #18181b;
+  }
+  html.light .bbbee-create-light [class~="text-white"]:not([class*="bg-"]) {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class~="text-[#f2f2f7]"],
+  html.light .bbbee-create-light [class~="text-[#e5e5ea]"] {
+    color: #27272a !important;
+  }
+  html.light .bbbee-create-light [class*="text-amber-100"],
+  html.light .bbbee-create-light [class*="text-amber-200"] {
+    color: #92400e !important;
+  }
+  html.light .bbbee-create-light [class*="text-emerald-200"] {
+    color: #047857 !important;
+  }
+  html.light .bbbee-create-light [class*="border-white/"],
+  html.light .bbbee-create-light [class*="border-white\\["] {
+    border-color: rgba(24,24,27,0.1) !important;
+  }
+  html.light .bbbee-create-light [class*="bg-white/"],
+  html.light .bbbee-create-light [class*="bg-white\\["] {
+    background-color: rgba(24,24,27,0.035) !important;
+  }
+  html.light .bbbee-create-light [class*="bg-[#0"],
+  html.light .bbbee-create-light [class*="bg-[#1"],
+  html.light .bbbee-create-light [class*="bg-[color:var(--ink"] {
+    background-color: rgba(255,255,255,0.88) !important;
+  }
+  html.light .bbbee-create-light [class*="hover:bg-[#222225]"]:hover,
+  html.light .bbbee-create-light [class*="hover:bg-[rgba(255,255,255"]:hover {
+    background-color: #f4f4f5 !important;
+  }
+  html.light .bbbee-create-light [class*="hover:text-white"]:hover {
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light input,
+  html.light .bbbee-create-light select,
+  html.light .bbbee-create-light textarea {
+    background: #ffffff !important;
+    border-color: rgba(24,24,27,0.14) !important;
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light input::placeholder,
+  html.light .bbbee-create-light textarea::placeholder {
+    color: #a1a1aa !important;
+  }
+  html.light .bbbee-create-light option {
+    background: #ffffff !important;
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light button[class*="bg-white"],
+  html.light .bbbee-create-light a[class*="bg-white"] {
+    background-color: #18181b !important;
+    border-color: #18181b !important;
+    color: #ffffff !important;
+  }
+  html.light .bbbee-create-light button[class*="bg-white"]:hover,
+  html.light .bbbee-create-light a[class*="bg-white"]:hover {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+  }
+  html.light .bbbee-create-light .bg-violet-500,
+  html.light .bbbee-create-light [class*="bg-violet-"] {
+    background-color: #18181b !important;
+    color: #ffffff !important;
+    box-shadow: none !important;
+  }
+  html.light .bbbee-create-light .bg-violet-500:hover,
+  html.light .bbbee-create-light [class*="hover:bg-violet-"]:hover {
+    background-color: #000000 !important;
+  }
+  html.light .bbbee-create-light [class*="bg-[#107C41]"] {
+    background-color: #107C41 !important;
+    color: #ffffff !important;
+  }
+  html.light .bbbee-create-light [class*="hover:bg-[#185C37]"]:hover {
+    background-color: #185C37 !important;
+    color: #ffffff !important;
+  }
+  html.light .bbbee-create-light [class*="bg-amber-500"] {
+    background-color: #f59e0b !important;
+    color: #18181b !important;
+  }
+  html.light .bbbee-create-light [class*="shadow-[0_24px_80px"],
+  html.light .bbbee-create-light [class*="shadow-[0_22px_70px"] {
+    box-shadow: 0 24px 70px rgba(24,24,27,0.08) !important;
+  }
+  html.light .bbbee-create-light [class*="ring-white/"] {
+    --tw-ring-color: rgba(24,24,27,0.1) !important;
+  }
+`;
 type SectionData = { rows: Row[]; meta?: Record<string, unknown> };
 type Workbook = {
   companyId: string;
@@ -343,7 +447,7 @@ function SetupShell({
   );
 }
 
-function CompanyPicker({
+export function CompanyPicker({
   onPick,
   onLandEstimate,
   mode = "picker",
@@ -553,7 +657,6 @@ function CompanyPicker({
     sections: WorkbookSectionsInput,
     opts?: {
       importMarker?: unknown;
-      warnCount?: number;
       landOn?: "workbook" | "estimate";
       /** Per-document verdicts from the document flow, shown on the estimate page. */
       verdicts?: unknown;
@@ -630,6 +733,13 @@ function CompanyPicker({
         return false;
       }
       let submitted = false;
+      // Why the submit refused, in the server's words. A refusal used to be
+      // read only as `!ok` and thrown away: the toast said "Workbook imported"
+      // and the document flow went on to the provisional score page, which
+      // read the company before anything had been synced to it and showed 0.
+      // That is how a full evidence pack missing only its year end scored
+      // nothing, with no sign of what to fix.
+      let submitRefusal: string | null = null;
       const submitRes = await fetch(
         `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
         { method: "POST", credentials: "include" },
@@ -641,21 +751,26 @@ function CompanyPicker({
         } catch {
           // Summary page will retry loadClientData.
         }
+      } else {
+        const body = await submitRes.json().catch(() => ({}));
+        submitRefusal = (
+          (typeof body?.error === "string" && body.error) ||
+          `The score could not be calculated (error ${submitRes.status})`
+        ).replace(/[.\s]*$/, ".");
       }
-      const warnCount = opts?.warnCount ?? 0;
-      toast({
-        title: submitted
-          ? "Imported and synced to scorecard"
-          : warnCount > 0
-            ? "Imported with gaps"
-            : "Workbook imported",
-        description: submitted
-          ? companyName
-          : warnCount > 0
-            ? `${warnCount} warning(s) — open workbook and submit when ready.`
-            : `${companyName} — submit workbook to calculate score.`,
-      });
-      if (opts?.landOn === "estimate" && onLandEstimate) {
+      if (submitRefusal) {
+        toast({
+          title: "Workbook saved — score not calculated yet",
+          description: `${submitRefusal} Complete it in the workbook, then submit.`,
+          variant: "destructive",
+        });
+      } else {
+        toast({ title: "Imported and synced to scorecard", description: companyName });
+      }
+      // The estimate page scores what was synced. When nothing was, it can
+      // only show 0 — so a refused submit lands in the workbook, where the
+      // missing field is, instead.
+      if (submitted && opts?.landOn === "estimate" && onLandEstimate) {
         onLandEstimate(c);
       } else {
         onPick(c);
@@ -865,7 +980,6 @@ function CompanyPicker({
               if (!companyName || !sections) return;
               const ok = await createFromSections(companyName, sections, {
                 importMarker: previewResult?.data,
-                warnCount: previewResult?.warnings?.length ?? 0,
               });
               if (ok) {
                 setPreviewOpen(false);
@@ -1050,7 +1164,6 @@ function CompanyPicker({
             if (!companyName || !sections) return;
             const ok = await createFromSections(companyName, sections, {
               importMarker: previewResult?.data,
-              warnCount: previewResult?.warnings?.length ?? 0,
             });
             if (ok) {
               setPreviewOpen(false);
@@ -1317,7 +1430,8 @@ function CompanyPicker({
               `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/submit`,
               { method: "POST", credentials: "include" },
             );
-            console.log('[SCORING-TRACE] POST /api/workbook/submit response:', submitRes.status, submitRes.ok ? await submitRes.clone().json().catch(() => ({})) : await submitRes.text().catch(() => ''));
+            console.log('[SCORING-TRACE] POST /api/workbook/submit response:', submitRes.status, submitRes.ok ? await submitRes.clone().json().catch(() => ({})) : await submitRes.clone().text().catch(() => ''));
+            let submitRefusal: string | null = null;
             if (submitRes.ok) {
               submitted = true;
               try {
@@ -1325,20 +1439,23 @@ function CompanyPicker({
               } catch {
                 // Summary page will retry loadClientData.
               }
+            } else {
+              // Same as createFromSections: say why, not just that it was imported.
+              const body = await submitRes.json().catch(() => ({}));
+              submitRefusal = (
+                (typeof body?.error === "string" && body.error) ||
+                `The score could not be calculated (error ${submitRes.status})`
+              ).replace(/[.\s]*$/, ".");
             }
-            const warnCount = previewResult?.warnings?.length ?? 0;
-            toast({
-              title: submitted
-                ? "Imported and synced to scorecard"
-                : warnCount > 0
-                  ? "Imported with gaps"
-                  : "Workbook imported",
-              description: submitted
-                ? companyName
-                : warnCount > 0
-                  ? `${warnCount} warning(s) — open workbook and submit when ready.`
-                  : `${companyName} — submit workbook to calculate score.`,
-            });
+            toast(
+              submitted
+                ? { title: "Imported and synced to scorecard", description: companyName }
+                : {
+                    title: "Workbook saved — score not calculated yet",
+                    description: `${submitRefusal} Complete it in the workbook, then submit.`,
+                    variant: "destructive",
+                  },
+            );
             setPreviewOpen(false);
             setPendingFile(null);
             setPreviewResult(null);
@@ -1582,6 +1699,20 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
   const workbookRef = useRef<Workbook | null>(null);
   const inFlight = useRef(0);
   const { toast } = useToast();
+  /**
+   * Documents added to this company after it was set up. Opened by the toolbar
+   * button, or arriving from the score page's "Add documents" (?addDocuments=1).
+   */
+  const [addingDocuments, setAddingDocuments] = useState(
+    () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("addDocuments") === "1",
+  );
+  const [merging, setMerging] = useState(false);
+  const [mergeReport, setMergeReport] = useState<{
+    added: Record<string, number>;
+    filled: number;
+    conflicts: Array<{ section: string; field: string; kept: unknown; offered: unknown; row?: string }>;
+    blocked: string[];
+  } | null>(null);
 
   useEffect(() => {
     workbookRef.current = workbook;
@@ -1983,6 +2114,72 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
     void syncWorkbookToScorecard({ quiet: true, skipFlush: true });
   }, [companyId, flushAllPending, waitForInFlight, saveError, navigate, syncWorkbookToScorecard, toast]);
 
+  /**
+   * Documents added after the company exists: merged, never replaced. Blanks
+   * take the documents' values; nothing already in the workbook is
+   * overwritten or deleted, and every disagreement comes back in the report so
+   * the user sees both figures. Then the score re-syncs.
+   */
+  const mergeDocuments = useCallback(
+    async (
+      sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>,
+      documentIds: string[] = [],
+    ) => {
+      setMerging(true);
+      try {
+        await flushAllPending();
+        const res = await fetch(`${API_BASE}/api/workbook/${encodeURIComponent(companyId)}/merge-documents`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sections }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          toast({
+            title: "Couldn't add the documents",
+            description: body?.error ?? `The workbook was left exactly as it was (error ${res.status}).`,
+            variant: "destructive",
+          });
+          return;
+        }
+        // File the uploads under this company, as creating one does.
+        void Promise.allSettled(
+          documentIds.map((documentId) =>
+            fetch(`/api/parser-documents/${encodeURIComponent(documentId)}`, {
+              method: "PATCH",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ entityId: companyId }),
+            }),
+          ),
+        );
+        const fresh = await fetch(`${API_BASE}/api/workbook/${encodeURIComponent(companyId)}`, { credentials: "include" })
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        if (fresh) {
+          workbookRef.current = fresh;
+          setWorkbook(fresh);
+          setSavedAt(fresh.updatedAt);
+        }
+        const report = body.report as NonNullable<typeof mergeReport>;
+        setMergeReport(report);
+        setAddingDocuments(false);
+        const added = Object.values(report?.added ?? {}).reduce((n, k) => n + k, 0);
+        toast({
+          title: "Documents added to the workbook",
+          description: `${added} row${added === 1 ? "" : "s"} added · ${report?.filled ?? 0} blank${report?.filled === 1 ? "" : "s"} filled${
+            report?.conflicts?.length ? ` · ${report.conflicts.length} disagreement${report.conflicts.length === 1 ? "" : "s"} kept as they were` : ""
+          }`,
+        });
+        void syncWorkbookToScorecard({ quiet: true, skipFlush: true });
+      } finally {
+        setMerging(false);
+      }
+    },
+    [companyId, flushAllPending, syncWorkbookToScorecard, toast],
+  );
+
   const handleExcelImport = useCallback(
     async (file: File) => {
       try {
@@ -2322,6 +2519,18 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           >
             <Download className="h-3.5 w-3.5" /> Download Excel
           </button>
+          {/* A document that arrives after the company was set up — the
+              forgotten payroll, the late certificate. Read on its own and
+              merged in; nothing already here is overwritten. */}
+          <button
+            type="button"
+            onClick={() => setAddingDocuments(true)}
+            disabled={loading || !workbook || addingDocuments}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[color:var(--ink-3)] hover:bg-[rgba(255,255,255,0.06)] text-[12px] text-[color:var(--body)] smooth press-sm disabled:opacity-50"
+            data-testid="button-add-documents"
+          >
+            <Upload className="h-3.5 w-3.5" /> Add documents
+          </button>
           <ExcelImportButton onImport={handleExcelImport} disabled={loading || !workbook} />
           <button
             onClick={() => void handleContinueToSummary()}
@@ -2337,6 +2546,79 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
           )}
         </div>
       </div>
+
+      {addingDocuments && workbook && (() => {
+        const info = (workbook.sections["company-information"]?.meta ?? {}) as Record<string, unknown>;
+        return (
+          <div className="mb-6 rounded-[24px] border border-violet-300/20 bg-[#17151d] p-4" data-testid="add-documents-panel">
+            <div className="mb-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setAddingDocuments(false)}
+                disabled={merging}
+                className="text-[12px] text-[color:var(--body)] hover:text-white disabled:opacity-50"
+                data-testid="button-cancel-add-documents"
+              >
+                Close
+              </button>
+            </div>
+            <DocumentUploadStart
+              existingCompany={{
+                id: companyId,
+                name: company.name,
+                sectorCode: String(info.industrySector ?? ""),
+                scorecardType: String(info.scorecardType ?? ""),
+                financialYearEnd: String(info.financialYearEnd ?? ""),
+              }}
+              creating={merging}
+              onCreate={async (_name, sections, extras) => {
+                await mergeDocuments(sections, extras?.documentIds ?? []);
+              }}
+            />
+          </div>
+        );
+      })()}
+
+      {/* What adding documents did — including every place a document
+          disagreed with the workbook, where the workbook's value was kept. */}
+      {mergeReport && (mergeReport.conflicts.length > 0 || mergeReport.blocked.length > 0) && (
+        <div className="mb-6 rounded-2xl border border-amber-400/25 bg-amber-500/[0.06] p-4" data-testid="merge-report">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[13px] font-semibold text-white">
+                {mergeReport.conflicts.length} place{mergeReport.conflicts.length === 1 ? "" : "s"} where the new documents
+                disagree with the workbook
+              </p>
+              <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
+                We kept what was already in the workbook. Change any of these yourself if the document is right.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMergeReport(null)}
+              className="shrink-0 text-[12px] text-[color:var(--body)] hover:text-white"
+            >
+              Dismiss
+            </button>
+          </div>
+          <ul className="mt-2 space-y-1">
+            {mergeReport.conflicts.slice(0, 12).map((c, i) => (
+              <li key={i} className="text-[12px] leading-5 text-[color:var(--body)]">
+                <span className="text-amber-200/90">{c.row ? `${c.row} — ` : ""}{c.field}:</span> workbook says{" "}
+                <span className="text-white">{String(c.kept)}</span>, document says <span className="text-white">{String(c.offered)}</span>
+              </li>
+            ))}
+            {mergeReport.conflicts.length > 12 && (
+              <li className="text-[11.5px] text-[color:var(--muted)]">…and {mergeReport.conflicts.length - 12} more</li>
+            )}
+            {mergeReport.blocked.length > 0 && (
+              <li className="text-[12px] text-[color:var(--body)]">
+                Not added — you don't have edit access to: {mergeReport.blocked.join(", ")}.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
 
       {/* The AI reasoning surface: what was read, grounded fills to confirm,
           conflicts to decide, missing fields grouped into single decisions.
@@ -2692,7 +2974,8 @@ export default function InformationRequest() {
   };
 
   return (
-    <div className="text-white">
+    <div className={isCreateScorecardFlow ? "bbbee-create-light text-white" : "text-white"}>
+      {isCreateScorecardFlow && <style>{CREATE_SCORECARD_LIGHT_CSS}</style>}
 
       <main className={isCreateScorecardFlow && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
         {/* The flow states its own step ("Add your documents"). A second,

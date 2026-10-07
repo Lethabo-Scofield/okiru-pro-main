@@ -21,6 +21,7 @@
 import * as XLSX from 'xlsx';
 import { dittoFill, mainColumnRegion } from './sheetRegions.js';
 import { sheetMatrix } from './sheetCellValues.js';
+import { boundWorkbookSheets } from './sheetBounds.js';
 
 export interface SheetDocument {
   /** Sheet name, verbatim. */
@@ -31,6 +32,60 @@ export interface SheetDocument {
   markdown: string;
   /** Flat text for the deterministic path. */
   text: string;
+  /**
+   * The sheet's cells as laid out, trailing blanks trimmed — for readers that
+   * need the layout itself (a block per measure, months across a row), which
+   * header-keyed rows cannot express. Omitted for very large sheets.
+   */
+  matrix?: unknown[][];
+  /** Hidden or very hidden in the workbook. */
+  hidden?: boolean;
+}
+
+/** Above this many rows a sheet is a register, not a layout to read cell by cell. */
+const MAX_MATRIX_ROWS = 600;
+const MAX_MATRIX_COLS = 80;
+
+/** The matrix without its trailing blank rows and columns, or undefined when too large. */
+function boundedMatrix(matrix: unknown[][]): unknown[][] | undefined {
+  const filled = (c: unknown) => c !== null && c !== undefined && String(c).trim() !== '';
+  let rows = matrix.length;
+  while (rows > 0 && !(matrix[rows - 1] ?? []).some(filled)) rows -= 1;
+  if (rows === 0 || rows > MAX_MATRIX_ROWS) return undefined;
+  let cols = 0;
+  for (let r = 0; r < rows; r += 1) {
+    const row = matrix[r] ?? [];
+    for (let c = row.length - 1; c >= cols; c -= 1) {
+      if (filled(row[c])) {
+        cols = c + 1;
+        break;
+      }
+    }
+  }
+  if (cols > MAX_MATRIX_COLS) return undefined;
+  return matrix.slice(0, rows).map((row) => row.slice(0, cols));
+}
+
+/**
+ * Two columns under one label ("Fuel" | "Fuel" beneath "Internal" | "External")
+ * collapsed into one key, the second silently overwriting the first. Name each
+ * duplicate by the label above it — the other half of a two-row header — and
+ * by its position when there is none.
+ */
+function distinctHeaders(labels: string[], above: unknown[]): string[] {
+  const count = new Map<string, number>();
+  for (const label of labels) count.set(label, (count.get(label) ?? 0) + 1);
+  const named = labels.map((label, i) => {
+    if ((count.get(label) ?? 0) < 2) return label;
+    const parent = String(above[i] ?? '').replace(/\s+/g, ' ').trim();
+    return parent ? `${parent} ${label}` : label;
+  });
+  const seen = new Map<string, number>();
+  return named.map((label) => {
+    const n = (seen.get(label) ?? 0) + 1;
+    seen.set(label, n);
+    return n === 1 ? label : `${label} (${n})`;
+  });
 }
 
 /** Sheets that never carry scoreable evidence — instructions, legends, lookups. */
@@ -126,23 +181,22 @@ function findHeaderRow(matrix: unknown[][]): number {
  *     fragment. Text columns inherit; numeric/date columns never do, so the
  *     event's cost is counted once, on the row that states it.
  */
-function sheetRowsWithHeader(sheet: XLSX.WorkSheet, maxRows: number): Array<Record<string, unknown>> {
-  // Format-aware: a cell displaying `32%` must not reach the model as `0.32`.
-  // See sheetCellValues.ts — losing the percent format is unrecoverable
-  // downstream and forces the mapping layer to guess the unit.
-  const matrix = sheetMatrix(sheet);
+function sheetRowsWithHeader(matrix: unknown[][], maxRows: number): Array<Record<string, unknown>> {
   if (matrix.length === 0) return [];
 
   const asText = matrix.map((row) => row.map((c) => String(c ?? '')));
-  const region = mainColumnRegion(asText) ?? { start: 0, end: Math.max(0, ...matrix.map((r) => r.length)) - 1 };
+  const region = mainColumnRegion(asText) ?? { start: 0, end: matrix.reduce((w, r) => Math.max(w, r.length), 0) - 1 }; // not Math.max(...rows): spreading every row as an argument overflows the stack past ~120k rows
   const inRegion = <T>(row: T[]): T[] => row.slice(region.start, region.end + 1);
   const regionMatrix = matrix.map(inRegion);
 
   const headerIdx = findHeaderRow(regionMatrix);
-  const rawHeaders = (regionMatrix[headerIdx] ?? []).map((c, i) => {
-    const label = String(c ?? '').replace(/\s+/g, ' ').trim();
-    return label || `col_${i}`;
-  });
+  const rawHeaders = distinctHeaders(
+    (regionMatrix[headerIdx] ?? []).map((c, i) => {
+      const label = String(c ?? '').replace(/\s+/g, ' ').trim();
+      return label || `col_${i}`;
+    }),
+    headerIdx > 0 ? regionMatrix[headerIdx - 1] ?? [] : [],
+  );
   const width = rawHeaders.length;
 
   // Ditto-fill on the TEXT projection, then read typed values back from the
@@ -220,6 +274,9 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
   } catch {
     return [];
   }
+  // A sheet's declared size is a claim, not a fact (sheetBounds.ts): checked
+  // before sheetMatrix builds a row for every cell the file claims.
+  boundWorkbookSheets(workbook);
 
   const documents: SheetDocument[] = [];
   for (const sheetName of workbook.SheetNames) {
@@ -228,16 +285,24 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
     const sheet = workbook.Sheets[sheetName];
     if (!sheet) continue;
 
+    // Format-aware: a cell displaying `32%` must not reach the model as `0.32`.
+    // See sheetCellValues.ts — losing the percent format is unrecoverable
+    // downstream and forces the mapping layer to guess the unit.
+    const matrix = sheetMatrix(sheet);
+
     // Header-aware: skip the banner/legend rows and key data by the REAL column
     // headers, so the markdown the model reads has meaningful columns.
-    const rows = sheetRowsWithHeader(sheet, maxRows).filter(rowHasContent);
+    const rows = sheetRowsWithHeader(matrix, maxRows).filter(rowHasContent);
     if (rows.length < minContent) continue;
 
+    const visibility = workbook.Workbook?.Sheets?.find((entry) => entry.name === sheetName)?.Hidden ?? 0;
     documents.push({
       sheetName,
       rows,
       markdown: sheetToMarkdown(sheetName, rows),
       text: sheetToText(sheetName, rows),
+      matrix: boundedMatrix(matrix),
+      hidden: visibility !== 0,
     });
   }
 

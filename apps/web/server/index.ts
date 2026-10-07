@@ -11,6 +11,8 @@ import { connectDB } from "./db";
 import { createLogger, requestContext } from "./logger";
 import { apiCeilingLimiter } from "./rateLimit";
 import { startAuditRetentionJob } from "./auditRetention";
+import { startFeedbackNotifier } from "./feedbackNotifier";
+import { startExtractionRefundSweep } from "./extractionRefunds";
 import crypto from 'crypto';
 
 const logger = createLogger("WebServer");
@@ -40,10 +42,16 @@ app.use(helmet({
     ? {
         useDefaults: true,
         directives: {
-          scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com"],
+          // clarity.ms: Microsoft Clarity's loader (www.) and recorder (scripts.),
+          // present only when CLARITY_PROJECT_ID is set — see server/clarity.ts.
+          scriptSrc: ["'self'", "'unsafe-inline'", "https://www.googletagmanager.com", "https://*.clarity.ms"],
           imgSrc: ["'self'", "data:", "blob:", "https:"],
           connectSrc: ["'self'", "https:", "wss:"],
           workerSrc: ["'self'", "blob:"],
+          // The document review previews the user's own upload in an iframe of
+          // a blob: URL. Without this, frame-src fell back to default-src
+          // 'self' and every PDF preview rendered as a blank grey box.
+          frameSrc: ["'self'", "blob:"],
           // Nothing on this site is a frame target, and nothing loads a plugin.
           // Stated explicitly so a future widen of the defaults cannot reopen
           // clickjacking or a <base> injection.
@@ -138,6 +146,12 @@ app.use((req, res, next) => {
 
   // Seals each closed day of the audit trail and enforces the retention period.
   startAuditRetentionJob();
+
+  // Emails feedback the widget saved but nobody has been told about yet.
+  startFeedbackNotifier();
+
+  // Refunds paid runs that delivered nothing and that no upload screen settled.
+  startExtractionRefundSweep();
 
 
   // Session must be mounted BEFORE the proxy so the proxy can read

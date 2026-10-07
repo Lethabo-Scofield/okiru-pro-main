@@ -14,8 +14,10 @@
  *     plausible-looking cell or implying a workbook was filled in.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import EsgDocumentUploadStart from "../EsgDocumentUploadStart";
 
@@ -174,6 +176,8 @@ interface StubOptions {
   authorizeStatus?: number;
   authorizeBody?: Record<string, unknown>;
   frames?: string[];
+  /** What the server answers when the screen asks for its run to be settled. */
+  settlement?: Record<string, unknown>;
 }
 
 function stubFetch(options: StubOptions = {}) {
@@ -198,6 +202,7 @@ function stubFetch(options: StubOptions = {}) {
       sse("result", RESULT_CASE),
       sse("complete", {}),
     ],
+    settlement = { state: "settled", quoteId: "q-esg-1", chargedTokens: 120, refundedTokens: 0, reason: "Every document produced values." },
   } = options;
 
   const calls: string[] = [];
@@ -234,13 +239,23 @@ function stubFetch(options: StubOptions = {}) {
     if (url.includes("/api/parser/esg/resolve-case-files-stream")) {
       return { ok: true, status: 200, body: streamBody(frames), json: async () => ({}) };
     }
+    if (url.includes("/api/tokens/runs/") && url.endsWith("/settle-outcome")) {
+      return { ok: true, status: 200, json: async () => settlement };
+    }
     throw new Error(`Unexpected fetch in test: ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
   return { calls, fetchMock };
 }
 
-type CompleteArg = { injection: { implemented: boolean; patches: unknown; valuesRead: number } };
+type CompleteArg = {
+  injection: {
+    implemented: boolean;
+    patches: Record<string, { cells: Record<string, unknown> } | undefined>;
+    valuesRead: number;
+  };
+  parserCase: { manual_placements?: unknown[] } | null;
+};
 
 function renderUpload(onComplete = vi.fn(async (_result: CompleteArg) => {})) {
   render(
@@ -315,13 +330,18 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // go in. The user is told that in the panel, not by discovering an empty
     // workbook later.
     expect(screen.queryByTestId("esg-mapping-not-implemented")).not.toBeInTheDocument();
-    // And the real values are listed rather than swallowed.
-    expect(screen.getByTestId("esg-unplaced-values")).toHaveTextContent("35332");
+    // And the real values are listed rather than swallowed — beside the
+    // document they came from, in the side-by-side review. A bill that names
+    // its site but no billing period is one question away from its cell.
+    const review = screen.getByTestId("document-review");
+    const question = within(review).getByTestId("review-question");
+    expect(question).toHaveTextContent(/35\s?332/);
+    expect(question).toHaveTextContent("Which month is it for?");
     // The extraction's own exception reaches the user — this is the line an
     // assurance provider will ask about.
-    expect(screen.getByTestId("esg-extraction-exceptions")).toHaveTextContent(
-      /one day outside the reporting period/i,
-    );
+    expect(
+      within(review).getAllByTestId("review-problem").some((p) => /one day outside the reporting period/i.test(p.textContent ?? "")),
+    ).toBe(true);
     // The file's verdict is derived from its extraction, not from a key the
     // ESG parser does not send.
     expect(screen.getByTestId("esg-docs-file-input").closest("div")).toBeTruthy();
@@ -342,6 +362,30 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // Still empty, and now for a stated reason rather than a missing layer.
     expect(handed.injection.patches).toEqual({});
     expect(handed.injection.valuesRead).toBe(2);
+  });
+
+  it("puts a held figure where the person says, and hands it to the workbook", async () => {
+    stubFetch();
+    const onComplete = renderUpload();
+    const user = await stageAFile();
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+
+    const question = await screen.findByTestId("review-question", {}, { timeout: 10_000 });
+    const month = within(question).getByLabelText("Month") as HTMLSelectElement;
+    await user.selectOptions(month, month.options[1].value);
+    await user.click(within(question).getByRole("button", { name: "Put it here" }));
+    expect(await screen.findByText(/Placed by you in/)).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("esg-button-continue-to-workbook"));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    const handed = onComplete.mock.calls[0]![0];
+    const written = Object.entries(handed.injection.patches["e-data"]?.cells ?? {}).filter(([ref]) => /^s2_/.test(ref));
+    expect(written).toEqual([[expect.stringMatching(/^s2_C\d+$/), 35332]]);
+    // The answer travels on the case, so a restored flow keeps it too.
+    expect(handed.parserCase?.manual_placements).toHaveLength(1);
   });
 
   it("names the shortfall instead of failing vaguely when tokens run out", async () => {
@@ -424,6 +468,51 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     expect(calls).toContain("POST /api/parser-documents/doc-1/runs");
   });
 
+  it("archives a workbook read sheet by sheet under the file that was uploaded", async () => {
+    // The parser splits a workbook and names each sheet "File › Sheet". None of
+    // those names is an upload, so every sheet's result used to be dropped: a
+    // paid read of a workbook left nothing in the document library.
+    const base = RESULT_CASE.ai_entities.extractions[0];
+    const sheetCase = {
+      ...RESULT_CASE,
+      documents: [
+        { file_name: "city-power-oct.pdf › Depot A" },
+        { file_name: "city-power-oct.pdf › Depot B" },
+      ],
+      ai_entities: {
+        ...RESULT_CASE.ai_entities,
+        extractions: [
+          { ...base, sourceFile: "city-power-oct.pdf › Depot A" },
+          { ...base, sourceFile: "city-power-oct.pdf › Depot B", exceptions: [] },
+        ],
+      },
+    };
+    const { fetchMock } = stubFetch({ frames: [sse("result", sheetCase), sse("complete", {})] });
+    renderUpload();
+    const user = await stageAFile();
+
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+    await screen.findByTestId("esg-extraction-summary", {}, { timeout: 10_000 });
+
+    const runCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/runs"));
+    expect(runCalls).toHaveLength(1);
+    const body = JSON.parse(String((runCalls[0]![1] as RequestInit).body));
+    expect(body.parserOutput.filename).toBe("city-power-oct.pdf");
+    expect(body.parserOutput.extractions).toHaveLength(2);
+    expect(body.parserOutput.validation.passed).toBe(true);
+  });
+
+  it("keeps waiting while the reader's keep-alive arrives", () => {
+    // The parser sends ": ping" every 15 s while it works. Only named events
+    // used to reset the 10-minute idle timer, so a long workbook timed out mid-read.
+    const src = readFileSync(resolve(__dirname, "../EsgDocumentUploadStart.tsx"), "utf8");
+    expect(src).toMatch(/const \{ done, value \} = await reader\.read\(\);\s*if \(done\) break;\s*resetIdleTimer\(\);/);
+    expect(src).not.toMatch(/those are saved in your document library/);
+  });
+
   it("surfaces a stream error rather than spinning forever", async () => {
     stubFetch({
       frames: [
@@ -443,5 +532,51 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
       "The extraction worker died",
     );
     expect(screen.queryByTestId("esg-extraction-phase")).not.toBeInTheDocument();
+  });
+
+  it("settles the paid run as it ends and shows what came back", async () => {
+    const { calls } = stubFetch({
+      frames: [
+        sse("doc-start", { fileName: "city-power-oct.pdf" }),
+        sse("error", { message: "The extraction worker died" }),
+      ],
+      settlement: {
+        state: "settled",
+        quoteId: "q-esg-1",
+        chargedTokens: 120,
+        refundedTokens: 120,
+        refundedNow: true,
+        balance: 5000,
+        reason: "The run failed, so every token was returned.",
+      },
+    });
+    renderUpload();
+    const user = await stageAFile();
+
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+
+    expect(await screen.findByTestId("esg-refund-notice", {}, { timeout: 10_000 })).toHaveTextContent(
+      "120 tokens were returned to your balance. The run failed, so every token was returned.",
+    );
+    // The screen names the run; the server decides the amount.
+    expect(calls).toContain("POST /api/tokens/runs/q-esg-1/settle-outcome");
+  });
+
+  it("says nothing about refunds when the run delivered and nothing is owed", async () => {
+    const { calls } = stubFetch();
+    renderUpload();
+    const user = await stageAFile();
+
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+
+    await screen.findByTestId("esg-extraction-summary", {}, { timeout: 10_000 });
+    await waitFor(() => expect(calls).toContain("POST /api/tokens/runs/q-esg-1/settle-outcome"));
+    expect(screen.queryByTestId("esg-refund-notice")).not.toBeInTheDocument();
   });
 });

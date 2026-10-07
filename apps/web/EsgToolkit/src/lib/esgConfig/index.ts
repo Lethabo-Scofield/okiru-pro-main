@@ -185,6 +185,35 @@ export function findEsgSectorConfig(
  * Lookup with a safe fallback to Generic. Scoring paths should use this: an
  * unrecognised sector must never silently mean "score them as FMCG".
  */
+/**
+ * The sector a workbook declares, read the way the workbook stores it.
+ *
+ * `Cover!sector` is the app's named key; `Assumptions!B10` is the address an
+ * imported workbook carries it at. Cover is checked first, because a user's
+ * own selection outranks a translation of the sheet.
+ *
+ * Extracted from `ghgInventory.ts`, which was the ONLY consumer of the sector
+ * registry. Every threshold in the three pillar scorers was bound at module
+ * load to `ESG_CONSUMER_GOODS_CONFIG`, so a mining company was scored on an
+ * FMCG distributor's numbers whatever it picked on the cover — and calibrating
+ * a sector would have produced values nothing read.
+ */
+export function esgSectorFromWorkbook(
+  workbook: { sections?: Record<string, { cells?: Record<string, unknown> } | undefined> } | null | undefined,
+): string | undefined {
+  const cover = workbook?.sections?.["company-reporting-setup"]?.cells?.sector;
+  const assumptions = workbook?.sections?.assumptions?.cells?.B10;
+  const raw = cover ?? assumptions;
+  return typeof raw === "string" && raw.trim() !== "" ? raw : undefined;
+}
+
+/** The config a workbook should be scored against. */
+export function esgSectorConfigForWorkbook(
+  workbook: { sections?: Record<string, { cells?: Record<string, unknown> } | undefined> } | null | undefined,
+): EsgSectorConfig {
+  return getEsgSectorConfig(esgSectorFromWorkbook(workbook));
+}
+
 export function getEsgSectorConfig(sector: string | null | undefined): EsgSectorConfig {
   return findEsgSectorConfig(sector) ?? ESG_SECTOR_GENERIC;
 }

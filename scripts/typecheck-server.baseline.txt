@@ -10,7 +10,6 @@
 1	server/bbbeeKnowledge.ts | error TS2802 | Type 'Set<string>' can only be iterated through when using the
 1	server/esgKnowledge.ts | error TS2802 | Type 'Set<string>' can only be iterated through when using the
 2	server/esgWorkbookRoutes.ts | error TS2322 | Type 'string | string[]' is not assignable to type
-4	server/esgWorkbookRoutes.ts | error TS2345 | Argument of type 'import("C:/Users/Administrator/Documents/GitHub/okiru-pro-main/apps/web/server/esgWorkbookRoutes").EsgWorkbookData' is not assignable to param
 3	server/esgWorkbookRoutes.ts | error TS2345 | Argument of type 'string | string[]' is not assignable to parameter of type
 1	server/esgWorkbookRoutes.ts | error TS2538 | Type 'string[]' cannot be used as an index type.
 1	server/excelImportRoute.ts | error TS2339 | Property 'choices' does not exist on type
@@ -77,7 +76,6 @@
 1	Toolkit/src/lib/sectors/fsc-banks.ts | error TS2353 | Object literal may only specify known properties, and 'empowermentFinancing' does not exist in type
 1	Toolkit/src/lib/sectors/fsc-lti.ts | error TS2353 | Object literal may only specify known properties, and 'empowermentFinancing' does not exist in type
 1	Toolkit/src/lib/sectors/fsc-sti.ts | error TS2353 | Object literal may only specify known properties, and 'empowermentFinancing' does not exist in type
-5	Toolkit/src/lib/store.ts | error TS2322 | Type 'boolean | undefined' is not assignable to type
 1	Toolkit/src/lib/store.ts | error TS2339 | Property 'env' does not exist on type
 1	Toolkit/src/lib/store.ts | error TS2339 | Property 'yes' does not exist on type
 1	Toolkit/src/lib/store.ts | error TS2345 | Argument of type '{ id: any; clientId: string; totalEmployees: number; yesHeadcountTarget: number; candidates: { id: string; name: string; race: "African" | "Co
