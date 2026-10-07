@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { boundWorkbookSheets } from './sheetBounds.js';
 import { matchSheetName, matchHeaders, type FieldMatch } from './textSimilarity.js';
 import { extractEntity, extractCurrency, extractPercentage } from './entityExtractor.js';
 
@@ -1538,6 +1539,8 @@ export function parseExcelBuffer(buffer: Buffer, filename: string): ParseResult 
   let workbook: XLSX.WorkBook;
   try {
     workbook = XLSX.read(buffer, { type: 'buffer' });
+    // A file's declared sheet size is checked against its cells before anything walks it.
+    boundWorkbookSheets(workbook);
   } catch (e: unknown) {
     addLog(logs, `Failed to read file: ${e instanceof Error ? e.message : String(e)}`, 'error');
     return {
