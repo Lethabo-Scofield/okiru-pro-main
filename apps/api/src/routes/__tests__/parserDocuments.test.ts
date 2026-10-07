@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
+import crypto from 'crypto';
 import http from 'http';
 import type { AddressInfo } from 'net';
+import { signRunPayload } from '../../security/parserRunAttestation.js';
 
 const documents: any[] = [];
 const runs: any[] = [];
@@ -23,11 +25,12 @@ class Query<T> implements PromiseLike<T> {
 function matches(record: any, filter: Record<string, any>): boolean {
   return Object.entries(filter).every(([key, expected]) => {
     if (key === '$or') return (expected as any[]).some((part) => matches(record, part));
+    const actual = key.split('.').reduce((value, part) => value?.[part], record);
     if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
-      if ('$ne' in expected) return record[key] !== expected.$ne;
+      if ('$ne' in expected) return actual !== expected.$ne;
       return true;
     }
-    return String(record[key] ?? '') === String(expected ?? '');
+    return String(actual ?? '') === String(expected ?? '');
   });
 }
 
@@ -145,7 +148,69 @@ function parserOutput(status: 'passed' | 'review_required' | 'failed' = 'passed'
   };
 }
 
+const SECRET = 'test-parser-internal-secret';
+const CERTIFICATE_BYTES = 'certificate bytes';
+const sha256 = (content: string | Buffer) => crypto.createHash('sha256').update(content).digest('hex');
+
+/** A parser document whose stored bytes are `content`. */
+function parserDocument(id: string, content = CERTIFICATE_BYTES, owner = { userId: 'user-a', organizationId: 'org-a' }) {
+  return { _id: id, filename: 'certificate.pdf', fileType: 'application/pdf', source: 'parser', contentHash: sha256(content), ...owner };
+}
+
+/** A value the model or the agent read, as the parser's record carries it. */
+function aiValue(over: Record<string, unknown> = {}) {
+  return {
+    key: 'ai.bbbee_certificate.bee_level', field: 'bee_level', value: 3, layer: 'ai', confidence: null,
+    documentId: 'bbbee_certificate', documentName: 'B-BBEE Certificate', element: 'GENERAL', sourceFile: 'certificate.pdf',
+    page: null, cell: null, quote: null, grounded: true,
+    ...over,
+  };
+}
+
+interface RecordOptions {
+  content?: string | Buffer;
+  reviewReasons?: string[];
+  caseId?: string;
+  iat?: number;
+  secret?: string;
+  aiValues?: unknown[];
+  domain?: string;
+}
+
+/** The parser's signed record, as the parser makes it. */
+function signedRecord(output: Record<string, unknown>, options: RecordOptions = {}) {
+  const iat = options.iat ?? Date.now();
+  const payload = JSON.stringify({
+    typ: 'okiru.parser-run',
+    v: 1,
+    iat,
+    exp: iat + 24 * 60 * 60 * 1000,
+    domain: options.domain ?? 'bbbee',
+    caseId: options.caseId ?? 'case-1',
+    quoteId: 'q-1',
+    filename: 'certificate.pdf',
+    contentSha256: sha256(options.content ?? CERTIFICATE_BYTES),
+    reviewReasons: options.reviewReasons ?? [],
+    parserOutput: output,
+    ...(options.aiValues ? { aiValues: options.aiValues } : {}),
+  });
+  return { filename: 'certificate.pdf', payload, signature: signRunPayload(payload, options.secret ?? SECRET) };
+}
+
+/** The run body the browser files: the parser's signed record. */
+function signedRun(output: Record<string, unknown>, options: RecordOptions = {}) {
+  const { payload, signature } = signedRecord(output, options);
+  return { attestation: { payload, signature } };
+}
+
+function postRun(documentId: string, body: unknown, user = 'user-a', org = 'org-a') {
+  return request(`/api/parser-documents/${documentId}/runs`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  }, user, org);
+}
+
 beforeAll(async () => {
+  process.env.PARSER_INTERNAL_SECRET = SECRET;
   const router = (await import('../parserDocuments.js')).default;
   const app = express();
   app.use(express.json({ limit: '2mb' }));
@@ -236,13 +301,67 @@ describe('paid fresh reads', () => {
     expect(res.body.code).toBe('PAID_READ_UNAVAILABLE');
   });
 
-  it('sends ESG evidence back to the ESG workbook instead of reading it as B-BBEE', async () => {
+  const reread = () => request('/api/parser-documents/doc-1/reread', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: 'quote_reread_1' }),
+  });
+
+  it('asks the parser for the whole read — rules, model, agent — through the B-BBEE reader', async () => {
+    seed();
+    await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    await reread();
+    expect(parserCalls.mock.calls[0][2]).toEqual({ domain: 'bbbee', full: true });
+  });
+
+  it('reads ESG evidence again with the ESG reader — it used to be refused', async () => {
     seed();
     runs[0].parserOutput = { domain: 'esg' };
-    const res = await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
-    expect(res.status).toBe(409);
-    expect(res.body.code).toBe('ESG_REREAD_FROM_WORKBOOK');
-    expect(quoteCalls).not.toHaveBeenCalled();
+    const quoted = await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    expect(quoted.status).toBe(201);
+    // Priced exactly as before: the same quote route, the same bytes.
+    expect(quoteCalls).toHaveBeenCalledTimes(1);
+    const res = await reread();
+    expect(res.status).toBe(201);
+    expect(parserCalls.mock.calls[0][2]).toEqual({ domain: 'esg', full: true });
+  });
+
+  it('stores the signed AI and agent values of a fresh read as the new run', async () => {
+    seed();
+    await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    const output = parserOutput('review_required');
+    const values = [aiValue(), aiValue({ key: 'ai.afs.npat', field: 'npat', value: 1200, layer: 'agent', page: 3, quote: 'Net profit 1 200' })];
+    const signed = signedRecord(output, { content: Buffer.from('%PDF afs'), aiValues: values });
+    paidReply = { ok: true, result: { ...output, run_attestation: signed, ai_value_count: 2 } };
+
+    const res = await reread();
+    expect(res.status).toBe(201);
+    const run = runs[1];
+    expect(run.aiValues).toEqual(values);
+    expect(run.aiValueCount).toBe(2);
+    expect(run.attestation).toMatchObject({ contentSha256: sha256(Buffer.from('%PDF afs')), id: signed.signature });
+    // The rule layer is the run's parser output, without the transport fields.
+    expect(run.parserOutput).not.toHaveProperty('run_attestation');
+    expect(run.parserOutput.extracted_fields.bee_level.normalized_value).toBe(2);
+    // Two rule fields read + two model/agent values.
+    expect(run.extractedFieldCount).toBe(4);
+    expect(res.body.run.aiValueCount).toBe(2);
+
+    const detail = await request('/api/parser-documents/doc-1');
+    expect(detail.body.latestRun.aiValues).toEqual(values);
+  });
+
+  it('keeps only the rule layer of a fresh read whose record does not verify', async () => {
+    seed();
+    await request('/api/parser-documents/doc-1/reread/quote', { method: 'POST' });
+    const output = parserOutput('passed');
+    // Signed for other bytes than the ones this document holds.
+    const signed = signedRecord(output, { content: 'some other file', aiValues: [aiValue()] });
+    paidReply = { ok: true, result: { ...output, run_attestation: signed } };
+    const res = await reread();
+    expect(res.status).toBe(201);
+    expect(runs[1].aiValues).toBeNull();
+    expect(runs[1].attestation).toBeNull();
+    expect(runs[1].parserOutput).not.toHaveProperty('run_attestation');
+    expect(runs[1].reviewReasons).toContain('The AI values from this read could not be verified, so only the rule-based fields were kept.');
   });
 
   it('is not available to a view-only member', async () => {
@@ -355,12 +474,11 @@ describe('parser document persistence', () => {
   });
 
   it('preserves missing, low-confidence, warning, and review-required data', async () => {
-    documents.push({ _id: 'doc-1', filename: 'certificate.pdf', fileType: 'application/pdf', source: 'parser', userId: 'user-a', organizationId: 'org-a' });
-    const response = await request('/api/parser-documents/doc-1/runs', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ parserOutput: parserOutput('review_required'), reviewReasons: ['Confirm level'] }),
-    });
+    documents.push(parserDocument('doc-1'));
+    const response = await postRun('doc-1', signedRun(parserOutput('review_required'), { reviewReasons: ['Confirm level'] }));
     expect(response.status).toBe(201);
+    expect(runs[0].caseId).toBe('case-1');
+    expect(runs[0].attestation).toMatchObject({ quoteId: 'q-1', contentSha256: sha256(CERTIFICATE_BYTES) });
     expect(runs[0].status).toBe('review_required');
     expect(runs[0].missingFields).toContain('expiry_date');
     expect(runs[0].lowConfidenceFields).toContain('bee_level');
@@ -369,11 +487,9 @@ describe('parser document persistence', () => {
   });
 
   it('keeps failed attempts visible and preserves earlier runs on rerun', async () => {
-    documents.push({ _id: 'doc-1', filename: 'certificate.pdf', fileType: 'application/pdf', source: 'parser', userId: 'user-a', organizationId: 'org-a' });
+    documents.push(parserDocument('doc-1'));
     for (const status of ['failed', 'passed'] as const) {
-      const response = await request('/api/parser-documents/doc-1/runs', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parserOutput: parserOutput(status) }),
-      });
+      const response = await postRun('doc-1', signedRun(parserOutput(status), { caseId: `case-${status}` }));
       expect(response.status).toBe(201);
     }
     expect(runs).toHaveLength(2);
@@ -404,10 +520,195 @@ describe('parser document persistence', () => {
     documents.push({ _id: 'doc-secret', filename: 'private.pdf', source: 'parser', userId: 'user-b', organizationId: 'org-b' });
     const detail = await request('/api/parser-documents/doc-secret', {}, 'user-a', 'org-a');
     expect(detail.status).toBe(404);
-    const createRun = await request('/api/parser-documents/doc-secret/runs', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parserOutput: parserOutput() }),
-    }, 'user-a', 'org-a');
+    const createRun = await postRun('doc-secret', signedRun(parserOutput()), 'user-a', 'org-a');
     expect(createRun.status).toBe(404);
+  });
+
+  it('counts an ESG value as read, not as low confidence, when the reader scores no confidence', async () => {
+    documents.push(parserDocument('doc-1'));
+    const esgOutput = {
+      filename: 'certificate.pdf', domain: 'esg', document_type: 'Electricity bill', pillar: 'ENVIRONMENTAL', status: 'passed',
+      extracted_fields: {
+        electricity_kwh: { raw_value: 18250, normalized_value: 18250, data_type: 'number', confidence: null, source: { page: null, table: null, text_snippet: null } },
+      },
+      validation: { passed: true, warnings: [], errors: [], missing_fields: [] },
+      audit_trail: { source_file: 'certificate.pdf', requires_human_review: false },
+    };
+    expect((await postRun('doc-1', signedRun(esgOutput, { domain: 'esg' }))).status).toBe(201);
+    expect(runs[0].extractedFieldCount).toBe(1);
+    expect(runs[0].lowConfidenceFields).toEqual([]);
+    expect(runs[0].missingFields).toEqual([]);
+  });
+});
+
+describe('a parser run is only what the parser signed', () => {
+  /** Nothing was stored, and the document still points at nothing. */
+  function expectNothingFiled() {
+    expect(runs).toHaveLength(0);
+    expect(documents[0].latestParserRunId).toBeUndefined();
+    expect(documents[0].parserStatus).toBeUndefined();
+  }
+
+  it('refuses a result the browser wrote itself', async () => {
+    documents.push(parserDocument('doc-1'));
+    const response = await postRun('doc-1', { parserOutput: parserOutput('passed'), reviewReasons: [] });
+    expect(response.status).toBe(400);
+    expectNothingFiled();
+  });
+
+  it('ignores the old fields a browser sends beside the signed record — only the signed text is stored', async () => {
+    documents.push(parserDocument('doc-1'));
+    const madeUp = { ...parserOutput('passed'), document_type: 'Something the browser made up' };
+    const response = await postRun('doc-1', { ...signedRun(parserOutput('review_required')), parserOutput: madeUp, caseId: 'browser-case' });
+    expect(response.status).toBe(201);
+    expect(runs[0].status).toBe('review_required');
+    expect(runs[0].documentType).toBe('B-BBEE Certificate');
+    expect(runs[0].caseId).toBe('case-1');
+  });
+
+  it('refuses a forged record carrying a made-up signature', async () => {
+    documents.push(parserDocument('doc-1'));
+    const forged = signedRun(parserOutput('passed'));
+    forged.attestation.signature = crypto.randomBytes(32).toString('base64url');
+    const response = await postRun('doc-1', forged);
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe('RUN_SIGNATURE_INVALID');
+    expectNothingFiled();
+  });
+
+  it('refuses a genuine record edited after signing — a review turned into a pass, a level raised', async () => {
+    documents.push(parserDocument('doc-1'));
+    const genuine = signedRun(parserOutput('review_required'));
+    const claims = JSON.parse(genuine.attestation.payload);
+    claims.parserOutput.status = 'passed';
+    claims.parserOutput.extracted_fields.bee_level.normalized_value = 1;
+    const response = await postRun('doc-1', { attestation: { payload: JSON.stringify(claims), signature: genuine.attestation.signature } });
+    expect(response.status).toBe(403);
+    expectNothingFiled();
+  });
+
+  it('refuses a record signed under any other secret', async () => {
+    documents.push(parserDocument('doc-1'));
+    const response = await postRun('doc-1', signedRun(parserOutput('passed'), { secret: 'not-the-parser' }));
+    expect(response.status).toBe(403);
+    expectNothingFiled();
+  });
+
+  it('refuses a genuine reading of a different file', async () => {
+    documents.push(parserDocument('doc-1', 'the certificate this document holds'));
+    const response = await postRun('doc-1', signedRun(parserOutput('passed'), { content: 'some other, better certificate' }));
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('RUN_FILE_MISMATCH');
+    expectNothingFiled();
+  });
+
+  it('refuses a record past its lifetime', async () => {
+    documents.push(parserDocument('doc-1'));
+    const response = await postRun('doc-1', signedRun(parserOutput('passed'), { iat: Date.now() - 2 * 24 * 60 * 60 * 1000 }));
+    expect(response.status).toBe(422);
+    expectNothingFiled();
+  });
+
+  it('files each signed record once, so a replay cannot roll the document back to an older reading', async () => {
+    documents.push(parserDocument('doc-1'));
+    const older = signedRun(parserOutput('passed'), { caseId: 'case-old' });
+    const newer = signedRun(parserOutput('review_required'), { caseId: 'case-new' });
+    expect((await postRun('doc-1', older)).status).toBe(201);
+    expect((await postRun('doc-1', newer)).status).toBe(201);
+
+    const replay = await postRun('doc-1', older);
+    expect(replay.status).toBe(200);
+    expect(replay.body.duplicate).toBe(true);
+    expect(runs).toHaveLength(2);
+    expect(documents[0].latestParserRunId).toBe('run-2');
+    expect(documents[0].parserStatus).toBe('review_required');
+  });
+
+  it('refuses every run when this server cannot check signatures', async () => {
+    documents.push(parserDocument('doc-1'));
+    delete process.env.PARSER_INTERNAL_SECRET;
+    try {
+      const response = await postRun('doc-1', signedRun(parserOutput('passed')));
+      expect(response.status).toBe(503);
+      expectNothingFiled();
+    } finally {
+      process.env.PARSER_INTERNAL_SECRET = SECRET;
+    }
+  });
+});
+
+describe('the AI block of a run: what the model and the agent read', () => {
+  const values = () => [
+    aiValue(),
+    aiValue({ key: 'ai.afs.npat', field: 'npat', value: 1200, layer: 'agent', documentId: 'afs', documentName: 'AFS', page: 3, quote: 'Net profit after tax 1 200' }),
+    aiValue({ key: 'ai.sheet_table__skills.learners', field: 'learners', value: [{ name: 'A' }], layer: 'ai', cell: 'Skills!B4', rowCount: 340 }),
+  ];
+
+  it('stores the signed AI values with the run and returns them with their source layer and citation', async () => {
+    documents.push(parserDocument('doc-1'));
+    const response = await postRun('doc-1', signedRun(parserOutput('passed'), { aiValues: values() }));
+    expect(response.status).toBe(201);
+    expect(response.body.run.aiValueCount).toBe(3);
+    expect(runs[0].aiValues).toEqual(values());
+    // The library counts both layers: 2 rule fields read + 3 model/agent values.
+    expect(runs[0].extractedFieldCount).toBe(5);
+    expect(documents[0].parserExtractedFieldCount).toBe(5);
+
+    const detail = await request('/api/parser-documents/doc-1');
+    expect(detail.body.latestRun.aiValues).toEqual(values());
+    expect(detail.body.latestRun.aiValues[1]).toMatchObject({ layer: 'agent', page: 3, quote: 'Net profit after tax 1 200' });
+    const history = await request(`/api/parser-documents/doc-1/runs/${runs[0].runId}`);
+    expect(history.body.run.aiValues).toHaveLength(3);
+  });
+
+  it('refuses an AI block sent outside the signature, even beside a genuine record', async () => {
+    documents.push(parserDocument('doc-1'));
+    const response = await postRun('doc-1', { ...signedRun(parserOutput('passed')), aiValues: values() });
+    expect(response.status).toBe(400);
+    expect(runs).toHaveLength(0);
+  });
+
+  it('refuses a genuine record whose AI values were edited after signing', async () => {
+    documents.push(parserDocument('doc-1'));
+    const genuine = signedRun(parserOutput('passed'), { aiValues: values() });
+    const claims = JSON.parse(genuine.attestation.payload);
+    claims.aiValues[0].value = 1;
+    claims.aiValues.push(aiValue({ key: 'ai.extra.injected', field: 'injected', value: 'made up' }));
+    const response = await postRun('doc-1', { attestation: { payload: JSON.stringify(claims), signature: genuine.attestation.signature } });
+    expect(response.status).toBe(403);
+    expect(runs).toHaveLength(0);
+  });
+
+  it('refuses a signed AI block that is not in the shape the library shows', async () => {
+    documents.push(parserDocument('doc-1'));
+    const response = await postRun('doc-1', signedRun(parserOutput('passed'), { aiValues: [aiValue({ layer: 'oracle' })] }));
+    expect(response.status).toBe(422);
+    expect(runs).toHaveLength(0);
+  });
+
+  it('still returns an old run with no AI block, as an empty one', async () => {
+    documents.push({ ...parserDocument('doc-1'), latestParserRunId: 'run-old' });
+    runs.push({ runId: 'run-old', documentId: 'doc-1', organizationId: 'org-a', status: 'passed', parserOutput: parserOutput('passed') });
+    const detail = await request('/api/parser-documents/doc-1');
+    expect(detail.status).toBe(200);
+    expect(detail.body.latestRun.aiValues).toEqual([]);
+    expect(detail.body.latestRun.aiValueCount).toBe(0);
+    expect(detail.body.latestRun.signed).toBe(false);
+  });
+
+  it('records a correction to an AI value against what THAT reader said, beside the reading', async () => {
+    documents.push(parserDocument('doc-1'));
+    await postRun('doc-1', signedRun(parserOutput('passed'), { aiValues: values() }));
+    const res = await request('/api/parser-documents/doc-1', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { 'ai.afs.npat': 1250 } }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.reviewHistory).toEqual([
+      expect.objectContaining({ fieldKey: 'ai.afs.npat', originalValue: 1200, correctedValue: 1250, approvalState: 'corrected' }),
+    ]);
+    // The reader's own value is untouched.
+    expect(runs[0].aiValues[1].value).toBe(1200);
   });
 });
 

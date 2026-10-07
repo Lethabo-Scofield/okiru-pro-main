@@ -7,6 +7,13 @@ import { requireAuth } from '../middleware/requireAuth.js';
 import { createLogger } from '../logger.js';
 import { isParserConfigured, quoteFileWithParser, resolvePaidFileWithParser } from '../services/parserClient.js';
 import { applyDocumentScopeFilter, isViewOnlyMember, resolveClientScopeIds } from '../services/clientScopes.js';
+import {
+  signedParserRunSchema,
+  verifyParserRun,
+  type ParserRunClaims,
+  type RunAiValue,
+  type SignedParserRun,
+} from '../security/parserRunAttestation.js';
 
 const logger = createLogger('ParserDocuments');
 const router = Router();
@@ -101,18 +108,44 @@ function runSummary(run: Record<string, any>): Record<string, unknown> {
     requiresHumanReview: run.requiresHumanReview,
     parserVersion: run.parserVersion,
     graphVersion: run.graphVersion,
+    aiValueCount: Number(run.aiValueCount ?? (Array.isArray(run.aiValues) ? run.aiValues.length : 0)),
+    signed: Boolean(run.attestation),
     createdAt: run.createdAt,
   };
 }
 
+/** A run with everything the detail screens show: both layers and the review history. */
+function runDetail(run: Record<string, any>): Record<string, unknown> {
+  return {
+    ...runSummary(run),
+    parserOutput: run.parserOutput,
+    aiValues: Array.isArray(run.aiValues) ? run.aiValues : [],
+    reviewHistory: run.reviewHistory ?? [],
+  };
+}
+
+/**
+ * A run filed from the browser is the parser's signed record and nothing else.
+ * It used to be any JSON the browser sent, so anyone signed in could file a
+ * "parser reading" of their own making. Case id, review reasons and the AI
+ * block ride inside the signed record, so none of what is stored is the
+ * browser's say.
+ *
+ * The browser may still send the old fields beside `attestation` (it does,
+ * so an api that predates signing keeps filing runs during a deploy); they are
+ * ignored here. An AI block OUTSIDE the signature is refused outright — it can
+ * only be an attempt to have one stored.
+ */
 const runInputSchema = z.object({
-  parserOutput: z.record(z.unknown()),
-  caseId: z.string().max(200).optional().nullable(),
-  parserVersion: z.string().max(100).optional().nullable(),
-  reviewReasons: z.array(z.string().max(1000)).max(200).optional(),
+  attestation: signedParserRunSchema,
+  aiValues: z.undefined({ invalid_type_error: 'AI values are only accepted inside the parser’s signed record' }),
 });
 
-export function deriveParserRunData(output: Record<string, any>, suppliedReviewReasons: string[] = []) {
+export function deriveParserRunData(
+  output: Record<string, any>,
+  suppliedReviewReasons: string[] = [],
+  aiValues: readonly RunAiValue[] = [],
+) {
   const fields = output.extracted_fields && typeof output.extracted_fields === 'object'
     ? output.extracted_fields as Record<string, any>
     : {};
@@ -124,10 +157,18 @@ export function deriveParserRunData(output: Record<string, any>, suppliedReviewR
       .filter(([, field]) => field?.normalized_value == null && field?.raw_value == null)
       .map(([key]) => key),
   ]));
+  // A null confidence is a reader that does not score one (ESG), not a low
+  // score; a MISSING one still counts as low, as it always has.
   const lowConfidenceFields = Object.entries(fields)
-    .filter(([, field]) => field?.normalized_value != null && Number(field?.confidence ?? 0) < SAFE_FIELD_CONFIDENCE)
+    .filter(([, field]) => field?.normalized_value != null
+      && field?.confidence !== null
+      && Number(field?.confidence ?? 0) < SAFE_FIELD_CONFIDENCE)
     .map(([key]) => key);
-  const extractedFieldCount = Object.values(fields).filter((field) => field?.normalized_value != null).length;
+  // Both layers: what the rules read plus what the model and the agent read.
+  // Counting the rule layer alone is how the library said "3 read" of a
+  // document the parser had read forty values from.
+  const extractedFieldCount = Object.values(fields).filter((field) => field?.normalized_value != null).length
+    + aiValues.length;
   const warnings = Array.isArray(validation.warnings) ? validation.warnings.map(String) : [];
   const errors = Array.isArray(validation.errors) ? validation.errors.map(String) : [];
   const reviewReasons = Array.from(new Set([...suppliedReviewReasons, ...warnings, ...errors]));
@@ -187,21 +228,36 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
   }
 });
 
+type RunAttestationRecord = { id: string; issuedAt: Date; quoteId: string | null; contentSha256: string };
+
+function attestationRecord(signed: SignedParserRun, claims: ParserRunClaims): RunAttestationRecord {
+  return { id: signed.signature, issuedAt: new Date(claims.iat), quoteId: claims.quoteId, contentSha256: claims.contentSha256 };
+}
+
 /**
  * Append a run and point the document at it.
  *
- * Shared by the client-supplied path (`POST /:id/runs`) and the server-side
- * re-parse, so a re-parse produces a record indistinguishable from a first
- * read — same fields, same derivation, same history. A re-parse that recorded
- * itself differently would make the run history unreadable.
+ * Shared by the signed path (`POST /:id/runs`) and the server-side re-read,
+ * so a re-read produces a record indistinguishable from a first read — same
+ * fields, same derivation, same history. A re-read that recorded itself
+ * differently would make the run history unreadable.
+ *
+ * Only ever called with parser output the server can vouch for: verified
+ * against the parser's signature, or fetched from the parser by this server.
  */
 async function appendRun(
   doc: { _id: unknown },
   owner: SessionIdentity,
   output: Record<string, any>,
-  extra: { caseId?: string | null; parserVersion?: string | null; reviewReasons?: string[] } = {},
+  extra: {
+    caseId?: string | null;
+    parserVersion?: string | null;
+    reviewReasons?: string[];
+    aiValues?: RunAiValue[] | null;
+    attestation?: RunAttestationRecord | null;
+  } = {},
 ) {
-  const derived = deriveParserRunData(output, extra.reviewReasons ?? []);
+  const derived = deriveParserRunData(output, extra.reviewReasons ?? [], extra.aiValues ?? []);
   const run = await ParserRunModel.create({
     documentId: doc._id,
     userId: owner.userId,
@@ -222,6 +278,9 @@ async function appendRun(
     reviewReasons: derived.reviewReasons,
     requiresHumanReview: derived.requiresHumanReview,
     parserOutput: output,
+    aiValues: extra.aiValues ?? null,
+    aiValueCount: extra.aiValues?.length ?? 0,
+    attestation: extra.attestation ?? null,
   });
   return run;
 }
@@ -245,30 +304,59 @@ function documentSetFromRun(run: Record<string, any>): Record<string, unknown> {
 
 router.post('/:id/runs', async (req: Request, res: Response) => {
   const parsed = runInputSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ message: 'Invalid parser result', issues: parsed.error.issues });
+  if (!parsed.success) {
+    return res.status(400).json({
+      message: 'A parser result can only be saved as the signed record the parser issued',
+      issues: parsed.error.issues,
+    });
+  }
   const owner = identity(req);
+  const documentId = routeParam(req.params.id);
+
+  // Before anything is looked up: an unsigned or altered record learns nothing
+  // about which documents exist.
+  const verdict = verifyParserRun(parsed.data.attestation);
+  if (!verdict.ok) {
+    logger.warn('Refused a parser run that the parser did not sign', { documentId, code: verdict.code, userId: owner.userId });
+    return res.status(verdict.status).json({ message: verdict.message, code: verdict.code });
+  }
+  const { claims } = verdict;
 
   try {
-    const documentId = routeParam(req.params.id);
     const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
 
-    const output = parsed.data.parserOutput as Record<string, any>;
-    const status = output.status;
-    if (!['passed', 'review_required', 'failed'].includes(status)) {
-      return res.status(400).json({ message: 'Parser status must be passed, review_required, or failed' });
+    // A genuine reading of one file must not be filed against another.
+    const storedHash = (doc as unknown as { contentHash?: string | null }).contentHash ?? null;
+    if (!storedHash || storedHash !== claims.contentSha256) {
+      logger.warn('Refused a signed parser run for different bytes', { documentId, userId: owner.userId });
+      return res.status(409).json({
+        message: 'This parser result was read from a different file than this document holds.',
+        code: 'RUN_FILE_MISMATCH',
+      });
     }
 
-    const run = await appendRun(doc as unknown as { _id: unknown }, owner, output, {
-      caseId: parsed.data.caseId ?? null,
-      parserVersion: parsed.data.parserVersion ?? null,
-      reviewReasons: parsed.data.reviewReasons ?? [],
+    // Each signed record files once. Replaying it would add a duplicate run, or
+    // make an older reading the document's latest again.
+    const attestation = attestationRecord(parsed.data.attestation, claims);
+    const already = await ParserRunModel.findOne({ documentId: doc._id, 'attestation.id': attestation.id }).lean();
+    if (already) return res.status(200).json({ run: runSummary(already as Record<string, any>), duplicate: true });
+
+    const run = await appendRun(doc as unknown as { _id: unknown }, owner, claims.parserOutput as Record<string, any>, {
+      caseId: claims.caseId,
+      reviewReasons: claims.reviewReasons,
+      aiValues: claims.aiValues ?? null,
+      attestation,
     });
     await Document.updateOne(documentFilter(req, documentId), { $set: documentSetFromRun(run.toObject()) });
 
     return res.status(201).json({ run: runSummary(run.toObject()) });
   } catch (error) {
-    logger.error('Failed to persist parser run', error as Error, { documentId: routeParam(req.params.id) });
+    // The same record filed twice at once: the unique index let one through.
+    if ((error as { code?: number })?.code === 11000) {
+      return res.status(200).json({ duplicate: true });
+    }
+    logger.error('Failed to persist parser run', error as Error, { documentId });
     return res.status(500).json({ message: 'Could not persist parser run' });
   }
 });
@@ -381,12 +469,25 @@ router.patch('/:id', async (req: Request, res: Response) => {
       if (!latestRunId) {
         return res.status(409).json({ message: 'This document has not been read yet, so there is nothing to correct.', code: 'NOT_READ' });
       }
-      const latestRun = await ParserRunModel.findOne({ runId: latestRunId }).select('parserOutput').lean();
+      const latestRun = await ParserRunModel.findOne({ runId: latestRunId }).select('parserOutput aiValues').lean();
       const extracted = ((latestRun as { parserOutput?: { extracted_fields?: Record<string, { normalized_value?: unknown; raw_value?: unknown }> } } | null)
         ?.parserOutput?.extracted_fields ?? {});
+      // A model or agent value is corrected under its own key (ai.<spec>.<field>),
+      // so a correction to it names what THAT reader said, not the rule layer.
+      const aiValues = new Map(
+        ((latestRun as { aiValues?: RunAiValue[] | null } | null)?.aiValues ?? [])
+          .map((value) => [value.key, value.value] as const),
+      );
+      const original = (fieldKey: string): unknown => {
+        if (aiValues.has(fieldKey)) {
+          const value = aiValues.get(fieldKey);
+          return value !== null && typeof value === 'object' ? JSON.stringify(value) : value ?? null;
+        }
+        return extracted[fieldKey]?.normalized_value ?? extracted[fieldKey]?.raw_value ?? null;
+      };
       const events = Object.entries(parsed.data.fields).map(([fieldKey, value]) => ({
         fieldKey,
-        originalValue: extracted[fieldKey]?.normalized_value ?? extracted[fieldKey]?.raw_value ?? null,
+        originalValue: original(fieldKey),
         correctedValue: typeof value === 'string' ? value.trim() || null : value,
         reviewerUserId: owner.userId,
         organizationId: owner.organizationId,
@@ -468,22 +569,55 @@ router.post('/:id/reparse', upload.single('file'), async (req: Request, res: Res
 });
 
 /**
- * ESG evidence is read by the ESG case reader into the ESG workbook. The paid
- * single-file read is the B-BBEE reader: an ESG bill through it would come back
- * as B-BBEE fields and reach no workbook. Refused rather than read wrongly.
+ * Which reader a fresh read goes through. ESG evidence is read by the ESG
+ * reader: an ESG bill through the B-BBEE reader came back as B-BBEE fields,
+ * which is why ESG re-reads used to be refused outright. A document's domain
+ * is the one its latest run was read under; a document never read is B-BBEE,
+ * as every document was before ESG runs could be stored.
  */
-async function isEsgDocument(doc: Record<string, any>, owner: SessionIdentity): Promise<boolean> {
-  if (!doc.latestParserRunId) return false;
+export async function documentDomain(doc: Record<string, any>, owner: SessionIdentity): Promise<'bbbee' | 'esg'> {
+  if (!doc.latestParserRunId) return 'bbbee';
   const run = await ParserRunModel.findOne({ documentId: doc._id, runId: doc.latestParserRunId, ...tenantFilter(owner) })
     .select('parserOutput')
     .lean() as { parserOutput?: { domain?: unknown } } | null;
-  return run?.parserOutput?.domain === 'esg';
+  return run?.parserOutput?.domain === 'esg' ? 'esg' : 'bbbee';
 }
 
-const ESG_REREAD = {
-  message: 'ESG documents are read again from the ESG workbook — use Add documents there.',
-  code: 'ESG_REREAD_FROM_WORKBOOK',
-};
+/**
+ * What a fresh read stores: the parser's signed record (both layers) when it
+ * sent one that verifies and was read from these bytes; otherwise the rule
+ * layer it returned, as before, saying the model's values could not be kept.
+ *
+ * This read was fetched by this server, so it is trusted either way — the
+ * signature is checked anyway, so the library holds one kind of AI block: the
+ * kind the parser signed.
+ */
+function freshReadRecord(
+  result: Record<string, any>,
+  signed: SignedParserRun | null | undefined,
+  sha256: string,
+): { output: Record<string, any>; aiValues: RunAiValue[] | null; attestation: RunAttestationRecord | null; notes: string[] } {
+  const { run_attestation: _signed, ai_value_count: _count, ...ruleLayer } = result;
+  if (!signed) return { output: ruleLayer, aiValues: null, attestation: null, notes: [] };
+  const verdict = verifyParserRun(signed);
+  if (!verdict.ok || verdict.claims.contentSha256 !== sha256) {
+    logger.warn('A fresh read came back with a run record that does not verify; keeping the rule layer only', {
+      code: verdict.ok ? 'RUN_FILE_MISMATCH' : verdict.code,
+    });
+    return {
+      output: ruleLayer,
+      aiValues: null,
+      attestation: null,
+      notes: ['The AI values from this read could not be verified, so only the rule-based fields were kept.'],
+    };
+  }
+  return {
+    output: verdict.claims.parserOutput as Record<string, any>,
+    aiValues: verdict.claims.aiValues ?? null,
+    attestation: attestationRecord(signed, verdict.claims),
+    notes: verdict.claims.reviewReasons,
+  };
+}
 
 /** The bytes a fresh read would use: a replacement, or what is stored. */
 function rereadBytes(doc: Record<string, any>, replacement: Express.Multer.File | undefined) {
@@ -511,7 +645,6 @@ router.post('/:id/reread/quote', upload.single('file'), async (req: Request, res
   try {
     const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
-    if (await isEsgDocument(doc as unknown as Record<string, any>, identity(req))) return res.status(409).json(ESG_REREAD);
     const bytes = rereadBytes(doc as unknown as Record<string, any>, req.file);
     if (!bytes) {
       return res.status(409).json({ message: 'The original file is not stored for this document. Upload it again as a replacement.' });
@@ -548,7 +681,6 @@ router.post('/:id/reread', upload.single('file'), async (req: Request, res: Resp
     const doc = await Document.findOne(await scopedDocumentFilter(req, documentId));
     if (!doc) return res.status(404).json({ message: 'Document not found' });
     const plain = doc as unknown as Record<string, any>;
-    if (await isEsgDocument(plain, owner)) return res.status(409).json(ESG_REREAD);
     if (!quoteId || plain.pendingRereadQuoteId !== quoteId) {
       return res.status(409).json({ message: 'That price was for a different read. Get a new price.', code: 'QUOTE_NOT_FOR_THIS_DOCUMENT' });
     }
@@ -557,7 +689,10 @@ router.post('/:id/reread', upload.single('file'), async (req: Request, res: Resp
       return res.status(409).json({ message: 'These are not the bytes that were priced. Get a new price.', code: 'QUOTE_FILE_MISMATCH' });
     }
 
-    const outcome = await resolvePaidFileWithParser(bytes, quoteId);
+    // The whole per-document read (rules, model, agent), through the reader
+    // for this document's domain — not the rule layer alone.
+    const domain = await documentDomain(plain, owner);
+    const outcome = await resolvePaidFileWithParser(bytes, quoteId, { domain, full: true });
     if (!outcome.ok || !outcome.result) {
       if (outcome.status === 404) {
         return res.status(503).json({ message: 'Fresh reads are not available yet. Nothing was read.', code: 'PAID_READ_UNAVAILABLE' });
@@ -583,8 +718,14 @@ router.post('/:id/reread', upload.single('file'), async (req: Request, res: Resp
       });
     }
 
-    const run = await appendRun(doc as unknown as { _id: unknown }, owner, outcome.result as unknown as Record<string, any>, {
-      reviewReasons: req.file ? ['Read again after the file was replaced by a user.'] : ['Read again from scratch on request.'],
+    const record = freshReadRecord(outcome.result as unknown as Record<string, any>, outcome.result.run_attestation, bytes.sha256);
+    const run = await appendRun(doc as unknown as { _id: unknown }, owner, record.output, {
+      reviewReasons: [
+        req.file ? 'Read again after the file was replaced by a user.' : 'Read again from scratch on request.',
+        ...record.notes,
+      ],
+      aiValues: record.aiValues,
+      attestation: record.attestation,
     });
     await Document.updateOne(documentFilter(req, documentId), {
       $set: { ...documentSetFromRun(run.toObject()), pendingRereadQuoteId: null, pendingRereadSha256: null },
@@ -659,7 +800,7 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
   const doc = await Document.findOne(await scopedDocumentFilter(req, routeParam(req.params.id))).select('_id').lean();
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   const runs = await ParserRunModel.find({ documentId: doc._id, ...tenantFilter(identity(req)) })
-    .select('-parserOutput -reviewHistory').sort({ createdAt: -1 }).lean();
+    .select('-parserOutput -reviewHistory -aiValues').sort({ createdAt: -1 }).lean();
   return res.json({ runs: runs.map((run) => runSummary(run as Record<string, any>)) });
 });
 
@@ -668,7 +809,7 @@ router.get('/:id/runs/:runId', async (req: Request, res: Response) => {
   if (!doc) return res.status(404).json({ message: 'Document not found' });
   const run = await ParserRunModel.findOne({ documentId: doc._id, runId: routeParam(req.params.runId), ...tenantFilter(identity(req)) }).lean();
   if (!run) return res.status(404).json({ message: 'Parser run not found' });
-  return res.json({ run: { ...runSummary(run as Record<string, any>), parserOutput: run.parserOutput, reviewHistory: run.reviewHistory ?? [] } });
+  return res.json({ run: runDetail(run as Record<string, any>) });
 });
 
 /**
@@ -708,7 +849,7 @@ router.get('/:id', async (req: Request, res: Response) => {
     : null;
   return res.json({
     document: documentJson(doc as Record<string, any>),
-    latestRun: latestRun ? { ...runSummary(latestRun as Record<string, any>), parserOutput: latestRun.parserOutput, reviewHistory: latestRun.reviewHistory ?? [] } : null,
+    latestRun: latestRun ? runDetail(latestRun as Record<string, any>) : null,
   });
 });
 

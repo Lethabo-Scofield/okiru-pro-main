@@ -149,6 +149,22 @@ spec:
                   name: session-secrets
                   key: AUDIT_SIGNING_KEY
                   optional: true
+            # Verifies the parser's signature on every run filed into the
+            # document library: the browser's (POST /api/parser-documents/:id/runs)
+            # and a paid re-read's. Must equal the parser and web Deployments'
+            # PARSER_INTERNAL_SECRET. Missing → every browser-filed run is
+            # refused with 503 (never accepted unsigned), and a re-read keeps
+            # only its rule-layer fields.
+            - name: PARSER_INTERNAL_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: session-secrets
+                  key: PARSER_INTERNAL_SECRET
+                  optional: true
+            # A paid re-read is now the full per-document read (rules, model,
+            # agent). Under the 600s ingress / web-proxy idle limit.
+            - name: PARSER_FILE_TIMEOUT_MS
+              value: "540000"
             - name: AZURE_OPENAI_ENDPOINT
               valueFrom:
                 secretKeyRef:

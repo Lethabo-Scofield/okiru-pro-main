@@ -414,12 +414,35 @@ const parserRunSchema = new Schema({
   // Lossless snapshot of the parser result. Missing expected fields, provenance,
   // validation, calculator filtering, and audit details remain exactly as returned.
   parserOutput: { type: Schema.Types.Mixed, required: true },
+  // What the model and the agent read from the same file — the AI block of
+  // the parser's signed record (field, value, source layer rule|ai|agent,
+  // page/cell citation and quote). Null on a run that predates it or had no
+  // model read; parserOutput above stays the rule layer.
+  aiValues: { type: Schema.Types.Mixed, default: null },
+  aiValueCount: { type: Number, default: 0 },
+  // The parser's signature over this run. Null on a run stored before runs
+  // were signed.
+  attestation: {
+    type: new Schema({
+      id: { type: String, required: true },
+      issuedAt: { type: Date, required: true },
+      quoteId: { type: String, default: null },
+      contentSha256: { type: String, required: true },
+    }, { _id: false }),
+    default: null,
+  },
   reviewHistory: { type: [parserReviewEventSchema], default: [] },
   createdAt: { type: Date, default: Date.now, index: true },
 }, { collection: 'parser_runs', minimize: false });
 
 parserRunSchema.index({ documentId: 1, createdAt: -1 });
 parserRunSchema.index({ organizationId: 1, status: 1, createdAt: -1 });
+// One run per signed record: replaying a signature must not add a duplicate or
+// roll the document back to an older reading.
+parserRunSchema.index(
+  { documentId: 1, 'attestation.id': 1 },
+  { unique: true, partialFilterExpression: { 'attestation.id': { $type: 'string' } } },
+);
 
 const entityTemplateSchema = new Schema({
   id: { type: String, default: uuid, unique: true },
