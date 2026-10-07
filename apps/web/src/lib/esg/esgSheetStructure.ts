@@ -271,7 +271,7 @@ function namedFieldsFromSheetLabels(
     if (m) rows.add(Number(m[1]));
   }
 
-  for (const row of rows) {
+  for (const row of Array.from(rows)) {
     for (let i = 0; i < LABEL_COLUMN_SCAN.length; i++) {
       const label = normaliseLabel(raw[`${LABEL_COLUMN_SCAN[i]}${row}`]);
       if (!label) continue;
