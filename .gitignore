@@ -104,3 +104,10 @@ docs/Super Group Upload Pack/
 # Generated test uploads — regenerate rather than version them.
 test-uploads/
 Okiru - Supplier Register TEST.xlsx
+
+# Extraction evaluations: answer keys and raw comparisons hold client data
+# (names, ID numbers, production ids). Keep only the runners in git.
+docs/eval/*.json
+**/.eval/
+okiru-ai-parser/__tests__/eval/fixtures/*
+!okiru-ai-parser/__tests__/eval/fixtures/README.md
