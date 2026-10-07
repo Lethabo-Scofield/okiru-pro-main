@@ -67,6 +67,7 @@ import {
 } from "@/lib/esg/esgParserToWorkbook";
 import type { EsgRejectionReason } from "@/lib/esg/esgWorkbookInjection";
 import { esgMonthlyCellRef } from "@/lib/esg/esgParserFieldBridge";
+import { ESG_PROVENANCE_SECTION, provenanceCells } from "@/lib/esg/esgProvenance";
 import {
   esgPlacementAxes,
   esgWorkbookAxisState,
@@ -645,15 +646,22 @@ export function esgPatchCellCount(patches: EsgSectionPatches): number {
 export async function persistEsgSectionPatches(
   companyId: string,
   patches: EsgSectionPatches,
+  /** The placements behind these patches: recorded so each cell keeps its source document (E4). */
+  placed: ReadonlyArray<EsgPlacedValue> = [],
 ): Promise<boolean> {
   if (!companyId || esgPatchCellCount(patches) === 0) return false;
+  const provenance = provenanceCells(placed);
+  const sections: Record<string, { cells: Record<string, EsgCellValue> }> =
+    Object.keys(provenance).length > 0
+      ? { ...patches, [ESG_PROVENANCE_SECTION]: { cells: provenance } }
+      : patches;
   const res = await fetch(
     `${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/import`,
     {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirm: true, sections: patches }),
+      body: JSON.stringify({ confirm: true, sections }),
     },
   );
   if (!res.ok) {

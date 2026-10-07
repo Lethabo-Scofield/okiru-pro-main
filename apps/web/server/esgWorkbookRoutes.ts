@@ -17,6 +17,7 @@ import { createChatCompletion } from "./openaiCompat";
 import { computeEsgScores } from "../src/lib/esg/esgCalculators";
 import { computeEsgScorecard } from "../EsgToolkit/src/lib/calculators";
 import { ESG_APPLICABILITY_SECTION } from "../EsgToolkit/src/lib/calculators/esgApplicability";
+import { ESG_PROVENANCE_SECTION } from "../src/lib/esg/esgProvenance";
 import {
   applyEsgWorkbookReopen,
   applyEsgWorkbookSubmit,
@@ -45,7 +46,10 @@ export type EsgWorkbookData = {
  * Refused here, neither could ever be saved, so the scorers' support for them
  * was unreachable.
  */
-const SECTION_KEYS = [...ESG_SECTION_IDS, ESG_APPLICABILITY_SECTION, "netzero"];
+// `provenance` records which document placed each value (E4); it merges cell
+// by cell through the import confirm like any other section, under the same
+// payload bounds.
+const SECTION_KEYS = [...ESG_SECTION_IDS, ESG_APPLICABILITY_SECTION, "netzero", ESG_PROVENANCE_SECTION];
 
 const esgWorkbookSchema = new mongoose.Schema(
   {

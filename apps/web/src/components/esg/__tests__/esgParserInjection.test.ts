@@ -380,3 +380,21 @@ describe("mergeEsgCalculators — a second round keeps the first round's figures
     expect(mergeEsgCalculators(only, undefined, new Set())).toBe(only);
   });
 });
+
+describe("persistEsgSectionPatches — provenance (E4)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("records which document placed each value, in the same request as the values", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) }));
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    await persistEsgSectionPatches("company-1", { "e-data": { cells: { B14: 35332 } } }, [
+      { sectionId: "e-data", cellRef: "B14", field: "diesel_litres", value: 35332, sourceFile: "DIESEL.xlsx", documentId: "doc-1" },
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.sections["e-data"]).toEqual({ cells: { B14: 35332 } });
+    expect(JSON.parse(body.sections.provenance.cells["e-data!B14"])).toMatchObject({ f: "DIESEL.xlsx", d: "doc-1", v: 35332 });
+  });
+});

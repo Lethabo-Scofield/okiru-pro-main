@@ -343,7 +343,8 @@ export default function EsgInformationRequest() {
     try {
       const cells = esgPatchCellCount(injection.patches);
       if (cells > 0) {
-        await persistEsgSectionPatches(companyId, injection.patches);
+        // The placements travel too, so each cell keeps the document it came from (E4).
+        await persistEsgSectionPatches(companyId, injection.patches, injection.placed);
         await load(companyId, companyName, { force: true });
         toast({
           title: "Values added to your workbook",

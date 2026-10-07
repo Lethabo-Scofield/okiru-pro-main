@@ -184,6 +184,30 @@ describe("ESG workbook routes", () => {
     expect(bad.status).toBe(400);
   });
 
+  it("keeps which document placed each value, merging record by record (E4)", async () => {
+    const record = (file: string, v: number) => JSON.stringify({ f: file, d: `doc-${file}`, t: "2026-10-07", v });
+    const first = await esgAgent.post(`/api/esg/workbook/${companyId}/import`).send({
+      confirm: true,
+      sections: {
+        "e-data": { cells: { s1a_C14: 1200 } },
+        provenance: { cells: { "e-data!s1a_C14": record("DIESEL.xlsx", 1200) } },
+      },
+    });
+    expect(first.status).toBe(200);
+    await esgAgent.post(`/api/esg/workbook/${companyId}/import`).send({
+      confirm: true,
+      sections: {
+        "e-data": { cells: { s2_C41: 41000 } },
+        provenance: { cells: { "e-data!s2_C41": record("ESKOM.pdf", 41000) } },
+      },
+    });
+
+    const stored = (await esgAgent.get(`/api/esg/workbook/${companyId}`)).body.sections.provenance.cells;
+    // The second upload added its record; it did not erase the first.
+    expect(Object.keys(stored).sort()).toEqual(["e-data!s1a_C14", "e-data!s2_C41"]);
+    expect(JSON.parse(stored["e-data!s1a_C14"]).f).toBe("DIESEL.xlsx");
+  });
+
   it("merges an import by default, and replaces a register only when the person chose to", async () => {
     const fleet = (regs: string[]) => ({ cells: mergeEsgSectionCells("fleet", regs.map((reg, i) => ({ _id: `r${i}`, reg })), {}) });
     const rowsNow = async () => readEsgGridRows((await esgAgent.get(`/api/esg/workbook/${companyId}`)).body.sections.fleet.cells, "fleet").map((r) => r.reg);
