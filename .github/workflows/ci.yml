@@ -37,7 +37,7 @@ jobs:
     name: Secret scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Full history: a credential committed and then removed in the next
           # commit is still a leaked credential, and scanning only the tip would
@@ -54,7 +54,7 @@ jobs:
     name: Typecheck and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
@@ -83,7 +83,7 @@ jobs:
     name: Dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: pnpm/action-setup@v4
         with:
@@ -128,7 +128,7 @@ jobs:
       matrix:
         service: [web, api]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build image
         run: docker build -f apps/${{ matrix.service }}/Dockerfile -t okiru-${{ matrix.service }}:ci .
