@@ -52,7 +52,7 @@ function isNumericish(cell: string): boolean {
 
 /** Contiguous ranges of columns that hold ANY content, split on blank columns. */
 export function columnRegions(grid: string[][]): Region[] {
-  const width = Math.max(0, ...grid.map((r) => r.length));
+  const width = grid.reduce((w, r) => Math.max(w, r.length), 0); // not Math.max(...rows): spreading every row as an argument overflows the stack past ~120k rows
   const colHasContent: boolean[] = Array.from({ length: width }, (_, c) =>
     grid.some((row) => !isBlank(row[c] ?? '')),
   );
@@ -172,7 +172,7 @@ function pipeRow(cells: string[]): string {
 function renderMainRegion(rows: string[][]): string {
   const headerIdx = findHeaderRow(rows);
   if (headerIdx === -1) return '';
-  const width = Math.max(...rows.map((r) => r.length));
+  const width = rows.reduce((w, r) => Math.max(w, r.length), 0); // not Math.max(...rows): spreading every row as an argument overflows the stack past ~120k rows
 
   const preamble = rows
     .slice(0, headerIdx)

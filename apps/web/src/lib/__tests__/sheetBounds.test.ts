@@ -85,6 +85,23 @@ describe("boundWorkbookSheets", () => {
     expect(book.Sheets.Data!["!ref"]).toBe("A1:D9");
   });
 
+  it("leaves a sheet that claims nothing alone — no reader walks it", () => {
+    // Four real client files carry empty tabs like this (a diesel report's Sheet1..9).
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, {}, "Empty");
+    expect(boundWorkbookSheets(book)).toEqual([]);
+    expect(book.Sheets.Empty!["!ref"]).toBeUndefined();
+  });
+
+  it("holds an unreadable claim to its cells rather than trusting it", () => {
+    // Row 0 does not exist, so the claim fails to decode — yet a reader handed
+    // it would walk from row -1 to ten million.
+    const book = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(book, { A1: { t: "n", v: 5 }, C4: { t: "s", v: "x" }, "!ref": "A0:XFD9999999" }, "Odd");
+    boundWorkbookSheets(book);
+    expect(book.Sheets.Odd!["!ref"]).toBe("A1:C4");
+  });
+
   it("cuts a claim of the whole grid down to its cells, keeping row 1 where it was", async () => {
     const book = await open([{ name: "E_Data", dimension: "A1:XFD1048576", cells: { B7: 42, C9: 7, D9: "ok" } }]);
     // The premise: SheetJS really does hand back the claim.
