@@ -319,7 +319,8 @@ export function EsgCreateFlow() {
 
       let written = 0;
       try {
-        await persistEsgSectionPatches(companyId, patches);
+        // The document placements travel too, so each cell keeps its source (E4).
+        await persistEsgSectionPatches(companyId, patches, work.injection?.placed ?? []);
         written = esgPatchCellCount(work.patches);
       } catch (err) {
         toast({
