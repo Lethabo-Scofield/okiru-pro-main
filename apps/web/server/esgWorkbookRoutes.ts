@@ -26,6 +26,7 @@ import {
 import { parseEsgWorkbookXlsx } from "../src/lib/esg/esgWorkbookImport";
 import { mergeImportIntoSection, type EsgRegisterMergeOutcome } from "../src/lib/esg/esgImportMerge";
 import { answerEsgQuestionWithAi } from "./esgKnowledge";
+import type { EsgWorkbookData as EsgScorableWorkbook } from "../src/lib/esg/esgWorkbookStorage";
 
 const logger = createLogger("EsgWorkbook");
 
@@ -187,8 +188,20 @@ async function persistEsgWorkbook(wb: EsgWorkbookData): Promise<void> {
  * Deliberately the same shape the client used to send, so `esgKnowledge.ts`
  * needs no change — what moved is WHO produces it.
  */
+/**
+ * The stored workbook as the scorers, the validator, the export and the
+ * assistant take it. An assertion, not a conversion: the write paths admit
+ * only what a cell holds (`cellPayloadProblem`: text, a number, true/false,
+ * nothing) plus the `_rows` register array, which its readers cast for
+ * themselves. Filtering here would drop `_rows` and change every register's
+ * score.
+ */
+function scorable(workbook: EsgWorkbookData): EsgScorableWorkbook {
+  return workbook as unknown as EsgScorableWorkbook;
+}
+
 function buildRuntimeSnapshot(workbook: EsgWorkbookData): unknown {
-  const scorecard = computeEsgScorecard(workbook);
+  const scorecard = computeEsgScorecard(scorable(workbook));
   if (!scorecard) return {};
   const pillar = (p: { score: number; max: number; percent: number }) => ({
     score: p.score,
@@ -421,7 +434,7 @@ export function registerEsgWorkbookRoutes(app: Express): void {
     if (wb.submittedAt) {
       return res.json({ ok: true, submittedAt: wb.submittedAt });
     }
-    const validation = validateEsgWorkbookForSubmit(wb);
+    const validation = validateEsgWorkbookForSubmit(scorable(wb));
     if (!validation.ok) {
       return res.status(400).json({
         error: "Workbook validation failed",
@@ -467,14 +480,14 @@ export function registerEsgWorkbookRoutes(app: Express): void {
   app.get("/api/esg/workbook/:companyId/scores", requireAuth, async (req, res) => {
     const wb = await authorizeEsgWorkbook(req, res);
     if (!wb) return;
-    const scores = computeEsgScores(wb);
+    const scores = computeEsgScores(scorable(wb));
     res.json({ companyId: wb.companyId, scores });
   });
 
   app.get("/api/esg/workbook/:companyId/export", requireAuth, async (req, res) => {
     const wb = await authorizeEsgWorkbook(req, res);
     if (!wb) return;
-    const buf = buildEsgWorkbookXlsx(wb);
+    const buf = buildEsgWorkbookXlsx(scorable(wb));
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="esg-workbook-${wb.companyId}.xlsx"`,
@@ -621,7 +634,7 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       typeof body?.activeSectionId === "string" ? body.activeSectionId : undefined;
 
     try {
-      const grounding = buildEsgAssistantContext(wb, activeSectionId);
+      const grounding = buildEsgAssistantContext(scorable(wb), activeSectionId);
       const system = [
         "You are the Okiru ESG workbook assistant. You help the user understand and complete ONE company's ESG workbook.",
         "The grounding document below is your ONLY source of truth about this workbook. Never invent figures, rows or scores; when the document does not contain an answer, say exactly what is missing and which section would hold it.",
