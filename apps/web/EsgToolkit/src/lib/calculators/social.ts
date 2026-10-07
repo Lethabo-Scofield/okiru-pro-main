@@ -30,6 +30,14 @@ import {
   TARGET_BASIS_REASON,
 } from "./esgTargets";
 import type { EsgExclusion } from "./esgApplicability";
+import {
+  answerRule,
+  bandedRule,
+  cell as traceCell,
+  inverseBandedRule,
+  targetSource,
+  type EsgTraceUnit,
+} from "./esgTrace";
 
 export type SocialScoreResult = EsgPillarResult;
 
@@ -333,6 +341,158 @@ export function scoreSocial(
 
   const d26 = supplierBand("_hs_mean", 5);
   const d27 = supplierBand("_fs_mean", 5);
+
+  /* ----------------------- How each row was made (E2) ---------------------- */
+  // Observes the values above; computes nothing the score depends on.
+  const trace = options?.trace;
+  if (trace) {
+    const parity = mode === "workbook-parity";
+    const PARITY_ZERO = "Workbook-parity scoring: the client workbook holds a literal 0 in this row.";
+    const traceTarget = (ref: string, value: number | null, unit: EsgTraceUnit) => {
+      if (value == null) return null;
+      const stated = readEsgCell(workbook, "assumptions", ref) != null;
+      const source = parity
+        ? stated
+          ? targetSource("workbook", `Assumptions!${ref}`)
+          : targetSource("workbook-default")
+        : basis === "bbbee"
+          ? stated
+            ? targetSource("bbbee-stated", `Assumptions!${ref}`)
+            : targetSource("bbbee-default")
+          : targetSource("company", `Assumptions!${ref}`);
+      return { value, unit, source };
+    };
+    const answer = (sheet: string, ref: string, section: string, label: string) => {
+      const value = str(workbook, ref, section);
+      return {
+        measured: value ? { value, unit: "answer" as const, label } : null,
+        inputs: [traceCell(sheet, ref, label, value || null)],
+      };
+    };
+    const record = trace.record.bind(trace);
+    const blackShare = readEsgCell(workbook, "ee", "B5");
+    const pwdShare = readEsgCell(workbook, "ee", "B8");
+
+    record({
+      key: "d5",
+      measured: blackShare == null ? null : { value: blackShare, unit: "ratio", label: "Black employees, share of headcount" },
+      target: traceTarget("B50", thrBlack, "ratio"),
+      inputs: [traceCell("EE_Scorecard", "B5", "Black employees (share of headcount), from the S_Data headcount matrix", blackShare)],
+      rule: bandedRule(8, floor, "the black share of the workforce"),
+    });
+    record({
+      key: "d6",
+      measured: mgmtHeadcount > 0 ? { value: blackFemaleMgmt / mgmtHeadcount, unit: "ratio", label: "Black women in top and senior management" } : null,
+      target: traceTarget("B51", thrBfm, "ratio"),
+      inputs: [
+        traceCell("S_Data", "F5:H6", "Black women in top and senior management", blackFemaleMgmt),
+        traceCell("S_Data", "L5:L6", "Top and senior management headcount", mgmtHeadcount),
+      ],
+      rule: bandedRule(6, floor, "the share of black women in management"),
+    });
+    record({ key: "d7", target: null, rule: answerRule(5, "An Employment Equity plan submitted"), ...answer("EE_Scorecard", "B9", "ee", "Employment Equity plan submitted") });
+    record({
+      key: "d8",
+      measured: pwdShare == null ? null : { value: pwdShare, unit: "ratio", label: "Employees with disabilities, share of headcount" },
+      target: traceTarget("B52", thrPwd, "ratio"),
+      inputs: [traceCell("EE_Scorecard", "B8", "Employees with disabilities (share of headcount)", pwdShare)],
+      rule: bandedRule(5, floor, "the share of employees with disabilities"),
+    });
+    record({ key: "d9", target: null, rule: answerRule(3, "The Employment Equity forum consulted"), ...answer("EE_Scorecard", "B10", "ee", "Employment Equity forum consulted") });
+    record({ key: "d10", target: null, rule: answerRule(3, "Numerical targets set per level, race and gender"), ...answer("EE_Scorecard", "B12", "ee", "Numerical EE targets set") });
+    record({ key: "d12", target: null, rule: "5 points when the Workplace Skills Plan is submitted (Yes); nothing otherwise — the workbook has no Partial here.", ...answer("S_Data", "B45", "s-data", "Workplace Skills Plan submitted") });
+    record({ key: "d13", target: null, rule: "5 points when the Annual Training Report is submitted (Yes); nothing otherwise.", ...answer("S_Data", "B46", "s-data", "Annual Training Report submitted") });
+    record({
+      key: "d14",
+      measured: headcount > 0 ? { value: num(workbook, "B49") / headcount, unit: "hours", label: "Training hours per employee" } : null,
+      target: traceTarget("B53", thrTraining, "hours"),
+      inputs: [traceCell("S_Data", "B49", "Total training hours delivered", num(workbook, "B49")), traceCell("S_Data", "L12", "Total headcount", headcount)],
+      rule: bandedRule(5, floor, "training hours per employee"),
+    });
+    record({
+      key: "d15",
+      measured: levy > 0 ? { value: num(workbook, "B47") / levy, unit: "ratio", label: "Mandatory grant recovered, share of the skills levy" } : null,
+      target: traceTarget("B54", thrGrant, "ratio"),
+      inputs: [traceCell("S_Data", "B47", "Mandatory grant claimed (R)", num(workbook, "B47")), traceCell("S_Data", "B44", "Skills development levy (R), derived", levy)],
+      rule: bandedRule(5, floor, "the grant recovered"),
+    });
+    record({
+      key: "d17",
+      measured: readEsgCell(workbook, "s-data", "G35") == null ? null : { value: readEsgCell(workbook, "s-data", "G35"), unit: "rate", label: "Lost-time injury frequency rate (per 1,000,000 hours)" },
+      target: traceTarget("B55", thrLtifr, "rate"),
+      inputs: [traceCell("S_Data", "G35", "LTIFR, from lost-time injuries and hours worked", readEsgCell(workbook, "s-data", "G35"))],
+      rule: inverseBandedRule(8, floor, "the injury rate"),
+    });
+    record({
+      key: "d18",
+      measured: { value: parity ? (g28 == null ? null : String(g28)) : readEsgCell(workbook, "s-data", "G28"), unit: "count", label: "Fatalities reported this period" },
+      target: null,
+      inputs: [traceCell("S_Data", "G28", "Fatalities (sum of the four quarters)", g28)],
+      rule: parity
+        ? "Workbook-parity scoring: 8 points when the cell is 0, a dash or blank — the workbook's own rule."
+        : "8 points when the company reports zero fatalities for the period; nothing when it reports one or reports nothing.",
+    });
+    record({
+      key: "d19",
+      measured: { value: driverActive, unit: "answer", label: "Driver fatigue programme in place" },
+      target: null,
+      inputs: [
+        traceCell("Driver_Debrief", "rows", "Driver debrief register in use", readEsgCell(workbook, "driver-debrief", "_active") ?? 0),
+        traceCell("S_Data", "C59", "OFO learners on the fatigue programme", num(workbook, "C59")),
+      ],
+      rule: "5 points when the driver debrief register is in use or learners are on the fatigue programme; nothing otherwise.",
+    });
+    record({
+      key: "d20",
+      measured: { value: incidents, unit: "count", label: "Health and safety incidents recorded" },
+      target: null,
+      inputs: [
+        traceCell("S_Data", "G29:G33", "Incidents recorded (injuries, near-misses, vehicle and property)", incidents),
+        traceCell("S_Data", "_hsTracking", "Does the company track incidents?", hsTracking || null),
+      ],
+      rule: "4 points when incidents are recorded, or when the company declares it tracks them and had a clean year; nothing when it does not track them. With neither, the row waits for the company to say which.",
+    });
+    record({
+      key: "d22",
+      measured: !parity && npat > 0 ? { value: csiSpend / npat, unit: "ratio", label: "Community investment, share of net profit after tax" } : null,
+      target: traceTarget("B56", thrCsiSpend, "ratio"),
+      inputs: [traceCell("S_Data", "D82", "Community investment spend (R), from the CSI register", csiSpend), traceCell("S_Data", "B84", "Net profit after tax (R)", npat)],
+      rule: parity ? PARITY_ZERO : bandedRule(5, floor, "community investment as a share of profit"),
+    });
+    record({
+      key: "d23",
+      measured: { value: initiatives, unit: "count", label: "Community initiatives this period" },
+      target: { value: thresholds.csiInitiativesPerYear, unit: "count", source: targetSource("sector") },
+      inputs: [traceCell("S_Data", "A72:A79", "Community initiatives in the CSI register", initiatives)],
+      rule: bandedRule(5, floor, "the number of community initiatives"),
+    });
+    record({
+      key: "d24",
+      measured: !parity && procurementTotal > 0 ? { value: procurementLocal / procurementTotal, unit: "ratio", label: "Local procurement, share of measured spend" } : null,
+      target: traceTarget("B57", thrLocal, "ratio"),
+      inputs: [traceCell("S_Data", "B86", "Local procurement spend (R)", procurementLocal), traceCell("S_Data", "B87", "Total measured procurement spend (R)", procurementTotal)],
+      rule: parity ? PARITY_ZERO : bandedRule(5, floor, "the local share of procurement"),
+    });
+    for (const [key, meanRef, what] of [
+      ["d26", "_hs_mean", "health and safety"],
+      ["d27", "_fs_mean", "food safety"],
+    ] as const) {
+      const mean = readEsgCell(workbook, "saq", meanRef);
+      record({
+        key,
+        measured: !parity && mean != null && supplierRatingMax > 0 ? { value: mean / supplierRatingMax, unit: "ratio", label: `Suppliers' ${what} rating, as a share of the top rating` } : null,
+        target: traceTarget("B58", thrSupplier, "ratio"),
+        inputs: [
+          traceCell("SAQ_Supplier", meanRef === "_hs_mean" ? "D:D" : "F:F", `Mean supplier ${what} rating`, mean),
+          traceCell("SAQ_Supplier", "rows", "Suppliers assessed", supplierCount),
+          traceCell("S_Data", "B89", "Assessed share of the supplier population (blank = not declared)", supplierCoverage),
+        ],
+        rule: parity
+          ? PARITY_ZERO
+          : `${bandedRule(5, floor, `the mean ${what} rating`)} Scaled by the share of suppliers assessed once the company declares how many it has.`,
+      });
+    }
+  }
 
   const rows = {
     d5, d6, d7, d8, d9, d10, d12, d13, d14, d15,

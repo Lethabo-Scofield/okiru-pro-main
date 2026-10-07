@@ -34,6 +34,15 @@ import {
   readTargetBasis,
   resolveTarget,
 } from "./esgTargets";
+import {
+  answerRule,
+  bandedRule,
+  cell as traceCell,
+  presentRule,
+  ratingRule,
+  targetSource,
+  type EsgTraceUnit,
+} from "./esgTrace";
 
 export type EnvironmentalScoreResult = EsgPillarResult;
 
@@ -336,6 +345,195 @@ export function scoreEnvironmental(
    */
   const legalRegisterLive = num(workbook, "F21", "g-data") > 0;
   const d29 = parity || !legalRegisterLive ? 0 : minCap((4 * isoLegal) / 5, 4);
+
+  /* ----------------------- How each row was made (E2) ---------------------- */
+  // Observes the values above; computes nothing the score depends on.
+  const trace = options?.trace;
+  if (trace) {
+    const E = "E_Data";
+    const PARITY_ZERO = "Workbook-parity scoring: the client workbook holds a literal 0 in this row.";
+    const traceTarget = (ref: string, value: number | null, unit: EsgTraceUnit) => {
+      if (value == null) return null;
+      const stated = readEsgCell(workbook, "assumptions", ref) != null;
+      const source = parity
+        ? stated
+          ? targetSource("workbook", `Assumptions!${ref}`)
+          : targetSource("workbook-default")
+        : targetSource("company", `Assumptions!${ref}`);
+      return { value, unit, source };
+    };
+    const record = trace.record.bind(trace);
+
+    record({
+      key: "d5",
+      measured: { value: l19, unit: "litres", label: "Fleet diesel this period (Scope 1A)" },
+      target: null,
+      inputs: [traceCell(E, "L19", "Fleet diesel, Scope 1A — litres, period total", l19)],
+      rule: presentRule(5, "fleet diesel"),
+    });
+    record({
+      key: "d6",
+      measured: b90 > 0 ? { value: (b90 - currentTco2e) / b90, unit: "ratio", label: "Scope 1 + 2 reduction from the baseline" } : null,
+      target: traceTarget("B43", thrGhgYoy, "ratio"),
+      inputs: [
+        traceCell(E, "B90", "Net-zero baseline (tCO₂e)", b90),
+        inventory
+          ? {
+              ref: "GHG inventory",
+              label: `This period's Scope 1 + 2 (tCO₂e)${months && months > 0 && months < 12 ? `, ${months} months scaled to a year` : ""}`,
+              value: Math.round(currentTco2e * 100) / 100,
+            }
+          : traceCell(E, "F90", "This period's emissions as the workbook sums them", f90),
+      ],
+      rule: bandedRule(10, floor, "the reduction from the baseline"),
+    });
+    record({
+      key: "d7",
+      measured: s2Gross > 0 ? { value: s2Offset / s2Gross, unit: "ratio", label: "Solar offset as a share of Scope 2 electricity" } : null,
+      target: traceTarget("B44", thrRenew, "ratio"),
+      inputs: parity
+        ? [traceCell(E, "M80", "Scope 2 gross (the workbook's reference)", s2Gross), traceCell(E, "M81", "Solar offset (the workbook's reference)", -s2Offset)]
+        : [traceCell(E, "L80", "Scope 2 grid electricity (kWh)", s2Gross), traceCell(E, "L81", "Solar generation offset (kWh)", s2Offset)],
+      rule: bandedRule(8, floor, "the solar share of Scope 2 electricity"),
+    });
+    record({
+      key: "d8",
+      measured: { value: l63, unit: "kL", label: "Water this period" },
+      target: null,
+      inputs: [traceCell(E, "L63", "Water — kilolitres, period total", l63)],
+      rule: presentRule(5, "water use"),
+    });
+    record({
+      key: "d9",
+      measured: sbtiYear > 0 ? { value: sbtiYear, unit: "year", label: "Net-zero target year" } : null,
+      target: null,
+      inputs: [traceCell("Assumptions", "B107", "Net-zero target year", sbtiYear || null)],
+      rule: "5 points for a net-zero target year from 2030 to 2060; 2.5 for any other year; nothing when none is set.",
+    });
+    record({
+      key: "d11",
+      measured: { value: l46, unit: "kWh", label: "Grid electricity this period" },
+      target: null,
+      inputs: [traceCell(E, "L46", "Grid electricity — kWh, period total", l46)],
+      rule: presentRule(5, "grid electricity"),
+    });
+    record({
+      key: "d12",
+      measured: !parity && priorYearKwh > 0 ? { value: (priorYearKwh - l46) / priorYearKwh, unit: "ratio", label: "Electricity reduction on the prior year" } : null,
+      target: traceTarget("B43", thrGhgYoy, "ratio"),
+      inputs: [traceCell(E, "B92", "Prior-year electricity (kWh)", priorYearKwh || null), traceCell(E, "L46", "This period's electricity (kWh)", l46)],
+      rule: parity ? PARITY_ZERO : bandedRule(5, floor, "the electricity reduction on the prior year"),
+    });
+    record({
+      key: "d13",
+      measured: l46 > 0 ? { value: solarKwh / l46, unit: "ratio", label: "Solar generation as a share of electricity use" } : null,
+      target: traceTarget("B44", thrRenew, "ratio"),
+      inputs: [traceCell(E, "L50:L54", "Solar generation (kWh, all sites)", solarKwh), traceCell(E, "L46", "Grid electricity (kWh)", l46)],
+      rule: bandedRule(8, floor, "the solar share of electricity use"),
+    });
+    record({
+      key: "d15",
+      measured: l100Positive > 0 ? { value: l100WithinNorm / l100Positive, unit: "ratio", label: "Vehicles running within their fuel-rate norm" } : null,
+      target: null,
+      inputs: [
+        traceCell("Fleet_Register", "A:A", "Vehicles listed", vehicleCount),
+        traceCell("Fleet_Register", "K:K", "Vehicles with a measured L/100 km", l100Positive),
+        traceCell("Fleet_Register", "K:L", "…of which within their norm (with the B45 tolerance)", l100WithinNorm),
+      ],
+      rule: "8 points × the share of vehicles with a measured L/100 km that run within their own norm; nothing without a fleet register.",
+    });
+    record({
+      key: "d16",
+      measured: { value: num(workbook, "_tonne_km_rows", "fleet"), unit: "count", label: "Vehicles with payload and monthly distance" },
+      target: null,
+      inputs: [traceCell("Fleet_Register", "F:F, I:I", "Vehicles carrying both a payload (kg) and monthly km", num(workbook, "_tonne_km_rows", "fleet"))],
+      rule: presentRule(5, "payload and distance for at least one vehicle"),
+    });
+    record({
+      key: "d17",
+      measured: fleetVehicles > 0 ? { value: fleetEvs / fleetVehicles, unit: "ratio", label: "Electric share of the fleet" } : null,
+      target: traceTarget("B46", thrEv, "ratio"),
+      inputs: [traceCell("Fleet_Register", "B28", "Vehicles in the fleet", fleetVehicles), traceCell("Fleet_Register", "H28", "Electric vehicles", fleetEvs)],
+      rule: bandedRule(5, floor, "the electric share of the fleet"),
+    });
+    record({
+      key: "d19",
+      measured: { value: num(workbook, "B16", "waste"), unit: "ratio", label: "Waste diversion rate" },
+      target: traceTarget("B48", thrWaste, "ratio"),
+      inputs: [traceCell("Waste_Register", "B16", "Waste diverted from landfill (share)", num(workbook, "B16", "waste"))],
+      rule: bandedRule(5, floor, "the waste diversion rate"),
+    });
+    record({
+      key: "d20",
+      measured: { value: num(workbook, "B17", "waste"), unit: "ratio", label: "Monthly share recycled" },
+      target: null,
+      inputs: [traceCell("Waste_Register", "B17", "Recycled share, from the waste contractor's report", num(workbook, "B17", "waste"))],
+      rule: presentRule(4, "a recycled share"),
+    });
+    record({
+      key: "d21",
+      measured: { value: num(workbook, "B18", "waste"), unit: "kg", label: "Waste to landfill" },
+      target: null,
+      inputs: [traceCell("Waste_Register", "B18", "Landfill waste (kg)", num(workbook, "B18", "waste"))],
+      rule: presentRule(3, "landfill waste"),
+    });
+    record({
+      key: "d23",
+      measured: { value: l63, unit: "kL", label: "Water this period" },
+      target: null,
+      inputs: [traceCell(E, "L63", "Water — kilolitres, period total", l63)],
+      rule: presentRule(4, "water use"),
+    });
+    record({
+      key: "d24",
+      measured: parity ? null : { value: String(workbook.sections?.["e-data"]?.cells?.["B94"] ?? "") || null, unit: "answer", label: "Water efficiency initiative active" },
+      target: null,
+      inputs: [traceCell(E, "B94", "Water efficiency initiative active", workbook.sections?.["e-data"]?.cells?.["B94"])],
+      rule: parity ? PARITY_ZERO : answerRule(3, "A water efficiency initiative"),
+    });
+    record({
+      key: "d26",
+      measured: parity ? null : { value: isoCert, unit: "rating", label: "ISO 14001 certification status (0–5)" },
+      target: null,
+      inputs: [
+        traceCell("ISO_Tracker", "certification", "Certification row, rated 0–5", isoCert),
+        traceCell("ISO_Tracker", "clauses", "EMS clauses assessed, besides the certification row", Math.max(0, emsScore - isoCert)),
+        traceCell("ISO_Tracker", "max", "EMS points available", emsMax),
+      ],
+      rule: parity
+        ? PARITY_ZERO
+        : "8 points × the certification rating ÷ 5 — but only once the EMS clauses behind it have been assessed (failing a lower band blocks the points above it); a certificate alone earns nothing.",
+    });
+    record({
+      key: "d27",
+      measured: parity ? null : { value: isoAspects, unit: "rating", label: "Environmental aspects register (0–5)" },
+      target: null,
+      inputs: [traceCell("ISO_Tracker", "6.1.2", "Environmental aspects register, rated 0–5", isoAspects)],
+      rule: parity ? PARITY_ZERO : ratingRule(4, "The environmental aspects register (ISO clause 6.1.2)"),
+    });
+    record({
+      key: "d28",
+      measured: parity ? null : { value: Math.min(policyDeclared, isoPolicy), unit: "rating", label: "Environmental policy, the stricter rating (0–5)" },
+      target: null,
+      inputs: [
+        traceCell("G_Data", "F27", "Environmental policy as the board declares it, 0–5", policyDeclared),
+        traceCell("ISO_Tracker", "5.2", "Environmental policy as the ISO assessment rates it, 0–5", isoPolicy),
+      ],
+      rule: parity ? PARITY_ZERO : ratingRule(4, "The stricter of the board's declaration and the ISO clause 5.2 assessment"),
+    });
+    record({
+      key: "d29",
+      measured: parity ? null : { value: isoLegal, unit: "rating", label: "Legal compliance register (0–5)" },
+      target: null,
+      inputs: [
+        traceCell("ISO_Tracker", "6.1.3", "Legal compliance register, rated 0–5", isoLegal),
+        traceCell("G_Data", "F21", "Governance risk register maturity (must be live)", num(workbook, "F21", "g-data")),
+      ],
+      rule: parity
+        ? PARITY_ZERO
+        : `${ratingRule(4, "The legal compliance register (ISO clause 6.1.3)")} It counts only where the governance risk register is live.`,
+    });
+  }
 
   const rows = {
     d5, d6, d7, d8, d9, d11, d12, d13, d15, d16, d17,
