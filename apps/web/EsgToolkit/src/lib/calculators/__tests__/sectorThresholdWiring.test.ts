@@ -38,15 +38,20 @@ vi.mock("../../esgConfig", async (importOriginal) => {
 const { scoreEnvironmental } = await import("../environmental");
 const esgConfig = await import("../../esgConfig");
 
-function workbook(diversionRate: number, statedTarget?: number) {
+const OWN_TARGETS = "Company's own targets";
+
+function workbook(diversionRate: number, statedTarget?: number, targetBasis?: string) {
   return {
     companyId: "WIRING",
     sections: {
       "company-reporting-setup": { cells: { sector: "Mining" } },
       assumptions: {
-        cells: statedTarget == null
-          ? { B8: "Standard", B9: 0.5 }
-          : { B8: "Standard", B9: 0.5, B48: statedTarget },
+        cells: {
+          B8: "Standard",
+          B9: 0.5,
+          ...(statedTarget == null ? {} : { B48: statedTarget }),
+          ...(targetBasis == null ? {} : { _targetBasis: targetBasis }),
+        },
       },
       waste: { cells: { B16: diversionRate } },
     },
@@ -60,23 +65,37 @@ describe("environmental thresholds come from the sector registry", () => {
     expect(esgConfig.esgSectorConfigForWorkbook).toHaveBeenCalled();
   });
 
-  it("bands against the SECTOR's waste target, not the base one", () => {
+  it("parity mode still bands against the sector's waste figure, as the workbook did", () => {
     /*
      * `Waste_Register!B16` is the diversion rate `E d19` scores. Against the
-     * real base target of 0.75, a rate of 0.375 sits exactly at the stance
-     * floor and earns partial credit. Against the mocked sector target of
-     * 0.375 the same rate meets the target outright and earns the full 5.
+     * real base figure of 0.75, a rate of 0.375 sits exactly at the stance
+     * floor and earns partial credit. Against the mocked sector figure of
+     * 0.375 the same rate meets it outright and earns the full 5.
      *
      * A scorer that ignored the sector would return the partial figure, and
      * this would fail — which is the entire point of the file.
      */
     expect(ESG_BASE_VALUES.thresholds.wasteDiversion).toBe(0.75);
-    expect(scoreEnvironmental(workbook(0.375)).rows.d19).toBeCloseTo(5, 6);
+    expect(scoreEnvironmental(workbook(0.375), { mode: "workbook-parity" }).rows.d19).toBeCloseTo(5, 6);
   });
 
-  it("still lets an explicit Assumptions cell outrank the sector", () => {
-    // A stated target of 0.9 is stricter than the mocked sector's 0.375, and
-    // 0.375/0.9 is below the 0.5 stance floor, so nothing is earned.
-    expect(scoreEnvironmental(workbook(0.375, 0.9)).rows.d19).toBe(0);
+  it("never bands a company against the sector's figure as though it were its target (D5)", () => {
+    /*
+     * This used to assert that corrected scoring banded `d19` against the
+     * sector's 0.375 when the company had set nothing. That fallback is what
+     * the 14 September ruling removed: "For E the company needs to determine
+     * their own targets." With no target set, `d19` leaves the total and says
+     * why; a sector figure is a benchmark, never a target anybody set.
+     */
+    const result = scoreEnvironmental(workbook(0.375));
+    expect(result.rows.d19).toBe(0);
+    expect(result.excluded.map((x) => x.key)).toContain("d19");
+  });
+
+  it("bands against the company's own stated target, not the sector's", () => {
+    // A stated 0.9 is stricter than the mocked sector's 0.375, and 0.375/0.9 is
+    // below the 0.5 stance floor, so nothing is earned; a stated 0.375 is met.
+    expect(scoreEnvironmental(workbook(0.375, 0.9, OWN_TARGETS)).rows.d19).toBe(0);
+    expect(scoreEnvironmental(workbook(0.375, 0.375, OWN_TARGETS)).rows.d19).toBeCloseTo(5, 6);
   });
 });

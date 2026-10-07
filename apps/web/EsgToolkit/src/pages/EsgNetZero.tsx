@@ -1,8 +1,14 @@
+import { EsgAppLink } from "@/components/EsgAppLink";
+import { esgCreateSectionHref } from "@/lib/esgRoutes";
+import { NetZeroLeversEditor } from "../components/NetZeroLeversEditor";
 import { computeNetZeroRoadmap } from "../lib/calculators/netZero";
 import { useEsgStore } from "../lib/esgStore";
 
 export default function EsgNetZero() {
   const workbook = useEsgStore((s) => s.workbook);
+  const companyId = useEsgStore((s) => s.companyId);
+  const submittedAt = useEsgStore((s) => s.submittedAt);
+  const updateSectionCells = useEsgStore((s) => s.updateSectionCells);
   const nz = workbook ? computeNetZeroRoadmap(workbook) : null;
 
   return (
@@ -10,8 +16,44 @@ export default function EsgNetZero() {
       <h1 className="text-[22px] font-semibold text-[var(--esg-text)]">Net-Zero Roadmap</h1>
       <p className="text-[12px] text-[var(--esg-text2)]">
         SBTi CNZS 2.0 milestones — this period's Scope 1 + 2 tonnes, from the GHG inventory, against
-        each milestone of the pathway from the company's own baseline.
+        each milestone of the pathway.
       </p>
+      {/* Whose pathway this is (D5). SBTi measures a company against its OWN base
+          year and target year; without both, the milestones below are the source
+          workbook's calendar ladder, and saying nothing let it pass for theirs. */}
+      {nz ? (
+        nz.pathwayIsOwn ? (
+          <p className="text-[12px] text-[var(--esg-text2)]" data-testid="esg-nz-pathway">
+            The company&apos;s own pathway: a straight line from its base year, {nz.baselineYear}, to net zero in{" "}
+            {nz.targetYear} — as SBTi measures it.
+          </p>
+        ) : (
+          <div className="esg-glass p-4 text-[12px] text-[var(--esg-text2)]" data-testid="esg-nz-pathway">
+            <p>
+              These milestones are not the company&apos;s pathway yet. SBTi measures a company from its own base year
+              to its own net-zero year, and{" "}
+              {nz.baselineYear > 0 ? "the net-zero target year is" : nz.targetYear > 0 ? "the base year is" : "both are"}{" "}
+              still to be set.
+            </p>
+            {companyId ? (
+              <p className="mt-2 flex flex-wrap gap-3">
+                <EsgAppLink
+                  href={esgCreateSectionHref(companyId, "company-reporting-setup")}
+                  className="text-[var(--esg-acc-blue,#22c55e)] hover:underline"
+                >
+                  Set the base year
+                </EsgAppLink>
+                <EsgAppLink
+                  href={esgCreateSectionHref(companyId, "assumptions")}
+                  className="text-[var(--esg-acc-blue,#22c55e)] hover:underline"
+                >
+                  Set the net-zero target year
+                </EsgAppLink>
+              </p>
+            ) : null}
+          </div>
+        )
+      ) : null}
       {nz ? (
         <div className="esg-glass p-4 grid gap-3 sm:grid-cols-3 text-[12px]">
           <div>
@@ -70,21 +112,17 @@ export default function EsgNetZero() {
         ) : null}
       </div>
       <div className="esg-glass p-5">
-        <h2 className="text-[11px] font-bold uppercase text-[var(--esg-text3)] mb-3">Key levers</h2>
-        {nz && nz.levers.length > 0 ? (
-          <ul className="space-y-2 text-[12px] text-[var(--esg-text2)]">
-            {nz.levers.map((l) => (
-              <li key={l.lever}>
-                <span className="text-[var(--esg-acc-e)] font-medium">{l.lever}</span> — {l.action}
-                {l.target ? ` (${l.target})` : ""}
-                {l.owner ? ` — ${l.owner}` : ""}
-              </li>
-            ))}
-          </ul>
+        <h2 className="text-[11px] font-bold uppercase text-[var(--esg-text3)] mb-3">Reduction levers</h2>
+        {workbook ? (
+          <NetZeroLeversEditor
+            cells={workbook.sections?.netzero?.cells as Record<string, unknown> | undefined}
+            locked={Boolean(submittedAt)}
+            onSave={(cells) =>
+              updateSectionCells("netzero", cells as Record<string, string | number | boolean | null>)
+            }
+          />
         ) : (
-          <p className="text-[12px] text-[var(--esg-text3)]">
-            No net-zero levers captured for this company yet.
-          </p>
+          <p className="text-[12px] text-[var(--esg-text3)]">Open a company to plan its reduction levers.</p>
         )}
       </div>
     </div>

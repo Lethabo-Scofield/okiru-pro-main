@@ -25,8 +25,15 @@ import {
   exclude,
   mergeExclusions,
   readDeclaredExclusions,
+  type EsgExclusion,
   type EsgPillarResult,
 } from "./esgApplicability";
+import {
+  environmentalTargetBasis,
+  environmentalTargetReason,
+  readTargetBasis,
+  resolveTarget,
+} from "./esgTargets";
 
 export type EnvironmentalScoreResult = EsgPillarResult;
 
@@ -75,11 +82,43 @@ export function scoreEnvironmental(
     readEsgCell(workbook, "assumptions", "B9"),
   );
   const thresholds = sectorThresholds(workbook);
-  const thrGhgYoy = readEsgCell(workbook, "assumptions", "B43") ?? thresholds.ghgYoyReduction;
-  const thrRenew =
-    readEsgCell(workbook, "assumptions", "B44") ?? thresholds.renewableElectricityMin;
-  const thrEv = readEsgCell(workbook, "assumptions", "B46") ?? thresholds.evFleetMin;
-  const thrWaste = readEsgCell(workbook, "assumptions", "B48") ?? thresholds.wasteDiversion;
+
+  /*
+   * Environmental targets are the company's own (D5). "For E the company needs
+   * to determine their own targets" — Z. Mnanzana, 14 September 2026.
+   *
+   * These four fell back to a sector default whenever the company had not set
+   * one: a 10% annual emissions cut, 20% renewable electricity, 5% electric
+   * vehicles and 75% waste diversion, which nobody outside the office had
+   * approved. They now follow the declared target basis exactly as Social's
+   * do: a target the company has not set cannot be scored, so its indicators
+   * leave the total with the reason stated. B-BBEE sets no environmental
+   * targets, so electing it for Social reads as "the company's own" here.
+   *
+   * One target can drive two indicators (B43 the emissions AND the energy
+   * reduction; B44 the Scope 2 offset AND the solar share), and both go.
+   * Parity mode keeps the workbook's constants, as Social's does.
+   */
+  const basis = mode === "workbook-parity" ? "bbbee" : readTargetBasis(workbook);
+  const targetExclusions: EsgExclusion[] = [];
+  const target = (keys: string[], cell: string, sectorDefault: number, label: string): number | null => {
+    if (mode === "workbook-parity") return readEsgCell(workbook, "assumptions", cell) ?? sectorDefault;
+    const resolved = resolveTarget(workbook, cell, sectorDefault, environmentalTargetBasis(basis));
+    if (resolved == null) {
+      const reason = environmentalTargetReason(basis, label);
+      for (const key of keys) {
+        const x = exclude("environmental", key, reason);
+        if (x) targetExclusions.push(x);
+      }
+    }
+    return resolved;
+  };
+  const thrGhgYoy = target(["d6", "d12"], "B43", thresholds.ghgYoyReduction, "the annual emissions reduction");
+  const thrRenew = target(["d7", "d13"], "B44", thresholds.renewableElectricityMin, "the renewable electricity share");
+  const thrEv = target(["d17"], "B46", thresholds.evFleetMin, "electric vehicles in the fleet");
+  const thrWaste = target(["d19"], "B48", thresholds.wasteDiversion, "waste diversion");
+  /** No target is not a target of zero: the indicator is excluded, this only keeps the arithmetic off it. */
+  const prT = (actual: number, thr: number | null, max: number) => (thr == null ? 0 : pr(actual, thr, max, floor));
 
   const l19 = num(workbook, "L19");
   const l46 = num(workbook, "L46");
@@ -106,7 +145,7 @@ export function scoreEnvironmental(
   const currentTco2e = inventory
     ? inventory.scope1And2 * (months && months > 0 && months < 12 ? 12 / months : 1)
     : f90;
-  const d6 = b90 > 0 ? pr((b90 - currentTco2e) / b90, thrGhgYoy, 10, floor) : 0;
+  const d6 = b90 > 0 ? prT((b90 - currentTco2e) / b90, thrGhgYoy, 10) : 0;
 
   /*
    * C7 = =IFERROR(IF(M80=0,0,IF(-M81/M80>=B44,8,
@@ -121,7 +160,7 @@ export function scoreEnvironmental(
   const s2Gross = mode === "workbook-parity" ? num(workbook, "M80") : num(workbook, "L80");
   const s2Offset =
     mode === "workbook-parity" ? -num(workbook, "M81") : num(workbook, "L81");
-  const d7 = s2Gross > 0 ? pr(s2Offset / s2Gross, thrRenew, 8, floor) : 0;
+  const d7 = s2Gross > 0 ? prT(s2Offset / s2Gross, thrRenew, 8) : 0;
 
   // C8 = =IF(E_Data!$L$63>0,5,0)
   const d8 = l63 > 0 ? 5 : 0;
@@ -157,14 +196,14 @@ export function scoreEnvironmental(
   const d12 =
     mode === "workbook-parity" || priorYearKwh <= 0
       ? 0
-      : pr((priorYearKwh - l46) / priorYearKwh, thrGhgYoy, 5, floor);
+      : prT((priorYearKwh - l46) / priorYearKwh, thrGhgYoy, 5);
 
   /*
    * C13 = =IFERROR(IF(L46=0,0,IF((L50+L51+L52+L53+L54)/L46>=B44,8,
    *         IF((L50+…+L54)/L46>=B44*B9,8*((L50+…+L54)/L46)/B44,0))),0)
    */
   const solarKwh = SOLAR_ROWS.reduce((a, ref) => a + num(workbook, ref), 0);
-  const d13 = l46 > 0 ? pr(solarKwh / l46, thrRenew, 8, floor) : 0;
+  const d13 = l46 > 0 ? prT(solarKwh / l46, thrRenew, 8) : 0;
 
   /* ------------------------------- Fleet ---------------------------- */
 
@@ -196,12 +235,12 @@ export function scoreEnvironmental(
    */
   const fleetVehicles = num(workbook, "B28", "fleet");
   const fleetEvs = num(workbook, "H28", "fleet");
-  const d17 = fleetVehicles > 0 ? pr(fleetEvs / fleetVehicles, thrEv, 5, floor) : 0;
+  const d17 = fleetVehicles > 0 ? prT(fleetEvs / fleetVehicles, thrEv, 5) : 0;
 
   /* ------------------------------- Waste ---------------------------- */
 
   // C19 = =IFERROR(IF(B16>=B48,5,IF(B16>=B48*B9,5*B16/B48,0)),0)
-  const d19 = pr(num(workbook, "B16", "waste"), thrWaste, 5, floor);
+  const d19 = prT(num(workbook, "B16", "waste"), thrWaste, 5);
   // C20 = =IF(Waste_Register!$B$17>0,4,0)
   const d20 = num(workbook, "B17", "waste") > 0 ? 4 : 0;
   // C21 = =IF(Waste_Register!$B$18>0,3,0)
@@ -312,7 +351,7 @@ export function scoreEnvironmental(
   const excluded =
     mode === "workbook-parity"
       ? []
-      : mergeExclusions(readDeclaredExclusions(workbook, "environmental"), []);
+      : mergeExclusions(readDeclaredExclusions(workbook, "environmental"), targetExclusions);
   const scored = Object.entries(rows)
     .filter(([key]) => !excluded.some((x) => x.key === key))
     .reduce((a, [, v]) => a + v, 0);

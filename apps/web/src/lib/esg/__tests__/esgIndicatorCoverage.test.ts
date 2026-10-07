@@ -10,6 +10,13 @@ import { SCORECARD_INDICATORS, esgIndicatorLabel } from "../esgScorecardDefiniti
 const wb = (sections: Record<string, Record<string, unknown>>): EsgWorkbookData =>
   ({ sections: Object.fromEntries(Object.entries(sections).map(([k, cells]) => [k, { cells }])) }) as unknown as EsgWorkbookData;
 
+/**
+ * A company that has set its own environmental targets. Without a declared
+ * basis the target-based E indicators leave the total (D5), and these tests are
+ * about what happens once a target exists.
+ */
+const OWN_TARGETS = { _targetBasis: "Company's own targets", B43: 0.1, B44: 0.2 };
+
 const find = (result: ReturnType<typeof computeEsgIndicatorCoverage>, pillar: string, key: string) =>
   result.pillars.find((p) => p.pillar === pillar)!.indicators.find((x) => x.key === key)!;
 
@@ -50,7 +57,7 @@ describe("computeEsgIndicatorCoverage", () => {
   });
 
   it("moves an indicator from missing to scored as its inputs arrive", () => {
-    const fuel = computeEsgIndicatorCoverage(wb({ "e-data": { s1a_C14: 1_000 } }));
+    const fuel = computeEsgIndicatorCoverage(wb({ "e-data": { s1a_C14: 1_000 }, assumptions: OWN_TARGETS }));
     expect(find(fuel, "environmental", "d5")).toMatchObject({ status: "full", points: 5, missing: [] });
     // A baseline is still needed for the reduction indicator.
     expect(find(fuel, "environmental", "d6")).toMatchObject({ status: "missing", missing: ["A Scope 1 + 2 baseline in tCO₂e"] });
@@ -75,7 +82,7 @@ describe("computeEsgIndicatorCoverage", () => {
 
   it("calls a zero on present data a result, not a gap", () => {
     // Grid electricity recorded, no solar: the renewable share is a real zero.
-    const result = computeEsgIndicatorCoverage(wb({ "e-data": { s2_C14: 100_000 } }));
+    const result = computeEsgIndicatorCoverage(wb({ "e-data": { s2_C14: 100_000 }, assumptions: OWN_TARGETS }));
     const solarShare = find(result, "environmental", "d13");
     expect(solarShare.status).toBe("zero");
     expect(solarShare.missing).toEqual([]);
