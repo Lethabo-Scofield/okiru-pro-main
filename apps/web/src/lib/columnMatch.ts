@@ -176,16 +176,162 @@ function containsTokenRun(haystack: string[], needle: string[]): boolean {
  * Is the header a run of WHOLE WORDS inside the alias? "Course" is in "Course
  * Cost"; "Age" is not in "Wages".
  *
- * For the containment-based header→key resolvers (workbookExcelNormalizer,
- * workbookGridParse), which still matched letter runs in this direction. "Age"
- * matched Salary Cost's alias "Wages", so every learner's age was read as their
- * salary cost and the real salary column fell through to Total Cost: Skills
- * dropped 2–5 points on 13 of the 16 reference workbooks from 18 Sep 2026
- * (f4f2871f made header claims exclusive, so the stray match started winning).
- * The same rule `aliasSimilarity` applies, as a yes/no.
+ * For the containment tier of `resolveHeaderKeys`, which still matched letter
+ * runs in this direction. "Age" matched Salary Cost's alias "Wages", so every
+ * learner's age was read as their salary cost and the real salary column fell
+ * through to Total Cost: Skills dropped 2–5 points on 13 of the 16 reference
+ * workbooks from 18 Sep 2026 (f4f2871f made header claims exclusive, so the
+ * stray match started winning). The same rule `aliasSimilarity` applies, as a
+ * yes/no.
  */
 export function headerIsWordsOfAlias(header: string, alias: string): boolean {
   return containsTokenRun(tokens(alias), tokens(header));
+}
+
+/**
+ * A workbook grid column, as far as naming it goes: structurally the `ColumnDef`
+ * of components/workbook/sections.ts, which this file cannot import (sections ↔
+ * workbookExcelNormalizer is already a cycle, and the server imports this file
+ * by relative path).
+ */
+export type NamedColumn = Pick<TargetField, "key" | "label" | "aliases">;
+
+/** Every name a grid column answers to: key, label, the label's stem, aliases. */
+export function buildColumnAliases(col: NamedColumn): string[] {
+  const aliases = [col.key, col.label];
+  const label = col.label.replace(/\*+$/, "").trim();
+  aliases.push(label);
+  if (label.includes("—")) aliases.push(label.split("—")[0].trim());
+  if (label.includes("(")) aliases.push(label.split("(")[0].trim());
+  if (col.aliases) aliases.push(...col.aliases);
+  return aliases;
+}
+
+/** A header's own name: its text before a parenthesised or dashed qualifier. */
+function headerStem(header: string): string {
+  const stem = header.split("(")[0].split("—")[0].trim();
+  return norm(stem) ? stem : header;
+}
+
+/** An alias inside the header, or the header inside an alias as whole words ("Age" is not "Wages"). */
+function containsName(header: string, alias: string): boolean {
+  const h = norm(header);
+  const a = norm(alias);
+  return Boolean(a) && (h.includes(a) || (a.includes(h) && headerIsWordsOfAlias(header, alias)));
+}
+
+/**
+ * How strongly a header names a column it does not claim outright, 0 for not at
+ * all: the header equal to one of its names (4), the header's stem equal to one
+ * (3), a name inside the stem (2), a name only inside the qualifier (1).
+ *
+ * The stem, because a parenthesis qualifies a header; it does not name it, just
+ * as `buildColumnAliases` reads a label by its stem. "Salary Cost (category
+ * B,C,D only)" names Salary Cost and says which learners it covers. Matched as
+ * one string it contains Category's "category", and Category, declared first,
+ * took the salary column. Length is no better a rule: "Name & Surname" contains
+ * Surname's longer name, but the register reads it as Name and splits it.
+ */
+function containmentStrength(header: string, col: NamedColumn): number {
+  const stem = headerStem(header);
+  let best = 0;
+  for (const alias of buildColumnAliases(col)) {
+    const a = norm(alias);
+    if (!a) continue;
+    const strength = a === norm(header)
+      ? 4
+      : a === norm(stem)
+        ? 3
+        : containsName(stem, alias)
+          ? 2
+          : containsName(header, alias)
+            ? 1
+            : 0;
+    if (strength > best) best = strength;
+  }
+  return best;
+}
+
+/**
+ * Which column key each header of one row means. The one resolver behind every
+ * header row a consultant hands us: the Excel import (workbookExcelNormalizer),
+ * the section import/export (workbookSectionImportExport), and a header row
+ * pasted into a B-BBEE or ESG grid (workbookGridParse).
+ *
+ * A header ROW, not a header. Which column a header means depends on what the
+ * headers beside it have already claimed, so resolving them one at a time is
+ * how the paste path read "Salary Cost (category B,C,D only)" as Category, and
+ * how the import dialog told a consultant "No column found for: Current Size"
+ * about a column the parse had just read. Two functions answering one question
+ * is how a screen ends up contradicting the thing behind it.
+ *
+ * Claims are settled strongest first. A header that IS the column's label or
+ * key (rank 0) beats one equal to an alias (rank 1), which beats containment,
+ * where a name in the header's own words beats one only in its parenthesised
+ * qualifier (`containmentStrength`). Each key is spoken for once: a weaker claim
+ * never overwrites a stronger one, and a header whose key is taken falls through
+ * to its next valid key rather than being dropped.
+ *
+ * Two things forced this. "Salary Cost (category B,C,D only)" and "Location"
+ * both substring-matched "category" and overwrote the real "Category *" ->
+ * categoryCode slot with the Location value, breaking category-based skills
+ * scoring for every workbook. (W-skills) And real Management Control sheets
+ * carry BOTH "Position (Occupational Level)" and "Job Title" — each an alias of
+ * Designation — so with last-write-wins every employee's Designation was read
+ * from Job Title ("Member", "Administration Manager") and the whole register
+ * landed in the wrong management band. Designation is what MC scores.
+ */
+export function resolveHeaderKeys(headers: string[], columns: NamedColumn[]): Array<string | null> {
+  const claimForHeader = (h: string): { key: string; rank: number } | null => {
+    const hn = norm(h);
+    if (!hn) return null;
+    let best: { key: string; rank: number } | null = null;
+    for (const col of columns) {
+      const ownNames = [col.key, col.label.replace(/\*+$/, "").trim()];
+      const rank = ownNames.some((n) => norm(n) === hn)
+        ? 0
+        : buildColumnAliases(col).some((a) => norm(a) === hn)
+          ? 1
+          : -1;
+      if (rank >= 0 && (!best || rank < best.rank)) best = { key: col.key, rank };
+      if (best?.rank === 0) break;
+    }
+    return best;
+  };
+
+  const claims = headers.map(claimForHeader);
+  const keyByCol: Array<string | null> = headers.map(() => null);
+  const taken = new Set<string>();
+  for (const rank of [0, 1]) {
+    headers.forEach((_, i) => {
+      const claim = claims[i];
+      if (keyByCol[i] || !claim || claim.rank !== rank || taken.has(claim.key)) return;
+      keyByCol[i] = claim.key;
+      taken.add(claim.key);
+    });
+  }
+
+  // Containment, across the whole row at once: every unresolved header against
+  // every free column, strongest first; header order, then column order, break
+  // ties so the same row always resolves the same way.
+  const contained: Array<{ i: number; c: number; strength: number }> = [];
+  headers.forEach((h, i) => {
+    if (keyByCol[i] || !norm(h)) return;
+    columns.forEach((col, c) => {
+      if (taken.has(col.key)) return;
+      const strength = containmentStrength(h, col);
+      if (strength > 0) contained.push({ i, c, strength });
+    });
+  });
+  contained.sort((x, y) => y.strength - x.strength || x.i - y.i || x.c - y.c);
+  for (const { i, c } of contained) {
+    const key = columns[c].key;
+    if (keyByCol[i] || taken.has(key)) continue;
+    keyByCol[i] = key;
+    taken.add(key);
+  }
+
+  return keyByCol;
 }
 
 /**

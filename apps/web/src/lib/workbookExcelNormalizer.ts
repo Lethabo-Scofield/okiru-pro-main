@@ -23,7 +23,7 @@ import {
   type WorkbookValidationIssue,
 } from "@/components/workbook/workbookValidation";
 import { BOOLEAN_TRUE, BOOLEAN_FALSE } from "@/lib/tabularNormalize";
-import { headerIsWordsOfAlias } from "@/lib/columnMatch";
+import { buildColumnAliases, resolveHeaderKeys } from "@/lib/columnMatch";
 
 export type WorkbookRow = Record<string, unknown> & { _id: string };
 export type WorkbookSectionPayload = { rows: WorkbookRow[]; meta?: Record<string, unknown> };
@@ -121,44 +121,6 @@ function matchSheetName(sheetName: string): string | null {
     }
   }
   return bestKey;
-}
-
-function buildColumnAliases(col: ColumnDef): string[] {
-  const aliases = [col.key, col.label];
-  const label = col.label.replace(/\*+$/, "").trim();
-  aliases.push(label);
-  if (label.includes("—")) aliases.push(label.split("—")[0].trim());
-  if (label.includes("(")) aliases.push(label.split("(")[0].trim());
-  if (col.aliases) aliases.push(...col.aliases);
-  return aliases;
-}
-
-function mapHeaderToKey(header: string, columns: ColumnDef[], excludeKeys?: Set<string>): string | null {
-  const h = norm(header);
-  if (!h) return null;
-  // First pass: exact normalised match — beats substring matches when both
-  // would qualify (e.g. "Spend" vs "Total Spend" → prefer the exact "Spend").
-  for (const col of columns) {
-    if (excludeKeys?.has(col.key)) continue;
-    for (const alias of buildColumnAliases(col)) {
-      if (norm(alias) === h) return col.key;
-    }
-  }
-  // Second pass: substring/contains match (looser). Skipping already-claimed keys
-  // lets a header whose FIRST substring match is taken fall through to its next
-  // valid key (e.g. "Current Company Size *" → sizeAtFirstProcurement is claimed →
-  // currentSize). (W-proc)
-  for (const col of columns) {
-    if (excludeKeys?.has(col.key)) continue;
-    for (const alias of buildColumnAliases(col)) {
-      const a = norm(alias);
-      if (!a) continue;
-      // A header inside an alias counts only as whole words: "Age" is not
-      // "Wages" (see headerIsWordsOfAlias).
-      if (h.includes(a) || (a.includes(h) && headerIsWordsOfAlias(header, alias))) return col.key;
-    }
-  }
-  return null;
 }
 
 /**
@@ -386,7 +348,7 @@ function parseMetaFromSheet(
     if (row.length >= 2) {
       const label = String(row[0] ?? "").trim();
       if (!label) continue;
-      const key = mapHeaderToKey(label, columns);
+      const [key] = resolveHeaderKeys([label], columns);
       if (key) {
         const col = columns.find((c) => c.key === key);
         // Default to column B; override with the Measured column when present and
@@ -474,74 +436,6 @@ function deriveAfsMetaFromIndicatorTable(rows: unknown[][]): Record<string, unkn
     }
   }
   return out;
-}
-
-/**
- * Which column key each header means, resolved the way the parser resolves it.
- *
- * Exported because the UI has to report the SAME answer the parse uses. It did
- * not: the dialog called `mapHeaderToKey` per header, with no notion of a key
- * already being claimed, and so told a consultant "No column found for:
- * Current Size" about a column it had just read, and "Ignored: Registration
- * No." about one it had not ignored. Two functions answering one question is
- * how a screen ends up contradicting the thing behind it.
- */
-export function resolveHeaderKeys(
-  headers: string[],
-  columns: ColumnDef[],
-): Array<string | null> {
-  // Column→key mapping in strength order, strongest claim first. A header that IS
-  // the column's label or key (rank 0) beats one matching an alias (rank 1),
-  // which beats a substring match. Each key is spoken for once: a weaker claim
-  // never overwrites a stronger one, and a header whose key is taken falls
-  // through to its next valid key rather than being dropped.
-  //
-  // Two things forced this. "Salary Cost (category B,C,D only)" and "Location"
-  // both substring-matched "category" and overwrote the real "Category *" ->
-  // categoryCode slot with the Location value, breaking category-based skills
-  // scoring for every workbook. (W-skills) And real Management Control sheets
-  // carry BOTH "Position (Occupational Level)" and "Job Title" — each an alias of
-  // Designation — so with last-write-wins every employee's Designation was read
-  // from Job Title ("Member", "Administration Manager") and the whole register
-  // landed in the wrong management band. Designation is what MC scores.
-  const claimForHeader = (h: string): { key: string; rank: number } | null => {
-    const hn = norm(h);
-    if (!hn) return null;
-    let best: { key: string; rank: number } | null = null;
-    for (const col of columns) {
-      const ownNames = [col.key, col.label.replace(/\*+$/, "").trim()];
-      const rank = ownNames.some((n) => norm(n) === hn)
-        ? 0
-        : buildColumnAliases(col).some((a) => norm(a) === hn)
-          ? 1
-          : -1;
-      if (rank >= 0 && (!best || rank < best.rank)) best = { key: col.key, rank };
-      if (best?.rank === 0) break;
-    }
-    return best;
-  };
-
-  const claims = headers.map(claimForHeader);
-  const keyByCol: Array<string | null> = headers.map(() => null);
-  const taken = new Set<string>();
-  for (const rank of [0, 1]) {
-    headers.forEach((_, i) => {
-      const claim = claims[i];
-      if (keyByCol[i] || !claim || claim.rank !== rank || taken.has(claim.key)) return;
-      keyByCol[i] = claim.key;
-      taken.add(claim.key);
-    });
-  }
-  headers.forEach((h, i) => {
-    if (keyByCol[i]) return;
-    const key = mapHeaderToKey(h, columns, taken);
-    if (key && !taken.has(key)) {
-      keyByCol[i] = key;
-      taken.add(key);
-    }
-  });
-
-  return keyByCol;
 }
 
 function parseGridFromSheet(

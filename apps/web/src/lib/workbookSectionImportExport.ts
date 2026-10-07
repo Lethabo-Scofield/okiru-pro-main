@@ -2,7 +2,8 @@ import * as XLSX from "xlsx";
 import { boundWorkbookSheets } from "./sheetBounds";
 import { v4 as uuidv4 } from "uuid";
 import type { ColumnDef } from "@/components/workbook/sections";
-import { coerceCellValue, mapHeaderToKey } from "@/lib/workbookGridParse";
+import { coerceCellValue } from "@/lib/workbookGridParse";
+import { resolveHeaderKeys } from "@/lib/columnMatch";
 
 export type WorkbookGridRow = Record<string, unknown> & { _id: string };
 
@@ -26,7 +27,7 @@ function parseGridMatrix(matrix: unknown[][], columns: ColumnDef[]): WorkbookGri
   if (matrix.length < 1) return [];
   const headerIdx = findHeaderRow(matrix);
   const headers = (matrix[headerIdx] as unknown[]).map((h) => String(h ?? "").trim());
-  const keyByCol = headers.map((h) => mapHeaderToKey(h, columns));
+  const keyByCol = resolveHeaderKeys(headers, columns);
 
   const out: WorkbookGridRow[] = [];
   for (let i = headerIdx + 1; i < matrix.length; i++) {
