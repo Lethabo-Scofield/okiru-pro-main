@@ -59,6 +59,8 @@ export default function EsgDashboard() {
   const selectedTopics = useMemo(() => parseSelectedTopics(topicsCsv), [topicsCsv]);
   const [submitting, setSubmitting] = useState(false);
   const [reopening, setReopening] = useState(false);
+  /** The headline whose calculation is open (E3). */
+  const [openKpi, setOpenKpi] = useState<string | null>(null);
   const unlockWorkbook = useEsgStore((s) => s.unlockWorkbook);
 
   const reopen = async () => {
@@ -215,6 +217,19 @@ export default function EsgDashboard() {
               >
                 {inner}
               </Link>
+            ) : k.calc ? (
+              // A headline opens onto how it was made (E3).
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setOpenKpi(openKpi === k.id ? null : k.id)}
+                aria-expanded={openKpi === k.id}
+                aria-controls="esg-kpi-calc"
+                className={`esg-glass-sm p-3 text-left hover:bg-white/[0.04] transition-colors ${openKpi === k.id ? "ring-1 ring-[var(--esg-acc-e)]" : ""}`}
+                data-testid={`esg-kpi-${k.id}`}
+              >
+                {inner}
+              </button>
             ) : (
               <div key={k.id} className="esg-glass-sm p-3" data-testid={`esg-kpi-${k.id}`}>
                 {inner}
@@ -223,6 +238,47 @@ export default function EsgDashboard() {
           })}
         </div>
       ) : null}
+
+      {(() => {
+        const open = dash?.kpis?.find((k) => k.id === openKpi);
+        if (!open?.calc) return null;
+        return (
+          <div id="esg-kpi-calc" className="esg-glass p-4 text-[12px] text-[var(--esg-text2)] space-y-2" data-testid="esg-kpi-calc">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-[13px] font-semibold text-[var(--esg-text)]">
+                How {open.label} is worked out: {open.value}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setOpenKpi(null)}
+                className="text-[11px] text-[var(--esg-text3)] hover:text-[var(--esg-text)]"
+              >
+                Close
+              </button>
+            </div>
+            <p>{open.calc.rule}</p>
+            {open.calc.inputs.length > 0 ? (
+              <table className="w-full max-w-[760px] text-[11px]">
+                <tbody>
+                  {open.calc.inputs.map((input) => (
+                    <tr key={`${input.ref}-${input.label}`} className="border-t border-[var(--esg-glass-border)]/50">
+                      <td className="py-1 pr-3 font-mono text-[10.5px] text-[var(--esg-text3)]">{input.ref}</td>
+                      <td className="py-1 pr-3">{input.label}</td>
+                      <td className="py-1 text-right tabular-nums text-[var(--esg-text)]">
+                        {input.value == null || input.value === ""
+                          ? "—"
+                          : typeof input.value === "number"
+                            ? input.value.toLocaleString("en-ZA", { maximumFractionDigits: 2 })
+                            : String(input.value)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : null}
+          </div>
+        );
+      })()}
 
       {dash?.pillarRows ? (
         <div className="grid gap-4 lg:grid-cols-3">
