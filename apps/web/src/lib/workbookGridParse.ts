@@ -3,7 +3,7 @@ import { parseWorkbookDate, type ColumnDef } from "@/components/workbook/section
 import { suggestSelectOption, FUZZY_SELECT_ACCEPT } from "@/lib/selectOptionMatch";
 import { parseNumberLoose } from "@/lib/tabularNormalize";
 import { coerceYesNo } from "@/lib/yesNoValue";
-import { headerIsWordsOfAlias } from "@/lib/columnMatch";
+import { resolveHeaderKeys } from "@/lib/columnMatch";
 
 export type WorkbookGridRow = Record<string, unknown> & { _id: string };
 
@@ -27,26 +27,13 @@ function norm(s: string): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function buildColumnAliases(col: ColumnDef): string[] {
-  const aliases = [col.key, col.label];
-  const label = col.label.replace(/\*+$/, "").trim();
-  aliases.push(label);
-  if (label.includes("—")) aliases.push(label.split("—")[0].trim());
-  if (label.includes("(")) aliases.push(label.split("(")[0].trim());
-  return aliases;
-}
-
+/**
+ * The column one header names, on its own. A header ROW goes through
+ * `resolveHeaderKeys`: what a header means depends on what the headers beside it
+ * have claimed.
+ */
 export function mapHeaderToKey(header: string, columns: ColumnDef[]): string | null {
-  const h = norm(header);
-  if (!h) return null;
-  for (const col of columns) {
-    for (const alias of buildColumnAliases(col)) {
-      const a = norm(alias);
-      // A header inside an alias counts only as whole words: "Age" is not "Wages".
-      if (h === a || h.includes(a) || (a.includes(h) && headerIsWordsOfAlias(header, alias))) return col.key;
-    }
-  }
-  return null;
+  return resolveHeaderKeys([header], columns)[0];
 }
 
 export function coerceCellValue(key: string, col: ColumnDef | undefined, raw: unknown): unknown {
@@ -199,9 +186,16 @@ export function matrixToRowsByPosition(
 
   if (mapHeaders && matrix.length > 0) {
     const headers = matrix[0];
-    const mapped = headers.map((h) => mapHeaderToKey(h, columns));
+    const mapped = resolveHeaderKeys(headers, columns);
     if (mapped.some(Boolean)) {
-      colKeys = mapped.map((k, i) => k ?? columns[startCol + i]?.key ?? "");
+      // A header that names nothing keeps its position, unless a header elsewhere
+      // in the row claimed that column by name: then it is dropped, not written
+      // over the named column ("Age" landing in Disabled).
+      const named = new Set(mapped.filter(Boolean));
+      colKeys = mapped.map((k, i) => {
+        const positional = columns[startCol + i]?.key ?? "";
+        return k ?? (named.has(positional) ? "" : positional);
+      });
       dataStart = 1;
       colOffset = 0;
     }

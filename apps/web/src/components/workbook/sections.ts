@@ -46,8 +46,8 @@ export interface ColumnDef {
   optionGuidance?: Record<string, string>;
   /**
    * Optional alternate header labels recognised when normalising an uploaded
-   * spreadsheet. Matching is whitespace/punctuation/case-insensitive (see
-   * `mapHeaderToKey` in `workbookExcelNormalizer.ts`).
+   * spreadsheet or a pasted header row. Matching is whitespace/punctuation/
+   * case-insensitive (see `resolveHeaderKeys` in `lib/columnMatch.ts`).
    */
   aliases?: string[];
   /**
