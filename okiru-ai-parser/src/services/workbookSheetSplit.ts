@@ -185,7 +185,7 @@ function sheetRowsWithHeader(matrix: unknown[][], maxRows: number): Array<Record
   if (matrix.length === 0) return [];
 
   const asText = matrix.map((row) => row.map((c) => String(c ?? '')));
-  const region = mainColumnRegion(asText) ?? { start: 0, end: Math.max(0, ...matrix.map((r) => r.length)) - 1 };
+  const region = mainColumnRegion(asText) ?? { start: 0, end: matrix.reduce((w, r) => Math.max(w, r.length), 0) - 1 }; // not Math.max(...rows): spreading every row as an argument overflows the stack past ~120k rows
   const inRegion = <T>(row: T[]): T[] => row.slice(region.start, region.end + 1);
   const regionMatrix = matrix.map(inRegion);
 

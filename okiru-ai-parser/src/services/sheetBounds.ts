@@ -132,7 +132,12 @@ function boundSheet(
   cap: number,
   force: boolean,
 ): { kept: Extent | null; dropped: number } | undefined {
+  // No claim at all: every reader skips a sheet without `!ref`, so there is
+  // nothing to bound — and filling one in would only ever add rows.
+  if (sheet['!ref'] == null) return undefined;
   const declared = declaredExtent(sheet);
+  // An honest-sized claim stays exactly as it is. An UNREADABLE one does not:
+  // "A0:XFD9999999" fails decoding here, yet a reader would still walk it.
   if (!force && declared && areaOf(declared) <= cap) return undefined;
 
   const { rows, cols } = cellsOf(sheet);
