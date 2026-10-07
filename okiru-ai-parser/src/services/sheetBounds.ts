@@ -221,7 +221,7 @@ export function boundWorkbookSheets(
     }
   }
 
-  return [...notes.values()];
+  return Array.from(notes.values());
 }
 
 /** The notes that mean a value was not read, worded for the person who uploaded the file. */
