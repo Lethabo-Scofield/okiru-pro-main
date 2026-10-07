@@ -29,7 +29,9 @@ import { useLocation } from "wouter";
 import { AlertTriangle, Building2, Check, Download, FileWarning, Loader2, RefreshCw, Upload } from "lucide-react";
 import { ExtractionReviewPane } from "@/components/upload/ExtractionReviewPane";
 import { EditableValue } from "@/components/review/EditableValue";
-import { PARSER_STATUS_PRESENTATION, fieldLabel, formatParserValue, type ParserDocumentSummary, type ParserRunDetail } from "@/lib/parserDocuments";
+import type { PreviewFocus } from "@/components/review/DocumentPreview";
+import { AiValuesSection, LayerBadge } from "@/components/review/AiValuesSection";
+import { PARSER_STATUS_PRESENTATION, fieldLabel, formatParserValue, sheetOfSource, type ParserDocumentSummary, type ParserRunDetail } from "@/lib/parserDocuments";
 
 interface ClientRow { clientId: string; name: string }
 
@@ -40,6 +42,12 @@ interface ClassificationCandidate {
   confidence?: number;
   matched_evidence?: string[];
   reasons?: string[];
+}
+
+/** "0:42", "3:05" — how long the read has been going. */
+function formatElapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 export default function ParserDocumentDetail({ id }: { id: string }) {
@@ -55,6 +63,21 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [typeDraft, setTypeDraft] = useState("");
   const replaceRef = useRef<HTMLInputElement>(null);
+  /** The page or sheet the preview shows: the citation of the value being checked. */
+  const [focus, setFocus] = useState<PreviewFocus | null>(null);
+  /**
+   * When the paid read started. A full read — rules, AI and agent — takes
+   * minutes on a scanned pack; the page says so and counts, instead of a
+   * spinner that looks stuck.
+   */
+  const [readingSince, setReadingSince] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (readingSince == null) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [readingSince]);
 
   const load = async (signal?: AbortSignal) => {
     const [detailRes, runsRes] = await Promise.all([
@@ -96,6 +119,9 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   }, []);
 
   const fields = (run?.parserOutput?.extracted_fields ?? {}) as Record<string, any>;
+  // What the model and the agent read — most of what a read finds. Absent on
+  // a run stored before the library kept it.
+  const aiValues = Array.isArray(run?.aiValues) ? run!.aiValues : [];
   const audit = (run?.parserOutput?.audit_trail ?? {}) as Record<string, any>;
   const missingKeys = useMemo(() => new Set([
     ...(run?.missingFields ?? []),
@@ -115,11 +141,13 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     }
     return out;
   }, [run]);
-  // A missing field someone has filled in is read now — by a person.
+  // A missing field someone has filled in is read now — by a person. A
+  // correction to an AI value (key `ai.…`) belongs to that value, below.
   const readableKeys = Array.from(new Set([
     ...Object.entries(fields).filter(([key, field]) => !missingKeys.has(key) && field?.normalized_value != null).map(([key]) => key),
-    ...Array.from(corrections.keys()),
+    ...Array.from(corrections.keys()).filter((key) => !key.startsWith("ai.")),
   ]));
+  const ruleCorrectionCount = Array.from(corrections.keys()).filter((key) => !key.startsWith("ai.")).length;
   const missingKeyList = Array.from(missingKeys).filter((key) => !corrections.has(key));
 
   /** Save one value a person read off the document. Throws so the editor can say why. */
@@ -133,7 +161,8 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(res.status === 403 ? "You can view this company's documents but not change them." : body?.message ?? "Could not save that value");
     setRun((current) => (current ? { ...current, reviewHistory: body.reviewHistory ?? current.reviewHistory } : current));
-    setNotice(`Saved ${fieldLabel(key)}.`);
+    const aiField = aiValues.find((value) => value.key === key)?.field;
+    setNotice(`Saved ${fieldLabel(aiField ?? key)}.`);
   };
   const presentation = run ? PARSER_STATUS_PRESENTATION[run.status] : null;
 
@@ -244,11 +273,17 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       const form = new FormData();
       form.append("quoteId", quoteId);
       if (file) form.append("file", file, file.name);
-      const res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reread`, {
-        method: "POST",
-        credentials: "include",
-        body: form,
-      });
+      setReadingSince(Date.now());
+      let res: Response;
+      try {
+        res = await fetch(`/api/parser-documents/${encodeURIComponent(id)}/reread`, {
+          method: "POST",
+          credentials: "include",
+          body: form,
+        });
+      } finally {
+        setReadingSince(null);
+      }
       const body = await res.json().catch(() => ({}));
 
       // Settle the paid run whatever happened — the server decides from the
@@ -354,8 +389,24 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
 
       {notice && <div className="mb-4 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-2.5 text-[12.5px] text-[color:var(--body)]" data-testid="document-notice">{notice}</div>}
 
+      {/* The paid read itself, under way. It is the whole read now — rules,
+          the AI model and the agent — so it can take minutes; say so, and count. */}
+      {readingSince != null && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-violet-300/25 bg-[#17151d] px-4 py-3" role="status" data-testid="document-reading-progress">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-200" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-white">
+              Reading {paidRead?.file ? paidRead.file.name : "the document"} — rules, AI and agent · {formatElapsed(now - readingSince)}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
+              A full read can take a few minutes on a scanned or long document. Keep this page open; the earlier reading stays on record.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* A fresh read, priced — nothing is charged until this is confirmed. */}
-      {paidRead && (
+      {paidRead && readingSince == null && (
         <div className="mb-4 flex flex-col gap-3 rounded-xl border border-violet-300/25 bg-[#17151d] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-fresh-read-price">
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-white">
@@ -518,7 +569,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
         </div>
       </div>
 
-      <ExtractionReviewPane file={previewFile} title={document.filename} className="min-h-[720px]">
+      <ExtractionReviewPane file={previewFile} title={document.filename} className="min-h-[720px]" focus={focus}>
         <div className="h-full overflow-y-auto bg-[color:var(--ink-2)] p-5 sm:p-6">
           {!run ? <div className="py-16 text-center text-sm text-[color:var(--body)]">This file is saved, but no parser run has been recorded yet. Use “Re-read” above to have it read now.</div> : <div className="space-y-8">
             {/* What else it could have been. The single most useful thing for
@@ -553,7 +604,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
               <div className="mb-1 flex items-center justify-between">
                 <h2 className="text-[14px] font-semibold text-white">Extracted fields</h2>
                 <span className="text-[11px] text-[color:var(--muted)]">
-                  {readableKeys.length} read{corrections.size > 0 ? ` · ${corrections.size} checked by your team` : ""}
+                  {readableKeys.length} read by the rules{ruleCorrectionCount > 0 ? ` · ${ruleCorrectionCount} checked by your team` : ""}
                 </span>
               </div>
               <p className="mb-3 text-[11.5px] text-[color:var(--body)]">Check each value against the document. Click one to correct it.</p>
@@ -564,7 +615,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                   const shown = formatParserValue(fix ? fix.value : field.normalized_value);
                   return (
                     <div key={key} className="grid gap-2 py-4 sm:grid-cols-[180px_1fr_80px]" data-testid={`field-row-${key}`}>
-                      <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div>
+                      <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}<div className="mt-1"><LayerBadge layer="rule" /></div></div>
                       <div className="min-w-0">
                         <div className="text-[13px] text-white">
                           <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
@@ -587,14 +638,27 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                           </details>
                         )}
                       </div>
-                      <div className={`text-right text-[12px] tabular-nums ${fix ? "text-violet-200" : Number(field.confidence) >= 0.85 ? "text-emerald-300" : "text-amber-300"}`}>
-                        {fix ? "Checked" : `${Math.round(Number(field.confidence || 0) * 100)}%`}
+                      {/* null: a reader that does not score confidence (ESG) — not a 0% score. */}
+                      <div className={`text-right text-[12px] tabular-nums ${fix ? "text-violet-200" : field.confidence === null ? "text-[color:var(--muted)]" : Number(field.confidence) >= 0.85 ? "text-emerald-300" : "text-amber-300"}`}>
+                        {fix ? "Checked" : field.confidence === null ? "—" : `${Math.round(Number(field.confidence || 0) * 100)}%`}
                       </div>
                     </div>
                   );
                 })}
               </div>
             </section>
+
+            {/* Everything the AI model and the agent read from this file, each with
+                where it was read, and editable the same way. The rules above are a
+                small part of a read; this is the rest of it. */}
+            {aiValues.length > 0 && (
+              <AiValuesSection
+                values={aiValues}
+                corrections={corrections}
+                onSave={saveField}
+                onShow={(value) => setFocus({ page: value.page, sheet: sheetOfSource(value.sourceFile), nonce: Date.now() })}
+              />
+            )}
 
             <section data-testid="missing-fields">
               <div className="mb-1 flex items-center justify-between">

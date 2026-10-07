@@ -43,16 +43,30 @@ async function readSheets(blob: Blob): Promise<Sheet[]> {
   });
 }
 
+/**
+ * A place in the document a value was read from — a page, or a workbook sheet.
+ * `nonce` changes on every request, so asking for the same place twice still
+ * brings it back into view.
+ */
+export interface PreviewFocus {
+  page?: number | null;
+  sheet?: string | null;
+  nonce: number;
+}
+
 export function DocumentPreview({
   name,
   file,
   documentId,
+  focus,
 }: {
   name: string;
   /** The upload from this session, when we still have it. */
   file: File | null;
   /** The document library id, used once the upload itself is gone. */
   documentId?: string | null;
+  /** Show this page or sheet — a value's citation. */
+  focus?: PreviewFocus | null;
 }) {
   const kind = previewKind(name);
   const [blob, setBlob] = useState<Blob | null>(file);
@@ -123,6 +137,18 @@ export function DocumentPreview({
     if (downloadHref) URL.revokeObjectURL(downloadHref);
   }, [downloadHref]);
 
+  // A citation names a sheet: open its tab, once the sheets are read.
+  useEffect(() => {
+    if (!focus?.sheet || !sheets) return;
+    const wanted = focus.sheet.trim().toLowerCase();
+    const index = sheets.findIndex((s) => s.name.trim().toLowerCase() === wanted);
+    if (index >= 0) setSheetIndex(index);
+  }, [focus, sheets]);
+  const focusPage = useMemo(
+    () => (focus?.page != null ? { page: focus.page, nonce: focus.nonce } : null),
+    [focus],
+  );
+
   const Icon = kind === "spreadsheet" ? FileSpreadsheet : kind === "image" ? ImageIcon : FileText;
   const sheet = sheets?.[sheetIndex];
 
@@ -155,7 +181,7 @@ export function DocumentPreview({
               : "The preview isn't available here — the document is saved in your documents library."}
           </div>
         )}
-        {kind === "pdf" && blob && !pdfFallback && <PdfPages blob={blob} name={name} onFail={() => setPdfFallback(true)} />}
+        {kind === "pdf" && blob && !pdfFallback && <PdfPages blob={blob} name={name} onFail={() => setPdfFallback(true)} focusPage={focusPage} />}
         {kind === "pdf" && url && pdfFallback && <iframe title={name} src={url} className="min-h-[420px] w-full flex-1 bg-[#111]" />}
         {kind === "image" && url && (
           <div className="flex flex-1 items-start justify-center overflow-auto p-3">
@@ -182,6 +208,7 @@ export function DocumentPreview({
                     type="button"
                     role="tab"
                     aria-selected={i === sheetIndex}
+                    data-testid={`document-preview-tab-${s.name}`}
                     onClick={() => setSheetIndex(i)}
                     className={`shrink-0 rounded-md px-2.5 py-1 text-[11.5px] ${
                       i === sheetIndex ? "bg-white/[0.10] text-white" : "text-[color:var(--body)] hover:bg-white/[0.05]"

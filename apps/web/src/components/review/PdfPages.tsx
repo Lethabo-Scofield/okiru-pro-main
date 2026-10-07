@@ -15,9 +15,21 @@ import { Loader2 } from "lucide-react";
 /** Enough for any certificate, register or AFS; a 200-page ledger shows its start. */
 const MAX_PAGES = 40;
 
-export function PdfPages({ blob, name, onFail }: { blob: Blob; name: string; onFail: () => void }) {
+export function PdfPages({
+  blob,
+  name,
+  onFail,
+  focusPage,
+}: {
+  blob: Blob;
+  name: string;
+  onFail: () => void;
+  /** Scroll to this page (1-based) — a value's citation. `nonce` re-scrolls to the same page. */
+  focusPage?: { page: number; nonce: number } | null;
+}) {
   const holder = useRef<HTMLDivElement | null>(null);
   const [pages, setPages] = useState<{ total: number; shown: number } | null>(null);
+  const [rendered, setRendered] = useState(0);
   const failRef = useRef(onFail);
   failRef.current = onFail;
 
@@ -26,6 +38,7 @@ export function PdfPages({ blob, name, onFail }: { blob: Blob; name: string; onF
     if (!el) return;
     el.replaceChildren();
     setPages(null);
+    setRendered(0);
     let cancelled = false;
     let destroy: (() => void) | null = null;
 
@@ -59,8 +72,10 @@ export function PdfPages({ blob, name, onFail }: { blob: Blob; name: string; onF
           canvas.className = "mx-auto mb-3 block rounded-[3px] bg-white shadow-[0_1px_8px_rgba(0,0,0,0.5)]";
           canvas.setAttribute("role", "img");
           canvas.setAttribute("aria-label", `${name}, page ${n} of ${doc.numPages}`);
+          canvas.dataset.page = String(n);
           el.appendChild(canvas);
           await page.render({ canvas, canvasContext: canvas.getContext("2d")!, viewport }).promise;
+          if (!cancelled) setRendered(n);
         }
       } catch {
         if (!cancelled) failRef.current();
@@ -72,6 +87,13 @@ export function PdfPages({ blob, name, onFail }: { blob: Blob; name: string; onF
       destroy?.();
     };
   }, [blob, name]);
+
+  // A citation asks for a page: bring it into view once it has been drawn.
+  useEffect(() => {
+    if (!focusPage || focusPage.page > rendered) return;
+    const canvas = holder.current?.querySelector<HTMLElement>(`[data-page="${focusPage.page}"]`);
+    canvas?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [focusPage, rendered]);
 
   return (
     <div className="min-h-0 flex-1 overflow-auto bg-[#1a1a1c] px-3 pt-3" data-testid="pdf-pages">

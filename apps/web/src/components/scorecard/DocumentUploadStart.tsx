@@ -271,6 +271,7 @@ const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workboo
 // The flow snapshot — how a paid extraction survives navigation. Shared with
 // the Hub's "continue where you left off" strip, so it lives in its own module.
 import { clearFlowSnapshot, readFlowSnapshot, writeFlowSnapshot } from "./flowSnapshot";
+import { postParserRun, signedRunsByFile, withoutSignedRuns } from "@/lib/parserRunAttestation";
 // Each "Add documents" round reads only its new files; this folds the result
 // into what earlier rounds already read, without losing any of it.
 import { mergeParserCases } from "@/lib/parserCaseMerge";
@@ -1058,56 +1059,79 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     }
   };
 
-  /** Save one immutable, lossless run for every document returned by the case parser. */
+  /**
+   * Save one immutable, lossless run for every uploaded file the case parser
+   * read — as the record the parser signed, which carries both layers of the
+   * read: the rule layer and every value the AI model and the agent read, with
+   * its citation. A workbook read sheet by sheet is one run, the workbook's.
+   * A file the parser did not sign for is reported, not skipped.
+   */
   const persistParserRuns = async (data: ParserCaseLike, list: File[]): Promise<void> => {
     const caseData = data as ParserCaseLike & { case_id?: string };
     const reviewRows = data.documents_needing_review ?? [];
-    const tasks = (data.documents_detected ?? []).map(async (detected: any) => {
-      const file = list.find((candidate) => candidate.name === detected.filename);
-      if (!file) throw new Error(`No persisted upload found for ${detected.filename}`);
+    const signed = signedRunsByFile(data);
+    const uploadNames = new Set(list.map((file) => file.name));
+    // The upload a detected document came from: itself, or the workbook a
+    // sheet ("Pack.xlsx › Ownership") was split out of.
+    const uploadOf = (name: string) => {
+      if (uploadNames.has(name)) return name;
+      const marker = name.indexOf("›");
+      const workbook = marker >= 0 ? name.slice(0, marker).trim() : "";
+      return uploadNames.has(workbook) ? workbook : null;
+    };
+    /** The run as the library took it before runs were signed (see LegacyRunBody). */
+    const legacyParserOutput = (detected: any, documentId: string): Record<string, unknown> => detected.parser_output ?? {
+      ...detected,
+      file_id: detected.file_id ?? documentId,
+      filename: detected.filename,
+      document_type: detected.document_type ?? "Unknown",
+      pillar: detected.pillar ?? "",
+      extracted_fields: detected.extracted_fields ?? {},
+      calculator_payload: detected.calculator_payload ?? {},
+      supplier_rows: (data.supplier_rows ?? []).filter((row) => row.source_file === detected.filename),
+      measured_procurement_spend: (caseData as any).measured_procurement_spend ?? null,
+      validation: {
+        passed: detected.status === "passed",
+        warnings: detected.validation?.warnings ?? [],
+        errors: detected.validation?.errors ?? [],
+        missing_fields: detected.validation?.missing_fields ?? [],
+      },
+      audit_trail: {
+        source_file: detected.filename,
+        matched_patterns: [],
+        rules_applied: [],
+        graph_version: "unknown",
+        requires_human_review: detected.status !== "passed",
+        classification_candidates: [],
+        rejected_calculator_keys: [],
+      },
+    };
+
+    const filesInCase = new Set<string>(Array.from(signed?.keys() ?? []).filter((name) => uploadNames.has(name)));
+    const unmatched: string[] = [];
+    for (const detected of data.documents_detected ?? []) {
+      const upload = uploadOf(String(detected.filename ?? ""));
+      if (upload) filesInCase.add(upload);
+      else unmatched.push(String(detected.filename));
+    }
+    const tasks = Array.from(filesInCase).map(async (filename) => {
+      const file = list.find((candidate) => candidate.name === filename)!;
       const documentId = await persistDocument(file);
-      const parserOutput = detected.parser_output ?? {
-        ...detected,
-        file_id: detected.file_id ?? documentId,
-        filename: detected.filename,
-        document_type: detected.document_type ?? "Unknown",
-        pillar: detected.pillar ?? "",
-        extracted_fields: detected.extracted_fields ?? {},
-        calculator_payload: detected.calculator_payload ?? {},
-        supplier_rows: (data.supplier_rows ?? []).filter((row) => row.source_file === detected.filename),
-        measured_procurement_spend: (caseData as any).measured_procurement_spend ?? null,
-        validation: {
-          passed: detected.status === "passed",
-          warnings: detected.validation?.warnings ?? [],
-          errors: detected.validation?.errors ?? [],
-          missing_fields: detected.validation?.missing_fields ?? [],
-        },
-        audit_trail: {
-          source_file: detected.filename,
-          matched_patterns: [],
-          rules_applied: [],
-          graph_version: "unknown",
-          requires_human_review: detected.status !== "passed",
-          classification_candidates: [],
-          rejected_calculator_keys: [],
-        },
-      };
-      const reviewReasons = reviewRows.find((row) => row.filename === detected.filename)?.reasons ?? [];
-      const res = await fetch(`/api/parser-documents/${encodeURIComponent(documentId)}/runs`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parserOutput, caseId: caseData.case_id ?? null, reviewReasons }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.message ?? `Could not save parser result for ${detected.filename}`);
-      }
+      const detected = (data.documents_detected ?? []).find((doc) => doc.filename === filename);
+      // A workbook read sheet by sheet never had a pre-signing body.
+      const legacy = detected
+        ? {
+            parserOutput: legacyParserOutput(detected, documentId),
+            caseId: caseData.case_id ?? null,
+            reviewReasons: reviewRows.find((row) => row.filename === filename)?.reasons ?? [],
+          }
+        : null;
+      await postParserRun(documentId, filename, { signed: signed?.get(filename), legacy });
     });
     const results = await Promise.allSettled(tasks);
-    const failures = results.filter((result) => result.status === "rejected");
-    if (failures.length > 0) {
-      throw new Error(`${failures.length} parser result${failures.length === 1 ? "" : "s"} could not be saved to the document library.`);
+    const failures = results.filter((result) => result.status === "rejected").length + unmatched.length;
+    if (failures > 0) {
+      throw new Error(`${failures} parser result${failures === 1 ? "" : "s"} could not be saved to the document library.`);
     }
   };
 
@@ -1208,7 +1232,8 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       }
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
-      const mergedCase = mergeParserCases(parserCaseRef.current, data);
+      // The signed records were filed above; the case keeps no second copy.
+      const mergedCase = mergeParserCases(parserCaseRef.current, withoutSignedRuns(data));
       parserCaseRef.current = mergedCase;
       setParserCase(mergedCase);
       delivered = true;

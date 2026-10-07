@@ -71,6 +71,7 @@ import {
   type EsgParserCaseLike,
 } from "./esgParserInjection";
 import { writeEsgFlowSnapshot } from "./esgFlowSnapshot";
+import { postParserRun, signedRunsByFile, withoutSignedRuns } from "@/lib/parserRunAttestation";
 import type { EsgUploadFocus } from "@/lib/esg/esgSectionElements";
 import { esgSectionById } from "@/lib/esg/esgSections";
 
@@ -578,7 +579,8 @@ export function EsgDocumentUploadStart({
   ): Promise<void> => {
     const extractions = data.ai_entities?.extractions ?? [];
     const reviewRows = data.documents_needing_review ?? [];
-    const fileNames = esgCaseFileNames(data);
+    const signed = signedRunsByFile(data);
+    const fileNames = Array.from(new Set([...esgCaseFileNames(data), ...Array.from(signed?.keys() ?? [])]));
     if (fileNames.length === 0) return;
 
     // A workbook comes back as one source per sheet ("File.xlsx › Sheet"); its
@@ -649,16 +651,15 @@ export function EsgDocumentUploadStart({
         ...(failure ? [failure] : []),
         ...exceptions,
       ];
-      const res = await fetch(`/api/parser-documents/${encodeURIComponent(documentId)}/runs`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ parserOutput, caseId: data.case_id ?? null, reviewReasons }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body?.message ?? `Could not save parser result for ${filename}`);
-      }
+      // The parser's signed record is what the library stores: it carries a
+      // status and every value read, with its sheet and citation, as the AI
+      // block. The record built here (no status — every api refused it) is
+      // sent only when the parser signed nothing, so the refusal is reported
+      // as before rather than the file silently left out.
+      const own = signed?.get(filename);
+      await postParserRun(documentId, filename, own
+        ? { signed: own }
+        : { legacy: { parserOutput, caseId: data.case_id ?? null, reviewReasons } });
     });
     const results = await Promise.allSettled(tasks);
     const failures = results.filter((result) => result.status === "rejected");
@@ -821,7 +822,8 @@ export function EsgDocumentUploadStart({
       }
       // Merge with anything already paid for and read in an earlier round, so a
       // requote never loses (or re-charges for) documents we already have.
-      const mergedCase = mergeEsgCases(parserCaseRef.current, data);
+      // The signed records were filed above; the case keeps no second copy.
+      const mergedCase = mergeEsgCases(parserCaseRef.current, withoutSignedRuns(data));
       parserCaseRef.current = mergedCase;
       setParserCase(mergedCase);
       // These files are now part of the case: never priced, charged or read again.

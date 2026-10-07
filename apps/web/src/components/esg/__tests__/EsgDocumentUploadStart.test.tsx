@@ -505,6 +505,30 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     expect(body.parserOutput.validation.passed).toBe(true);
   });
 
+  it("files the parser's signed record — every value it read, with its source — and nothing else", async () => {
+    // The record built in the browser had no status, so the library refused
+    // every ESG run. The parser's signed record carries a status and the AI
+    // block; the browser files it unopened.
+    const signedRun = { filename: "city-power-oct.pdf", payload: '{"typ":"okiru.parser-run","domain":"esg"}', signature: "sig-esg" };
+    const { fetchMock } = stubFetch({
+      frames: [sse("result", { ...RESULT_CASE, run_attestations: [signedRun] }), sse("complete", {})],
+    });
+    renderUpload();
+    const user = await stageAFile();
+
+    const done = await screen.findByTestId("esg-button-done-staging");
+    await waitFor(() => expect(done).not.toBeDisabled());
+    await user.click(done);
+    await user.click(await screen.findByTestId("esg-button-spend-tokens"));
+    await screen.findByTestId("esg-extraction-summary", {}, { timeout: 10_000 });
+
+    const runCalls = fetchMock.mock.calls.filter(([url]) => String(url).endsWith("/runs"));
+    expect(runCalls).toHaveLength(1);
+    expect(JSON.parse(String((runCalls[0]![1] as RequestInit).body))).toEqual({
+      attestation: { payload: signedRun.payload, signature: "sig-esg" },
+    });
+  });
+
   it("keeps waiting while the reader's keep-alive arrives", () => {
     // The parser sends ": ping" every 15 s while it works. Only named events
     // used to reset the 10-minute idle timer, so a long workbook timed out mid-read.
