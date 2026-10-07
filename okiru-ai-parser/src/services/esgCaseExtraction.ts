@@ -39,6 +39,7 @@ import { getExtractionModel, duplicateWorkbookException, type ResolveProgress } 
 import { ROW_HIDDEN_KEY, resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { billAsMonthlyRows } from './esgBillFacts.js';
 import { classifyDocument, routingElement } from './documentClassification.js';
+import { focusForInput } from './esgFocus.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { elementFromHint } from './specRetrieval.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
@@ -115,6 +116,10 @@ export async function extractEsgCaseEntities(
   inputs: RawExtractionInput[],
   model: ExtractionModel | null = getExtractionModel(),
   onProgress?: (p: ResolveProgress) => void,
+  options: {
+    /** The element each upload was filed under, by file name (C1, `esgFocus.ts`). */
+    focusByFile?: Readonly<Record<string, EsgElement>>;
+  } = {},
 ): Promise<EsgCaseExtractionResult | null> {
   if (!model || inputs.length === 0) return null;
   let done = 0;
@@ -141,7 +146,10 @@ export async function extractEsgCaseEntities(
           raw_text: input.raw_text,
         }, { domain: 'esg' })
       : null;
-    const elementOverride = routingElement(classification) ?? undefined;
+    // A confident classification says what the document IS; below that, the
+    // element the person filed it under beats a keyword guess (C1).
+    const elementOverride =
+      routingElement(classification) ?? focusForInput(input.filename, options.focusByFile) ?? undefined;
 
     // A dashboard sheet — sites down the side, months across — is read by the
     // code, figure by figure. When it is, the flat spec pass is skipped for that

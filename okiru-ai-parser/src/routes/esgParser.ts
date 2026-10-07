@@ -53,6 +53,7 @@ import { recordExtractionOutcome, valuesByQuotedFile, watchClient } from '../ser
 import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
+import { parseEsgFocus } from '../services/esgFocus.js';
 import { elementFromHint } from '../services/specRetrieval.js';
 import {
   ESG_DOCUMENT_MATRIX,
@@ -273,7 +274,10 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
       ));
     }
 
-    const entities = await extractEsgCaseEntities(rawInputs);
+    // The element batch each file was filed under (C1): a hint, never an order.
+    const entities = await extractEsgCaseEntities(rawInputs, undefined, undefined, {
+      focusByFile: parseEsgFocus(req.body?.focus_elements),
+    });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     await recordExtractionOutcome(paidQuoteId, {
       status: entities ? 'resolved' : 'failed',
@@ -383,7 +387,10 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
 
     send('resolving', { total: rawInputs.length });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
-    const entities = await extractEsgCaseEntities(rawInputs, undefined, (p) => send('resolve-progress', p));
+    // The element batch each file was filed under (C1): a hint, never an order.
+    const entities = await extractEsgCaseEntities(rawInputs, undefined, (p) => send('resolve-progress', p), {
+      focusByFile: parseEsgFocus(req.body?.focus_elements),
+    });
     await recordExtractionOutcome(paidQuoteId, {
       status: entities ? 'resolved' : 'failed',
       ...valuesByQuotedFile(files, paidQuote, (entities as { extractions?: [] } | null)?.extractions),
