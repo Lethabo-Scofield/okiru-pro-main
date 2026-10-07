@@ -682,10 +682,10 @@ describe("IFRS_S1_S2 E29 / E30", () => {
      */
     const d = derive({
       ifrs: {
-        A5: "Board oversight", C5: "Disclosed",
-        A6: "Management role", C6: "Partially Disclosed",
-        A7: "Scenario analysis", C7: "Not Disclosed",
-        A8: "Internal carbon price", C8: "N/A",
+        B5: "Board oversight", D5: "Disclosed",
+        B6: "Management role", D6: "Partially Disclosed",
+        B7: "Scenario analysis", D7: "Not Disclosed",
+        B8: "Internal carbon price", D8: "N/A",
       },
     });
     expect(cells(d, "ifrs").E29).toBe(8); // 5 + 3; the N/A row scores nothing
@@ -698,7 +698,7 @@ describe("IFRS_S1_S2 E29 / E30", () => {
     // Four requirements assessed out of 22. The other 18 are unassessed, which
     // is a gap — not an exemption — so the denominator stays at the full set.
     const d = derive({
-      ifrs: { A5: "Board oversight", C5: "Disclosed" },
+      ifrs: { B5: "Board oversight", D5: "Disclosed" },
     });
     expect(cells(d, "ifrs")._max_score).toBe(110);
     expect(cells(d, "ifrs").E30).toBeCloseTo(5 / 110, 10);
@@ -707,8 +707,8 @@ describe("IFRS_S1_S2 E29 / E30", () => {
   it("leaves nothing to score when every requirement is not applicable", () => {
     const d = derive({
       ifrs: {
-        A5: "Board oversight", C5: "N/A",
-        A6: "Management role", C6: "N/A",
+        B5: "Board oversight", D5: "N/A",
+        B6: "Management role", D6: "N/A",
       },
     });
     expect(cells(d, "ifrs")._applicable_count).toBe(0);
@@ -725,8 +725,8 @@ describe("IFRS_S1_S2 E29 / E30", () => {
       ...Array(2).fill("Partially Disclosed"),
     ];
     statuses.forEach((s, i) => {
-      grid[`A${5 + i}`] = `Requirement ${i + 1}`;
-      grid[`C${5 + i}`] = s;
+      grid[`B${5 + i}`] = `Requirement ${i + 1}`;
+      grid[`D${5 + i}`] = s;
     });
     const c = cells(derive({ ifrs: grid }), "ifrs");
     expect(c.E29).toBe(24); // 8 × 3
