@@ -272,7 +272,36 @@ export function scoreSocial(
    * The threshold 6 is hardcoded in the workbook — there is no Assumptions cell.
    */
   const initiatives = readEsgCell(workbook, "s-data", "_initiatives_count") ?? 0;
-  const d23 = pr(initiatives, thresholds.csiInitiativesPerYear, 5, floor);
+  /*
+   * That hardcoded 6 was the last target here nobody had set: every other
+   * Social target already followed the declared basis. It now does too — the
+   * company's own figure (`Assumptions!_csiInitiativesTarget`), or the row
+   * leaves the total with its reason. A B-BBEE election does not supply one:
+   * B-BBEE measures community investment as spend (d22), never as a count.
+   * Parity mode keeps the workbook's 6.
+   */
+  const thrInitiatives =
+    mode === "workbook-parity"
+      ? thresholds.csiInitiativesPerYear
+      : resolveTarget(
+          workbook,
+          "_csiInitiativesTarget",
+          thresholds.csiInitiativesPerYear,
+          basis === "bbbee" ? "own" : basis,
+        );
+  if (mode !== "workbook-parity" && thrInitiatives == null) {
+    const x = exclude(
+      "social",
+      "d23",
+      basis === "own"
+        ? targetNotSetReason("community initiatives a year")
+        : basis === "bbbee"
+          ? "B-BBEE measures community investment as spend, not as a count of initiatives, and the company has not set one for community initiatives a year, so there is nothing to score against. The figure is still reported."
+          : TARGET_BASIS_REASON[basis as "undeclared" | "trend"],
+    );
+    if (x) targetExclusions.push(x);
+  }
+  const d23 = thrInitiatives == null ? 0 : pr(initiatives, thrInitiatives, 5, floor);
 
   /*
    * C24 — MANUAL_ZERO in the workbook. `S_Data!B86` (local procurement spend)
@@ -462,7 +491,14 @@ export function scoreSocial(
     record({
       key: "d23",
       measured: { value: initiatives, unit: "count", label: "Community initiatives this period" },
-      target: { value: thresholds.csiInitiativesPerYear, unit: "count", source: targetSource("sector") },
+      target:
+        thrInitiatives == null
+          ? null
+          : {
+              value: thrInitiatives,
+              unit: "count",
+              source: parity ? targetSource("workbook-default") : targetSource("company", "Assumptions!_csiInitiativesTarget"),
+            },
       inputs: [traceCell("S_Data", "A72:A79", "Community initiatives in the CSI register", initiatives)],
       rule: bandedRule(5, floor, "the number of community initiatives"),
     });

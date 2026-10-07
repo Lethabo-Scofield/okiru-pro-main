@@ -55,6 +55,24 @@ Environmental is unchanged *on this dataset only*: five E indicators went from
 Consumer (no solar generation, no fleet register captured, no EV data). Their
 correctness is proven by the per-indicator tests in §5, not by this total.
 
+**Amendment, 7 October 2026 — targets follow the declared basis everywhere
+(sprint task D5).** "For E the company needs to determine their own targets"
+(Z. Mnanzana, 14 Sep). Environmental targets (`B43`, `B44`, `B46`, `B48`) no
+longer fall back to the sector's 10% cut, 20% renewable, 5% EV and 75%
+diversion: undeclared or trend leaves those indicators out of both sides with
+the reason stated; "own" scores against what the company stated; a B-BBEE
+election reads as "own" for E, because B-BBEE sets no environmental targets.
+Social `d23` (community initiatives) stops banding against the template's
+hardcoded 6 and reads the company's own `Assumptions!_csiInitiativesTarget`;
+a B-BBEE election supplies no count, because B-BBEE measures community
+investment as spend (`d22`).
+
+On this fixture, as the regression gate scores it, Social is now **20 / 90**
+(`d23` out) and the overall **0.3846949891**: (36/108 + 20/90 +
+59.8529411765/100) / 3. A company with no basis declared also loses the six
+target-based E rows from both sides — on this fixture undeclared, E reads
+31 / 67 instead of 36 / 108.
+
 ---
 
 ## 2. Every indicator that changed
