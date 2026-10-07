@@ -23,6 +23,7 @@ import {
   type WorkbookValidationIssue,
 } from "@/components/workbook/workbookValidation";
 import { BOOLEAN_TRUE, BOOLEAN_FALSE } from "@/lib/tabularNormalize";
+import { headerIsWordsOfAlias } from "@/lib/columnMatch";
 
 export type WorkbookRow = Record<string, unknown> & { _id: string };
 export type WorkbookSectionPayload = { rows: WorkbookRow[]; meta?: Record<string, unknown> };
@@ -152,7 +153,9 @@ function mapHeaderToKey(header: string, columns: ColumnDef[], excludeKeys?: Set<
     for (const alias of buildColumnAliases(col)) {
       const a = norm(alias);
       if (!a) continue;
-      if (h.includes(a) || a.includes(h)) return col.key;
+      // A header inside an alias counts only as whole words: "Age" is not
+      // "Wages" (see headerIsWordsOfAlias).
+      if (h.includes(a) || (a.includes(h) && headerIsWordsOfAlias(header, alias))) return col.key;
     }
   }
   return null;
