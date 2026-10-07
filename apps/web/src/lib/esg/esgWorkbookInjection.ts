@@ -64,7 +64,9 @@ export type EsgRejectionReason =
   /** No cell in the workbook holds this fact. */
   | "no_workbook_home"
   /** A real cell exists but which one depends on context we do not have. */
-  | "needs_context";
+  | "needs_context"
+  /** Its cell is in a section other than the one the documents were added for (C1). */
+  | "outside_focus";
 
 export type EsgNormaliseResult =
   | { ok: true; value: EsgCellValue }

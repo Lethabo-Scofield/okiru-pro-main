@@ -25,6 +25,7 @@
  */
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, FileWarning, HelpCircle } from "lucide-react";
+import { esgSectionById } from "@/lib/esg/esgSections";
 import {
   esgCaseFileNames,
   esgUnplacedKinds,
@@ -283,6 +284,17 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false }:
             kinds.toPlace > 0 ? `${kinds.toPlace} figure${kinds.toPlace === 1 ? "" : "s"} need${kinds.toPlace === 1 ? "s" : ""} you to say where ${kinds.toPlace === 1 ? "it goes" : "they go"}` : "",
             kinds.evidence > 0 ? `${kinds.evidence} value${kinds.evidence === 1 ? " is" : "s are"} kept as evidence — no cell in the workbook needs ${kinds.evidence === 1 ? "it" : "them"}` : "",
           ].filter(Boolean).join(" · ")}
+        </p>
+      )}
+      {/* Added from inside a section (C1): what was read for another part of the
+          workbook was not written, and says where it belongs. */}
+      {(injection.outsideFocus?.length ?? 0) > 0 && (
+        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-outside-focus">
+          Not written from here:{" "}
+          {injection.outsideFocus!
+            .map(({ sectionId, figures }) => `${figures} figure${figures === 1 ? "" : "s"} for ${esgSectionById(sectionId)?.title ?? sectionId}`)
+            .join(", ")}
+          {" "}— add these documents there, or to the whole workbook, to place them.
         </p>
       )}
 
