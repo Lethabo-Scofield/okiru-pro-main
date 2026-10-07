@@ -204,3 +204,30 @@ describe("Environmental targets follow the declared basis (D5)", () => {
     expect(parity.rows.d19).toBeGreaterThan(0); // the workbook's own 0.75
   });
 });
+
+describe("community initiatives follow the declared basis too", () => {
+  const raw = (assumptions: Record<string, unknown>) =>
+    ({
+      companyId: "c",
+      sections: {
+        assumptions: { cells: { B9: 0.5, ...assumptions } },
+        "s-data": { cells: { _initiatives_count: 4 } },
+      },
+      updatedAt: "",
+    }) as unknown as EsgWorkbookData;
+
+  it("leaves d23 out until the company sets its own number — the template's 6 is nobody's target", () => {
+    expect(scoreSocial(raw({})).excluded.find((x) => x.key === "d23")?.reason).toContain("has not declared");
+    expect(scoreSocial(raw({ _targetBasis: OWN })).excluded.find((x) => x.key === "d23")?.reason).toContain("has not set one for community initiatives");
+    // B-BBEE counts community investment as spend, so electing it supplies no count.
+    expect(scoreSocial(raw({ _targetBasis: BBBEE })).excluded.find((x) => x.key === "d23")?.reason).toContain("spend, not as a count");
+  });
+
+  it("scores against the company's own figure once it is set", () => {
+    const s = scoreSocial(raw({ _targetBasis: OWN, _csiInitiativesTarget: 4 }));
+    expect(s.excluded.map((x) => x.key)).not.toContain("d23");
+    expect(s.rows.d23).toBe(5);
+    // Parity keeps the workbook's 6: 4 of 6 is above the 0.5 floor, so part of the 5.
+    expect(scoreSocial(raw({}), { mode: "workbook-parity" }).rows.d23).toBeCloseTo((4 / 6) * 5, 6);
+  });
+});
