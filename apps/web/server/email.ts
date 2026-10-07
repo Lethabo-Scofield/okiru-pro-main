@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import { randomInt } from "crypto";
 import { createLogger } from "./logger";
 
@@ -6,7 +6,9 @@ const logger = createLogger("Email");
 
 const ADMIN_EMAIL = "cmyezwa@okiru.co.za";
 
-let transporter: nodemailer.Transporter | null = null;
+// A named type import: nodemailer 10 ships its own types, and its default
+// export is a value, not a namespace to reach the Transporter type through.
+let transporter: Transporter | null = null;
 
 function getTransporter() {
   if (transporter) return transporter;
