@@ -79,7 +79,7 @@
     "nodemailer": "^10.0.15",
     "openai": "^6.27.0",
     "p-limit": "^7.3.0",
-    "p-retry": "^7.1.1",
+    "p-retry": "^8.0.1",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pdfjs-dist": "^5.5.207",
