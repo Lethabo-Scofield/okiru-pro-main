@@ -353,6 +353,13 @@ export const ASSUMPTIONS_FIELDS: EsgFieldDef[] = [
       "ESG frameworks do not prescribe targets. A company sets its own, elects to be measured against the B-BBEE and Employment Equity targets, or tracks movement over time instead of scoring against a target. Where it has not chosen, we do not score against a target we invented — those indicators come out of the total and the report says why.",
   },
   {
+    cell: "_csiInitiativesTarget",
+    label: "Community initiatives a year (the company's target)",
+    type: "number",
+    helpText:
+      "How many community or social investment initiatives the company aims to run in the year. ESG sets no number for this — the workbook template assumed six — and B-BBEE measures community investment as spend, not as a count. With no figure here the initiatives are reported but not scored against a target.",
+  },
+  {
     cell: "_nzBaselineYear",
     label: "Emissions base year (calendar year)",
     type: "number",

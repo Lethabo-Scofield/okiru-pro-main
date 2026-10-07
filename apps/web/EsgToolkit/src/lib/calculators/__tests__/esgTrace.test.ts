@@ -107,8 +107,10 @@ describe("a trace says where its target came from", () => {
     // E under a B-BBEE election is the company's own: B-BBEE sets no E targets.
     expect(bbbee.traces.environmental.d19?.target?.source).toContain("company's own target");
 
-    // The one row still banded against a benchmark says so rather than passing it off.
-    expect(own.traces.social.d23?.target?.source).toContain("not a target the company set");
+    // No row is banded against a number nobody set: community initiatives, the
+    // last one, waits for the company's own figure.
+    expect(own.traces.social.d23?.target).toBeNull();
+    expect(own.excluded.social.find((x) => x.key === "d23")?.reason).toMatch(/has not set one for community initiatives/);
   });
 
   it("shows the measured value, not the points, as the row's actual", () => {
