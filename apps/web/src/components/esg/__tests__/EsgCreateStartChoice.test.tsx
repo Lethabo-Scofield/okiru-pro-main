@@ -108,4 +108,13 @@ describe("EsgInformationRequest wiring", () => {
     expect(PAGE).toMatch(/handleContinueToSummary/);
     expect(PAGE).toMatch(/esgSummaryHref\(companyId\)/);
   });
+
+  it("lets each section add documents for its own pillar, and the toolbar for the whole workbook (C1)", () => {
+    expect(PAGE).toContain('data-testid="button-esg-section-add-documents"');
+    expect(PAGE).toContain("setUploadFocus(esgUploadFocus(activeSection.id, activeSection.title))");
+    expect(PAGE).toContain("focus={uploadFocus}");
+    // The toolbar, the entry choice, a handed-over spreadsheet, Back and the landing
+    // all leave the focus behind — none of them is "this section".
+    expect(PAGE.match(/setUploadFocus\(null\)/g)?.length ?? 0).toBeGreaterThanOrEqual(5);
+  });
 });
