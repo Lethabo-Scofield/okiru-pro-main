@@ -21,6 +21,7 @@
 import * as XLSX from 'xlsx';
 import { dittoFill, mainColumnRegion } from './sheetRegions.js';
 import { sheetMatrix } from './sheetCellValues.js';
+import { boundWorkbookSheets } from './sheetBounds.js';
 
 export interface SheetDocument {
   /** Sheet name, verbatim. */
@@ -273,6 +274,9 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
   } catch {
     return [];
   }
+  // A sheet's declared size is a claim, not a fact (sheetBounds.ts): checked
+  // before sheetMatrix builds a row for every cell the file claims.
+  boundWorkbookSheets(workbook);
 
   const documents: SheetDocument[] = [];
   for (const sheetName of workbook.SheetNames) {
