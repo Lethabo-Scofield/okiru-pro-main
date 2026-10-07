@@ -3,6 +3,7 @@ import { parseWorkbookDate, type ColumnDef } from "@/components/workbook/section
 import { suggestSelectOption, FUZZY_SELECT_ACCEPT } from "@/lib/selectOptionMatch";
 import { parseNumberLoose } from "@/lib/tabularNormalize";
 import { coerceYesNo } from "@/lib/yesNoValue";
+import { headerIsWordsOfAlias } from "@/lib/columnMatch";
 
 export type WorkbookGridRow = Record<string, unknown> & { _id: string };
 
@@ -41,7 +42,8 @@ export function mapHeaderToKey(header: string, columns: ColumnDef[]): string | n
   for (const col of columns) {
     for (const alias of buildColumnAliases(col)) {
       const a = norm(alias);
-      if (h === a || h.includes(a) || a.includes(h)) return col.key;
+      // A header inside an alias counts only as whole words: "Age" is not "Wages".
+      if (h === a || h.includes(a) || (a.includes(h) && headerIsWordsOfAlias(header, alias))) return col.key;
     }
   }
   return null;
