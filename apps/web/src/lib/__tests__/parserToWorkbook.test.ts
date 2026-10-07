@@ -193,13 +193,30 @@ describe("entity-level values go to meta, not a row", () => {
     const result = parserExtractionsToWorkbook([
       extraction({
         element: "ESD",
-        values: [{ field: "total_pre_exclusions_tmps", value: "R 1 030 806.68" }],
+        values: [{ field: "total_measured_procurement_spend", value: "R 1 030 806.68" }],
       }),
     ]);
 
     // TMPS is the procurement DENOMINATOR — one number, not a supplier row.
     expect(result.meta["financial-information"]?.tmps).toBeCloseTo(1030806.68, 2);
     expect(result.rows.procurement ?? []).toHaveLength(0);
+  });
+
+  it("never places a PRE-exclusions procurement total on TMPS", () => {
+    // The total before exclusions is not TMPS; as the denominator it would
+    // understate every procurement percentage. Reported as unmapped instead.
+    const result = parserExtractionsToWorkbook([
+      extraction({
+        element: "ESD",
+        values: [
+          { field: "total_pre_exclusions_tmps", value: 1_234_567.89 },
+          { field: "tmps_inclusions", value: 1_234_567.89 },
+        ],
+      }),
+    ]);
+
+    expect(result.meta["financial-information"]?.tmps).toBeUndefined();
+    expect(result.coverage.unmapped).toEqual(expect.arrayContaining(["total_pre_exclusions_tmps", "tmps_inclusions"]));
   });
 
   it("withholds a meta value when two documents disagree, and says so", () => {
@@ -269,40 +286,40 @@ describe("entity-level values go to meta, not a row", () => {
         documentId: "sheet_financials",
         sourceFile: "wb.xlsm › Finance",
         element: "ESD",
-        values: [{ field: "total_measured_procurement_spend", value: 4674994.56 }],
+        values: [{ field: "total_measured_procurement_spend", value: 5123456.78 }],
       }),
       extraction({
         documentId: "esd__audited_financial_statements",
         sourceFile: "afs.pdf",
         element: "ESD",
-        values: [{ field: "total_pre_exclusions_tmps", value: 8100064 }],
+        values: [{ field: "total_measured_procurement_spend", value: 9200000 }],
       }),
     ]);
 
-    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(4674994.56, 2);
+    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(5123456.78, 2);
     expect(result.metaConflicts).toHaveLength(0);
   });
 
   it("lets a LABELLED reading replace a model-computed one, whatever the order", () => {
-    // The model-computed TMPS summed the exclusions back in (8,100,064); the
-    // Finance sheet's own stated total is 4,674,994.56. A stated total beats a
+    // The model-computed TMPS summed the exclusions back in (9,200,000); the
+    // Finance sheet's own stated total is 5,123,456.78. A stated total beats a
     // computed one even when it arrives second.
     const result = parserExtractionsToWorkbook([
       extraction({
         documentId: "esd__audited_financial_statements_or_signed_management_accounts_w",
         sourceFile: "wb.xlsm › Finance",
         element: "ESD",
-        values: [{ field: "total_pre_exclusions_tmps", value: 8100064 }],
+        values: [{ field: "total_measured_procurement_spend", value: 9200000 }],
       }),
       extraction({
         documentId: "sheet_financials",
         sourceFile: "wb.xlsm › Finance",
         element: "ESD",
-        values: [{ field: "total_measured_procurement_spend", value: 4674994.56 }],
+        values: [{ field: "total_measured_procurement_spend", value: 5123456.78 }],
       }),
     ]);
 
-    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(4674994.56, 2);
+    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(5123456.78, 2);
   });
 
   it("never lets a computed value overwrite a labelled one", () => {
@@ -311,17 +328,17 @@ describe("entity-level values go to meta, not a row", () => {
         documentId: "sheet_financials",
         sourceFile: "wb.xlsm › Finance",
         element: "ESD",
-        values: [{ field: "total_measured_procurement_spend", value: 4674994.56 }],
+        values: [{ field: "total_measured_procurement_spend", value: 5123456.78 }],
       }),
       extraction({
         documentId: "esd__audited_financial_statements_or_signed_management_accounts_w",
         sourceFile: "other.xlsm › Finance",
         element: "ESD",
-        values: [{ field: "total_pre_exclusions_tmps", value: 8100064 }],
+        values: [{ field: "total_measured_procurement_spend", value: 9200000 }],
       }),
     ]);
 
-    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(4674994.56, 2);
+    expect(result.meta["financial-information"]?.tmps).toBeCloseTo(5123456.78, 2);
   });
 });
 
@@ -368,7 +385,7 @@ describe("shaping for the workbook", () => {
     const result = parserExtractionsToWorkbook([
       extraction({ element: "ESD", values: [
         { field: "supplier_name", value: "Alpha" },
-        { field: "total_pre_exclusions_tmps", value: 1000000 },
+        { field: "total_measured_procurement_spend", value: 1000000 },
       ] }),
     ]);
 

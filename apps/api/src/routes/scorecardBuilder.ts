@@ -345,6 +345,9 @@ router.post('/calculate-from-extraction', requireAuth, async (req, res) => {
       success: true,
       scorecard: result,
       dataQuality: payload.dataQuality,
+      // Where pillarData.financials.tmps came from — a supplier-sum stand-in
+      // is never to be shown as the client's stated TMPS.
+      tmpsProvenance: { source: payload.tmpsSource, held: payload.tmpsHeld },
       pillarData: {
         employees: payload.employees,
         shareholders: payload.shareholders,

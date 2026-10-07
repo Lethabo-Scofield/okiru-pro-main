@@ -31,6 +31,7 @@ import {
 } from "../src/components/workbook/sections";
 import { mapWorkbookFinancialsToClient } from "../src/components/workbook/workbookClientSync";
 import { coerceYesNo } from "../src/lib/yesNoValue";
+import { tmpsHold } from "../src/lib/extractionMetaKeys";
 import { isBlackRace, isScoringDesignation, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import { createChatCompletion } from "./openaiCompat";
 import {
@@ -988,6 +989,11 @@ function pctToFraction(v: unknown): number {
   // parseLooseNumber strips "%", currency and thousands separators so "51.5%" /
   // "60" / "0,6" still parse instead of NaN→0 (which failed every BO51/BWO30 check).
   const n = parseLooseNumber(v);
+  // A value that SAYS it is a percentage ("1%", "0.5%") is one, whatever its
+  // size: "1%" is one percent. Only a bare number has its unit inferred, and
+  // a bare value of 1 or less is a fraction (see percentCellValue in
+  // workbookInjection.ts, which stores 1% or less that way for this reason).
+  if (typeof v === "string" && v.includes("%")) return Math.max(0, n / 100);
   if (n <= 1) return Math.max(0, n);
   return Math.max(0, n / 100);
 }
@@ -1373,12 +1379,30 @@ export function projectWorkbookToClient(wb: WorkbookData) {
   // scored because procurement targets are tmps × pct, and tmps only came from the
   // Financials TMPS field. If that wasn't supplied, derive tmps from total supplier
   // spend so entered suppliers actually produce a score.
+  //
+  // Only when no document STATED one, though (decision F: a computed TMPS is
+  // never presented as if stated). A blank that is a contested pair of stated
+  // figures, or a stated cell that held #REF!, is a hole the upload told the
+  // user it left open ("nothing is scored from it until you pick one") — the
+  // supplier sum there would score exactly what the screen said it would not.
+  // Every outcome is labelled, so the sum is never shown as the client's figure.
+  const heldOpen = tmpsHold(finMeta);
+  financials.tmpsSource = financials.tmps > 0 ? "stated" : null;
+  financials.tmpsHeld = null;
   if (!(financials.tmps > 0)) {
-    const supplierSpendTotal = suppliers.reduce(
-      (acc, sup) => acc + (num((sup as any).spend) || 0),
-      0,
-    );
-    if (supplierSpendTotal > 0) financials.tmps = supplierSpendTotal;
+    if (heldOpen) {
+      financials.tmps = 0;
+      financials.tmpsHeld = heldOpen;
+    } else {
+      const supplierSpendTotal = suppliers.reduce(
+        (acc, sup) => acc + (num((sup as any).spend) || 0),
+        0,
+      );
+      if (supplierSpendTotal > 0) {
+        financials.tmps = supplierSpendTotal;
+        financials.tmpsSource = "supplier_spend_sum";
+      }
+    }
   }
 
   // Connect the skills headcount to the actual employee register — the user
@@ -1723,6 +1747,10 @@ export function registerWorkbookRoutes(app: Express): void {
           if (f.revenue > 0) update.revenue = f.revenue;
           if (f.leviableAmount > 0) update.leviableAmount = f.leviableAmount;
           if (f.tmps > 0) update.tmps = f.tmps;
+          // A TMPS held open (contested / withdrawn) clears the client's copy:
+          // left alone, the figure an earlier sync wrote — often the supplier
+          // sum — would go on being scored as if the question were settled.
+          else if (f.tmpsHeld) update.tmps = 0;
           if (f.effectiveNpat != null) update.npat = f.effectiveNpat;
           else if (typeof f.npat === "number") update.npat = f.npat;
           if (projected.ownershipMeta?.companyValue > 0) {
@@ -1752,6 +1780,11 @@ export function registerWorkbookRoutes(app: Express): void {
           if (f.eapProvince) update.eapProvince = f.eapProvince;
           if (f.headcount != null && f.headcount > 0) update.numberOfEmployees = f.headcount;
           const skillsExtra: Record<string, unknown> = {};
+          // Always written (null clears): the financials blob is merged over
+          // the stored one, so a stale "supplier_spend_sum" would outlive the
+          // stated TMPS that replaced it.
+          skillsExtra.tmpsSource = f.tmpsSource ?? null;
+          skillsExtra.tmpsHeld = f.tmpsHeld ?? null;
           if (f.deemedNpatUsed != null) skillsExtra.deemedNpatUsed = f.deemedNpatUsed;
           if (f.deemedNpat != null) skillsExtra.deemedNpat = f.deemedNpat;
           if (f.effectiveNpat != null) skillsExtra.effectiveNpat = f.effectiveNpat;
@@ -1936,6 +1969,9 @@ export function registerWorkbookRoutes(app: Express): void {
             sedContributions: projected.sedContributions.length,
           },
           submittedAt: new Date().toISOString(),
+          // Where the synced TMPS came from (stated / supplier_spend_sum), or
+          // why it was left blank (contested / withdrawn).
+          tmpsProvenance: { source: projected.financials.tmpsSource ?? null, held: projected.financials.tmpsHeld ?? null },
           validationIssues: allValidationIssues,
           blockingIssues,
           warnings: allValidationIssues.filter((i) => !blockingIssues.includes(i)),

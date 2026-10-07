@@ -5,6 +5,7 @@ import {
 } from "@/lib/npatDeemedCalculation";
 import { lookupIndustryNormPercent } from "@/lib/industryNormLookup";
 import { coerceYesNo } from "@/lib/yesNoValue";
+import type { TmpsHold, TmpsSource } from "@/lib/extractionMetaKeys";
 
 function num(v: unknown): number {
   // Tolerant parse: "1,000,000" / "R 1 000 000" / "60%" are NaN under Number() and
@@ -41,6 +42,14 @@ export type WorkbookClientFinancials = {
   /** Always derived as `payroll × 1%` — never a user-entered value. */
   leviableAmount: number;
   tmps: number;
+  /**
+   * Where `tmps` came from, set by the server projection: the workbook's own
+   * figure (`stated`) or the supplier schedule's total standing in for one no
+   * document stated (`supplier_spend_sum`). Null when there is no TMPS.
+   */
+  tmpsSource?: TmpsSource | null;
+  /** Why TMPS is blank on purpose (contested / withdrawn), or null. */
+  tmpsHeld?: TmpsHold | null;
   industrySector?: string;
   scorecardType?: string;
   annualTurnover: number;

@@ -32,6 +32,11 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --prod --frozen-lockfile
 COPY --from=build /app/dist ./dist
 COPY ontology ./ontology
+# Per-document-type extraction skills (skills/<domain>/*.md), read at runtime
+# from /app/skills by src/services/skills.ts. Copied as data rather than
+# bundled into dist so each file keeps its own content hash (the cache salt)
+# and a skill edit needs no build step. A missing directory fails loudly.
+COPY skills ./skills
 EXPOSE 3200
 HEALTHCHECK --interval=30s --timeout=5s --start-period=25s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3200)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"

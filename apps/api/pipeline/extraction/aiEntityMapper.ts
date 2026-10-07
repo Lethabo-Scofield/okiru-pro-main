@@ -46,6 +46,13 @@ export interface UCSReadyPayload {
   financials: FinancialsInput;
   crossPillarValues: Map<string, number>;
   dataQuality: DataQualityReport;
+  /**
+   * Where financials.tmps came from: stated by a document, or the supplier
+   * schedule total standing in because none was. Null when there is none.
+   */
+  tmpsSource: TmpsSource | null;
+  /** Why TMPS is blank on purpose (a stated cell held #REF!), or null. */
+  tmpsHeld: TmpsHold | null;
 }
 
 export interface DataQualityReport {
@@ -274,7 +281,9 @@ const FINANCIAL_ENTITY_MAP: Record<string, keyof FinancialsInput> = {
   'annual payroll': 'leviableAmount', 'staff costs': 'leviableAmount',
   'tmps': 'tmps', 'total_measured_procurement_spend': 'tmps',
   'total measured procurement spend': 'tmps',
-  'tmps inclusions': 'tmps', 'tmps_inclusions': 'tmps',
+  // 'tmps inclusions' / 'tmps_inclusions' are deliberately absent: the total
+  // BEFORE exclusions is not TMPS, and as the denominator it understates every
+  // procurement percentage by every excluded rand.
   'measured procurement spend': 'tmps', 'procurement spend': 'tmps',
   'total procurement': 'tmps', 'total spend': 'tmps',
   'headcount': 'headcount', 'number_of_employees': 'headcount',
@@ -296,10 +305,20 @@ const OWNERSHIP_FINANCIAL_MAP: Record<string, string> = {
   'years since transaction': 'yearsHeld',
 };
 
+/** A spreadsheet error a cell can hold instead of a figure (#REF!, #DIV/0!, …). */
+const SPREADSHEET_ERROR = /^\s*#(?:REF!|VALUE!|DIV\/0!|N\/A|NAME\?|NUM!|NULL!|SPILL!|CALC!|GETTING_DATA)/i;
+
+/** Where the TMPS in a UCS payload came from — see mapToUCSPayload. */
+export type TmpsSource = 'stated' | 'supplier_spend_sum';
+/** Why TMPS is blank on purpose: the stated cell could not be read. */
+export type TmpsHold = 'withdrawn';
+
 function extractFinancialsFromEntities(
   entities: ExtractionOutput['entities'],
   tables: ExtractionOutput['tables']
-): FinancialsInput {
+): { financials: FinancialsInput; tmpsSource: TmpsSource | null; tmpsHeld: TmpsHold | null } {
+  /** A TMPS was stated but its cell held a spreadsheet error. */
+  let tmpsWithdrawn = false;
   const financials: FinancialsInput = {
     revenue: 0,
     npat: 0,
@@ -317,6 +336,10 @@ function extractFinancialsFromEntities(
       key = FINANCIAL_ENTITY_MAP[stripped];
     }
     if (key) {
+      if (key === 'tmps' && typeof entity.value === 'string' && SPREADSHEET_ERROR.test(entity.value)) {
+        tmpsWithdrawn = true;
+        continue;
+      }
       const val = normalizeNumber(entity.value);
       if (val > 0 && financials[key] === 0) {
         (financials as any)[key] = val;
@@ -340,16 +363,6 @@ function extractFinancialsFromEntities(
     financials.headcount = tables.employees.length;
   }
 
-  // Derive TMPS from supplier spend if not found in entities
-  if (financials.tmps === 0 && tables.suppliers?.length) {
-    const totalSupplierSpend = tables.suppliers.reduce(
-      (sum: number, s: any) => sum + normalizeNumber(s.spend || s.amount || 0), 0
-    );
-    if (totalSupplierSpend > 0) {
-      financials.tmps = totalSupplierSpend;
-    }
-  }
-
   // Derive leviableAmount from revenue if not found (estimate: 30-40% of revenue)
   if (financials.leviableAmount === 0 && financials.revenue > 0) {
     financials.leviableAmount = financials.revenue * 0.35;
@@ -363,7 +376,8 @@ function extractFinancialsFromEntities(
     if (financials.leviableAmount === 0 && normalizeNumber(ft.leviableAmount || ft.leviable_amount || ft.payroll) > 0) {
       financials.leviableAmount = normalizeNumber(ft.leviableAmount || ft.leviable_amount || ft.payroll);
     }
-    if (financials.tmps === 0 && normalizeNumber(ft.tmps) > 0) financials.tmps = normalizeNumber(ft.tmps);
+    if (typeof ft.tmps === 'string' && SPREADSHEET_ERROR.test(ft.tmps)) tmpsWithdrawn = true;
+    else if (financials.tmps === 0 && normalizeNumber(ft.tmps) > 0) financials.tmps = normalizeNumber(ft.tmps);
     if (financials.headcount === 0 && normalizeNumber(ft.headcount) > 0) financials.headcount = normalizeNumber(ft.headcount);
     if (normalizeNumber(ft.companyValue) > 0 && !(financials as any).companyValue) {
       (financials as any).companyValue = normalizeNumber(ft.companyValue);
@@ -393,7 +407,29 @@ function extractFinancialsFromEntities(
     }
   }
 
-  return financials;
+  // TMPS from supplier spend — LAST, after every stated source has had its
+  // say (it used to run before the financials table was read, so a TMPS the
+  // table stated lost to the computed sum), and only when no TMPS was stated
+  // at all. A stated cell that held #REF! is a hole for the client to fill:
+  // summing the suppliers there would present a computed figure as if it
+  // were the one the workbook states. Either way the source is reported.
+  let tmpsSource: TmpsSource | null = financials.tmps > 0 ? 'stated' : null;
+  let tmpsHeld: TmpsHold | null = null;
+  if (financials.tmps === 0) {
+    if (tmpsWithdrawn) {
+      tmpsHeld = 'withdrawn';
+    } else if (tables.suppliers?.length) {
+      const totalSupplierSpend = tables.suppliers.reduce(
+        (sum: number, s: any) => sum + normalizeNumber(s.spend || s.amount || 0), 0
+      );
+      if (totalSupplierSpend > 0) {
+        financials.tmps = totalSupplierSpend;
+        tmpsSource = 'supplier_spend_sum';
+      }
+    }
+  }
+
+  return { financials, tmpsSource, tmpsHeld };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -749,7 +785,7 @@ export async function mapToUCSPayload(
   employees = await aiRepairEmployeeDesignations(employees);
 
   // Extract and derive financials
-  const financials = extractFinancialsFromEntities(entities, tables);
+  const { financials, tmpsSource, tmpsHeld } = extractFinancialsFromEntities(entities, tables);
 
   // Build entity values map from individual entities
   const entityValues: Record<string, { entityId: string; value: any; source: string; confidence: number }> = {};
@@ -801,7 +837,7 @@ export async function mapToUCSPayload(
   if ((financials as any).yearsHeld) crossPillarValues.set('yearsHeld', (financials as any).yearsHeld);
 
   // Build data quality report
-  const dataQuality = buildQualityReport(employees, shareholders, suppliers, contributions, trainingPrograms, financials);
+  const dataQuality = buildQualityReport(employees, shareholders, suppliers, contributions, trainingPrograms, financials, tmpsSource, tmpsHeld);
 
   return {
     entityValues,
@@ -813,6 +849,8 @@ export async function mapToUCSPayload(
     financials,
     crossPillarValues,
     dataQuality,
+    tmpsSource,
+    tmpsHeld,
   };
 }
 
@@ -827,6 +865,8 @@ function buildQualityReport(
   contributions: ContributionInput[],
   trainingPrograms: any[],
   financials: FinancialsInput,
+  tmpsSource: TmpsSource | null = financials.tmps > 0 ? 'stated' : null,
+  tmpsHeld: TmpsHold | null = null,
 ): DataQualityReport {
   const pillarsWithData: string[] = [];
   const pillarsWithoutData: string[] = [];
@@ -867,12 +907,14 @@ function buildQualityReport(
       missingCritical.push('Leviable Amount');
     }
   }
-  if (!financials.tmps) {
-    if (suppliers.length > 0) {
-      derivedValues.push('TMPS (derived from total supplier spend)');
-    } else {
-      missingCritical.push('TMPS (Total Measured Procurement Spend)');
-    }
+  if (tmpsSource === 'supplier_spend_sum') {
+    derivedValues.push('TMPS (derived from total supplier spend)');
+  } else if (!financials.tmps) {
+    missingCritical.push(
+      tmpsHeld === 'withdrawn'
+        ? 'TMPS (Total Measured Procurement Spend): the stated cell holds a spreadsheet error, so it was left blank, not computed'
+        : 'TMPS (Total Measured Procurement Spend)',
+    );
   }
 
   if (employees.length > 0 && employees.length < 5) {

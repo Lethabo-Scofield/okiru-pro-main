@@ -1,6 +1,7 @@
 import type { ParserDataType } from '../schemas/document_types.js';
 
-const LEVEL_WORDS: Record<string, number> = {
+/** B-BBEE levels as certificates write them in words ("LEVEL ONE CONTRIBUTOR"). */
+export const LEVEL_WORDS: Readonly<Record<string, number>> = {
   one: 1,
   two: 2,
   three: 3,
@@ -10,6 +11,9 @@ const LEVEL_WORDS: Record<string, number> = {
   seven: 7,
   eight: 8,
 };
+
+/** `one|two|…|eight`, for patterns that read a level written in words. */
+export const LEVEL_WORD_ALTERNATION = Object.keys(LEVEL_WORDS).join('|');
 
 export function normalizeMoney(value: unknown): number | null {
   if (value == null) return null;
@@ -40,8 +44,9 @@ export function normalizeBeeLevel(value: unknown): number | null {
   const raw = String(value).trim().toLowerCase();
   const numeric = raw.match(/\b([1-8])\b/);
   if (numeric) return Number(numeric[1]);
+  // Whole words: "none" is not level one.
   for (const [word, level] of Object.entries(LEVEL_WORDS)) {
-    if (raw.includes(word)) return level;
+    if (new RegExp(`\\b${word}\\b`).test(raw)) return level;
   }
   return null;
 }
@@ -78,9 +83,17 @@ export function normalizeDate(value: unknown): string | null {
     }
   }
 
+  // Last resort: whatever the engine can parse ("July 14, 2023"). A bare
+  // number is not a date (an Excel serial or a lone figure comes back as some
+  // year), nor is anything placed outside the years a document can mean.
+  if (/^[\d\s.,]+$/.test(raw)) return null;
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return null;
-  return parsed.toISOString().slice(0, 10);
+  // The engine parses a written date as LOCAL midnight; reading it back in UTC
+  // (toISOString) moved every such date a day earlier east of Greenwich.
+  const year = parsed.getFullYear();
+  if (year < 1900 || year > 2100) return null;
+  return `${year}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
 }
 
 export function normalizeValue(value: unknown, dataType: ParserDataType): unknown | null {

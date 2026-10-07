@@ -59,6 +59,46 @@ export function findDocumentById(id: string): VerificationDocument | null {
   return VERIFICATION_DOCUMENT_MATRIX.find((doc) => doc.id === id) ?? null;
 }
 
+/**
+ * Source-workbook sheet → element. Mirrors SHEET_TO_ELEMENT in
+ * scripts/generate-document-matrix.mjs (a plain .mjs script, so it cannot import
+ * this); the ontology loader test fails if the two drift apart.
+ */
+export const MATRIX_SHEET_ELEMENTS: Readonly<Record<string, VerificationElement>> = {
+  'Ownership': 'OWNERSHIP',
+  'Management Control': 'MANAGEMENT_CONTROL',
+  'Skills Development': 'SKILLS_DEVELOPMENT',
+  'Enterprise & Supplier Dev': 'ESD',
+  'Socio-Economic Development': 'SED',
+};
+
+/**
+ * Does the spec ask for one record PER item — "Return JSON per payment: …",
+ * "Extract a list of all current directors with: …", "a JSON table by
+ * management level: …"? Read from the words between the verb and the colon
+ * that opens the field list (the same marker the generator parses fields after).
+ */
+export function asksForOneRecordPerItem(doc: Pick<VerificationDocument, 'extractionPrompt'>): boolean {
+  const marker = doc.extractionPrompt.match(/\b(?:Return|Extract)\b([^:]{0,80}):/i)?.[1] ?? '';
+  return /\b(?:per|each|list|table|by)\b/i.test(marker);
+}
+
+const rowKey = (name: string) => name.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/**
+ * The matrix entry for one row of the source workbook — how the runtime
+ * ontology loader reads the generator's field list instead of re-parsing the
+ * prompt itself. Matched on the element plus the document name; on a sheet the
+ * generator does not know, on the name alone when exactly one entry has it.
+ */
+export function findDocumentForWorkbookRow(sheetName: string, documentName: string): VerificationDocument | null {
+  const key = rowKey(documentName);
+  const element = MATRIX_SHEET_ELEMENTS[sheetName.trim()];
+  const byName = VERIFICATION_DOCUMENT_MATRIX.filter((doc) => rowKey(doc.name) === key);
+  if (element) return byName.find((doc) => doc.element === element) ?? null;
+  return byName.length === 1 ? byName[0] : null;
+}
+
 /** Element → its documents, for building a "what we need from you" request. */
 export function documentsByElement(): Record<VerificationElement, VerificationDocument[]> {
   const grouped = {} as Record<VerificationElement, VerificationDocument[]>;

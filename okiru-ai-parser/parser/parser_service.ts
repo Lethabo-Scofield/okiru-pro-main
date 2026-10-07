@@ -3,14 +3,15 @@ import type { OntologyRepository } from '../graph/ontology_models.js';
 import { InMemoryOntologyRepository } from '../graph/ontology_queries.js';
 import type { ParserOutput, RawExtractionInput } from '../schemas/parser_output.js';
 import { parserOutputSchema } from '../schemas/parser_output.js';
-import { classifyDocument } from './classify_document.js';
+import { classifyDocument, contentConcepts } from './classify_document.js';
+import { rankSpecsForDocument } from '../src/services/specRetrieval.js';
 import { mapCalculatorPayload } from './calculator_mapper.js';
 import { extractFields } from './extract_fields.js';
 import { extractSupplierRows, extractMeasuredProcurementSpend } from './extract_supplier_rows.js';
 import { parseRawExtractionInput } from './ingest.js';
 import { validateExtractedFields } from './validate.js';
-import type { AdjudicationCandidate, DocumentTypeAdjudicator } from './type_adjudicator.js';
-import type { DocumentClassification } from '../schemas/document_types.js';
+import { ADJUDICATION_MENU, type AdjudicationCandidate, type DocumentTypeAdjudicator } from './type_adjudicator.js';
+import type { DocumentClassification, DocumentClassificationCandidate } from '../schemas/document_types.js';
 
 const logger = createLogger('ParserService');
 
@@ -25,6 +26,79 @@ export interface ParserServiceOptions {
 /** Matches the classifier's PASS_CONFIDENCE — above it, no review flag for type. */
 const ADJUDICATED_PASS = 0.85;
 
+/** How many lexical candidates lead the adjudication menu. */
+const SHORTLIST_LEXICAL = 5;
+/** How many specs content retrieval may add behind them. */
+const SHORTLIST_RETRIEVED = 8;
+
+const nameKey = (name: string) => name.trim().toLowerCase();
+
+/**
+ * The types the adjudicator may choose from.
+ *
+ * It used to be the lexical top 5 and nothing else, so when keyword overlap
+ * missed the right type the reader could not choose it: both payroll PDFs in
+ * the real pack were offered EEA1, an EE report, a medical certificate, a
+ * valuation report and personnel records — and "Payroll as at Measurement
+ * Date" was not on the menu. The menu is now the lexical top 5 followed by the
+ * content-retrieval top 8 (BM25 over each spec's purpose, fields and example —
+ * the ranking the AI extraction path uses), merged without repeats and capped
+ * at ADJUDICATION_MENU. Retrieval is told the classifier's concept words, so a
+ * "Basic Salary" column is a payroll query there too.
+ *
+ * Every entry is still an ontology type with its real keyword score — a type
+ * the ontology does not know (a matrix spec merged into a canonical type) is
+ * skipped, because extraction has nothing to run under it.
+ */
+export function adjudicationShortlist(
+  input: Pick<RawExtractionInput, 'filename' | 'raw_text'>,
+  classification: DocumentClassification,
+): DocumentClassificationCandidate[] {
+  const lexical = (classification.candidates ?? []).filter((c) => c.confidence > 0).slice(0, SHORTLIST_LEXICAL);
+  const scored = new Map<string, DocumentClassificationCandidate>();
+  for (const candidate of classification.ranked ?? classification.candidates ?? []) {
+    if (!scored.has(nameKey(candidate.document_type))) scored.set(nameKey(candidate.document_type), candidate);
+  }
+
+  const menu = [...lexical];
+  const seen = new Set(lexical.map((c) => nameKey(c.document_type)));
+  const text = input.raw_text ?? '';
+  const concepts = contentConcepts(text);
+  let retrieved: ReturnType<typeof rankSpecsForDocument> = [];
+  try {
+    retrieved = rankSpecsForDocument(concepts.length > 0 ? `${text}\n${concepts.join(' ')}` : text, input.filename ?? '', {
+      limit: SHORTLIST_RETRIEVED,
+    });
+  } catch (err) {
+    // Retrieval widens the menu; without it the lexical shortlist still stands.
+    logger.warn('Spec retrieval for the adjudication shortlist failed', { reason: (err as Error).message });
+  }
+  for (const { spec } of retrieved) {
+    const candidate = scored.get(nameKey(spec.name));
+    if (!candidate || seen.has(nameKey(candidate.document_type))) continue;
+    menu.push(candidate);
+    seen.add(nameKey(candidate.document_type));
+  }
+  return menu.slice(0, ADJUDICATION_MENU);
+}
+
+/**
+ * Does the lexical decision need a reader?
+ *
+ * Always when it is undecided (low confidence, a close call). Also when it is
+ * "classified" but the top pick rests only on a LABEL — an alias in the text or
+ * the filename — rather than on the document's content: a label match is the
+ * failure this classifier was rebuilt to stop trusting. A compendium is many
+ * documents at once, not a single-type question; an unsupported upload matched
+ * nothing to choose between.
+ */
+export function needsAdjudication(classification: DocumentClassification): boolean {
+  if (classification.status === 'low_confidence' || classification.status === 'ambiguous') return true;
+  if (classification.status !== 'classified') return false;
+  const basis = classification.candidates?.[0]?.evidence_basis;
+  return basis === 'alias' || basis === 'filename' || basis === 'none';
+}
+
 export class ParserService {
   private readonly adjudicator?: DocumentTypeAdjudicator;
 
@@ -38,18 +112,20 @@ export class ParserService {
   /**
    * Let a reader settle what the lexical classifier could not.
    *
-   * Only the undecided outcomes go to the model — a confident lexical
-   * classification is never second-guessed, and a compendium (many types at
-   * once) is not a single-type question. The model chooses from the lexical
-   * SHORTLIST, so it can only ever land on a type the ontology knows.
+   * The undecided outcomes go to the model, and so does a confident pick that
+   * rests only on a label (see needsAdjudication) — a pick backed by the
+   * document's content is never second-guessed, and a compendium (many types at
+   * once) is not a single-type question. The model chooses from a closed
+   * SHORTLIST of ontology types (see adjudicationShortlist), so it can only
+   * ever land on a type the ontology knows.
    */
   private async adjudicate(
     input: RawExtractionInput,
     classification: DocumentClassification,
   ): Promise<DocumentClassification> {
     if (!this.adjudicator) return classification;
-    if (classification.status !== 'low_confidence' && classification.status !== 'ambiguous') return classification;
-    const shortlist = (classification.candidates ?? []).filter((c) => c.confidence > 0);
+    if (!needsAdjudication(classification)) return classification;
+    const shortlist = adjudicationShortlist(input, classification);
     if (shortlist.length === 0) return classification;
 
     const descriptions = new Map<string, string>();
@@ -82,6 +158,20 @@ export class ParserService {
 
     const chosen = shortlist.find((c) => c.document_type.toLowerCase() === verdict!.documentType.toLowerCase());
     if (!chosen) return classification;
+
+    // A confident pick asked about only because it rests on a label, and the
+    // reader names the SAME type: that is a confirmation, not a re-grade. Taking
+    // the reader's confidence here would turn an agreeing 0.6 into 'ambiguous'
+    // and cost the document a calculator payload it had already earned.
+    if (classification.status === 'classified' && nameKey(chosen.document_type) === nameKey(classification.document_type)) {
+      logger.info('Document type confirmed by adjudication', {
+        fileId: input.file_id, documentType: classification.document_type, confidence: verdict.confidence,
+      });
+      return {
+        ...classification,
+        reason: `${classification.reason}; confirmed by reading it: ${verdict.reason || 'distinctive features present'}`,
+      };
+    }
 
     const confident = verdict.confidence >= ADJUDICATED_PASS;
     logger.info('Document type adjudicated', {

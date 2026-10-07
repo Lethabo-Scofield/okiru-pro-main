@@ -21,11 +21,14 @@
  */
 import { injectIntoSection, injectMetaValue, type InjectionRejection, type VocabularyDecisions } from "./workbookInjection";
 import {
+  declaredOwnershipFlags,
   huntRequiredFields,
   targetForField,
   type CoverageReport,
   type WorkbookSectionKey,
 } from "./parserFieldBridge";
+import { getSection } from "@/components/workbook/sections";
+import { META_CONFLICTS_KEY, META_CORROBORATION_KEY, META_WITHDRAWN_KEY } from "./extractionMetaKeys";
 
 /** One document's worth of extracted values, as the parser reports it. */
 export interface ParserExtraction {
@@ -34,13 +37,46 @@ export interface ParserExtraction {
   values: Array<{ field: string; value: unknown }>;
   /** Matrix element (OWNERSHIP | MANAGEMENT_CONTROL | SKILLS_DEVELOPMENT | ESD | SED). */
   element?: string;
+  /** The reader's own findings on this document (e.g. "TMPS cell holds #REF! …"). */
+  exceptions?: string[];
 }
 
 export interface WorkbookRow extends Record<string, unknown> {
   _id: string;
   /** Files this row's values came from — provenance, kept on the row itself. */
   _sourceFiles?: string[];
+  /** See DERIVED_FROM_FLAG_KEY. */
+  _derivedFromFlag?: Record<string, string>;
 }
+
+/**
+ * Reserved row key: the cells whose value was DERIVED from a declaration flag
+ * rather than stated — column key → the flag it came from. A supplier schedule
+ * that says only "51% or more black owned: Yes" gets 51 in its Black Ownership
+ * (%) cell (the floor the flag vouches for), and this key keeps that from
+ * passing for a figure the supplier gave: it is reported to the user, and a
+ * percentage another document states replaces it when the rows link.
+ */
+export const DERIVED_FROM_FLAG_KEY = "_derivedFromFlag";
+
+function derivedNote(row: WorkbookRow, column: string): string | undefined {
+  return row._derivedFromFlag?.[column];
+}
+
+function setDerived(row: WorkbookRow, column: string, note: string | undefined): void {
+  if (note) {
+    row._derivedFromFlag = { ...(row._derivedFromFlag ?? {}), [column]: note };
+    return;
+  }
+  if (!row._derivedFromFlag || !(column in row._derivedFromFlag)) return;
+  const rest = { ...row._derivedFromFlag };
+  delete rest[column];
+  if (Object.keys(rest).length > 0) row._derivedFromFlag = rest;
+  else delete row._derivedFromFlag;
+}
+
+/** Row keys that carry bookkeeping, never a cell's value. */
+const ROW_BOOKKEEPING = new Set(["_id", "_sourceFiles", DERIVED_FROM_FLAG_KEY]);
 
 /**
  * One field, already compared across every document by the parser's resolver.
@@ -103,10 +139,31 @@ export interface MetaCorroboration {
  *
  * Underscore-prefixed so they can never collide with a workbook column, and
  * exported so the review layer reads the same constant the writer used rather
- * than a string literal that can drift.
+ * than a string literal that can drift. Defined in extractionMetaKeys, which
+ * the server projection reads without pulling in the injector.
  */
-export const META_CONFLICTS_KEY = "_metaConflicts";
-export const META_CORROBORATION_KEY = "_metaCorroboration";
+export { META_CONFLICTS_KEY, META_CORROBORATION_KEY, META_WITHDRAWN_KEY };
+
+/**
+ * An entity-level figure a document STATED but that could not be read, so it
+ * was left blank on purpose. Unlike a figure no document mentioned, it must
+ * not be computed around: the client has to fix or confirm it.
+ */
+export interface MetaWithdrawal {
+  section: WorkbookSectionKey;
+  column: string;
+  field: string;
+  /** The reader's finding, verbatim. */
+  reason: string;
+  sources: string[];
+}
+
+/**
+ * The Finance-sheet reader's finding for a TMPS cell holding a spreadsheet
+ * error. Anchored on "TMPS cell": "TMPS inclusions cell holds …" is about the
+ * pre-exclusions total, which is never TMPS.
+ */
+const TMPS_ERROR_FINDING = /^\s*TMPS cell holds #/;
 
 export interface ParserToWorkbookResult {
   /** Grid rows, per workbook section. */
@@ -127,6 +184,8 @@ export interface ParserToWorkbookResult {
   metaConflicts: MetaConflict[];
   /** Entity-level figures more than one document confirmed. */
   metaCorroboration: MetaCorroboration[];
+  /** Entity-level figures a document stated but that could not be read. */
+  metaWithdrawn?: MetaWithdrawal[];
 }
 
 let rowCounter = 0;
@@ -184,11 +243,27 @@ const EVIDENCE_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
  * facts (descriptions, dates, amounts) never propagate.
  */
 const IDENTITY_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
-  procurement: ["bbbeeLevel", "empoweringSupplier", "currentSize", "registrationNumber", "vatNumber", "certificateExpiryDate", "currentBlackOwnership"],
+  procurement: ["bbbeeLevel", "empoweringSupplier", "currentSize", "registrationNumber", "vatNumber", "certificateExpiryDate", "currentBlackOwnership", "currentBlackFemaleOwnership"],
   sed: ["percentBenefitingBlack"],
   ownership: ["race", "gender", "idNumber"],
   "management-control": ["race", "gender", "idNumber"],
   "skills-development": ["race", "gender", "idNumber"],
+};
+
+/**
+ * Sections whose rows are EVENTS of an entity rather than the entity itself.
+ *
+ * A training row is one learner on one course: the same learner on First Aid
+ * and on Forklift Driver Training is two training entries, not one person to
+ * be merged. Linking by learner name folded a whole training register into one
+ * row per learner (28 entries → 11), moving one course's cost onto another
+ * course's row. So in these sections two rows from the SAME document are
+ * always separate entries, and rows that state different values for an
+ * instance column (the course, its date) are different entries wherever they
+ * came from. A learner's identity columns (race, gender, ID) still propagate.
+ */
+const INSTANCE_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
+  "skills-development": ["programName", "startDate"],
 };
 
 /** "Thandanani Packers & Hauliers cc" → "thandanani packers and hauliers". */
@@ -300,6 +375,14 @@ function fromAccountingRecord(row: WorkbookRow): boolean {
 function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow, entity: string): MergeDecision {
   let finding: string | undefined;
 
+  const instanceColumns = INSTANCE_COLUMNS[section];
+  if (instanceColumns) {
+    if (shareASourceFile(a, b)) return { merge: false };
+    const differ = instanceColumns.some((column) =>
+      !cellBlank(a[column]) && !cellBlank(b[column]) && !cellsAgree(a[column], b[column]));
+    if (differ) return { merge: false };
+  }
+
   for (const column of EVIDENCE_COLUMNS[section] ?? []) {
     if (cellBlank(a[column]) || cellBlank(b[column])) continue;
     if (shareASourceFile(a, b)) return { merge: false };
@@ -325,11 +408,21 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
   return { merge: true, finding };
 }
 
-/** Fill `into`'s blanks from `from`; existing values are never overwritten. */
+/**
+ * Fill `into`'s blanks from `from`; existing values are never overwritten —
+ * except a value derived from a declaration flag, which a value `from` actually
+ * STATES replaces (a certificate's 75% beats a schedule's "51% or more: Yes").
+ */
 function mergeInto(into: WorkbookRow, from: WorkbookRow): void {
   for (const [column, value] of Object.entries(from)) {
-    if (column === "_id" || column === "_sourceFiles") continue;
-    if (cellBlank(into[column]) && !cellBlank(value)) into[column] = value;
+    if (ROW_BOOKKEEPING.has(column) || cellBlank(value)) continue;
+    if (cellBlank(into[column])) {
+      into[column] = value;
+      setDerived(into, column, derivedNote(from, column));
+    } else if (derivedNote(into, column) && !derivedNote(from, column)) {
+      into[column] = value;
+      setDerived(into, column, undefined);
+    }
   }
   const sources = new Set([...(into._sourceFiles ?? []), ...(from._sourceFiles ?? [])]);
   if (sources.size > 0) into._sourceFiles = Array.from(sources);
@@ -415,10 +508,17 @@ export function linkWorkbookRows(
       for (const group of Array.from(byName.values())) {
         if (group.length < 2) continue;
         for (const column of identityColumns) {
-          const value = group.map((r) => r[column]).find((v) => !cellBlank(v));
-          if (cellBlank(value)) continue;
+          // A stated value outranks one derived from a declaration flag.
+          const source = group.find((r) => !cellBlank(r[column]) && !derivedNote(r, column))
+            ?? group.find((r) => !cellBlank(r[column]));
+          if (!source) continue;
+          const value = source[column];
+          const note = derivedNote(source, column);
           for (const row of group) {
-            if (cellBlank(row[column])) row[column] = value;
+            if (cellBlank(row[column]) || (derivedNote(row, column) && !note)) {
+              row[column] = value;
+              setDerived(row, column, note);
+            }
           }
         }
       }
@@ -513,6 +613,8 @@ export function parserExtractionsToWorkbook(
    * established we cannot stand behind.
    */
   const metaContested = new Set<string>();
+  /** Contested keys whose dispute is between two LABELLED (authoritative) readings. */
+  const metaAuthoritativeContested = new Set<string>();
 
   for (const extraction of extractions) {
     // Values for THIS document, split into the scalar ones (which together make
@@ -555,8 +657,10 @@ export function parserExtractionsToWorkbook(
         // TMPS) outranks anything the resolver settled from another field
         // feeding the same column. Two parser fields map to `tmps`; whichever
         // arrived first used to claim the column for good — and on a real pack
-        // the first was `total_pre_exclusions_tmps` read as 23 (a row count),
-        // which then blocked the sheet's stated R4,674,995 from ever landing.
+        // the first was a TMPS read as 23, which then blocked the sheet's
+        // stated TMPS from ever landing. (The 23 was not a row count, as
+        // this comment once said: it was SheetJS's error code for a `#REF!`
+        // cell, which the parser now reports instead of reading.)
         const authoritativeReading = AUTHORITATIVE_DOCS.has(extraction.documentId);
         if (resolvedField && !authoritativeReading) {
           if (metaFromResolver.has(metaKey) || metaFromAuthoritative.has(metaKey)) continue; // settled
@@ -632,6 +736,9 @@ export function parserExtractionsToWorkbook(
             continue;
           }
           if (metaContested.has(metaKey)) {
+            // A dispute between stated totals is between stated totals; a
+            // model-computed figure does not get a vote in it.
+            if (metaAuthoritativeContested.has(metaKey) && !authoritative) continue;
             const open = metaConflicts.find(
               (c) => c.section === target.section && c.column === target.column,
             );
@@ -653,26 +760,41 @@ export function parserExtractionsToWorkbook(
               field,
             });
           } else {
-            // A disagreement with a LABELLED total is not a conflict — it is
-            // already settled. The stated figure on the Finance sheet beats a
-            // model-computed one by rule (the computed TMPS summed the
-            // exclusions back in and overstated the denominator by millions),
-            // so putting that to the user would be asking them to re-decide
-            // something we know the answer to.
-            if (metaFromAuthoritative.has(metaKey)) continue;
+            // A model-computed figure disagreeing with a LABELLED total is not
+            // a conflict — it is already settled. The stated figure on the
+            // Finance sheet beats a computed one by rule (the computed TMPS
+            // summed the exclusions back in and overstated the denominator by
+            // millions), so putting that to the user would be asking them to
+            // re-decide something we know the answer to.
+            if (metaFromAuthoritative.has(metaKey) && !authoritative) continue;
 
+            // Two LABELLED totals that disagree, though, are a real question:
+            // two workbooks each state their own TMPS, and nothing here knows
+            // which revision the client stands behind. That used to be dropped
+            // silently — the first file read won — so the score depended on
+            // upload order and nobody saw there had been a choice.
             const first = metaFirstValue.get(metaKey);
             if (first && !cellsAgree(first.value, injected.value)) {
               // Contested, so nothing is scored from it — the first-arrived
-              // value comes back OUT of the bucket.
+              // value comes back OUT of the bucket. Sources that had already
+              // agreed with it stay with it, so a two-against-one dispute can
+              // still be settled by corroboration below.
+              const agreedAt = metaCorroboration.findIndex(
+                (c) => c.section === target.section && c.column === target.column,
+              );
+              const firstSources = agreedAt >= 0
+                ? [...metaCorroboration[agreedAt].sources]
+                : [first.sourceFile].filter(Boolean);
+              if (agreedAt >= 0) metaCorroboration.splice(agreedAt, 1);
               delete bucket[target.column];
               metaContested.add(metaKey);
+              if (authoritative) metaAuthoritativeContested.add(metaKey);
               metaConflicts.push({
                 section: target.section,
                 column: target.column,
                 field,
                 candidates: [
-                  { value: first.value, sources: [first.sourceFile].filter(Boolean) },
+                  { value: first.value, sources: firstSources },
                   { value: injected.value, sources: [extraction.sourceFile].filter(Boolean) },
                 ],
               });
@@ -723,7 +845,11 @@ export function parserExtractionsToWorkbook(
     // Tables: one row per entry. A share register is twelve shareholders, and
     // flattening it would score a fraction of the ownership.
     for (const table of tables) {
-      for (const entry of table.entries) {
+      for (const rawEntry of table.entries) {
+        // A supplier's "51%/30% or more" Yes flags stand in for an unstated
+        // ownership percentage, at exactly the floor they declare — marked on
+        // the row as derived, never passed off as stated.
+        const { entry, derived } = declaredOwnershipFlags(rawEntry);
         const values = Object.entries(entry)
           .map(([key, value]) => {
             const target = targetForField(key, extraction.element);
@@ -739,7 +865,12 @@ export function parserExtractionsToWorkbook(
           rejected.push({ ...rejection, sourceFile: extraction.sourceFile, section: table.section });
         }
         if (Object.keys(injected.cells).length > 0) {
-          addRow(table.section, { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] });
+          const row: WorkbookRow = { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] };
+          for (const [field, flag] of Object.entries(derived)) {
+            const column = targetForField(field, extraction.element)?.column;
+            if (column && !cellBlank(row[column])) setDerived(row, column, flag);
+          }
+          addRow(table.section, row);
         }
       }
     }
@@ -788,7 +919,9 @@ export function parserExtractionsToWorkbook(
   // the rows it must contain, and one person's race across the sections that
   // name them. Both report; neither guesses.
   const tmpsFindings = sanityCheckTmps(meta, linked.rows, metaConflicts);
+  const derivedFindings = derivedFromFlagFindings(linked.rows);
   const raceFindings = reconcileRaceAcrossSections(linked.rows);
+  const metaWithdrawn = withdrawnTmps(extractions, meta, metaConflicts);
 
   const coverage = huntRequiredFields(linked.rows, Array.from(unmapped), options);
   return {
@@ -796,10 +929,46 @@ export function parserExtractionsToWorkbook(
     meta,
     rejected,
     coverage,
-    reconciliation: [...linked.reconciliation, ...duplicateFindings, ...metaResolutions, ...tmpsFindings, ...raceFindings],
+    reconciliation: [...linked.reconciliation, ...duplicateFindings, ...metaResolutions, ...tmpsFindings, ...raceFindings, ...derivedFindings],
     metaConflicts,
     metaCorroboration,
+    metaWithdrawn,
   };
+}
+
+/**
+ * A stated TMPS whose cell held a spreadsheet error, with no other document
+ * filling the gap: recorded as WITHDRAWN so the workbook carries the reason.
+ *
+ * The parser reads nothing from a `#REF!` cell and says so, but only on the
+ * upload screen. Without this the synced workbook shows an ordinary blank, and
+ * an ordinary blank is one the server fills with the supplier-schedule total —
+ * the figure the finding promised had not been computed. Not filed when TMPS
+ * landed from another workbook, nor when it is already an open conflict (that
+ * holds it blank on its own).
+ */
+function withdrawnTmps(
+  extractions: ParserExtraction[],
+  meta: Partial<Record<WorkbookSectionKey, Record<string, unknown>>>,
+  metaConflicts: MetaConflict[],
+): MetaWithdrawal[] {
+  const fin = meta["financial-information"];
+  if (fin?.tmps !== undefined && fin.tmps !== null && fin.tmps !== "") return [];
+  if (metaConflicts.some((c) => c.section === "financial-information" && c.column === "tmps")) return [];
+  const findings = extractions.flatMap((e) =>
+    (e.exceptions ?? [])
+      .map((note) => String(note ?? ""))
+      .filter((note) => TMPS_ERROR_FINDING.test(note))
+      .map((note) => ({ note, source: e.sourceFile })),
+  );
+  if (findings.length === 0) return [];
+  return [{
+    section: "financial-information",
+    column: "tmps",
+    field: "total_measured_procurement_spend",
+    reason: findings[0].note.trim(),
+    sources: Array.from(new Set(findings.map((f) => f.source).filter(Boolean))),
+  }];
 }
 
 /**
@@ -848,14 +1017,53 @@ export function resolveLopsidedConflict(
 }
 
 /**
+ * Say which cells hold a value derived from a declaration flag rather than a
+ * stated one — one finding per column, naming the rows. The grid shows a plain
+ * 51 either way; this is where the user learns the supplier never said 51.
+ */
+function derivedFromFlagFindings(
+  rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
+): ReconciliationFinding[] {
+  const findings: ReconciliationFinding[] = [];
+  for (const [sectionKey, sectionRows] of Object.entries(rows)) {
+    const section = sectionKey as WorkbookSectionKey;
+    const byColumn = new Map<string, { flag: string; value: unknown; names: string[] }>();
+    for (const row of sectionRows ?? []) {
+      for (const [column, flag] of Object.entries(row._derivedFromFlag ?? {})) {
+        const entry = byColumn.get(column) ?? { flag, value: row[column], names: [] };
+        const nameColumns = LINK_KEY_COLUMNS[section] ?? [];
+        entry.names.push(nameColumns.map((c) => String(row[c] ?? "").trim()).filter(Boolean).join(" ") || "a row with no name");
+        byColumn.set(column, entry);
+      }
+    }
+    for (const [column, { flag, value, names }] of Array.from(byColumn.entries())) {
+      const label = getSection(section)?.columns?.find((c) => c.key === column)?.label ?? column;
+      const shown = names.length > 10 ? `${names.slice(0, 10).join(", ")} and ${names.length - 10} more` : names.join(", ");
+      findings.push({
+        section,
+        entity: names.length === 1 ? names[0] : `${names.length} rows`,
+        column,
+        message:
+          `${shown}: ${label} shows ${String(value)}, the floor the schedule's ${flag} vouches for — `
+          + "not a percentage the supplier stated. It scores at exactly that floor; enter the supplier's actual percentage if you have it.",
+      });
+    }
+  }
+  return findings;
+}
+
+/**
  * Total Measured Procurement Spend must CONTAIN the supplier schedule. When
  * the figure read as TMPS is smaller than the largest single supplier's spend,
- * or equals the schedule's row count, it is not TMPS — it is a count or a
- * misplaced cell. (Measured, twice: `tmps = 23` on a schedule of 23 rows
- * summing to R3.3M. Scored, that makes every supplier "more than all
- * procurement" and the pillar nonsense.) The figure is withdrawn from meta and
- * put to the user as a conflict against the schedule total, which is the
- * lower bound any verifier would start from.
+ * or is a small integer no bigger than the schedule's row count, it is not
+ * TMPS — it is a misplaced cell, a count, or a spreadsheet error code.
+ * (Measured, twice: `tmps = 23` on a schedule of 23 rows summing to R3.3M. The
+ * row count matched by coincidence; the 23 was SheetJS's code for a `#REF!`
+ * cell. Scored, it makes every supplier "more than all procurement" and the
+ * pillar nonsense.) The figure is withdrawn from meta and put to the user as a
+ * conflict. The schedule total joins whatever candidates were already open,
+ * as the lower bound any verifier would start from, and replaces none of
+ * them: a stated TMPS another workbook offered must stay on the table.
  */
 function sanityCheckTmps(
   meta: Partial<Record<WorkbookSectionKey, Record<string, unknown>>>,
@@ -876,19 +1084,32 @@ function sanityCheckTmps(
   delete fin.tmps;
   const fmt = (n: number) => `R${n.toLocaleString("en-ZA", { maximumFractionDigits: 2 })}`;
   const already = metaConflicts.find((c) => c.section === "financial-information" && c.column === "tmps");
-  const candidates = [
-    { value: tmps, sources: ["as read"] },
-    { value: Math.round(sum), sources: ["sum of the supplier schedule (lower bound)"] },
-  ];
-  if (already) already.candidates = candidates;
-  else metaConflicts.push({ section: "financial-information", column: "tmps", field: "total_measured_procurement_spend", candidates });
+  const scheduleSum = { value: Math.round(sum), sources: ["sum of the supplier schedule (lower bound)"] };
+  if (already) {
+    // Append, never replace: the candidates already open include every stated
+    // TMPS another document offered, and the user must still be able to pick it.
+    if (!already.candidates.some((c) => cellsAgree(c.value, tmps))) {
+      already.candidates.push({ value: tmps, sources: ["as read"] });
+    }
+    if (!already.candidates.some((c) => cellsAgree(c.value, scheduleSum.value))) {
+      already.candidates.push(scheduleSum);
+    }
+  } else {
+    metaConflicts.push({
+      section: "financial-information",
+      column: "tmps",
+      field: "total_measured_procurement_spend",
+      candidates: [{ value: tmps, sources: ["as read"] }, scheduleSum],
+    });
+  }
   return [{
     section: "financial-information",
     entity: "Total Measured Procurement Spend",
     column: "tmps",
     message:
       `TMPS was read as ${fmt(tmps)}, but the supplier schedule it must contain has ${suppliers.length} rows summing to ${fmt(sum)}`
-      + ` (largest single supplier ${fmt(largest)})${looksLikeCount ? " — the figure equals a row count, not a spend" : ""}.`
+      + ` (largest single supplier ${fmt(largest)})`
+      + `${looksLikeCount ? " — a figure that small is not a procurement spend (it is no bigger than the schedule's row count; a broken #REF! cell, for one, reads as 23)" : ""}.`
       + ` It has been withdrawn; confirm TMPS in the workbook (the schedule total ${fmt(sum)} is the lower bound).`,
   }];
 }
@@ -1182,6 +1403,14 @@ export function toWorkbookSections(
       result.metaCorroboration
         .filter((c) => c.section === section)
         .map(({ column, field, value, agreementCount, sources }) => ({ column, field, value, agreementCount, sources })),
+    );
+  }
+  const withdrawn = result.metaWithdrawn ?? [];
+  for (const section of Array.from(new Set(withdrawn.map((w) => w.section)))) {
+    attach(
+      section,
+      META_WITHDRAWN_KEY,
+      withdrawn.filter((w) => w.section === section).map(({ column, field, reason, sources }) => ({ column, field, reason, sources })),
     );
   }
   return sections;

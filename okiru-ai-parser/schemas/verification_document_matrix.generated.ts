@@ -2,7 +2,7 @@
  * GENERATED FILE — DO NOT EDIT BY HAND.
  * Run `pnpm gen:matrix` after changing the source workbook.
  *
- * Source: docs/testdocs/BBBEE_Verification_Document_Matrix_v3 (1) (1).xlsx
+ * Source: okiru-ai-parser/ontology/BBBEE_Verification_Document_Matrix_v3.xlsx
  * Generated: 109 documents across 5 elements,
  * 109 of them carrying a parsed extraction schema.
  *
@@ -96,9 +96,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "ID_number_last_4",
       "appointment_date",
       "status",
-      "resignation_date_if_any",
-      "directors_on_scorecard_only",
-      "matched_directors"
+      "resignation_date_if_any"
     ]
   },
   {
@@ -117,6 +115,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "total_shares_in_issue",
       "share_classes",
       "holdings_table",
+      "shareholder_name",
       "share_class",
       "number_of_shares",
       "percentage",
@@ -310,8 +309,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "closing_price",
       "source",
       "source_url",
-      "retrieval_date",
-      "state"
+      "retrieval_date"
     ]
   },
   {
@@ -456,8 +454,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "expenses_percentage",
       "distributed_to_beneficiaries",
       "distributed_percentage",
-      "retained_earnings",
-      "distributions"
+      "retained_earnings"
     ]
   },
   {
@@ -498,8 +495,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "transaction_date",
       "sworn_before_commissioner",
       "prior_bee_deal_value_declared",
-      "cipc_director_history_consistent",
-      "not"
+      "cipc_director_history_consistent"
     ]
   },
   {
@@ -1039,8 +1035,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "seta_name",
       "registration_date",
       "current_status",
-      "verified_on_portal",
-      "flag"
+      "verified_on_portal"
     ]
   },
   {
@@ -1357,8 +1352,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "amount",
       "qualification",
       "institution",
-      "clawback_clauses",
-      "each"
+      "clawback_clauses"
     ]
   },
   {
@@ -1455,8 +1449,7 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "capital_expenditure",
       "finance_costs",
       "total_pre_exclusions_tmps",
-      "line_items_classified_as_procurement",
-      "vice"
+      "line_items_classified_as_procurement"
     ]
   },
   {
@@ -1739,7 +1732,8 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "net_reduction",
       "new_jobs_created",
       "new_jobs_for_black_sa",
-      "percentage_for_black_sa"
+      "percentage_for_black_sa",
+      "50_percent_threshold_met"
     ]
   },
   {
@@ -1780,7 +1774,12 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "current_year_npat",
       "current_year_revenue",
       "current_year_npat_margin",
-      "industry_norm_margin"
+      "industry_norm_margin",
+      "25_percent_of_industry_norm",
+      "current_year_margin_passes_25_percent_test",
+      "npat_basis_selected",
+      "reasoning",
+      "npat_used_for_target"
     ]
   },
   {
@@ -1799,7 +1798,10 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "industry_sic_code",
       "stats_sa_release_reference",
       "release_date",
-      "industry_norm_margin"
+      "industry_norm_margin",
+      "25_percent_norm",
+      "entity_revenue",
+      "indicative_npat_calculated"
     ]
   },
   {
@@ -2001,7 +2003,11 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
       "current_year_npat",
       "current_year_revenue",
       "current_year_margin",
-      "industry_norm_margin"
+      "industry_norm_margin",
+      "25_percent_norm",
+      "test_outcome",
+      "npat_basis_used",
+      "sed_target_at_1_percent"
     ]
   },
   {
@@ -2041,7 +2047,11 @@ export const VERIFICATION_DOCUMENT_MATRIX: readonly VerificationDocument[] = [
     "expectedFields": [
       "industry_sic_code",
       "source",
-      "industry_norm_margin"
+      "industry_norm_margin",
+      "25_percent_norm",
+      "entity_revenue",
+      "indicative_npat",
+      "one_percent_target"
     ]
   },
   {

@@ -50,19 +50,38 @@ export function validateSaId(raw: unknown): ChecksumResult {
 }
 
 /**
+ * A CIPC registration number as printed. Registers, share certificates and the
+ * CIPC's own disclosure certificate write it with spaced slashes
+ * ("2019 / 111222 / 07") as often as without, and both are the same number.
+ */
+export const CIPC_REGISTRATION_PATTERN = /(?<!\d)(\d{4})\s*\/\s*(\d{6})\s*\/\s*(\d{2})(?!\d)/;
+
+/**
  * CIPC company registration: `YYYY/NNNNNN/NN`. We validate the shape and a
  * plausible incorporation year. The `/NN` entity-type suffix is left informational
  * (unknown suffixes are not treated as failures — the vocabulary evolves).
  */
 export function validateCipcRegistration(raw: unknown): ChecksumResult {
   const value = String(raw ?? '').trim();
-  const match = value.match(/\b(\d{4})\/(\d{6})\/(\d{2})\b/);
+  const match = value.match(CIPC_REGISTRATION_PATTERN);
   if (!match) return { valid: false, reason: 'Registration must be YYYY/NNNNNN/NN' };
 
   const year = Number(match[1]);
   const currentYear = new Date().getFullYear();
   if (year < 1900 || year > currentYear + 1) return { valid: false, reason: 'Registration year implausible' };
   return { valid: true };
+}
+
+/**
+ * The registration number in its one written form, `YYYY/NNNNNN/NN`, or null
+ * when the value is not a valid registration number. Spaces around the slashes
+ * are layout, not part of the number, so "2019 / 111222 / 07" and
+ * "2019/111222/07" normalise to the same value and compare equal downstream.
+ */
+export function normalizeCipcRegistration(raw: unknown): string | null {
+  if (!validateCipcRegistration(raw).valid) return null;
+  const match = String(raw ?? '').match(CIPC_REGISTRATION_PATTERN)!;
+  return `${match[1]}/${match[2]}/${match[3]}`;
 }
 
 /**
@@ -105,7 +124,10 @@ export function isVatNumberField(fieldName: string): boolean {
 export function isCompanyRegistrationField(fieldName: string): boolean {
   const f = plainName(fieldName);
   if (MONEY_FIELD.test(f) || /vehicle|licen[cs]e|plate/.test(f) || isVatNumberField(f)) return false;
-  return /registration_number|cipc|company_number/.test(f);
+  // "cipc" names the NUMBER only on its own or as cipc_number/cipc_registration:
+  // cipc_stamp_present and cipc_director_history_consistent are yes/no checks,
+  // and reading them as registrations put "No" through the CIPC checksum.
+  return /registration_number|company_number|(^|_)cipc(_(number|no|registration|reg_no|registration_number))?$/.test(f);
 }
 
 /**

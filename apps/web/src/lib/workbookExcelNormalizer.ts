@@ -15,6 +15,7 @@ import {
   DESIGNATION_MAP,
   OCC_LEVEL_MAP,
   SUPPLIER_SIZE_MAP,
+  isPercentColumn,
   type ColumnDef,
 } from "@/components/workbook/sections";
 import {
@@ -544,9 +545,39 @@ export function resolveHeaderKeys(
   return keyByCol;
 }
 
+/**
+ * The sheet as a matrix in which every PERCENT-FORMATTED number reads in the
+ * unit its cell shows: a cell displaying "36.59%" stores 0.3659, and a plain
+ * read hands a "Black Ownership (%)" column (0–100, "51 not 0.51") the ratio.
+ * Cell-for-cell aligned with `sheet_to_json(header: 1)` of the same sheet,
+ * because it IS that call on a copy whose percent cells were rescaled.
+ *
+ * Only values above 1% are rescaled. Projection reads a value ≤ 1 as a
+ * fraction, so a rescaled 0.8 (from 0.8%) would score as 80%; left as 0.008 it
+ * still reads as 0.8%. Every rescaled value is > 1 and maps back exactly.
+ */
+function percentShownMatrix(sheet: XLSX.WorkSheet | undefined): unknown[][] | undefined {
+  if (!sheet) return undefined;
+  const shown: XLSX.WorkSheet = { ...sheet };
+  let rescaled = 0;
+  for (const address of Object.keys(sheet)) {
+    if (address.startsWith("!")) continue;
+    const cell = sheet[address] as XLSX.CellObject | undefined;
+    if (!cell || cell.t !== "n" || typeof cell.v !== "number") continue;
+    const format = typeof cell.z === "string" ? cell.z.replace(/"[^"]*"/g, "") : "";
+    if (!format.includes("%") || !(cell.v > 0.01)) continue;
+    shown[address] = { ...cell, v: Number((cell.v * 100).toFixed(6)) };
+    rescaled += 1;
+  }
+  // No percent cell: the plain matrix already says everything.
+  if (rescaled === 0) return undefined;
+  return XLSX.utils.sheet_to_json<unknown[]>(shown, { header: 1, defval: "" }) as unknown[][];
+}
+
 function parseGridFromSheet(
   rows: unknown[][],
   columns: ColumnDef[],
+  percentShown?: unknown[][],
 ): WorkbookRow[] {
   if (rows.length < 2) return [];
   const headerIdx = findHeaderRow(rows, columns);
@@ -562,7 +593,9 @@ function parseGridFromSheet(
     keyByCol.forEach((key, colIdx) => {
       if (!key) return;
       const col = columns.find((c) => c.key === key);
-      const val = coerceValue(key, col, vals[colIdx]);
+      // A 0–100 percentage column reads the value its cell SHOWS.
+      const source = percentShown && isPercentColumn(col) ? (percentShown[i] as unknown[] | undefined) ?? vals : vals;
+      const val = coerceValue(key, col, source[colIdx]);
       if (val !== "" && val !== null && val !== undefined) hasData = true;
       row[key] = val;
     });
@@ -607,14 +640,18 @@ function countExtractedFields(sections: WorkbookSectionsInput): number {
  * Total Measured Procurement Spend is the Preferential Procurement DENOMINATOR,
  * and without it the pillar scores 0 no matter how many suppliers are listed.
  *
- * It is not on the Finance sheet. Real workbooks state it as a labelled total in
- * the Procurement sheet's summary block:
+ * The gathering template states it on the Finance sheet (row 76, "Total
+ * Measured Procurement Spend"); this harvests it from a Procurement sheet only
+ * for workbooks that caption it there, and only when the Finance sheet gave
+ * nothing.
  *
- *   "Total Procurement Expenditure from suppliers for whom certificates have
- *    been provided (Per the schedule below)" | 1030806.68
- *
- * Measured on Thandanani: that cell holds R1 030 806.68 while our financials
- * carried tmps = 0, so 23 correctly-read suppliers scored nothing.
+ * NOT TMPS: the Procurement sheet's summary line "Total Procurement
+ * Expenditure from suppliers for whom certificates have been provided (Per the
+ * schedule below)" (K6, `=SUM(PP_ExclVAT)`). That is the certified-supplier
+ * schedule total, on a real client pack under a quarter of the stated
+ * TMPS. This comment once called it TMPS; used as the denominator it
+ * would overstate every procurement ratio about 4.5 times. Only a label naming
+ * Total MEASURED Procurement Spend counts.
  *
  * ONLY a labelled total is taken. TMPS is never derived by summing supplier
  * rows — the statutory figure has inclusions and exclusions a supplier list does
@@ -635,8 +672,13 @@ function harvestProcurementTotals(wb: XLSX.WorkBook, sections: WorkbookSectionsI
   const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, defval: "" }) as unknown[][];
   for (const row of rows.slice(0, 12)) {
     if (!Array.isArray(row)) continue;
+    // `norm` strips spaces, so the phrases are matched space-free. (The old
+    // spaced phrases could never match a normed label, which is the only reason
+    // the certified-supplier total was never actually read as TMPS here.)
     const label = norm(String(row[0] ?? ""));
-    if (!label.includes("total procurement expenditure") && !label.includes("total measured procurement")) continue;
+    if (!label.includes("totalmeasuredprocurement")) continue;
+    // "…can be excluded from Total Measured Procurement Spend" is not the total.
+    if (/excludedfrom|foreign|import/.test(label)) continue;
 
     // The value is the first positive number to the right of the label.
     for (let col = 1; col < row.length; col++) {
@@ -881,7 +923,8 @@ export function readSectionSheet(
   columns: ColumnDef[],
   opts: { sectionKey?: string; sheetName?: string; sheetHints?: string[] } = {},
 ): SectionSheetRead {
-  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  // cellNF keeps each cell's number format, so a percent cell is known as one.
+  const wb = XLSX.read(buffer, { type: "array", cellDates: true, cellNF: true });
   boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   const sheetNames = wb.SheetNames ?? [];
   // `sheetHints` names the sheets for a register that is NOT a workbook
@@ -944,7 +987,7 @@ export function readSectionSheet(
     headerRowIndex,
     headers,
     mappedKeys,
-    rows: parseGridFromSheet(matrix, columns),
+    rows: parseGridFromSheet(matrix, columns, percentShownMatrix(wb.Sheets[chosen])),
   };
 }
 
@@ -953,7 +996,8 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
   const mappedSheets: Record<string, string> = {};
   const sections = emptySections();
 
-  const wb = XLSX.read(buffer, { type: "array", cellDates: true });
+  // cellNF keeps each cell's number format, so a percent cell is known as one.
+  const wb = XLSX.read(buffer, { type: "array", cellDates: true, cellNF: true });
   boundWorkbookSheets(wb); // a sheet's declared size is a claim, not a fact
   for (const sheetName of wb.SheetNames) {
     const sectionKey = matchSheetName(sheetName);
@@ -985,7 +1029,7 @@ export function normalizeExcelBuffer(buffer: ArrayBuffer): ExcelImportResult {
       }
     }
     if (def.columns) {
-      let rows = parseGridFromSheet(matrix, def.columns);
+      let rows = parseGridFromSheet(matrix, def.columns, percentShownMatrix(sheet));
       // Drop summary/total/note rows the grid parser picks up below the shareholder
       // data so they don't show as bogus shareholders in the import preview. (W-validate)
       if (sectionKey === "ownership") {

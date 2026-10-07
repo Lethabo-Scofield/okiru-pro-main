@@ -4,6 +4,8 @@ import XLSX from 'xlsx';
 import { createLogger } from '../src/logger.js';
 import type { FieldKnowledge, OntologyRecord, OntologyRepository } from './ontology_models.js';
 import { defaultDocumentKnowledge } from './ontology_queries.js';
+import { borrowedCanonicalFields } from './matrix_ontology.js';
+import { asksForOneRecordPerItem, findDocumentForWorkbookRow } from '../schemas/verification_document_matrix.js';
 
 const logger = createLogger('ParserOntologyLoader');
 
@@ -19,8 +21,12 @@ function slugCode(input: string): string {
     .slice(0, 24) || 'PILLAR';
 }
 
-function inferDataType(text: string): FieldKnowledge['field']['data_type'] {
+export function inferDataType(text: string): FieldKnowledge['field']['data_type'] {
   const lower = text.toLowerCase();
+  // An identifier or a person is text, whatever else the name mentions:
+  // registration_number is not a date because it says "registration", and
+  // signed_by names a signatory, not the day of signing.
+  if (/(^|[\s_])(number|no|nr|id|code|reference)$|_by$/.test(lower)) return 'string';
   if (/(amount|spend|value|cost|rand|revenue|turnover|npat)/.test(lower)) return 'money';
   if (/(percent|percentage|ownership|benefit|margin|%)$/.test(lower) || /percent|percentage|ownership|benefit|margin/.test(lower)) return 'percentage';
   if (/(date|expiry|issued|signed|appointment|incorporation|registration|period|year)/.test(lower)) return 'date';
@@ -30,65 +36,39 @@ function inferDataType(text: string): FieldKnowledge['field']['data_type'] {
 }
 
 /**
- * Instruction words that are never a field. The expert's prompts are prose
- * ("Inspect the certificate… Reconcile against… Flag if…"), and mining that
- * prose for field names produced "inspect", "reconcile", "supporting",
- * "underlying" and "flag" as EXPECTED FIELDS — which then showed up in every
- * user's missing-field list as things the document "did not contain".
+ * The fields a workbook row's document is read for: the generated matrix's
+ * `expectedFields` (parsed once, by scripts/generate-document-matrix.mjs), so
+ * the deterministic path and the AI path ask for the same fields.
+ *
+ * This loader used to re-parse the prompt with its own regex, which missed
+ * "Return JSON per employee: …" / "per payment:" / "per certificate:" and left
+ * 28 types — EEA1, SED proof of payment, the supplier ledger, the supplier
+ * certificate, COR39 — with nothing but a placeholder to look for.
+ *
+ * A row the matrix does not know (a different workbook passed via
+ * ONTOLOGY_MATRIX_PATH) returns null and gets one honest placeholder, never
+ * prose mined into fields — an invented field becomes a "missing" line in the
+ * user's review.
+ *
+ * A spec that asks for one record per item ("per payment", "per employee")
+ * describes a document holding many records, so its fields are read from labels
+ * only (see ExtractionFieldNode.labelled_only).
  */
-const INSTRUCTION_WORDS = new Set([
-  'return', 'json', 'object', 'fields', 'list', 'bool', 'date', 'amount', 'with',
-  'inspect', 'reconcile', 'compare', 'confirm', 'verify', 'check', 'ensure', 'flag',
-  'extract', 'read', 'note', 'record', 'supporting', 'underlying', 'against', 'then',
-  'also', 'plus', 'each', 'all', 'any', 'the', 'and', 'for', 'per', 'from', 'into',
-  'absent', 'expired', 'present', 'missing', 'where', 'when', 'must', 'should',
-]);
+function matrixFieldsFor(sheetName: string, documentName: string): { names: string[]; labelledOnly: boolean } | null {
+  const doc = findDocumentForWorkbookRow(sheetName, documentName);
+  if (!doc || doc.expectedFields.length === 0) return null;
+  return { names: [...doc.expectedFields], labelledOnly: asksForOneRecordPerItem(doc) };
+}
 
 /**
- * Field names ONLY from an explicit JSON list ("Return JSON: a, b, c"). A prompt
- * with no such list yields nothing — prose is not a schema, and an invented
- * field is worse than none: it becomes a "missing" line in the user's review.
- * The list ends at the first sentence break, so trailing instructions
- * ("If absent or expired, flag — zero points") do not leak in.
+ * The matrix names are already snake_case; only case is folded, so the
+ * deterministic path reports the same key the AI path asks for. (A rewrite of
+ * "bbee" to "bee", meant for prose labels, turned total_bbbee_suppliers into
+ * total_bee_suppliers.)
  */
-function extractJsonFieldNames(instruction: string): string[] {
-  const matches = [
-    ...instruction.matchAll(/Return\s+(?:a\s+)?JSON(?:\s+object)?(?:\s+with(?:\s+fields)?)?\s*:\s*([\s\S]+)/gi),
-    ...instruction.matchAll(/Extract\s+(?:and\s+return\s+)?JSON\s*:\s*([\s\S]+)/gi),
-    ...instruction.matchAll(/with\s+columns\s*:\s*([\s\S]+)/gi),
-  ];
-  const source = matches[0]?.[1];
-  if (!source) return [];
-  const list = source
-    .split(/\.\s+[A-Z]|\n\n|\bIf\b|\bFlag\b|\bThen\b/)[0]
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/\bwith fields\b/gi, '')
-    .replace(/\bper\b.*$/gi, '');
-
-  const fields = list
-    .split(/,|;|\band\b|\n/)
-    .map((part) => part.trim())
-    .map((part) => part.match(/[a-z][a-z0-9_]*(?:\s*→\s*[a-z0-9_]+)?/i)?.[0] || '')
-    .map((part) => part.replace(/\s*→\s*/g, '_').toLowerCase())
-    .filter((part) => /^[a-z][a-z0-9_]{2,64}$/.test(part))
-    .filter((part) => !INSTRUCTION_WORDS.has(part));
-
-  return Array.from(new Set(fields));
-}
-
-function splitExpectedFields(_expectedData: string, _auditorChecks: string, instruction: string): string[] {
-  const jsonFields = extractJsonFieldNames(instruction);
-  // No declared schema \u2192 one honest placeholder, never prose mined into
-  // fields. (The AI extraction path reads these documents from the matrix's
-  // own prompt; the deterministic path has nothing real to look for here.)
-  return jsonFields.length > 0 ? jsonFields : ['primary_evidence'];
-}
-
 function fieldNameFromLabel(label: string): string {
   return label
     .toLowerCase()
-    .replace(/b-bbee|bbee|broad based black economic empowerment/g, 'bee')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 64) || 'primary_evidence';
@@ -98,8 +78,20 @@ function fieldRequired(fieldName: string): boolean {
   return !/(exceptions?|flags?|list|notes?|reasoning|assessment|summary|mismatch|risk)/i.test(fieldName);
 }
 
-function fieldLabelRegex(fieldName: string): string {
-  return `${fieldName.replace(/_/g, '(?:\\s|_|/|-)+')}\\s*[:\\-]?\\s*([^\\n\\r;]+)`;
+/**
+ * "<field label>: value". The value stops at the end of its line, at a `;`, or
+ * at the next table cell (`|`, tab): a register's header row read as text is
+ * one cell per pipe, and the next cell is a different column. extract_fields
+ * guards what this captures further (whole-word label, tags, other labels,
+ * length).
+ *
+ * The label is deliberately NOT word-bounded here: classification scores a
+ * type by whether these patterns hit the text, so bounding them would move
+ * every type's keyword score (and the adjudicator's recorded prompts). The
+ * whole-word rule is applied where a value is taken instead.
+ */
+export function fieldLabelRegex(fieldName: string): string {
+  return `${fieldName.replace(/_/g, '(?:\\s|_|/|-)+')}\\s*[:\\-]?\\s*([^\\n\\r;|\\t]+)`;
 }
 
 function cellText(value: unknown): string {
@@ -147,6 +139,7 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
 
   const workbook = XLSX.readFile(workbookPath);
   const records: OntologyRecord[] = [];
+  const unmatchedRows: string[] = [];
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
@@ -170,7 +163,9 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
       const instruction = valueAt(row, instructionIndex);
       const code = pillarCode;
       const canonical = findCanonicalKnowledge(documentName);
-      const fieldLabels = canonical ? [] : splitExpectedFields(expectedData, auditorChecks, instruction);
+      const matrix = canonical ? null : matrixFieldsFor(sheetName, documentName);
+      if (!canonical && !matrix) unmatchedRows.push(`${sheetName}: ${documentName}`);
+      const fieldLabels = canonical ? [] : matrix?.names ?? ['primary_evidence'];
       const fields: FieldKnowledge[] = fieldLabels.map((label) => {
         const fieldName = fieldNameFromLabel(label);
         const dataType = inferDataType(label);
@@ -181,6 +176,7 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
             name: fieldName,
             data_type: dataType,
             required,
+            ...(matrix?.labelledOnly ? { labelled_only: true as const } : {}),
             description: label,
             calculator_key: calculatorKey,
             graph_version: GRAPH_VERSION,
@@ -234,7 +230,12 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
           pillar_code: canonical?.document.pillar_code ?? code,
           graph_version: GRAPH_VERSION,
         },
-        fields: canonical?.fields ?? fields,
+        // A non-canonical row keeps its own fields, plus any the canonical
+        // ownership type used to read for it (see borrowedCanonicalFields).
+        fields: canonical?.fields ?? [
+          ...fields,
+          ...borrowedCanonicalFields(documentName, canonicalKnowledge, fields.map((f) => f.field.name)),
+        ],
       });
     }
   }
@@ -244,6 +245,12 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
     sheets: workbook.SheetNames.length,
     records: records.length,
   });
+  if (unmatchedRows.length > 0) {
+    logger.warn('Workbook rows not in the generated matrix carry only a placeholder field; run pnpm gen:matrix against this workbook', {
+      count: unmatchedRows.length,
+      rows: unmatchedRows.slice(0, 10),
+    });
+  }
   return records;
 }
 

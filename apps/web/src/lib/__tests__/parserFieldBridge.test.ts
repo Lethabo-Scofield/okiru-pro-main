@@ -29,10 +29,17 @@ describe("translating parser fields to workbook columns", () => {
   it("routes entity-level values to META, not to a grid row", () => {
     // TMPS is the procurement DENOMINATOR — it is one number for the entity,
     // not a row in the supplier grid.
-    expect(targetForField("total_pre_exclusions_tmps")).toEqual({
+    expect(targetForField("total_measured_procurement_spend")).toEqual({
       section: "financial-information", column: "tmps", meta: true,
     });
     expect(targetForField("current_year_revenue")?.meta).toBe(true);
+  });
+
+  it("never lands a PRE-exclusions procurement total on TMPS", () => {
+    // TMPS is what is left AFTER exclusions. The total before them overstates
+    // the denominator by every excluded rand, so it is reported, never placed.
+    expect(targetForField("total_pre_exclusions_tmps")).toBeNull();
+    expect(targetForField("tmps_inclusions")).toBeNull();
   });
 
   it("returns null for a field it was never taught", () => {

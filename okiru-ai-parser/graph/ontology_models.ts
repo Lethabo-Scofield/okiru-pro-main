@@ -22,6 +22,20 @@ export interface ExtractionFieldNode {
   description: string;
   calculator_key?: string;
   graph_version: string;
+  /**
+   * Read for this type, but not evidence OF it. A field borrowed from another
+   * type (a company name every ownership record prints) says nothing about
+   * which document this is, so the classifier skips it.
+   */
+  identifying?: false;
+  /**
+   * Read only where the document LABELS it — never by the name/date/money
+   * shaped guesses. Set for a spec that asks for one record per item ("Return
+   * JSON per payment: …"): such a document holds many records, and "the first
+   * date in the text" is a guess about which one (it read an EEA1 form's
+   * "27 April 1994" as the declaration date).
+   */
+  labelled_only?: true;
 }
 
 export interface ValidationRuleNode {

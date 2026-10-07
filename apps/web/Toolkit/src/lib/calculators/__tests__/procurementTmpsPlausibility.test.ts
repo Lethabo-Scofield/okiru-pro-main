@@ -1,8 +1,9 @@
 /**
  * An impossible TMPS scores nothing, and says why.
  *
- * Thandanani, live: tmps = 23 — the supplier schedule's ROW COUNT, not a Rand
- * amount — beside 45 suppliers summing to R3.17m. Every target line divided by
+ * A real client pack, live: tmps = 23 — not a Rand amount but SheetJS's error code for
+ * a #REF! cell (long mistaken for the supplier schedule's row count) — beside
+ * 45 suppliers summing to R3.17m. Every target line divided by
  * 23, ran ~138,000x over target, and clamped to full marks: a whole pillar
  * minted by a misplaced denominator, then handed to the elective as the "best"
  * element. The invariant is arithmetic, not a heuristic: a total can never be

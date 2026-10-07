@@ -20,7 +20,7 @@ function azureLikeModel(reply: string): ExtractionModel & { calls: number } {
       return reply;
     },
   };
-  model.completeHard = model.complete;
+  (model as { completeHard?: unknown }).completeHard = model.complete;
   return model as unknown as ExtractionModel & { calls: number };
 }
 

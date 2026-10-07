@@ -45,6 +45,7 @@ import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
+import { formFactMismatches, workbookFormFacts } from "@/lib/workbookInstructionFacts";
 import {
   autofillProcurementFromCertificates,
   type AutofillReport,
@@ -615,6 +616,21 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   );
   const activeSector = sectorOptions.find((s) => s.code === sector);
 
+  // The sector and year end the workbook's Instructions sheet states. They fill
+  // the form only where it is EMPTY — once per stated value, so a field the user
+  // cleared stays cleared — and never replace what the user chose; where the
+  // user's value differs, the note under the Build bar says so.
+  const workbookFacts = useMemo(() => workbookFormFacts(parserCase), [parserCase]);
+  const prefilledFactsRef = useRef("");
+  useEffect(() => {
+    const key = `${workbookFacts.sector ?? ""}|${workbookFacts.yearEnd ?? ""}`;
+    if (key === "|" || key === prefilledFactsRef.current) return;
+    prefilledFactsRef.current = key;
+    if (workbookFacts.sector) setSector((prev) => prev || workbookFacts.sector!);
+    if (workbookFacts.yearEnd) setYearEnd((prev) => prev || workbookFacts.yearEnd!);
+  }, [workbookFacts]);
+  const workbookMismatches = formFactMismatches({ sector, yearEnd }, workbookFacts);
+
   const mapped: ParserWorkbookMapResult | null = useMemo(
     () => (parserCase ? mapParserCaseToWorkbookSections(parserCase) : null),
     [parserCase],
@@ -629,7 +645,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
    */
   const injected = useMemo(() => {
     const extractions = (parserCase as {
-      ai_entities?: { extractions?: Array<{ documentId?: string; sourceFile?: string; element?: string; values?: Array<{ field: string; value: unknown }> }> };
+      ai_entities?: { extractions?: Array<{ documentId?: string; sourceFile?: string; element?: string; values?: Array<{ field: string; value: unknown }>; exceptions?: unknown[] }> };
     } | null)?.ai_entities?.extractions;
     if (!extractions?.length) return null;
 
@@ -639,6 +655,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
         sourceFile: String(e.sourceFile ?? ""),
         element: e.element,
         values: e.values ?? [],
+        // The reader's findings travel too: a TMPS cell holding #REF! is
+        // filed in the workbook as withdrawn, so the sync leaves it blank.
+        exceptions: (e.exceptions ?? []).map((note) => String(note ?? "")),
       })),
       { sectorCode: sector || "Generic", scorecardType: size || "Generic", vocabulary },
     );
@@ -799,10 +818,16 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     } | null)?.ai_entities?.extractions ?? [];
     const flags: Array<{ sourceFile: string; note: string }> = [];
     for (const e of extractions) {
-      if (!String(e.documentId ?? "").startsWith("sheet_table__")) continue;
+      const documentId = String(e.documentId ?? "");
+      // The Finance-sheet reader raises one specific finding: a labelled total
+      // (TMPS) whose cell holds a spreadsheet error such as #REF!. Only that is
+      // shown from it; analyst notes may also land on its extraction.
+      const financials = documentId === "sheet_financials";
+      if (!documentId.startsWith("sheet_table__") && !financials) continue;
       for (const note of e.exceptions ?? []) {
         const text = String(note ?? "").trim();
-        if (text) flags.push({ sourceFile: String(e.sourceFile ?? ""), note: text });
+        if (!text || (financials && !/\bcell holds #/.test(text))) continue;
+        flags.push({ sourceFile: String(e.sourceFile ?? ""), note: text });
       }
     }
     // Cross-document disagreements found while linking — most usefully a
@@ -2889,8 +2914,19 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
 
             {/* Only what stops the build, or what changes how it is scored —
                 said once, under the bar. The happy path shows nothing here. */}
-            {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid) && (
+            {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid || workbookMismatches.length > 0) && (
               <div className="mt-2.5 space-y-1 border-t border-white/[0.05] pt-2.5 text-[11.5px] leading-5">
+                {/* The workbook states a different sector or year end from the
+                    one chosen here. The choice here stands; this only makes
+                    sure it is a choice, not an oversight. */}
+                {workbookMismatches.map((m) => (
+                  <p key={m.field} className="text-amber-300/90" data-testid={`workbook-mismatch-${m.field}`}>
+                    {m.field === "sector"
+                      ? `Your workbook's Instructions sheet says the sector is ${m.workbook}; you chose ${activeSector?.label ?? m.form}.`
+                      : `Your workbook's Instructions sheet says the financial year-end is ${m.workbook}; you entered ${m.form}.`}{" "}
+                    We use yours — change it if the workbook is right.
+                  </p>
+                ))}
                 {(!sector || !size) && (
                   <p className="text-amber-300/90" data-testid="scoring-as-line">
                     Choose the sector and size — they decide which scorecard rules your documents are scored against.

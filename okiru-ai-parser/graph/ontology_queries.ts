@@ -1,5 +1,12 @@
 import type { DocumentKnowledge, DocumentTypeNode, OntologyRepository } from './ontology_models.js';
 import { matrixDocumentKnowledge } from './matrix_ontology.js';
+import { LEVEL_WORD_ALTERNATION } from '../parser/normalize.js';
+
+/**
+ * A certificate's headline level as verification agencies print it, "LEVEL ONE
+ * CONTRIBUTOR" or "Level 2 Contributor", with no "B-BBEE Level:" label before it.
+ */
+const LEVEL_CONTRIBUTOR_REGEX = `\\bLevel\\s+(${LEVEL_WORD_ALTERNATION}|[1-8])\\s+Contributor\\b`;
 
 export class InMemoryOntologyRepository implements OntologyRepository {
   private knowledge = new Map<string, DocumentKnowledge>();
@@ -92,7 +99,7 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'required_supplier_name', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Supplier name not found', graph_version },
           ],
           patterns: [
-            { name: 'Enterprise Name', pattern_type: 'regex', examples: ['Enterprise Name: ABC Suppliers Pty Ltd'], regex: '(?:Enterprise|Entity|Measured Entity|Supplier|Company)\\s*Name\\s*[:\\-]?\\s*([^\\n\\r]+)', semantic_hint: 'supplier legal name', graph_version },
+            { name: 'Enterprise Name', pattern_type: 'regex', examples: ['Enterprise Name: ABC Suppliers Pty Ltd'], regex: '(?:Enterprise|Entity|Measured Entity|Supplier|Company)\\s*Name\\s*[:\\-]?\\s*([^\\n\\r|\\t]+)', semantic_hint: 'supplier legal name', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.name', expected_type: 'string', destination: 'manual_workbook', workbook_field: 'supplier.name', manual_flow_mapping: 'procurement.supplier.name', graph_version },
@@ -112,6 +119,7 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
           ],
           patterns: [
             { name: 'B-BBEE Status Level', pattern_type: 'regex', examples: ['B-BBEE Status Level: Level Two'], regex: '(?:B[-\\s]?BBEE\\s*(?:Status\\s*)?Level|BEE\\s*Level)\\s*[:\\-]?\\s*(Level\\s*)?([A-Za-z0-9]+)', semantic_hint: 'bee level', graph_version },
+            { name: 'Level Contributor', pattern_type: 'regex', examples: ['LEVEL ONE CONTRIBUTOR'], regex: LEVEL_CONTRIBUTOR_REGEX, semantic_hint: 'bee level printed as a contributor level', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.bee_level', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.beeLevel', manual_flow_mapping: 'procurement.supplier.beeLevel', graph_version },
@@ -181,7 +189,7 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'required_supplier_name', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Supplier name not found', graph_version },
           ],
           patterns: [
-            { name: 'Enterprise Name', pattern_type: 'regex', examples: ['Enterprise Name: ABC Suppliers Pty Ltd'], regex: '(?:Enterprise|Entity|Measured Entity|Supplier|Company)\\s*Name\\s*[:\\-]?\\s*([^\\n\\r]+)', semantic_hint: 'supplier legal name', graph_version },
+            { name: 'Enterprise Name', pattern_type: 'regex', examples: ['Enterprise Name: ABC Suppliers Pty Ltd'], regex: '(?:Enterprise|Entity|Measured Entity|Supplier|Company)\\s*Name\\s*[:\\-]?\\s*([^\\n\\r|\\t]+)', semantic_hint: 'supplier legal name', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.name', expected_type: 'string', destination: 'manual_workbook', workbook_field: 'supplier.name', manual_flow_mapping: 'procurement.supplier.name', graph_version },
@@ -201,6 +209,7 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
           ],
           patterns: [
             { name: 'B-BBEE Status Level', pattern_type: 'regex', examples: ['B-BBEE Status Level: Level Two'], regex: '(?:B[-\\s]?BBEE\\s*(?:Status\\s*)?Level|BEE\\s*Level)\\s*[:\\-]?\\s*(Level\\s*)?([A-Za-z0-9]+)', semantic_hint: 'bee level', graph_version },
+            { name: 'Level Contributor', pattern_type: 'regex', examples: ['LEVEL ONE CONTRIBUTOR'], regex: LEVEL_CONTRIBUTOR_REGEX, semantic_hint: 'bee level printed as a contributor level', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.bee_level', expected_type: 'number', destination: 'manual_workbook', workbook_field: 'supplier.beeLevel', manual_flow_mapping: 'procurement.supplier.beeLevel', graph_version },
@@ -281,7 +290,7 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
             { name: 'required_supplier_name', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Supplier name not found', graph_version },
           ],
           patterns: [
-            { name: 'Supplier Name', pattern_type: 'regex', examples: ['Supplier Name: ABC Suppliers Pty Ltd'], regex: 'Supplier\\s*Name\\s*[:\\-]?\\s*([^\\n\\r,;]+)', semantic_hint: 'supplier name', graph_version },
+            { name: 'Supplier Name', pattern_type: 'regex', examples: ['Supplier Name: ABC Suppliers Pty Ltd'], regex: 'Supplier\\s*Name\\s*[:\\-]?\\s*([^\\n\\r,;|\\t]+)', semantic_hint: 'supplier name', graph_version },
           ],
           calculator_requirements: [
             { key: 'supplier.name', expected_type: 'string', destination: 'manual_workbook', workbook_field: 'supplier.name', manual_flow_mapping: 'procurement.supplier.name', graph_version },
@@ -355,8 +364,24 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
     {
       document: {
         name: 'Ownership Confirmation',
-        description: 'Ownership evidence: share certificate, share register, or ownership confirmation letter.',
-        aliases: ['Share Certificate', 'Share Register', 'Ownership Confirmation', 'Ownership Statement', 'Shareholding Certificate'],
+        // What the adjudicator reads as this type's purpose (the "For:" line of
+        // its menu), beside the matrix's own share-register and share-certificate
+        // types and their full purpose text. The old one-liner claimed "share
+        // certificate, share register" too, so it overlapped them and said
+        // nothing about a register that is neither: a close corporation's
+        // beneficial interest register (members and their percentage interest,
+        // no shares) was offered both and read as a share register. It confirms
+        // who owns what — this type.
+        description: 'Confirms who holds what percentage of the measured entity as at a date: a signed ownership '
+          + 'confirmation letter or statement, or a register of beneficial or members\' interests (a close '
+          + 'corporation records each member\'s percentage interest, not shares).',
+        aliases: [
+          'Share Certificate', 'Share Register', 'Ownership Confirmation', 'Ownership Statement', 'Shareholding Certificate',
+          // The register's own title. A beneficial interest register lists who
+          // holds what percentage; it has no share classes or share numbers, so
+          // it is not a securities register.
+          'Beneficial Interest Register', 'Register of Beneficial Interests', 'Beneficial Ownership Register',
+        ],
         required: true,
         pillar_code: 'OWN',
         graph_version,
@@ -365,7 +390,7 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
         {
           field: { name: 'entity_name', data_type: 'string', required: true, description: 'Measured entity name.', calculator_key: 'ownership.entity_name', graph_version },
           rules: [{ name: 'required_entity_name', rule_type: 'required', severity: 'error', logic: 'required', failure_message: 'Entity name not found', graph_version }],
-          patterns: [{ name: 'Entity Name', pattern_type: 'regex', examples: ['Measured Entity: ABC Pty Ltd'], regex: '(?:Measured\\s+Entity|Entity|Enterprise|Company)\\s*Name\\s*[:\\-]?\\s*([^\\n\\r]+)', semantic_hint: 'entity name', graph_version }],
+          patterns: [{ name: 'Entity Name', pattern_type: 'regex', examples: ['Measured Entity: ABC Pty Ltd'], regex: '(?:Measured\\s+Entity|Entity|Enterprise|Company)\\s*Name\\s*[:\\-]?\\s*([^\\n\\r|\\t]+)', semantic_hint: 'entity name', graph_version }],
           calculator_requirements: [{ key: 'ownership.entity_name', expected_type: 'string', destination: 'manual_workbook', workbook_field: 'ownership.entityName', manual_flow_mapping: 'ownership entity name', graph_version }],
         },
         {

@@ -127,22 +127,175 @@ function textDominantColumns(body: string[][], width: number): boolean[] {
   });
 }
 
+/** A row that says something real — not blank, not a 0-residue template line. */
+function isMeaningfulRow(row: string[]): boolean {
+  return row.some((c) => !isBlank(c ?? '') && !isZeroResidue(c ?? ''));
+}
+
+/**
+ * A text cell that breaks off mid-phrase because the sheet wrapped it onto the
+ * next row: "Truck Mounted Crane -", "Basic Rigging and-" — a dash straight
+ * after a word. Deliberately NOT a trailing "and"/"to": an answer list's "We
+ * have not been asked to" is a whole option, and joining it to the next
+ * option merged two answers. A bare "-" (the usual "nothing here" mark) and a
+ * label's ":-" ("TOTAL TO BE INVOICED:-") are not fragments either.
+ */
+function isDanglingFragment(cell: string): boolean {
+  return /[a-z]\s*[-–]$/i.test(cell.trim());
+}
+
+/** Join a wrapped fragment to its continuation: "Crane -" + "operator" → "Crane operator". */
+function joinFragment(head: string, tail: string): string {
+  return `${head.trim().replace(/\s*[-–]$/, '')} ${tail.trim()}`.replace(/\s+/g, ' ').trim();
+}
+
+/** A long run of digits (an SA ID number, a registration number) names something; it is not an amount. */
+function isIdentifierNumber(cell: string): boolean {
+  return /^\d{8,}$/.test(cell.replace(/\s/g, ''));
+}
+
+/**
+ * Rejoin text that wrapped onto the next row. A client types a long course name
+ * across two rows of the same column — "Truck Mounted Crane -" / "operator" —
+ * on a row that starts no new block of its own. Read as ditto, the
+ * continuation OVERWROTE the remembered course, so every learner after it was
+ * on a course called "operator". The two halves are one value: the first row
+ * gets the whole name, and the continuation cell is emptied so the rows below
+ * inherit the whole name.
+ *
+ * Narrow on purpose, because a wrong join silently merges two records into one
+ * (a supplier vanishes, its spend lands on a merged name):
+ *  - the upper cell must visibly break off (a dash straight after a word), the
+ *    continuation must be words, and it must sit on the very next row with
+ *    content;
+ *  - never in the identity column: a blank there is what marks a continuation
+ *    row, so a value there is a record of its own ("Acme Trading -" / "Zenith
+ *    Logistics", each with its spend, are two suppliers);
+ *  - never in a per-row column (stated on nearly every row, so each value is
+ *    its own row's), only in a block column the sheet states once per block;
+ *  - the continuation row must carry NOTHING of its own: no identity, no amount
+ *    or date, no other block-level value. All it may hold besides the tail is
+ *    a repeat of the upper row's cell, or per-row facts about a person on the
+ *    same block (a learner's name, ID number, race) — the shape of a
+ *    continuation row in a training register. A line with its own amount
+ *    ("Food parcels -" R500 / "blankets" R300) is a second line item.
+ */
+function joinWrappedFragments(
+  body: string[][],
+  textCol: boolean[],
+  identityCol: number,
+  perRow: boolean[],
+): string[][] {
+  const rows = body.map((row) => [...row]);
+  const carriesNothingOfItsOwn = (head: string[], next: string[], c: number): boolean =>
+    next.every((cell, k) => {
+      const value = (cell ?? '').trim();
+      if (k === c || isBlank(value) || isZeroResidue(value)) return true;
+      if (k === identityCol) return false;
+      if (value === (head[k] ?? '').trim()) return true; // a repeat of the row above
+      if (!perRow[k]) return false; // a block-level value of its own
+      return !isNumericish(value) || isIdentifierNumber(value); // a person's fact, not an amount or date
+    });
+  for (let i = 0; i < rows.length; i++) {
+    if (!isMeaningfulRow(rows[i])) continue;
+    for (let c = 0; c < textCol.length; c++) {
+      if (!textCol[c] || c === identityCol || perRow[c]) continue;
+      // A wrap can run over more than two rows: keep joining while it dangles.
+      while (isDanglingFragment(rows[i][c] ?? '')) {
+        let j = i + 1;
+        while (j < rows.length && !rows[j].some((cell) => !isBlank(cell ?? ''))) j++;
+        if (j >= rows.length) break;
+        const tail = (rows[j][c] ?? '').trim();
+        if (!tail || !/^[a-z(]/i.test(tail) || isNumericish(tail)) break;
+        if (!carriesNothingOfItsOwn(rows[i], rows[j], c)) break;
+        rows[i][c] = joinFragment(rows[i][c], tail);
+        rows[j][c] = '';
+      }
+    }
+  }
+  return rows;
+}
+
+/**
+ * Columns that hold PER-ROW facts in a block-layout sheet: stated on nearly
+ * every row, so each value belongs to its own row.
+ *
+ * Blank-means-ditto is right for the columns a sheet states once per block (the
+ * course, the beneficiary), and those are SPARSE. A column stated on nearly
+ * every row — the learner's name, their employee number — is per-row data; a
+ * blank there is genuinely blank. Filling it cloned the last learner into a row
+ * that carried only training hours (a phantom second learner), and gave a
+ * learner with no employee number the previous learner's.
+ *
+ * "Nearly every row" is measured against the blocks: a column stated on at
+ * least 60% of the rows AND at least twice as often as the identity column
+ * starts a block is per-row. Never the identity column itself, whose blank is
+ * exactly what marks a continuation row. A sheet that is not block-shaped (the
+ * identity stated on most rows) has no column that clears the second bar.
+ * Covers every column, text or not; the ditto only ever consults text ones.
+ */
+function perRowColumns(body: string[][], width: number, identityCol: number): boolean[] {
+  const meaningful = body.filter(isMeaningfulRow);
+  if (meaningful.length < 3) return Array.from({ length: width }, () => false);
+  const stated = (c: number) => meaningful.filter((r) => !isBlank(r[c] ?? '')).length;
+  const blocks = stated(identityCol);
+  const bar = Math.max(0.6 * meaningful.length, 2 * blocks);
+  return Array.from({ length: width }, (_, c) => c !== identityCol && stated(c) >= bar);
+}
+
+/**
+ * How continuation rows of a block-layout sheet are read.
+ *
+ * Both default ON (the B-BBEE reading). The ESG upload turns them OFF: its
+ * registers (vehicle fuel logs, fleet lists) were read, recorded and checked
+ * against the ESG answer key with the plain ditto, and these refinements were
+ * built and verified on B-BBEE training and SED registers only. Off, `dittoFill`
+ * is exactly the plain blank-means-ditto it always was.
+ */
+export interface DittoOptions {
+  /** Rejoin a text value that wrapped onto the next row ("Crane -" / "operator"). */
+  joinWrappedText?: boolean;
+  /** Never ditto-fill a per-row column (a learner's name, an employee number). */
+  keepPerRowColumns?: boolean;
+}
+
+/** The plain ditto, with neither refinement: what the ESG reading uses. */
+export const PLAIN_DITTO: DittoOptions = Object.freeze({ joinWrappedText: false, keepPerRowColumns: false });
+
 /**
  * Blank-means-ditto: fill blank TEXT cells of a continuation row from the last
  * stated value. A new value in the leftmost text column starts a new block and
  * clears the other columns' memory, so a later beneficiary can never inherit
  * an earlier one's location or type. Numeric/date columns are never filled —
- * a blank amount is genuinely blank.
+ * a blank amount is genuinely blank. Text that wrapped onto the next row is
+ * rejoined first, and per-row columns (a learner's name) are never filled —
+ * each unless `options` turns it off (see DittoOptions).
  */
-export function dittoFill(body: string[][], width: number): string[][] {
+export function dittoFill(body: string[][], width: number, options: DittoOptions = {}): string[][] {
   const textCol = textDominantColumns(body, width);
   const identityCol = textCol.findIndex(Boolean);
   if (identityCol === -1) return body;
 
-  const memory: string[] = Array.from({ length: width }, () => '');
-  return body.map((row) => {
+  const padded = body.map((row) => {
     const out = [...row];
     while (out.length < width) out.push('');
+    return out;
+  });
+  const noneMarked = Array.from({ length: width }, () => false);
+  // Measured before any join: the tail a join empties is not a blank of the column's own.
+  const perRowAny = options.joinWrappedText === false && options.keepPerRowColumns === false
+    ? noneMarked
+    : perRowColumns(padded, width, identityCol);
+  const joined = options.joinWrappedText === false
+    ? padded
+    : joinWrappedFragments(padded, textCol, identityCol, perRowAny);
+  const perRow = options.keepPerRowColumns === false
+    ? noneMarked
+    : perRowColumns(joined, width, identityCol);
+
+  const memory: string[] = Array.from({ length: width }, () => '');
+  return joined.map((row) => {
+    const out = [...row];
     if (out.every((c) => isBlank(c))) return out;
     // A continuation row carries something REAL of its own — a name, a date,
     // an amount. A row whose only content is zero residue (a formula column
@@ -157,7 +310,7 @@ export function dittoFill(body: string[][], width: number): string[][] {
       for (let c = 0; c < width; c++) if (c !== identityCol) memory[c] = '';
     }
     for (let c = 0; c < width; c++) {
-      if (!textCol[c]) continue;
+      if (!textCol[c] || perRow[c]) continue;
       if (!isBlank(out[c])) memory[c] = out[c];
       else if (memory[c]) out[c] = memory[c];
     }
@@ -169,7 +322,7 @@ function pipeRow(cells: string[]): string {
   return `| ${cells.map((c) => c.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ')).join(' | ')} |`;
 }
 
-function renderMainRegion(rows: string[][]): string {
+function renderMainRegion(rows: string[][], options: DittoOptions): string {
   const headerIdx = findHeaderRow(rows);
   if (headerIdx === -1) return '';
   const width = rows.reduce((w, r) => Math.max(w, r.length), 0); // not Math.max(...rows): spreading every row as an argument overflows the stack past ~120k rows
@@ -184,7 +337,7 @@ function renderMainRegion(rows: string[][]): string {
     return cell || `col${c + 1}`;
   });
 
-  const body = dittoFill(rows.slice(headerIdx + 1).filter((r) => r.some((c) => !isBlank(c))), width);
+  const body = dittoFill(rows.slice(headerIdx + 1).filter((r) => r.some((c) => !isBlank(c))), width, options);
 
   const lines = [
     ...preamble,
@@ -210,7 +363,7 @@ function renderSideRegion(rows: string[][]): string {
  * the data table cleanly headed and ditto-filled, side lists labelled as
  * reference options.
  */
-export function sheetGridToMarkdown(sheetName: string, grid: string[][]): string {
+export function sheetGridToMarkdown(sheetName: string, grid: string[][], options: DittoOptions = {}): string {
   const heading = `## ${sheetName.trim() || 'Sheet'}`;
   const regions = columnRegions(grid);
   if (regions.length === 0) return heading;
@@ -219,7 +372,7 @@ export function sheetGridToMarkdown(sheetName: string, grid: string[][]): string
   const main = withCells.reduce((a, b) => (filledCount(b.cells) > filledCount(a.cells) ? b : a));
 
   const blocks = [heading];
-  const mainTable = renderMainRegion(main.cells);
+  const mainTable = renderMainRegion(main.cells, options);
   if (mainTable) blocks.push(mainTable);
   for (const other of withCells) {
     if (other === main) continue;

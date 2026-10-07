@@ -581,6 +581,11 @@ const percentValidator = (v: unknown): string | null => {
   return null;
 };
 
+/** Does this column hold a 0–100 percentage ("51 not 0.51")? */
+export function isPercentColumn(column: ColumnDef | undefined): boolean {
+  return column?.validate === percentValidator;
+}
+
 const integerNonNegValidator = (v: unknown): string | null => {
   if (isBlank(v)) return null;
   const n = Number(v);
@@ -1289,7 +1294,7 @@ export const PROCUREMENT_COLUMNS: ColumnDef[] = [
   },
   { key: "sizeAtFirstProcurement", label: "Size at First Procurement", type: "select", options: SUPPLIER_SIZE_OPTIONS, width: 180, aliases: ["Initial Size", "Original Size", "Size at first procurement"] },
   { key: "currentBlackOwnership", label: "Black Ownership (%)", type: "number", width: 160, validate: percentValidator, aliases: ["Black Ownership", "Current Black ownership", "% Black Ownership", "Black Owned %", "Black Owned"], validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)" },
-  { key: "currentBlackFemaleOwnership", label: "Black Female Ownership (%)", type: "number", width: 190, validate: percentValidator, aliases: ["Black Female Ownership", "Current Black Female ownership", "Black Women Ownership", "% Black Women", "Black Women Owned"], validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)" },
+  { key: "currentBlackFemaleOwnership", label: "Black Female Ownership (%)", type: "number", width: 190, validate: percentValidator, aliases: ["Black Female Ownership", "Current Black Female ownership", "Black Women Ownership", "Black Woman Ownership", "% Black Women", "Black Women Owned", "Black Woman Owned"], validationMessage: "Enter a percentage between 0 and 100 (e.g. 51 not 0.51)" },
   yesNoColumn("hasModifiedBlackOwnership", "Modified Black Ownership?", { width: 190, aliases: ["Flow through Black ownership"] }),
   { key: "unmodifiedBlackOwnership", label: "Unmodified Black Ownership (%)", type: "number", width: 200, validate: percentValidator },
   yesNoColumn("sdRecipient", "SD Recipient?", { width: 130, aliases: ["Supplier development recipient? (Yes/No)"] }),

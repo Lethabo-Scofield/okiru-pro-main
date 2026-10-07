@@ -4,18 +4,23 @@ import mammoth from 'mammoth';
 import { createWorker } from 'tesseract.js';
 import { createLogger } from '../logger.js';
 import type { RawExtractionInput } from '../../schemas/parser_output.js';
+import type { TableGrid } from '../../schemas/table_grid.js';
 import {
   htmlToMarkdown,
   pptxToMarkdown,
   reconstructPdfLines,
   worksheetToMarkdown,
 } from './markdownConversion.js';
-import { sheetGridToMarkdown } from './sheetRegions.js';
-import { sheetMatrix } from './sheetCellValues.js';
+import { PLAIN_DITTO, sheetGridToMarkdown, type DittoOptions } from './sheetRegions.js';
+import { sheetMatrix, type CellReadOptions } from './sheetCellValues.js';
 import { boundWorkbookSheets } from './sheetBounds.js';
 import { convertWithDocling, doclingHandlesExtension, isDoclingEnabled } from './doclingClient.js';
 import { preprocessForOcr } from './imagePreprocessing.js';
-import { analyseWithDocumentIntelligence, documentIntelligenceConfigured } from './documentIntelligence.js';
+import {
+  analyseWithDocumentIntelligence,
+  documentIntelligenceCacheEnabled,
+  documentIntelligenceConfigured,
+} from './documentIntelligence.js';
 import { splitWorkbookIntoSheets, shouldSplitWorkbook } from './workbookSheetSplit.js';
 import { extractScannedPdfWithVision } from './visionExtraction.js';
 
@@ -59,6 +64,29 @@ export interface UploadedFileLike {
   size: number;
 }
 
+/**
+ * Which product the upload is evidence for. Files are read the same way for
+ * both, except in the spreadsheet details the B-BBEE reading refines:
+ * block-layout continuation rows (wrapped text rejoined, per-row columns never
+ * ditto-filled; DittoOptions in sheetRegions.ts), cells (error cells as their
+ * error text, percent cells exact where the display rounds them;
+ * CellReadOptions in sheetCellValues.ts) and each sheet's named cells. The ESG
+ * reading keeps, byte for byte, the plain reading its registers were recorded
+ * and checked against the ESG answer key with. Omitted, the B-BBEE reading
+ * applies.
+ */
+export interface UploadReadOptions {
+  domain?: 'bbbee' | 'esg';
+}
+
+function dittoFor(options: UploadReadOptions): DittoOptions {
+  return options.domain === 'esg' ? PLAIN_DITTO : {};
+}
+
+function cellsFor(options: UploadReadOptions): CellReadOptions {
+  return options.domain === 'esg' ? { exactPercent: false, errorText: false } : {};
+}
+
 function positiveIntEnv(name: string, fallback: number): number {
   const raw = Number(process.env[name]);
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
@@ -86,50 +114,15 @@ function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
   return Promise.race([work, timeout]).finally(() => clearTimeout(timer)) as Promise<T>;
 }
 
-/**
- * Reads a PDF's TEXT LAYER only — it never OCRs. That makes it free and safe to
- * run at quote time, and it doubles as the digital-vs-scan differentiator: a
- * healthy string means a digital PDF (tokenize it exactly), an empty/near-empty
- * one means the pages are images and real OCR will be needed later.
- */
-export async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const loadingTask = pdfjs.getDocument({
-    data: new Uint8Array(buffer),
-  });
-  const pdf = await loadingTask.promise;
-  const pages: string[] = [];
-  const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
+type PdfTextItem = { str: string; x: number; y: number };
 
-  for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const content = await page.getTextContent();
-    const text = content.items
-      .map((item: unknown) => {
-        if (item && typeof item === 'object' && 'str' in item) return String((item as { str: string }).str);
-        return '';
-      })
-      .filter(Boolean)
-      .join(' ');
-    pages.push(text);
-  }
-
-  return pages.join('\n\n');
-}
-
-/**
- * Layout-aware markdown rendering of a digital PDF's text layer. Same source
- * items as {@link extractPdfText}, but grouped into visual reading-order lines
- * (via item x/y positions) and split into `## Page N` sections — the structure
- * an LLM reads far more reliably than a single space-joined blob. Text-layer
- * only, never OCR; returns '' when there is no digital text (a scan).
- */
-export async function extractPdfMarkdown(buffer: Buffer): Promise<string> {
+/** Each page's positioned text items, in content-stream order. */
+async function pdfPageItems(buffer: Buffer): Promise<PdfTextItem[][]> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
   const pdf = await loadingTask.promise;
   const pageLimit = Math.min(pdf.numPages, MAX_PDF_PAGES);
-  const blocks: string[] = [];
+  const pages: PdfTextItem[][] = [];
 
   for (let pageNumber = 1; pageNumber <= pageLimit; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
@@ -142,14 +135,69 @@ export async function extractPdfMarkdown(buffer: Buffer): Promise<string> {
         }
         return null;
       })
-      .filter((v): v is { str: string; x: number; y: number } => Boolean(v && v.str.trim()));
-
-    const lines = reconstructPdfLines(items);
-    if (lines.length === 0) continue;
-    blocks.push([`## Page ${pageNumber}`, '', ...lines].join('\n'));
+      .filter((v): v is PdfTextItem => Boolean(v && v.str.trim()));
+    pages.push(items);
   }
+  return pages;
+}
 
-  return blocks.join('\n\n');
+/**
+ * Both readings of a PDF from ONE pdfjs pass: the plain text and the markdown,
+ * built from each page's reading-order LINES (pdfjs items grouped by vertical
+ * position and sorted left to right, `reconstructPdfLines`), so both read a
+ * page the same way.
+ *
+ * FAILURE ISOLATION. Line reconstruction is the fragile step, and a throw in it
+ * must not cost the document its text. The plain text falls back to each
+ * page's items joined in stream order (how the text layer was read before
+ * lines existed) and the markdown is left empty, exactly as when the markdown
+ * was its own pass behind `.catch(() => '')`.
+ */
+function pdfReadings(pages: PdfTextItem[][], filename = ''): { text: string; markdown: string } {
+  try {
+    const lines = pages.map((items) => reconstructPdfLines(items));
+    return { text: pdfTextOf(lines), markdown: pdfMarkdownOf(lines) };
+  } catch (err) {
+    logger.warn('Could not rebuild PDF lines; reading the text layer in stream order, without markdown', {
+      filename, reason: (err as Error).message,
+    });
+    return { text: pages.map((items) => items.map((item) => item.str).join(' ')).join('\n\n'), markdown: '' };
+  }
+}
+
+/**
+ * Reads a PDF's TEXT LAYER only — it never OCRs. That makes it free and safe to
+ * run at quote time, and it doubles as the digital-vs-scan differentiator: a
+ * healthy string means a digital PDF (tokenize it exactly), an empty/near-empty
+ * one means the pages are images and real OCR will be needed later.
+ *
+ * One line per visual line, pages separated by a blank line. It used to join a
+ * whole page with spaces, so every page was ONE line and a label's "value" ran
+ * on to the end of the page; a line break is where a printed value ends.
+ */
+export async function extractPdfText(buffer: Buffer): Promise<string> {
+  return pdfReadings(await pdfPageItems(buffer)).text;
+}
+
+function pdfTextOf(pages: string[][]): string {
+  return pages.map((lines) => lines.join('\n')).join('\n\n');
+}
+
+function pdfMarkdownOf(pages: string[][]): string {
+  return pages
+    .map((lines, index) => (lines.length === 0 ? '' : [`## Page ${index + 1}`, '', ...lines].join('\n')))
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * Layout-aware markdown rendering of a digital PDF's text layer: the same
+ * reading-order lines as {@link extractPdfText}, split into `## Page N`
+ * sections. Text-layer only, never OCR; returns '' when there is no digital
+ * text (a scan).
+ */
+export async function extractPdfMarkdown(buffer: Buffer): Promise<string> {
+  return pdfReadings(await pdfPageItems(buffer)).markdown;
 }
 
 export async function extractDocxText(buffer: Buffer): Promise<string> {
@@ -169,8 +217,8 @@ export async function extractDocxMarkdown(buffer: Buffer): Promise<string> {
  * their percent sign. Duplicate headers are suffixed the way SheetJS does, so
  * callers keyed on column names behave unchanged.
  */
-function percentAwareRows(sheet: XLSX.WorkSheet): Array<Record<string, unknown>> {
-  const matrix = sheetMatrix(sheet);
+function percentAwareRows(sheet: XLSX.WorkSheet, cells: CellReadOptions = {}): Array<Record<string, unknown>> {
+  const matrix = sheetMatrix(sheet, cells);
   if (matrix.length === 0) return [];
 
   const seen = new Map<string, number>();
@@ -198,7 +246,10 @@ function percentAwareRows(sheet: XLSX.WorkSheet): Array<Record<string, unknown>>
   return rows;
 }
 
-export function extractWorkbookText(buffer: Buffer): { text: string; tables: unknown[]; markdown: string } {
+export function extractWorkbookText(
+  buffer: Buffer,
+  options: UploadReadOptions = {},
+): { text: string; tables: unknown[]; markdown: string } {
   // cellNF keeps each cell's number format, which is the only thing that tells
   // a stored 0.32 apart from a displayed "32%" (see sheetCellValues.ts).
   const workbook = XLSX.read(buffer, { type: 'buffer', cellNF: true });
@@ -214,7 +265,7 @@ export function extractWorkbookText(buffer: Buffer): { text: string; tables: unk
     // Format-aware (sheetCellValues.ts): the deterministic readers that consume
     // `tables` score these cells directly, so a percentage must arrive as
     // "32%" rather than a bare 0.32 they would have to guess the unit of.
-    const allRows = percentAwareRows(sheet);
+    const allRows = percentAwareRows(sheet, cellsFor(options));
     const rows = allRows.slice(0, MAX_SHEET_ROWS);
     tables.push({ sheetName, rows });
     parts.push(`Sheet: ${sheetName}`);
@@ -225,7 +276,7 @@ export function extractWorkbookText(buffer: Buffer): { text: string; tables: unk
     // lists are labelled so the extractor doesn't invent rows from them. The
     // structured `tables` array above stays raw for deterministic readers.
     const grid = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
-    markdownParts.push(sheetGridToMarkdown(sheetName, (grid as unknown as string[][]).slice(0, MAX_SHEET_ROWS)));
+    markdownParts.push(sheetGridToMarkdown(sheetName, (grid as unknown as string[][]).slice(0, MAX_SHEET_ROWS), dittoFor(options)));
   }
 
   return { text: parts.join('\n'), tables, markdown: markdownParts.join('\n\n') };
@@ -345,7 +396,10 @@ function extensionFromFilename(filename: string): string {
   return path.extname(filename).toLowerCase();
 }
 
-export async function rawExtractionInputFromUpload(file: UploadedFileLike): Promise<RawExtractionInput> {
+export async function rawExtractionInputFromUpload(
+  file: UploadedFileLike,
+  options: UploadReadOptions = {},
+): Promise<RawExtractionInput> {
   if (!isSupportedUpload(file.mimetype, file.originalname)) {
     throw new Error(`Unsupported file type ${file.mimetype}`);
   }
@@ -356,6 +410,9 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
   // additive so `raw_text` (what the regex extractor reads) never changes shape.
   let markdown = '';
   let tables: unknown[] = [];
+  // Which scanned-document reader produced the text, when one did. Travels in
+  // metadata so later stages (the agent-loop gate) know the text is OCR.
+  let scannedBy: 'document_intelligence' | 'vision' | null = null;
 
   logger.info('Extracting uploaded file', {
     filename: file.originalname,
@@ -364,8 +421,10 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
   });
 
   if (file.mimetype === 'application/pdf' || ext === '.pdf') {
-    rawText = await withTimeout(extractPdfText(file.buffer), EXTRACTION_TIMEOUT_MS);
-    markdown = await withTimeout(extractPdfMarkdown(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => '');
+    // One pdfjs pass serves both renderings (they read the same lines).
+    const readings = pdfReadings(await withTimeout(pdfPageItems(file.buffer), EXTRACTION_TIMEOUT_MS), file.originalname);
+    rawText = readings.text;
+    markdown = readings.markdown;
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     || ext === '.docx'
@@ -379,7 +438,7 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
     || ext === '.xlsm'
     || ext === '.xls'
   ) {
-    const extracted = extractWorkbookText(file.buffer);
+    const extracted = extractWorkbookText(file.buffer, options);
     rawText = extracted.text;
     tables = extracted.tables;
     markdown = extracted.markdown || tablesToMarkdown(extracted.tables);
@@ -422,16 +481,25 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
     });
 
     // Preferred: Document Intelligence, which is purpose-built and returns table
-    // structure. Used automatically if the subscription ever has it.
-    if (documentIntelligenceConfigured()) {
+    // structure. Used automatically if the subscription ever has it. An
+    // evaluation replay (no credentials) reads the scan from the raw-response
+    // cache instead; production never sets that cache.
+    if (documentIntelligenceConfigured() || documentIntelligenceCacheEnabled()) {
       const analysed = await analyseWithDocumentIntelligence(file.buffer, file.mimetype, file.originalname);
       if (analysed && analysed.text.trim()) {
         rawText = analysed.text;
+        scannedBy = 'document_intelligence';
         markdown = analysed.markdown || analysed.text;
+        // Each table travels as a cell grid (schemas/table_grid.ts): its dense
+        // `rows`, and `cells` with kind, span and page — what lets a reader
+        // take "the value under the Shares header on T Nkosi's row" instead of
+        // whatever text happens to follow a label.
         if (tables.length === 0 && analysed.tables.length > 0) {
-          tables = analysed.tables.map((table, index) => ({
-            sheetName: `Table ${index + 1}`,
-            rows: table.cells,
+          tables = analysed.tables.map((table): TableGrid => ({
+            sheetName: table.sheetName,
+            page: table.page,
+            rows: table.rows,
+            cells: table.cells,
           }));
         }
       }
@@ -445,6 +513,7 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
       const seen = await extractScannedPdfWithVision(file.buffer, file.originalname);
       if (seen && seen.markdown.trim()) {
         rawText = seen.markdown;
+        scannedBy = 'vision';
         markdown = seen.markdown;
 
         // If the page cap bit, SAY SO in the document itself. The caller was
@@ -501,6 +570,7 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
       source: 'direct_upload',
       file_size: file.size,
       mime_type: file.mimetype,
+      ...(scannedBy ? { scanned: true, text_source: scannedBy } : {}),
     },
   };
 }
@@ -520,7 +590,10 @@ export async function rawExtractionInputFromUpload(file: UploadedFileLike): Prom
  * split can never make a file less readable: if it produces nothing, the
  * whole-file input is used.
  */
-export async function extractionInputsFromUpload(file: UploadedFileLike): Promise<RawExtractionInput[]> {
+export async function extractionInputsFromUpload(
+  file: UploadedFileLike,
+  options: UploadReadOptions = {},
+): Promise<RawExtractionInput[]> {
   const ext = extensionFromFilename(file.originalname);
   const isWorkbook = file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     || file.mimetype === 'application/vnd.ms-excel'
@@ -529,7 +602,20 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
     || ext === '.xlsx' || ext === '.xlsm' || ext === '.xls';
 
   if (isWorkbook) {
-    const sheets = splitWorkbookIntoSheets(file.buffer);
+    const sheets = splitWorkbookIntoSheets(file.buffer, {
+      ditto: dittoFor(options),
+      cells: cellsFor(options),
+      namedCells: options.domain !== 'esg',
+      instructions: options.domain !== 'esg',
+    });
+    /** One sheet's table, with the workbook's Instructions profile when this sheet carries it. */
+    const sheetTable = (sheet: (typeof sheets)[number]) => ({
+      sheetName: sheet.sheetName,
+      rows: sheet.rows,
+      matrix: sheet.matrix,
+      ...(sheet.namedCells ? { namedCells: sheet.namedCells } : {}),
+      ...(sheet.instructions ? { instructions: sheet.instructions } : {}),
+    });
 
     // A SINGLE-sheet workbook is not worth splitting into one document, but it
     // still has header-keyed rows, and the deterministic readers (supplier
@@ -538,10 +624,10 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
     // are always filed — extracted nothing.
     if (sheets.length === 1) {
       const [sheet] = sheets;
-      const input = await rawExtractionInputFromUpload(file);
+      const input = await rawExtractionInputFromUpload(file, options);
       return [{
         ...input,
-        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows, matrix: sheet.matrix }],
+        tables: [sheetTable(sheet)],
         metadata: { ...input.metadata, sheet_name: sheet.sheetName, sheet_hidden: Boolean(sheet.hidden) },
       }];
     }
@@ -571,7 +657,7 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
         mime_type: childMime,
         raw_text: sheet.text,
         markdown: sheet.markdown,
-        tables: [{ sheetName: sheet.sheetName, rows: sheet.rows, matrix: sheet.matrix }],
+        tables: [sheetTable(sheet)],
         metadata: {
           source: 'direct_upload',
           file_size: file.size,
@@ -586,5 +672,5 @@ export async function extractionInputsFromUpload(file: UploadedFileLike): Promis
 
   // Not a multi-sheet workbook — one input, the existing path (which also
   // handles scanned PDFs via vision, DOCX, PPTX, images, etc.).
-  return [await rawExtractionInputFromUpload(file)];
+  return [await rawExtractionInputFromUpload(file, options)];
 }

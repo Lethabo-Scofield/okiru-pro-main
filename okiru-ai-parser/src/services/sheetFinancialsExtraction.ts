@@ -15,6 +15,7 @@
  */
 import { createLogger } from '../logger.js';
 import type { DocumentExtraction, ExtractionModel } from './aiExtraction.js';
+import { isSpreadsheetError } from './sheetCellValues.js';
 
 const logger = createLogger('SheetFinancialsExtraction');
 
@@ -40,28 +41,72 @@ const SYSTEM_PROMPT = [
  * post-exclusion figure the workbook computed (inclusions minus exclusions).
  * The model path used to COMPUTE a TMPS by summing components, which included
  * the exclusions and overstated the denominator by the excluded spend
- * (R8,100,064 vs the labelled R4,674,995 on the real pack), suppressing the
+ * (on a real pack, millions above the labelled TMPS), suppressing the
  * procurement ratio. A stated total is read, never computed — and the sheet is
  * banner-heavy so its columns misalign; the label and its figure are found by
  * scanning CELLS, not by trusting a column.
  */
 const TMPS_LABEL = /total\s+measured\s+procurement\s+spend/i;
+/** "Total Inclusions" / "TMPS Inclusions" — a caption on the inclusions total's own row. */
+const TMPS_INCLUSIONS_LABEL = /^\s*(?:total\s+)?(?:tmps\s+|measured\s+procurement\s+)?inclusions\s*:?\s*$/i;
+/** The gathering template names its inclusions total `TMPS_Inc` (Finance!C74). */
+const TMPS_INCLUSIONS_NAME = /^tmps_?inc(?:lusions)?$/i;
 
-function labelledTmpsFromRows(rows: Array<Record<string, unknown>>): number | null {
+/**
+ * A labelled figure as the sheet states it: the number on the label's row, or
+ * the spreadsheet ERROR that row holds instead.
+ *
+ * An error is reported, never read as a value: SheetJS stores `#REF!` as the
+ * error code 23, which is how a broken `=TMPS_Inc-H74` formula once arrived as
+ * TMPS = 23 (see sheetCellValues.ts).
+ */
+interface LabelledFigure {
+  value: number | null;
+  /** The error text (`"#REF!"`) a labelled row held instead of a figure. */
+  error: string | null;
+}
+
+function labelledFigureFromRows(rows: Array<Record<string, unknown>>, label: RegExp): LabelledFigure {
+  let error: string | null = null;
   for (const row of rows) {
     const cells = Object.values(row);
-    const hasLabel = cells.some((c) => typeof c === 'string' && TMPS_LABEL.test(c));
+    const hasLabel = cells.some((c) => typeof c === 'string' && label.test(c));
     if (!hasLabel) continue;
+    // A broken formula on the labelled row: the figure the sheet meant to state
+    // is unknown, so nothing on that row is taken — not even a lone number in
+    // another column, which could be any year's or any part's.
+    const errors = cells.filter(isSpreadsheetError);
+    if (errors.length > 0) {
+      error ??= errors[0].trim();
+      continue;
+    }
     // The value row carries a number; the section HEADING row does not.
     const numbers = cells.filter((c): c is number => typeof c === 'number' && Number.isFinite(c) && c !== 0);
-    if (numbers.length === 1) return numbers[0];
+    if (numbers.length === 1) return { value: numbers[0], error: null };
   }
-  return null;
+  return { value: null, error };
+}
+
+/** A figure the workbook states through a defined name rather than a caption. */
+function namedFigure(namedCells: Record<string, unknown> | undefined, name: RegExp): LabelledFigure {
+  for (const [key, raw] of Object.entries(namedCells ?? {})) {
+    if (!name.test(key)) continue;
+    if (isSpreadsheetError(raw)) return { value: null, error: raw.trim() };
+    if (typeof raw === 'number' && Number.isFinite(raw) && raw !== 0) return { value: raw, error: null };
+  }
+  return { value: null, error: null };
 }
 
 export async function extractSheetFinancials(
   model: ExtractionModel,
-  input: { filename: string; markdown?: string; raw_text: string; rows?: Array<Record<string, unknown>> },
+  input: {
+    filename: string;
+    markdown?: string;
+    raw_text: string;
+    rows?: Array<Record<string, unknown>>;
+    /** The workbook's defined names on this sheet (`TMPS_Inc` → 9200000). */
+    namedCells?: Record<string, unknown>;
+  },
 ): Promise<DocumentExtraction | null> {
   const content = input.markdown?.trim() || input.raw_text;
   const user = [
@@ -91,18 +136,52 @@ export async function extractSheetFinancials(
     }
   }
 
-  const labelledTmps = input.rows ? labelledTmpsFromRows(input.rows) : null;
-  if (labelledTmps !== null) {
+  const exceptions: string[] = [];
+
+  const tmps = input.rows ? labelledFigureFromRows(input.rows, TMPS_LABEL) : { value: null, error: null };
+  if (tmps.value !== null) {
     values.push({
       field: 'total_measured_procurement_spend',
-      value: labelledTmps,
+      value: tmps.value,
       sourceFile: input.filename,
       sourceDocumentId: 'sheet_financials',
     });
+  } else if (tmps.error) {
+    // REPORTED, not repaired. The sheet's own inclusions and exclusions are
+    // right there, but subtracting them would be a figure this workbook does
+    // not state; a TMPS another uploaded workbook states is used instead, and
+    // when none does the denominator stays open for the client to supply.
+    exceptions.push(
+      `TMPS cell holds ${tmps.error} in ${input.filename}: the workbook's "Total Measured Procurement Spend" `
+      + 'formula is broken, so no TMPS was read from this sheet. It has not been computed from the inclusions '
+      + 'and exclusions; a TMPS stated in another uploaded workbook is used if there is one. '
+      + 'Fix the formula in the workbook, or confirm TMPS, before relying on the Preferential Procurement score.',
+    );
   }
 
-  if (values.length === 0) return null;
+  // TMPS inclusions (the total BEFORE exclusions): reported for the reviewer
+  // and the answer key, never scored as TMPS — it overstates the denominator by
+  // every excluded rand. Its caption is usually the workbook's defined name.
+  const named = namedFigure(input.namedCells, TMPS_INCLUSIONS_NAME);
+  const inclusions = named.value !== null || named.error
+    ? named
+    : input.rows ? labelledFigureFromRows(input.rows, TMPS_INCLUSIONS_LABEL) : { value: null, error: null };
+  if (inclusions.value !== null) {
+    values.push({
+      field: 'tmps_inclusions',
+      value: inclusions.value,
+      sourceFile: input.filename,
+      sourceDocumentId: 'sheet_financials',
+    });
+  } else if (inclusions.error) {
+    exceptions.push(`TMPS inclusions cell holds ${inclusions.error} in ${input.filename}: no inclusions total was read from this sheet.`);
+  }
 
+  if (values.length === 0 && exceptions.length === 0) return null;
+
+  if (exceptions.length > 0) {
+    logger.warn('Finance sheet holds spreadsheet errors where figures were expected', { file: input.filename, exceptions });
+  }
   logger.info('Extracted sheet financials', { file: input.filename, fields: values.map((x) => x.field) });
   return {
     documentId: 'sheet_financials',
@@ -114,7 +193,7 @@ export async function extractSheetFinancials(
     values,
     missingFields: [],
     unexpectedFields: [],
-    exceptions: [],
+    exceptions,
   };
 }
 

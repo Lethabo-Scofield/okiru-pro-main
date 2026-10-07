@@ -1,6 +1,11 @@
-# Run an ESG evidence pack through the parser for the answer-key gate (B1).
+# Run an evidence pack through the parser for an answer-key gate.
 #
 #   .\scripts\esg-pack-eval.ps1 -Pack "..\docs\Super Group Upload Pack" [-Mode auto|replay|record]
+#   .\scripts\esg-pack-eval.ps1 -Domain bbbee -Pack "C:\...\Okiru Upload Pack" [-Mode auto|replay|record] [-Out <dir>]
+#
+# -Domain esg (the default) runs the ESG case extraction, exactly as before.
+# -Domain bbbee runs the deterministic case parser AND the model extraction, as
+# /resolve-case-files does (scripts/pack-eval.ts).
 #
 # Model and OCR credentials are read from the cluster secret straight into this
 # process's environment: never printed, never written to disk. Replay mode needs
@@ -9,6 +14,7 @@
 param(
   [Parameter(Mandatory = $true)][string]$Pack,
   [ValidateSet("auto", "replay", "record")][string]$Mode = "auto",
+  [ValidateSet("esg", "bbbee")][string]$Domain = "esg",
   [string]$Out = ""
 )
 $ErrorActionPreference = "Stop"
@@ -33,8 +39,11 @@ $env:AZURE_MODEL_DEPLOYMENT = "gpt-4o"
 $env:PARSER_DOCUMENT_CONCURRENCY = "6"
 $env:NODE_ENV = "development"
 $env:LOG_LEVEL = "warn"
+# (-Domain bbbee turns the template-decision and extraction caches off itself,
+# in scripts/pack-eval.ts, so a replay asks exactly the recorded prompts.)
 
-$tsxArgs = @("tsx", "scripts/esg-pack-eval.ts", "--pack", $Pack, "--mode", $Mode)
+$script = if ($Domain -eq "esg") { "scripts/esg-pack-eval.ts" } else { "scripts/pack-eval.ts" }
+$tsxArgs = @("tsx", $script, "--domain", $Domain, "--pack", $Pack, "--mode", $Mode)
 if ($Out) { $tsxArgs += @("--out", $Out) }
 Push-Location (Split-Path $PSScriptRoot -Parent)
 # PDF readers write font warnings to stderr; Windows PowerShell turns any stderr

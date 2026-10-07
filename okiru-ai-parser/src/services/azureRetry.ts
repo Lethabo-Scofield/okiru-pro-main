@@ -17,8 +17,18 @@ const MAX_ATTEMPTS = 4;
 const BASE_DELAY_MS = 2_000;
 const MAX_DELAY_MS = 60_000;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** Waits ms, or less when the signal aborts (a cancelled caller stops waiting). */
+function sleep(ms: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    const timer = setTimeout(done, ms);
+    function done() {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', done);
+      resolve();
+    }
+    signal?.addEventListener('abort', done, { once: true });
+  });
 }
 
 function retryDelayMs(response: Response, attempt: number): number {
@@ -37,9 +47,13 @@ function retryDelayMs(response: Response, attempt: number): number {
 export async function fetchAzureWithRetry(url: string, init: RequestInit): Promise<Response> {
   let response = await fetch(url, init);
   for (let attempt = 1; attempt < MAX_ATTEMPTS && RETRYABLE.has(response.status); attempt++) {
+    // A caller that gave up (init.signal aborted) gets the throttled response
+    // back now, not after more waits and requests.
+    if (init.signal?.aborted) break;
     const delay = retryDelayMs(response, attempt);
     logger.warn('Azure call throttled — retrying', { status: response.status, attempt, delayMs: Math.round(delay) });
-    await sleep(delay);
+    await sleep(delay, init.signal);
+    if (init.signal?.aborted) break;
     response = await fetch(url, init);
   }
   return response;

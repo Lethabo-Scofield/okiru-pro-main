@@ -127,6 +127,15 @@ const LABEL_SYNONYMS: Record<keyof ExtractedCompanyData, string[]> = {
   totalProcurement: [
     "total measured procurement spend",
     "tmps",
+    // A full caption in its own right, so it may sit inside a longer label
+    // ("Total Procurement Spend (R)"). Whole-label-only "total procurement"
+    // below stopped matching it, and the figure was lost. What it must never
+    // match — foreign / imports / excluded / pre-exclusions spend — is
+    // refused by NOT_TMPS_LABEL, not by narrowing the synonym.
+    "total procurement spend",
+    // Bare phrases: matched only as the WHOLE label (EXACT_ONLY_SYNONYMS). As
+    // substrings they caught "Total Procurement Expenditure from foreign
+    // suppliers" on the Imports sheet and read the imports total as TMPS.
     "total procurement",
     "measured procurement",
   ],
@@ -197,9 +206,40 @@ const LABEL_SYNONYMS: Record<keyof ExtractedCompanyData, string[]> = {
   empowermentFinancing: ["empowerment financing", "empowerment loans", "bee transaction financing"],
 };
 
+/**
+ * Synonyms too generic to match INSIDE a longer label. "Total procurement"
+ * is a fair caption for TMPS on its own, but a label merely containing it can
+ * be any procurement subtotal (foreign suppliers, certified suppliers, …).
+ */
+const EXACT_ONLY_SYNONYMS = new Set(["total procurement", "measured procurement"].map(norm));
+
+/**
+ * A label that names a PART of procurement or what is taken out of it is never
+ * TMPS, however much of TMPS's own caption it repeats: "Value of Imports
+ * Procurement that can be excluded from Total Measured Procurement Spend
+ * (TMPS)" contains the whole caption and is not the total. Nor is the total
+ * BEFORE exclusions ("TMPS Inclusions", "… before exclusions"), nor a spend
+ * with one class of supplier ("… with B-BBEE compliant suppliers").
+ */
+const NOT_TMPS_LABEL = new RegExp(
+  [
+    String.raw`\b(?:excluded\s+from|foreign|imports?|inclusions?|(?:before|pre)[\s-]*exclusions?)\b`,
+    String.raw`^\s*(?:total\s+)?exclusions?\b`,
+    String.raw`\b(?:compliant|certified|recogni[sz]ed|black|empowering|designated|women|youth|eme|qse)\b`,
+  ].join("|"),
+  "i",
+);
+
+/** Sheets that never state the measured entity's TMPS (the Imports sheet holds foreign spend). */
+const NOT_TMPS_SHEET_TYPES = new Set(["imports"]);
+
 const NAMED_RANGE_MAP: Record<string, keyof ExtractedCompanyData> = {
   companyname: "companyName",
   sector: "sector",
+  // The template names its year-end cell (Instructions!I5) as it names the
+  // sector; the caption scan finds it only while "Financial Year End:" still
+  // sits beside it.
+  yearend: "financialYearEnd",
   turnover: "revenue",
   npat: "npat",
   salaries: "payroll",
@@ -519,6 +559,7 @@ function bestLabelMatch(cellText: string): { field: keyof ExtractedCompanyData; 
     [keyof ExtractedCompanyData, string[]]
   >) {
     for (const synonym of synonyms) {
+      if (EXACT_ONLY_SYNONYMS.has(norm(synonym)) && norm(cellText) !== norm(synonym)) continue;
       const score = labelSimilarity(cellText, synonym);
       if (score >= 0.8 && score > bestScore) {
         bestScore = score;
@@ -589,13 +630,13 @@ function readCellRef(wb: XLSX.WorkBook, ref: string): unknown {
   const ws = wb.Sheets[sheetPart];
   if (!ws) return undefined;
 
-  if (cellPart.includes(":")) {
-    const range = XLSX.utils.decode_range(cellPart);
-    const cell = ws[XLSX.utils.encode_cell({ r: range.s.r, c: range.s.c })];
-    return cell?.v;
-  }
-
-  const cell = ws[cellPart];
+  const cell: XLSX.CellObject | undefined = cellPart.includes(":")
+    ? ws[XLSX.utils.encode_cell(XLSX.utils.decode_range(cellPart).s)]
+    : ws[cellPart];
+  // An error cell (#REF!, #DIV/0!, …) holds no figure. SheetJS stores its
+  // error CODE in `v` (#REF! is 23), and reading that as the named figure is
+  // how a broken formula became a plausible-looking number.
+  if (cell?.t === "e") return undefined;
   return cell?.v;
 }
 
@@ -648,6 +689,7 @@ function scanAllCells(matrix: SheetMatrix, sheetName: string, maxRows = 120, max
       if (/^\d+([.,]\d+)?$/.test(text.replace(/,/g, ""))) continue;
       const match = bestLabelMatch(text);
       if (!match || GENERIC_SCAN_EXCLUDED.has(match.field)) continue;
+      if (match.field === "totalProcurement" && NOT_TMPS_LABEL.test(text)) continue;
 
       const beside = valueBesideLabel(row, c);
       const below = valueBelowLabel(matrix, r, c);
@@ -714,8 +756,14 @@ function extractFromTables(matrix: SheetMatrix, sheetName: string): FieldCandida
       [keyof ExtractedCompanyData, string[]]
     >) {
       if (GENERIC_SCAN_EXCLUDED.has(field)) continue;
-      const col = colIdx(table.headers, ...synonyms);
+      // Bare synonyms count only as a whole header, never inside a longer one.
+      const loose = synonyms.filter((s) => !EXACT_ONLY_SYNONYMS.has(norm(s)));
+      const exact = synonyms.filter((s) => EXACT_ONLY_SYNONYMS.has(norm(s)));
+      const col = colIdx(table.headers, ...loose)
+        ?? exact.map((s) => table.headers.get(norm(s))).find((idx) => idx !== undefined);
       if (col === undefined) continue;
+      const headerText = cellStr((matrix[table.rowIdx] as unknown[] | undefined)?.[col]);
+      if (field === "totalProcurement" && NOT_TMPS_LABEL.test(headerText)) continue;
       for (let r = table.rowIdx + 1; r < Math.min(matrix.length, table.rowIdx + 20); r++) {
         const row = matrix[r] as unknown[] | undefined;
         if (!row) continue;
@@ -1412,8 +1460,12 @@ export function extractBeeGatheringBuffer(buffer: ArrayBuffer): ExcelExtractionR
     const matrix = sheetMatrix(wb, sheetName);
     const sheetType = classifySheet(sheetName);
 
-    allCandidates.push(...scanAllCells(matrix, sheetName));
-    allCandidates.push(...extractFromTables(matrix, sheetName));
+    // The generic scans read any labelled figure on any sheet, but some sheets
+    // can never state TMPS: the Imports sheet's "Total Procurement Expenditure
+    // from foreign suppliers" is foreign spend, and was once read as TMPS.
+    const notTmpsSheet = sheetType !== undefined && NOT_TMPS_SHEET_TYPES.has(sheetType);
+    const generic = [...scanAllCells(matrix, sheetName), ...extractFromTables(matrix, sheetName)];
+    allCandidates.push(...generic.filter((c) => !(notTmpsSheet && c.field === "totalProcurement")));
 
     switch (sheetType) {
       case "companyInfo":

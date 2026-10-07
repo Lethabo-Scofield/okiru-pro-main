@@ -77,6 +77,12 @@ export interface DocumentClassification {
   /** 'compendium' = the upload holds several documents (a workbook or pack), not one. */
   status?: 'classified' | 'ambiguous' | 'low_confidence' | 'unsupported' | 'compendium';
   candidates?: DocumentClassificationCandidate[];
+  /**
+   * Every type the classifier scored, best first — `candidates` is its top 5.
+   * Lets the adjudication shortlist add types the lexical top 5 missed with
+   * their real keyword score. Not part of the parser output.
+   */
+  ranked?: DocumentClassificationCandidate[];
   margin?: number;
   reason?: string;
 }
@@ -87,4 +93,11 @@ export interface DocumentClassificationCandidate {
   confidence: number;
   matched_evidence: string[];
   reasons: string[];
+  /**
+   * What the score rests on: the document's content, only an alias in its
+   * text, only its filename, the sheet it came from, or nothing type-specific.
+   * A pick that rests on a label (alias/filename) is adjudicated even when it
+   * scores high. Classifier-internal; not part of the parser output.
+   */
+  evidence_basis?: 'content' | 'alias' | 'filename' | 'sheet' | 'none';
 }

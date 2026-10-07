@@ -19,8 +19,8 @@
  * exactly as before.
  */
 import * as XLSX from 'xlsx';
-import { dittoFill, mainColumnRegion } from './sheetRegions.js';
-import { sheetMatrix } from './sheetCellValues.js';
+import { dittoFill, mainColumnRegion, type DittoOptions } from './sheetRegions.js';
+import { isSpreadsheetError, namedSheetCells, sheetMatrix, type CellReadOptions } from './sheetCellValues.js';
 import { boundWorkbookSheets } from './sheetBounds.js';
 
 export interface SheetDocument {
@@ -40,6 +40,161 @@ export interface SheetDocument {
   matrix?: unknown[][];
   /** Hidden or very hidden in the workbook. */
   hidden?: boolean;
+  /**
+   * The workbook's defined names that point at a single cell on this sheet,
+   * with that cell's value (see `namedSheetCells`). Omitted when there are none.
+   */
+  namedCells?: Record<string, unknown>;
+  /**
+   * The measured entity's profile as the workbook's Instructions sheet states
+   * it. That sheet is never a document of its own (it carries no evidence), so
+   * its facts ride on the workbook's FIRST document. Omitted when the workbook
+   * has no such sheet, or it states none of them.
+   */
+  instructions?: WorkbookInstructions;
+}
+
+/**
+ * What a B-BBEE gathering workbook's Instructions sheet says about the entity
+ * being measured. Field names are the parser's (`sheet_instructions` emits them
+ * as-is); every value is the workbook's own, never inferred.
+ */
+export interface WorkbookInstructions {
+  /** The sheet the facts were read from, for provenance. */
+  sheetName: string;
+  /** The sector as the workbook names it ("Transport"), verbatim. */
+  industry_sector?: string;
+  /** ISO yyyy-mm-dd. */
+  financial_year_end?: string;
+  measured_entity_name?: string;
+  /** "Revised Codes" / "Non Revised Codes", verbatim. */
+  applicable_code?: string;
+}
+
+type InstructionField = Exclude<keyof WorkbookInstructions, 'sheetName'>;
+
+/** The sheets a gathering template states the entity's profile on. */
+const INSTRUCTION_SHEET_NAMES = new Set(['instructions', 'instruction']);
+
+/** The template's own defined names for each fact (`Sector` → Instructions!I4). */
+const INSTRUCTION_NAMES: Array<[RegExp, InstructionField]> = [
+  [/^sector$/i, 'industry_sector'],
+  [/^year_?end$/i, 'financial_year_end'],
+  [/^company_?name$/i, 'measured_entity_name'],
+  [/^codes?$/i, 'applicable_code'],
+];
+
+/** The captions beside each fact, for a copy whose defined names were lost. */
+const INSTRUCTION_LABELS: Array<[RegExp, InstructionField]> = [
+  [/^\s*industry\s+sector\s*:?\s*$/i, 'industry_sector'],
+  [/^\s*financial\s+year[\s-]*end\s*:?\s*$/i, 'financial_year_end'],
+  [/^\s*measured\s+entity(?:\s+name)?\s*:?\s*$/i, 'measured_entity_name'],
+  [/^\s*applicable\s+codes?\s*:?\s*$/i, 'applicable_code'],
+];
+
+/**
+ * How far right of a caption its value may sit. The template's value is the
+ * very next cell; its dropdown lists start two columns further on, and a blank
+ * value must read as blank, not as the first entry of the list beside it.
+ */
+const LABEL_VALUE_REACH = 2;
+
+const DAY_MS = 86_400_000;
+
+/**
+ * An Excel date serial as ISO. A year end is a date cell, so it arrives as a
+ * number (45716) once its display format is set aside; a number that is not a
+ * plausible modern date is no year end at all.
+ */
+function serialToIso(serial: number, date1904: boolean): string | null {
+  if (!Number.isFinite(serial) || serial < 1) return null;
+  // Day 0 of the 1900 system is 1899-12-30 (Excel counts a 29 Feb 1900 that
+  // never was); of the 1904 system, 1904-01-01.
+  const epoch = date1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30);
+  const date = new Date(epoch + Math.floor(serial) * DAY_MS);
+  const year = date.getUTCFullYear();
+  if (year < 1980 || year > 2100) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+const MONTHS: Record<string, string> = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
+
+/** A year end typed as text: ISO, day-first dd/mm/yyyy (South African), or "28 February 2025". */
+function textDateToIso(text: string): string | null {
+  const s = text.trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(s);
+  if (dmy && Number(dmy[2]) >= 1 && Number(dmy[2]) <= 12 && Number(dmy[1]) >= 1 && Number(dmy[1]) <= 31) {
+    return `${dmy[3]}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
+  }
+  const long = /(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})/.exec(s);
+  const month = long ? MONTHS[long[2].slice(0, 3).toLowerCase()] : undefined;
+  if (long && month) return `${long[3]}-${month}-${long[1].padStart(2, '0')}`;
+  return null;
+}
+
+/** One stated value for a fact, or null when the cell states nothing usable. */
+function instructionValue(field: InstructionField, raw: unknown, date1904: boolean): string | null {
+  if (raw === undefined || raw === null || isSpreadsheetError(raw)) return null;
+  if (field === 'financial_year_end') {
+    if (typeof raw === 'number') return serialToIso(raw, date1904);
+    if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw.toISOString().slice(0, 10);
+    return textDateToIso(String(raw));
+  }
+  if (typeof raw !== 'string') return null;
+  const text = raw.replace(/\s+/g, ' ').trim();
+  return text === '' ? null : text;
+}
+
+/**
+ * Read the entity's profile off the workbook's Instructions sheet.
+ *
+ * The gathering template states the sector, the financial year end, the
+ * measured entity and the applicable Codes on its Instructions sheet — and
+ * names those cells (`Sector`, `YearEnd`, `CompanyName`, `Codes`). The sheet is
+ * skipped as a document because it holds no evidence, which is how those four
+ * facts were lost and the client had to type them again. A defined name is
+ * read first; where a copy lost its names, the caption beside the value
+ * ("Industry Sector:") finds it.
+ */
+export function readWorkbookInstructions(workbook: XLSX.WorkBook, cells?: CellReadOptions): WorkbookInstructions | null {
+  const date1904 = Boolean((workbook.Workbook?.WBProps as { date1904?: boolean } | undefined)?.date1904);
+  for (const sheetName of workbook.SheetNames) {
+    if (!INSTRUCTION_SHEET_NAMES.has(normSheetName(sheetName))) continue;
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) continue;
+
+    const found: Partial<Record<InstructionField, string>> = {};
+    for (const [name, raw] of Object.entries(namedSheetCells(workbook, sheetName, cells))) {
+      const field = INSTRUCTION_NAMES.find(([pattern]) => pattern.test(name))?.[1];
+      if (!field || found[field]) continue;
+      const value = instructionValue(field, raw, date1904);
+      if (value) found[field] = value;
+    }
+
+    const matrix = sheetMatrix(sheet, cells);
+    for (const row of matrix.slice(0, 60)) {
+      for (let c = 0; c < row.length; c += 1) {
+        const caption = row[c];
+        if (typeof caption !== 'string') continue;
+        const field = INSTRUCTION_LABELS.find(([pattern]) => pattern.test(caption))?.[1];
+        if (!field || found[field]) continue;
+        for (let k = c + 1; k <= c + LABEL_VALUE_REACH && k < row.length; k += 1) {
+          if (row[k] === '' || row[k] === null || row[k] === undefined) continue;
+          const value = instructionValue(field, row[k], date1904);
+          if (value) found[field] = value;
+          break;
+        }
+      }
+    }
+
+    if (Object.keys(found).length > 0) return { sheetName, ...found };
+  }
+  return null;
 }
 
 /** Above this many rows a sheet is a register, not a layout to read cell by cell. */
@@ -181,7 +336,7 @@ function findHeaderRow(matrix: unknown[][]): number {
  *     fragment. Text columns inherit; numeric/date columns never do, so the
  *     event's cost is counted once, on the row that states it.
  */
-function sheetRowsWithHeader(matrix: unknown[][], maxRows: number): Array<Record<string, unknown>> {
+function sheetRowsWithHeader(matrix: unknown[][], maxRows: number, ditto: DittoOptions = {}): Array<Record<string, unknown>> {
   if (matrix.length === 0) return [];
 
   const asText = matrix.map((row) => row.map((c) => String(c ?? '')));
@@ -201,13 +356,15 @@ function sheetRowsWithHeader(matrix: unknown[][], maxRows: number): Array<Record
 
   // Ditto-fill on the TEXT projection, then read typed values back from the
   // original cells where they exist — a filled cell is a copied string, a
-  // stated cell keeps its number/date/percent.
+  // stated cell keeps its number/date/percent. A stated cell whose text the
+  // fill CHANGED is a wrapped fragment it rejoined ("Truck Mounted Crane -" →
+  // "Truck Mounted Crane operator"), and the rejoined text is the value.
   const bodyText = asText.slice(headerIdx + 1).map((row) => {
     const cells = inRegion(row);
     while (cells.length < width) cells.push('');
     return cells.slice(0, width);
   });
-  const filled = dittoFill(bodyText, width);
+  const filled = dittoFill(bodyText, width, ditto);
 
   const rows: Array<Record<string, unknown>> = [];
   for (let i = 0; i < filled.length && rows.length < maxRows; i += 1) {
@@ -215,7 +372,9 @@ function sheetRowsWithHeader(matrix: unknown[][], maxRows: number): Array<Record
     const obj: Record<string, unknown> = {};
     for (let c = 0; c < width; c += 1) {
       const stated = original[c];
-      const value = stated !== undefined && stated !== null && String(stated).trim() !== '' ? stated : filled[i][c];
+      const hasStated = stated !== undefined && stated !== null && String(stated).trim() !== '';
+      const rewritten = hasStated && filled[i][c] !== bodyText[i][c];
+      const value = hasStated && !rewritten ? stated : filled[i][c];
       if (value !== undefined && value !== null && String(value).trim() !== '') obj[rawHeaders[c]] = value;
     }
     if (Object.keys(obj).length > 0) rows.push(obj);
@@ -253,6 +412,22 @@ export interface SplitOptions {
   maxRowsPerSheet?: number;
   /** Below this many content rows a sheet is dropped as empty/boilerplate. */
   minContentRows?: number;
+  /** How block-layout continuation rows are read (see DittoOptions in sheetRegions.ts). */
+  ditto?: DittoOptions;
+  /** How cells are read (see CellReadOptions in sheetCellValues.ts). */
+  cells?: CellReadOptions;
+  /**
+   * Attach each sheet's named single cells (`namedCells`). Default on; the
+   * ESG reading turns it off, since nothing there reads them and its inputs
+   * stay as they were recorded.
+   */
+  namedCells?: boolean;
+  /**
+   * Read the Instructions sheet's profile (`instructions`, see
+   * readWorkbookInstructions). Default on; the ESG reading turns it off, so
+   * its inputs stay exactly as they were recorded.
+   */
+  instructions?: boolean;
 }
 
 /**
@@ -288,14 +463,15 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
     // Format-aware: a cell displaying `32%` must not reach the model as `0.32`.
     // See sheetCellValues.ts — losing the percent format is unrecoverable
     // downstream and forces the mapping layer to guess the unit.
-    const matrix = sheetMatrix(sheet);
+    const matrix = sheetMatrix(sheet, options.cells);
 
     // Header-aware: skip the banner/legend rows and key data by the REAL column
     // headers, so the markdown the model reads has meaningful columns.
-    const rows = sheetRowsWithHeader(matrix, maxRows).filter(rowHasContent);
+    const rows = sheetRowsWithHeader(matrix, maxRows, options.ditto).filter(rowHasContent);
     if (rows.length < minContent) continue;
 
     const visibility = workbook.Workbook?.Sheets?.find((entry) => entry.name === sheetName)?.Hidden ?? 0;
+    const namedCells = options.namedCells === false ? {} : namedSheetCells(workbook, sheetName, options.cells);
     documents.push({
       sheetName,
       rows,
@@ -303,8 +479,17 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
       text: sheetToText(sheetName, rows),
       matrix: boundedMatrix(matrix),
       hidden: visibility !== 0,
+      ...(Object.keys(namedCells).length > 0 ? { namedCells } : {}),
     });
   }
+
+  // The Instructions sheet was skipped above as a document (SKIP_SHEET_NAMES),
+  // but its profile is still read here, and carried by the first document so
+  // it is emitted once per workbook.
+  const instructions = options.instructions === false || documents.length === 0
+    ? null
+    : readWorkbookInstructions(workbook, options.cells);
+  if (instructions) documents[0] = { ...documents[0], instructions };
 
   return documents;
 }

@@ -30,6 +30,14 @@
  */
 import { createLogger } from '../logger.js';
 import { fetchAzureWithRetry } from './azureRetry.js';
+import {
+  agentReasoningEffort,
+  azureCompleteWithTools,
+  type AgentCallOptions,
+  type AgentMessage,
+  type AgentTool,
+  type AgentTurn,
+} from './agentModel.js';
 import { chunkDocument, mergeChunkResults } from './documentChunking.js';
 import { rankSpecsForDocument, elementFromHint } from './specRetrieval.js';
 import { groundValues } from './extractionGrounding.js';
@@ -59,6 +67,19 @@ export interface ExtractedValue {
   sourceFile: string;
   /** Matrix document id whose prompt produced it. */
   sourceDocumentId: string;
+  /**
+   * Where the value was read, when the reader cited it. Only the agent loop
+   * (agentExtraction.ts) sets this today: method 'agent', plus the page or
+   * table cell and the quote the citation check found there.
+   */
+  source?: ExtractedValueSource;
+}
+
+export interface ExtractedValueSource {
+  method: 'agent';
+  page?: number;
+  cellRef?: string;
+  quote: string;
 }
 
 export interface DocumentExtraction {
@@ -79,6 +100,22 @@ export interface DocumentExtraction {
   ungroundedFields?: string[];
   /** Exceptions the expert's prompt asked the model to raise. */
   exceptions: string[];
+  error?: string;
+  /** What the agent-loop pass did on this document, when it ran (agentExtraction.ts). */
+  agent?: AgentPassReport;
+}
+
+export interface AgentPassReport {
+  turns: number;
+  tokens: number;
+  stopReason: string;
+  /** Fields the first pass left empty and the agent filled, with a citation. */
+  filled: string[];
+  /** Fields where the agent disagreed; the first-pass value was kept. */
+  conflicts: string[];
+  /** Submitted values the citation or target check refused. */
+  rejected: number;
+  reasons: string[];
   error?: string;
 }
 
@@ -101,6 +138,12 @@ export interface ExtractionModel {
    * uses completeHard, then complete.
    */
   completeReview?(system: string, user: string): Promise<string>;
+  /**
+   * One tool-calling turn of the agent-loop extractor (agentExtraction.ts):
+   * the whole transcript in, one assistant message (with tool_calls) out.
+   * Optional: absent, the agent pass is skipped and nothing else changes.
+   */
+  completeWithTools?(messages: AgentMessage[], tools: AgentTool[], options?: AgentCallOptions): Promise<AgentTurn>;
 }
 
 // NOTE: the old AI_EXTRACTION_MAX_CHARS truncation is gone — long documents are
@@ -173,6 +216,8 @@ export function createAzureExtractionModel(): ExtractionModel | null {
     complete: callAt(reasoningEffort),
     completeHard: callAt(sweepEffort),
     completeReview: callAt(reviewEffort),
+    // The agent loop's turns (only reached when PARSER_AGENT_EXTRACTION is on).
+    completeWithTools: azureCompleteWithTools(url, apiKey, agentReasoningEffort()),
   };
 }
 
@@ -252,6 +297,83 @@ function toExceptions(value: unknown): string[] {
   if (!value) return [];
   if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
   return [String(value)].filter(Boolean);
+}
+
+/** Keys a reply carries about itself, never a wrapper around the record. */
+const REPLY_META_KEYS = new Set(['exceptions', 'not_this_document']);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+export interface UnwrappedReply {
+  /** The reply with a single wrapped record's fields lifted to the top level. */
+  record: Record<string, unknown>;
+  /** The key the record was lifted out of, when one was. */
+  wrapper?: string;
+  /** A wrapper holding SEVERAL records: reported, never chosen between. */
+  multiple?: { key: string; count: number };
+}
+
+/**
+ * A single-record answer nested one level down.
+ *
+ * A spec that reads one record ("Return JSON per letter: signatory_name, …")
+ * is answered flat ({"signatory_name": …}) or wrapped ({"letters": [{…}],
+ * "expected_parties": …}, {"letter": {…}}). Both say the same thing, but the
+ * wrapped shape left every expected key absent at the top level, so the whole
+ * extraction read as "nothing found" and was dropped.
+ *
+ * A wrapper is a key the spec does NOT expect (an expected array field such as
+ * `shareholder_rows` is the answer, not a wrapper) whose value is one object,
+ * or an array of exactly one object, carrying at least one expected field.
+ * Its fields only FILL gaps: a value stated at the top level always wins. The
+ * record's own `exceptions` join the reply's.
+ *
+ * Nothing is guessed: two candidate wrappers, or one wrapper holding several
+ * records, leave the reply as it was (the second reported in `multiple`).
+ *
+ * And a reply that already names any expected field at the top level — even as
+ * null — IS the record: a nested object beside it is a sub-entity (an auditor,
+ * a signatory), not a wrapper, and must not fill the record's gaps. Without
+ * this, {"entity_name": null, "auditor": {"entity_name": "…"}} read the
+ * auditor's name as the company's.
+ */
+export function unwrapSingleRecord(
+  parsed: Record<string, unknown>,
+  expectedFields: readonly string[],
+): UnwrappedReply {
+  const expected = new Set(expectedFields);
+  if (Object.keys(parsed).some((key) => expected.has(key))) return { record: parsed };
+  const carriesExpected = (candidate: Record<string, unknown>) =>
+    Object.keys(candidate).some((key) => expected.has(key) && !isEmptyValue(candidate[key]));
+
+  const singles: Array<{ key: string; inner: Record<string, unknown> }> = [];
+  let multiple: UnwrappedReply['multiple'];
+  for (const [key, value] of Object.entries(parsed)) {
+    if (expected.has(key) || REPLY_META_KEYS.has(key)) continue;
+    if (isPlainObject(value)) {
+      if (carriesExpected(value)) singles.push({ key, inner: value });
+      continue;
+    }
+    if (!Array.isArray(value)) continue;
+    const records = value.filter(isPlainObject).filter(carriesExpected);
+    if (records.length === 1 && value.length === 1) singles.push({ key, inner: records[0] });
+    else if (records.length > 1) multiple = { key, count: records.length };
+  }
+
+  if (singles.length !== 1 || multiple) return { record: parsed, multiple };
+
+  const [{ key, inner }] = singles;
+  const record: Record<string, unknown> = { ...parsed };
+  delete record[key];
+  for (const [field, value] of Object.entries(inner)) {
+    if (field === 'exceptions') continue;
+    if (isEmptyValue(record[field]) && !isEmptyValue(value)) record[field] = value;
+  }
+  const exceptions = [...toExceptions(parsed.exceptions), ...toExceptions(inner.exceptions)];
+  if (exceptions.length > 0) record.exceptions = exceptions;
+  return { record, wrapper: key };
 }
 
 /**
@@ -349,7 +471,8 @@ async function sweepForMissingFields(
     ].join('\n');
 
     try {
-      return parseModelJson(await completeSweep(SWEEP_SYSTEM_PROMPT, user));
+      const reply = parseModelJson(await completeSweep(SWEEP_SYSTEM_PROMPT, user));
+      return reply ? unwrapSingleRecord(reply, missing).record : null;
     } catch (err) {
       logger.warn('Sweep pass failed — leaving fields missing', {
         document: spec.id, file: filename, chunk: chunk.index, reason: (err as Error).message,
@@ -472,9 +595,26 @@ export async function extractWithSpec(
     };
   }
 
+  // A register spec's rows are hoisted by the GRID PASS below; every other spec
+  // reads one record, which a model may still answer inside a wrapper.
+  const grid = extractionDomain(domain).gridForDocument(spec.id);
+  const wrapperExceptions: string[] = [];
   const parsedChunks = successes
     .map((r) => (r.ok ? parseModelJson(r.reply) : null))
-    .filter((p): p is Record<string, unknown> => p !== null);
+    .filter((p): p is Record<string, unknown> => p !== null)
+    .map((reply) => {
+      if (grid) return reply;
+      const { record, wrapper, multiple } = unwrapSingleRecord(reply, spec.expectedFields);
+      if (wrapper) {
+        logger.info('Read a single record from inside a wrapper', { document: spec.id, file: input.filename, wrapper });
+      }
+      if (multiple) {
+        wrapperExceptions.push(
+          `The reply held ${multiple.count} records under "${multiple.key}"; this document type reads one record, so none was chosen`,
+        );
+      }
+      return record;
+    });
 
   if (parsedChunks.length === 0) {
     return { ...base, error: 'Model reply was not JSON', missingFields: [...spec.expectedFields] };
@@ -502,7 +642,6 @@ export async function extractWithSpec(
   // already uses for `shareholder_rows` / `supplier_rows` — which the calculator
   // mapping expands into N rows. `gridForDocument` returns null for every B-BBEE
   // spec, so nothing below this comment changes for that domain.
-  const grid = extractionDomain(domain).gridForDocument(spec.id);
   const gridRows = grid ? hoistGridRows(parsed, grid) : [];
   // Row columns stop counting as document-level fields once the rows are in
   // hand — except where the same name is legitimately BOTH a row column and a
@@ -634,7 +773,12 @@ export async function extractWithSpec(
     missingFields,
     unexpectedFields,
     ungroundedFields,
-    exceptions: [...toExceptions(parsed.exceptions), ...groundingExceptions, ...checksumExceptions],
+    exceptions: [
+      ...toExceptions(parsed.exceptions),
+      ...wrapperExceptions,
+      ...groundingExceptions,
+      ...checksumExceptions,
+    ],
   };
 
   if (cachingEnabled()) getExtractionCache().set(cacheKey, result);

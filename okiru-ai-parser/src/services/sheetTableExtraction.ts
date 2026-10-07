@@ -38,7 +38,7 @@ const logger = createLogger('SheetTableExtraction');
  * field bridge maps to calculator keys. Kept deliberately small — the columns
  * that actually score, not every column a sheet has.
  */
-const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; columns: string[]; what: string }>> = {
+const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; columns: string[]; what: string; guide?: string }>> = {
   OWNERSHIP: {
     field: 'shareholder_rows',
     columns: ['shareholder_name', 'race', 'gender', 'id_number', 'voting_rights', 'economic_interest', 'number_of_shares'],
@@ -57,15 +57,30 @@ const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; column
     // program_name + training_provider carry the intervention identity the
     // scorecard's Training Program column needs; without slots for them the model
     // dropped a "Programme"/"Course" column entirely.
-    columns: ['learner_name', 'race', 'gender', 'category_code', 'program_name', 'training_provider', 'total_cost'],
+    // id_number + start_date tell one learner's courses apart (and are what the
+    // scorecard's identity and date columns hold); employed is the
+    // Employed/Unemployed learner flag, which reads as Unemployed when blank.
+    columns: [
+      'learner_name', 'race', 'gender', 'id_number', 'category_code', 'program_name', 'training_provider',
+      'total_cost', 'start_date', 'end_date', 'employed',
+    ],
     what: 'each learner / training record. program_name is the course/programme/learnership name; category_code is the A–G learning-programme category; total_cost is the training spend',
+    guide: 'id_number is the learner\'s ID number; start_date is the training (or invoice / learnership start) date and end_date its end date; employed is the learner\'s Employed Yes/No flag',
   },
   ESD: {
     field: 'supplier_rows',
     // supplier_classification is the EME / QSE / Generic size — present in the
-    // client schedule and needed for the EME/QSE procurement lines.
-    columns: ['supplier_name', 'registration_number', 'claimed_spend_ex_vat', 'bee_level', 'supplier_classification', 'certificate_expiry_date'],
+    // client schedule and needed for the EME/QSE procurement lines. The
+    // supplier's own black / black-woman ownership decide the 51% black-owned
+    // and 30% black-woman-owned procurement lines; the Yes/No "51% or more" and
+    // "30% or more" columns are the schedule's own flags for the same facts.
+    columns: [
+      'supplier_name', 'registration_number', 'claimed_spend_ex_vat', 'bee_level', 'supplier_classification', 'certificate_expiry_date',
+      'supplier_black_ownership_percentage', 'supplier_black_women_ownership_percentage', 'is_51_black_owned', 'is_30_black_woman_owned',
+    ],
     what: 'each supplier with the spend against them (a preferential-procurement spend schedule); supplier_classification is the EME / QSE / Generic size; registration_number is the supplier company registration number',
+    guide: 'supplier_black_ownership_percentage is THAT supplier\'s black ownership % and supplier_black_women_ownership_percentage its black woman ownership %; '
+      + 'is_51_black_owned is the "51% or more black owned" Yes/No column and is_30_black_woman_owned the "30% or more black woman owned" Yes/No column',
   },
   SED: {
     field: 'beneficiary_rows',
@@ -144,7 +159,12 @@ function isEsdContributionSheet(filename: string, rows?: Array<Record<string, un
  * a keyword special-case again. New destination = new catalogue entry, nothing
  * else changes.
  */
-interface TableShapeDef { field: string; columns: string[]; what: string; element: VerificationElement }
+/**
+ * `what` describes one row (the shape-choice catalogue reads it); `guide`
+ * explains individual target fields to the column-mapping question only, so a
+ * field note never changes how every sheet's shape is chosen.
+ */
+interface TableShapeDef { field: string; columns: string[]; what: string; guide?: string; element: VerificationElement }
 const SHAPE_CATALOG: Record<string, TableShapeDef> = {
   shareholders: { ...ELEMENT_TABLE.OWNERSHIP!, columns: [...ELEMENT_TABLE.OWNERSHIP!.columns], element: 'OWNERSHIP' },
   employees: { ...ELEMENT_TABLE.MANAGEMENT_CONTROL!, columns: [...ELEMENT_TABLE.MANAGEMENT_CONTROL!.columns], element: 'MANAGEMENT_CONTROL' },
@@ -251,7 +271,7 @@ async function shapeForSheet(
   model: ExtractionModel,
   element: VerificationElement,
   input: { filename: string; rows?: Array<Record<string, unknown>> },
-): Promise<{ field: string; columns: string[]; what: string; element: VerificationElement } | null> {
+): Promise<TableShapeDef | null> {
   const rows = input.rows ?? [];
   if (rows.length > 0) {
     const chosen = await chooseTableShape(model, sheetNameOf(input.filename), element, rows);
@@ -466,6 +486,7 @@ export async function extractSheetTable(
   const user = [
     `SHEET: ${input.filename}`,
     `\nExtract ${shape.what}.`,
+    ...(shape.guide ? [`Field notes: ${shape.guide}.`] : []),
     `\nReturn: {"${shape.field}": [ { ${shape.columns.map((c) => `"${c}": …`).join(', ')} }, … ]}`,
     `\nSHEET CONTENT:\n${content}`,
   ].join('\n');

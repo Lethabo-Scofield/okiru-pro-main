@@ -331,7 +331,9 @@ export async function extractEsgSheetTable(
     return null;
   }
 
-  const table = applyColumnMapping(rows, mapping, shape);
+  // The B-BBEE echo-row skip stays off here: ESG registers keep the reading
+  // they were checked against the ESG answer key with.
+  const table = applyColumnMapping(rows, mapping, shape, { skipEchoRows: false });
   if (table.rows.length === 0) return null;
   for (const field of checked?.perLitreFields ?? []) {
     for (const row of table.rows) {

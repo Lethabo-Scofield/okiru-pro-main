@@ -1,7 +1,7 @@
 /**
  * Generate the verification document matrix from the expert's workbook.
  *
- * SOURCE: docs/testdocs/BBBEE_Verification_Document_Matrix_v3 (1) (1).xlsx —
+ * SOURCE: okiru-ai-parser/ontology/BBBEE_Verification_Document_Matrix_v3.xlsx —
  * Chengetai's per-element document matrix. Each row is one document a verifier
  * asks for, and carries four things we need:
  *   - what the auditor tests           → validation rules / review prompts
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import XLSX from 'xlsx';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SOURCE = join(here, '../../docs/testdocs/BBBEE_Verification_Document_Matrix_v3 (1) (1).xlsx');
+const SOURCE = join(here, '../ontology/BBBEE_Verification_Document_Matrix_v3.xlsx');
 const OUT = join(here, '../schemas/verification_document_matrix.generated.ts');
 
 /** Sheet name → the pillar code the rest of the system uses. */
@@ -60,7 +60,10 @@ function splitTopLevel(text) {
  * "return a reconciliation table:", which is not the schema).
  *
  * Field names are snake_case, so a chunk yielding no snake_case head is prose
- * and ends the list.
+ * and ends the list. So does the first sentence break: "…, line_items (list).
+ * Identify any items excluded, and vice versa." lists two fields, not three —
+ * the comma after the period belongs to the prose, and reading on made "vice",
+ * "not", "state", "flag" and "distributions" into fields.
  */
 function parseExpectedFields(prompt) {
   const match = prompt.match(/\b(?:Return|Extract)\b[^:]{0,80}:\s*([\s\S]+)$/i);
@@ -68,20 +71,35 @@ function parseExpectedFields(prompt) {
 
   const fields = [];
   for (const chunk of splitTopLevel(match[1])) {
+    const unbracketed = chunk.replace(/\([^)]*\)/g, ' ');
+    const sentenceEnds = /\.\s+[A-Z]/.test(unbracketed);
     // Drop trailing prose after the field's own sentence.
-    const head = chunk
+    const head = unbracketed
       .split(/\.\s+[A-Z]/)[0]
-      .replace(/\([^)]*\)/g, ' ')
       // "…, and a holdings_table with columns: …" — the connective is not a field.
       .replace(/^\s*(?:and|plus|also|then)\b\s*/i, '')
       .replace(/^\s*(?:a|an|the)\b\s*/i, '')
+      .replace(/[.\s]+$/, '')
       .trim();
-    const name = head.match(/^([A-Za-z][A-Za-z0-9_]{2,})/);
-    // Accept an all-lowercase word ("exceptions") or anything snake_cased
-    // ("ID_number_last_4"). A capitalised word without an underscore is prose
-    // ("Then compare against...") and ends the list.
-    if (!name || !(/^[a-z][a-z0-9_]*$/.test(name[1]) || name[1].includes('_'))) break;
+    // Names may start with a digit ("25_percent_norm") as long as they are
+    // snake_cased; a bare number is not a name.
+    const name = head.match(/^([A-Za-z0-9][A-Za-z0-9_]{2,})/);
+    // Accept anything snake_cased ("ID_number_last_4"), or an all-lowercase word
+    // that stands alone ("exceptions", "ticker"). A lowercase word with prose
+    // after it ("each clawback classified as…") is a sentence, and a capitalised
+    // word without an underscore is prose ("Then compare against..."); both end
+    // the list.
+    const accepted = name && (
+      (name[1].includes('_') && /[A-Za-z]/.test(name[1]))
+      || (/^[a-z][a-z0-9]*$/.test(name[1]) && head === name[1])
+    );
+    if (!accepted) break;
     fields.push(name[1]);
+    // "a holdings_table with columns: shareholder_name" — the chunk names the
+    // table AND its first column; the remaining columns follow as chunks.
+    const firstColumn = head.match(/:\s*([A-Za-z0-9][A-Za-z0-9_]{2,})$/);
+    if (firstColumn && firstColumn[1].includes('_')) fields.push(firstColumn[1]);
+    if (sentenceEnds) break;
   }
   return [...new Set(fields)];
 }
@@ -155,7 +173,7 @@ const banner = `/**
  * GENERATED FILE — DO NOT EDIT BY HAND.
  * Run \`pnpm gen:matrix\` after changing the source workbook.
  *
- * Source: docs/testdocs/BBBEE_Verification_Document_Matrix_v3 (1) (1).xlsx
+ * Source: okiru-ai-parser/ontology/BBBEE_Verification_Document_Matrix_v3.xlsx
  * Generated: ${documents.length} documents across ${Object.keys(SHEET_TO_ELEMENT).length} elements,
  * ${withFields} of them carrying a parsed extraction schema.
  *

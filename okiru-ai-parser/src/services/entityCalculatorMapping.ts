@@ -68,6 +68,11 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   // ── The measured entity ──
   { field: 'entity_name', calculatorKey: 'ownership.entity_name', elements: ['OWNERSHIP', 'SKILLS_DEVELOPMENT'], coerce: 'text' },
   { field: 'measured_entity_name', calculatorKey: 'ownership.entity_name', coerce: 'text' },
+  // The workbook Instructions sheet's year end (sheet_instructions, already ISO).
+  // The sector and the applicable Codes it states beside it are company-
+  // information facts the create form takes (see FORM_ONLY_FIELDS), not
+  // calculator inputs.
+  { field: 'financial_year_end', calculatorKey: 'entity.financial_year_end', coerce: 'iso_date' },
 
   // ── Ownership ──
   { field: 'black_ownership', calculatorKey: 'ownership.black_ownership', elements: ['OWNERSHIP'], coerce: 'percentage' },
@@ -102,6 +107,12 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   { field: 'certificate_expiry_date', calculatorKey: 'supplier.certificate_expiry', elements: ['ESD'], coerce: 'iso_date' },
   { field: 'expiry_date', calculatorKey: 'supplier.certificate_expiry', elements: ['ESD'], coerce: 'iso_date' },
   { field: 'total_claimed_spend', calculatorKey: 'supplier.spend', elements: ['ESD'], coerce: 'money' },
+  // The SUPPLIER's own ownership, from a procurement schedule's "Black Ownership
+  // (%)" / "Black Woman Ownership (%)" columns. Deliberately distinct from
+  // black_ownership_percentage (the measured entity's own, Ownership only): a
+  // supplier's 36.59% must never land on the client's ownership scorecard.
+  { field: 'supplier_black_ownership_percentage', calculatorKey: 'supplier.black_ownership', elements: ['ESD'], coerce: 'percentage' },
+  { field: 'supplier_black_women_ownership_percentage', calculatorKey: 'supplier.black_women_ownership', elements: ['ESD'], coerce: 'percentage' },
 
   // ── Socio-economic development ──
   { field: 'beneficiary_name', calculatorKey: 'sed.beneficiary_name', elements: ['SED'], coerce: 'text' },
@@ -120,11 +131,11 @@ const FIELD_MAPPINGS: FieldMapping[] = [
   // ── DENOMINATORS. Each one zeroes an entire pillar when absent, however many
   //    rows were extracted: Thandanani held all 23 supplier rows and scored 0
   //    for Procurement because TMPS was missing.
-  { field: 'total_pre_exclusions_tmps', calculatorKey: 'procurement.tmps', elements: ['ESD'], coerce: 'money' },
   // The Finance sheet's own stated post-exclusion TMPS — the labelled figure,
-  // read deterministically. Listed BEFORE nothing in particular: resolution
-  // between this and the model-computed field happens downstream, where the
-  // labelled source is preferred.
+  // read deterministically. `total_pre_exclusions_tmps` (the expert prompt's
+  // name for the total BEFORE exclusions) is deliberately NOT mapped here: it
+  // is not TMPS, and as the denominator it would understate every procurement
+  // percentage. It is reported, never scored — see REPORTED_NOT_SCORED.
   { field: 'total_measured_procurement_spend', calculatorKey: 'procurement.tmps', elements: ['ESD'], coerce: 'money' },
   { field: 'sum_of_leviable_amount', calculatorKey: 'skills.leviable_amount', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
   { field: 'total_entity_value', calculatorKey: 'ownership.company_value', elements: ['OWNERSHIP'], coerce: 'money' },
@@ -145,6 +156,7 @@ const FIELD_MAPPINGS: FieldMapping[] = [
 
   // ── Skills ──
   { field: 'learner_name', calculatorKey: 'skills.learner_name', elements: ['SKILLS_DEVELOPMENT'], coerce: 'text' },
+  { field: 'employed', calculatorKey: 'skills.employment_status', elements: ['SKILLS_DEVELOPMENT'], coerce: 'text' },
   { field: 'total_skills_dev_spend', calculatorKey: 'skills.total_spend', elements: ['SKILLS_DEVELOPMENT'], coerce: 'money' },
 
   // ── Procurement / ESD ──
@@ -229,8 +241,10 @@ function coerce(mapping: FieldMapping, value: unknown): unknown {
       // A ratio written as 0.3215 is the same claim as 32.15%. Percentages here
       // are 0-100, and a genuine 0.32% ownership stake is not a thing anyone
       // scores, so treating sub-1 values as ratios is safe and catches a common
-      // spreadsheet representation.
-      const percentage = parsed > 0 && parsed <= 1 ? parsed * 100 : parsed;
+      // spreadsheet representation. A value that STATES its unit ("0.5%", which
+      // is how a percent-formatted cell arrives) is already a percentage.
+      const statesPercent = typeof value === 'string' && value.includes('%');
+      const percentage = !statesPercent && parsed > 0 && parsed <= 1 ? parsed * 100 : parsed;
       return percentage >= 0 && percentage <= 100 ? Number(percentage.toFixed(4)) : null;
     }
     case 'bee_level':
@@ -367,6 +381,25 @@ function coercionForKey(key: string): FieldMapping['coerce'] {
 }
 
 /**
+ * Read and reported, deliberately never scored — so never offered to the
+ * semantic pass either, which would place them on the nearest-sounding key.
+ * `tmps_inclusions` / `total_pre_exclusions_tmps` are the procurement total
+ * BEFORE exclusions; landing either on `procurement.tmps` would overstate the
+ * denominator by every excluded rand.
+ */
+const REPORTED_NOT_SCORED = new Set(['tmps_inclusions', 'total_pre_exclusions_tmps']);
+
+/**
+ * Company-information facts from the workbook's Instructions sheet
+ * (sheet_instructions) that the CREATE FORM takes, never the calculator: the
+ * sector picks which scorecard applies, and the user confirms it on the form
+ * (DocumentUploadStart prefills it when blank and flags a disagreement). Kept
+ * out of the semantic pass so it never places the sector on the nearest-
+ * sounding numeric key.
+ */
+const FORM_ONLY_FIELDS = new Set(['industry_sector', 'applicable_code']);
+
+/**
  * Declared mapping first, semantic placement for the leftovers.
  *
  * Runs `mapEntitiesToCalculator` unchanged, then offers ONLY the fields it
@@ -383,7 +416,9 @@ export async function mapEntitiesToCalculatorWithSemantics(
 ): Promise<CalculatorMappingResult> {
   const base = mapEntitiesToCalculator(entities, fieldElements);
 
-  const orphans = base.unmapped.filter((u) => u.reason === 'no_mapping').map((u) => u.field);
+  const orphans = base.unmapped
+    .filter((u) => u.reason === 'no_mapping' && !REPORTED_NOT_SCORED.has(u.field) && !FORM_ONLY_FIELDS.has(u.field))
+    .map((u) => u.field);
   if (orphans.length === 0 || !model) return base;
 
   const proposals = await proposeFieldMappings(model, orphans, mappableKeys(), {

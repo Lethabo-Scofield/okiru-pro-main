@@ -20,7 +20,8 @@
  *
  *  2. THE FILE READING. `extractionInputsFromUpload` is shared unchanged —
  *     PDFs, scans, workbooks and decks are read the same way whatever the
- *     evidence is about.
+ *     evidence is about. The one difference is asked for by name (ESG_READ):
+ *     block-layout sheets keep the plain ditto reading.
  *
  *  3. THE EXTRACTION ENGINE. `extractEsgCaseEntities` is a thin wrapper over the
  *     same `extractDocument` the B-BBEE path calls, with `domain: 'esg'`.
@@ -33,7 +34,7 @@
 import { Router, type Request, type Response } from 'express';
 import { createLogger } from '../logger.js';
 import { fail, ok } from '../utils/apiResponse.js';
-import { extractionInputsFromUpload } from '../services/fileExtraction.js';
+import { extractionInputsFromUpload, type UploadReadOptions } from '../services/fileExtraction.js';
 import {
   MAX_UPLOAD_BATCH_BYTES,
   skippedUploadSummary,
@@ -63,6 +64,9 @@ import {
 
 const logger = createLogger('EsgParserRoutes');
 const router = Router();
+
+/** ESG evidence: spreadsheets keep the plain ditto reading (see UploadReadOptions). */
+const ESG_READ: UploadReadOptions = { domain: 'esg' };
 
 /**
  * Whether extraction is gated on payment. Defaults to ON: paid work must never
@@ -242,7 +246,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     const settled = await Promise.all(
       files.map(async (file) => {
         try {
-          return { ok: true as const, inputs: await extractionInputsFromUpload(file) };
+          return { ok: true as const, inputs: await extractionInputsFromUpload(file, ESG_READ) };
         } catch (err) {
           logger.warn('File skipped — could not be read', { filename: file.originalname, error: (err as Error).message });
           return { ok: false as const, fileName: file.originalname, message: (err as Error).message };
@@ -373,7 +377,7 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     const settled = await concurrentMap(files, fileLanes, async (file, i) => {
       send('doc-start', { index: i, fileName: file.originalname });
       try {
-        const inputs = await extractionInputsFromUpload(file);
+        const inputs = await extractionInputsFromUpload(file, ESG_READ);
         send('doc-done', { index: i, fileName: file.originalname });
         return inputs;
       } catch (err) {

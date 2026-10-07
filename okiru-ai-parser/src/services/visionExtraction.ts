@@ -117,6 +117,30 @@ async function pdfPagesToBase64(buffer: Buffer, maxPages: number): Promise<strin
   return images;
 }
 
+/**
+ * One page of a PDF as a base64 PNG (no data-URI prefix), with the same
+ * renderer and settings as the transcription path. Null past the last page or
+ * when the page cannot be rendered. Used by the agent loop's get_page_image
+ * tool, which is offered for scanned documents only.
+ */
+export async function renderPdfPageBase64(buffer: Buffer, page: number): Promise<string | null> {
+  if (!Number.isInteger(page) || page < 1) return null;
+  try {
+    const { fromBuffer } = await import('pdf2pic');
+    const convert = fromBuffer(buffer, {
+      density: RENDER_DPI,
+      format: 'png',
+      width: RENDER_WIDTH,
+      preserveAspectRatio: true,
+    });
+    const rendered = await convert(page, { responseType: 'base64' });
+    return normaliseBase64((rendered as { base64?: string }).base64);
+  } catch (err) {
+    logger.warn('Could not render a PDF page', { page, reason: (err as Error).message });
+    return null;
+  }
+}
+
 /** PNG magic bytes, base64-encoded — every PNG's payload starts with this. */
 const PNG_BASE64_PREFIX = 'iVBORw0KGgo';
 

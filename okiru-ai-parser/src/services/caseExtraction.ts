@@ -10,6 +10,7 @@
  */
 import { createLogger } from '../logger.js';
 import type { RawExtractionInput } from '../../schemas/document_types.js';
+import { isTableGrid, tableGridsToRecords } from '../../schemas/table_grid.js';
 import {
   createAzureExtractionModel,
   extractDocument,
@@ -24,6 +25,7 @@ import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
 import { extractLedgerTable } from './sheetLedgerExtraction.js';
 import { extractSheetFinancials, isFinancialsSheet } from './sheetFinancialsExtraction.js';
+import { instructionsExtraction, structuredInstructions } from './sheetInstructionsExtraction.js';
 import { elementFromHint } from './specRetrieval.js';
 import {
   fieldElementIndex,
@@ -34,6 +36,7 @@ import {
 } from './entityCalculatorMapping.js';
 import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
 import { reviewCase } from './caseReview.js';
+import { agentCasePass, agentPassForDocument, type AgentCaseContext } from './agentExtraction.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -43,18 +46,39 @@ function auditorValidationEnabled(): boolean {
 }
 
 /**
- * The workbook split stores each sheet's parsed rows as
- * `tables: [{ sheetName, rows }]`. `tables` is loosely typed at the schema
- * boundary, so pull the rows out defensively — anything unshaped returns
- * undefined and the table extractor falls back to its model read.
+ * Header-keyed rows for the deterministic table readers (ledger, financials,
+ * sheet tables). Two producers:
+ *
+ *  - The workbook split stores each sheet's parsed rows as
+ *    `tables: [{ sheetName, rows }]`, rows already header-keyed.
+ *  - A scan read by Document Intelligence stores cell grids
+ *    (schemas/table_grid.ts). Their header is the row(s) the reader tagged
+ *    `columnHeader`, and a table split across pages is joined back together
+ *    before it is read, so a three-page scanned ledger is summed in full.
+ *
+ * `tables` is loosely typed at the schema boundary, so anything unshaped
+ * returns undefined and the extractor falls back to its model read.
  */
-function structuredRows(tables: unknown[] | undefined): Array<Record<string, unknown>> | undefined {
+export function structuredRows(tables: unknown[] | undefined): Array<Record<string, unknown>> | undefined {
   const first = tables?.[0];
   if (!first || typeof first !== 'object') return undefined;
+
+  const grids = (tables ?? []).filter(isTableGrid);
+  if (grids.length > 0) return tableGridsToRecords(grids)?.records;
+
   const rows = (first as { rows?: unknown }).rows;
   if (!Array.isArray(rows) || rows.length === 0) return undefined;
   if (!rows.every((row) => row !== null && typeof row === 'object' && !Array.isArray(row))) return undefined;
   return rows as Array<Record<string, unknown>>;
+}
+
+/** The sheet's named single cells (`TMPS_Inc` → value), when the split recorded any. */
+function structuredNamedCells(tables: unknown[] | undefined): Record<string, unknown> | undefined {
+  const first = tables?.[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const named = (first as { namedCells?: unknown }).namedCells;
+  if (!named || typeof named !== 'object' || Array.isArray(named)) return undefined;
+  return named as Record<string, unknown>;
 }
 
 /**
@@ -138,14 +162,25 @@ export interface ResolveProgress {
   fileName?: string;
 }
 
+export interface CaseExtractionOptions {
+  /**
+   * The agent-loop pass (agentExtraction.ts). Runs only when this is given AND
+   * PARSER_AGENT_EXTRACTION (or `agent.mode`) is hard/all — the streaming case
+   * route passes it; the plain JSON route does not (it times out at the proxy).
+   */
+  agent?: AgentCaseContext;
+}
+
 export async function extractCaseEntities(
   inputs: RawExtractionInput[],
   model: ExtractionModel | null = getExtractionModel(),
   onProgress?: (p: ResolveProgress) => void,
+  options: CaseExtractionOptions = {},
 ): Promise<CaseExtractionResult | null> {
   if (!model || inputs.length === 0) return null;
   let done = 0;
   const total = inputs.length;
+  const agentPass = agentCasePass(model, options.agent);
 
   // Documents are read in PARALLEL, bounded. Each already fans its chunks out
   // internally; this fans the documents out too, so a 26-file pack is not as
@@ -218,13 +253,28 @@ export async function extractCaseEntities(
           // Parsed rows let the labelled TMPS be read deterministically — the
           // sheet's own stated total, never a computed sum.
           rows: structuredRows(input.tables),
+          // The workbook's defined names on this sheet: the TMPS inclusions
+          // total is captioned only by its name (TMPS_Inc), not on its row.
+          namedCells: structuredNamedCells(input.tables),
         });
       })(),
     ]);
 
-    const results = [...specResults];
+    let results = [...specResults];
     if (tableResult) results.push(tableResult);
     if (financialsResult) results.push(financialsResult);
+    // The workbook's Instructions profile (sector, year end, measured entity,
+    // Codes), carried by its first sheet: read off the cells, never a model.
+    const instructions = structuredInstructions(input.tables);
+    if (instructions) {
+      const workbookFile = typeof input.metadata?.parent_file === 'string' ? input.metadata.parent_file : input.filename;
+      const profile = instructionsExtraction(instructions, workbookFile);
+      if (profile) results.push(profile);
+    }
+    // Agent loop (off by default): a cited second read of a hard document.
+    // It only fills gaps; disagreements become exceptions; a failure returns
+    // the first-pass results untouched.
+    if (agentPass) results = await agentPassForDocument(model, input, results, agentPass);
     // Sub-progress: the resolve phase is the multi-minute, rate-limited part of
     // a paid run. Reporting each document as its AI read lands keeps the user on
     // the page (and makes the "reconciling your company profile" step visible).
@@ -323,8 +373,8 @@ export async function extractCaseEntities(
   // ── PLAUSIBILITY ────────────────────────────────────────────────────────
   // Grounding checks each value against its own document; nothing above checks
   // the values against EACH OTHER. That is where Thandanani's tmps=23 lived —
-  // a row count in a Rand field, grounded perfectly, wrong by four orders of
-  // magnitude. The invariants are arithmetic and always on; when a model is
+  // a `#REF!` cell's error code in a Rand field (sheetCellValues.ts), grounded
+  // perfectly, wrong by five orders of magnitude. The invariants are arithmetic and always on; when a model is
   // present it adds what the figure probably is, read from the source excerpt.
   // Findings attach to the document that supplied the figure, so the upload
   // reveal shows them with provenance — and never edit the payload.

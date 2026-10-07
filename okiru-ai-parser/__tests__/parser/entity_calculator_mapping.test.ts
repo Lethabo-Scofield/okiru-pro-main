@@ -197,7 +197,7 @@ describe('the safety rules', () => {
 
   it('maps the denominators, whose absence zeroes a whole pillar', () => {
     const result = mapFrom([
-      extraction('ESD', 'procurement.xlsx', [['total_pre_exclusions_tmps', 'R 1 030 806.68']]),
+      extraction('ESD', 'procurement.xlsx', [['total_measured_procurement_spend', 'R 1 030 806.68']]),
       extraction('SKILLS_DEVELOPMENT', 'emp201.pdf', [['sum_of_leviable_amount', 'R 4 249 500']]),
     ]);
 

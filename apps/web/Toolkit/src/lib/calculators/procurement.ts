@@ -115,8 +115,10 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
 
   // ── DENOMINATOR PLAUSIBILITY ──────────────────────────────────────────
   // TMPS is the denominator for every line in this pillar, and a misplaced
-  // one hands the pillar over whole: Thandanani arrived with tmps = 23 — the
-  // ROW COUNT of an earlier supplier schedule, not a Rand amount — so
+  // one hands the pillar over whole: a real client pack arrived with tmps = 23 — not
+  // a Rand amount, and not the supplier schedule's row count as first
+  // thought, but SheetJS's error code for a #REF! cell read off the Finance
+  // sheet (the parser now reports such cells) — so
   // spend / 23 ran 137,000x over target and every line clamped to full
   // marks. On an elective scorecard the inflated pillar is then exactly the
   // one that gets elected.
@@ -126,7 +128,7 @@ export function calculateProcurementScore(data: ProcurementData, config?: Calcul
   // rows — loans, levies — sit in schedules but not in the measured total;
   // Lake Trading's genuine workbook runs 1.6% over), so the sum is NOT
   // compared. A 2x margin keeps borderline-legitimate cases out: a real
-  // misplacement is orders of magnitude off (Thandanani: 18,000x). Per the
+  // misplacement is orders of magnitude off (on a real pack: 18,000x). Per the
   // scoring rule — score what is actually there, nothing for what is not —
   // a failing figure is treated as MISSING, loudly, not as a tiny
   // denominator that mints points.

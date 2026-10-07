@@ -5,11 +5,14 @@
  * Extraction verifies each value against its own document (grounding,
  * checksums). What nothing verified until now is the relationships BETWEEN
  * values, and that is where the expensive failures live: Thandanani arrived
- * with `procurement.tmps = 23` — the ROW COUNT of an earlier supplier
- * schedule, not a Rand amount — while the supplier rows beside it summed to
- * R3.17m. Every downstream ratio divided by 23, clamped to full marks, and
- * handed the whole Preferential Procurement pillar over. A person looking at
- * the same page would have said "23 is not a procurement total" in a second.
+ * with `procurement.tmps = 23` while the supplier rows beside it summed to
+ * R3.17m. The 23 was not a Rand amount (nor, as first thought, the schedule's
+ * row count): it was SheetJS's error code for `#REF!`, read off a Finance cell
+ * whose formula pointed at a deleted cell (sheetCellValues.ts now refuses to
+ * pass an error code on as a value). Every downstream ratio divided by 23,
+ * clamped to full marks, and handed the whole Preferential Procurement pillar
+ * over. A person looking at the same page would have said "23 is not a
+ * procurement total" in a second.
  *
  * That check is arithmetic, so the INVARIANTS here are code, not model calls:
  * a total can never be smaller than one of its own parts. What the model adds

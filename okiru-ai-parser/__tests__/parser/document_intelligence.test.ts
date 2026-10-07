@@ -5,8 +5,15 @@
  * failed call, a timeout, or a malformed response all degrade to null so the
  * caller keeps whatever the local text layer produced.
  */
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { analyseWithDocumentIntelligence, documentIntelligenceConfigured } from '../../src/services/documentIntelligence.js';
+import {
+  analyseWithDocumentIntelligence,
+  documentIntelligenceCacheEnabled,
+  documentIntelligenceConfigured,
+} from '../../src/services/documentIntelligence.js';
 
 const ENDPOINT = 'https://example-di.cognitiveservices.azure.com';
 const originalFetch = globalThis.fetch;
@@ -36,6 +43,11 @@ function mockAnalyse(pollBody: unknown, opts: { analyseOk?: boolean; pollOk?: bo
     return { ok: pollOk, status: pollOk ? 200 : 500, json: async () => pollBody } as never;
   }) as never;
 }
+
+// Each analyse waits out one real 2 s poll interval (shouldAdvanceTime moves the
+// fake clock in step with the real one), so under a loaded full-suite run a
+// test can pass the 5 s default for no fault of its own.
+vi.setConfig({ testTimeout: 20_000 });
 
 beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); configure(); });
 afterEach(() => { vi.useRealTimers(); globalThis.fetch = originalFetch; unconfigure(); });
@@ -78,7 +90,8 @@ describe('reading a scanned document', () => {
     expect(result!.text).toContain('Thandanani');
     expect(result!.pageCount).toBe(2);
     // The grid must survive — a share register IS a table.
-    expect(result!.tables[0].cells).toEqual([['Shareholder', 'Shares'], ['T Nkosi', '100']]);
+    expect(result!.tables[0].rows).toEqual([['Shareholder', 'Shares'], ['T Nkosi', '100']]);
+    expect(result!.tables[0].cells).toHaveLength(4);
   });
 
   it('appends table markdown when the content has no grid of its own', async () => {
@@ -103,6 +116,52 @@ describe('reading a scanned document', () => {
     const result = await analyseWithDocumentIntelligence(Buffer.from('scan'), 'application/pdf', 'r.pdf');
     expect(result!.markdown).toContain('| Name | Shares |');
     expect(result!.markdown).toContain('| T Nkosi | 100 |');
+  });
+});
+
+describe('the evaluation raw-response cache (PARSER_DI_CACHE_DIR)', () => {
+  const succeeded = {
+    status: 'succeeded',
+    analyzeResult: {
+      content: 'Share Register',
+      pages: [{}],
+      tables: [{ rowCount: 1, columnCount: 2, cells: [{ rowIndex: 0, columnIndex: 0, content: 'Name' }, { rowIndex: 0, columnIndex: 1, content: 'Shares' }] }],
+    },
+  };
+  let dir: string;
+  beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'di-cache-')); });
+  afterEach(() => { delete process.env.PARSER_DI_CACHE_DIR; rmSync(dir, { recursive: true, force: true }); });
+
+  it('writes nothing and changes nothing when the variable is unset', async () => {
+    mockAnalyse(succeeded);
+    const result = await analyseWithDocumentIntelligence(Buffer.from('scan'), 'application/pdf', 'r.pdf');
+    expect(result!.text.startsWith('Share Register')).toBe(true);
+    expect(documentIntelligenceCacheEnabled()).toBe(false);
+    expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it('keeps the raw analyzeResult keyed by content and model, then serves it without credentials', async () => {
+    process.env.PARSER_DI_CACHE_DIR = dir;
+    mockAnalyse(succeeded);
+    const live = await analyseWithDocumentIntelligence(Buffer.from('scan'), 'application/pdf', 'r.pdf');
+
+    const [file] = readdirSync(dir);
+    expect(file).toMatch(/^[0-9a-f]{64}\.prebuilt-layout\.[\d-]+\.json$/);
+    // The RAW answer is kept, so a later change to how text is built from it applies.
+    expect(JSON.parse(readFileSync(join(dir, file), 'utf8')).analyzeResult).toEqual(succeeded.analyzeResult);
+
+    unconfigure();
+    const fetchSpy = vi.fn(async () => { throw new Error('must not call the service'); });
+    globalThis.fetch = fetchSpy as never;
+    const replayed = await analyseWithDocumentIntelligence(Buffer.from('scan'), 'application/pdf', 'r.pdf');
+    expect(replayed).toEqual(live);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('a different file misses the cache and, unconfigured, reads nothing', async () => {
+    process.env.PARSER_DI_CACHE_DIR = dir;
+    unconfigure();
+    expect(await analyseWithDocumentIntelligence(Buffer.from('other'), 'application/pdf', 'o.pdf')).toBeNull();
   });
 });
 

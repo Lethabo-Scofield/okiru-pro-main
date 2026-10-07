@@ -19,7 +19,7 @@
  *    every document as missing — noise, not signal. They describe the shape the
  *    AI extraction path fills, and become enforceable when it does.
  */
-import type { DocumentKnowledge, ExtractionFieldNode } from './ontology_models.js';
+import type { DocumentKnowledge, ExtractionFieldNode, FieldKnowledge } from './ontology_models.js';
 import type { ParserDataType } from '../schemas/document_types.js';
 import {
   VERIFICATION_DOCUMENT_MATRIX,
@@ -69,6 +69,56 @@ function normalise(value: string): string {
 }
 
 /**
+ * Fields a matrix document borrows from a canonical type, pattern and all.
+ *
+ * The canonical "Ownership Confirmation" lists share certificates and share
+ * registers among its aliases, and while those documents classified under it,
+ * its entity_name field read the company name ("Company Name: …"). Classifying
+ * them by content moved them to the matrix's own share-certificate and register
+ * types, whose fields describe the HOLDING (certificate number, holder, class,
+ * shares) — so the company name stopped being read. The ownership-record types
+ * borrow that one field back.
+ *
+ * Borrowed as declared-not-required (rule 2 above): a certificate that does not
+ * print the company name is not failed for it. And borrowed as NOT identifying:
+ * every ownership record prints a company name, so it is no evidence of which
+ * record this is, and classification scores stay exactly what they were.
+ */
+const BORROWED_FIELDS: Array<{ documents: RegExp; from: string; fields: string[] }> = [
+  {
+    documents: /\b(share|security|securities) (certificate|register)s?\b/,
+    from: 'Ownership Confirmation',
+    fields: ['entity_name'],
+  },
+];
+
+export function borrowedCanonicalFields(
+  documentName: string,
+  canonical: DocumentKnowledge[],
+  alreadyDeclared: Iterable<string> = [],
+): FieldKnowledge[] {
+  const name = normalise(documentName);
+  const declared = new Set(alreadyDeclared);
+  const borrowed: FieldKnowledge[] = [];
+  for (const rule of BORROWED_FIELDS) {
+    if (!rule.documents.test(name)) continue;
+    const source = canonical.find((known) => known.document.name === rule.from);
+    if (!source || normalise(source.document.name) === name) continue;
+    for (const fieldName of rule.fields) {
+      const field = source.fields.find((f) => f.field.name === fieldName);
+      if (!field || declared.has(fieldName)) continue;
+      declared.add(fieldName);
+      borrowed.push({
+        ...field,
+        field: { ...field.field, required: false, identifying: false },
+        rules: field.rules.filter((r) => r.rule_type !== 'required'),
+      });
+    }
+  }
+  return borrowed;
+}
+
+/**
  * Build ontology entries for every matrix document that does not collide with a
  * canonical type.
  *
@@ -106,12 +156,15 @@ export function matrixDocumentKnowledge(canonical: DocumentKnowledge[]): Documen
         pillar_code: ELEMENT_TO_PILLAR[doc.element],
         graph_version: GRAPH_VERSION,
       },
-      fields: toFields(doc).map((field) => ({
-        field,
-        rules: [],
-        patterns: [],
-        calculator_requirements: [],
-      })),
+      fields: [
+        ...toFields(doc).map((field) => ({
+          field,
+          rules: [],
+          patterns: [],
+          calculator_requirements: [],
+        })),
+        ...borrowedCanonicalFields(doc.name, canonical, doc.expectedFields),
+      ],
     });
   }
   return built;

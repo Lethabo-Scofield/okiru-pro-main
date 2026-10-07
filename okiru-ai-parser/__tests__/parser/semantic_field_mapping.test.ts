@@ -112,6 +112,25 @@ describe('mapEntitiesToCalculatorWithSemantics', () => {
     expect(result.unmapped.find((u) => u.field === 'weird_field')?.reason).toBe('uncoercible');
   });
 
+  it('never places a PRE-exclusions procurement total on TMPS, declared or by meaning', async () => {
+    // TMPS is what is left AFTER exclusions; the total before them overstates
+    // the denominator by every excluded rand. Even a model that proposes it
+    // for procurement.tmps must not get it placed, and it is never asked.
+    const complete = vi.fn().mockResolvedValue(
+      '{"total_pre_exclusions_tmps":"procurement.tmps","tmps_inclusions":"procurement.tmps"}',
+    );
+    const result = await mapEntitiesToCalculatorWithSemantics(
+      entities({ total_pre_exclusions_tmps: 1234567.89, tmps_inclusions: 1234567.89 }),
+      new Map(),
+      { name: 'test', complete },
+    );
+    expect(result.payload['procurement.tmps']).toBeUndefined();
+    expect(complete).not.toHaveBeenCalled();
+    expect(result.unmapped.map((u) => u.field)).toEqual(
+      expect.arrayContaining(['total_pre_exclusions_tmps', 'tmps_inclusions']),
+    );
+  });
+
   it('never asks about fields a declared mapping already placed', async () => {
     const complete = vi.fn().mockResolvedValue('{}');
     const model: ExtractionModel = { name: 'test', complete };

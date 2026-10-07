@@ -2,7 +2,7 @@
  * The last link: parser field names → workbook columns.
  *
  * The parser speaks the B-BBEE expert's vocabulary (`holder_name`,
- * `total_pre_exclusions_tmps`, `declared_race`) because that is what the
+ * `total_measured_procurement_spend`, `declared_race`) because that is what the
  * 109-document matrix asks for. The workbook speaks its own column keys
  * (`shareholderName`, `tmps`, `race`). Neither should change to suit the other:
  * the matrix belongs to the expert and the columns belong to the workbook.
@@ -110,6 +110,12 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   amount_ex_vat: { section: "procurement", column: "spend" },
   certificate_expiry_date: { section: "procurement", column: "certificateExpiryDate" },
   expiry_date: { section: "procurement", column: "certificateExpiryDate" },
+  // The SUPPLIER's own black / black-woman ownership, from the schedule's "Black
+  // Ownership (%)" / "Black Woman Ownership (%)" columns. They decide the 51%
+  // black-owned and 30% black-woman-owned procurement lines. Named apart from
+  // black_ownership_percentage, which is the measured entity's own (Ownership).
+  supplier_black_ownership_percentage: { section: "procurement", column: "currentBlackOwnership" },
+  supplier_black_women_ownership_percentage: { section: "procurement", column: "currentBlackFemaleOwnership" },
 
   // ── Enterprise & supplier development ──
   // contribution_value / beneficiary_name are element-scoped (ESD vs SED share
@@ -132,7 +138,10 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   black_beneficiary_percentage_concluded: { section: "sed", column: "percentBenefitingBlack" },
 
   // ── Entity-level META fields (not grid rows) ──
-  total_pre_exclusions_tmps: { section: "financial-information", column: "tmps", meta: true },
+  // `total_pre_exclusions_tmps` / `tmps_inclusions` are deliberately ABSENT:
+  // a procurement total BEFORE exclusions is not TMPS, and as the denominator
+  // it understates every procurement percentage by every excluded rand. They
+  // are reported as unmapped, never placed on the TMPS cell.
   // The Finance sheet's own labelled post-exclusion TMPS (deterministic read).
   total_measured_procurement_spend: { section: "financial-information", column: "tmps", meta: true },
   sum_of_leviable_amount: { section: "financial-information", column: "payroll", meta: true },
@@ -234,6 +243,18 @@ const ROW_FIELD_BY_ELEMENT: Record<string, { column: string; defaultSection: Wor
   id_number: { column: "idNumber", defaultSection: "management-control" },
 };
 
+/**
+ * Training-record fields whose NAMES are too generic to map on their own: a
+ * loan agreement has a start_date, an employment contract an end_date. Only a
+ * Skills Development document's start_date is a training date — anywhere else
+ * it would create a phantom training row — so these map for that element only.
+ */
+const SKILLS_ONLY: Record<string, FieldTarget> = {
+  start_date: { section: "skills-development", column: "startDate" },
+  end_date: { section: "skills-development", column: "endDate" },
+  employed: { section: "skills-development", column: "employed" },
+};
+
 /** Where does this parser field belong? Null when we were never taught. */
 export function targetForField(field: string, element?: string): FieldTarget | null {
   const scoped = ELEMENT_SCOPED[field];
@@ -242,6 +263,9 @@ export function targetForField(field: string, element?: string): FieldTarget | n
     // Ambiguous without an element — better unmapped than in the wrong pillar.
     return byElement ?? null;
   }
+
+  const skillsOnly = SKILLS_ONLY[field];
+  if (skillsOnly) return element === "SKILLS_DEVELOPMENT" ? skillsOnly : null;
 
   // Element-routed demographic fields: same column, section chosen by the
   // document's element (defaulting to Management Control when none is given).
@@ -252,6 +276,54 @@ export function targetForField(field: string, element?: string): FieldTarget | n
   }
 
   return FIELD_TARGETS[field] ?? null;
+}
+
+const DECLARED_YES = /^(yes|y|true|x|✓)$/i;
+
+/**
+ * A supplier schedule's own "51% or more black owned" / "30% or more black
+ * woman owned" Yes/No columns, read as the floor they state.
+ *
+ * The workbook has no column for the flags themselves; it holds the supplier's
+ * ownership PERCENTAGES, and scoring only ever asks whether those clear 51% and
+ * 30%. So when a row states its percentage, the percentage stands and the flag
+ * adds nothing. When it states only "Yes", the evidence establishes "at least
+ * 51%" (or 30%) and nothing more — so the percentage becomes exactly that
+ * floor: it clears the line the flag vouches for and no higher one (a 30%
+ * black-woman flag does not reach the 35% or 51% lines). "No" or blank states
+ * nothing and fills nothing. The flags are consumed either way, so they are
+ * never reported as fields nobody mapped.
+ *
+ * A percentage filled this way is NOT a figure the supplier stated, so `derived`
+ * says which fields came from which flag; the caller carries that onto the row
+ * (parserToWorkbook's DERIVED_FROM_FLAG_KEY), where it is shown, and where a
+ * stated percentage from another document replaces it.
+ */
+export function declaredOwnershipFlags(entry: Record<string, unknown>): {
+  entry: Record<string, unknown>;
+  /** Parser field → the flag it was derived from, for fields this filled. */
+  derived: Record<string, string>;
+} {
+  const derived: Record<string, string> = {};
+  if (!("is_51_black_owned" in entry) && !("is_30_black_woman_owned" in entry)) return { entry, derived };
+  const out: Record<string, unknown> = { ...entry };
+  const blankValue = (v: unknown) => v === undefined || v === null || String(v).trim() === "";
+  if (blankValue(out.supplier_black_ownership_percentage) && DECLARED_YES.test(String(out.is_51_black_owned ?? "").trim())) {
+    out.supplier_black_ownership_percentage = 51;
+    derived.supplier_black_ownership_percentage = '"51% or more black owned: Yes"';
+  }
+  if (blankValue(out.supplier_black_women_ownership_percentage) && DECLARED_YES.test(String(out.is_30_black_woman_owned ?? "").trim())) {
+    out.supplier_black_women_ownership_percentage = 30;
+    derived.supplier_black_women_ownership_percentage = '"30% or more black woman owned: Yes"';
+  }
+  delete out.is_51_black_owned;
+  delete out.is_30_black_woman_owned;
+  return { entry: out, derived };
+}
+
+/** `declaredOwnershipFlags` without the provenance: the entry alone. */
+export function applyDeclaredOwnershipFlags(entry: Record<string, unknown>): Record<string, unknown> {
+  return declaredOwnershipFlags(entry).entry;
 }
 
 export interface RequiredGap {

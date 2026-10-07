@@ -30,6 +30,7 @@ import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_d
 import { ParserService } from '../../parser/parser_service.js';
 import { documentsByElement } from '../../schemas/verification_document_matrix.js';
 import { extractCaseEntities } from '../services/caseExtraction.js';
+import { pageImageProviderFor } from '../services/agentExtraction.js';
 // The reader behind the lexical classifier: settles low-confidence / too-close
 // document types by purpose and layout. Undefined without a model, in which
 // case the lexical decision stands and extraction still runs under it.
@@ -499,6 +500,11 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
   // Heartbeat so intermediaries don't drop a long-idle connection during the
   // cross-case AI step.
   const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
+  // Aborted when the connection closes before the stream finished.
+  const clientGone = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) clientGone.abort();
+  });
 
   const repository = await getParserRepository();
   try {
@@ -545,8 +551,18 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     const result = await service.resolveCase(rawInputs, caseId);
     // Sub-progress through the slow, rate-limited AI resolve phase, so the wait
     // after payment shows movement instead of a silent multi-minute gap.
+    // The agent-loop pass is reachable from THIS route only (it can run for
+    // minutes; the plain JSON route already times out at the proxy). Off
+    // unless PARSER_AGENT_EXTRACTION is hard|all.
     const entities = await extractCaseEntities(rawInputs, undefined, (p) =>
-      send('resolve-progress', p));
+      send('resolve-progress', p), {
+      agent: {
+        deterministic: result.documents_detected,
+        pageImages: pageImageProviderFor(files),
+        // A client that disconnects stops its agent runs (and their retries).
+        signal: clientGone.signal,
+      },
+    });
 
     send('result', { ...result, ai_entities: entities });
     send('complete', {});

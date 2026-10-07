@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "gen:matrix": "node scripts/generate-document-matrix.mjs",
     "eval:extraction": "vitest run __tests__/eval/extractionEval.test.ts",
-    "eval:extraction:update": "node __tests__/eval/updateBaseline.mjs"
+    "eval:extraction:update": "node __tests__/eval/updateBaseline.mjs",
+    "eval:pack": "vitest run __tests__/eval/packEval.test.ts"
   },
   "dependencies": {
     "@azure/storage-blob": "^12.31.0",

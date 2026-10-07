@@ -48,6 +48,109 @@ const PEOPLE_SECTIONS: Record<string, string[]> = {
   "skills-development": ["learnerName"],
 };
 
+/**
+ * People sections whose rows are EVENTS, not the person: a training row is one
+ * learner on one course. The person's identity (race, gender, ID) is still
+ * banked and stamped across their rows, but two rows are the same row only when
+ * the course matches too, their dates do not disagree, and nothing they state
+ * conflicts. Merging on the learner alone folded a 28-entry training register
+ * into 11 rows and back-filled one course's cost onto another course's row.
+ *
+ * "Matches" and "disagrees" are about what a cell SAYS, not how it is written:
+ * the same entry reaches us from a register and from an invoice as "2850" and
+ * "R2,850.00", "First Aid Training" and "First-Aid training", with a date and
+ * without one. Compared as raw strings those were two entries, and the
+ * training spend was counted twice.
+ */
+const EVENT_KEY_COLUMNS: Record<string, { course: string }> = {
+  // The date is checked with every other column the rows state (rowsConflict):
+  // two filled dates that differ are two entries; a blank one disagrees with nothing.
+  "skills-development": { course: "programName" },
+};
+
+/** Case, spacing and punctuation aside: "First-Aid training" → "firstaidtraining". */
+const squash = (v: unknown): string => str(v).toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+/** At most one inserted, deleted or changed character apart. */
+function withinOneEdit(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length > b.length) i++;
+    else if (b.length > a.length) j++;
+    else { i++; j++; }
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+/**
+ * The same name, as people write it: equal once squashed, or — for a name long
+ * enough that one letter cannot make it a different course — one slip apart
+ * ("First Aid Trainng"). Short names must match exactly.
+ */
+function sameText(a: unknown, b: unknown): boolean {
+  // Numbers name different things exactly: "First Aid Level 1" and "Level 2",
+  // "Module 1.2" and "Module 12" are different courses, so the slip allowed
+  // below is for letters only. (Squashing alone folds "1.2" into "12".)
+  if (numbersOf(a) !== numbersOf(b)) return false;
+  const x = squash(a);
+  const y = squash(b);
+  return x === y || (Math.min(x.length, y.length) >= 10 && withinOneEdit(x, y));
+}
+
+/** The numbers a name states, in order, separators kept: "NQF 4, Module 1.2" → "4|1.2". */
+const numbersOf = (v: unknown): string => (str(v).match(/\d+(?:[.,]\d+)*/g) ?? []).join("|");
+
+/** "R2,850.00", "2 850", 2850 → 2850; null for anything that is not a plain amount. */
+function amountOf(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const t = str(v).replace(/^R\s*/i, "").replace(/[\s,]/g, "");
+  return /^-?\d+(\.\d+)?$/.test(t) ? Number(t) : null;
+}
+
+/** A date cell, however written (ISO, dd/mm/yyyy, an Excel serial) → ISO; else null. */
+function dateOf(v: unknown): string | null {
+  const parsed = parseWorkbookDate(v);
+  if (parsed) return parsed.toISOString().slice(0, 10);
+  return excelSerialToIso(v);
+}
+
+/** Do two filled cells of one column state the same thing, however each is written? */
+function sameCell(type: string | undefined, a: unknown, b: unknown): boolean {
+  if (type === "date") {
+    const x = dateOf(a);
+    const y = dateOf(b);
+    if (x && y) return x === y;
+  }
+  const x = amountOf(a);
+  const y = amountOf(b);
+  if (x !== null && y !== null) return Math.abs(x - y) < 0.005;
+  return sameText(a, b);
+}
+
+/** Do two rows state a different value for any column they both fill? */
+function rowsConflict(a: WorkbookRow, b: WorkbookRow, types: Record<string, string>): boolean {
+  for (const [col, val] of Object.entries(b)) {
+    if (col.startsWith("_")) continue;
+    if (blank(val) || blank(a[col])) continue;
+    if (!sameCell(types[col], a[col], val)) return true;
+  }
+  return false;
+}
+
+/** Are these two rows the same event: same course, dates that do not disagree, nothing in conflict? */
+function sameEvent(a: WorkbookRow, b: WorkbookRow, keys: { course: string }, types: Record<string, string>): boolean {
+  const courseA = a[keys.course];
+  const courseB = b[keys.course];
+  if (blank(courseA) !== blank(courseB)) return false;
+  if (!blank(courseA) && !sameText(courseA, courseB)) return false;
+  return !rowsConflict(a, b, types);
+}
+
 const CONTRIBUTION_SECTIONS = ["sed", "esd"] as const;
 
 /**
@@ -242,15 +345,25 @@ function reconcileIdentity(sections: WorkbookSections, issues: ReconciliationIss
   for (const [key, section] of Object.entries(sections)) {
     if (!(key in PEOPLE_SECTIONS)) continue;
     const nameCols = PEOPLE_SECTIONS[key];
-    const byKey = new Map<string, WorkbookRow>();
+    const eventKeys = EVENT_KEY_COLUMNS[key];
+    const types: Record<string, string> = {};
+    for (const c of getSection(key)?.columns ?? []) types[c.key] = c.type;
+    // Per person: their rows so far (one, unless the section's rows are events).
+    const byPerson = new Map<string, WorkbookRow[]>();
     const kept: WorkbookRow[] = [];
     let merged = 0;
     for (const row of section.rows ?? []) {
-      const k = isId(row.idNumber)
+      const person = isId(row.idNumber)
         ? `id:${idKey(row.idNumber)}`
         : `nm:${nameCols.map((c) => normaliseEntityName(row[c])).filter(Boolean).join(" ")}`;
-      if (k === "nm:") { kept.push(row); continue; }
-      const existing = byKey.get(k);
+      if (person === "nm:") { kept.push(row); continue; }
+      const theirs = byPerson.get(person) ?? [];
+      // An event row folds only into the same event — the same course, dates
+      // that do not disagree, and nothing else it states in conflict (a cost, a
+      // provider). Anything else is a second entry, not a duplicate.
+      const existing = eventKeys
+        ? theirs.find((candidate) => sameEvent(candidate, row, eventKeys, types))
+        : theirs[0];
       if (existing) {
         for (const [col, val] of Object.entries(row)) {
           if (col === "_id" || col === "_sourceFiles") continue;
@@ -260,7 +373,8 @@ function reconcileIdentity(sections: WorkbookSections, issues: ReconciliationIss
         merged++;
         continue;
       }
-      byKey.set(k, row);
+      theirs.push(row);
+      byPerson.set(person, theirs);
       kept.push(row);
     }
     // Stamp banked identity onto every kept row.
@@ -274,7 +388,9 @@ function reconcileIdentity(sections: WorkbookSections, issues: ReconciliationIss
     if (merged > 0) {
       issues.push({
         id: nextId(), invariant: "identity", severity: "resolved", section: key,
-        statement: `Merged ${merged} duplicate ${merged === 1 ? "row" : "rows"} in ${sectionLabel(key)} — the same person appeared more than once.`,
+        statement: eventKeys
+          ? `Merged ${merged} duplicate ${merged === 1 ? "row" : "rows"} in ${sectionLabel(key)} — the same person on the same course and date appeared more than once.`
+          : `Merged ${merged} duplicate ${merged === 1 ? "row" : "rows"} in ${sectionLabel(key)} — the same person appeared more than once.`,
       });
     }
   }

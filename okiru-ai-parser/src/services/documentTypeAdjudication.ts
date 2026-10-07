@@ -25,11 +25,13 @@ import { parseModelJson } from './aiExtraction.js';
 import { getExtractionModel } from './caseExtraction.js';
 import { modelClassificationEnabled } from './documentClassification.js';
 import { VERIFICATION_DOCUMENT_MATRIX } from '../../schemas/verification_document_matrix.js';
-import type {
-  AdjudicationCandidate,
-  AdjudicationInput,
-  DocumentTypeAdjudicator,
-  TypeAdjudication,
+import {
+  ADJUDICATION_MENU,
+  MIN_READABLE_CHARS,
+  type AdjudicationCandidate,
+  type AdjudicationInput,
+  type DocumentTypeAdjudicator,
+  type TypeAdjudication,
 } from '../../parser/type_adjudicator.js';
 
 const logger = createLogger('DocumentTypeAdjudication');
@@ -132,10 +134,13 @@ export async function adjudicateDocumentType(
   input: AdjudicationInput,
   rawCandidates: AdjudicationCandidate[],
 ): Promise<TypeAdjudication | null> {
-  const candidates = describeCandidates(rawCandidates.slice(0, 6));
+  // The whole menu ParserService built (lexical top 5 + retrieval), not just
+  // the head of it: a 6-item cut dropped exactly the retrieved types the
+  // keyword scorer had missed.
+  const candidates = describeCandidates(rawCandidates.slice(0, ADJUDICATION_MENU));
   if (candidates.length === 0) return null;
   const content = String(input.markdown?.trim() || input.raw_text || '').slice(0, ADJUDICATE_CHARS);
-  if (content.trim().length < 20) return null;
+  if (content.trim().length < MIN_READABLE_CHARS) return null;
 
   const key = cacheKey(input.filename, content, candidates);
   if (cache.has(key)) return cache.get(key) ?? null;

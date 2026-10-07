@@ -38,6 +38,8 @@ export interface TableShape {
   columns: string[];
   /** Human description of what one row is — context for the mapping question. */
   what: string;
+  /** Optional notes on individual target fields, for the mapping question only. */
+  guide?: string;
 }
 
 export interface DeterministicTableResult {
@@ -122,6 +124,7 @@ export async function mapSheetColumns(
     `SHEET: ${sheetName}`,
     `One row is ${shape.what}.`,
     `TARGET FIELDS: ${shape.columns.join(', ')}`,
+    ...(shape.guide ? [`FIELD NOTES: ${shape.guide}`] : []),
     `SHEET COLUMNS: ${JSON.stringify(headers)}`,
     `SAMPLE ROWS (${samples.length} of ${rows.length}):`,
     JSON.stringify(samples, null, 1),
@@ -238,11 +241,17 @@ function isTotalRow(row: Record<string, unknown>): boolean {
  * excluded from the data but their labelled figures are captured, and the
  * extracted rows are summed against them — a mismatch is reported, never
  * silently accepted.
+ *
+ * options.skipEchoRows (default on, the B-BBEE reading) leaves out a keyless
+ * row that only repeats the row above, in a register that states its key on
+ * nearly every row (see below). The ESG reading turns it off: its registers
+ * were recorded and checked against the ESG answer key without it.
  */
 export function applyColumnMapping(
   rows: Array<Record<string, unknown>>,
   mapping: Record<string, string>,
   shape: TableShape,
+  options: { skipEchoRows?: boolean } = {},
 ): DeterministicTableResult {
   const keyField = shape.columns[0];
   const mapped: Array<Record<string, unknown>> = [];
@@ -250,15 +259,41 @@ export function applyColumnMapping(
   let totalRowsSkipped = 0;
   let keylessRowsSkipped = 0;
   let forwardFilledRows = 0;
+  let echoRowsSkipped = 0;
   let lastKey = '';
 
-  for (const row of rows) {
+  const project = (row: Record<string, unknown>): Record<string, unknown> => {
     const out: Record<string, unknown> = {};
     for (const [header, field] of Object.entries(mapping)) {
       const value = row[header];
       if (value === null || value === undefined || String(value).trim() === '') continue;
       out[field] = value;
     }
+    return out;
+  };
+
+  // Forward-fill of the key is for schedules that write it ONCE per block (a
+  // beneficiary over thirteen monthly lines) — a SPARSE key column. In a
+  // register that states the key on nearly every row (a learner per training
+  // line), a keyless row whose every value is a copy of the row above — the
+  // block's course and provider, ditto-filled down — carries nothing of its
+  // own: it is the sheet's stray hours-only line, not a second record. Filling
+  // it cloned the last learner into a phantom training entry. Such rows are
+  // skipped and reported. A keyless row with a figure of its own (a second
+  // invoice line under one supplier) still inherits the key as before.
+  const evidenceRows = rows.filter((row) => !isTotalRow(row)).map(project).filter((out) => Object.keys(out).length > 0);
+  const keyed = evidenceRows.filter((out) => String(out[keyField] ?? '').trim() !== '').length;
+  const perRowKey = options.skipEchoRows !== false && evidenceRows.length >= 3 && keyed / evidenceRows.length >= 0.8;
+  const saysSomethingOfItsOwn = (out: Record<string, unknown>, above: Record<string, unknown> | null): boolean =>
+    Object.entries(out).some(([field, value]) =>
+      field !== keyField
+      && (typeof value === 'number' || !above || String(above[field] ?? '').trim() !== String(value).trim()));
+  let above: Record<string, unknown> | null = null;
+
+  for (const row of rows) {
+    const out = project(row);
+    const previous = above;
+    above = out;
 
     if (isTotalRow(row)) {
       totalRowsSkipped += 1;
@@ -277,12 +312,14 @@ export function applyColumnMapping(
       // Inherit the block's key only when the row still says something —
       // an empty template line stays skipped even inside a block.
       const hasEvidence = Object.keys(out).length > 0;
-      if (hasEvidence && lastKey !== '') {
+      const echoOnly = perRowKey && hasEvidence && !saysSomethingOfItsOwn(out, previous);
+      if (hasEvidence && lastKey !== '' && !echoOnly) {
         out[keyField] = lastKey;
         key = lastKey;
         forwardFilledRows += 1;
       } else {
         if (hasEvidence) keylessRowsSkipped += 1;
+        if (echoOnly) echoRowsSkipped += 1;
         continue;
       }
     } else {
@@ -292,6 +329,12 @@ export function applyColumnMapping(
   }
 
   const exceptions: string[] = [];
+  if (echoRowsSkipped > 0) {
+    exceptions.push(
+      `${echoRowsSkipped} row(s) carry no ${keyField} and nothing of their own (only values repeated from the row above), `
+        + 'so they were left out rather than credited to the row above as a second entry.',
+    );
+  }
   for (const [field, labelled] of Object.entries(labelledTotals)) {
     let sum = 0;
     let counted = 0;

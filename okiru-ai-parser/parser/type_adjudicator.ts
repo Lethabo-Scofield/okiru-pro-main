@@ -9,10 +9,12 @@
  * "too close to call": they share WORDS, not meaning. Under the old gate every
  * one of those documents was thrown away unread.
  *
- * An adjudicator is asked only when the lexical classifier cannot decide
- * (low confidence or a close call). It receives the SHORTLIST the lexical pass
- * produced — a closed set, never a free-text guess — plus what each candidate
- * type is FOR, and answers with one name and a calibrated confidence. Code
+ * An adjudicator is asked when the lexical classifier cannot decide (low
+ * confidence or a close call), or when its pick rests only on a label (an
+ * alias or the filename). It receives a SHORTLIST (the lexical top 5 plus the
+ * specs content retrieval ranks highest): a closed set, never a free-text
+ * guess, with what each candidate type is FOR. It answers with one name and a
+ * calibrated confidence. Code
  * still decides what is extracted and what scores; the model only decides
  * what the document IS, which is the one question it is better at.
  *
@@ -21,6 +23,21 @@
  * stands and extraction proceeds under it anyway — doubt is a review flag,
  * never a reason to discard evidence.
  */
+
+/**
+ * The longest candidate menu an adjudicator is shown: the lexical top 5 plus
+ * what content retrieval adds behind them (ParserService builds it). Long
+ * enough that the right type is on it when keyword overlap ranked it low;
+ * short enough that each candidate's purpose text still fits the prompt.
+ */
+export const ADJUDICATION_MENU = 10;
+
+/**
+ * Below this many characters of text there is nothing for a reader to read:
+ * the adjudicator declines, and the lexical classifier lets the filename carry
+ * full weight because it is the only evidence there is.
+ */
+export const MIN_READABLE_CHARS = 20;
 
 export interface AdjudicationCandidate {
   /** The ontology document-type name, verbatim. */

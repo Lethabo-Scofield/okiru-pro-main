@@ -28,6 +28,7 @@ import {
   BBBEE_LEVEL_MAP,
   CONTRIBUTION_TYPE_MAP,
   ESD_CATEGORY_MAP,
+  isPercentColumn,
   type ColumnDef,
   type SectionDef,
 } from "@/components/workbook/sections";
@@ -304,6 +305,28 @@ function fuzzyMonth(token: string): string | null {
   return hits.length === 1 ? String(MONTH_NAMES.indexOf(hits[0]) + 1).padStart(2, "0") : null;
 }
 
+/** Does the value itself say it is a percentage ("1%", "36.59 %")? */
+function statesPercentSign(value: unknown): boolean {
+  return typeof value === "string" && value.includes("%");
+}
+
+/**
+ * A stated percentage ("1%" → 1) in the unit a 0–100 percent column stores,
+ * under the ONE convention the whole workbook keeps.
+ *
+ * The projection (pctToFraction) reads any stored value of 1 or less as a
+ * FRACTION. So a percentage above 1% is stored in percent (51 for "51%"), and
+ * one of 1% or less is stored as the fraction it is (0.01 for "1%", 0.005 for
+ * "0.5%"): stored as 1 or 0.5 it would score as 100% or 50%, and a 1%-black-
+ * owned supplier would clear the 51% line. The Excel normalizer
+ * (percentShownMatrix) keeps exactly this convention, on purpose, for the same
+ * reason; the parser path must not be the one road that breaks it.
+ */
+export function percentCellValue(percent: number): number {
+  if (percent > 1 || percent <= 0) return percent;
+  return Number((percent / 100).toFixed(10));
+}
+
 const TRUTHY = new Set(["yes", "y", "true", "1", "checked"]);
 const FALSY = new Set(["no", "n", "false", "0", "unchecked"]);
 
@@ -322,6 +345,9 @@ export function coerceToColumn(
       const parsed = toNumber(value);
       if (parsed === null) {
         return { ok: false, reason: "not_a_number", detail: `"${String(value)}" is not a number` };
+      }
+      if (isPercentColumn(column) && statesPercentSign(value)) {
+        return { ok: true, value: percentCellValue(parsed) };
       }
       return { ok: true, value: parsed };
     }

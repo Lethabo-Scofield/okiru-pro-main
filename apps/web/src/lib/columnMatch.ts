@@ -68,7 +68,7 @@ export const FIELD_SYNONYMS: Record<string, string[]> = {
   measuredUnder: ["measured under", "codes", "scorecard codes"],
   empoweringSupplier: ["empowering supplier", "empowering"],
   currentBlackOwnership: ["black ownership", "% black ownership", "black owned"],
-  currentBlackFemaleOwnership: ["black female ownership", "black women ownership", "bwo"],
+  currentBlackFemaleOwnership: ["black female ownership", "black women ownership", "black woman ownership", "bwo"],
   spend: ["spend", "expenditure", "procurement spend", "amount", "value", "spend incl vat", "spend excl vat", "spend ex vat", "claimed spend", "claimed spend ex vat", "supplier spend", "annual spend", "rand value", "total spend"],
   payroll: ["payroll", "total payroll", "annual payroll", "salaries", "wages", "staff costs", "total staff costs", "wage bill", "remuneration", "total remuneration"],
   leviableAmount: ["leviable amount", "total leviable amount", "leviable", "sdl leviable amount"],
