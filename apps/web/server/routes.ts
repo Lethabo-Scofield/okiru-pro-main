@@ -2755,7 +2755,7 @@ export async function registerRoutes(
       // not forward PATCH /api/clients/:id, so it is never reached.
       const patchAccess = await resolveClientPillarAccess(
         String(req.params.clientId),
-        String(req.session.userId),
+        String((req.session as any).userId),
       );
       if (patchAccess && patchAccess.mode !== "full" && patchAccess.mode !== "owner_override") {
         return res.status(403).json({
