@@ -31,7 +31,12 @@ beforeEach(() => cleanup());
 
 describe("EsgScoreBreakdown", () => {
   it("shows the totals, what is still needed, and every indicator", () => {
-    seed({ "e-data": { cells: { s1a_C14: 1_000 } } });
+    // A company that has set its own reduction target: without one the
+    // reduction indicator is excluded, not waiting for a baseline (D5).
+    seed({
+      "e-data": { cells: { s1a_C14: 1_000 } },
+      assumptions: { cells: { _targetBasis: "Company's own targets", B43: 0.1 } },
+    });
     render(<EsgScoreBreakdown />);
 
     expect(screen.getByTestId("esg-breakdown-headline")).toHaveTextContent("Overall ESG");

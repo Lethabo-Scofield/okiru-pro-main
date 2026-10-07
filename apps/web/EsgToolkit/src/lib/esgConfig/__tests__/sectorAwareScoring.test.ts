@@ -85,20 +85,32 @@ describe("the workbook's sector reaches the scorers", () => {
     expect(lenient.inheritedPaths).not.toContain("thresholds.wasteDiversion");
 
     // `Waste_Register!B16` is the diversion rate E d19 bands against. Against
-    // the base target of 0.75, a rate of 0.375 sits at the stance floor and
-    // earns partial credit — not the full five.
-    const base = scoreEnvironmental(workbook("Generic", { waste: { cells: { B16: 0.375 } } })).rows.d19;
+    // the base figure of 0.75, a rate of 0.375 sits at the stance floor and
+    // earns partial credit — not the full five. Parity mode: since D5 that is
+    // the only mode that bands against a sector figure; corrected scoring
+    // bands against the company's own target or leaves d19 out.
+    const base = scoreEnvironmental(workbook("Generic", { waste: { cells: { B16: 0.375 } } }), {
+      mode: "workbook-parity",
+    }).rows.d19;
     expect(base).toBeGreaterThan(0);
     expect(base).toBeLessThan(5);
   });
 
-  it("an explicit Assumptions cell still outranks the sector default", () => {
+  it("a company's own stated target is what it is scored against", () => {
     // A company that states its own target beats any benchmark we hold for it.
     const stated = workbook("Mining", {
-      assumptions: { cells: { B8: "Standard", B9: 0.5, B48: 0.375 } },
+      assumptions: { cells: { B8: "Standard", B9: 0.5, B48: 0.375, _targetBasis: "Company's own targets" } },
       waste: { cells: { B16: 0.375 } },
     });
     expect(scoreEnvironmental(stated).rows.d19).toBeCloseTo(5, 6);
+
+    // The same number with no basis declared is not yet the company's target
+    // (D5): nobody asked, so d19 leaves the total until somebody does.
+    const undeclared = workbook("Mining", {
+      assumptions: { cells: { B8: "Standard", B9: 0.5, B48: 0.375 } },
+      waste: { cells: { B16: 0.375 } },
+    });
+    expect(scoreEnvironmental(undeclared).excluded.map((x) => x.key)).toContain("d19");
   });
 });
 
