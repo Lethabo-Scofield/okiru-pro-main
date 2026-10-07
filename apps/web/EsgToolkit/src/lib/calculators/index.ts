@@ -5,11 +5,19 @@ import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import { scoreEnvironmental } from "./environmental";
 import { scoreGovernance } from "./governance";
 import { scoreSocial } from "./social";
+import { EsgTraceRecorder, type EsgPillarTraces } from "./esgTrace";
+import type { EsgExclusion } from "./esgApplicability";
+
+type EsgPillarKey = "environmental" | "social" | "governance";
 
 export type EsgScorecardResult = EsgDashboardKpis & {
   environmentalRows: Record<string, number>;
   socialRows: Record<string, number>;
   governanceRows: Record<string, number>;
+  /** How each row was made — measured, target and its source, inputs, rule (E2). */
+  traces: Record<EsgPillarKey, EsgPillarTraces>;
+  /** The rows that left the total, each with its reason. */
+  excluded: Record<EsgPillarKey, EsgExclusion[]>;
 };
 
 export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgScorecardResult | null {
@@ -24,9 +32,15 @@ export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgSco
   // scores identically to an imported/fixture workbook (B-BBEE parity).
   const workbook = deriveEsgSummaryCells(rawWorkbook);
 
-  const e = scoreEnvironmental(workbook);
-  const s = scoreSocial(workbook);
-  const g = scoreGovernance(workbook);
+  // One recorder per pillar: indicator keys repeat across pillars (E d5, S d5).
+  const traces = {
+    environmental: new EsgTraceRecorder(),
+    social: new EsgTraceRecorder(),
+    governance: new EsgTraceRecorder(),
+  };
+  const e = scoreEnvironmental(workbook, { trace: traces.environmental });
+  const s = scoreSocial(workbook, { trace: traces.social });
+  const g = scoreGovernance(workbook, { trace: traces.governance });
   const dash = computeEsgDashboard(workbook);
   const pillars = esgScoresFromPillars(e.score, s.score, g.score, {
     environmental: e.scoringDenominator,
@@ -43,6 +57,12 @@ export function computeEsgScorecard(rawWorkbook: EsgWorkbookData | null): EsgSco
     environmentalRows: e.rows,
     socialRows: s.rows,
     governanceRows: g.rows,
+    traces: {
+      environmental: traces.environmental.traces,
+      social: traces.social.traces,
+      governance: traces.governance.traces,
+    },
+    excluded: { environmental: e.excluded, social: s.excluded, governance: g.excluded },
   };
 }
 
