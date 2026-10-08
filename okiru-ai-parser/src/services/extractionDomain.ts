@@ -411,6 +411,18 @@ export function hoistGridRows(
   parsed: Record<string, unknown>,
   grid: DocumentGrid,
 ): Array<Record<string, unknown>> {
+  return hoistGridRowsFrom(parsed, grid).rows;
+}
+
+/**
+ * The same, also naming the reply key the rows came from. The caller keeps that
+ * array out of the document-level fields, so a register is stored once even
+ * when the model answers under a skill's rows field rather than the container.
+ */
+export function hoistGridRowsFrom(
+  parsed: Record<string, unknown>,
+  grid: DocumentGrid,
+): { rows: Array<Record<string, unknown>>; key: string | null } {
   const rowFields = new Set(grid.rowFields);
 
   const usable = (candidate: unknown): Array<Record<string, unknown>> | null => {
@@ -429,12 +441,12 @@ export function hoistGridRows(
 
   for (const key of grid.containerKeys) {
     const found = usable(parsed[key]);
-    if (found) return found;
+    if (found) return { rows: found, key };
   }
   for (const [key, value] of Object.entries(parsed)) {
     if (key === 'exceptions') continue;
     const found = usable(value);
-    if (found) return found;
+    if (found) return { rows: found, key };
   }
-  return [];
+  return { rows: [], key: null };
 }

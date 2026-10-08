@@ -52,7 +52,7 @@ import {
 import type { VerificationDocument } from '../../schemas/verification_document_matrix.js';
 import {
   extractionDomain,
-  hoistGridRows,
+  hoistGridRowsFrom,
   type DomainDocument,
   type ExtractionDomain,
   type RoutableElement,
@@ -784,12 +784,20 @@ export async function extractWithSpec(
   // already uses for `shareholder_rows` / `supplier_rows` — which the calculator
   // mapping expands into N rows. `gridForDocument` returns null for every B-BBEE
   // spec, so nothing below this comment changes for that domain.
-  const gridRows = grid ? hoistGridRows(parsed, grid) : [];
+  const hoisted = grid ? hoistGridRowsFrom(parsed, grid) : { rows: [], key: null };
+  const gridRows = hoisted.rows;
   // Row columns stop counting as document-level fields once the rows are in
   // hand — except where the same name is legitimately BOTH a row column and a
   // register total (waste per stream and per site), where both are read.
-  const scalarFields = grid && gridRows.length > 0 && grid.suppressRowScalars
-    ? keys.filter((field) => !grid.rowFields.includes(field))
+  // The rows themselves are stored ONCE, by the grid push below: a skill adds
+  // its rows field to the keys, and for most ESG registers that name IS the
+  // grid's rows field, so the same array would otherwise be stored as a field
+  // and again as the grid (every register row twice in the workbook, every
+  // fuel fill counted twice in its month).
+  const scalarFields = grid && gridRows.length > 0
+    ? keys.filter((field) => field !== grid.rowsField
+      && field !== hoisted.key
+      && !(grid.suppressRowScalars && grid.rowFields.includes(field)))
     : keys;
   if (grid && gridRows.length > 0) {
     logger.info('Extracted a register grid', {
@@ -854,9 +862,10 @@ export async function extractWithSpec(
       sourceFile: input.filename,
       sourceDocumentId: spec.id,
     });
-  } else if (grid) {
+  } else if (grid && !missingFields.includes(grid.rowsField) && !values.some((v) => v.field === grid.rowsField)) {
     // A register that yielded no rows says so, rather than reporting each column
-    // absent as if the client had left them blank.
+    // absent as if the client had left them blank (once, even when a skill
+    // also asked for the rows field by name).
     missingFields.push(grid.rowsField);
   }
 
