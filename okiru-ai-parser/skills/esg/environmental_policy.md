@@ -124,12 +124,12 @@ EXAMPLE LOGISTICS - ENVIRONMENTAL POLICY      Doc EX-ENV-01  Rev 4  Revised 12/0
 We commit to: comply with environmental legislation; reduce fuel and electricity use per load;
 recycle packaging; continually improve our environmental management system.
 Approved by the Board. Reviewed annually.
-Signed: A. Naidoo, Chief Executive Officer, 12/02/2026
+Signed: J. Example, Chief Executive Officer, 12/02/2026
 ```
 
 ```json
 {"policy_title": "ENVIRONMENTAL POLICY", "policy_version": "Rev 4", "board_approval_date": "12/02/2026",
- "policy_effective_date": null, "signatory_name": "A. Naidoo", "signatory_role": "Chief Executive Officer",
+ "policy_effective_date": null, "signatory_name": "J. Example", "signatory_role": "Chief Executive Officer",
  "policy_approved_by": "the Board", "review_frequency": "annually", "net_zero_commitment_present": false,
  "ghg_reduction_commitment_present": null, "energy_commitment_present": true, "water_commitment_present": null,
  "waste_commitment_present": true, "biodiversity_commitment_present": null, "legal_compliance_commitment_present": true,
