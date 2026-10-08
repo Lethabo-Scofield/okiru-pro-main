@@ -85,6 +85,14 @@ export interface ExtractionOutcome {
    * nobody received it.
    */
   delivered?: boolean;
+  /**
+   * Until when the run's result is held for the client to collect after a
+   * dropped connection (GET /quotes/:id/result). An undelivered run is not
+   * lost while it is held — the wallet waits rather than refund it.
+   */
+  resultHeldUntil?: number;
+  /** When an undelivered result was collected after all (it then reads as delivered). */
+  collectedAt?: number;
   reason?: string;
 }
 

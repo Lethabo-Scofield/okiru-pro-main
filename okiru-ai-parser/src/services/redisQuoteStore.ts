@@ -44,7 +44,8 @@ function ttlSecondsFor(record: QuoteRecord): number {
 }
 
 export class RedisQuoteStore implements QuoteStore {
-  constructor(private readonly client: RedisClientType) {}
+  /** Public so the paid-run result store can share this connection (see server.ts). */
+  constructor(readonly client: RedisClientType) {}
 
   async put(record: QuoteRecord): Promise<void> {
     await this.client.set(keyFor(record.quoteId), JSON.stringify(record), {

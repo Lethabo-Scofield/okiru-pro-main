@@ -70,10 +70,29 @@ import {
   type EsgInjectionResult,
   type EsgParserCaseLike,
 } from "./esgParserInjection";
-import { writeEsgFlowSnapshot } from "./esgFlowSnapshot";
+import { clearEsgPendingRead, readEsgPendingRead, writeEsgFlowSnapshot, writeEsgPendingRead } from "./esgFlowSnapshot";
+import {
+  PaidReadInterrupted,
+  RESUME_CHECKING_MESSAGE,
+  RESUME_RUNNING_MESSAGE,
+  collectPaidRead,
+  isConnectionLoss,
+  refundSentence,
+  uncollectedReadMessage,
+} from "@/lib/paidReadResume";
 import { postParserRun, signedRunsByFile, withoutSignedRuns } from "@/lib/parserRunAttestation";
 import type { EsgUploadFocus } from "@/lib/esg/esgSectionElements";
 import { esgSectionById } from "@/lib/esg/esgSections";
+
+/** One upload a read covers: the File while this page holds it, its library id once saved. */
+interface ReadUpload {
+  name: string;
+  file: File | null;
+  documentId: string | null;
+}
+
+/** How a paid read ended: its result landed, it was refused or broke, or its connection dropped and it could not be collected. */
+type ReadEnd = "delivered" | "failed" | "lost";
 
 /** The free, structure-only price scan (POST /api/parser/esg/quote-files). */
 interface ParserQuote {
@@ -137,6 +156,8 @@ interface TokenCost {
   sufficient: boolean;
   shortfall: number;
   alreadyAuthorized: boolean;
+  /** Uploads are not charged for (TOKENS_REQUIRE_PAYMENT=false). */
+  free?: boolean;
 }
 
 const tokenText = (value: number): string => value.toLocaleString("en-ZA");
@@ -296,6 +317,22 @@ export function EsgDocumentUploadStart({
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   /** What the server refunded for the run that just ended, in its own words. */
   const [refundNotice, setRefundNotice] = useState<string | null>(null);
+  /** Set while a dropped read is being collected and the server says it is still reading. */
+  const [resumeNotice, setResumeNotice] = useState<string | null>(null);
+  /** A dropped read that could not be collected: what happened, whether the tokens come back, and a way on. */
+  const [readLost, setReadLost] = useState<{ message: string; quoteId: string; canCheckAgain: boolean } | null>(null);
+  /** A read collected after a reload: its uploads are only in the library, so the reveal runs on the case alone. */
+  const [collectedWithoutFiles, setCollectedWithoutFiles] = useState(false);
+  /** Library id per name for uploads a collected read covered without their File. */
+  const collectedIdsByNameRef = useRef<Record<string, string>>({});
+  /** Polling for a dropped read stops when the page goes. */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [parserCase, setParserCase] = useState<EsgParserCaseLike | null>(null);
   const persistedDocumentsRef = useRef<Map<string, string>>(new Map());
   /** The phase banner reporting the paid read — scrolled to when it starts. */
@@ -371,7 +408,7 @@ export function EsgDocumentUploadStart({
         patches: result.patches,
         injection: result,
         parserCase: caseResult,
-        documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
+        documentIds: allDocumentIds(),
         excel: null,
       },
     });
@@ -440,6 +477,30 @@ export function EsgDocumentUploadStart({
   const persistSelectedDocuments = async (list: File[]): Promise<void> => {
     await Promise.all(list.map((file) => persistDocument(file)));
   };
+
+  /** The library id of an upload: saved already (a collected read after a reload), or saved now. */
+  const documentIdOf = async (upload: ReadUpload): Promise<string> => {
+    if (upload.file) return persistDocument(upload.file);
+    if (upload.documentId) return upload.documentId;
+    throw new Error(`${upload.name} is not in your document library`);
+  };
+
+  /** The uploads a read of `list` covers, with whatever library ids they already have. */
+  const uploadsOf = (list: File[], idsByName: Record<string, string> = {}): ReadUpload[] =>
+    list.map((file) => ({
+      name: file.name,
+      file,
+      documentId: persistedDocumentsRef.current.get(filePersistenceKey(file)) ?? idsByName[file.name] ?? null,
+    }));
+
+  /** Every library id this flow owns: this mount's uploads, and any a collected read covered. */
+  const allDocumentIds = () =>
+    Array.from(
+      new Set([
+        ...Array.from(persistedDocumentsRef.current.values()),
+        ...Object.values(collectedIdsByNameRef.current),
+      ]),
+    );
 
   /**
    * Scan the documents for a PRICE only. Reads structure and text layers
@@ -574,7 +635,7 @@ export function EsgDocumentUploadStart({
    */
   const persistParserRuns = async (
     data: EsgParserCaseLike,
-    list: File[],
+    uploads: ReadUpload[],
     docErrors: Map<string, string>,
   ): Promise<void> => {
     const extractions = data.ai_entities?.extractions ?? [];
@@ -585,7 +646,7 @@ export function EsgDocumentUploadStart({
 
     // A workbook comes back as one source per sheet ("File.xlsx › Sheet"); its
     // run belongs to the file that was uploaded, carrying every sheet.
-    const uploadNames = list.map((candidate) => candidate.name);
+    const uploadNames = uploads.map((candidate) => candidate.name);
     const uploadOf = (source: unknown) => esgUploadNameForSource(source, uploadNames);
     const problems = [
       ...(data.unreadable_files ?? []).map((u) => [String(u.file_name ?? ""), String(u.reason ?? "")] as const),
@@ -596,9 +657,9 @@ export function EsgDocumentUploadStart({
     );
 
     const tasks = filesInCase.map(async (filename) => {
-      const file = list.find((candidate) => candidate.name === filename);
-      if (!file) return;
-      const documentId = await persistDocument(file);
+      const upload = uploads.find((candidate) => candidate.name === filename);
+      if (!upload) return;
+      const documentId = await documentIdOf(upload);
       const mine = extractions.filter((e) => uploadOf(e.sourceFile) === filename);
       const detected = (data.documents_detected ?? []).find((d) => uploadOf(d.filename) === filename);
       const readSomething = mine.some((e) => (e.values?.length ?? 0) > 0);
@@ -671,17 +732,198 @@ export function EsgDocumentUploadStart({
   };
 
   /**
-   * The paid work. Only runs once the quote is authorised, and sends the quote
-   * id so the server can verify payment and that these are the exact files that
-   * were paid for. Resolves whether a result came back.
+   * Finish a read exactly as a completed stream does: file the signed runs in
+   * the library, merge into the case, mark the files read and keep the
+   * snapshot. One path for a stream that delivered and for a read collected
+   * after its connection dropped, so the two can never end differently.
    */
-  const runExtraction = async (list: File[], quoteId: string): Promise<boolean> => {
-    let delivered = false;
+  const completeRead = async (
+    data: EsgParserCaseLike,
+    uploads: ReadUpload[],
+    docErrors: Map<string, string>,
+  ): Promise<void> => {
+    // Uploads that are only in the library (a read collected after a reload)
+    // still belong to this flow: the workbook files them under the company.
+    for (const upload of uploads) {
+      if (!upload.file && upload.documentId) {
+        collectedIdsByNameRef.current = { ...collectedIdsByNameRef.current, [upload.name]: upload.documentId };
+      }
+    }
+    try {
+      await persistParserRuns(data, uploads, docErrors);
+      setLibraryWarning(null);
+    } catch (persistenceError) {
+      console.error("[EsgDocumentUploadStart] Parser result persistence failed", persistenceError);
+      setLibraryWarning(
+        persistenceError instanceof Error
+          ? persistenceError.message
+          : "Parser results were not saved to the document library.",
+      );
+    }
+    // Merge with anything already paid for and read in an earlier round, so a
+    // requote never loses (or re-charges for) documents we already have.
+    // The signed records were filed above; the case keeps no second copy.
+    const mergedCase = mergeEsgCases(parserCaseRef.current, withoutSignedRuns(data));
+    parserCaseRef.current = mergedCase;
+    setParserCase(mergedCase);
+    // These files are now part of the case: never priced, charged or read again.
+    const nowRead = new Set(readKeysRef.current);
+    for (const upload of uploads) if (upload.file) nowRead.add(filePersistenceKey(upload.file));
+    readKeysRef.current = nowRead;
+    setReadKeys(nowRead);
+    setQuote(null);
+    setTokenCost(null);
+    setDoneStaging(false);
+    if (uploads.length > 0 && uploads.every((upload) => !upload.file)) setCollectedWithoutFiles(true);
+    // Tokens have just been spent on this result — make it survive leaving
+    // the flow, even before "continue to workbook" is pressed. The host flow
+    // restores it (straight to review) on its next mount, and overwrites this
+    // with the proposed entity name once the user does continue.
+    // The backlog below measures the mapper, so it reads the unrestricted result: what a
+    // section's focus (C1) holds back was placed fine, just not written from here.
+    const mappedInjection = applyEsgParserResult(mergedCase, { workbook: workbookAxes });
+    const snapshotInjection = withinFocus(mappedInjection);
+    // The honest not-placed list IS the improvement backlog — record it
+    // server-side (fire-and-forget) so "what should the mapper learn next?"
+    // is answerable from data instead of memory. Never blocks the flow.
+    try {
+      const byKey = new Map<string, { field: string; context: string; reason: string; count: number }>();
+      for (const u of mappedInjection.unplaced) {
+        const key = `${u.field}::${u.reason}`;
+        const row = byKey.get(key) ?? { field: u.field, context: u.element, reason: u.reason, count: 0 };
+        row.count += 1;
+        byKey.set(key, row);
+      }
+      void Promise.resolve(
+        fetch("/api/telemetry/placement", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain: "esg",
+            caseId: (data as { case_id?: string } | null)?.case_id ?? null,
+            fileCount: uploads.length,
+            valuesRead: mappedInjection.valuesRead,
+            placedCount: mappedInjection.placed.length,
+            unplacedCount: mappedInjection.unplaced.length,
+            conflictCount: mappedInjection.conflicts.length,
+            unplaced: Array.from(byKey.values()),
+          }),
+        }),
+      ).catch(() => {});
+    } catch {
+      // telemetry must never cost a user their extraction
+    }
+    saveCreateFlowSnapshot(mergedCase, snapshotInjection);
+    // The read has landed: nothing is left to collect.
+    clearEsgPendingRead(companyId);
+  };
+
+  /**
+   * Ask the server to settle the run that just ended. Whatever the run failed
+   * to deliver is refunded there — decided from the parser's own record of the
+   * run, never from anything this screen reports. Resolves the settlement
+   * (null when it could not be asked).
+   */
+  const requestSettlement = async (quoteId: string): Promise<Record<string, any> | null> => {
+    try {
+      const res = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return null;
+      return (await res.json().catch(() => null)) as Record<string, any> | null;
+    } catch {
+      // The server settles every paid run on its own sweep regardless.
+      return null;
+    }
+  };
+
+  /**
+   * Collect a read whose stream was lost. The quote is spent and the run reads
+   * on server-side, so the result is ASKED FOR — never re-run, never charged
+   * again: still reading → say so and keep asking every 5s; done → finish it
+   * exactly as the stream would have; failed or gone → say what happened,
+   * whether the tokens come back, and offer a way on.
+   */
+  const collectRead = async (
+    quoteId: string,
+    uploads: ReadUpload[],
+    docErrors: Map<string, string>,
+  ): Promise<ReadEnd> => {
+    setResumeNotice(RESUME_CHECKING_MESSAGE);
+    setReadLost(null);
+    const collected = await collectPaidRead(quoteId, {
+      onRunning: () => {
+        if (mountedRef.current) setResumeNotice(RESUME_RUNNING_MESSAGE);
+      },
+      isCancelled: () => !mountedRef.current,
+    });
+    if (!mountedRef.current) return "lost";
+    setResumeNotice(null);
+    if (collected.status === "done") {
+      await completeRead(collected.result as EsgParserCaseLike, uploads, docErrors);
+      return "delivered";
+    }
+    // Unreachable: the read may still land — keep the record so "Check again"
+    // or a reload can collect it. Anything else is final.
+    if (collected.status !== "unreachable") clearEsgPendingRead(companyId);
+    const settlement = await requestSettlement(quoteId);
+    if (settlement?.state === "settled" && Number(settlement.refundedTokens) > 0) {
+      if (typeof settlement.balance === "number") {
+        setTokenCost((prev) => (prev ? { ...prev, balance: settlement.balance } : prev));
+      }
+      window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+    }
+    setReadLost({
+      message: `${uncollectedReadMessage(collected)} ${refundSentence(settlement)}`,
+      quoteId,
+      canCheckAgain: collected.status === "unreachable",
+    });
+    return "lost";
+  };
+
+  /** Collect a read this page did not start (a retry met "already processed", or a reload found one in flight). */
+  const resumeCollect = async (quoteId: string, uploads: ReadUpload[]): Promise<ReadEnd> => {
     setParsing(true);
     setResolving(false);
     setResolveProgress(null);
     setParseError(null);
+    try {
+      return await collectRead(quoteId, uploads, new Map());
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : "Could not collect the read");
+      return "failed";
+    } finally {
+      setParsing(false);
+      setResolving(false);
+    }
+  };
+
+  /**
+   * The paid work. Only runs once the quote is authorised, and sends the quote
+   * id so the server can verify payment and that these are the exact files that
+   * were paid for. A dropped connection — or a stream gone quiet — is not the
+   * end of the read: the run carries on server-side and its result is
+   * collected instead.
+   */
+  const runExtraction = async (list: File[], quoteId: string): Promise<ReadEnd> => {
+    let end: ReadEnd = "failed";
+    setParsing(true);
+    setResolving(false);
+    setResolveProgress(null);
+    setParseError(null);
+    setResumeNotice(null);
+    setReadLost(null);
     setDocProgress({});
+    /**
+     * Per-file failures reported live on the stream. They do NOT appear in
+     * the streaming result payload (only the non-streaming route carries
+     * `unreadable_files`), so this is the only record of them — and it has to
+     * reach the run archive, or a document that failed looks identical to one
+     * that was never uploaded.
+     */
+    const docErrors = new Map<string, string>();
 
     // A stream that has gone quiet is a stream that has died. ANY bytes reset
     // this — the parser's 15-second ": ping" keep-alive included. Resetting only
@@ -697,9 +939,21 @@ export function EsgDocumentUploadStart({
         controller.abort();
       }, STREAM_IDLE_TIMEOUT_MS);
     };
+    /** A lost stream — dropped, or silent past the idle limit — is collected rather than failed. */
+    const lostStream = (err: unknown) => isConnectionLoss(err) || timedOut;
 
     try {
       await persistSelectedDocuments(list);
+      // The read in flight, kept until it lands: what a retry or a reload
+      // collects if this connection drops.
+      writeEsgPendingRead({
+        quoteId,
+        startedAt: new Date().toISOString(),
+        fileNames: list.map((f) => f.name),
+        documentIdsByName: Object.fromEntries(
+          uploadsOf(list).flatMap((u) => (u.documentId ? [[u.name, u.documentId]] : [])),
+        ),
+      }, companyId);
       const form = new FormData();
       for (const f of list) form.append("files", f, f.name);
       form.append("case_id", `esg_workbook_${companyId || "unknown"}_${Date.now()}`);
@@ -718,14 +972,25 @@ export function EsgDocumentUploadStart({
       resetIdleTimer();
       // Streaming endpoint: emits per-file doc-start/doc-done SSE events so the
       // list fills up as each document is read, then a single result event.
-      const res = await fetch("/api/parser/esg/resolve-case-files-stream", {
-        method: "POST",
-        credentials: "include",
-        body: form,
-        signal: controller.signal,
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/parser/esg/resolve-case-files-stream", {
+          method: "POST",
+          credentials: "include",
+          body: form,
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (lostStream(err)) throw new PaidReadInterrupted(quoteId, timedOut ? "idle" : "connection");
+        throw err;
+      }
       if (res.status === 402 || res.status === 409 || res.status === 410) {
         const body = await res.json().catch(() => ({}));
+        // Spent by a run already going (a double click, a retry): collect it.
+        if (res.status === 409 && body?.error?.code === "QUOTE_ALREADY_USED") {
+          throw new PaidReadInterrupted(quoteId, "already-used");
+        }
+        clearEsgPendingRead(companyId);
         throw new Error(body?.error?.message ?? "Payment could not be verified for these documents");
       }
       if (!res.ok || !res.body) throw new Error(`Parser returned ${res.status}`);
@@ -735,14 +1000,6 @@ export function EsgDocumentUploadStart({
       let buffer = "";
       let data: EsgParserCaseLike | null = null;
       let streamError: string | null = null;
-      /**
-       * Per-file failures reported live on the stream. They do NOT appear in
-       * the streaming result payload (only the non-streaming route carries
-       * `unreadable_files`), so this is the only record of them — and it has to
-       * reach the run archive, or a document that failed looks identical to one
-       * that was never uploaded.
-       */
-      const docErrors = new Map<string, string>();
 
       const handle = (event: string, payload: any) => {
         resetIdleTimer();
@@ -782,7 +1039,14 @@ export function EsgDocumentUploadStart({
 
       // Parse the SSE stream block by block (blocks separated by a blank line).
       for (;;) {
-        const { done, value } = await reader.read();
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch (err) {
+          if (lostStream(err)) throw new PaidReadInterrupted(quoteId, timedOut ? "idle" : "connection");
+          throw err;
+        }
+        const { done, value } = chunk;
         if (done) break;
         resetIdleTimer();
         buffer += decoder.decode(value, { stream: true });
@@ -804,83 +1068,25 @@ export function EsgDocumentUploadStart({
           }
         }
       }
+      if (idleTimer) clearTimeout(idleTimer);
 
-      if (streamError) throw new Error(streamError);
-      if (!data) throw new Error("The parser did not return a result.");
-      delivered = true;
-
-      try {
-        await persistParserRuns(data, list, docErrors);
-        setLibraryWarning(null);
-      } catch (persistenceError) {
-        console.error("[EsgDocumentUploadStart] Parser result persistence failed", persistenceError);
-        setLibraryWarning(
-          persistenceError instanceof Error
-            ? persistenceError.message
-            : "Parser results were not saved to the document library.",
-        );
+      if (streamError) {
+        clearEsgPendingRead(companyId);
+        throw new Error(streamError);
       }
-      // Merge with anything already paid for and read in an earlier round, so a
-      // requote never loses (or re-charges for) documents we already have.
-      // The signed records were filed above; the case keeps no second copy.
-      const mergedCase = mergeEsgCases(parserCaseRef.current, withoutSignedRuns(data));
-      parserCaseRef.current = mergedCase;
-      setParserCase(mergedCase);
-      // These files are now part of the case: never priced, charged or read again.
-      const nowRead = new Set(readKeysRef.current);
-      for (const f of list) nowRead.add(filePersistenceKey(f));
-      readKeysRef.current = nowRead;
-      setReadKeys(nowRead);
-      setQuote(null);
-      setTokenCost(null);
-      setDoneStaging(false);
-      // Tokens have just been spent on this result — make it survive leaving
-      // the flow, even before "continue to workbook" is pressed. The host flow
-      // restores it (straight to review) on its next mount, and overwrites this
-      // with the proposed entity name once the user does continue.
-      // The backlog below measures the mapper, so it reads the unrestricted result: what a
-      // section's focus (C1) holds back was placed fine, just not written from here.
-      const mappedInjection = applyEsgParserResult(mergedCase, { workbook: workbookAxes });
-      const snapshotInjection = withinFocus(mappedInjection);
-      // The honest not-placed list IS the improvement backlog — record it
-      // server-side (fire-and-forget) so "what should the mapper learn next?"
-      // is answerable from data instead of memory. Never blocks the flow.
-      try {
-        const byKey = new Map<string, { field: string; context: string; reason: string; count: number }>();
-        for (const u of mappedInjection.unplaced) {
-          const key = `${u.field}::${u.reason}`;
-          const row = byKey.get(key) ?? { field: u.field, context: u.element, reason: u.reason, count: 0 };
-          row.count += 1;
-          byKey.set(key, row);
-        }
-        void Promise.resolve(
-          fetch("/api/telemetry/placement", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              domain: "esg",
-              caseId: (data as { case_id?: string } | null)?.case_id ?? null,
-              fileCount: list.length,
-              valuesRead: mappedInjection.valuesRead,
-              placedCount: mappedInjection.placed.length,
-              unplacedCount: mappedInjection.unplaced.length,
-              conflictCount: mappedInjection.conflicts.length,
-              unplaced: Array.from(byKey.values()),
-            }),
-          }),
-        ).catch(() => {});
-      } catch {
-        // telemetry must never cost a user their extraction
-      }
-      saveCreateFlowSnapshot(mergedCase, snapshotInjection);
+      // The stream closed without a result or an error: cut on the way (a
+      // proxy timeout, a dropped hop). The run may well have finished.
+      if (!data) throw new PaidReadInterrupted(quoteId, "no-result");
+      await completeRead(data, uploadsOf(list), docErrors);
+      end = "delivered";
     } catch (err) {
-      if (timedOut || (err as Error)?.name === "AbortError") {
-        // Results are only saved once the whole batch comes back, so nothing
-        // from this run is in the library — the old copy said otherwise.
-        setParseError(
-          "The document reader stopped responding for 10 minutes, so we stopped waiting. No results came back, so nothing was placed in your workbook or saved to your document library. Try the documents again in a smaller batch.",
-        );
+      if (idleTimer) clearTimeout(idleTimer);
+      if (err instanceof PaidReadInterrupted) {
+        try {
+          end = await collectRead(err.quoteId, uploadsOf(list, readEsgPendingRead(companyId)?.documentIdsByName), docErrors);
+        } catch (collectError) {
+          setParseError(collectError instanceof Error ? collectError.message : "Could not collect the read");
+        }
       } else {
         setParseError(err instanceof Error ? err.message : "Could not read the documents");
       }
@@ -889,43 +1095,53 @@ export function EsgDocumentUploadStart({
       setParsing(false);
       setResolving(false);
     }
-    return delivered;
+    return end;
   };
 
   /**
-   * Ask the server to settle the run that just ended. Whatever the run failed
-   * to deliver is refunded there — decided from the parser's own record of the
-   * run, never from anything this screen reports — and the answer says what
-   * came back, so a refund shows the moment it happens.
+   * Settle the run that just ended and show what came back, so a refund shows
+   * the moment it happens. A read that was lost settled itself already, with
+   * its own message.
    */
-  const settlePaidRun = async (quoteId: string, delivered: boolean) => {
-    try {
-      const res = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const body = await res.json().catch(() => null);
-      if (body?.state === "settled" && Number(body.refundedTokens) > 0) {
-        setRefundNotice(
-          `${Number(body.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance. ${body.reason ?? ""}`.trim(),
-        );
-        if (typeof body.balance === "number") {
-          setTokenCost((prev) => (prev ? { ...prev, balance: body.balance } : prev));
-        }
-        window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
-      } else if (body?.state === "pending" && body.queued && body.reason) {
-        // Owed, and waiting on the organisation's daily refund allowance.
-        setRefundNotice(String(body.reason));
-      } else if (body?.state === "pending" && !delivered) {
-        setRefundNotice(
-          "If this run delivered nothing, its tokens come back to your balance automatically — there is nothing you need to do.",
-        );
+  const settlePaidRun = async (quoteId: string, end: ReadEnd) => {
+    if (end === "lost") return;
+    const delivered = end === "delivered";
+    const body = await requestSettlement(quoteId);
+    if (!body) return;
+    if (body?.state === "settled" && Number(body.refundedTokens) > 0) {
+      setRefundNotice(
+        `${Number(body.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance. ${body.reason ?? ""}`.trim(),
+      );
+      if (typeof body.balance === "number") {
+        setTokenCost((prev) => (prev ? { ...prev, balance: body.balance } : prev));
       }
-    } catch {
-      // The server settles every paid run on its own sweep regardless.
+      window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+    } else if (body?.state === "pending" && body.queued && body.reason) {
+      // Owed, and waiting on the organisation's daily refund allowance.
+      setRefundNotice(String(body.reason));
+    } else if (body?.state === "pending" && !delivered) {
+      setRefundNotice(
+        "If this run delivered nothing, its tokens come back to your balance automatically — there is nothing you need to do.",
+      );
     }
   };
+
+  /**
+   * A read whose connection dropped before this page mounted (a reload, a
+   * closed tab) is collected on the way in — once, on mount, before any
+   * interaction.
+   */
+  useEffect(() => {
+    const pending = readEsgPendingRead(companyId);
+    if (!pending) return;
+    const uploads: ReadUpload[] = pending.fileNames.map((name) => ({
+      name,
+      file: null,
+      documentId: pending.documentIdsByName[name] ?? null,
+    }));
+    void resumeCollect(pending.quoteId, uploads).then((end) => settlePaidRun(pending.quoteId, end));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Spend tokens, then read.
@@ -933,12 +1149,16 @@ export function EsgDocumentUploadStart({
    * The debit is server-side and idempotent, so a double-click charges once. If
    * the balance will not cover the batch we say so with the exact shortfall and
    * send them to billing rather than failing vaguely.
+   *
+   * A batch already processed is not processed again: when the quote is spent
+   * (the connection dropped and this is the retry), its read is collected.
    */
   const spendAndExtract = async () => {
     if (!quote) return;
     setPaying(true);
     setParseError(null);
     setRefundNotice(null);
+    setReadLost(null);
     try {
       const res = await fetch("/api/tokens/authorize", {
         method: "POST",
@@ -947,6 +1167,15 @@ export function EsgDocumentUploadStart({
         body: JSON.stringify({ quoteId: quote.quoteId }),
       });
       const body = await res.json().catch(() => ({}));
+      if (res.status === 409 && body?.code === "QUOTE_ALREADY_USED") {
+        const pending = readEsgPendingRead(companyId);
+        const end = await resumeCollect(
+          quote.quoteId,
+          uploadsOf(unreadFiles, pending?.quoteId === quote.quoteId ? pending.documentIdsByName : {}),
+        );
+        await settlePaidRun(quote.quoteId, end);
+        return;
+      }
       if (res.status === 402) {
         setTokenCost((prev) =>
           prev
@@ -970,13 +1199,50 @@ export function EsgDocumentUploadStart({
       // Every header shows the balance, so it must move the moment it changes.
       window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
       // Exactly the files this quote priced: the unread ones.
-      const delivered = await runExtraction(unreadFiles, quote.quoteId);
-      await settlePaidRun(quote.quoteId, delivered);
+      const end = await runExtraction(unreadFiles, quote.quoteId);
+      await settlePaidRun(quote.quoteId, end);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not start processing");
     } finally {
       setPaying(false);
     }
+  };
+
+  /**
+   * Read without spending (free mode). The authorise call costs nothing here,
+   * but it records which organisation started this read — the only thing that
+   * lets it collect the result if the connection drops.
+   */
+  const readFree = async (list: File[], quoteId: string): Promise<ReadEnd> => {
+    if (tokenCost?.free) {
+      try {
+        await fetch("/api/tokens/authorize", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quoteId }),
+        });
+      } catch {
+        // Reading still works; only collecting after a dropped connection would not.
+      }
+    }
+    return runExtraction(list, quoteId);
+  };
+
+  /** After a read that could not be collected: ask again (no charge), or price the documents afresh. */
+  const checkLostReadAgain = () => {
+    const lost = readLost;
+    if (!lost) return;
+    const pending = readEsgPendingRead(companyId);
+    const uploads = unreadFiles.length > 0
+      ? uploadsOf(unreadFiles, pending?.documentIdsByName)
+      : (pending?.fileNames ?? []).map((name) => ({ name, file: null, documentId: pending?.documentIdsByName[name] ?? null }));
+    void resumeCollect(lost.quoteId, uploads).then((end) => settlePaidRun(lost.quoteId, end));
+  };
+  const uploadLostReadAgain = () => {
+    setReadLost(null);
+    clearEsgPendingRead(companyId);
+    if (unreadFiles.length > 0) void prepareAndQuote(files);
   };
 
   /**
@@ -1139,7 +1405,8 @@ export function EsgDocumentUploadStart({
     return out;
   }, [parserCase]);
 
-  const revealed = Boolean(parserCase && !parsing && files.length > 0);
+  // A read collected after a reload has no File objects, only the case.
+  const revealed = Boolean(parserCase && !parsing && (files.length > 0 || collectedWithoutFiles));
   // Requires `doneStaging`: collapsing the stage into the checkout the moment a
   // quote landed is what left people with "files appear but there is nowhere to
   // carry on".
@@ -1151,7 +1418,7 @@ export function EsgDocumentUploadStart({
   const readNow = () => {
     if (!quote) return;
     if (readCharging) void spendAndExtract();
-    else void runExtraction(unreadFiles, quote.quoteId);
+    else void readFree(unreadFiles, quote.quoteId);
   };
 
   const readCount = Object.values(docProgress).filter((s) => s === "done").length;
@@ -1180,7 +1447,9 @@ export function EsgDocumentUploadStart({
   );
   const documentIdFor = (name: string): string | null => {
     const file = files.find((f) => f.name === name);
-    return file ? persistedDocumentsRef.current.get(filePersistenceKey(file)) ?? null : null;
+    return file
+      ? persistedDocumentsRef.current.get(filePersistenceKey(file)) ?? null
+      : collectedIdsByNameRef.current[name] ?? null;
   };
 
   /**
@@ -1540,7 +1809,7 @@ export function EsgDocumentUploadStart({
 
                 <div className="mt-5 space-y-2">
                   <button
-                    onClick={() => void (charging ? spendAndExtract() : runExtraction(unreadFiles, quote!.quoteId))}
+                    onClick={() => void (charging ? spendAndExtract() : readFree(unreadFiles, quote!.quoteId))}
                     disabled={paying || parsing || cannotAfford}
                     className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
                     style={{ background: "var(--esg-acc-e, #1de9a0)", color: "#080e14" }}
@@ -1841,7 +2110,9 @@ export function EsgDocumentUploadStart({
               {resolving ? "Reconciling across your documents" : "Reading your documents"}
             </div>
             <div className="text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-              {resolving
+              {resumeNotice
+                ? <span data-testid="esg-read-resume-notice">{resumeNotice}</span>
+                : resolving
                 ? resolveProgress
                   ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking sites, periods and figures across every file`
                   : "Cross-checking sites, periods and figures across every file"
@@ -1990,6 +2261,37 @@ export function EsgDocumentUploadStart({
           {parseError}
         </p>
       )}
+      {/* A read whose connection dropped and could not be collected: what
+          happened, whether the tokens come back, and a way on. */}
+      {readLost && !parsing && (
+        <div
+          className="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/[0.06] px-4 py-3"
+          role="alert"
+          data-testid="esg-read-lost"
+        >
+          <p className="text-[12px] leading-5 text-amber-100">{readLost.message}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {readLost.canCheckAgain && (
+              <button
+                type="button"
+                onClick={checkLostReadAgain}
+                className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] hover:bg-white/[0.04]"
+                data-testid="esg-button-read-check-again"
+              >
+                Check again
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={uploadLostReadAgain}
+              className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] hover:bg-white/[0.04]"
+              data-testid="esg-button-read-upload-again"
+            >
+              Upload the documents again
+            </button>
+          </div>
+        </div>
+      )}
       {libraryWarning && (
         <p className="mt-3 text-[12px] text-amber-300" role="alert" data-testid="esg-library-warning">
           {libraryWarning}
@@ -2031,7 +2333,7 @@ export function EsgDocumentUploadStart({
                 void onComplete({
                   injection,
                   parserCase,
-                  documentIds: Array.from(new Set(persistedDocumentsRef.current.values())),
+                  documentIds: allDocumentIds(),
                 })
               }
               // A document added after the read but never read would arrive with

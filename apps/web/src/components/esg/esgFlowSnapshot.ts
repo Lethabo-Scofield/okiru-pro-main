@@ -21,6 +21,12 @@ import type {
   EsgParserCaseLike,
   EsgSectionPatches,
 } from "./esgParserInjection";
+import {
+  clearPendingReadRecord,
+  readPendingReadRecord,
+  writePendingReadRecord,
+  type PendingRead,
+} from "@/lib/paidReadResume";
 
 const ESG_FLOW_SNAPSHOT_KEY = "okiru-esg-create-flow-v1";
 
@@ -68,4 +74,28 @@ export function clearEsgFlowSnapshot(): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * The paid read in flight in this tab, if any — its quote id and the library
+ * ids of its uploads. Written as a paid read starts and cleared once its result
+ * has landed (or it is known lost), so a dropped connection, a retry that meets
+ * "already processed", or a reload can still collect what the quote bought.
+ * Scoped by company: reading into one company's workbook never collects into
+ * the create flow, nor the reverse.
+ */
+const ESG_PENDING_READ_KEY = "okiru-esg-pending-read-v1";
+const esgPendingKeyFor = (companyId?: string | null) =>
+  companyId ? `${ESG_PENDING_READ_KEY}:${companyId}` : ESG_PENDING_READ_KEY;
+
+export function readEsgPendingRead(companyId?: string | null): PendingRead | null {
+  return readPendingReadRecord(esgPendingKeyFor(companyId));
+}
+
+export function writeEsgPendingRead(record: PendingRead, companyId?: string | null): void {
+  writePendingReadRecord(esgPendingKeyFor(companyId), record);
+}
+
+export function clearEsgPendingRead(companyId?: string | null): void {
+  clearPendingReadRecord(esgPendingKeyFor(companyId));
 }

@@ -45,6 +45,9 @@ export const RUN_PRESUMED_DEAD_AFTER_MS = 2 * 60 * 60 * 1000;
  */
 export const UNUSED_QUOTE_AFTER_MS = 30 * 60 * 1000;
 
+/** Past a held result's expiry, how long the refund still waits — so a last-moment collection is never refunded too. */
+export const RESULT_COLLECTION_MARGIN_MS = 10 * 60 * 1000;
+
 /** How far back the sweep looks: the parser keeps a paid quote's record for a week past expiry. */
 const SWEEP_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 /** Runs this fresh are left to the upload screen, which settles its own run as it ends. */
@@ -80,6 +83,12 @@ export interface ParserRunRecord {
     totalValues?: number;
     /** False when the client had gone before the result could be sent. */
     delivered?: boolean;
+    /**
+     * Until when the parser holds an undelivered result for the organisation to
+     * collect (GET /api/tokens/result/:quoteId). Collecting it marks the run
+     * delivered; only a result that was never collected is refunded as lost.
+     */
+    resultHeldUntil?: number;
     reason?: string;
   } | null;
   files: Array<{ filename: string; extractionCents: number }>;
@@ -156,6 +165,14 @@ export function decideRefund(
   // However well it went, nobody received it: the screen had timed out, closed
   // or lost its connection before the result could be sent.
   if (run.outcome.delivered === false) {
+    // Not lost while it is held: the screen collects it after a dropped
+    // connection, and collecting it marks it delivered. Refunding it now would
+    // pay back a read the organisation is about to receive. A small margin
+    // keeps a collection at the last moment from racing the refund.
+    const heldUntil = run.outcome.resultHeldUntil;
+    if (typeof heldUntil === "number" && now < heldUntil + RESULT_COLLECTION_MARGIN_MS) {
+      return { kind: "wait", reason: "The result is being kept for you to collect." };
+    }
     return all(
       "the result never reached you",
       "The connection closed before the result reached you, so every token was returned.",
@@ -225,6 +242,7 @@ function toRunRecord(data: unknown): ParserRunRecord | null {
           attributed: rawOutcome.attributed === true,
           totalValues: typeof rawOutcome.totalValues === "number" ? rawOutcome.totalValues : undefined,
           delivered: typeof rawOutcome.delivered === "boolean" ? rawOutcome.delivered : undefined,
+          resultHeldUntil: typeof rawOutcome.resultHeldUntil === "number" ? rawOutcome.resultHeldUntil : undefined,
           reason: typeof rawOutcome.reason === "string" ? rawOutcome.reason : undefined,
         }
       : null,

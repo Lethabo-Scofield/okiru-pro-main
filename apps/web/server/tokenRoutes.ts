@@ -18,6 +18,7 @@ import { recordAudit } from "./securityAudit";
 import { TokenOrderModel } from "../shared/schema";
 import { TOKEN_PACKS, findTokenPack } from "../shared/tokenPacks";
 import { authorizeRefusal, settleRun } from "./extractionRefunds";
+import { RunResultUnavailable, bindQuoteToOrganization, quoteOwner, readParserRunResult } from "./paidRunResults";
 import {
   FREE_TOKEN_GRANT,
   TOKENS_PER_CENT,
@@ -298,7 +299,15 @@ export function registerTokenRoutes(app: Express): void {
       const quote = await readParserQuote(quoteId);
       if (!quote) return res.status(404).json({ message: "That quote is unknown or has expired. Upload the batch again." });
       if (quote.consumed) {
-        return res.status(409).json({ message: "This batch has already been processed." });
+        // Never a second charge or a second run. The code tells the upload
+        // screen to COLLECT the run this quote already bought instead
+        // (GET /api/tokens/result/:quoteId) — the run reads on server-side
+        // when a connection drops.
+        return res.status(409).json({
+          message: "This batch has already been processed.",
+          code: "QUOTE_ALREADY_USED",
+          quoteId,
+        });
       }
       // Its tokens already came back. Re-debiting under the same reference would
       // read as "already paid" and buy nothing, so say what to do instead.
@@ -318,6 +327,16 @@ export function registerTokenRoutes(app: Express): void {
       // secret that free mode deliberately does not depend on. The response
       // keeps the same shape so the upload UI needs no knowledge of any of this.
       if (!paymentRequired()) {
+        // Nothing is charged, so no debit says whose run this is. The binding
+        // does — it is what lets this organisation, and only this one, collect
+        // the result if the connection drops. First to authorise owns it.
+        const owner = await bindQuoteToOrganization(quoteId, orgId);
+        if (owner !== orgId) {
+          return res.status(404).json({
+            message: "That quote is unknown or has expired. Upload the batch again.",
+            code: "QUOTE_NOT_FOUND",
+          });
+        }
         await recordAudit(req, {
           action: "tokens.authorize",
           resourceType: "organization",
@@ -414,6 +433,44 @@ export function registerTokenRoutes(app: Express): void {
     } catch (err) {
       logger.error("POST /api/tokens/authorize failed", err as Error);
       res.status(500).json({ message: "Could not authorise this batch" });
+    }
+  });
+
+  /**
+   * Collect a read whose connection dropped.
+   *
+   * The parser reads on when the browser's connection goes, and keeps the
+   * finished result for a day. The upload screen asks here when its stream
+   * fails or a retry meets "already processed": running → it polls; done →
+   * it carries on exactly as if the stream had finished; failed / unknown →
+   * it says so, and whether the tokens come back (the settlement decides).
+   *
+   * Only the organisation that paid for the quote (its `extract:` debit), or
+   * in free mode the one that authorised it, may collect it. Anyone else gets
+   * the same 404 as a quote that never ran. Kept under /api/tokens on purpose:
+   * the ingress already routes that prefix to this server.
+   */
+  app.get("/api/tokens/result/:quoteId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const orgId = orgOf(req, res);
+      if (!orgId) return;
+      const quoteId = String(req.params.quoteId ?? "").trim();
+      if (!quoteId) return res.status(400).json({ message: "quoteId is required" });
+
+      const owner = await quoteOwner(quoteId);
+      if (!owner || owner !== orgId) {
+        return res.status(404).json({ message: "No read is on record for this batch.", code: "RUN_NOT_FOUND" });
+      }
+      try {
+        res.json(await readParserRunResult(quoteId));
+      } catch (err) {
+        if (!(err instanceof RunResultUnavailable)) throw err;
+        // Transient: the screen keeps asking until the run's time is up.
+        res.status(503).json({ message: err.message, code: "RUN_RESULT_UNAVAILABLE" });
+      }
+    } catch (err) {
+      logger.error("GET /api/tokens/result failed", err as Error);
+      res.status(500).json({ message: "Could not collect this read right now" });
     }
   });
 
