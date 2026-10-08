@@ -53,8 +53,8 @@ export interface ParserRunDetail {
   reviewHistory?: unknown[];
 }
 
-/** Which reader produced a value. */
-export type ParserValueLayer = "rule" | "ai" | "agent";
+/** Which reader produced a value; "derived" was worked out from printed figures, never printed itself. */
+export type ParserValueLayer = "rule" | "ai" | "agent" | "derived";
 
 /**
  * One value the model or the agent read. Mirrors RunAiValue in the parser's
@@ -85,6 +85,7 @@ export const VALUE_LAYER_PRESENTATION: Record<ParserValueLayer, { label: string;
   rule: { label: "Rules", title: "Read by the parser's rules, without a model", tone: "border-sky-400/30 text-sky-200" },
   ai: { label: "AI", title: "Read by the AI model", tone: "border-violet-400/30 text-violet-200" },
   agent: { label: "Agent", title: "Read by the AI agent on a second, cited look at the document", tone: "border-emerald-400/30 text-emerald-200" },
+  derived: { label: "Derived", title: "Worked out by the parser from figures the document printed; not printed in the document itself", tone: "border-amber-400/30 text-amber-200" },
 };
 
 /** The sheet a value came from, when it came from a workbook sheet ("File.xlsx › Sheet"). */

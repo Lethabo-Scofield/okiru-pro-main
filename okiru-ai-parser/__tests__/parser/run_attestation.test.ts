@@ -246,6 +246,28 @@ describe('aiValuesForUpload', () => {
     ], 'Book.xlsx', uploadOf);
     expect(value.layer).toBe('rule');
   });
+
+  it('marks a figure the parser worked out as derived, never as a grounded AI read', () => {
+    // The grounding check ran before the derivation existed, so the extraction's
+    // ungrounded list cannot speak for it: an edited derived figure must never
+    // be taken for one the document printed.
+    const values = aiValuesForUpload([
+      {
+        ...base,
+        documentId: 'emp201',
+        sourceFile: 'Book.xlsx',
+        ungroundedFields: [],
+        values: [
+          { field: 'sdl_amount', value: 120, sourceFile: 'Book.xlsx', sourceDocumentId: 'emp201' },
+          { field: 'derived_leviable_amount', value: 12000, sourceFile: 'Book.xlsx', sourceDocumentId: 'emp201', source: { method: 'derived', quote: 'derived: SDL 120 x 100' } },
+        ],
+      },
+    ], 'Book.xlsx', uploadOf);
+    expect(values.map((v) => [v.field, v.layer, v.grounded])).toEqual([
+      ['sdl_amount', 'ai', true],
+      ['derived_leviable_amount', 'derived', null],
+    ]);
+  });
 });
 
 describe('signParserRuns with an AI block', () => {

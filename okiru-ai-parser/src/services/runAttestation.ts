@@ -76,7 +76,8 @@ export const AI_VALUE_LIMITS = {
 export type AiValueLimits = { [K in keyof typeof AI_VALUE_LIMITS]: number };
 
 /** Which reader produced a value, as the library shows it. */
-export type RunValueLayer = 'rule' | 'ai' | 'agent';
+/** 'derived': worked out by the parser from printed figures, never printed itself. */
+export type RunValueLayer = 'rule' | 'ai' | 'agent' | 'derived';
 
 /**
  * One value the model or the agent read from the file — the shape the library
@@ -256,6 +257,7 @@ const RULE_READERS = new Set<string>([SHEET_INSTRUCTIONS_DOCUMENT_ID]);
 
 function layerOf(extraction: DocumentExtraction, value: DocumentExtraction['values'][number]): RunValueLayer {
   if (value.source?.method === 'agent') return 'agent';
+  if (value.source?.method === 'derived') return 'derived';
   if (RULE_READERS.has(extraction.documentId)) return 'rule';
   return 'ai';
 }
@@ -294,11 +296,12 @@ export function aiValuesForUpload(
       keys.add(key);
       const carried = carriedValue(value.value, limits);
       const source = value.source;
+      const entryLayer = layerOf(extraction, value);
       const entry: RunAiValue = {
         key,
         field: value.field,
         value: carried.value,
-        layer: layerOf(extraction, value),
+        layer: entryLayer,
         confidence: null,
         documentId: extraction.documentId,
         documentName: extraction.documentName,
@@ -307,7 +310,9 @@ export function aiValuesForUpload(
         page: typeof source?.page === 'number' ? source.page : null,
         cell: typeof source?.cellRef === 'string' ? source.cellRef : null,
         quote: typeof source?.quote === 'string' && source.quote ? clipText(source.quote, limits) : null,
-        grounded: extraction.ungroundedFields ? !ungrounded.has(value.field) : null,
+        // A derived figure was added after the grounding check ran, so the
+        // extraction's ungrounded list cannot speak for it either way.
+        grounded: entryLayer === 'derived' || !extraction.ungroundedFields ? null : !ungrounded.has(value.field),
         ...(carried.rowCount !== undefined ? { rowCount: carried.rowCount } : {}),
       };
       const size = Buffer.byteLength(JSON.stringify(entry)) + 1;

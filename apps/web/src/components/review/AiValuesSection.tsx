@@ -132,7 +132,7 @@ export function AiValuesSection({ values, corrections, onSave, onShow, disabled 
                 )}
                 {fix && (
                   <p className="mt-1 text-[11px] text-violet-200/80" data-testid={`field-${value.key}-corrected`}>
-                    Corrected by your team — the {value.layer === "agent" ? "agent" : "AI"} read “{formatParserValue(fix.original ?? value.value)}”
+                    Corrected by your team — {value.layer === "derived" ? "the parser worked out" : value.layer === "agent" ? "the agent read" : "the AI read"} “{formatParserValue(fix.original ?? value.value)}”
                   </p>
                 )}
                 {value.grounded === false && !fix && (
