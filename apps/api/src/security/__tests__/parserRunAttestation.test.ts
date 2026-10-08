@@ -83,6 +83,19 @@ describe('verifyParserRun', () => {
       .toMatchObject({ ok: false, status: 422, message: 'Parser status must be passed, review_required, or failed' });
   });
 
+  it('accepts a value the parser worked out (derived) beside the ones it read, and refuses an unknown layer', () => {
+    const value = (over: Record<string, unknown>) => ({
+      key: 'ai.emp201.derived_sdl_total', field: 'derived_sdl_total', value: '12 345.00', layer: 'derived',
+      confidence: null, documentId: 'doc-1', documentName: 'returns.pdf', element: null,
+      sourceFile: 'returns.pdf', page: null, cell: null, quote: null, grounded: null, ...over,
+    });
+    const ok = verifyParserRun(signed(claims({ aiValues: [value({}), value({ key: 'ai.emp201.sdl', field: 'sdl', layer: 'ai' })] })), { secret: SECRET, now: NOW });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.claims.aiValues?.map((v) => v.layer)).toEqual(['derived', 'ai']);
+    expect(verifyParserRun(signed(claims({ aiValues: [value({ layer: 'guessed' })] })), { secret: SECRET, now: NOW }))
+      .toMatchObject({ ok: false, status: 422 });
+  });
+
   it('refuses everything when this server has no secret, rather than accepting anything', () => {
     expect(verifyParserRun(signed(claims()), { secret: '', now: NOW }))
       .toMatchObject({ ok: false, status: 503, code: 'RUN_ATTESTATION_UNCONFIGURED' });

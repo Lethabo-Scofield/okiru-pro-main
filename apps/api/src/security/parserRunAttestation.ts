@@ -33,7 +33,9 @@ export const runAiValueSchema = z.object({
   key: z.string().min(1).max(120).regex(/^[A-Za-z0-9_. -]+$/),
   field: z.string().min(1).max(200),
   value: z.unknown(),
-  layer: z.enum(['rule', 'ai', 'agent']),
+  // 'derived': worked out by the parser from printed figures (sums, SDL x 100),
+  // never printed itself — shown apart from what was read.
+  layer: z.enum(['rule', 'ai', 'agent', 'derived']),
   confidence: z.number().min(0).max(1).nullable(),
   documentId: z.string().max(200),
   documentName: z.string().max(500),

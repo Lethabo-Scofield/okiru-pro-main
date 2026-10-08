@@ -415,7 +415,7 @@ const parserRunSchema = new Schema({
   // validation, calculator filtering, and audit details remain exactly as returned.
   parserOutput: { type: Schema.Types.Mixed, required: true },
   // What the model and the agent read from the same file — the AI block of
-  // the parser's signed record (field, value, source layer rule|ai|agent,
+  // the parser's signed record (field, value, source layer rule|ai|agent|derived,
   // page/cell citation and quote). Null on a run that predates it or had no
   // model read; parserOutput above stays the rule layer.
   aiValues: { type: Schema.Types.Mixed, default: null },
