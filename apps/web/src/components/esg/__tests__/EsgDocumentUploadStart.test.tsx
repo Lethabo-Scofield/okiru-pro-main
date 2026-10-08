@@ -533,7 +533,9 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // The parser sends ": ping" every 15 s while it works. Only named events
     // used to reset the 10-minute idle timer, so a long workbook timed out mid-read.
     const src = readFileSync(resolve(__dirname, "../EsgDocumentUploadStart.tsx"), "utf8");
-    expect(src).toMatch(/const \{ done, value \} = await reader\.read\(\);\s*if \(done\) break;\s*resetIdleTimer\(\);/);
+    // (The read itself is wrapped so a dropped connection can be told apart;
+    // what matters is that every chunk of bytes resets the timer.)
+    expect(src).toMatch(/chunk = await reader\.read\(\);[\s\S]{0,400}?const \{ done, value \} = chunk;\s*if \(done\) break;\s*resetIdleTimer\(\);/);
     expect(src).not.toMatch(/those are saved in your document library/);
   });
 

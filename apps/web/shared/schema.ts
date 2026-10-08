@@ -883,6 +883,26 @@ extractionSettlementSchema.set("toJSON", {
 export const ExtractionSettlementModel =
   mongoose.models.ExtractionSettlement || mongoose.model("ExtractionSettlement", extractionSettlementSchema);
 
+/**
+ * Which organisation authorised a quote when nothing was charged for it.
+ *
+ * A paid run is owned by its ledger debit (`extract:<quoteId>`). In free mode
+ * there is no debit, so authorising writes this instead — the only thing that
+ * lets the organisation that started a read, and nobody else, collect its
+ * result after a dropped connection. Kept a week, like the parser's quote.
+ */
+const extractionQuoteBindingSchema = new Schema(
+  {
+    quoteId: { type: String, required: true, unique: true },
+    organizationId: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now, expires: 7 * 24 * 60 * 60 },
+  },
+  { collection: "extractionQuoteBindings", id: false }
+);
+
+export const ExtractionQuoteBindingModel =
+  mongoose.models.ExtractionQuoteBinding || mongoose.model("ExtractionQuoteBinding", extractionQuoteBindingSchema);
+
 export const TokenLedgerModel =
   mongoose.models.TokenLedger || mongoose.model("TokenLedger", tokenLedgerSchema);
 export const TokenOrderModel =

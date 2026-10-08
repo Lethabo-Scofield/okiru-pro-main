@@ -56,6 +56,8 @@ import { concurrentMap } from '../services/concurrentMap.js';
 import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
 import { esgRunRecords, signParserRuns, verifiedQuoteId } from '../services/runAttestation.js';
 import { parseEsgFocus } from '../services/esgFocus.js';
+import { recorderForRun } from '../services/paidRunTracking.js';
+import { RUN_RESULT_TTL_MS } from '../services/runResultStore.js';
 import { elementFromHint } from '../services/specRetrieval.js';
 import {
   ESG_DOCUMENT_MATRIX,
@@ -344,6 +346,10 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
   if (paidQuote === null) return;
   const paidQuoteId = paidQuote?.quoteId;
   const clientStillThere = watchClient(res);
+  // The run's status and, once done, its result — kept so a client whose
+  // connection drops can still collect what it paid for.
+  const recorder = await recorderForRun({ domain: 'esg', paidQuoteId, requestedQuoteId: req.body?.quote_id, files });
+  await recorder?.start();
 
   void persistCaseFiles(
     typeof req.body?.case_id === 'string' ? req.body.case_id : undefined,
@@ -358,12 +364,16 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
+  // A client that has gone is written to no more; the run itself carries on.
+  const writable = () => !res.writableEnded && !res.destroyed;
   const send = (event: string, data: unknown) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (writable()) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
   // Heartbeat so intermediaries don't drop a long-idle connection during the
   // cross-case AI step.
-  const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
+  const heartbeat = setInterval(() => {
+    if (writable()) res.write(': ping\n\n');
+  }, 15000);
 
   try {
     // Files the upload filter dropped never reach `files`, so without this they
@@ -406,13 +416,8 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     const entities = await extractEsgCaseEntities(rawInputs, undefined, (p) => send('resolve-progress', p), {
       focusByFile: parseEsgFocus(req.body?.focus_elements),
     });
-    await recordExtractionOutcome(paidQuoteId, {
-      status: entities ? 'resolved' : 'failed',
-      ...valuesByQuotedFile(files, paidQuote, (entities as { extractions?: [] } | null)?.extractions),
-      delivered: clientStillThere(),
-    });
 
-    send('result', {
+    const payload = {
       status: entities ? 'resolved' : 'failed',
       case_id: caseId,
       domain: 'esg',
@@ -426,10 +431,31 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
         extractions: entities?.extractions ?? null,
         readErrors,
       }), { caseId: caseId ?? null, quoteId: verifiedQuoteId(req.body, extractionRequiresPayment()) }),
-    });
+    };
+    const outcome = {
+      status: (entities ? 'resolved' : 'failed') as 'resolved' | 'failed',
+      ...valuesByQuotedFile(files, paidQuote, (entities as { extractions?: [] } | null)?.extractions),
+      delivered: clientStillThere(),
+    };
+    // The outcome goes first, saying the result is held, and only then is the
+    // result kept: a client collecting it the instant it lands then always
+    // finds an outcome to mark delivered. An undelivered result that is held is
+    // not lost yet — the wallet waits for it to be collected (or to expire).
+    if (recorder) {
+      await recordExtractionOutcome(paidQuoteId, { ...outcome, resultHeldUntil: Date.now() + RUN_RESULT_TTL_MS });
+      // Kept BEFORE it is sent: a client that drops now still finds it.
+      const held = await recorder.done(payload);
+      // Not kept after all (too large, the store down): nothing is held.
+      if (!held) await recordExtractionOutcome(paidQuoteId, outcome);
+    } else {
+      await recordExtractionOutcome(paidQuoteId, outcome);
+    }
+
+    send('result', payload);
     send('complete', {});
   } catch (err) {
     logger.error('ESG case file resolve (stream) failed', err as Error);
+    await recorder?.failed((err as Error).message || 'CASE_FILE_PARSE_FAILED');
     await recordExtractionOutcome(paidQuoteId, {
       status: 'error',
       ...valuesByQuotedFile(files, paidQuote, []),

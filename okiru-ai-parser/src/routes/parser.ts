@@ -50,6 +50,8 @@ import {
   type RunRecord,
 } from '../services/runAttestation.js';
 import esgRouter from './esgParser.js';
+import { markResultCollected, recorderForRun } from '../services/paidRunTracking.js';
+import { getRunResultStore, runMaxMs } from '../services/runResultStore.js';
 
 const logger = createLogger('ParserRoutes');
 const router = Router();
@@ -601,6 +603,8 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
   if (batchTooLarge(files)) {
     return res.status(413).json(fail('Upload batch is too large. Maximum combined size is 500MB.', 'BATCH_TOO_LARGE'));
   }
+  /** The quote this run consumed: set only when payment is on and the claim won. */
+  let paidQuoteId: string | undefined;
   if (extractionRequiresPayment()) {
     const quoteId = typeof req.body?.quote_id === 'string' ? req.body.quote_id : undefined;
     const gate = await authoriseExtraction(quoteId, files);
@@ -610,7 +614,12 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     }
     const claim = await claimQuoteForRun(gate.record.quoteId);
     if (!claim.ok) return res.status(claim.status).json(fail(claim.message, claim.code));
+    paidQuoteId = gate.record.quoteId;
   }
+  // The run's status and, once done, its result — kept so a client whose
+  // connection drops can still collect what it paid for.
+  const recorder = await recorderForRun({ domain: 'bbbee', paidQuoteId, requestedQuoteId: req.body?.quote_id, files });
+  await recorder?.start();
 
   // Fire-and-forget: persist the ORIGINAL uploaded files to durable blob
   // storage in parallel with the stream below — never awaited, never lets a
@@ -628,19 +637,33 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
+  // A client that has gone is written to no more; the run itself carries on.
+  const writable = () => !res.writableEnded && !res.destroyed;
   const send = (event: string, data: unknown) => {
-    res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    if (writable()) res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   };
   // Heartbeat so intermediaries don't drop a long-idle connection during the
   // cross-case AI step.
-  const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
+  const heartbeat = setInterval(() => {
+    if (writable()) res.write(': ping\n\n');
+  }, 15000);
   // Aborted when the connection closes before the stream finished.
   const clientGone = new AbortController();
   res.on('close', () => {
     if (!res.writableEnded) clientGone.abort();
   });
 
-  const repository = await getParserRepository();
+  let repository: OntologyRepository;
+  try {
+    repository = await getParserRepository();
+  } catch (err) {
+    logger.error('Parser case file resolve (stream) could not open the ontology', err as Error);
+    await recorder?.failed((err as Error).message || 'CASE_FILE_PARSE_FAILED');
+    send('error', { message: (err as Error).message || 'CASE_FILE_PARSE_FAILED' });
+    clearInterval(heartbeat);
+    res.end();
+    return;
+  }
   try {
     // Files the upload filter dropped never reach `files`, so without this they
     // would be silently absent from a stream the client uses as the record of
@@ -693,12 +716,15 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       agent: {
         deterministic: result.documents_detected,
         pageImages: pageImageProviderFor(files),
-        // A client that disconnects stops its agent runs (and their retries).
-        signal: clientGone.signal,
+        // An UNPAID run whose client disconnects stops its agent runs (and
+        // their retries): nobody is waiting and nobody paid. A paid run is
+        // finished within its caps instead — its result is kept for the
+        // client to collect, and a half-read result is not what was bought.
+        signal: paidQuoteId ? undefined : clientGone.signal,
       },
     });
 
-    send('result', {
+    const payload = {
       ...result,
       ai_entities: entities,
       // One signed record per uploaded file — both layers of its read — the
@@ -710,10 +736,14 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
         caseId: result.case_id,
         quoteId: verifiedQuoteId(req.body, extractionRequiresPayment()),
       }),
-    });
+    };
+    // Kept BEFORE it is sent: a client that drops now still finds it.
+    await recorder?.done(payload);
+    send('result', payload);
     send('complete', {});
   } catch (err) {
     logger.error('Parser case file resolve (stream) failed', err as Error);
+    await recorder?.failed((err as Error).message || 'CASE_FILE_PARSE_FAILED');
     send('error', { message: (err as Error).message || 'CASE_FILE_PARSE_FAILED' });
   } finally {
     clearInterval(heartbeat);
@@ -962,6 +992,48 @@ router.get('/quotes/:quoteId/outcome', async (req: Request, res: Response) => {
       extractionCents: file.pricing?.extractionCents ?? 0,
     })),
   }));
+});
+
+/**
+ * A paid stream run's status and, once done, its result — for the client whose
+ * connection dropped while the run read on (the web server collects it for
+ * the organisation that paid, behind its own org check).
+ *
+ *   running → still reading (or reported failed once past PARSER_RUN_MAX_MS:
+ *             a run that old died with its pod)
+ *   done    → `result` is exactly the stream's final `result` event; null
+ *             only when it was too large to keep (`reason: 'too-large'`)
+ *   failed  → the run threw; `reason` says why
+ *
+ * Collecting a result marks an undelivered run delivered, so the wallet does
+ * not refund a run the organisation did receive in the end.
+ */
+router.get('/quotes/:quoteId/result', async (req: Request, res: Response) => {
+  if (!internalCallerAllowed(req, res, 'result read')) return;
+  const quoteId = String(req.params.quoteId);
+  try {
+    const run = await getRunResultStore().get(quoteId);
+    if (!run) return res.status(404).json(fail('No run is recorded for that quote', 'RUN_NOT_FOUND'));
+    const now = Date.now();
+    const maxRunMs = runMaxMs();
+    const stale = run.status === 'running' && now - run.startedAt > maxRunMs;
+    const status = stale ? 'failed' : run.status;
+    if (status === 'done' && run.result != null) await markResultCollected(quoteId);
+    return res.json(ok({
+      quoteId,
+      domain: run.domain,
+      status,
+      result: status === 'done' ? run.result : null,
+      startedAt: run.startedAt,
+      finishedAt: run.finishedAt,
+      reason: stale ? 'The read stopped without finishing.' : (run.reason ?? null),
+      maxRunMs,
+      now,
+    }));
+  } catch (err) {
+    logger.error('Could not read a paid run result', err as Error, { quoteId });
+    return res.status(503).json(fail('The run could not be read right now', 'RUN_STORE_UNAVAILABLE'));
+  }
 });
 
 /**

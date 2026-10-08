@@ -14,6 +14,12 @@
  * pulling the whole upload component into their bundle.
  */
 import type { ParserCaseLike } from "@/lib/parserWorkbookMap";
+import {
+  clearPendingReadRecord,
+  readPendingReadRecord,
+  writePendingReadRecord,
+  type PendingRead,
+} from "@/lib/paidReadResume";
 
 const FLOW_SNAPSHOT_KEY = "okiru-create-scorecard-flow-v1";
 
@@ -67,4 +73,27 @@ export function clearFlowSnapshot(scope?: string): void {
   } catch {
     // ignore
   }
+}
+
+/**
+ * The paid read in flight in this tab, if any — its quote id and the library
+ * ids of its uploads. Written as a paid read starts and cleared once its result
+ * has landed (or it is known lost), so a dropped connection, a retry that meets
+ * "already processed", or a reload can still collect what the quote bought.
+ * Same scopes as the snapshot: an add-documents round never collects into the
+ * create flow, nor the reverse.
+ */
+const PENDING_READ_KEY = "okiru-create-scorecard-pending-read-v1";
+const pendingKeyFor = (scope?: string) => (scope ? `${PENDING_READ_KEY}:${scope}` : PENDING_READ_KEY);
+
+export function readPendingRead(scope?: string): PendingRead | null {
+  return readPendingReadRecord(pendingKeyFor(scope));
+}
+
+export function writePendingRead(record: PendingRead, scope?: string): void {
+  writePendingReadRecord(pendingKeyFor(scope), record);
+}
+
+export function clearPendingRead(scope?: string): void {
+  clearPendingReadRecord(pendingKeyFor(scope));
 }

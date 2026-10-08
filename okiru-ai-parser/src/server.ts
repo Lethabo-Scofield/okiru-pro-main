@@ -11,6 +11,7 @@ import { createLogger } from './logger.js';
 import { parserHelmetOptions, resolveCorsOrigin } from './securityConfig.js';
 import { setQuoteStore } from './services/quoteStore.js';
 import { createRedisQuoteStore } from './services/redisQuoteStore.js';
+import { RedisRunResultStore, setRunResultStore } from './services/runResultStore.js';
 
 const logger = createLogger('OkiruPaser');
 const app = express();
@@ -146,6 +147,9 @@ async function initialiseQuoteStore(): Promise<void> {
     const store = await createRedisQuoteStore();
     if (store) {
       setQuoteStore(store);
+      // A paid run's result must be collectable from whichever replica the
+      // reconnecting client's request lands on, so it lives beside the quote.
+      setRunResultStore(new RedisRunResultStore(store.client));
       return;
     }
   } catch (err) {

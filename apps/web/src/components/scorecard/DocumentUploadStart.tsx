@@ -262,6 +262,8 @@ interface TokenCost {
   sufficient: boolean;
   shortfall: number;
   alreadyAuthorized: boolean;
+  /** Uploads are not charged for (TOKENS_REQUIRE_PAYMENT=false). */
+  free?: boolean;
 }
 
 const tokenText = (value: number): string => value.toLocaleString("en-ZA");
@@ -270,8 +272,34 @@ const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workboo
 
 // The flow snapshot — how a paid extraction survives navigation. Shared with
 // the Hub's "continue where you left off" strip, so it lives in its own module.
-import { clearFlowSnapshot, readFlowSnapshot, writeFlowSnapshot } from "./flowSnapshot";
+import {
+  clearFlowSnapshot,
+  clearPendingRead,
+  readFlowSnapshot,
+  readPendingRead,
+  writeFlowSnapshot,
+  writePendingRead,
+} from "./flowSnapshot";
 import { postParserRun, signedRunsByFile, withoutSignedRuns } from "@/lib/parserRunAttestation";
+import {
+  PaidReadInterrupted,
+  RESUME_CHECKING_MESSAGE,
+  RESUME_RUNNING_MESSAGE,
+  collectPaidRead,
+  isConnectionLoss,
+  refundSentence,
+  uncollectedReadMessage,
+} from "@/lib/paidReadResume";
+
+/** One upload a read covers: the File while this page holds it, its library id once saved. */
+interface ReadUpload {
+  name: string;
+  file: File | null;
+  documentId: string | null;
+}
+
+/** How a paid read ended: its result landed, it was refused or broke, or its connection dropped and it could not be collected. */
+type ReadEnd = "delivered" | "failed" | "lost";
 // Each "Add documents" round reads only its new files; this folds the result
 // into what earlier rounds already read, without losing any of it.
 import { mergeParserCases } from "@/lib/parserCaseMerge";
@@ -411,6 +439,18 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   /** What the server returned for a paid run that delivered less than it cost. */
   const [refundNotice, setRefundNotice] = useState<string | null>(null);
+  /** Set while a dropped read is being collected and the server says it is still reading. */
+  const [resumeNotice, setResumeNotice] = useState<string | null>(null);
+  /** A dropped read that could not be collected: what happened, whether the tokens come back, and a way on. */
+  const [readLost, setReadLost] = useState<{ message: string; quoteId: string; canCheckAgain: boolean } | null>(null);
+  /** Polling for a dropped read stops when the page goes. */
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [parserCase, setParserCase] = useState<ParserCaseLike | null>(null);
   /** The case as of now, for the merge at the end of a read (which outlives the render it started in). */
   const parserCaseRef = useRef<ParserCaseLike | null>(null);
@@ -1026,6 +1066,21 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     await Promise.all(list.map((file) => persistDocument(file)));
   };
 
+  /** The library id of an upload: saved already (a collected read after a reload), or saved now. */
+  const documentIdOf = async (upload: ReadUpload): Promise<string> => {
+    if (upload.file) return persistDocument(upload.file);
+    if (upload.documentId) return upload.documentId;
+    throw new Error(`${upload.name} is not in your document library`);
+  };
+
+  /** The uploads a read of `list` covers, with whatever library ids they already have. */
+  const uploadsOf = (list: File[], idsByName: Record<string, string> = {}): ReadUpload[] =>
+    list.map((file) => ({
+      name: file.name,
+      file,
+      documentId: persistedDocumentsRef.current.get(filePersistenceKey(file)) ?? idsByName[file.name] ?? null,
+    }));
+
   const prepareAndQuote = async (list: File[]): Promise<void> => {
     setLibraryWarning(null);
     // The WHOLE pipeline is "checking" — saving to the library and then
@@ -1066,11 +1121,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
    * its citation. A workbook read sheet by sheet is one run, the workbook's.
    * A file the parser did not sign for is reported, not skipped.
    */
-  const persistParserRuns = async (data: ParserCaseLike, list: File[]): Promise<void> => {
+  const persistParserRuns = async (data: ParserCaseLike, uploads: ReadUpload[]): Promise<void> => {
     const caseData = data as ParserCaseLike & { case_id?: string };
     const reviewRows = data.documents_needing_review ?? [];
     const signed = signedRunsByFile(data);
-    const uploadNames = new Set(list.map((file) => file.name));
+    const uploadNames = new Set(uploads.map((upload) => upload.name));
     // The upload a detected document came from: itself, or the workbook a
     // sheet ("Pack.xlsx › Ownership") was split out of.
     const uploadOf = (name: string) => {
@@ -1115,8 +1170,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       else unmatched.push(String(detected.filename));
     }
     const tasks = Array.from(filesInCase).map(async (filename) => {
-      const file = list.find((candidate) => candidate.name === filename)!;
-      const documentId = await persistDocument(file);
+      const documentId = await documentIdOf(uploads.find((candidate) => candidate.name === filename)!);
       const detected = (data.documents_detected ?? []).find((doc) => doc.filename === filename);
       // A workbook read sheet by sheet never had a pre-signing body.
       const legacy = detected
@@ -1136,32 +1190,202 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   };
 
   /**
-   * Step 7: the paid work. Only runs once the quote is paid, and sends the
-   * quote id so the server can verify payment and that these are the exact
-   * files that were paid for.
+   * Finish a read exactly as a completed stream does: file the signed runs in
+   * the library, merge into the case, mark the files read and keep the
+   * snapshot. One path for a stream that delivered and for a read collected
+   * after its connection dropped, so the two can never end differently.
    */
-  const runExtraction = async (list: File[], quoteId: string): Promise<boolean> => {
-    let delivered = false;
+  const completeRead = async (
+    data: ParserCaseLike & { calculator_payload?: Record<string, unknown> },
+    uploads: ReadUpload[],
+  ): Promise<void> => {
+    try {
+      await persistParserRuns(data, uploads);
+      setLibraryWarning(null);
+    } catch (persistenceError) {
+      console.error("[DocumentUploadStart] Parser result persistence failed", persistenceError);
+      setLibraryWarning(persistenceError instanceof Error ? persistenceError.message : "Parser results were not saved to the document library.");
+    }
+    // Uploads that are only in the library (a read collected after a reload)
+    // still belong to this run: create files them under the company.
+    for (const upload of uploads) {
+      if (upload.file || !upload.documentId) continue;
+      if (!restoredDocumentIdsRef.current.includes(upload.documentId)) {
+        restoredDocumentIdsRef.current = [...restoredDocumentIdsRef.current, upload.documentId];
+      }
+      restoredIdsByNameRef.current = { ...restoredIdsByNameRef.current, [upload.name]: upload.documentId };
+    }
+    // Merge with anything already paid for and read in an earlier round, so a
+    // requote never loses (or re-charges for) documents we already have.
+    // The signed records were filed above; the case keeps no second copy.
+    const mergedCase = mergeParserCases(parserCaseRef.current, withoutSignedRuns(data));
+    parserCaseRef.current = mergedCase;
+    setParserCase(mergedCase);
+    // These files are now part of the case: never priced, charged or read again.
+    const nowRead = new Set(readKeysRef.current);
+    for (const upload of uploads) if (upload.file) nowRead.add(filePersistenceKey(upload.file));
+    readKeysRef.current = nowRead;
+    setReadKeys(nowRead);
+    setQuote(null);
+    setTokenCost(null);
+    setDoneStaging(false);
+    // No File objects survive a reload; a read collected after one reveals
+    // from the case alone, the way a restored snapshot does.
+    if (uploads.length > 0 && uploads.every((upload) => !upload.file)) setRestoredAt(new Date().toISOString());
+    const readNames = Array.from(
+      new Set([...(readFlowSnapshot(snapshotScope)?.fileNames ?? []), ...uploads.map((upload) => upload.name)]),
+    );
+    // Auto-fill the company name from the extracted entity name — the
+    // resolved ai_entities field first (clean), then the raw extractions,
+    // then the legacy payload key. This both saves the user typing it and,
+    // crucially, gives reconciliation the registered name it needs.
+    const entity = pickEntityName(mergedCase);
+    if (entity) setCompanyName((prev) => prev.trim() || entity);
+    // Tokens have just been spent on this result — make it survive leaving
+    // the flow. Restored on the next mount, cleared when the scorecard is
+    // created or the run is discarded.
+    writeFlowSnapshot({
+      savedAt: new Date().toISOString(),
+      companyName: companyName.trim() || entity,
+      sector,
+      subSector,
+      size,
+      yearEnd,
+      fileNames: readNames,
+      filedBatchByFile,
+      documentIds: allDocumentIds(),
+      documentIdsByName: documentIdsByName(),
+      parserCase: mergedCase,
+    }, snapshotScope);
+    // The read has landed: nothing is left to collect.
+    clearPendingRead(snapshotScope);
+  };
+
+  /**
+   * Ask the server to settle the paid run that just ended — the same call the
+   * ESG flow makes. Whatever the run failed to deliver is refunded there,
+   * decided from the parser's own record of the run, never from this screen.
+   * Resolves the settlement (null when it could not be asked).
+   */
+  const requestSettlement = async (quoteId: string): Promise<Record<string, any> | null> => {
+    try {
+      const res = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
+        method: "POST",
+        credentials: "include",
+      });
+      if (!res.ok) return null;
+      return (await res.json().catch(() => null)) as Record<string, any> | null;
+    } catch {
+      // The server settles every paid run on its own sweep regardless.
+      return null;
+    }
+  };
+
+  /**
+   * Collect a read whose stream was lost. The quote is spent and the run reads
+   * on server-side, so the result is ASKED FOR — never re-run, never charged
+   * again: still reading → say so and keep asking every 5s; done → finish it
+   * exactly as the stream would have; failed or gone → say what happened,
+   * whether the tokens come back, and offer a way on.
+   */
+  const collectRead = async (quoteId: string, uploads: ReadUpload[]): Promise<ReadEnd> => {
+    setResumeNotice(RESUME_CHECKING_MESSAGE);
+    setReadLost(null);
+    const collected = await collectPaidRead(quoteId, {
+      onRunning: () => {
+        if (mountedRef.current) setResumeNotice(RESUME_RUNNING_MESSAGE);
+      },
+      isCancelled: () => !mountedRef.current,
+    });
+    if (!mountedRef.current) return "lost";
+    setResumeNotice(null);
+    if (collected.status === "done") {
+      await completeRead(collected.result as ParserCaseLike, uploads);
+      return "delivered";
+    }
+    // Unreachable: the read may still land — keep the record so "Check again"
+    // or a reload can collect it. Anything else is final.
+    if (collected.status !== "unreachable") clearPendingRead(snapshotScope);
+    const settlement = await requestSettlement(quoteId);
+    if (settlement?.state === "settled" && Number(settlement.refundedTokens) > 0) {
+      window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+    }
+    setReadLost({
+      message: `${uncollectedReadMessage(collected)} ${refundSentence(settlement)}`,
+      quoteId,
+      canCheckAgain: collected.status === "unreachable",
+    });
+    return "lost";
+  };
+
+  /** Collect a read this page did not start (a retry met "already processed", or a reload found one in flight). */
+  const resumeCollect = async (quoteId: string, uploads: ReadUpload[]): Promise<ReadEnd> => {
     setParsing(true);
     setResolving(false);
     setResolveProgress(null);
     setParseError(null);
+    try {
+      return await collectRead(quoteId, uploads);
+    } catch (err) {
+      setParseError(err instanceof Error ? err.message : "Could not collect the read");
+      return "failed";
+    } finally {
+      setParsing(false);
+      setResolving(false);
+    }
+  };
+
+  /**
+   * Step 7: the paid work. Only runs once the quote is paid, and sends the
+   * quote id so the server can verify payment and that these are the exact
+   * files that were paid for. A dropped connection is not the end of the read:
+   * the run carries on server-side and its result is collected instead.
+   */
+  const runExtraction = async (list: File[], quoteId: string): Promise<ReadEnd> => {
+    let end: ReadEnd = "failed";
+    setParsing(true);
+    setResolving(false);
+    setResolveProgress(null);
+    setParseError(null);
+    setResumeNotice(null);
+    setReadLost(null);
     setDocProgress({});
     try {
       await persistSelectedDocuments(list);
+      // The read in flight, kept until it lands: what a retry or a reload
+      // collects if this connection drops.
+      writePendingRead({
+        quoteId,
+        startedAt: new Date().toISOString(),
+        fileNames: list.map((f) => f.name),
+        documentIdsByName: Object.fromEntries(
+          uploadsOf(list).flatMap((u) => (u.documentId ? [[u.name, u.documentId]] : [])),
+        ),
+      }, snapshotScope);
       const form = new FormData();
       for (const f of list) form.append("files", f, f.name);
       form.append("case_id", `create_scorecard_${Date.now()}`);
       form.append("quote_id", quoteId);
       // Streaming endpoint: emits per-file doc-start/doc-done SSE events so the
       // list fills up as each document is read, then a single result event.
-      const res = await fetch("/api/parser/resolve-case-files-stream", {
-        method: "POST",
-        credentials: "include",
-        body: form,
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/parser/resolve-case-files-stream", {
+          method: "POST",
+          credentials: "include",
+          body: form,
+        });
+      } catch (err) {
+        if (isConnectionLoss(err)) throw new PaidReadInterrupted(quoteId, "connection");
+        throw err;
+      }
       if (res.status === 402 || res.status === 409 || res.status === 410) {
         const body = await res.json().catch(() => ({}));
+        // Spent by a run already going (a double click, a retry): collect it.
+        if (res.status === 409 && body?.error?.code === "QUOTE_ALREADY_USED") {
+          throw new PaidReadInterrupted(quoteId, "already-used");
+        }
+        clearPendingRead(snapshotScope);
         throw new Error(body?.error?.message ?? "Payment could not be verified for these documents");
       }
       if (!res.ok || !res.body) throw new Error(`Parser returned ${res.status}`);
@@ -1203,7 +1427,14 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
 
       // Parse the SSE stream block by block (blocks are separated by a blank line).
       for (;;) {
-        const { done, value } = await reader.read();
+        let chunk: ReadableStreamReadResult<Uint8Array>;
+        try {
+          chunk = await reader.read();
+        } catch (err) {
+          if (isConnectionLoss(err)) throw new PaidReadInterrupted(quoteId, "connection");
+          throw err;
+        }
+        const { done, value } = chunk;
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const blocks = buffer.split(/\r?\n\r?\n/);
@@ -1221,93 +1452,71 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
         }
       }
 
-      if (streamError) throw new Error(streamError);
-      if (!data) throw new Error("The parser did not return a result.");
-      try {
-        await persistParserRuns(data, list);
-        setLibraryWarning(null);
-      } catch (persistenceError) {
-        console.error("[DocumentUploadStart] Parser result persistence failed", persistenceError);
-        setLibraryWarning(persistenceError instanceof Error ? persistenceError.message : "Parser results were not saved to the document library.");
+      if (streamError) {
+        clearPendingRead(snapshotScope);
+        throw new Error(streamError);
       }
-      // Merge with anything already paid for and read in an earlier round, so a
-      // requote never loses (or re-charges for) documents we already have.
-      // The signed records were filed above; the case keeps no second copy.
-      const mergedCase = mergeParserCases(parserCaseRef.current, withoutSignedRuns(data));
-      parserCaseRef.current = mergedCase;
-      setParserCase(mergedCase);
-      delivered = true;
-      // These files are now part of the case: never priced, charged or read again.
-      const nowRead = new Set(readKeysRef.current);
-      for (const f of list) nowRead.add(filePersistenceKey(f));
-      readKeysRef.current = nowRead;
-      setReadKeys(nowRead);
-      setQuote(null);
-      setTokenCost(null);
-      setDoneStaging(false);
-      const readNames = Array.from(
-        new Set([...(readFlowSnapshot(snapshotScope)?.fileNames ?? []), ...list.map((f) => f.name)]),
-      );
-      // Auto-fill the company name from the extracted entity name — the
-      // resolved ai_entities field first (clean), then the raw extractions,
-      // then the legacy payload key. This both saves the user typing it and,
-      // crucially, gives reconciliation the registered name it needs.
-      const entity = pickEntityName(mergedCase);
-      if (entity) setCompanyName((prev) => prev.trim() || entity);
-      // Tokens have just been spent on this result — make it survive leaving
-      // the flow. Restored on the next mount, cleared when the scorecard is
-      // created or the run is discarded.
-      writeFlowSnapshot({
-        savedAt: new Date().toISOString(),
-        companyName: companyName.trim() || entity,
-        sector,
-        subSector,
-        size,
-        yearEnd,
-        fileNames: readNames,
-        filedBatchByFile,
-        documentIds: allDocumentIds(),
-        documentIdsByName: documentIdsByName(),
-        parserCase: mergedCase,
-      }, snapshotScope);
+      // The stream closed without a result or an error: cut on the way (a
+      // proxy timeout, a dropped hop). The run may well have finished.
+      if (!data) throw new PaidReadInterrupted(quoteId, "no-result");
+      await completeRead(data, uploadsOf(list));
+      end = "delivered";
     } catch (err) {
-      setParseError(err instanceof Error ? err.message : "Could not read the documents");
+      if (err instanceof PaidReadInterrupted) {
+        try {
+          end = await collectRead(err.quoteId, uploadsOf(list, readPendingRead(snapshotScope)?.documentIdsByName));
+        } catch (collectError) {
+          setParseError(collectError instanceof Error ? collectError.message : "Could not collect the read");
+        }
+      } else {
+        setParseError(err instanceof Error ? err.message : "Could not read the documents");
+      }
     } finally {
       setParsing(false);
       setResolving(false);
     }
-    return delivered;
+    return end;
   };
 
   /**
-   * Ask the server to settle the paid run that just ended — the same call the
-   * ESG flow makes. Whatever the run failed to deliver is refunded there,
-   * decided from the parser's own record of the run, never from this screen.
+   * Settle the paid run that just ended and show what came back. A read that
+   * was lost settled itself already, with its own message.
    */
-  const settlePaidRun = async (quoteId: string, delivered: boolean) => {
-    try {
-      const res = await fetch(`/api/tokens/runs/${encodeURIComponent(quoteId)}/settle-outcome`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!res.ok) return;
-      const body = await res.json().catch(() => null);
-      if (body?.state === "settled" && Number(body.refundedTokens) > 0) {
-        setRefundNotice(
-          `${Number(body.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance. ${body.reason ?? ""}`.trim(),
-        );
-        window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
-      } else if (body?.state === "pending" && body.queued && body.reason) {
-        setRefundNotice(String(body.reason));
-      } else if (body?.state === "pending" && !delivered) {
-        setRefundNotice(
-          "If this run delivered nothing, its tokens come back to your balance automatically — there is nothing you need to do.",
-        );
-      }
-    } catch {
-      // The server settles every paid run on its own sweep regardless.
+  const settlePaidRun = async (quoteId: string, end: ReadEnd) => {
+    if (end === "lost") return;
+    const delivered = end === "delivered";
+    const body = await requestSettlement(quoteId);
+    if (!body) return;
+    if (body?.state === "settled" && Number(body.refundedTokens) > 0) {
+      setRefundNotice(
+        `${Number(body.refundedTokens).toLocaleString("en-ZA")} tokens were returned to your balance. ${body.reason ?? ""}`.trim(),
+      );
+      window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
+    } else if (body?.state === "pending" && body.queued && body.reason) {
+      setRefundNotice(String(body.reason));
+    } else if (body?.state === "pending" && !delivered) {
+      setRefundNotice(
+        "If this run delivered nothing, its tokens come back to your balance automatically — there is nothing you need to do.",
+      );
     }
   };
+
+  /**
+   * A read whose connection dropped before this page mounted (a reload, a
+   * closed tab) is collected on the way in — once, on mount, before any
+   * interaction, like the snapshot restore above.
+   */
+  useEffect(() => {
+    const pending = readPendingRead(snapshotScope);
+    if (!pending) return;
+    const uploads: ReadUpload[] = pending.fileNames.map((name) => ({
+      name,
+      file: null,
+      documentId: pending.documentIdsByName[name] ?? null,
+    }));
+    void resumeCollect(pending.quoteId, uploads).then((end) => settlePaidRun(pending.quoteId, end));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Step 6: spend tokens, then read.
@@ -1320,12 +1529,16 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
    * The debit is server-side and idempotent, so a double-click charges once. If
    * the balance will not cover the batch, we say so with the exact shortfall and
    * send them to billing rather than failing vaguely.
+   *
+   * A batch already processed is not processed again: when the quote is spent
+   * (the connection dropped and this is the retry), its read is collected.
    */
   const spendAndExtract = async () => {
     if (!quote) return;
     setPaying(true);
     setParseError(null);
     setRefundNotice(null);
+    setReadLost(null);
     try {
       const res = await fetch("/api/tokens/authorize", {
         method: "POST",
@@ -1334,6 +1547,15 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
         body: JSON.stringify({ quoteId: quote.quoteId }),
       });
       const body = await res.json().catch(() => ({}));
+      if (res.status === 409 && body?.code === "QUOTE_ALREADY_USED") {
+        const pending = readPendingRead(snapshotScope);
+        const end = await resumeCollect(
+          quote.quoteId,
+          uploadsOf(unreadFiles, pending?.quoteId === quote.quoteId ? pending.documentIdsByName : {}),
+        );
+        await settlePaidRun(quote.quoteId, end);
+        return;
+      }
       if (res.status === 402) {
         setTokenCost((prev) => (prev ? { ...prev, balance: body?.balance ?? prev.balance, sufficient: false, shortfall: body?.shortfall ?? prev.shortfall } : prev));
         throw new Error(
@@ -1348,13 +1570,50 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       // Every header shows the balance, so it must move the moment it changes.
       window.dispatchEvent(new CustomEvent("okiru:tokens-changed"));
       // Exactly the files this quote priced: the unread ones.
-      const delivered = await runExtraction(unreadFiles, quote.quoteId);
-      await settlePaidRun(quote.quoteId, delivered);
+      const end = await runExtraction(unreadFiles, quote.quoteId);
+      await settlePaidRun(quote.quoteId, end);
     } catch (err) {
       setParseError(err instanceof Error ? err.message : "Could not start processing");
     } finally {
       setPaying(false);
     }
+  };
+
+  /**
+   * Read without spending (free mode). The authorise call costs nothing here,
+   * but it records which organisation started this read — the only thing that
+   * lets it collect the result if the connection drops.
+   */
+  const readFree = async (list: File[], quoteId: string): Promise<ReadEnd> => {
+    if (tokenCost?.free) {
+      try {
+        await fetch("/api/tokens/authorize", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quoteId }),
+        });
+      } catch {
+        // Reading still works; only collecting after a dropped connection would not.
+      }
+    }
+    return runExtraction(list, quoteId);
+  };
+
+  /** After a read that could not be collected: ask again (no charge), or price the documents afresh. */
+  const checkLostReadAgain = () => {
+    const lost = readLost;
+    if (!lost) return;
+    const pending = readPendingRead(snapshotScope);
+    const uploads = unreadFiles.length > 0
+      ? uploadsOf(unreadFiles, pending?.documentIdsByName)
+      : (pending?.fileNames ?? []).map((name) => ({ name, file: null, documentId: pending?.documentIdsByName[name] ?? null }));
+    void resumeCollect(lost.quoteId, uploads).then((end) => settlePaidRun(lost.quoteId, end));
+  };
+  const uploadLostReadAgain = () => {
+    setReadLost(null);
+    clearPendingRead(snapshotScope);
+    if (unreadFiles.length > 0) void prepareAndQuote(files);
   };
 
   /** Extensions the parser can read. Anything else is filtered with a warning. */
@@ -1589,7 +1848,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   const readNow = () => {
     if (!quote) return;
     if (readCharging) void spendAndExtract();
-    else void runExtraction(unreadFiles, quote.quoteId);
+    else void readFree(unreadFiles, quote.quoteId);
   };
   /**
    * Nothing on screen but the dropzone: the state a user lands in when they
@@ -1699,6 +1958,8 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   /** Throw the restored (or just-extracted) run away and start clean. */
   const discardRun = () => {
     clearFlowSnapshot(snapshotScope);
+    clearPendingRead(snapshotScope);
+    setReadLost(null);
     setParserCase(null);
     setReadKeys(new Set());
     setRestoredAt(null);
@@ -2224,7 +2485,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
 
               <div className="mt-5 space-y-2">
                 <button
-                  onClick={() => void (charging ? spendAndExtract() : runExtraction(unreadFiles, quote.quoteId))}
+                  onClick={() => void (charging ? spendAndExtract() : readFree(unreadFiles, quote.quoteId))}
                   disabled={paying || parsing || cannotAfford}
                   className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
                   style={{ background: "#0e6fff", color: "#ffffff" }}
@@ -2538,7 +2799,9 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
               {resolving ? "Reconciling into your company profile" : "Reading your documents"}
             </div>
             <div className="text-[12px] text-[color:var(--body)]">
-              {resolving
+              {resumeNotice
+                ? <span data-testid="read-resume-notice">{resumeNotice}</span>
+                : resolving
                 ? resolveProgress
                   ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking names, IDs and figures across every file`
                   : "Cross-checking names, IDs and figures across every file"
@@ -2710,6 +2973,33 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       )}
 
       {parseError && <p className="text-[12px] text-red-400 mt-3">{parseError}</p>}
+      {/* A read whose connection dropped and could not be collected: what
+          happened, whether the tokens come back, and a way on. */}
+      {readLost && !parsing && (
+        <div className="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/[0.06] px-4 py-3" data-testid="read-lost">
+          <p className="text-[12px] leading-5 text-amber-100">{readLost.message}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {readLost.canCheckAgain && (
+              <button
+                type="button"
+                onClick={checkLostReadAgain}
+                className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--body)] hover:bg-white/[0.04]"
+                data-testid="button-read-check-again"
+              >
+                Check again
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={uploadLostReadAgain}
+              className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--body)] hover:bg-white/[0.04]"
+              data-testid="button-read-upload-again"
+            >
+              Upload the documents again
+            </button>
+          </div>
+        </div>
+      )}
       {libraryWarning && <p className="text-[12px] text-amber-300 mt-3">{libraryWarning}</p>}
 
       {/* Pricing the documents — free, structure-only, nothing read yet. */}
