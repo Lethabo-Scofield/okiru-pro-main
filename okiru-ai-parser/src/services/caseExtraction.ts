@@ -144,6 +144,8 @@ const OWN_FINANCIALS_TYPE = /financial_statements|management_accounts|(?:^|_)afs
  * the measured entity's.
  */
 const THIRD_PARTY_FINANCIALS = /management_company|(?:^|_)scheme(?:_|$)|beneficiar|supplier|recipient/i;
+/** Statements for earlier years (the SED five-year average's prior AFS): not the measured year. */
+const PRIOR_YEAR_FINANCIALS = /(?:^|_)prior(?:_|$)|previous_(?:financial_)?years|historic/i;
 
 /** Whether an extraction can state the measured entity's own financial year end. */
 export function statesOwnYearEnd(extraction: DocumentExtraction): boolean {
@@ -151,29 +153,35 @@ export function statesOwnYearEnd(extraction: DocumentExtraction): boolean {
   if (id === SHEET_INSTRUCTIONS_DOCUMENT_ID || id === 'sheet_financials') return true;
   if (/certificate|affidavit/i.test(id)) return false;
   if (THIRD_PARTY_FINANCIALS.test(id)) return false;
+  if (PRIOR_YEAR_FINANCIALS.test(id)) return false;
   return OWN_FINANCIALS_TYPE.test(id);
 }
 
 /**
  * The measurement period the case's documents state: the year end on the
  * workbook's Instructions sheet first (the client's own declaration), then the
- * first of the measured entity's own financial documents that prints a full
- * year-end date (statesOwnYearEnd). Null when none does — and then nothing
- * period-dependent is derived.
+ * LATEST full year-end date the measured entity's own financial documents print
+ * (statesOwnYearEnd) — a pack holding last year's AFS beside this year's is
+ * measured over this year, whichever file was read first. Null when none
+ * does — and then nothing period-dependent is derived.
  */
 export function casePeriod(extractions: DocumentExtraction[]): MeasurementPeriod | null {
-  const ordered = [
-    ...extractions.filter((e) => e.documentId === SHEET_INSTRUCTIONS_DOCUMENT_ID),
-    ...extractions.filter((e) => e.documentId !== SHEET_INSTRUCTIONS_DOCUMENT_ID && statesOwnYearEnd(e)),
-  ];
-  for (const extraction of ordered) {
-    for (const value of extraction.values) {
-      if (value.field !== 'financial_year_end') continue;
-      const period = periodEndingOn(value.value);
-      if (period) return period;
+  const periodsOf = (extraction: DocumentExtraction): MeasurementPeriod[] => extraction.values
+    .filter((value) => value.field === 'financial_year_end')
+    .map((value) => periodEndingOn(value.value))
+    .filter((period): period is MeasurementPeriod => period !== null);
+  for (const extraction of extractions.filter((e) => e.documentId === SHEET_INSTRUCTIONS_DOCUMENT_ID)) {
+    const [declared] = periodsOf(extraction);
+    if (declared) return declared;
+  }
+  let latest: MeasurementPeriod | null = null;
+  for (const extraction of extractions) {
+    if (extraction.documentId === SHEET_INSTRUCTIONS_DOCUMENT_ID || !statesOwnYearEnd(extraction)) continue;
+    for (const period of periodsOf(extraction)) {
+      if (!latest || period.end > latest.end) latest = period;
     }
   }
-  return null;
+  return latest;
 }
 
 /**

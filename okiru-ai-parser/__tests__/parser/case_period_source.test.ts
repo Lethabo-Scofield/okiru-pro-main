@@ -63,6 +63,22 @@ describe('the measurement period comes only from the measured entity\'s own docu
     expect(casePeriod([scheme, afs])).toEqual({ start: '2024-03-01', end: '2025-02-28' });
   });
 
+  it('the statements for the prior financial years never set it', () => {
+    const prior = extraction('sed__afs_for_each_of_the_prior_5_financial_years_where_5_year_ave', { financial_year_end: '28 February 2021' }, 'SED');
+    const afs = extraction(ESD_AFS, { financial_year_end: '28 February 2025' }, 'ESD');
+    expect(casePeriod([prior])).toBeNull();
+    expect(casePeriod([prior, afs])).toEqual({ start: '2024-03-01', end: '2025-02-28' });
+  });
+
+  it('when the entity\'s own statements disagree, the latest year end wins whatever the upload order', () => {
+    // A pack holding last year's AFS beside this year's must not derive the
+    // EMP201 and SED totals over last year because that file was read first.
+    const lastYear = extraction('ownership__audited_reviewed_annual_financial_statements_afs', { financial_year_end: '29 February 2024' }, 'OWNERSHIP');
+    const thisYear = extraction(ESD_AFS, { financial_year_end: '28 February 2025' }, 'ESD');
+    expect(casePeriod([lastYear, thisYear])).toEqual({ start: '2024-03-01', end: '2025-02-28' });
+    expect(casePeriod([thisYear, lastYear])).toEqual({ start: '2024-03-01', end: '2025-02-28' });
+  });
+
   it('the Instructions sheet still comes first', () => {
     const afs = extraction(ESD_AFS, { financial_year_end: '31 March 2025' });
     const profile = extraction('sheet_instructions', { financial_year_end: '2025-02-28' });
