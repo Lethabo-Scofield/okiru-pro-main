@@ -42,6 +42,7 @@ import {
   findEsgDocumentById,
   type EsgElement,
 } from '../../schemas/esg_document_matrix.js';
+import { activeSkills, type Skill, type SkillRegistry } from './skills.js';
 
 export type ExtractionDomain = 'bbbee' | 'esg';
 
@@ -294,6 +295,11 @@ export function esgGridDocuments(): Array<{ documentId: string; grid: DocumentGr
 export interface DomainDefinition {
   domain: ExtractionDomain;
   matrix: readonly DomainDocument[];
+  /**
+   * A matrix spec by id — or, for a document type a skill declares that the
+   * matrix does not have yet (a skill's `newType`), the spec that skill reads it
+   * with (see skillTypeDocument).
+   */
   findDocumentById(id: string): DomainDocument | null;
   aliasIndex(): Array<{ alias: string; lower: string; doc: DomainDocument }>;
   /**
@@ -303,26 +309,84 @@ export interface DomainDefinition {
   analystRole: string;
   /** Grid shape for a spec, or null when the spec returns a single record. */
   gridForDocument(documentId: string): DocumentGrid | null;
+  /**
+   * The domain's skills (skills/<domain>/), or null when PARSER_SKILLS=off.
+   * B-BBEE's are required (a missing directory fails at boot); ESG's are
+   * optional, so an ESG skill dropped into skills/esg/ is picked up by every
+   * prompt, menu and agent target with no code change.
+   */
+  skills(): SkillRegistry | null;
+  /** The skill that reads a spec id or document-type name, or null. */
+  skillFor(specIdOrName: string): Skill | null;
+  /**
+   * Whether the domain's skills also read workbook SHEETS. B-BBEE's do not:
+   * each describes a standalone document (a payroll report, an AFS, a
+   * certificate), and its "a wrong document answers null" rule would make a
+   * gathering-workbook sheet routed to that spec answer nothing. ESG evidence
+   * is mostly registers kept as spreadsheets, so its skills (when they land)
+   * read sheets too.
+   */
+  skillsReadSheets: boolean;
+}
+
+/**
+ * A document type no matrix spec covers, read through its skill: a type the
+ * skill declares (`newType`: the beneficial interest register, the company
+ * profile), or a canonical type only the skill reads (the ownership letter's
+ * "Ownership Confirmation"). The skill supplies the fields, where they sit and
+ * the traps; this is only the spec-shaped handle the extraction pipeline
+ * addresses it by. Its id is the skill id, which cannot collide with a matrix
+ * id (the loader rejects a skill claiming an existing id). Null for a skill
+ * that reads a matrix spec: that spec is the handle.
+ */
+export function skillTypeDocument(skill: Skill): DomainDocument | null {
+  const matrix = skill.domain === 'esg' ? ESG_DOCUMENT_MATRIX : VERIFICATION_DOCUMENT_MATRIX;
+  const readsASpec = skill.appliesTo.some((target) => matrix.some((doc) => doc.id === target));
+  if (readsASpec) return null;
+  const name = skill.newType?.name ?? skill.appliesTo[0];
+  if (!name) return null;
+  return {
+    id: skill.id,
+    element: skill.element,
+    name,
+    aliases: [name, ...(skill.newType?.aliases ?? [])],
+    auditorTests: skill.classify.is,
+    exampleData: '',
+    extractionPrompt: `${skill.classify.is} Return the fields listed under FIELDS TO RETURN, copied as printed.`,
+    expectedFields: [],
+  };
+}
+
+function skillTypeDocumentById(domain: ExtractionDomain, id: string): DomainDocument | null {
+  const registry = activeSkills(domain);
+  const skill = registry?.skills.find((candidate) => candidate.id === id);
+  return skill ? skillTypeDocument(skill) : null;
 }
 
 const BBBEE_DOMAIN: DomainDefinition = {
   domain: 'bbbee',
   matrix: VERIFICATION_DOCUMENT_MATRIX,
-  findDocumentById,
+  findDocumentById: (id: string) => findDocumentById(id) ?? skillTypeDocumentById('bbbee', id),
   aliasIndex,
   analystRole: 'You are a B-BBEE verification analyst extracting evidence from a client document.',
   // Nothing in the B-BBEE matrix is grid-shaped; row evidence there comes from
   // sheetTableExtraction, which is unchanged.
   gridForDocument: () => null,
+  skills: () => activeSkills('bbbee'),
+  skillFor: (specIdOrName: string) => activeSkills('bbbee')?.skillFor(specIdOrName) ?? null,
+  skillsReadSheets: false,
 };
 
 const ESG_DOMAIN: DomainDefinition = {
   domain: 'esg',
   matrix: ESG_DOCUMENT_MATRIX,
-  findDocumentById: findEsgDocumentById,
+  findDocumentById: (id: string) => findEsgDocumentById(id) ?? skillTypeDocumentById('esg', id),
   aliasIndex: esgAliasIndex,
   analystRole: 'You are an ESG assurance analyst extracting evidence from a client document.',
   gridForDocument: (documentId: string) => ESG_GRIDS[documentId] ?? null,
+  skills: () => activeSkills('esg'),
+  skillFor: (specIdOrName: string) => activeSkills('esg')?.skillFor(specIdOrName) ?? null,
+  skillsReadSheets: true,
 };
 
 export function extractionDomain(domain: ExtractionDomain = 'bbbee'): DomainDefinition {

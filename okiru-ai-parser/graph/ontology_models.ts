@@ -36,6 +36,14 @@ export interface ExtractionFieldNode {
    * "27 April 1994" as the declaration date).
    */
   labelled_only?: true;
+  /**
+   * In running text, read only where the document SEPARATES label and value
+   * itself ("Auditor name: …"). A bare "Label value" line is accepted for other
+   * fields; for these it is how a table's header row ("Auditor Name Type
+   * Status …") read as a value. Table cells are still read under the label.
+   * Set on the fields the skills supplement adds (graph/skill_ontology.ts).
+   */
+  separator_required?: true;
 }
 
 export interface ValidationRuleNode {

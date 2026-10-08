@@ -101,6 +101,13 @@ describe('a value must really be in its quote', () => {
     expect(agent.valueInQuote(1234567.89, 'R1 234 567,89')).toBe(true);
   });
 
+  it('reads a long measured quantity as an amount, never as an identifier', () => {
+    // An ESG quantity (kWh, kg) can run to nine digits; a truncated one is not in the quote.
+    expect(agent.valueInQuote('123 456 789', 'Planned weight 123,456,789.25', 'number')).toBe(false);
+    expect(agent.valueInQuote('123 456 789.25', 'Planned weight 123,456,789.25', 'number')).toBe(true);
+    expect(agent.valueInQuote('123456789', 'Consumption 123 456 789 kWh', 'number')).toBe(true);
+  });
+
   it('matches text as whole words, never by its digits', () => {
     expect(agent.valueInQuote('Ghost Trading 2', 'Page 2 of 2')).toBe(false);
     expect(agent.valueInQuote('Invented Holdings 7', 'Level 7')).toBe(false);
@@ -127,18 +134,18 @@ describe('a value must really be in its quote', () => {
   });
 
   it('refuses the three submissions the review found accepted', () => {
-    expect(submit({ field: 'entity_name', value: 'Ghost Trading 2', page: 2, quote: 'Page 2 of 2' })).toMatchObject({ ok: false });
+    expect(submit({ field: 'supplier_name', value: 'Ghost Trading 2', page: 2, quote: 'Page 2 of 2' })).toMatchObject({ ok: false });
     expect(submit({ field: 'empowering_supplier', value: true, page: 2, quote: 'This document is confidential.' })).toMatchObject({ ok: false });
     expect(submit({ field: 'bee_level', value: '1', page: 1, quote: 'Page 1 of 2' })).toMatchObject({
       ok: false,
       rejection: { reason: expect.stringMatching(/short value needs its label/) },
     });
     expect(submit({ field: 'total_points', value: '785', page: 1, quote: 'Total Points 78.5' })).toMatchObject({ ok: false });
-    expect(submit({ field: 'entity_name', value: 'Ghost', page: 1, quote: 'Total R1 234 567,89' })).toMatchObject({ ok: false });
+    expect(submit({ field: 'supplier_name', value: 'Ghost', page: 1, quote: 'Total R1 234 567,89' })).toMatchObject({ ok: false });
   });
 
   it('still accepts the same fields cited properly', () => {
-    expect(submit({ field: 'entity_name', value: 'Acme Trading (Pty) Ltd', page: 1, quote: 'Measured Entity: Acme Trading (Pty) Ltd' })).toMatchObject({ ok: true });
+    expect(submit({ field: 'supplier_name', value: 'Acme Trading (Pty) Ltd', page: 1, quote: 'Measured Entity: Acme Trading (Pty) Ltd' })).toMatchObject({ ok: true });
     expect(submit({ field: 'bee_level', value: '1', page: 1, quote: 'B-BBEE Status Level: Level 1' })).toMatchObject({ ok: true });
     expect(submit({ field: 'empowering_supplier', value: true, page: 2, quote: 'Empowering Supplier: Yes' })).toMatchObject({ ok: true });
     expect(submit({ field: 'supplier_black_ownership_percentage', value: '51%', page: 2, quote: 'Black Ownership 51%' })).toMatchObject({ ok: true });
@@ -294,7 +301,8 @@ describe('caps on one turn', () => {
       : turnOf([call('submit_values', { values: [] })])));
     const run = await agent.runAgentExtraction(model, DIGITAL_CIPC, target(CIPC), { limits: { maxToolCallsPerTurn: 5 } } as Parameters<typeof agent.runAgentExtraction>[3]);
     expect(run.toolCalls).toBe(5 + 1);
-    const answers = model.seen[1].filter((m) => m.role === 'tool');
+    // The page index is answered before the first turn; it is not one of the 30.
+    const answers = model.seen[1].filter((m) => m.role === 'tool' && m.tool_call_id !== agent.PAGE_INDEX_CALL_ID);
     expect(answers).toHaveLength(30);
     expect(answers.filter((m) => String(m.content).includes('not run'))).toHaveLength(25);
   });

@@ -21,10 +21,12 @@
  */
 import { createLogger } from '../logger.js';
 import type { ExtractionModel } from './aiExtraction.js';
-import { parseModelJson } from './aiExtraction.js';
+import { isSheetName, parseModelJson } from './aiExtraction.js';
 import { getExtractionModel } from './caseExtraction.js';
 import { modelClassificationEnabled } from './documentClassification.js';
 import { VERIFICATION_DOCUMENT_MATRIX } from '../../schemas/verification_document_matrix.js';
+import { extractionDomain } from './extractionDomain.js';
+import { skillMenuLines, type Skill } from './skills.js';
 import {
   ADJUDICATION_MENU,
   MIN_READABLE_CHARS,
@@ -100,26 +102,42 @@ function matrixPurpose(name: string): { description: string; expectedFields: str
  * ontology description is only the name (matrix types deliberately keep their
  * description short for the lexical scorer — see matrix_ontology.ts).
  */
-export function describeCandidates(candidates: AdjudicationCandidate[]): AdjudicationCandidate[] {
+export function describeCandidates(candidates: AdjudicationCandidate[], options: { skills?: boolean } = {}): AdjudicationCandidate[] {
+  const withSkills = options.skills ?? true;
   return candidates.map((c) => {
     const purpose = matrixPurpose(c.name);
     const thinDescription = !c.description || c.description.trim().toLowerCase() === c.name.trim().toLowerCase();
+    // A type with a skill is described by the skill's own document-level
+    // fields: the ones an expert looks for on it, in the order they matter.
+    const skill = withSkills ? candidateSkill(c.name) : null;
+    const skillFields = skill ? skill.fields.filter((field) => !field.rowLevel).map((field) => field.name) : [];
     return {
       ...c,
       description: purpose && thinDescription ? purpose.description : c.description,
-      expectedFields: c.expectedFields.length > 0 ? c.expectedFields : purpose?.expectedFields ?? [],
+      expectedFields: skillFields.length > 0
+        ? skillFields
+        : c.expectedFields.length > 0 ? c.expectedFields : purpose?.expectedFields ?? [],
     };
   });
 }
 
-function menu(candidates: AdjudicationCandidate[]): string {
+/** The skill that reads a candidate type, by its name (null when skills are off or none does). */
+function candidateSkill(name: string): Skill | null {
+  return extractionDomain('bbbee').skillFor(name);
+}
+
+function menu(candidates: AdjudicationCandidate[], withSkills = true): string {
   return candidates
     .map((c, i) => {
       const fields = c.expectedFields.slice(0, 10).join(', ');
+      const skill = withSkills ? candidateSkill(c.name) : null;
       return [
         `${i + 1}. "${c.name}" [${c.pillar}] (keyword score ${c.lexicalConfidence.toFixed(2)})`,
         `   For: ${c.description.replace(/\s+/g, ' ').slice(0, 320)}`,
         fields ? `   Typically contains: ${fields}` : null,
+        // What the type is and is NOT, and what to look for: the look-alike
+        // distinctions an expert wrote down for this type.
+        skill ? skillMenuLines(skill) : null,
       ].filter(Boolean).join('\n');
     })
     .join('\n');
@@ -137,7 +155,10 @@ export async function adjudicateDocumentType(
   // The whole menu ParserService built (lexical top 5 + retrieval), not just
   // the head of it: a 6-item cut dropped exactly the retrieved types the
   // keyword scorer had missed.
-  const candidates = describeCandidates(rawCandidates.slice(0, ADJUDICATION_MENU));
+  // A workbook sheet is not the standalone document a skill describes (the
+  // same rule as the extraction prompt): its menu stays as it was.
+  const withSkills = !isSheetName(input.filename);
+  const candidates = describeCandidates(rawCandidates.slice(0, ADJUDICATION_MENU), { skills: withSkills });
   if (candidates.length === 0) return null;
   const content = String(input.markdown?.trim() || input.raw_text || '').slice(0, ADJUDICATE_CHARS);
   if (content.trim().length < MIN_READABLE_CHARS) return null;
@@ -149,7 +170,7 @@ export async function adjudicateDocumentType(
     `DOCUMENT: ${input.filename}`,
     '',
     'CANDIDATE DOCUMENT TYPES:',
-    menu(candidates),
+    menu(candidates, withSkills),
     '',
     'DOCUMENT CONTENT:',
     content,

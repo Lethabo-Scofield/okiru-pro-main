@@ -23,13 +23,16 @@
  *  - Document Intelligence's RAW answer is kept per file (PARSER_DI_CACHE_DIR,
  *    defaulted to <pack>/.eval/di-cache), so re-reading a scan is free and a
  *    change to how text is built from it still takes effect.
- *  - bbbee: PDFs and Word files are kept by content hash AND by the reader's
+ *  - PDFs and Word files are kept by content hash AND by the reader's
  *    own version (EXTRACTOR_VERSION plus a fingerprint of the reading code), so
  *    a change to how a file becomes text is never hidden by a cached input.
- *    esg keeps its original content-hash-only key (its recordings depend on it).
+ *    Both domains (ESG since its agent pass: its old content-hash-only entries
+ *    predate the scanned marker and the page split, so a scan read from them
+ *    looked like one digital page with no tables and no page images).
  *    Spreadsheets are always re-read, because that is the code under test.
  *
- * What makes a replay the same run as the recording (bbbee):
+ * What makes a replay the same run as the recording (both domains; ESG since
+ * the ESG agent pass, before which its replays missed the vehicle-tab calls):
  *  - file_ids come from the content, not the clock;
  *  - the template decision cache is off (PARSER_DECISION_CACHE=false). It is
  *    keyed by template while its prompt carries ONE workbook's sample rows, so
@@ -247,11 +250,13 @@ async function main(): Promise<void> {
   // Scans are read from the raw Document Intelligence cache when present; a
   // replay has no credentials and depends on it.
   process.env.PARSER_DI_CACHE_DIR ??= join(evalDir, 'di-cache');
-  if (domain === 'bbbee') {
-    // See the header: both caches would let concurrency decide which prompt is asked.
-    process.env.PARSER_DECISION_CACHE ??= 'false';
-    process.env.AI_EXTRACTION_CACHE ??= 'false';
-  }
+  // See the header: both caches would let concurrency decide which prompt is
+  // asked. ESG too: with the decision cache on, the twenty-odd vehicle tabs of
+  // one fuel-log template raced to be the one sheet whose rows the column
+  // mapping prompt showed, so a replay asked a different tab's prompt than the
+  // recording (22 of the 24 ESG misses).
+  process.env.PARSER_DECISION_CACHE ??= 'false';
+  process.env.AI_EXTRACTION_CACHE ??= 'false';
 
   const live = mode === 'replay' ? null : createAzureExtractionModel();
   if (mode !== 'replay' && !live) {
@@ -260,7 +265,7 @@ async function main(): Promise<void> {
   let inputs: RawExtractionInput[] = [];
   const model = attributingMisses(withCassette(live, join(evalDir, 'cassette'), mode), () => inputs);
   const started = Date.now();
-  const inputsVersion = domain === 'bbbee' ? extractorFingerprint() : null;
+  const inputsVersion: string | null = extractorFingerprint();
 
   const files = walk(pack).filter((path) => !NOT_EVIDENCE.has(basename(path)));
   const read: RawExtractionInput[] = [];
@@ -297,7 +302,12 @@ async function main(): Promise<void> {
   let entities: { extractions?: Array<{ values?: unknown[] }> } | null;
   let deterministic: { documents: number; status: string } | null = null;
   if (domain === 'esg') {
-    entities = await extractEsgCaseEntities(inputs, model, progress);
+    // The agent pass is off unless PARSER_AGENT_EXTRACTION is hard|all, as in
+    // the streaming route; ESG has no rule-based reader, so the gate types a
+    // document by Pass A alone.
+    entities = await extractEsgCaseEntities(inputs, model, progress, {
+      agent: { pageImages: pageImageProviderFor(uploads) },
+    });
     process.stdout.write('\n');
     caseResult = {
       status: entities ? 'resolved' : 'failed',

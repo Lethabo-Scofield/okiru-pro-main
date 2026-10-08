@@ -1,5 +1,6 @@
 import type { DocumentKnowledge, DocumentTypeNode, OntologyRepository } from './ontology_models.js';
 import { matrixDocumentKnowledge } from './matrix_ontology.js';
+import { withSkillSupplement } from './skill_ontology.js';
 import { LEVEL_WORD_ALTERNATION } from '../parser/normalize.js';
 
 /**
@@ -497,6 +498,18 @@ function canonicalDocumentKnowledge(): DocumentKnowledge[] {
  * and was reported back as a failure.
  */
 export function defaultDocumentKnowledge(): DocumentKnowledge[] {
+  // Plus what the per-document-type skills declare (graph/skill_ontology.ts):
+  // their typed fields on the types they read, and the types the matrix lacks.
+  return withSkillSupplement(baseDocumentKnowledge());
+}
+
+/**
+ * The canonical types and the matrix, WITHOUT the skills supplement — the
+ * catalogue the skills themselves are validated against (a skill's newType must
+ * not repeat an existing type, so it cannot be checked against a list that
+ * already contains it).
+ */
+export function baseDocumentKnowledge(): DocumentKnowledge[] {
   const canonical = canonicalDocumentKnowledge();
   return [...canonical, ...matrixDocumentKnowledge(canonical)];
 }

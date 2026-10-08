@@ -108,7 +108,7 @@ async function main(): Promise<void> {
 
     const firstPass = (firstCase.ai_entities?.extractions ?? []).filter((e) => e.sourceFile === input.filename);
     const deterministic = (firstCase.documents_detected ?? []).find((d) => d.filename === input.filename);
-    const target = agentTargetForDocument(firstPass, deterministic);
+    const target = agentTargetForDocument(firstPass, deterministic, input);
     if (!target) {
       console.log(`skip ${file}: no target type`);
       continue;
@@ -137,6 +137,9 @@ async function main(): Promise<void> {
       tokens: run.tokens,
       toolCalls: run.toolCalls,
       stopReason: run.stopReason,
+      turnBudget: run.turnBudget ?? null,
+      forcedSubmit: run.forcedSubmit ?? null,
+      rows: run.rows?.length ?? 0,
       error: run.error ?? null,
       values: run.values,
       rejected: run.rejected,

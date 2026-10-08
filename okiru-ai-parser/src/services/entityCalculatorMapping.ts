@@ -387,7 +387,30 @@ function coercionForKey(key: string): FieldMapping['coerce'] {
  * BEFORE exclusions; landing either on `procurement.tmps` would overstate the
  * denominator by every excluded rand.
  */
-const REPORTED_NOT_SCORED = new Set(['tmps_inclusions', 'total_pre_exclusions_tmps']);
+const REPORTED_NOT_SCORED = new Set([
+  'tmps_inclusions', 'total_pre_exclusions_tmps',
+  // A payroll's own period figures: one pay period's leviable pay and SDL, not
+  // the year's leviable amount the Skills denominator needs.
+  'period_leviable_amount', 'period_sdl_amount',
+  // EMP201 months filed: evidence of compliance, no calculator input.
+  'months_submitted',
+  // The unsworn ownership letter's own claims (the skill names them so they
+  // can never set the client's ownership): reported for the reviewer only.
+  'ownership_statement',
+  // The ledger checks deriveLedger works out in code under the matrix's own
+  // names: a count of invoices and a yes/no, never a calculator input.
+  'supporting_invoices_reviewed', 'ledger_total_matches_entries',
+]);
+
+/**
+ * Also reported, never scored: a figure worked out in code from other values
+ * (skillDerivations.ts — the EMP201 sums, SDL x 100, payment totals), and an
+ * unsworn document's STATED figures. Neither is a value a document printed as
+ * that calculator input, so the semantic pass must not place one there.
+ */
+export function isReportedNotScored(field: string): boolean {
+  return REPORTED_NOT_SCORED.has(field) || /^(derived|stated)_/.test(field);
+}
 
 /**
  * Company-information facts from the workbook's Instructions sheet
@@ -417,7 +440,7 @@ export async function mapEntitiesToCalculatorWithSemantics(
   const base = mapEntitiesToCalculator(entities, fieldElements);
 
   const orphans = base.unmapped
-    .filter((u) => u.reason === 'no_mapping' && !REPORTED_NOT_SCORED.has(u.field) && !FORM_ONLY_FIELDS.has(u.field))
+    .filter((u) => u.reason === 'no_mapping' && !isReportedNotScored(u.field) && !FORM_ONLY_FIELDS.has(u.field))
     .map((u) => u.field);
   if (orphans.length === 0 || !model) return base;
 

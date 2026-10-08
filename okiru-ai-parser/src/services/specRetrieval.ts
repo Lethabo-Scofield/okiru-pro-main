@@ -280,11 +280,31 @@ const COMBINED_UTILITY_SIGNALS: Array<{ specId: string; pattern: RegExp }> = [
 ];
 
 /** Spec ids that must appear in the candidate set whatever the ranking says. */
-function pinnedSpecIds(domain: ExtractionDomain, haystack: string): string[] {
+export function pinnedSpecIds(domain: ExtractionDomain, haystack: string): string[] {
   if (domain !== 'esg') return [];
   const matched = COMBINED_UTILITY_SIGNALS.filter((s) => s.pattern.test(haystack));
   // One utility is an ordinary bill and needs no help. Two on one document is
   // the combined account.
+  return matched.length >= 2 ? matched.map((s) => s.specId) : [];
+}
+
+/**
+ * Statutory forms printed together in one file: an Employment Equity
+ * submission often carries the workforce analysis (EEA2 or EEA12) and the EE
+ * plan (EEA13) in one PDF. Each form is its own document type, read by its
+ * own skill; one file naming both forms is read as both. Used only where a
+ * classifier has already named one of them (esgSkillSpecIds), never in the
+ * ranking, so a document typed some other way reads as before.
+ */
+const COMBINED_FORM_SIGNALS: Array<{ specId: string; pattern: RegExp }> = [
+  { specId: 'employment_equity__eea2_eea4_report', pattern: /\bEEA\s?-?(?:2|12)\b/i },
+  { specId: 'employment_equity__ee_plan_and_forum_minutes', pattern: /\bEEA\s?-?13\b/i },
+];
+
+/** The spec ids of statutory forms printed together in one file (both, or none). */
+export function combinedFormSpecIds(domain: ExtractionDomain, haystack: string): string[] {
+  if (domain !== 'esg') return [];
+  const matched = COMBINED_FORM_SIGNALS.filter((s) => s.pattern.test(haystack));
   return matched.length >= 2 ? matched.map((s) => s.specId) : [];
 }
 

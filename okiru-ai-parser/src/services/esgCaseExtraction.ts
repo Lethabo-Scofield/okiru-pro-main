@@ -38,10 +38,25 @@ import {
 import { getExtractionModel, duplicateWorkbookException, type ResolveProgress } from './caseExtraction.js';
 import { ROW_HIDDEN_KEY, resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { billAsMonthlyRows } from './esgBillFacts.js';
-import { classifyDocument, routingElement } from './documentClassification.js';
+import {
+  CONFIDENCE_FLOOR,
+  classifyDocument,
+  routingElement,
+  specForSkill,
+  type DocumentClassificationResult,
+} from './documentClassification.js';
 import { focusForInput } from './esgFocus.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
-import { elementFromHint } from './specRetrieval.js';
+import { combinedFormSpecIds, elementFromHint, pinnedSpecIds } from './specRetrieval.js';
+import {
+  agentCasePass,
+  agentPassForDocument,
+  unitAgainstFieldName,
+  unitsNamedByField,
+  type AgentCaseContext,
+  type AgentCasePass,
+  type DeterministicDocument,
+} from './agentExtraction.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
@@ -106,6 +121,113 @@ export function notesAsExceptions(extraction: DocumentExtraction): DocumentExtra
   };
 }
 
+/**
+ * A figure the first pass read in a unit its field's NAME excludes ("35.75 MWh"
+ * under electricity_kwh, "0.2 t" under waste_total_kg) is the reviewer's, not
+ * a value. Nothing downstream reads the unit fields, so it would count as kWh
+ * or kg: a thousand times too small. The agent's check_value refuses the same
+ * figure; this holds the first pass to it. The field's own unit, a same-size
+ * spelling (m3 for kL) and a bare figure are kept exactly as read.
+ */
+export function namedUnitFiguresAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const refused: string[] = [];
+  const values = extraction.values.filter((value) => {
+    if (typeof value.value !== 'string') return true;
+    const named = unitsNamedByField(value.field);
+    if (!named) return true;
+    const unit = unitAgainstFieldName(value.field, value.value, '');
+    if (!unit) return true;
+    refused.push(`${value.field}: "${value.value.trim()}" is printed in ${unit}, and ${value.field} holds ${named[0]} only. `
+      + 'It was not stored: never convert it; the reviewer decides where it goes.');
+    return false;
+  });
+  if (refused.length === 0) return extraction;
+  return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
+}
+
+/** How many zero quantities, and nothing else, make a sheet an unfilled template. */
+const TEMPLATE_ZERO_QUANTITIES = 3;
+
+const isZeroFigure = (value: unknown): boolean => {
+  if (typeof value === 'number') return value === 0;
+  return typeof value === 'string' && /^\s*-?0+(?:[.,]0+)?\s*$/.test(value);
+};
+
+/**
+ * An unfilled spreadsheet template prints its formulas' zeros: an empty stock
+ * reconciliation shows opening 0, deliveries 0, issues 0 and closing 0. Read as
+ * figures, they were filed as a depot's diesel stock and contradicted the real
+ * reconciliation on the next tab. A sheet read whose quantities (fields named
+ * for their unit: litres, kWh, kL, kg) number three or more and are ALL zero is
+ * a template: the zeros go to the reviewer as one exception, never as figures.
+ * A single zero ("generator diesel 0 L") is a reading and stays; so does every
+ * figure of a read with one non-zero quantity. Money and rates are no quantity.
+ */
+export function templateZerosAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const quantities = extraction.values.filter(
+    (value) => !Array.isArray(value.value) && unitsNamedByField(value.field) !== null,
+  );
+  if (quantities.length < TEMPLATE_ZERO_QUANTITIES || !quantities.every((value) => isZeroFigure(value.value))) {
+    return extraction;
+  }
+  const zeroed = new Set(quantities.map((value) => value.field));
+  return {
+    ...extraction,
+    values: extraction.values.filter((value) => !zeroed.has(value.field)),
+    exceptions: [
+      ...extraction.exceptions,
+      `Every quantity this sheet prints is zero (${[...zeroed].join(', ')}): an unfilled template's formulas, `
+        + 'not readings. None was stored; the reviewer confirms whether the sheet is in use.',
+    ],
+  };
+}
+
+/**
+ * The specs to read a document with when Pass A named its type from the ESG
+ * skills menu: that type's ONE spec (the B-BBEE rule, 2.9c), so a policy is not
+ * also read as an environmental policy and a municipal account not also as a
+ * solar generation report. One exception is the combined municipal
+ * account: when the named type is one of the two utility bills and the
+ * document evidences both utilities, both bill specs are read, as retrieval
+ * pins them, so its kilolitres are never lost to its kilowatt-hours. The
+ * same holds for an EE submission printing both the workforce analysis
+ * (EEA2/EEA12) and the EE plan (EEA13): both EE specs are read.
+ * Null leaves the choice to retrieval.
+ */
+export function esgSkillSpecIds(
+  classification: DocumentClassificationResult | null,
+  input: { filename: string; markdown?: string; raw_text?: string },
+): string[] | null {
+  const spec = specForSkill(classification, 'esg');
+  if (!spec) return null;
+  const haystack = `${input.filename}\n${input.markdown?.trim() || input.raw_text || ''}`;
+  // A combined municipal account (electricity and water), or statutory forms
+  // printed in one file (the EE workforce analysis and the EE plan): every
+  // document type it holds is read, the classified one first.
+  for (const pins of [pinnedSpecIds('esg', haystack), combinedFormSpecIds('esg', haystack)]) {
+    if (pins.includes(spec.id)) return [spec.id, ...pins.filter((id) => id !== spec.id)];
+  }
+  return [spec.id];
+}
+
+/**
+ * What the agent gate knows about an ESG document's type. ESG has no
+ * rule-based reader: the type is the skill Pass A named (only when it was
+ * confident), and the confidence is Pass A's.
+ */
+export function esgAgentTyping(
+  filename: string,
+  classification: DocumentClassificationResult | null,
+): DeterministicDocument {
+  const typed = classification?.skillId && classification.confidence >= CONFIDENCE_FLOOR ? classification.skillId : undefined;
+  return {
+    filename,
+    typed_by: 'classifier',
+    ...(typed ? { document_type: typed } : {}),
+    ...(classification ? { overall_confidence: classification.confidence } : {}),
+  };
+}
+
 /** The raw cell layout a split workbook sheet carries, when it carries one. */
 function sheetMatrixOf(tables: unknown[] | undefined): unknown[][] | undefined {
   const matrix = (tables?.[0] as { matrix?: unknown } | undefined)?.matrix;
@@ -119,11 +241,18 @@ export async function extractEsgCaseEntities(
   options: {
     /** The element each upload was filed under, by file name (C1, `esgFocus.ts`). */
     focusByFile?: Readonly<Record<string, EsgElement>>;
+    /**
+     * The agent-loop pass (agentExtraction.ts), exactly as on the B-BBEE side:
+     * runs only when this is given AND PARSER_AGENT_EXTRACTION (or
+     * `agent.mode`) is hard/all. The streaming route passes it.
+     */
+    agent?: AgentCaseContext;
   } = {},
 ): Promise<EsgCaseExtractionResult | null> {
   if (!model || inputs.length === 0) return null;
   let done = 0;
   const total = inputs.length;
+  const agentPass: AgentCasePass | null = agentCasePass(model, options.agent ? { ...options.agent, domain: 'esg' } : undefined);
 
   // Documents are read in PARALLEL, bounded — the same shared helper, the same
   // input-order guarantee, because ESG conflicts also resolve first-document-wins
@@ -150,6 +279,9 @@ export async function extractEsgCaseEntities(
     // element the person filed it under beats a keyword guess (C1).
     const elementOverride =
       routingElement(classification) ?? focusForInput(input.filename, options.focusByFile) ?? undefined;
+    // Pass A named the document's type from the ESG skills menu: read it with
+    // that type's spec, not with whatever keyword retrieval ranks first.
+    const skillSpecIds = esgSkillSpecIds(classification, input);
 
     // A dashboard sheet — sites down the side, months across — is read by the
     // code, figure by figure. When it is, the flat spec pass is skipped for that
@@ -224,12 +356,27 @@ export async function extractEsgCaseEntities(
         markdown: input.markdown,
         raw_text: input.raw_text,
         elementHint: sheetName,
-      }, { elementOverride, domain: 'esg' })
+      }, skillSpecIds ? { specIds: skillSpecIds, domain: 'esg' } : { elementOverride, domain: 'esg' })
       : ([] as DocumentExtraction[]);
 
-    const results = [...specResults];
+    let results = [...specResults];
     if (readByCode) results.push(readByCode);
     if (sheetTable) results.push(sheetTable);
+    // Agent loop (off by default): a cited second read of a hard document —
+    // a scan, a skill's hard type, a low-confidence type, or one whose first
+    // read missed a third of its required fields. It only fills gaps;
+    // disagreements become exceptions; a failure returns the first read
+    // untouched. Hard mode never sends a workbook sheet.
+    if (agentPass) {
+      const typing = esgAgentTyping(input.filename, classification);
+      results = await agentPassForDocument(model, input, results, {
+        ...agentPass,
+        context: { ...agentPass.context, deterministic: [typing] },
+      });
+    }
+
+    // A workbook sheet's formula zeros are a template's, not readings.
+    if (sheetName) results = results.map(templateZerosAsExceptions);
 
     done += 1;
     onProgress?.({ done, total, fileName: input.filename });
@@ -239,7 +386,7 @@ export async function extractEsgCaseEntities(
   const extractions: DocumentExtraction[] = [];
   for (const result of settled) {
     if (result.status === 'fulfilled' && result.value) {
-      extractions.push(...result.value.map(notesAsExceptions));
+      extractions.push(...result.value.map(notesAsExceptions).map(namedUnitFiguresAsExceptions));
     } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they
       // have already paid to extract.

@@ -5,8 +5,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  acceptedTypes,
   agrees,
+  answerKeyProblems,
   baselineFrom,
+  isCodeReadExtraction,
   gateFailures,
   KEY_NAME_ALIASES,
   keyNames,
@@ -331,6 +334,134 @@ describe('gate', () => {
   });
 });
 
+describe('ESG at document level: who read the value decides the layer', () => {
+  // An ESG case (scripts/pack-eval.ts --domain esg): no documents_detected,
+  // everything in ai_entities. Invented pack.
+  const esgCase: PackCase = {
+    domain: 'esg',
+    ai_entities: {
+      extractions: [
+        // The dashboard reader: one value per site x month cell.
+        { documentId: 'esg_monthly_tables', documentName: 'Monthly site figures', sourceFile: 'Dashboard.xlsx › fuel', values: [
+          { field: 'esg_monthly_rows', value: [{ monthly_site: 'Depot A', monthly_value: 1234.5 }, { monthly_site: 'Depot A', monthly_value: 2345.5 }] },
+        ] },
+        // The register reader: the register's spec id, "<sheet> register", one rows value.
+        { documentId: 'fleet__vehicle_register', documentName: 'FLEET LIST register', sourceFile: 'Fleet.xlsx › FLEET LIST', values: [
+          { field: 'fleet_vehicle_rows', value: [{ vehicle_registration: 'AB 12 CD GP' }, { vehicle_registration: 'EF 34 GH GP' }] },
+        ] },
+        // The model's spec read of a scanned bill, plus one agent fill.
+        { documentId: 'ghg_energy__municipal_electricity_bill', documentName: 'Municipal electricity bill / utility statement', sourceFile: 'Bill.pdf', values: [
+          { field: 'electricity_kwh', value: '12 345' },
+          { field: 'meter_number', value: 'M-0001' },
+          { field: 'billing_period_end', value: '30/06/2025', source: { method: 'agent' } },
+        ] },
+      ],
+    },
+  };
+  const esgKey: AnswerKey = {
+    version: 1,
+    domain: 'esg',
+    documents: [
+      { file: 'Dashboard.xlsx', path: 'parser', type: 'dashboard', typeAccepts: ['esg_monthly_tables'], fields: [
+        field({ label: 'Depot A diesel', keys: ['esg_monthly_rows.monthly_value'], value: [1234.5, 2345.5], kind: 'list', itemKind: 'number' }),
+      ] },
+      { file: 'Fleet.xlsx', path: 'parser', type: 'fleet', typeAccepts: ['fleet__vehicle_register'], fields: [
+        field({ label: 'Registrations', keys: ['fleet_vehicle_rows.vehicle_registration'], value: ['AB12CDGP', 'EF34GHGP'], kind: 'list', itemKind: 'regno' }),
+      ] },
+      { file: 'Bill.pdf', path: 'parser', type: 'bill', typeAccepts: ['ghg_energy__municipal_electricity_bill'], fields: [
+        field({ label: 'kWh', keys: ['electricity_kwh'], value: 12345, kind: 'number' }),
+        field({ label: 'Meter', keys: ['meter_number'], value: 'M-0002', kind: 'regno' }),
+        field({ label: 'Period end', keys: ['billing_period_end'], value: '2025-06-30', kind: 'date' }),
+        field({ label: 'Solar generated', keys: ['solar_kwh_generated'], value: null, kind: 'number', absentOk: true }),
+      ] },
+    ],
+  };
+  const score = scorePack(esgCase, esgKey);
+  const f = (label: string) => score.perField.find((x) => x.label === label)!;
+
+  it('code readers are the det layer, the model\'s spec reads the ai layer, agent fills the agent layer', () => {
+    expect(f('Depot A diesel').det.status).toBe('correct');
+    expect(f('Depot A diesel').ai.status).toBe('missing');
+    expect(f('Registrations').det.status).toBe('correct');
+    expect(f('Registrations').ai.status).toBe('missing');
+    expect(f('kWh')).toMatchObject({ det: { status: 'missing' }, ai: { status: 'correct' }, agent: { status: 'missing' } });
+    expect(f('Meter').ai.status).toBe('wrong');
+    expect(f('Period end')).toMatchObject({ ai: { status: 'missing' }, agent: { status: 'correct' }, union: { status: 'correct' } });
+    expect(f('Solar generated').union.status).toBe('absent_ok');
+  });
+
+  it('totals every layer, and types come from the reader that read the document', () => {
+    expect(score.totals.det).toMatchObject({ correct: 2, expected: 5 });
+    expect(score.totals.ai).toMatchObject({ correct: 1, wrong: 1 });
+    expect(score.totals.agent).toMatchObject({ correct: 1, wrong: 0, invented: 0 });
+    expect(score.totals.union).toMatchObject({ correct: 4, wrong: 1, invented: 0 });
+    const fleet = score.perDoc.find((d) => d.file === 'Fleet.xlsx')!;
+    expect(fleet).toMatchObject({ type_ok: true, ai_type_ok: false });
+    expect(score.perDoc.find((d) => d.file === 'Bill.pdf')!).toMatchObject({ type_ok: false, ai_type_ok: true });
+    expect(scoreMarkdown(score)).toContain('| agent |');
+  });
+
+  it('a model spec read named "... register" with several values stays in the ai layer', () => {
+    expect(isCodeReadExtraction({ documentId: 'iso_environmental__aspects_and_impacts_register', documentName: 'Environmental aspects and impacts register', values: [{ value: 'v3' }, { value: [] }] })).toBe(false);
+    expect(isCodeReadExtraction({ documentId: 'fleet__vehicle_register', documentName: 'Fleet vehicle register / vehicle asset list', values: [{ value: [{}] }] })).toBe(false);
+    expect(isCodeReadExtraction({ documentId: 'esg_period_summary', values: [] })).toBe(true);
+  });
+
+  it('a B-BBEE case keeps every ai_entities value in ai (the recorded gate), and shows agent fills on their own', () => {
+    const bbbee = scorePack({ ai_entities: { extractions: [{ documentId: 'x', sourceFile: 'Bill.pdf', values: [
+      { field: 'electricity_kwh', value: 12345, source: { method: 'agent' } },
+    ] }] } }, esgKey);
+    const kwh = bbbee.perField.find((x) => x.label === 'kWh')!;
+    expect(kwh.ai.status).toBe('correct');
+    expect(kwh.agent.status).toBe('correct');
+    expect(bbbee.totals.union.correct).toBe(1);
+  });
+});
+
+describe('answer key validation', () => {
+  const ok = (): Record<string, unknown> => ({
+    version: 1,
+    domain: 'esg',
+    entity: 'Acme Trading (Pty) Ltd',
+    reportingPeriod: { start: '2025-07-01', end: '2026-06-30' },
+    documents: [{ file: 'Bill.pdf', path: 'parser', type: 'bill', typeAccepts: [], fields: [
+      { label: 'kWh', keys: ['electricity_kwh'], value: 12345, kind: 'number', tolerance: null, absentOk: false, source: 'p1', review: 'MATCH' },
+      { label: 'Series', keys: ['esg_monthly_rows.monthly_value'], value: [1, 2], kind: 'list', itemKind: 'number', tolerance: 0.5, absentOk: false },
+      { label: 'Trap', keys: ['solar_kwh_generated'], value: null, kind: 'number', tolerance: null, absentOk: true },
+    ] }],
+  });
+
+  it('accepts a sound key', () => {
+    expect(answerKeyProblems(ok())).toEqual([]);
+  });
+
+  it.each([
+    ['a typo\'d property', (k: any) => { k.documents[0].fields[0].absentok = false; }, /unknown property "absentok"/],
+    ['an unknown kind', (k: any) => { k.documents[0].fields[0].kind = 'kwh'; }, /unknown kind/],
+    ['a value its kind cannot read', (k: any) => { k.documents[0].fields[0].value = 'about twelve thousand'; }, /number reader cannot read/],
+    ['an empty list', (k: any) => { k.documents[0].fields[1].value = []; }, /non-empty list/],
+    ['a list item its item kind cannot read', (k: any) => { k.documents[0].fields[1].value = [1, 'n/a']; }, /1 item\(s\) the number reader/],
+    ['a list tolerance above 1', (k: any) => { k.documents[0].fields[1].tolerance = 2; }, /in \(0, 1\]/],
+    ['itemKind on a scalar', (k: any) => { k.documents[0].fields[0].itemKind = 'number'; }, /itemKind belongs only to a list/],
+    ['a key that is not a field name', (k: any) => { k.documents[0].fields[0].keys = ['Electricity kWh']; }, /keys must be a list of field names/],
+    ['a duplicated label', (k: any) => { k.documents[0].fields[1].label = 'kWh'; }, /label used twice/],
+    ['a duplicated document', (k: any) => { k.documents.push(k.documents[0]); }, /listed twice/],
+    ['a bad path', (k: any) => { k.documents[0].path = 'scan'; }, /path must be parser or workbook/],
+    ['an unknown top-level property', (k: any) => { k.certifed = {}; }, /unknown top-level property "certifed"/],
+    ['an unknown domain', (k: any) => { k.domain = 'csr'; }, /domain must be/],
+  ])('rejects %s', (_label, mutate, message) => {
+    const k = ok();
+    mutate(k);
+    expect(answerKeyProblems(k).join('\n')).toMatch(message);
+  });
+
+  it('an absentOk trap needs no readable value, and an unreadable alternative costs nothing', () => {
+    const k = ok() as any;
+    k.documents[0].fields.push({ label: 'Flag', keys: ['is_landlord_recovery'], value: 'No', alternatives: ['N/A'], kind: 'bool', tolerance: null, absentOk: false });
+    expect(answerKeyProblems(k)).toEqual([]);
+  });
+});
+
 describe('key-name aliases', () => {
   const aliasKey: AnswerKey = {
     version: 1,
@@ -391,5 +522,62 @@ describe('key-name aliases', () => {
     }
     expect(keyNames(field({ label: 'x', keys: ['black_ownership', 'black_ownership_percentage'], value: 1, kind: 'percent' })))
       .toEqual(['black_ownership', 'black_ownership_percentage', 'supplier_black_ownership_percentage']);
+  });
+});
+
+describe('wave 3: the skills final contract under the key', () => {
+  it('reads a register\'s owners, a letter\'s stated owner and derived totals under the key\'s own names', () => {
+    const wave3Key: AnswerKey = {
+      version: 1,
+      documents: [
+        {
+          file: 'BI register.pdf', path: 'parser', type: 'beneficial interest register', typeAccepts: ['Ownership Confirmation'],
+          fields: [
+            field({ label: 'Owner', keys: ['shareholder_rows.shareholder_name'], value: 'J Doe', kind: 'text' }),
+            field({ label: 'Owner ID', keys: ['id_number'], value: '8001015009087', kind: 'regno' }),
+            field({ label: 'Interest', keys: ['shareholder_rows.economic_interest'], value: 100, kind: 'percent' }),
+          ],
+        },
+        {
+          file: 'EMP201s.pdf', path: 'parser', type: 'emp201', typeAccepts: [],
+          fields: [field({ label: 'Leviable amount', keys: ['sum_of_leviable_amount'], value: 30000, kind: 'money' })],
+        },
+      ],
+    };
+    const wave3Case: PackCase = { ai_entities: { extractions: [
+      { documentId: 'beneficial_interest_register', sourceFile: 'BI register.pdf', values: [
+        { field: 'beneficial_owner_rows', value: [{ beneficial_owner_name: 'J Doe', id_number: '8001015009087', beneficial_interest_percentage: '100%' }] },
+      ] },
+      { documentId: 'emp201', sourceFile: 'EMP201s.pdf', values: [{ field: 'derived_leviable_amount', value: 30000 }] },
+    ] } };
+    const score = scorePack(wave3Case, wave3Key, { narrowerTypes: [{ names: ['Beneficial interest register', 'beneficial_interest_register'], narrows: 'Ownership Confirmation' }] });
+    expect(score.perField.map((f) => f.ai.status)).toEqual(['correct', 'correct', 'correct', 'correct']);
+    // The register read under its own narrower type is the key's type.
+    expect(score.perDoc[0].ai_type_ok).toBe(true);
+    expect(scorePack(wave3Case, wave3Key, { aliases: false, narrowerTypes: [] }).perField.map((f) => f.ai.status))
+      .toEqual(['missing', 'missing', 'missing', 'missing']);
+  });
+
+  it('reads a register row\'s certificate number and a payment row\'s invoice date under the key\'s flat names', () => {
+    const rowKey: AnswerKey = { version: 1, documents: [
+      { file: 'Register.pdf', path: 'parser', type: 'register', typeAccepts: [], fields: [
+        field({ label: 'Certificate number', keys: ['certificate_number'], value: 'ABC001', kind: 'text' }),
+        field({ label: 'Issued', keys: ['issue_date'], value: '2011-05-17', kind: 'date' }),
+      ] },
+      { file: 'Payments.pdf', path: 'parser', type: 'sed', typeAccepts: [], fields: [
+        field({ label: 'Invoice', keys: ['sampled_invoices.invoice_date'], value: '2025-03-01', kind: 'date' }),
+      ] },
+    ] };
+    const rowCase: PackCase = { ai_entities: { extractions: [
+      { documentId: 'r', sourceFile: 'Register.pdf', values: [{ field: 'holdings_table', value: [{ certificate_number: 'ABC001', issue_date: '17 May 2011' }] }] },
+      { documentId: 'p', sourceFile: 'Payments.pdf', values: [{ field: 'beneficiary_rows', value: [{ invoice_date: '01/03/2025' }] }] },
+    ] } };
+    expect(scorePack(rowCase, rowKey).perField.map((f) => f.ai.status)).toEqual(['correct', 'correct', 'correct']);
+    expect(scorePack(rowCase, rowKey, { aliases: false }).perField.map((f) => f.ai.status)).toEqual(['missing', 'missing', 'missing']);
+  });
+  it('a narrower type is accepted only where its umbrella type is', () => {
+    const narrower = [{ names: ['Beneficial interest register'], narrows: 'Ownership Confirmation' }];
+    expect(acceptedTypes(['Ownership Confirmation'], narrower).has('beneficial interest register')).toBe(true);
+    expect(acceptedTypes(['Securities / share register'], narrower).has('beneficial interest register')).toBe(false);
   });
 });

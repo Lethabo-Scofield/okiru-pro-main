@@ -262,7 +262,9 @@ function countReadValues(extracted: Record<string, unknown> | undefined): number
  *    stream route runs (model classification, the spec reads, the table and
  *    financials readers, and the agent pass when PARSER_AGENT_EXTRACTION
  *    allows it), filed exactly as `bbbeeRunRecords` files a create-flow upload.
- *  - ESG: the ESG case extraction for this one file. An ESG bill through the
+ *  - ESG: the ESG case extraction for this one file, as the ESG stream runs
+ *    it (the ESG skills, and the agent pass when PARSER_AGENT_EXTRACTION
+ *    allows it). An ESG bill through the
  *    B-BBEE reader came back as B-BBEE fields, which is why the library used to
  *    refuse ESG re-reads outright.
  *
@@ -276,7 +278,15 @@ async function readOneFileFully(
 ): Promise<RunRecord> {
   if (domain === 'esg') {
     const inputs = await extractionInputsFromUpload(file, { domain: 'esg' });
-    const entities = await extractEsgCaseEntities(inputs);
+    // The ESG stream's read: the ESG skills (Pass A's menu and the skill's
+    // spec, through domain 'esg') and the agent pass when
+    // PARSER_AGENT_EXTRACTION allows it, cancelled if the caller goes.
+    const entities = await extractEsgCaseEntities(inputs, undefined, undefined, {
+      agent: {
+        pageImages: pageImageProviderFor([file]),
+        signal,
+      },
+    });
     const [record] = esgRunRecords({
       files: [file],
       inputs,

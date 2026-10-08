@@ -4,23 +4,23 @@ appliesTo:
   - B-BBEE Certificate
   - esd__valid_b_bbee_verification_certificate_per_sampled_supplier
 element: ESD
-version: 2
+version: 3
 hard: false
 classify:
-  is: "A B-BBEE verification certificate issued by a SANAS-accredited verification agency (or an IRBA-registered auditor), stating an entity's B-BBEE status level, points, ownership percentages, issue and expiry dates."
+  is: "A B-BBEE verification certificate issued by a SANAS-accredited verification agency (older certificates may name an IRBA-registered auditor), stating an entity's B-BBEE status level, points, ownership percentages, issue and expiry dates."
   isNot:
     - "a B-BBEE sworn affidavit for an EME or QSE (signed by the entity's own representative before a Commissioner of Oaths, no agency, no points table)"
     - "a CIPC-issued B-BBEE certificate for an EME (a CIPC form, not an agency verification)"
     - "a verification report or scorecard workpaper (many pages of element calculations)"
     - "a SETA or CIPC registration certificate"
-  filenameHints: ["bee cert", "bbbee", "b-bbee", "certificate", "bee certificate", "verification certificate"]
+  filenameHints: ["bee cert", "bee certificate", "bbbee certificate", "b-bbee certificate", "verification certificate"]
   contentSignals: ["B-BBEE Verification Certificate", "Status Level Verification Certificate", "B-BBEE Status Level", "Contributor", "Procurement Recognition Level", "SANAS", "BVA", "Black Ownership", "Black Women Ownership", "Empowering Supplier", "Date of Issue", "Expiry Date", "Codes of Good Practice"]
 fields:
-  - name: entity_name
+  - name: supplier_name
     type: text
     required: true
     labels: ["Measured Entity", "Entity name", "Company name", "Name of entity"]
-    description: "The certified entity as printed at the top of the certificate. For a consolidated certificate, the parent named on page 1 — not a subsidiary from an annexure."
+    description: "The certified entity (on a supplier's certificate, the supplier) as printed at the top of the certificate. For a consolidated certificate, the parent named on page 1 — not a subsidiary from an annexure."
   - name: registration_number
     type: regno
     labels: ["Registration number", "Reg No", "Company registration"]
@@ -32,7 +32,7 @@ fields:
   - name: bee_level
     type: level
     required: true
-    labels: ["B-BBEE Status Level", "Status", "Level", "Contributor"]
+    labels: ["B-BBEE Status Level", "Status Level", "B-BBEE Level", "Level", "Contributor"]
     description: "The FINAL B-BBEE status level as printed — digits ('Level 2') or words ('LEVEL ONE CONTRIBUTOR'), or 'Non-Compliant'. After any discounting."
   - name: total_points
     type: text
@@ -44,7 +44,7 @@ fields:
     description: "The procurement recognition percentage (e.g. 135%, 125%, 0%)."
   - name: supplier_black_ownership_percentage
     type: percent
-    labels: ["Black Ownership", "Black Ownership %", "Black Voting Rights", "Black Economic Interest"]
+    labels: ["Black Ownership", "Black Ownership %", "Black Economic Interest"]
     description: "The certified entity's (the supplier's) black ownership percentage as printed. When voting rights and economic interest are both shown, use economic interest and report both in exceptions."
   - name: supplier_black_women_ownership_percentage
     type: percent
@@ -56,7 +56,7 @@ fields:
     description: "Whether the certificate states Empowering Supplier status (Yes / No)."
   - name: scorecard_type
     type: text
-    labels: ["Scorecard", "Enterprise size", "Generic", "QSE", "EME", "Specialised"]
+    labels: ["Scorecard", "Enterprise size", "Measured on"]
     description: "The scorecard the entity was measured on: Generic, QSE, EME, or Specialised, as printed."
   - name: sector_code
     type: text
@@ -79,14 +79,14 @@ fields:
   - name: issuing_body
     type: text
     labels: ["Verification Agency", "Issued by", "Verified by"]
-    description: "The verification agency (or IRBA-registered auditor) that issued the certificate."
+    description: "The verification agency that issued the certificate (on older certificates, an IRBA-registered auditor)."
   - name: agency_accreditation_number
     type: text
     labels: ["SANAS", "BVA", "Accreditation number"]
     description: "The agency's SANAS accreditation number (e.g. 'BVA 123'), not the certificate number."
   - name: certificate_number
     type: text
-    labels: ["Certificate Number", "Certificate No", "Ref", "Reference number"]
+    labels: ["Certificate Number", "Certificate No", "Certificate reference"]
     description: "The certificate's own number / reference."
   - name: signatory_name
     type: text
@@ -106,10 +106,12 @@ Codes of Good Practice. A pack contains two kinds and they look the same:
 - SUPPLIERS' certificates, which prove each supplier's level for preferential
   procurement.
 
-Read both the same way and copy the certified entity's own name and
-registration number exactly: whose certificate it is gets decided by comparing
-those with the measured entity, outside this document. The ownership figures
-go under the supplier ownership fields either way: a certificate's ownership
+Read both the same way. The certified company's name always goes in
+`supplier_name` and its number in `registration_number`, copied exactly:
+whose certificate it is gets decided by comparing those with the measured
+entity, in code, outside this document. Never call the certified company the
+measured entity. The ownership figures go under the supplier ownership fields
+either way: a certificate's ownership
 percentages are the certified entity's, and the measured entity's own
 ownership is read from its share register and ownership documents, never from
 a certificate.
@@ -176,7 +178,7 @@ Certificate No: KOS-24-0187     Technical Signatory: S. Botha
 ```
 
 ```json
-{"entity_name": "KHANYA OFFICE SUPPLIES (PTY) LTD", "registration_number": "2012 / 654321 / 07",
+{"supplier_name": "KHANYA OFFICE SUPPLIES (PTY) LTD", "registration_number": "2012 / 654321 / 07",
  "vat_number": "4123456789", "bee_level": "LEVEL TWO CONTRIBUTOR", "total_points": "98.40 / 109",
  "procurement_recognition_level": "125%", "supplier_black_ownership_percentage": "51.00%",
  "supplier_black_women_ownership_percentage": "30.20%", "empowering_supplier": true, "scorecard_type": "Generic",

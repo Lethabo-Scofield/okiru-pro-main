@@ -27,7 +27,9 @@ import {
   type VerificationElement,
 } from '../schemas/verification_document_matrix.js';
 
-const GRAPH_VERSION = 'matrix-v3';
+/** Stamped on every matrix type, so the skills supplement can tell them from the canonical ones. */
+export const MATRIX_GRAPH_VERSION = 'matrix-v3';
+const GRAPH_VERSION = MATRIX_GRAPH_VERSION;
 
 /**
  * Matrix elements are the amended five. Sectors on the legacy seven-element

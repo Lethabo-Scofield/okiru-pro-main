@@ -305,11 +305,13 @@ function firstLabelledRead(
   text: string,
   regexes: Array<{ regex: RegExp; name: string; formLabel: boolean }>,
   confidence: number,
+  separatorRequired = false,
 ): FieldRead | null {
   let fallback: FieldRead | null = null;
   for (const { regex, name, formLabel } of regexes) {
     for (const capture of guardedCaptures(regex, text, formLabel, (raw) => cleanExtractedRawValue(field.name, cleanCapture(raw)))) {
       if (isUnusableCapture(capture.value)) continue;
+      if (separatorRequired && formLabel && !capture.explicit) continue;
       const read: FieldRead = {
         rawValue: capture.value,
         confidence,
@@ -361,7 +363,7 @@ function readField(fieldKnowledge: FieldKnowledge, input: RawExtractionInput, op
       .map((p) => ({ regex: new RegExp(p.regex, 'i'), name: field.name, formLabel: true })),
     ...labelsForField(field.name).map((label) => ({ regex: formLabelRegex(label), name: field.name, formLabel: true })),
   ];
-  const fromLabel = firstLabelledRead(field, text, labelled, 0.72);
+  const fromLabel = firstLabelledRead(field, text, labelled, 0.72, field.separator_required === true);
   if (fromLabel) return fromLabel;
 
   // A type whose spec asks for one record per item (a register, a ledger)

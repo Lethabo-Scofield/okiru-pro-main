@@ -36,7 +36,8 @@ if ($Mode -ne "replay") {
   Write-Output "credentials loaded: $([bool]$env:AZURE_OPENAI_API_KEY)"
 }
 $env:AZURE_MODEL_DEPLOYMENT = "gpt-4o"
-$env:PARSER_DOCUMENT_CONCURRENCY = "6"
+# A caller may lower it (the model quota is shared with production).
+if (-not $env:PARSER_DOCUMENT_CONCURRENCY) { $env:PARSER_DOCUMENT_CONCURRENCY = "6" }
 $env:NODE_ENV = "development"
 $env:LOG_LEVEL = "warn"
 # (-Domain bbbee turns the template-decision and extraction caches off itself,

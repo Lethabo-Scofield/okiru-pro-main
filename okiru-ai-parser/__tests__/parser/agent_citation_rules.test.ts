@@ -56,8 +56,8 @@ const cipc = (raw: Record<string, unknown>) => agent.validateSubmission(raw, tar
 
 describe('a text value carrying a date is matched as words', () => {
   it('refuses an invented name that only shares the date with the quote', () => {
-    expect(cert({ field: 'entity_name', value: 'Ghost Trading 1 March 2025', page: 1, quote: 'Date of Issue: 1 March 2025' })).toMatchObject({ ok: false });
-    expect(cert({ field: 'entity_name', value: 'Ghost 2025-03-01', page: 1, quote: 'Date of Issue: 1 March 2025' })).toMatchObject({ ok: false });
+    expect(cert({ field: 'supplier_name', value: 'Ghost Trading 1 March 2025', page: 1, quote: 'Date of Issue: 1 March 2025' })).toMatchObject({ ok: false });
+    expect(cert({ field: 'supplier_name', value: 'Ghost 2025-03-01', page: 1, quote: 'Date of Issue: 1 March 2025' })).toMatchObject({ ok: false });
     expect(agent.valueInQuote('Ghost Trading 1 March 2025', 'Date of Issue: 1 March 2025', 'text')).toBe(false);
     expect(agent.valueInQuote('Ghost 2025-03-01', 'Date of Issue: 1 March 2025')).toBe(false);
   });
@@ -155,8 +155,8 @@ describe('cheap advisories', () => {
   });
 
   it('a label is not a value', () => {
-    expect(cert({ field: 'entity_name', value: 'Measured Entity', page: 1, quote: 'Measured Entity: Acme Trading (Pty) Ltd' })).toMatchObject({ ok: false });
-    expect(cert({ field: 'entity_name', value: 'Acme Trading (Pty) Ltd', page: 1, quote: 'Measured Entity: Acme Trading (Pty) Ltd' })).toMatchObject({ ok: true });
+    expect(cert({ field: 'supplier_name', value: 'Measured Entity', page: 1, quote: 'Measured Entity: Acme Trading (Pty) Ltd' })).toMatchObject({ ok: false });
+    expect(cert({ field: 'supplier_name', value: 'Acme Trading (Pty) Ltd', page: 1, quote: 'Measured Entity: Acme Trading (Pty) Ltd' })).toMatchObject({ ok: true });
   });
 
   it('a matrix field named "..._present" is a yes/no field, not a registration number', () => {

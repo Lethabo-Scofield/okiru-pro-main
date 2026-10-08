@@ -69,3 +69,33 @@ export function documentConcurrency(): number {
   const configured = Number(process.env.PARSER_DOCUMENT_CONCURRENCY);
   return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : 10;
 }
+
+/**
+ * Promise.all over `items` with at most `limit` workers in flight, results in
+ * input order. With a limit at or above the item count it IS Promise.all: every
+ * task starts at once, exactly as before. A rejection rejects the whole, as
+ * Promise.all does; callers that must not fail catch inside the worker.
+ */
+export async function boundedAll<I, O>(
+  items: readonly I[],
+  limit: number,
+  worker: (item: I, index: number) => Promise<O>,
+): Promise<O[]> {
+  if (!(limit < items.length)) return Promise.all(items.map(worker));
+  const settled = await concurrentMap(items, limit, worker);
+  return settled.map((result) => {
+    if (result.status === 'rejected') throw result.reason;
+    return result.value as O;
+  });
+}
+
+/**
+ * How many chunk calls ONE document may have in flight. Unbounded by default
+ * (every chunk at once, as always); PARSER_CHUNK_CONCURRENCY lowers it, for a
+ * run on a model quota shared with production. A 35-chunk sheet was 35
+ * simultaneous calls.
+ */
+export function chunkConcurrency(): number {
+  const configured = Number(process.env.PARSER_CHUNK_CONCURRENCY);
+  return Number.isFinite(configured) && configured > 0 ? Math.floor(configured) : Infinity;
+}

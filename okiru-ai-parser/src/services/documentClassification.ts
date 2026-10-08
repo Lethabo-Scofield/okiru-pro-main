@@ -29,6 +29,8 @@ import type { VerificationElement } from '../../schemas/verification_document_ma
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import type { ExtractionDomain, RoutableElement } from './extractionDomain.js';
 import { parseModelJson } from './aiExtraction.js';
+import { extractionDomain, type DomainDocument } from './extractionDomain.js';
+import { skillMenuLines } from './skills.js';
 
 const logger = createLogger('DocumentClassification');
 
@@ -74,6 +76,49 @@ export interface DocumentClassificationResult {
   documentType: string;
   /** 0..1 — the caller ignores anything below CONFIDENCE_FLOOR. */
   confidence: number;
+  /**
+   * The document type, when the model recognised one of the types the domain's
+   * skills describe (their "is / is not" lines are on the menu): the skill id.
+   * The caller turns it into the spec to extract with (specForSkill), so the
+   * extraction no longer depends on keyword retrieval for that document.
+   */
+  skillId?: string;
+}
+
+/**
+ * The skills menu appended to Pass A's system prompt: one entry per skill, with
+ * what the type is, what it is NOT, and what to look for. Empty when the domain
+ * has no skills (ESG today, or PARSER_SKILLS=off), so the prompt is unchanged.
+ */
+export function skillsMenu(domain: ExtractionDomain): string {
+  const skills = extractionDomain(domain).skills()?.skills ?? [];
+  if (skills.length === 0) return '';
+  return [
+    '',
+    'DOCUMENT TYPES an expert has written a reading guide for. When the document is clearly ONE of',
+    'these, also return its id as "document_type_id"; otherwise "document_type_id": null.',
+    ...skills.map((skill) => `- ${skill.id}:\n${skillMenuLines(skill)}`),
+    'The id must be copied exactly from this list. A type that is only similar is not it.',
+    '"element" is always one of the ELEMENT keys above and "document_type" a short label: a type id goes ONLY in "document_type_id".',
+  ].join('\n');
+}
+
+/** The JSON contract line both domain prompts state. */
+const CONTRACT = 'Return ONLY JSON: {"element": <KEY>, "document_type": "<short label>", "confidence": <0..1>}.';
+/** The same contract when a skills menu follows: the fourth key is part of the ONE shape asked for. */
+const CONTRACT_WITH_TYPE_ID = 'Return ONLY JSON: {"element": <KEY>, "document_type": "<short label>", "document_type_id": <an id from DOCUMENT TYPES below, or null>, "confidence": <0..1>}.';
+
+/**
+ * Pass A's system prompt for a domain. With no skills (ESG today, or
+ * PARSER_SKILLS=off) it is the domain prompt exactly as before; with a skills
+ * menu the contract line names "document_type_id" too — a menu that asks for a
+ * key the contract line leaves out gets the id back in the wrong key.
+ */
+export function passASystemPrompt(domain: ExtractionDomain): string {
+  const base = domain === 'esg' ? ESG_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  const menu = skillsMenu(domain);
+  if (!menu) return base;
+  return base.replace(CONTRACT, CONTRACT_WITH_TYPE_ID) + menu;
 }
 
 /**
@@ -86,7 +131,7 @@ const SYSTEM_PROMPT = [
   'scorecard ELEMENT it is primarily evidence FOR. Read the whole document — its',
   'layout, headings and tables — and judge by MEANING, never by a single keyword.',
   '',
-  'Return ONLY JSON: {"element": <KEY>, "document_type": "<short label>", "confidence": <0..1>}.',
+  CONTRACT,
   '',
   'ELEMENT keys and what belongs to each:',
   '- OWNERSHIP: shareholders, share register / certificate, voting & economic rights, CIPC / MOI / COR forms, beneficial interest.',
@@ -117,7 +162,7 @@ const ESG_SYSTEM_PROMPT = [
   'data ELEMENT it is primarily evidence FOR. Read the whole document — its',
   'layout, headings and tables — and judge by MEANING, never by a single keyword.',
   '',
-  'Return ONLY JSON: {"element": <KEY>, "document_type": "<short label>", "confidence": <0..1>}.',
+  CONTRACT,
   '',
   'ELEMENT keys and what belongs to each:',
   '- GHG_ENERGY: electricity and utility accounts, solar generation, generator diesel, LPG, carbon tax returns, SBTi / net-zero targets, anything measured in kWh or tCO2e.',
@@ -195,7 +240,7 @@ export async function classifyDocument(
   const user = `DOCUMENT: ${input.filename}\n\n${content}`;
   let reply: string;
   try {
-    reply = await model.complete(domain === 'esg' ? ESG_SYSTEM_PROMPT : SYSTEM_PROMPT, user);
+    reply = await model.complete(passASystemPrompt(domain), user);
   } catch (err) {
     logger.warn('Document classification failed — falling back to BM25 routing', {
       file: input.filename, reason: (err as Error).message,
@@ -205,7 +250,20 @@ export async function classifyDocument(
   }
 
   const parsed = parseModelJson(reply);
-  const element = normaliseElement(parsed?.element, domain === 'esg' ? ESG_ELEMENT_KEYS : ELEMENT_KEYS);
+  const elementKeys = domain === 'esg' ? ESG_ELEMENT_KEYS : ELEMENT_KEYS;
+  // Only an id from the menu counts: an invented or misspelled one is no type.
+  const menu = extractionDomain(domain).skills()?.skills ?? [];
+  const menuSkill = (raw: unknown) => {
+    const id = String(raw ?? '').trim();
+    return id ? menu.find((s) => s.id === id) ?? null : null;
+  };
+  // The id belongs in document_type_id. A reply that put it in document_type
+  // (exactly a menu id, never a label that only resembles one) or in element
+  // still named the type; in element it also names the element: the skill's own.
+  const skillInElement = menuSkill(parsed?.element);
+  const skill = menuSkill(parsed?.document_type_id) ?? menuSkill(parsed?.document_type) ?? skillInElement;
+  const element = normaliseElement(parsed?.element, elementKeys)
+    ?? (skillInElement ? normaliseElement(skillInElement.element, elementKeys) : null);
   if (!parsed || !element) {
     cache.set(key, null);
     return null;
@@ -214,7 +272,8 @@ export async function classifyDocument(
   const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0;
   const documentType = String(parsed.document_type ?? '').trim().slice(0, 80) || element;
 
-  const result: DocumentClassificationResult = { element, documentType, confidence };
+  const skillId = skill?.id;
+  const result: DocumentClassificationResult = { element, documentType, confidence, ...(skillId ? { skillId } : {}) };
   cache.set(key, result);
   logger.info('Document classified by model', { file: input.filename, element, confidence, documentType });
   return result;
@@ -231,6 +290,29 @@ export function routingElement(cls: DocumentClassificationResult | null): Routab
   // (singular) is a real element and routes normally.
   if (cls.element === 'FINANCIALS' || cls.element === 'OTHER') return null;
   return cls.element;
+}
+
+/**
+ * The ONE spec to extract a document with when Pass A named its type (a skill
+ * id), or null to leave the choice to retrieval. One spec, not every spec the
+ * skill reads: a payroll read three times under three matrix specs is three
+ * paid calls for the same values. Preference: the skill's spec in the element
+ * Pass A routed to, then its first matrix spec, then the type the skill itself
+ * declares (a new type, or a canonical type no matrix spec covers).
+ */
+export function specForSkill(
+  cls: DocumentClassificationResult | null,
+  domain: ExtractionDomain = 'bbbee',
+): DomainDocument | null {
+  if (!cls?.skillId || cls.confidence < CONFIDENCE_FLOOR) return null;
+  const definition = extractionDomain(domain);
+  const skill = definition.skills()?.skills.find((s) => s.id === cls.skillId);
+  if (!skill) return null;
+  const specs = skill.appliesTo
+    .map((id) => definition.matrix.find((doc) => doc.id === id) ?? null)
+    .filter((doc): doc is DomainDocument => doc !== null);
+  const element = routingElement(cls);
+  return specs.find((doc) => doc.element === element) ?? specs[0] ?? definition.findDocumentById(skill.id);
 }
 
 /** Test seam: clear the per-process classification cache. */

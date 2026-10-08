@@ -7,7 +7,7 @@ appliesTo:
   - sed__audited_afs_or_signed_management_accounts
   - skills_development__afs_staff_costs_training_expense_note
 element: FINANCIALS
-version: 1
+version: 2
 hard: true
 classify:
   is: "A set of annual financial statements (audited, independently reviewed, compiled, or with a close corporation accounting officer's report), or signed management accounts, for one financial year."
@@ -22,7 +22,7 @@ fields:
   - name: entity_name
     type: text
     required: true
-    labels: ["Company", "Close Corporation", "Entity", "Name"]
+    labels: ["Company name", "Name of close corporation", "Registered name"]
     description: "The reporting entity's registered name from the cover or General Information page."
   - name: trading_name
     type: text
@@ -51,11 +51,11 @@ fields:
     description: "The auditor or independent reviewer who signed the report (firm and/or partner). Null when there is no audit or review."
   - name: accounting_officer_name
     type: text
-    labels: ["Accounting Officer", "Accounting officer's report", "Compiled by", "Practice number"]
+    labels: ["Accounting Officer", "Compiled by", "Practice number"]
     description: "The accounting officer (close corporations) or compiler named on the report, with practice number when printed."
   - name: signing_date
     type: date
-    labels: ["Date", "approved by", "signed on behalf of"]
+    labels: ["Date of approval", "approved by", "signed on behalf of"]
     description: "The date the report was signed or the statements approved by the directors / members."
   - name: current_year_revenue
     type: money
@@ -94,7 +94,7 @@ fields:
   - name: directors_or_members_remuneration
     type: money
     labels: ["Directors' emoluments", "Members' remuneration", "Directors' remuneration"]
-    description: "Remuneration paid to directors (companies) or members (CCs), stated separately. 'Nil' or '-' is zero."
+    description: "Remuneration paid to directors (companies) or members (CCs), stated separately, as printed ('Nil' and '-' are copied; the code reads both as zero)."
   - name: capital_expenditure
     type: money
     labels: ["Additions", "Purchase of property, plant and equipment", "Acquisition of assets"]
@@ -109,10 +109,10 @@ fields:
     description: "Total equity, or total members' interest for a close corporation; negative when liabilities exceed assets."
   - name: total_shares_in_issue
     type: count
-    labels: ["Issued", "Share capital", "ordinary shares of"]
-    description: "Issued shares from the share capital note (companies only; a CC has members' interest, not shares)."
+    labels: ["Issued shares", "Number of shares in issue", "ordinary shares of"]
+    description: "The NUMBER of issued shares from the share capital note, as a bare number (companies only; a CC has members' interest, not shares). Never the Rand value of share capital."
 newFields: [trading_name, assurance_type, accounting_officer_name, gross_profit, net_profit_before_tax, total_salaries, directors_or_members_remuneration, total_assets, total_equity]
-dropFields: [total_pre_exclusions_tmps, vice]
+dropFields: [total_pre_exclusions_tmps]
 ---
 ## What it is / is not
 
@@ -203,13 +203,13 @@ Tax computation: Computed loss carried forward (1 950 100)
 ```
 
 ```json
-{"entity_name": "SIZWE LOGISTICS CC", "registration_number": "2009/012345/23",
+{"entity_name": "SIZWE LOGISTICS CC", "trading_name": null, "registration_number": "2009/012345/23",
  "financial_year_end": "30 June 2025", "assurance_type": "Accounting Officer's Report",
  "audit_opinion": null, "signing_auditor": null, "accounting_officer_name": "P. van Wyk, Practice no. 12345",
  "signing_date": "20 October 2025", "current_year_revenue": "4 812 300", "cost_of_sales": "(2 914 650)",
  "gross_profit": "1 897 650", "operating_expenditure": "(1 822 410)", "finance_costs": "(96 115)",
  "net_profit_before_tax": "(20 875)", "current_year_npat": "(20 875)", "total_salaries": "1 203 400",
- "directors_or_members_remuneration": "0", "total_assets": "2 104 556", "total_equity": "(312 880)",
+ "directors_or_members_remuneration": "-", "total_assets": "2 104 556", "total_equity": "(312 880)",
  "capital_expenditure": null, "total_shares_in_issue": null,
  "exceptions": ["Unaudited: accounting officer's report only.", "Computed tax loss (1 950 100) is not TMPS and was not used."]}
 ```

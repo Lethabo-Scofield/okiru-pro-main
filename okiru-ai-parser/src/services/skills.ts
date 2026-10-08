@@ -26,7 +26,7 @@
  *     - { name: shareholder_name, type: text, required: true, rowLevel: true, labels: [...], description: "..." }
  *   newFields: [...]               # field names no parser/mapping code speaks yet
  *   dropFields: [...]              # spec keys this skill deliberately does not ask for
- *   newType: { name, aliases }     # only for a type the matrix does not have yet
+ *   newType: { name, aliases, narrows? }  # only for a type the matrix does not have yet
  *   ---
  *   ## What it is / is not
  *   ## Where values sit
@@ -35,6 +35,32 @@
  *
  * Files starting with `_` are domain-wide (`_global.md`): traps that apply to
  * every document, with no front-matter `appliesTo` or fields.
+ *
+ * DOMAINS. `skills/bbbee` names B-BBEE matrix ids or the canonical B-BBEE types
+ * in `appliesTo`. `skills/esg` names ESG matrix ids
+ * (schemas/esg_document_matrix.ts) and nothing else: ESG has no canonical
+ * types, so a document the ESG matrix has no spec for (a client's own monthly
+ * data dashboard) is a `newType` there too. ESG field names are the ESG
+ * matrix's, its grid rows' (extractionDomain ESG_GRIDS, e.g. `energy_site_rows`)
+ * and the code readers' (`esg_monthly_rows`), or declared in `newFields`.
+ *
+ * THE OUTPUT CONTRACT every skill teaches (and every worked example shows):
+ * ONE flat JSON object per document, keyed by the field names — document-level
+ * fields as keys, row-level fields as an array of objects under `rowsField` —
+ * plus `exceptions`. Values are copied AS PRINTED (a spaced registration
+ * number, a level in words, a date as written); code normalises them later.
+ * The model never computes a figure: sums, counts, x100 and "inside the
+ * measurement period" are done in code (skillDerivations.ts) and labelled
+ * derived there.
+ *
+ * NEW DOCUMENT TYPES. A type the matrix and the canonical ontology do not have
+ * is declared by the one skill that reads it, in `newType` — never by naming
+ * an invented id in `appliesTo` (which still fails loudly). Its name and
+ * aliases must not repeat any existing type's name, id or alias, unless the
+ * new type is a narrower kind of an existing umbrella type and says so in
+ * `narrows` (a beneficial interest register narrows the canonical "Ownership
+ * Confirmation", which lists it among its aliases). `registry.newTypes` is the
+ * list the Step 2.8 supplement registers as document types.
  *
  * LOUD BY DESIGN. Loading throws on anything malformed — an unknown spec id in
  * `appliesTo`, two skills claiming the same spec, a missing section, a field
@@ -52,7 +78,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { VERIFICATION_DOCUMENT_MATRIX } from '../../schemas/verification_document_matrix.js';
 import { ESG_DOCUMENT_MATRIX } from '../../schemas/esg_document_matrix.js';
-import { defaultDocumentKnowledge } from '../../graph/ontology_queries.js';
+import { baseDocumentKnowledge } from '../../graph/ontology_queries.js';
 import type { ExtractionDomain } from './extractionDomain.js';
 import {
   FrontMatterError,
@@ -61,9 +87,13 @@ import {
   type FrontMatterValue,
 } from './skillFrontMatter.js';
 
-/** The value vocabulary a skill field can declare. */
+/**
+ * The value vocabulary a skill field can declare. `number` is a measured
+ * quantity with a unit (kWh, litres, kg, kL, km, hours) — the ESG documents'
+ * staple; `count` is a whole number of things; `money` is Rand.
+ */
 export const SKILL_FIELD_TYPES = [
-  'text', 'date', 'money', 'percent', 'count', 'regno', 'idno', 'bool', 'level',
+  'text', 'date', 'money', 'percent', 'count', 'number', 'regno', 'idno', 'bool', 'level',
 ] as const;
 export type SkillFieldType = (typeof SKILL_FIELD_TYPES)[number];
 
@@ -94,6 +124,22 @@ export interface SkillSections {
   example: string;
 }
 
+export interface SkillNewType {
+  name: string;
+  aliases: string[];
+  /**
+   * The existing umbrella type this one is a narrower kind of, when its name or
+   * aliases repeat that type's aliases. Null for a type nothing covers yet.
+   */
+  narrows: string | null;
+}
+
+/** A new document type as the 2.8 supplement registers it. */
+export interface RegisteredNewType extends SkillNewType {
+  skillId: string;
+  element: string;
+}
+
 export interface Skill {
   id: string;
   domain: ExtractionDomain;
@@ -110,7 +156,7 @@ export interface Skill {
   /** Spec expectedFields this skill deliberately does not ask the model for. */
   dropFields: string[];
   /** A type the matrix does not have yet (Step 2.8 supplement), when declared. */
-  newType: { name: string; aliases: string[] } | null;
+  newType: SkillNewType | null;
   sections: SkillSections;
   /** sha256 of the file (line endings normalised) — the cache salt for anything it shapes. */
   hash: string;
@@ -134,7 +180,16 @@ export interface SkillRegistry {
   global: GlobalSkill | null;
   /** sha256 over every file hash, in file order — one salt for the whole set. */
   hash: string;
-  /** Lookup by skill id, applied spec id, spec name, canonical name, new-type name or alias. */
+  /** Every newType a skill declares, for registration as a document type (Step 2.8). */
+  newTypes: RegisteredNewType[];
+  /**
+   * Lookup by skill id, applied spec id, spec name, canonical name, new-type
+   * name or alias — then, when none of those match, by an existing type's own
+   * alias ("BEE Certificate", "Share Register"). An alias resolves only when it
+   * is unambiguous: every matrix type carrying it (or, when no matrix type
+   * does, every canonical type carrying it) is read by the same skill. A wrong
+   * skill is worse than none.
+   */
   skillFor(specIdOrName: string): Skill | null;
 }
 
@@ -157,6 +212,13 @@ const SKILL_ID = /^_?[a-z][a-z0-9_]*$/;
 
 // ─── Known document ids per domain ──────────────────────────────────────────
 
+interface AliasCarriers {
+  /** Matrix ids whose name or aliases normalise to this alias. */
+  matrix: Set<string>;
+  /** Canonical type names whose name or aliases normalise to it. */
+  canonical: Set<string>;
+}
+
 interface DomainCatalogue {
   /** Lowercased id or name → the canonical spelling. */
   known: Map<string, string>;
@@ -164,13 +226,39 @@ interface DomainCatalogue {
   nameById: Map<string, string>;
   /** Every existing document name and id, lowercased — a newType must not reuse one. */
   taken: Set<string>;
+  /** Normalised alias (names included) → the existing types that carry it. */
+  aliasCarriers: Map<string, AliasCarriers>;
   elements: Set<string>;
+}
+
+/**
+ * The form two spellings of one document name share: case, punctuation and a
+ * trailing plural "s" do not tell types apart ("Share certificates" is
+ * "Share Certificate"; "Register of Beneficial Interests" is "Register of
+ * beneficial interest").
+ */
+export function normaliseTypeLabel(label: string): string {
+  return String(label ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((word) => (word.length > 3 && word.endsWith('s') && !word.endsWith('ss') ? word.slice(0, -1) : word))
+    .join(' ');
 }
 
 function catalogueFor(domain: ExtractionDomain): DomainCatalogue {
   const known = new Map<string, string>();
   const nameById = new Map<string, string>();
   const taken = new Set<string>();
+  const aliasCarriers = new Map<string, AliasCarriers>();
+  const carry = (label: string, kind: keyof AliasCarriers, target: string) => {
+    const key = normaliseTypeLabel(label);
+    if (!key) return;
+    const entry = aliasCarriers.get(key) ?? { matrix: new Set<string>(), canonical: new Set<string>() };
+    entry[kind].add(target);
+    aliasCarriers.set(key, entry);
+  };
   const elements = new Set<string>(['FINANCIALS', 'OTHER']);
   const matrix = domain === 'esg' ? ESG_DOCUMENT_MATRIX : VERIFICATION_DOCUMENT_MATRIX;
   for (const doc of matrix) {
@@ -179,18 +267,21 @@ function catalogueFor(domain: ExtractionDomain): DomainCatalogue {
     taken.add(doc.id.toLowerCase());
     taken.add(doc.name.toLowerCase());
     elements.add(doc.element);
+    for (const label of [doc.name, ...(doc.aliases ?? [])]) carry(label, 'matrix', doc.id);
   }
   if (domain === 'bbbee') {
     // The hand-authored canonical types (B-BBEE Certificate, Ownership
     // Confirmation, ...) are addressed by NAME: they have no matrix id.
     const matrixNames = new Set(VERIFICATION_DOCUMENT_MATRIX.map((doc) => doc.name.toLowerCase()));
-    for (const knowledge of defaultDocumentKnowledge()) {
+    for (const knowledge of baseDocumentKnowledge()) {
       const name = knowledge.document.name;
-      if (!matrixNames.has(name.toLowerCase())) known.set(name.toLowerCase(), name);
+      if (matrixNames.has(name.toLowerCase())) continue;
+      known.set(name.toLowerCase(), name);
       taken.add(name.toLowerCase());
+      for (const label of [name, ...knowledge.document.aliases]) carry(label, 'canonical', name);
     }
   }
-  return { known, nameById, taken, elements };
+  return { known, nameById, taken, aliasCarriers, elements };
 }
 
 /** Every id/name a skill's `appliesTo` may legitimately name, for tests and tooling. */
@@ -324,14 +415,35 @@ function parseSkillFile(
   let newType: Skill['newType'] = null;
   if (meta.newType !== undefined && meta.newType !== null) {
     if (!isMapping(meta.newType)) throw new SkillLoadError('newType must be a mapping', file);
-    rejectUnknownKeys(meta.newType, new Set(['name', 'aliases']), 'newType', file);
+    rejectUnknownKeys(meta.newType, new Set(['name', 'aliases', 'narrows']), 'newType', file);
+    let narrows: string | null = null;
+    if (meta.newType.narrows !== undefined && meta.newType.narrows !== null) {
+      const target = stringOf(meta.newType.narrows, 'newType.narrows', file);
+      narrows = catalogue.known.get(target.toLowerCase()) ?? null;
+      if (!narrows) throw new SkillLoadError(`newType.narrows names "${target}", which is not an existing ${domain} type`, file);
+      if (narrows !== target) throw new SkillLoadError(`newType.narrows "${target}" must be spelled "${narrows}"`, file);
+    }
     newType = {
       name: stringOf(meta.newType.name, 'newType.name', file),
       aliases: stringList(meta.newType.aliases, 'newType.aliases', file),
+      narrows,
     };
     for (const label of [newType.name, ...newType.aliases]) {
       if (catalogue.taken.has(label.toLowerCase())) {
         throw new SkillLoadError(`newType "${label}" already exists — name it in appliesTo instead`, file);
+      }
+      // An existing type's ALIAS is that type too: declaring it again would
+      // make two types for one document. Only a declared narrowing of the
+      // umbrella type that carries the alias may take it over.
+      const carriers = catalogue.aliasCarriers.get(normaliseTypeLabel(label));
+      if (carriers) {
+        const owners = [...carriers.matrix, ...carriers.canonical];
+        if (owners.some((owner) => owner !== narrows)) {
+          throw new SkillLoadError(
+            `newType "${label}" is already an alias of ${owners.join(', ')} — name it in appliesTo, or declare newType.narrows when this type is a narrower kind of it`,
+            file,
+          );
+        }
       }
     }
   }
@@ -360,9 +472,21 @@ function parseSkillFile(
 
   if (!Array.isArray(meta.fields) || meta.fields.length === 0) throw new SkillLoadError('fields must be a non-empty list', file);
   const fields = meta.fields.map((raw, i) => parseField(raw, i, file));
+  // A name may appear once per level. The same name at BOTH levels is how an
+  // ESG grid reads a figure that is a row column and the document's total
+  // (extractionDomain ESG_GRIDS, suppressRowScalars false: a waste report's
+  // waste_total_kg per stream and for the site) — the same quantity, so the
+  // same type.
   const seen = new Set<string>();
+  const declared = new Map<string, SkillField>();
   for (const field of fields) {
-    if (seen.has(field.name)) throw new SkillLoadError(`field "${field.name}" is declared twice`, file);
+    const slot = `${field.rowLevel ? 'row' : 'document'}:${field.name}`;
+    if (declared.has(slot)) throw new SkillLoadError(`field "${field.name}" is declared twice`, file);
+    const other = declared.get(`${field.rowLevel ? 'document' : 'row'}:${field.name}`);
+    if (other && other.type !== field.type) {
+      throw new SkillLoadError(`field "${field.name}" is a ${other.type} at one level and a ${field.type} at the other`, file);
+    }
+    declared.set(slot, field);
     seen.add(field.name);
   }
 
@@ -483,6 +607,7 @@ export function buildSkillRegistry(
   // One spec, one skill: two skills claiming the same document would make the
   // prompt depend on file order.
   const index = new Map<string, Skill>();
+  const byTarget = new Map<string, Skill>();
   const claim = (key: string, skill: Skill) => {
     const lower = key.toLowerCase();
     const owner = index.get(lower);
@@ -495,6 +620,7 @@ export function buildSkillRegistry(
     claim(skill.id, skill);
     for (const target of skill.appliesTo) {
       claim(target, skill);
+      byTarget.set(target, skill);
       const name = catalogue.nameById.get(target);
       if (name) claim(name, skill);
     }
@@ -503,6 +629,47 @@ export function buildSkillRegistry(
     }
   }
 
+  // The same claims, spelled loosely ("Share certificates" for "Share
+  // Certificate"). A loose spelling two skills share resolves to neither.
+  const loose = new Map<string, Skill | null>();
+  for (const [key, skill] of index) {
+    const norm = normaliseTypeLabel(key);
+    if (!norm) continue;
+    const seen = loose.get(norm);
+    loose.set(norm, seen === undefined || seen === skill ? skill : null);
+  }
+
+  /** The one skill reading every carrier, or null when any carrier has another (or none). */
+  const soleSkill = (targets: Set<string>): Skill | null => {
+    let found: Skill | null = null;
+    for (const target of targets) {
+      const skill = byTarget.get(target) ?? null;
+      if (!skill || (found && found !== skill)) return null;
+      found = skill;
+    }
+    return found;
+  };
+
+  const skillFor = (specIdOrName: string): Skill | null => {
+    const key = String(specIdOrName ?? '').trim();
+    if (!key) return null;
+    const exact = index.get(key.toLowerCase());
+    if (exact) return exact;
+    const norm = normaliseTypeLabel(key);
+    if (loose.has(norm)) return loose.get(norm) ?? null;
+    // An existing type's own alias. The matrix's specific types decide before
+    // the canonical umbrella types: "Share Register" is the securities
+    // register's alias and also one of "Ownership Confirmation"'s.
+    const carriers = catalogue.aliasCarriers.get(norm);
+    if (!carriers) return null;
+    if (carriers.matrix.size > 0) return soleSkill(carriers.matrix);
+    return soleSkill(carriers.canonical);
+  };
+
+  const newTypes: RegisteredNewType[] = skills
+    .filter((skill) => skill.newType)
+    .map((skill) => ({ ...(skill.newType as SkillNewType), skillId: skill.id, element: skill.element }));
+
   const hash = sha256([...(global ? [global.hash] : []), ...skills.map((skill) => skill.hash)].join('\n'));
   return {
     domain,
@@ -510,7 +677,8 @@ export function buildSkillRegistry(
     skills,
     global,
     hash,
-    skillFor: (specIdOrName: string) => index.get(String(specIdOrName ?? '').trim().toLowerCase()) ?? null,
+    newTypes,
+    skillFor,
   };
 }
 
@@ -563,6 +731,46 @@ export function skillFor(specIdOrName: string, domain: ExtractionDomain = 'bbbee
   return loadSkills(domain, { optional: domain !== 'bbbee' }).skillFor(specIdOrName);
 }
 
+/**
+ * The kill switch: PARSER_SKILLS=off (or false) runs every prompt, menu and
+ * ontology type exactly as it was before skills were wired in.
+ */
+export function skillsEnabled(): boolean {
+  const flag = String(process.env.PARSER_SKILLS ?? '').trim().toLowerCase();
+  return flag !== 'off' && flag !== 'false' && flag !== '0';
+}
+
+/**
+ * Which domains must have a skills directory. B-BBEE ships skills, so a
+ * missing directory is a broken image; ESG (and any later domain) is optional
+ * until its first skill lands, and plugs in with no code change when it does.
+ */
+export function skillsRequired(domain: ExtractionDomain): boolean {
+  return domain === 'bbbee';
+}
+
+/**
+ * The registry the pipeline uses for a domain, or null when skills are switched
+ * off. A domain whose skills are optional and absent returns an empty registry
+ * (skillFor always null), so nothing about its prompts changes.
+ */
+export function activeSkills(domain: ExtractionDomain): SkillRegistry | null {
+  if (!skillsEnabled()) return null;
+  return loadSkills(domain, { optional: !skillsRequired(domain) });
+}
+
+/**
+ * Load every domain's skills once at server start, so a malformed skill (or an
+ * image built without skills/) fails the boot instead of a client's upload.
+ */
+export function loadSkillsAtBoot(domains: ExtractionDomain[] = ['bbbee', 'esg']): Array<{ domain: ExtractionDomain; skills: number; hash: string }> {
+  if (!skillsEnabled()) return [];
+  return domains.map((domain) => {
+    const registry = activeSkills(domain)!;
+    return { domain, skills: registry.skills.length, hash: registry.hash.slice(0, 12) };
+  });
+}
+
 // ─── Prompt rendering (pure) ────────────────────────────────────────────────
 
 export interface SkillPromptSections {
@@ -586,6 +794,7 @@ const TYPE_HINT: Record<SkillFieldType, string> = {
   money: 'amount as printed, sign and brackets kept',
   percent: 'percentage as printed',
   count: 'whole number as printed',
+  number: 'quantity as printed, in the unit the document prints; never converted',
   regno: 'registration number as printed',
   idno: 'ID / passport number as printed',
   bool: 'true / false, only when the document shows it',
@@ -615,10 +824,13 @@ export function skillPromptSections(skill: Skill, global: GlobalSkill | null = n
 
   const title = `SKILL: ${skill.id} v${skill.version}`;
   const traps = global ? `${skill.sections.traps}\n\nAlways:\n${global.traps}` : skill.sections.traps;
+  // The global "Where values sit" (reading tables, label/value pairs, amounts,
+  // dates) applies to every document; without it those rules never reach a prompt.
+  const where = global?.where ? `${skill.sections.where}\n\nIn every document:\n${global.where}` : skill.sections.where;
   const text = [
     title,
     `\nWHAT THIS DOCUMENT IS:\n${skill.classify.is}`,
-    `\nWHERE THE VALUES SIT:\n${skill.sections.where}`,
+    `\nWHERE THE VALUES SIT:\n${where}`,
     `\nTRAPS:\n${traps}`,
     `\nFIELDS TO RETURN (JSON keys; null when the document does not state it):\n${fieldLines}`,
     `\nWORKED EXAMPLE (invented values, for shape only — never copy them):\n${skill.sections.example}`,
@@ -627,7 +839,7 @@ export function skillPromptSections(skill: Skill, global: GlobalSkill | null = n
   return {
     title,
     whatItIs: skill.sections.whatItIs,
-    where: skill.sections.where,
+    where,
     traps,
     example: skill.sections.example,
     fieldLines,
@@ -658,6 +870,23 @@ export function expectedKeysWithSkill(skill: Skill, specExpectedFields: readonly
     add(name);
   }
   return keys;
+}
+
+/**
+ * The typed field lines for some of a skill's fields (the sweep's "what each
+ * missing field is"), required ones first, in the skill's order otherwise.
+ */
+export function skillFieldNotes(skill: Skill, names: readonly string[]): string {
+  const wanted = new Set(names);
+  const fields = skill.fields.filter((field) => wanted.has(field.name) && !field.rowLevel);
+  return [...fields.filter((f) => f.required), ...fields.filter((f) => !f.required)].map(fieldLine).join('\n');
+}
+
+/** Field names in sweep order: the skill's required fields first, then the rest as given. */
+export function requiredFirst(skill: Skill | null, names: readonly string[]): string[] {
+  if (!skill) return [...names];
+  const required = new Set(skill.fields.filter((field) => field.required).map((field) => field.name));
+  return [...names.filter((name) => required.has(name)), ...names.filter((name) => !required.has(name))];
 }
 
 /** One menu line for classification prompts (adjudicator / Pass A). */

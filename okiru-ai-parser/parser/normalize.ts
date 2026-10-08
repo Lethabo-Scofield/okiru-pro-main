@@ -109,7 +109,11 @@ export function normalizeValue(value: unknown, dataType: ParserDataType): unknow
     case 'bee_level':
       return normalizeBeeLevel(value);
     case 'number': {
-      const n = Number(String(value ?? '').replace(/,/g, ''));
+      // Nothing read is no number: Number('') is 0, which reported every
+      // absent count as a stated zero.
+      const text = String(value ?? '').replace(/,/g, '').trim();
+      if (!text) return null;
+      const n = Number(text);
       return Number.isFinite(n) ? n : null;
     }
     case 'string':

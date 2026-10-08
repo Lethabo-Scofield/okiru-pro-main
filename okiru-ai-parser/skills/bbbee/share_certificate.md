@@ -3,7 +3,7 @@ id: share_certificate
 appliesTo:
   - ownership__share_certificates_security_certificates_held_by_each_bee_pa
 element: OWNERSHIP
-version: 1
+version: 2
 hard: false
 classify:
   is: "A single share (security) certificate: 'This is to certify that [holder] is the registered holder of [n] [class] shares in [company]', with a certificate number, date and signatures."
@@ -27,7 +27,7 @@ fields:
   - name: certificate_number
     type: text
     required: true
-    labels: ["Certificate No", "Cert. No", "No."]
+    labels: ["Certificate No", "Cert. No", "Certificate number"]
     description: "The certificate's number, usually top left or top right."
   - name: holder_name
     type: text
@@ -82,7 +82,7 @@ B-BBEE: those come from IDs, declarations and the verification.
 - Title "Share Certificate"; the certificate number in a corner box
   ("Certificate No. BE01").
 - Top band or a side box: number of shares and class ("100 Ordinary Shares"),
-  sometimes the authorised capital ("Authorised Capital: 1 000 ordinary
+  sometimes the authorised capital ("Authorised Capital: 3 600 ordinary
   shares").
 - The certifying sentence in the middle: "This is to certify that [holder] (ID
   No ...) is the registered holder of [n] fully paid [class] shares of no par
@@ -93,7 +93,7 @@ B-BBEE: those come from IDs, declarations and the verification.
 
 ## Traps
 
-- Authorised capital is not the holding. "Authorised 1 000" with "100 shares"
+- Authorised capital is not the holding. "Authorised 3 600" with "100 shares"
   means the holder has 100.
 - Signatories' ID numbers sit near the signatures. The holder's ID is the one
   in the certifying sentence; if only signatories' IDs are printed, the
@@ -116,7 +116,7 @@ Invented, scanned:
 ```
 SHARE CERTIFICATE                                       Certificate No. BE01
                         BAOBAB ENGINEERING (PTY) LTD  (Reg. 2015/123456/07)
-Authorised Capital: 1 000 Ordinary Shares of no par value
+Authorised Capital: 3 600 Ordinary Shares of no par value
 This is to certify that THABO MOKOENA (ID No 800101 5009 087) is the registered holder of
 60 (sixty) fully paid Ordinary Shares in the above company.
 Given at Durban this 2nd day of March 2015.
@@ -126,7 +126,7 @@ ____ T. Mokoena, Director (ID 800101 5009 087)      ____ A. Smith, Company Secre
 ```json
 {"entity_name": "BAOBAB ENGINEERING (PTY) LTD", "registration_number": "2015/123456/07",
  "certificate_number": "BE01", "holder_name": "THABO MOKOENA", "id_number": "800101 5009 087",
- "share_class": "Ordinary", "number_of_shares": 60, "authorised_shares": 1000, "percentage": null,
+ "share_class": "Ordinary", "number_of_shares": 60, "authorised_shares": 3600, "percentage": null,
  "issue_date": "2nd day of March 2015", "signed_by": "T. Mokoena (Director); A. Smith (Company Secretary)",
  "exceptions": []}
 ```

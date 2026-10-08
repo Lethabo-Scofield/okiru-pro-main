@@ -11,6 +11,7 @@ import { createLogger } from './logger.js';
 import { parserHelmetOptions, resolveCorsOrigin } from './securityConfig.js';
 import { setQuoteStore } from './services/quoteStore.js';
 import { createRedisQuoteStore } from './services/redisQuoteStore.js';
+import { loadSkillsAtBoot } from './services/skills.js';
 
 const logger = createLogger('OkiruPaser');
 const app = express();
@@ -128,6 +129,18 @@ function validateStartupConfig(): void {
 }
 
 validateStartupConfig();
+
+/**
+ * Skills are read once, here: a malformed skill, or an image built without
+ * skills/, stops the boot instead of failing a client's paid upload later.
+ * PARSER_SKILLS=off skips them (and every prompt runs as it did before them).
+ */
+try {
+  for (const loaded of loadSkillsAtBoot()) logger.info('Extraction skills loaded', loaded);
+} catch (err) {
+  logger.error('Extraction skills failed to load', err as Error);
+  process.exit(1);
+}
 
 /**
  * Quote state must be shared before money can be involved.

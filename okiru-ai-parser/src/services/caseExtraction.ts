@@ -14,18 +14,24 @@ import { isTableGrid, tableGridsToRecords } from '../../schemas/table_grid.js';
 import {
   createAzureExtractionModel,
   extractDocument,
+  isSheetName,
   type DocumentExtraction,
   type ExtractionModel,
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { extractEntityNameFallback } from './entityNameExtraction.js';
-import { classifyDocument, routingElement } from './documentClassification.js';
+import { classifyDocument, routingElement, specForSkill } from './documentClassification.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
 import { extractLedgerTable } from './sheetLedgerExtraction.js';
 import { extractSheetFinancials, isFinancialsSheet } from './sheetFinancialsExtraction.js';
-import { instructionsExtraction, structuredInstructions } from './sheetInstructionsExtraction.js';
+import {
+  SHEET_INSTRUCTIONS_DOCUMENT_ID,
+  instructionsExtraction,
+  structuredInstructions,
+} from './sheetInstructionsExtraction.js';
+import { deriveForRecord, periodEndingOn, type MeasurementPeriod } from './skillDerivations.js';
 import { elementFromHint } from './specRetrieval.js';
 import {
   fieldElementIndex,
@@ -123,6 +129,84 @@ export function duplicateWorkbookException(inputs: RawExtractionInput[]): string
     + 'Remove the outdated version and re-upload so the score is stable and traceable to one source.';
 }
 
+/**
+ * The types that state the MEASURED ENTITY's own year end: its financial
+ * statements or management accounts (under whichever element's spec they were
+ * read — the AFS is read under ESD, Ownership, SED and Skills specs) and the
+ * workbook's Finance sheet. Never a certificate: a supplier's B-BBEE
+ * certificate prints the SUPPLIER's year end, and an ESD or SED document is
+ * about someone else.
+ */
+const OWN_FINANCIALS_TYPE = /financial_statements|management_accounts|(?:^|_)afs(?:_|$)/i;
+/**
+ * Financial statements that belong to someone else: a management company's or
+ * an ownership scheme's, a beneficiary's, a supplier's. Their year end is not
+ * the measured entity's.
+ */
+const THIRD_PARTY_FINANCIALS = /management_company|(?:^|_)scheme(?:_|$)|beneficiar|supplier|recipient/i;
+
+/** Whether an extraction can state the measured entity's own financial year end. */
+export function statesOwnYearEnd(extraction: DocumentExtraction): boolean {
+  const id = extraction.documentId;
+  if (id === SHEET_INSTRUCTIONS_DOCUMENT_ID || id === 'sheet_financials') return true;
+  if (/certificate|affidavit/i.test(id)) return false;
+  if (THIRD_PARTY_FINANCIALS.test(id)) return false;
+  return OWN_FINANCIALS_TYPE.test(id);
+}
+
+/**
+ * The measurement period the case's documents state: the year end on the
+ * workbook's Instructions sheet first (the client's own declaration), then the
+ * first of the measured entity's own financial documents that prints a full
+ * year-end date (statesOwnYearEnd). Null when none does — and then nothing
+ * period-dependent is derived.
+ */
+export function casePeriod(extractions: DocumentExtraction[]): MeasurementPeriod | null {
+  const ordered = [
+    ...extractions.filter((e) => e.documentId === SHEET_INSTRUCTIONS_DOCUMENT_ID),
+    ...extractions.filter((e) => e.documentId !== SHEET_INSTRUCTIONS_DOCUMENT_ID && statesOwnYearEnd(e)),
+  ];
+  for (const extraction of ordered) {
+    for (const value of extraction.values) {
+      if (value.field !== 'financial_year_end') continue;
+      const period = periodEndingOn(value.value);
+      if (period) return period;
+    }
+  }
+  return null;
+}
+
+/**
+ * Add each document's derived figures beside its printed ones (never over a
+ * value the document printed), each marked `source.method: 'derived'` with what
+ * it came from, and the derivation notes as exceptions a reviewer sees.
+ */
+export function addSkillDerivations(extractions: DocumentExtraction[]): void {
+  const period = casePeriod(extractions);
+  for (const extraction of extractions) {
+    if (extraction.error) continue;
+    // The skills read standalone documents, never workbook sheets (their rows
+    // are a template's fill-down, not a report's): nothing is derived from one.
+    if (isSheetName(extraction.sourceFile) || extraction.documentId.startsWith('sheet_')) continue;
+    const record: Record<string, unknown> = {};
+    for (const value of extraction.values) if (!(value.field in record)) record[value.field] = value.value;
+    const result = deriveForRecord(record, period);
+    if (!result) continue;
+    for (const [field, value] of Object.entries(result.values)) {
+      const basis = result.derived[field];
+      if (!basis || value === null || (Array.isArray(value) && value.length === 0) || field in record) continue;
+      extraction.values.push({
+        field,
+        value,
+        sourceFile: extraction.sourceFile,
+        sourceDocumentId: extraction.documentId,
+        source: { method: 'derived', quote: basis },
+      });
+    }
+    for (const note of result.notes) extraction.exceptions.push(`Derived figures: ${note}`);
+  }
+}
+
 /** Cached so a case does not rebuild the client per file. */
 let cachedModel: ExtractionModel | null | undefined;
 
@@ -201,6 +285,10 @@ export async function extractCaseEntities(
       ? await classifyDocument(model, { filename: input.filename, markdown: input.markdown, raw_text: input.raw_text })
       : null;
     const elementOverride = routingElement(classification) ?? undefined;
+    // Pass A named the document's type from the skills menu (2.9c): read it
+    // with that type's spec, not with whatever keyword retrieval ranks first —
+    // retrieval read a donation's proof of payment as an ESD invoice.
+    const skillSpec = specForSkill(classification);
 
     // Matrix-spec extraction (single evidence records) AND, for a workbook sheet
     // whose element is clear from its name, TABLE extraction (every row). The
@@ -212,7 +300,7 @@ export async function extractCaseEntities(
         markdown: input.markdown,
         raw_text: input.raw_text,
         elementHint: sheetName,
-      }, { elementOverride }),
+      }, skillSpec ? { specIds: [skillSpec.id] } : { elementOverride }),
       (async () => {
         const rows = structuredRows(input.tables);
 
@@ -295,6 +383,11 @@ export async function extractCaseEntities(
       });
     }
   }
+
+  // The figures the skills forbid the model to compute (EMP201 totals and the
+  // months filed, SED payments inside the period, a ledger's own total, the
+  // payroll headcount), worked out here and labelled derived.
+  addSkillDerivations(extractions);
 
   // Surfaced as a values-free extraction: it cannot move a score, only explain
   // why one moved. Added before resolution so it travels with the case.

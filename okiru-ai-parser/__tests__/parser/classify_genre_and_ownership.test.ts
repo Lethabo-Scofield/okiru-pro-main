@@ -28,6 +28,7 @@ import type { AdjudicationCandidate, DocumentTypeAdjudicator } from '../../parse
 const TRAINING_INVOICES = 'Invoices / internal accounting records — each training event';
 const SED_PROOF_OF_PAYMENT = 'Proof of payment — cash grants, donations, or monetary contributions';
 const OWNERSHIP_CONFIRMATION = 'Ownership Confirmation';
+const BI_REGISTER = 'Beneficial interest register';
 const SHARE_REGISTER = 'Securities / share register';
 const SHARE_CERT = 'Share certificates / security certificates held by each BEE participant';
 const PAYROLL = 'Payroll as at Measurement Date';
@@ -199,18 +200,36 @@ describe.each(Object.entries(repositories))('a beneficial interest register conf
     return classifyDocument(doc(filename, text) as never, await makeRepo());
   }
 
-  it('is read as Ownership Confirmation by its own title, from its content', async () => {
+  // The beneficial interest register skill declares the register as its own
+  // type, narrowing "Ownership Confirmation" (skills/bbbee, graph/skill_ontology.ts):
+  // it is read under that type, and the umbrella type gives up its aliases.
+  it('is read as the beneficial interest register type by its own title, from its content', async () => {
     const result = await classify('scan_0007.pdf', BI_REGISTER_TEXT);
-    expect(result.document_type).toBe(OWNERSHIP_CONFIRMATION);
-    expect(result.candidates?.[0].evidence_basis).toBe('content');
-    expect(result.candidates?.[0].reasons.join(' ')).toMatch(/Beneficial Interest Register/);
+    expect(result.document_type).toBe(BI_REGISTER);
+    // Named by its own title (the type's name), not by the filename. Its fields
+    // are not identifying, so the adjudicator still confirms the pick.
+    expect(result.candidates?.[0].evidence_basis).toBe('alias');
+    expect(result.candidates?.[0].reasons.join(' ')).toMatch(/Beneficial interest register/i);
   });
 
-  it('leads the adjudication menu, with the share-register type still offered behind it', async () => {
+  it('leads the adjudication menu, with the umbrella Ownership Confirmation still offered behind it', async () => {
     const input = doc('scan_0007.pdf', BI_REGISTER_TEXT);
     const classification = await classifyDocument(input as never, await makeRepo());
     const menu = adjudicationShortlist(input, classification).map((c) => c.document_type);
-    expect(menu[0]).toBe(OWNERSHIP_CONFIRMATION);
+    expect(menu[0]).toBe(BI_REGISTER);
+    expect(menu).toContain(OWNERSHIP_CONFIRMATION);
+  });
+
+  it('is an Ownership Confirmation again when skills are switched off', async () => {
+    const previous = process.env.PARSER_SKILLS;
+    process.env.PARSER_SKILLS = 'off';
+    try {
+      const result = await classify('scan_0007.pdf', BI_REGISTER_TEXT);
+      expect(result.document_type).toBe(OWNERSHIP_CONFIRMATION);
+    } finally {
+      if (previous === undefined) delete process.env.PARSER_SKILLS;
+      else process.env.PARSER_SKILLS = previous;
+    }
   });
 
   it('leaves a share register and a share certificate to their own types on the menu', async () => {

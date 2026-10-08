@@ -5,7 +5,7 @@ appliesTo:
   - management_control__remuneration_total_cost_to_company_schedules
   - ownership__payroll_remuneration_schedules_for_directors_and_senior_mana
 element: MANAGEMENT_CONTROL
-version: 1
+version: 2
 hard: true
 classify:
   is: "A payroll system report for one pay period (usually a month): the employer, the period, one row per employee with earnings and deductions, and a totals row."
@@ -15,8 +15,8 @@ classify:
     - "SARS EMP201 / EMP501 (a tax return with PAYE, SDL and UIF totals and payment references, no employee names)"
     - "an individual payslip or IRP5 (one employee only)"
     - "an employment-equity register in a workbook (race, gender and occupational level per person, not pay)"
-  filenameHints: ["payroll", "pay roll", "salary report", "salaries", "wages", "transaction history", "payslip summary", "earnings"]
-  contentSignals: ["Transaction History Report", "Payroll Report", "Salary Report", "Basic Salary", "Gross Pay", "Total Earnings", "Nett Pay", "PAYE", "UIF", "SDL", "Emp No", "Number of employees", "TOTAL"]
+  filenameHints: ["payroll", "pay roll", "salary report", "salaries", "payslip summary"]
+  contentSignals: ["Payroll Report", "Salary Report", "Earnings and Deductions", "Basic Salary", "Gross Pay", "Total Earnings", "Nett Pay", "Emp No", "Number of employees"]
 rowsField: employee_rows
 fields:
   - name: entity_name
@@ -34,23 +34,23 @@ fields:
     description: "First day of the pay period, when printed."
   - name: period_end
     type: date
-    labels: ["To", "Period end", "End date", "Pay date"]
-    description: "Last day of the pay period (or the pay date when only that is printed — say which in exceptions)."
+    labels: ["To", "Period end", "End date"]
+    description: "Last day of the pay period, when printed. Never the pay date, run date or print date."
   - name: employee_count
     type: count
     labels: ["Number of employees", "Employees", "Headcount", "No. of employees"]
-    description: "The headcount the report itself states. If it states none, count the employee rows and say so in exceptions; never count the totals row."
+    description: "Only a headcount the report itself prints, as a bare number. Never count the rows yourself: the code counts employee_rows."
   - name: total_gross_pay
     type: money
-    labels: ["Total earnings", "Gross pay", "Gross remuneration", "Total gross", "TOTAL"]
+    labels: ["Total earnings", "Gross pay", "Gross remuneration", "Total gross"]
     description: "The totals row's gross earnings for the period (before deductions)."
   - name: total_basic_salary
     type: money
-    labels: ["Basic Salary", "Basic", "Salary"]
+    labels: ["Basic Salary", "Total basic salary"]
     description: "The totals row of the basic (monthly-paid) salary column, when the report has one."
   - name: total_basic_hourly_pay
     type: money
-    labels: ["Basic Hourly", "Hourly pay", "Normal time", "Wages"]
+    labels: ["Basic Hourly", "Hourly pay", "Normal time"]
     description: "The totals row of the basic hourly / wage column for hourly-paid staff, when the report has one. Kept apart from total_basic_salary."
   - name: period_leviable_amount
     type: money
@@ -58,21 +58,21 @@ fields:
     description: "The SDL leviable remuneration for THIS pay period only, when printed. Never an annual figure."
   - name: period_sdl_amount
     type: money
-    labels: ["SDL", "Skills Development Levy", "SDL Contribution"]
+    labels: ["SDL Contribution", "Skills Development Levy", "SDL amount"]
     description: "The employer's Skills Development Levy for this pay period (the totals row of the SDL column)."
   - name: signatory_name
     type: text
     labels: ["Approved by", "Authorised by", "Signed", "Prepared by"]
     description: "Who signed off the payroll, when a sign-off block is filled in."
-  - name: signed_date
+  - name: signing_date
     type: date
-    labels: ["Date", "Approved on", "Signed on"]
+    labels: ["Approved on", "Signed on", "Date approved"]
     description: "The date beside the sign-off signature (not the run date or period)."
   - name: employee_name
     type: text
     required: true
     rowLevel: true
-    labels: ["Employee", "Employee name", "Name", "Surname, Initials", "Full names"]
+    labels: ["Employee", "Employee name", "Surname, Initials", "Full names"]
     description: "One employee per row, as printed (often 'Surname Firstname')."
   - name: employee_number
     type: text
@@ -92,7 +92,7 @@ fields:
   - name: basic_salary
     type: money
     rowLevel: true
-    labels: ["Basic Salary", "Basic", "Basic Hourly", "Rate"]
+    labels: ["Basic Salary", "Basic pay", "Basic Hourly", "Rate"]
     description: "That employee's basic pay for the period."
   - name: salary
     type: money
@@ -100,6 +100,7 @@ fields:
     labels: ["Gross", "Total earnings", "Gross pay", "Gross remuneration"]
     description: "That employee's gross earnings for the period (before deductions). This is the figure a workbook's monthly salary column takes."
 newFields: [period_start, period_end, employee_count, total_gross_pay, total_basic_salary, total_basic_hourly_pay, period_leviable_amount, period_sdl_amount, employee_number, basic_salary]
+dropFields: [payroll_management_population, scorecard_claim_population, individuals_claimed_not_on_payroll, reconciliation_status, headcount_by_race, mean_tcc_by_race, median_tcc_by_race, percentage_differential_black_vs_white, mean_tcc_black, mean_tcc_non_black, percentage_differential, materiality_assessment]
 ---
 ## What it is / is not
 
@@ -155,7 +156,13 @@ and not an EMP201 (a SARS return with no names).
 - No race, gender or occupational level on the report means null — never infer
   them from names, and never derive gender from the ID number here.
 - A report scanned after signing may have a handwritten date in the sign-off;
-  that is `signed_date`, not the period.
+  that is `signing_date`, not the period.
+- Never count employees or add columns yourself: `employee_count` is only a
+  printed headcount, and the code counts the rows.
+- The specs this skill serves also ask for comparisons with the scorecard and
+  for pay by race. Those are not on a payroll report (it states no race) and
+  are worked out later by the code and the reviewer, so they are not asked for
+  here.
 
 ## Worked example
 
@@ -177,7 +184,7 @@ Approved by: ____ (signed)   Date: 03/11/2025
  "period_start": "2025/10/01", "period_end": "2025/10/31", "employee_count": 3,
  "total_gross_pay": "53 840.00", "total_basic_salary": "42 500.00", "total_basic_hourly_pay": "9 840.00",
  "period_leviable_amount": null, "period_sdl_amount": null,
- "signatory_name": null, "signed_date": "03/11/2025",
+ "signatory_name": null, "signing_date": "03/11/2025",
  "employee_rows": [
    {"employee_name": "Mokoena Thabo", "employee_number": "E001", "id_number": null, "designation": null, "basic_salary": "18 500.00", "salary": "18 500.00"},
    {"employee_name": "Dlamini Nomsa", "employee_number": "E002", "id_number": null, "designation": null, "basic_salary": "9 840.00", "salary": "10 240.00"},

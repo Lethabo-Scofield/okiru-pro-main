@@ -1,13 +1,27 @@
 /**
- * Score a whole-pack case (scripts/pack-eval.ts --domain bbbee) against the
+ * Score a whole-pack case (scripts/pack-eval.ts --domain bbbee|esg) against the
  * pack's answer key. Pure: no files, no network — packEval.test.ts does the I/O.
  *
- * Three layers are scored for every expected field:
+ * Four layers are scored for every expected field. For a B-BBEE case:
  *  - det:   documents_detected[].extracted_fields[k].normalized_value (what
  *           parser_runs stores and the review screen shows), plus the
  *           deterministic supplier rows and measured procurement spend;
- *  - ai:    ai_entities.extractions[sourceFile].values[{field, value}];
- *  - union: either layer.
+ *  - ai:    ai_entities.extractions[sourceFile].values[{field, value}] — every
+ *           value, the agent's fills included (the gate's baseline was recorded
+ *           that way);
+ *  - agent: the values the agent loop filled (source.method 'agent'), on
+ *           their own — a subset of ai;
+ *  - union: any layer.
+ *
+ * An ESG case (case.domain 'esg') has no rule-based classifier pass: every
+ * value sits in ai_entities. Its layers split that by who read the value:
+ *  - det:   the code readers — the site x month dashboard reader
+ *           (esg_monthly_tables), the depot period summary (esg_period_summary)
+ *           and the register reader that applies one column mapping to every
+ *           row of a sheet (isCodeReadExtraction);
+ *  - ai:    the model's own spec reads (the first pass), agent fills excluded;
+ *  - agent: the agent loop's cited fills;
+ *  - union: any layer.
  *
  * A key field with `keys` compares only those parser field names, so a value
  * under them is correct, wrong, or (for absentOk fields) invented. A key field
@@ -15,7 +29,9 @@
  * that document's output. Precision is counted over keyed fields only, and the
  * report says how many fields that is, so the base of the figure is visible.
  */
+import { dirname, join } from 'node:path';
 import { valuesAgree } from '../../src/services/entityResolution.js';
+import { loadSkills } from '../../src/services/skills.js';
 
 export type FieldKind = 'regno' | 'date' | 'number' | 'money' | 'percent' | 'text' | 'bool' | 'level' | 'count' | 'list';
 
@@ -57,9 +73,17 @@ export interface KeyDocument {
 
 export interface AnswerKey {
   version: number;
+  /** Which pipeline the key scores; absent means bbbee. */
+  domain?: 'bbbee' | 'esg';
+  /** Who wrote the key and when (provenance only). */
+  from?: unknown;
+  /** The measured entity, as the key's author read it (ESG). */
+  entity?: string;
   sector?: string;
   size?: string;
   yearEnd?: string;
+  /** The reporting period the pack covers (ESG). */
+  reportingPeriod?: { start: string; end: string; actualsThrough?: string };
   certified?: { certificate?: string; score?: number; level?: number; elements?: Record<string, number> };
   documents: KeyDocument[];
 }
@@ -72,9 +96,12 @@ interface DetDocument {
   extracted_fields?: Record<string, DetField>;
   parser_output?: { supplier_rows?: Array<Record<string, unknown>>; measured_procurement_spend?: number | null };
 }
-interface AiExtraction { documentId: string; sourceFile: string; values?: Array<{ field: string; value: unknown }> }
+interface AiValue { field: string; value: unknown; source?: { method?: string } }
+interface AiExtraction { documentId: string; documentName?: string; sourceFile: string; values?: AiValue[] }
 
 export interface PackCase {
+  /** 'esg' for scripts/pack-eval.ts --domain esg; anything else scores as B-BBEE. */
+  domain?: string;
   documents_detected?: DetDocument[];
   ai_entities?: { extractions?: AiExtraction[] } | null;
   /** Files the run could not read at all (pack-eval.ts). */
@@ -82,7 +109,9 @@ export interface PackCase {
 }
 
 export type FieldStatus = 'correct' | 'wrong' | 'missing' | 'invented' | 'absent_ok' | 'unscored';
-export type Layer = 'det' | 'ai' | 'union';
+export type Layer = 'det' | 'ai' | 'agent' | 'union';
+const SCORED_LAYERS = ['det', 'ai', 'agent'] as const;
+const ALL_LAYERS = ['det', 'ai', 'agent', 'union'] as const;
 
 export interface LayerCounts {
   /** Fields the document validly contains (absentOk excluded). */
@@ -106,6 +135,7 @@ export interface DocScore {
   keyedFields: number;
   det: LayerCounts;
   ai: LayerCounts;
+  agent: LayerCounts;
   union: LayerCounts;
 }
 
@@ -117,6 +147,7 @@ export interface FieldScore {
   expected: unknown;
   det: { status: FieldStatus; ours: string[] };
   ai: { status: FieldStatus; ours: string[] };
+  agent: { status: FieldStatus; ours: string[] };
   union: { status: FieldStatus };
 }
 
@@ -136,6 +167,7 @@ export interface PackScore {
     unreadable: number;
     det: LayerCounts;
     ai: LayerCounts;
+    agent: LayerCounts;
     union: LayerCounts;
   };
 }
@@ -353,9 +385,57 @@ export function belongsTo(outputName: string, keyFile: string): boolean {
   return outputName.startsWith(`${keyFile} › `);
 }
 
-function detBag(caseResult: PackCase, file: string): { bag: FieldBag; types: string[] } {
+/** The ESG code readers' own extraction ids (esgMonthlyTables.ts, esgPeriodSummaries.ts). */
+const ESG_CODE_READER_IDS = new Set(['esg_monthly_tables', 'esg_period_summary']);
+
+/**
+ * Did the CODE read this ESG extraction? The dashboard and period readers say
+ * so in their id. The register reader (esgSheetTableExtraction.ts) answers
+ * under the register's spec id, so it is recognised by its shape: named
+ * "<sheet> register", holding one value, the register's rows. A model spec
+ * read is named after its spec and holds the spec's fields one by one.
+ */
+export function isCodeReadExtraction(extraction: { documentId: string; documentName?: string; values?: Array<{ value: unknown }> }): boolean {
+  if (ESG_CODE_READER_IDS.has(extraction.documentId)) return true;
+  const values = extraction.values ?? [];
+  return / register$/.test(extraction.documentName ?? '')
+    && values.length === 1
+    && Array.isArray(values[0].value);
+}
+
+function isAgentValue(value: AiValue): boolean {
+  return value.source?.method === 'agent';
+}
+
+export function isEsgCase(caseResult: PackCase): boolean {
+  return caseResult.domain === 'esg';
+}
+
+/**
+ * Where one domain's gate writes (packEval.test.ts), so the B-BBEE gate, the
+ * ESG workbook gate (score.json beside the case, baseline.json beside its
+ * answer-key.json) and the ESG document gate never overwrite each other.
+ */
+export function packEvalOutputs(esg: boolean, keyPath: string, override?: string): { prefix: string; baseline: string } {
+  return {
+    prefix: esg ? 'doc-score' : 'score',
+    baseline: override || join(dirname(keyPath), esg ? 'doc-baseline.json' : 'baseline.json'),
+  };
+}
+
+interface LayerBag { bag: FieldBag; types: string[] }
+
+function detBag(caseResult: PackCase, file: string): LayerBag {
   const bag: FieldBag = new Map();
   const types: string[] = [];
+  if (isEsgCase(caseResult)) {
+    for (const extraction of caseResult.ai_entities?.extractions ?? []) {
+      if (!belongsTo(extraction.sourceFile, file) || !isCodeReadExtraction(extraction)) continue;
+      types.push(extraction.documentId);
+      for (const value of extraction.values ?? []) if (!isAgentValue(value)) add(bag, value.field, value.value);
+    }
+    return { bag, types };
+  }
   for (const doc of caseResult.documents_detected ?? []) {
     if (!belongsTo(doc.filename, file)) continue;
     types.push(doc.document_type);
@@ -367,13 +447,33 @@ function detBag(caseResult: PackCase, file: string): { bag: FieldBag; types: str
   return { bag, types };
 }
 
-function aiBag(caseResult: PackCase, file: string): { bag: FieldBag; types: string[] } {
+function aiBag(caseResult: PackCase, file: string): LayerBag {
+  const bag: FieldBag = new Map();
+  const types: string[] = [];
+  const esg = isEsgCase(caseResult);
+  for (const extraction of caseResult.ai_entities?.extractions ?? []) {
+    if (!belongsTo(extraction.sourceFile, file)) continue;
+    // ESG: the code readers are the det layer; B-BBEE keeps every extraction here.
+    if (esg && isCodeReadExtraction(extraction)) continue;
+    types.push(extraction.documentId);
+    for (const value of extraction.values ?? []) {
+      if (esg && isAgentValue(value)) continue;
+      add(bag, value.field, value.value);
+    }
+  }
+  return { bag, types };
+}
+
+/** The agent loop's cited fills, in either domain. */
+function agentBag(caseResult: PackCase, file: string): LayerBag {
   const bag: FieldBag = new Map();
   const types: string[] = [];
   for (const extraction of caseResult.ai_entities?.extractions ?? []) {
     if (!belongsTo(extraction.sourceFile, file)) continue;
+    const filled = (extraction.values ?? []).filter(isAgentValue);
+    if (filled.length === 0) continue;
     types.push(extraction.documentId);
-    for (const { field, value } of extraction.values ?? []) add(bag, field, value);
+    for (const value of filled) add(bag, value.field, value.value);
   }
   return { bag, types };
 }
@@ -434,14 +534,41 @@ export const KEY_NAME_ALIASES: Readonly<Record<string, readonly string[]>> = {
   black_ownership: ['black_ownership_percentage', 'supplier_black_ownership_percentage'],
   black_women_ownership: ['black_women_ownership_percentage', 'supplier_black_women_ownership_percentage'],
   employee_rows: ['employee_count'],
-  percentage: ['member_interest_percentage'],
+  percentage: ['member_interest_percentage', 'director_rows.member_interest_percentage'],
   'net_value_inputs.assets': ['total_assets'],
   'net_value_inputs.equity': ['total_equity'],
+  // Wave 3: the skills' final contract returns people as rows (a register's
+  // owners, a CIPC disclosure's members, an unsworn letter's stated owners).
+  // The person's ID number and name on that document are the same quantity
+  // whether a key names them flat or under the rows.
+  id_number: ['stated_owner_rows.id_number', 'beneficial_owner_rows.id_number', 'holdings_table.id_number', 'director_rows.id_number'],
+  full_name: ['director_rows.full_name'],
+  'shareholder_rows.shareholder_name': ['beneficial_owner_rows.beneficial_owner_name'],
+  'shareholder_rows.economic_interest': ['beneficial_owner_rows.beneficial_interest_percentage'],
+  // A share register's certificate number and issue date are its rows' own
+  // (one per holding), under the register skill's rows field.
+  certificate_number: ['holdings_table.certificate_number'],
+  issue_date: ['holdings_table.issue_date'],
+  // A proof of payment's rows: the payment and invoice dates and the
+  // beneficiary's own registration number, under the SED skill's names.
+  'beneficiary_rows.date_of_contribution': ['beneficiary_rows.payment_date'],
+  'sampled_invoices.invoice_date': ['beneficiary_rows.invoice_date'],
+  registration_number: ['beneficiary_rows.beneficiary_registration_number'],
+  foreign: ['is_foreign'],
+  // The employer's SDL reference, under the EMP201 skill's name.
+  sars_sdl_number: ['sdl_reference_number'],
+  // Totals the skills forbid the model to compute, derived in code from the
+  // rows (skillDerivations.ts) and labelled derived: the SED payments'
+  // evidenced total, and the leviable amount as SDL x 100 (the key's own label).
+  amount_paid: ['derived_amount_paid_total'],
+  sum_of_leviable_amount: ['derived_leviable_amount'],
 };
 
 export interface ScoreOptions {
   /** Read KEY_NAME_ALIASES too (default true). False scores the key's names only. */
   aliases?: boolean;
+  /** Narrower types an accepted type also covers (default: the shipped skills' new types). */
+  narrowerTypes?: NarrowerType[];
 }
 
 /** A key field's names, plus their aliases when enabled, each once. */
@@ -534,9 +661,9 @@ function fieldStatus(field: KeyField, bag: FieldBag, options: ScoreOptions): { s
   return field.keys.length > 0 ? keyedStatus(field, bag, options) : unkeyedStatus(field, bag);
 }
 
-function unionStatus(a: FieldStatus, b: FieldStatus): FieldStatus {
+function unionStatus(...statuses: FieldStatus[]): FieldStatus {
   for (const s of ['correct', 'wrong', 'invented', 'missing', 'absent_ok', 'unscored'] as FieldStatus[]) {
-    if (a === s || b === s) return s;
+    if (statuses.includes(s)) return s;
   }
   return 'unscored';
 }
@@ -579,10 +706,45 @@ function sum(into: LayerCounts, from: LayerCounts): void {
 
 // ── the whole pack ─────────────────────────────────────────────────────────
 
+/** A narrower document type and the umbrella type it narrows (a skill's newType). */
+export interface NarrowerType {
+  /** The narrower type's names: its type name and the id its spec is extracted under. */
+  names: string[];
+  narrows: string;
+}
+
+/** The B-BBEE skills' new types that narrow an existing type, from the shipped skills. */
+export function shippedNarrowerTypes(): NarrowerType[] {
+  try {
+    return (loadSkills('bbbee').newTypes ?? [])
+      .filter((type) => type.narrows)
+      .map((type) => ({ names: [type.name, type.skillId], narrows: type.narrows! }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The types a key document accepts, plus every narrower type of an accepted
+ * umbrella type. A key written when the only type for a beneficial interest
+ * register was the umbrella "Ownership Confirmation" accepts that umbrella; the
+ * register's own type (declared by its skill, `narrows: Ownership Confirmation`)
+ * is the same document named more exactly, never a different one.
+ */
+export function acceptedTypes(typeAccepts: string[], narrower: NarrowerType[] = []): Set<string> {
+  const accepts = new Set(typeAccepts.map((t) => t.toLowerCase()));
+  for (const type of narrower) {
+    if (accepts.has(type.narrows.toLowerCase())) for (const name of type.names) accepts.add(name.toLowerCase());
+  }
+  return accepts;
+}
+
 export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOptions = {}): PackScore {
+  const narrowerTypes = options.narrowerTypes ?? shippedNarrowerTypes();
   const perDoc: DocScore[] = [];
   const perField: FieldScore[] = [];
-  const totals = { det: emptyCounts(), ai: emptyCounts(), union: emptyCounts() };
+  const layerCounts = () => ({ det: emptyCounts(), ai: emptyCounts(), agent: emptyCounts(), union: emptyCounts() });
+  const totals = layerCounts();
   let typeOk = 0;
   let aiTypeOk = 0;
   let typed = 0;
@@ -590,14 +752,17 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
   for (const doc of key.documents) {
     const det = detBag(caseResult, doc.file);
     const ai = aiBag(caseResult, doc.file);
-    const counts = { det: emptyCounts(), ai: emptyCounts(), union: emptyCounts() };
+    const agent = agentBag(caseResult, doc.file);
+    const counts = layerCounts();
 
     for (const field of doc.fields) {
       const d = fieldStatus(field, det.bag, options);
       const a = fieldStatus(field, ai.bag, options);
-      const u = unionStatus(d.status, a.status);
+      const g = fieldStatus(field, agent.bag, options);
+      const u = unionStatus(d.status, a.status, g.status);
       tally(counts.det, field, d.status);
       tally(counts.ai, field, a.status);
+      tally(counts.agent, field, g.status);
       tally(counts.union, field, u);
       perField.push({
         file: doc.file,
@@ -607,11 +772,12 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
         expected: field.value,
         det: { status: d.status, ours: shown(d.ours) },
         ai: { status: a.status, ours: shown(a.ours) },
+        agent: { status: g.status, ours: shown(g.ours) },
         union: { status: u },
       });
     }
 
-    const accepts = new Set(doc.typeAccepts.map((t) => t.toLowerCase()));
+    const accepts = acceptedTypes(doc.typeAccepts, narrowerTypes);
     const typeKnown = accepts.size > 0;
     const type_ok = typeKnown ? det.types.some((t) => accepts.has(t.toLowerCase())) : null;
     const ai_type_ok = typeKnown ? ai.types.some((t) => accepts.has(t.toLowerCase())) : null;
@@ -619,7 +785,7 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
     if (type_ok) typeOk += 1;
     if (ai_type_ok) aiTypeOk += 1;
 
-    for (const layer of ['det', 'ai', 'union'] as const) sum(totals[layer], counts[layer]);
+    for (const layer of ALL_LAYERS) sum(totals[layer], counts[layer]);
     perDoc.push({
       file: doc.file,
       path: doc.path,
@@ -629,6 +795,7 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
       keyedFields: doc.fields.filter((f) => !f.absentOk && f.keys.length > 0).length,
       det: finish(counts.det),
       ai: finish(counts.ai),
+      agent: finish(counts.agent),
       union: finish(counts.union),
     });
   }
@@ -652,9 +819,112 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
       unreadable,
       det: finish(totals.det),
       ai: finish(totals.ai),
+      agent: finish(totals.agent),
       union: finish(totals.union),
     },
   };
+}
+
+// ── key validation ─────────────────────────────────────────────────────────
+
+const FIELD_KINDS: readonly FieldKind[] = ['regno', 'date', 'number', 'money', 'percent', 'text', 'bool', 'level', 'count', 'list'];
+const ITEM_KINDS: readonly ItemKind[] = ['regno', 'date', 'number', 'money', 'percent', 'text', 'bool', 'level'];
+const KEY_TOP_LEVEL = new Set(['version', 'domain', 'from', 'entity', 'sector', 'size', 'yearEnd', 'reportingPeriod', 'certified', 'documents']);
+const KEY_DOCUMENT_PROPS = new Set(['file', 'path', 'type', 'typeAccepts', 'fields']);
+const KEY_FIELD_PROPS = new Set(['label', 'keys', 'value', 'kind', 'itemKind', 'tolerance', 'absentOk', 'alternatives', 'aggregate', 'source', 'review']);
+/** A parser field name, or `rows.column`. */
+const KEY_NAME = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)?$/;
+
+/** Can this kind's normaliser read the value at all? (An unreadable expectation can never score.) */
+function readableAs(kind: ItemKind | 'count', value: unknown): boolean {
+  switch (kind) {
+    case 'date': return toIsoDate(value) !== null;
+    case 'number':
+    case 'money':
+    case 'percent':
+    case 'count': return toFigure(value) !== null;
+    case 'bool': return toBool(value) !== null;
+    case 'level': return toLevel(value) !== null;
+    case 'regno': return normaliseRegNo(value).length > 0;
+    default: return normaliseText(value).length > 0;
+  }
+}
+
+/**
+ * Everything about a key that would make the scorer quietly mis-score it: an
+ * unknown property (a typo'd `absentok` is a field that silently scores as
+ * present), a kind the normalisers do not have, an expectation its own kind
+ * cannot read, a list tolerance outside (0, 1], a duplicated file. Empty when
+ * the key is sound. Messages name documents and labels, never values.
+ */
+export function answerKeyProblems(key: unknown): string[] {
+  const problems: string[] = [];
+  if (!key || typeof key !== 'object' || Array.isArray(key)) return ['the key is not an object'];
+  const top = key as Record<string, unknown>;
+  for (const name of Object.keys(top)) if (!KEY_TOP_LEVEL.has(name)) problems.push(`unknown top-level property "${name}"`);
+  if (typeof top.version !== 'number') problems.push('version must be a number');
+  if (top.domain !== undefined && top.domain !== 'bbbee' && top.domain !== 'esg') problems.push('domain must be bbbee or esg');
+  if (!Array.isArray(top.documents) || top.documents.length === 0) return [...problems, 'documents must be a non-empty list'];
+
+  const files = new Set<string>();
+  (top.documents as unknown[]).forEach((rawDoc, d) => {
+    if (!rawDoc || typeof rawDoc !== 'object') { problems.push(`documents[${d}] is not an object`); return; }
+    const doc = rawDoc as Record<string, unknown>;
+    const where = typeof doc.file === 'string' && doc.file ? doc.file : `documents[${d}]`;
+    for (const name of Object.keys(doc)) if (!KEY_DOCUMENT_PROPS.has(name)) problems.push(`${where}: unknown property "${name}"`);
+    if (typeof doc.file !== 'string' || !doc.file.trim()) problems.push(`${where}: file must be a non-empty string`);
+    else if (files.has(doc.file)) problems.push(`${where}: listed twice`);
+    else files.add(doc.file);
+    if (doc.path !== 'parser' && doc.path !== 'workbook') problems.push(`${where}: path must be parser or workbook`);
+    if (typeof doc.type !== 'string') problems.push(`${where}: type must be a string`);
+    if (!Array.isArray(doc.typeAccepts) || doc.typeAccepts.some((t) => typeof t !== 'string')) problems.push(`${where}: typeAccepts must be a list of strings`);
+    if (!Array.isArray(doc.fields) || doc.fields.length === 0) { problems.push(`${where}: fields must be a non-empty list`); return; }
+
+    const labels = new Set<string>();
+    (doc.fields as unknown[]).forEach((rawField, f) => {
+      if (!rawField || typeof rawField !== 'object') { problems.push(`${where} fields[${f}] is not an object`); return; }
+      const field = rawField as Record<string, unknown>;
+      const at = `${where} › ${typeof field.label === 'string' && field.label ? field.label : `fields[${f}]`}`;
+      for (const name of Object.keys(field)) if (!KEY_FIELD_PROPS.has(name)) problems.push(`${at}: unknown property "${name}"`);
+      if (typeof field.label !== 'string' || !field.label.trim()) problems.push(`${at}: label must be a non-empty string`);
+      else if (labels.has(field.label)) problems.push(`${at}: label used twice in this document`);
+      else labels.add(field.label);
+      if (!Array.isArray(field.keys) || field.keys.some((k) => typeof k !== 'string' || !KEY_NAME.test(k))) {
+        problems.push(`${at}: keys must be a list of field names (name or rows.column)`);
+      }
+      const kind = field.kind as FieldKind;
+      if (!FIELD_KINDS.includes(kind)) { problems.push(`${at}: unknown kind "${String(field.kind)}"`); return; }
+      if (field.itemKind !== undefined && (kind !== 'list' || !ITEM_KINDS.includes(field.itemKind as ItemKind))) {
+        problems.push(`${at}: itemKind belongs only to a list, and must be one of ${ITEM_KINDS.join(', ')}`);
+      }
+      if (typeof field.absentOk !== 'boolean') problems.push(`${at}: absentOk must be true or false`);
+      const tolerance = field.tolerance;
+      if (tolerance !== null && (typeof tolerance !== 'number' || !Number.isFinite(tolerance) || tolerance < 0)) {
+        problems.push(`${at}: tolerance must be null or a number >= 0`);
+      } else if (kind === 'list' && typeof tolerance === 'number' && (tolerance <= 0 || tolerance > 1)) {
+        problems.push(`${at}: a list tolerance is the fraction of items to find, in (0, 1]`);
+      }
+      if (field.aggregate !== undefined && field.aggregate !== 'any' && field.aggregate !== 'sum') problems.push(`${at}: aggregate must be any or sum`);
+      if (field.alternatives !== undefined && !Array.isArray(field.alternatives)) problems.push(`${at}: alternatives must be a list`);
+      for (const name of ['source', 'review'] as const) {
+        if (field[name] !== undefined && typeof field[name] !== 'string') problems.push(`${at}: ${name} must be a string`);
+      }
+      if (field.absentOk === true) return;
+      // A value the document holds must be one its kind can read.
+      if (kind === 'list') {
+        if (!Array.isArray(field.value) || field.value.length === 0) { problems.push(`${at}: a list's value must be a non-empty list`); return; }
+        const itemKind = (field.itemKind ?? 'text') as ItemKind;
+        const bad = field.value.filter((item) => !readableAs(itemKind, item)).length;
+        if (bad > 0) problems.push(`${at}: ${bad} item(s) the ${itemKind} reader cannot read`);
+        return;
+      }
+      // Only the value itself: an alternative its kind cannot read ("N/A" for a
+      // yes/no) can never match, which costs nothing; an unreadable value means
+      // the field can never score correct.
+      if (!readableAs(kind, field.value)) problems.push(`${at}: a value the ${kind} reader cannot read`);
+    });
+  });
+  return problems;
 }
 
 // ── baseline and gate ──────────────────────────────────────────────────────
@@ -738,6 +1008,10 @@ function pct(n: number | null): string {
   return n === null ? '-' : `${(n * 100).toFixed(1)}%`;
 }
 
+function yesNo(ok: boolean | null): string {
+  return ok === null ? 'n/a' : ok ? 'yes' : 'no';
+}
+
 function cell(c: LayerCounts): string {
   return `${c.correct}/${c.expected} (${pct(c.recall)}) p=${pct(c.precision)}`;
 }
@@ -762,21 +1036,21 @@ export function scoreMarkdown(score: PackScore, summary: RunSummary | null = nul
     '',
     '| Layer | correct / expected (recall) | precision | wrong | invented |',
     '|---|---|---|---|---|',
-    ...(['det', 'ai', 'union'] as const).map((l) => (
+    ...ALL_LAYERS.map((l) => (
       `| ${l} | ${t[l].correct}/${t[l].expected} (${pct(t[l].recall)}) | ${pct(t[l].precision)} | ${t[l].wrong} | ${t[l].invented} |`
     )),
     '',
-    '| Document | type ok | det | ai | union |',
-    '|---|---|---|---|---|',
+    '| Document | type ok (det / ai) | det | ai | agent | union |',
+    '|---|---|---|---|---|---|',
     ...score.perDoc.map((d) => (
-      `| ${d.file} | ${d.type_ok === null ? 'n/a' : d.type_ok ? 'yes' : 'no'} | ${cell(d.det)} | ${cell(d.ai)} | ${cell(d.union)} |`
+      `| ${d.file} | ${yesNo(d.type_ok)} / ${yesNo(d.ai_type_ok)} | ${cell(d.det)} | ${cell(d.ai)} | ${cell(d.agent)} | ${cell(d.union)} |`
     )),
     '',
-    '| Document | Field | keyed | det | ai | union | ours |',
-    '|---|---|---|---|---|---|---|',
+    '| Document | Field | keyed | det | ai | agent | union | ours |',
+    '|---|---|---|---|---|---|---|---|',
     ...score.perField.map((f) => (
-      `| ${f.file} | ${f.label} | ${f.keyed ? 'yes' : ''} | ${f.det.status} | ${f.ai.status} | ${f.union.status} | ${
-        [...f.det.ours, ...f.ai.ours].slice(0, 2).join(' / ').replace(/\|/g, '\\|').replace(/\n/g, ' ')
+      `| ${f.file} | ${f.label} | ${f.keyed ? 'yes' : ''} | ${f.det.status} | ${f.ai.status} | ${f.agent.status} | ${f.union.status} | ${
+        SCORED_LAYERS.flatMap((l) => f[l].ours).slice(0, 2).join(' / ').replace(/\|/g, '\\|').replace(/\n/g, ' ')
       } |`
     )),
   ];

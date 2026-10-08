@@ -28,6 +28,7 @@ import {
   agentDocumentFrom,
   agentTools,
   isScannedInput,
+  PAGE_INDEX_CALL_ID,
   type AgentRunResult,
   type AgentTarget,
 } from '../../src/services/agentExtraction.js';
@@ -140,7 +141,7 @@ describe('the agent loop', () => {
     expect(run.values).toEqual([{ ...goodRegistration, value: '2015 / 123456 / 07' }]);
     // The search result reached the model as a tool message answering its call.
     const second = model.seen[1].messages;
-    const toolMessage = second.find((m) => m.role === 'tool');
+    const toolMessage = second.find((m) => m.role === 'tool' && m.tool_call_id !== PAGE_INDEX_CALL_ID);
     expect(toolMessage && 'content' in toolMessage && String(toolMessage.content)).toContain('2015 / 123456 / 07');
   });
 
@@ -226,7 +227,7 @@ describe('the agent loop', () => {
     const long = input({ filename: 'long.pdf', markdown: `## Page 1\n\n${'x'.repeat(20_000)}` });
     const model = scripted([[toolCall('get_page_text', { page: 1 })], [toolCall('submit_values', { values: [] })]]);
     await runAgentExtraction(model, long, cipcTarget(), { limits: { maxToolResultChars: 2_000 } });
-    const result = model.seen[1].messages.find((m) => m.role === 'tool');
+    const result = model.seen[1].messages.find((m) => m.role === 'tool' && m.tool_call_id !== PAGE_INDEX_CALL_ID);
     const content = JSON.parse(String(result && 'content' in result ? result.content : '{}')) as { text: string; next_offset: number };
     expect(content.text.length).toBeLessThanOrEqual(2_000);
     expect(content.next_offset).toBeGreaterThan(0);

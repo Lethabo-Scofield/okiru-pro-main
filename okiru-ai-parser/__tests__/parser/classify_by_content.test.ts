@@ -161,8 +161,9 @@ describe.each(Object.entries(repositories))('classification by content (%s ontol
 
   it('does not read "based" as the alias SED in a company profile', async () => {
     const result = await classify('COMPANY PROFILE v2.docx', COMPANY_PROFILE_TEXT);
-    // There is no company-profile type: the honest outcome is "not identified".
-    expect(result.status).toBe('low_confidence');
+    // The company profile skill declares the type (skills/bbbee/company_profile.md),
+    // so the profile is read as one; before it, "not identified" was the honest outcome.
+    expect(result.document_type).toBe('Company profile');
     for (const candidate of result.candidates ?? []) {
       expect(candidate.matched_evidence.map((e) => e.toLowerCase()), candidate.document_type).not.toContain('sed');
     }

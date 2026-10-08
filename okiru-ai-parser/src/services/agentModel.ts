@@ -57,13 +57,20 @@ export interface AgentTurn {
   finish_reason?: string;
 }
 
+/** One named tool the model must call this turn (the agent's forced final submit). */
+export interface AgentNamedToolChoice {
+  type: 'function';
+  function: { name: string };
+}
+
 export interface AgentCallOptions {
   /**
    * 'required' on every agent turn: with 'auto' the deployment sometimes
    * announces an action as prose and stops, which would end a run without a
-   * submit. The loop only ends through its submit tool.
+   * submit. The loop only ends through its submit tool. A named tool forces
+   * that one call (the last turn of a run that has not submitted).
    */
-  toolChoice?: 'required' | 'auto';
+  toolChoice?: 'required' | 'auto' | AgentNamedToolChoice;
   /** Reasoning effort; 'off' omits the parameter. */
   effort?: string;
   /** Output ceiling for one turn (reasoning tokens included). */

@@ -30,6 +30,7 @@
  */
 import { createLogger } from '../logger.js';
 import { fetchAzureWithRetry } from './azureRetry.js';
+import { boundedAll, chunkConcurrency } from './concurrentMap.js';
 import {
   agentReasoningEffort,
   azureCompleteWithTools,
@@ -56,6 +57,13 @@ import {
   type ExtractionDomain,
   type RoutableElement,
 } from './extractionDomain.js';
+import {
+  expectedKeysWithSkill,
+  requiredFirst,
+  skillFieldNotes,
+  skillPromptSections,
+  type Skill,
+} from './skills.js';
 
 const logger = createLogger('AiExtraction');
 
@@ -76,10 +84,17 @@ export interface ExtractedValue {
 }
 
 export interface ExtractedValueSource {
-  method: 'agent';
+  /**
+   * 'agent': read by the agent loop, with a citation. 'derived': worked out in
+   * code from other extracted values (skillDerivations.ts) — `quote` then says
+   * what it was derived from, and the value is never a printed one.
+   */
+  method: 'agent' | 'derived';
   page?: number;
   cellRef?: string;
   quote: string;
+  /** A row array's value: each row's own citation, in row order. */
+  rows?: Array<{ page?: number; cellRef?: string; quote: string }>;
 }
 
 export interface DocumentExtraction {
@@ -117,6 +132,23 @@ export interface AgentPassReport {
   rejected: number;
   reasons: string[];
   error?: string;
+  /** Which document type the agent read the file as, and why (agentExtraction chooseAgentTarget). */
+  target?: {
+    specId: string;
+    skillId?: string;
+    /** classifier | classifier_alias | skill_signals | first_pass */
+    source: string;
+    /** The classifier's final (adjudicated) type, when there was one. */
+    type?: string;
+    /** The first-pass spec the classifier's type overrode. */
+    overrode?: string;
+  };
+  /** Turns this document was allowed (longer scans get more). */
+  turnBudget?: number;
+  /** Why the run ended with a forced submit_values turn, when it did. */
+  forcedSubmit?: string;
+  /** Rows the agent filled under the skill's rows field (only when the first pass had none). */
+  rowsFilled?: number;
 }
 
 /**
@@ -229,11 +261,72 @@ export function createAzureExtractionModel(): ExtractionModel | null {
  * evidence is a share register or a municipal water account, so both domains
  * share one prompt body rather than drifting apart in two copies.
  */
-function systemPromptFor(domain: ExtractionDomain): string {
+function systemPromptFor(domain: ExtractionDomain, skill: Skill | null = null): string {
   return [
     extractionDomain(domain).analystRole,
-    ...SYSTEM_PROMPT_RULES,
+    // A skill's contract answers a wrong document with nulls and a reason, so
+    // the reason reaches a reviewer; the bare marker said only "not this one".
+    ...(skill ? SYSTEM_PROMPT_RULES.map((rule) => (rule === NOT_THIS_DOCUMENT_RULE ? SKILL_WRONG_DOCUMENT_RULE : rule)) : SYSTEM_PROMPT_RULES),
   ].join('\n');
+}
+
+const NOT_THIS_DOCUMENT_RULE = '- If the document is not the type described, return {"not_this_document": true}.';
+const SKILL_WRONG_DOCUMENT_RULE = '- If the document is not the type described, return null for every key and say what it is in "exceptions".';
+
+/** "Document is a X, not a <type>" — the reason SKILL_WRONG_DOCUMENT_RULE asks for. */
+const WRONG_TYPE_STATEMENT = /^(?:the\s+)?(?:source\s+|provided\s+|uploaded\s+|attached\s+)?(?:document|file|this)\b[^.;]*?\bnot\s+(?:a|an|the)\s+([A-Za-z0-9][^.;,]*)/i;
+/** Words that qualify a document of the right type (a copy, an expired one), never name a type. */
+const TYPE_QUALIFIERS = new Set(['valid', 'original', 'certified', 'signed', 'complete', 'current', 'full', 'final', 'official', 'clear', 'legible']);
+
+/** Words any document type could carry; they never say which type a document is. */
+const GENERIC_DOCUMENT_WORDS = new Set([
+  'document', 'file', 'report', 'spreadsheet', 'sheet', 'excel', 'workbook', 'tab', 'summary', 'list',
+  'register', 'record', 'form', 'template', 'statement', 'data', 'page', 'pdf', 'scan', 'copy', 'part',
+  'section', 'extract', 'export', 'table', 'schedule', 'listing', 'overview', 'detail',
+]);
+
+function typeWords(text: string): string[] {
+  return text.toLowerCase()
+    .split(/[^a-z0-9.]+/)
+    .map((word) => word.replace(/\.+$/, '').replace(/s$/, ''))
+    .filter((word) => word.length >= 3);
+}
+
+/**
+ * The exception in which a skill read says the document is NOT this type
+ * ("Document is a beneficial interest register, not a CIPC COR14.1"), or null.
+ * The type named after "not a" must start with a word of this spec's own name,
+ * aliases or skill id — "not an original CIPC certificate" is a reservation
+ * about the copy, not a different type.
+ */
+export function wrongTypeStatement(
+  exceptions: string[],
+  spec: { name: string; aliases?: readonly string[] },
+  skillId: string,
+): string | null {
+  const identity = new Set(
+    [spec.name, ...(spec.aliases ?? []), skillId.replace(/_/g, ' ')]
+      .flatMap(typeWords)
+      .filter((word) => !TYPE_QUALIFIERS.has(word)),
+  );
+  // The first word that names a kind of document: "a spreadsheet report of
+  // fuel" is named by "fuel", never by a word any document type could carry.
+  const firstTypeWord = (text: string | undefined) =>
+    text ? typeWords(text).find((word) => !TYPE_QUALIFIERS.has(word) && !GENERIC_DOCUMENT_WORDS.has(word)) : undefined;
+  for (const exception of exceptions) {
+    const named = exception.trim().match(WRONG_TYPE_STATEMENT)?.[1];
+    const first = named ? typeWords(named)[0] : undefined;
+    if (!first || !identity.has(first)) continue;
+    // What the document IS, when it says so: "Document is a code of conduct
+    // (not an incident register)" names a part of a spec that covers the code,
+    // the policy AND the register. A document that is this type, lacking one
+    // part of it, keeps its values.
+    const is = /\b(?:is|appears to be|looks like)\s+(?:a|an|the)?\s*(.*?)\s*[,(;:–-]*\s*\bnot\s+(?:a|an|the)\b/i.exec(exception)?.[1];
+    const isFirst = firstTypeWord(is);
+    if (isFirst && identity.has(isFirst)) continue;
+    return exception.trim();
+  }
+  return null;
 }
 
 const SYSTEM_PROMPT_RULES = [
@@ -241,7 +334,7 @@ const SYSTEM_PROMPT_RULES = [
   'Rules that matter more than completeness:',
   '- Never invent or infer a value. If the document does not state it, use null.',
   '- Copy values as they appear; do not convert currencies, dates or percentages.',
-  '- If the document is not the type described, return {"not_this_document": true}.',
+  NOT_THIS_DOCUMENT_RULE,
   '- Add an "exceptions" array describing anything that fails the analyst checks.',
   '- NEVER extract rows from sections labelled "Reference options", dropdown/option',
   '  lists, legends, or category catalogues — those are template vocabulary, not data.',
@@ -458,14 +551,20 @@ async function sweepForMissingFields(
   filename: string,
   chunks: Array<{ text: string; index: number }>,
   missing: string[],
+  skill: Skill | null = null,
 ): Promise<Record<string, unknown>> {
   // The sweep thinks harder than the first pass: escalated reasoning effort
   // where the model supports it (completeHard), the plain call where not.
   const completeSweep = model.completeHard?.bind(model) ?? model.complete.bind(model);
+  // With a skill, each missing field comes with what it is and how it is
+  // printed: "where could this live" is exactly what the sweep asks.
+  const notes = skill ? skillFieldNotes(skill, missing) : '';
   const ask = async (chunk: { text: string; index: number }): Promise<Record<string, unknown> | null> => {
     const user = [
       `DOCUMENT TYPE: ${spec.name}`,
       `\nFIELDS STILL NEEDED (return exactly these keys): ${missing.join(', ')}`,
+      // Spread, not an empty string: without a skill the prompt stays byte-identical.
+      ...(notes ? [`\nWHAT EACH FIELD IS:\n${notes}`] : []),
       chunks.length > 1 ? `\nThis is part ${chunk.index + 1} of ${chunks.length}.` : '',
       `\nDOCUMENT (${filename}):\n${chunk.text}`,
     ].join('\n');
@@ -481,7 +580,7 @@ async function sweepForMissingFields(
     }
   };
 
-  const replies = (await Promise.all(chunks.map(ask)))
+  const replies = (await boundedAll(chunks, chunkConcurrency(), ask))
     .filter((r): r is Record<string, unknown> => r !== null);
 
   if (replies.length === 0) return {};
@@ -501,12 +600,27 @@ export async function extractWithSpec(
   model: ExtractionModel,
   spec: DomainDocument,
   input: { filename: string; markdown?: string; raw_text: string },
-  options: { domain?: ExtractionDomain } = {},
+  options: {
+    domain?: ExtractionDomain;
+    /** The input is a workbook sheet (see DomainDefinition.skillsReadSheets). */
+    sheet?: boolean;
+  } = {},
 ): Promise<DocumentExtraction> {
   const domain = options.domain ?? 'bbbee';
+  const definition = extractionDomain(domain);
+  const skillsApply = !options.sheet || definition.skillsReadSheets;
   // Markdown preferred: the values live in tables and under headings, and a flat
   // text projection destroys the row/column relationship they depend on.
   const source = input.markdown?.trim() || input.raw_text;
+
+  // The document type's SKILL, when one exists: what the type is, where its
+  // values sit, its traps, and a typed field list. It shapes the prompt, the
+  // keys asked for and the sweep; without one everything below is exactly as
+  // before (byte-identical prompts, the same cache key).
+  const skill = skillsApply ? definition.skillFor(spec.id) : null;
+  const skillRegistry = skill ? definition.skills() : null;
+  const keys = skill ? expectedKeysWithSkill(skill, spec.expectedFields) : spec.expectedFields;
+  const rowsField = skill?.rowsField ?? null;
 
   // Multi-pass extraction is the right amount of work to do ONCE. Adding one
   // document to a pack must not re-read the other 25, and a requote must not
@@ -516,10 +630,12 @@ export async function extractWithSpec(
     content: source,
     documentId: spec.id,
     extractionPrompt: spec.extractionPrompt,
-    expectedFields: spec.expectedFields,
+    expectedFields: keys,
     // Logic-version salt: the escalated multi-round sweep changes what a given
-    // document yields, so pre-sweep cache entries must not serve for it.
-    model: `${model.name}#sweep2`,
+    // document yields, so pre-sweep cache entries must not serve for it. A
+    // skill-shaped prompt is salted with the whole skill set's hash, so editing
+    // any skill (or the global traps) invalidates what the old text produced.
+    model: `${model.name}#sweep2${skillRegistry ? `#skills:${skillRegistry.hash.slice(0, 16)}` : ''}`,
   });
   if (cachingEnabled()) {
     const hit = getExtractionCache().get(cacheKey);
@@ -561,29 +677,43 @@ export async function extractWithSpec(
     exceptions: [],
   };
 
-  const promptFor = (chunk: { text: string; index: number }): string => [
-    `ANALYST INSTRUCTION:\n${spec.extractionPrompt}`,
-    `\nEXPECTED JSON KEYS: ${spec.expectedFields.join(', ')}`,
-    `\nWHAT CORRECT DATA LOOKS LIKE (for reference only, do not copy):\n${spec.exampleData}`,
-    chunks.length > 1
-      ? `\nNOTE: this is part ${chunk.index + 1} of ${chunks.length} of a long document. `
-        + 'Return only fields visible in THIS part; omit the rest. Do not infer from missing context.'
-      : '',
-    `\nDOCUMENT (${input.filename}):\n${chunk.text}`,
-  ].join('\n');
+  const chunkNote = (chunk: { index: number }): string => (chunks.length > 1
+    ? `\nNOTE: this is part ${chunk.index + 1} of ${chunks.length} of a long document. `
+      + 'Return only fields visible in THIS part; omit the rest. Do not infer from missing context.'
+    : '');
+  const skillText = skill ? skillPromptSections(skill, skillRegistry?.global ?? null).text : '';
+  const promptFor = (chunk: { text: string; index: number }): string => (skill
+    ? [
+        `ANALYST INSTRUCTION:\n${spec.extractionPrompt}`,
+        // The skill's worked example replaces the matrix's example data: it
+        // shows the exact shape (flat keys, rows under one array) asked for.
+        `\n${skillText}`,
+        '\nWhere the analyst instruction and the skill name a field or a shape differently, follow the skill\'s FIELDS TO RETURN.',
+        `\nEXPECTED JSON KEYS: ${keys.join(', ')}`,
+        chunkNote(chunk),
+        `\nDOCUMENT (${input.filename}):\n${chunk.text}`,
+      ].join('\n')
+    : [
+        `ANALYST INSTRUCTION:\n${spec.extractionPrompt}`,
+        `\nEXPECTED JSON KEYS: ${spec.expectedFields.join(', ')}`,
+        `\nWHAT CORRECT DATA LOOKS LIKE (for reference only, do not copy):\n${spec.exampleData}`,
+        chunkNote(chunk),
+        `\nDOCUMENT (${input.filename}):\n${chunk.text}`,
+      ].join('\n'));
 
-  // Chunks are read in parallel — they are independent, and a long document
-  // should not cost N sequential round trips.
-  const replies = await Promise.all(chunks.map(async (chunk) => {
+  // Chunks are read in parallel (PARSER_CHUNK_CONCURRENCY at a time; all at
+  // once when unset): they are independent, and a long document should not
+  // cost N sequential round trips.
+  const replies = await boundedAll(chunks, chunkConcurrency(), async (chunk) => {
     try {
-      return { ok: true as const, reply: await model.complete(systemPromptFor(domain), promptFor(chunk)) };
+      return { ok: true as const, reply: await model.complete(systemPromptFor(domain, skill), promptFor(chunk)) };
     } catch (err) {
       logger.error('Extraction model call failed', err as Error, {
         document: spec.id, file: input.filename, chunk: chunk.index,
       });
       return { ok: false as const, error: (err as Error).message };
     }
-  }));
+  });
 
   const successes = replies.filter((r) => r.ok);
   if (successes.length === 0) {
@@ -591,7 +721,7 @@ export async function extractWithSpec(
     return {
       ...base,
       error: firstError && !firstError.ok ? firstError.error : 'All extraction calls failed',
-      missingFields: [...spec.expectedFields],
+      missingFields: [...keys],
     };
   }
 
@@ -604,7 +734,7 @@ export async function extractWithSpec(
     .filter((p): p is Record<string, unknown> => p !== null)
     .map((reply) => {
       if (grid) return reply;
-      const { record, wrapper, multiple } = unwrapSingleRecord(reply, spec.expectedFields);
+      const { record, wrapper, multiple } = unwrapSingleRecord(reply, keys);
       if (wrapper) {
         logger.info('Read a single record from inside a wrapper', { document: spec.id, file: input.filename, wrapper });
       }
@@ -617,7 +747,7 @@ export async function extractWithSpec(
     });
 
   if (parsedChunks.length === 0) {
-    return { ...base, error: 'Model reply was not JSON', missingFields: [...spec.expectedFields] };
+    return { ...base, error: 'Model reply was not JSON', missingFields: [...keys] };
   }
 
   // First non-empty wins: chunks overlap, and a document states its headline
@@ -629,6 +759,18 @@ export async function extractWithSpec(
   // The model's own escape hatch: this file is not the document we asked about.
   // Treated as "nothing found here", never as a failure.
   if (parsed.not_this_document === true) return base;
+
+  // A skill's contract answers a wrong document with nulls and a reason. A reply
+  // that gives the reason ("Document is a beneficial interest register, not a
+  // CIPC COR14.1") but returns values anyway read ANOTHER document under this
+  // type's field names: none of them is kept.
+  if (skill) {
+    const statement = wrongTypeStatement(toExceptions(parsed.exceptions), spec, skill.id);
+    if (statement) {
+      logger.info('A skill read said the document is another type; its values were not kept', { document: spec.id, file: input.filename });
+      return { ...base, exceptions: [`${statement} (read as ${spec.name}: none of its values were kept)`] };
+    }
+  }
 
   // ── GRID PASS ───────────────────────────────────────────────────────────
   // Some specs describe a REGISTER, not a record: the fleet list, the EEA2
@@ -647,8 +789,8 @@ export async function extractWithSpec(
   // hand — except where the same name is legitimately BOTH a row column and a
   // register total (waste per stream and per site), where both are read.
   const scalarFields = grid && gridRows.length > 0 && grid.suppressRowScalars
-    ? spec.expectedFields.filter((field) => !grid.rowFields.includes(field))
-    : spec.expectedFields;
+    ? keys.filter((field) => !grid.rowFields.includes(field))
+    : keys;
   if (grid && gridRows.length > 0) {
     logger.info('Extracted a register grid', {
       document: spec.id, file: input.filename, field: grid.rowsField, rows: gridRows.length,
@@ -679,9 +821,9 @@ export async function extractWithSpec(
   if (foundSomething && sweepEnabled()) {
     const maxRounds = Math.max(1, Number(process.env.PARSER_SWEEP_ROUNDS) || 2);
     for (let round = 0; round < maxRounds; round++) {
-      const stillMissing = scalarFields.filter((field) => isEmptyValue(parsed[field]));
+      const stillMissing = requiredFirst(skill, scalarFields.filter((field) => field !== rowsField && isEmptyValue(parsed[field])));
       if (stillMissing.length === 0) break;
-      const swept = await sweepForMissingFields(model, spec, input.filename, chunks, stillMissing);
+      const swept = await sweepForMissingFields(model, spec, input.filename, chunks, stillMissing, skill);
       let recovered = 0;
       for (const [field, value] of Object.entries(swept)) {
         // The sweep may only FILL a gap. It can never overwrite a value the first
@@ -719,7 +861,7 @@ export async function extractWithSpec(
   }
 
   const known = new Set([
-    ...spec.expectedFields,
+    ...keys,
     ...(grid ? [...grid.containerKeys, ...grid.rowFields] : []),
     'exceptions',
     'not_this_document',
@@ -785,6 +927,11 @@ export async function extractWithSpec(
   return result;
 }
 
+/** A workbook sheet's input name: "Book.xlsx › Sheet" (the workbook split's convention). */
+export function isSheetName(filename: string): boolean {
+  return /\S\s›\s\S/.test(filename ?? '');
+}
+
 /**
  * Extract everything this file has to offer, across every document type whose
  * evidence appears in it.
@@ -826,8 +973,11 @@ export async function extractDocument(
   // parallel calls per file is the fastest way to hit a rate limit mid-case and
   // lose extractions the user has already paid for.
   const results: DocumentExtraction[] = [];
+  // A workbook sheet arrives with its sheet name as the hint and its name as
+  // "Book.xlsx › Sheet": it is not the standalone document a B-BBEE skill describes.
+  const sheet = Boolean(input.elementHint) || isSheetName(input.filename);
   for (const spec of specs) {
-    results.push(await extractWithSpec(model, spec, input, { domain }));
+    results.push(await extractWithSpec(model, spec, input, { domain, sheet }));
   }
 
   // Retrieval now offers CANDIDATES (BM25 surfaces weak matches); the model is

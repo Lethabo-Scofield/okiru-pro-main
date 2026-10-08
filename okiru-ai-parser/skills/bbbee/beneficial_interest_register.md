@@ -3,8 +3,9 @@ id: beneficial_interest_register
 newType:
   name: "Beneficial interest register"
   aliases: ["Beneficial ownership register", "Register of beneficial interest", "Register of beneficial owners", "Beneficial interest register (BI register)"]
+  narrows: "Ownership Confirmation"
 element: OWNERSHIP
-version: 1
+version: 2
 hard: true
 classify:
   is: "A register of the natural persons who hold a beneficial interest in the company's securities (Companies Act s56 and the CIPC beneficial-ownership filing): name, ID or passport, nationality, the percentage beneficial interest and how it is held."
@@ -32,17 +33,17 @@ fields:
     description: "The company's registration date, when the header prints it."
   - name: entity_type
     type: text
-    labels: ["Type", "(Pty) Ltd", "CC"]
+    labels: ["Company type", "(Pty) Ltd", "CC"]
     description: "The entity type as printed or as the name states it."
   - name: report_date
     type: date
-    labels: ["As at", "Date", "Updated"]
+    labels: ["As at", "Last updated", "Date updated"]
     description: "The date the register is stated as at, or was last updated."
   - name: beneficial_owner_name
     type: text
     required: true
     rowLevel: true
-    labels: ["Beneficial owner", "Full names", "Name and surname", "Name"]
+    labels: ["Beneficial owner", "Full names", "Name and surname"]
     description: "The natural person with the beneficial interest."
   - name: id_number
     type: idno

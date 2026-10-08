@@ -5,6 +5,7 @@ import { createLogger } from '../src/logger.js';
 import type { FieldKnowledge, OntologyRecord, OntologyRepository } from './ontology_models.js';
 import { defaultDocumentKnowledge } from './ontology_queries.js';
 import { borrowedCanonicalFields } from './matrix_ontology.js';
+import { skillFieldsForSpec } from './skill_ontology.js';
 import { asksForOneRecordPerItem, findDocumentForWorkbookRow } from '../schemas/verification_document_matrix.js';
 
 const logger = createLogger('ParserOntologyLoader');
@@ -66,6 +67,17 @@ function matrixFieldsFor(sheetName: string, documentName: string): { names: stri
  * "bbee" to "bee", meant for prose labels, turned total_bbbee_suppliers into
  * total_bee_suppliers.)
  */
+/**
+ * A row's fields plus the typed fields its document type's skill declares and
+ * the matrix does not (graph/skill_ontology.ts): declared, labelled-only, never
+ * required and never identifying, so classification is unchanged.
+ */
+function withSkillFields(sheetName: string, documentName: string, fields: FieldKnowledge[]): FieldKnowledge[] {
+  const doc = findDocumentForWorkbookRow(sheetName, documentName);
+  if (!doc) return fields;
+  return [...fields, ...skillFieldsForSpec(doc.id, fields.map((f) => f.field.name))];
+}
+
 function fieldNameFromLabel(label: string): string {
   return label
     .toLowerCase()
@@ -232,10 +244,10 @@ export function buildOntologyRecordsFromWorkbook(workbookPath: string): Ontology
         },
         // A non-canonical row keeps its own fields, plus any the canonical
         // ownership type used to read for it (see borrowedCanonicalFields).
-        fields: canonical?.fields ?? [
+        fields: canonical?.fields ?? withSkillFields(sheetName, documentName, [
           ...fields,
           ...borrowedCanonicalFields(documentName, canonicalKnowledge, fields.map((f) => f.field.name)),
-        ],
+        ]),
       });
     }
   }

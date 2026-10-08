@@ -3,7 +3,7 @@ id: share_register
 appliesTo:
   - ownership__securities_share_register
 element: OWNERSHIP
-version: 1
+version: 2
 hard: true
 classify:
   is: "The company's securities (share) register under section 50 of the Companies Act: a table with one line per holding or transfer, naming each registered shareholder, their certificate number, share class and number of shares."
@@ -32,11 +32,11 @@ fields:
     description: "The company's registration / incorporation date, when the header prints it."
   - name: entity_type
     type: text
-    labels: ["Type", "(Pty) Ltd", "CC", "Ltd", "NPC"]
+    labels: ["Company type", "(Pty) Ltd", "CC", "Ltd", "NPC"]
     description: "The entity type as printed or as its name states it ('(Pty) Ltd', 'CC')."
   - name: total_shares_in_issue
     type: count
-    labels: ["Total issued", "Total shares", "Issued shares", "TOTAL"]
+    labels: ["Total issued", "Total shares", "Issued shares"]
     description: "The total of shares currently in issue, when the register states it."
   - name: authorised_shares
     type: count
@@ -46,7 +46,7 @@ fields:
     type: text
     required: true
     rowLevel: true
-    labels: ["Name and surname", "Shareholder", "Name of member", "Registered holder", "Name"]
+    labels: ["Name and surname", "Shareholder", "Name of member", "Registered holder"]
     description: "The registered holder on that line: a person, a trust or a company."
   - name: id_number
     type: idno
@@ -72,12 +72,12 @@ fields:
   - name: percentage
     type: percent
     rowLevel: true
-    labels: ["%", "Percentage", "% held", "Shareholding"]
+    labels: ["Percentage", "% held", "Shareholding"]
     description: "Percentage of issued shares held, only when the register prints it."
   - name: issue_date
     type: date
     rowLevel: true
-    labels: ["Date of issue", "Date acquired", "Date registered", "Date"]
+    labels: ["Date of issue", "Date acquired", "Date registered"]
     description: "The date the shares were issued to or registered in the name of that holder."
   - name: pledge_or_encumbrance_noted
     type: bool
@@ -124,7 +124,7 @@ with the percentage as the holding.
   transfer in exceptions).
 - Only state `percentage` when the register prints it. Do not divide shares by
   the total yourself.
-- Authorised shares (e.g. 1 000) are not issued shares (e.g. 100).
+- Authorised shares (e.g. 3 600) are not issued shares (e.g. 100).
 - The register states NO race and NO gender. Never fill them, and never infer
   black ownership from a name.
 - ID numbers are often spaced ("800101 5009 087"); copy as printed.
@@ -142,7 +142,8 @@ SECURITIES REGISTER — BAOBAB ENGINEERING (PTY) LTD   Reg No: 2015 / 123456 / 0
 NAME AND      | ID NUMBER        | CERT | DATE OF    | CLASS    | NO. OF | %
 SURNAME       |                  | NO.  | ISSUE      |          | SHARES |
 Thabo Mokoena | 800101 5009 087  | BE01 | 02/03/2015 | Ordinary | 60     | 60%
-Lerato Khumalo| 850615 0123 081  | BE02 | 02/03/2015 | Ordinary | 40     | 40%
+Khumalo Family| IT 001234/2014   | BE02 | 02/03/2015 | Ordinary | 40     | 40%
+Trust         |                  |      |            |          |        |
 TOTAL                                                           | 100    | 100%
 ```
 
@@ -152,7 +153,7 @@ TOTAL                                                           | 100    | 100%
  "authorised_shares": null,
  "holdings_table": [
    {"shareholder_name": "Thabo Mokoena", "id_number": "800101 5009 087", "certificate_number": "BE01", "share_class": "Ordinary", "number_of_shares": 60, "percentage": "60%", "issue_date": "02/03/2015", "pledge_or_encumbrance_noted": null},
-   {"shareholder_name": "Lerato Khumalo", "id_number": "850615 0123 081", "certificate_number": "BE02", "share_class": "Ordinary", "number_of_shares": 40, "percentage": "40%", "issue_date": "02/03/2015", "pledge_or_encumbrance_noted": null}
+   {"shareholder_name": "Khumalo Family Trust", "id_number": "IT 001234/2014", "certificate_number": "BE02", "share_class": "Ordinary", "number_of_shares": 40, "percentage": "40%", "issue_date": "02/03/2015", "pledge_or_encumbrance_noted": null}
  ],
- "exceptions": ["Register states no race or gender for holders."]}
+ "exceptions": ["Register states no race or gender for holders.", "The second holder is a trust; its beneficial owners are on the beneficial interest register."]}
 ```

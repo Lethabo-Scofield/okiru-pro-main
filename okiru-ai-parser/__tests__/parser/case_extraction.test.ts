@@ -31,7 +31,11 @@ function modelFor(answers: Array<{ whenKeys: string; whenFile: string; reply: Re
   return {
     name: 'fake-deployment',
     async complete(_system, user) {
-      const match = answers.find((a) => user.includes(`EXPECTED JSON KEYS: ${a.whenKeys}`) && user.includes(a.whenFile));
+      // A key the spec asks for. A spec with a skill lists the skill's fields
+      // first, so the keys line is read as a list rather than by its first key.
+      const keysLine = user.match(/EXPECTED JSON KEYS: ([^\n]*)/)?.[1] ?? '';
+      const asksFor = (key: string) => keysLine.split(', ').includes(key);
+      const match = answers.find((a) => asksFor(a.whenKeys) && user.includes(a.whenFile));
       return JSON.stringify(match?.reply ?? { not_this_document: true });
     },
   };

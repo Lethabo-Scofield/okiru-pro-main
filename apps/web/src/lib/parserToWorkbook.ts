@@ -552,6 +552,68 @@ function isRowTable(value: unknown): value is Array<Record<string, unknown>> {
 }
 
 /**
+ * Row tables the parser's per-document skills read off a PDF that are evidence
+ * for a reviewer, not workbook rows. Each would land somewhere wrong if its
+ * columns were placed by name:
+ *  - emp201_rows: monthly SARS returns (the year's totals are derived from them);
+ *  - ledger_entry_rows: a supplier ledger's entries (the supplier row is its total);
+ *  - stated_owner_rows: an unsworn letter's own claims about who owns the entity;
+ *  - director_rows: CIPC directors or members, whose `full_name` would become
+ *    phantom employees in Management Control;
+ *  - beneficial_owner_rows: whose ID column alone would open a nameless
+ *    shareholder row.
+ * Reported as unmapped, so they stay visible.
+ */
+export const REPORTED_ROW_TABLES: ReadonlySet<string> = new Set([
+  "emp201_rows",
+  "ledger_entry_rows",
+  "stated_owner_rows",
+  "director_rows",
+  "beneficial_owner_rows",
+]);
+
+/** Procurement columns that identify a company but say nothing about it as a supplier. */
+const IDENTIFIER_COLUMNS = new Set(["registrationNumber", "vatNumber"]);
+
+/**
+ * A procurement row a document would open with nothing but a registration or
+ * VAT number: no supplier name, level, spend or ownership. That is the
+ * document's own entity's number (an AFS, a letter), not a supplier.
+ */
+function identifiersOnlySupplierRow(section: WorkbookSectionKey, values: Array<{ field: string }>): boolean {
+  return section === "procurement" && values.length > 0 && values.every((v) => IDENTIFIER_COLUMNS.has(v.field));
+}
+
+/** The employment-equity columns that make an employee table a register Management Control can score. */
+const EE_COLUMNS = ["race", "declared_race", "gender", "derived_gender", "occupational_level"];
+
+/**
+ * The columns only the SED proof-of-payment skill returns. Its beneficiary rows
+ * are payments that EVIDENCE contributions the SED register already lists (one
+ * may be dated after year end, or marked by the bank as not a proof of
+ * payment); placed, each would become an extra SED contribution and a reviewer
+ * filling its % would count the money twice. Reported, like the tables above.
+ */
+const PAYMENT_EVIDENCE_COLUMNS = ["evidence_kind", "payment_reference", "marked_not_proof_of_payment"];
+
+/**
+ * A payroll report's employee table (the payroll skill's employee_rows: names,
+ * numbers and pay) carries no race, gender or occupational level. Placed, it
+ * would duplicate the gathering workbook's employee register as extra,
+ * unscoreable employees. An employee table fills the Management Control grid
+ * only when it carries at least one employment-equity column — a register.
+ * A beneficiary table with the payment-evidence columns is reported too.
+ */
+function reportedOnlyTable(field: string, entries: Array<Record<string, unknown>>): boolean {
+  if (REPORTED_ROW_TABLES.has(field)) return true;
+  if (field === "beneficiary_rows") {
+    return entries.some((entry) => PAYMENT_EVIDENCE_COLUMNS.some((column) => column in entry));
+  }
+  if (field !== "employee_rows") return false;
+  return !entries.some((entry) => EE_COLUMNS.some((column) => !cellBlank(entry[column])));
+}
+
+/**
  * Turn parser extractions into workbook rows and meta.
  *
  * `options.element` on each extraction disambiguates fields that exist in more
@@ -624,6 +686,10 @@ export function parserExtractionsToWorkbook(
 
     for (const { field, value } of extraction.values) {
       if (isRowTable(value)) {
+        if (reportedOnlyTable(field, value)) {
+          unmapped.add(field);
+          continue;
+        }
         // A table's own column names are parser fields too, so resolve the
         // section from the FIRST entry's keys rather than from the table name.
         const firstKey = Object.keys(value[0]).find((key) => targetForField(key, extraction.element));
@@ -833,6 +899,13 @@ export function parserExtractionsToWorkbook(
 
     // Scalars: one row per section this document contributed to.
     for (const [section, values] of Array.from(scalarBySection.entries())) {
+      if (identifiersOnlySupplierRow(section, values)) {
+        // An ESD-routed document that names no supplier (an AFS read under the
+        // ESD "audited financials" spec) prints the MEASURED ENTITY's own
+        // registration and VAT numbers. Alone they are no supplier.
+        for (const { field } of values) unmapped.add(field === "vatNumber" ? "vat_number" : "registration_number");
+        continue;
+      }
       const injected = injectIntoSection(section, values.map((v: { field: string; value: unknown }) => ({ ...v, sourceFile: extraction.sourceFile })), options);
       for (const rejection of injected.rejected) {
         rejected.push({ ...rejection, sourceFile: extraction.sourceFile, section });

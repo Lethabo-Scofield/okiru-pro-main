@@ -94,8 +94,8 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   // — the expert's field names on the two most common supplier evidence PDFs.
   // Without these a certificate produced a level with no name attached to it.
   supplier_entity: { section: "procurement", column: "supplierName" },
-  registration_number: { section: "procurement", column: "registrationNumber" },
-  vat_number: { section: "procurement", column: "vatNumber" },
+  // registration_number / vat_number are element-scoped (see ELEMENT_SCOPED):
+  // on an ownership document they are the CLIENT's own numbers.
   bee_status_level: { section: "procurement", column: "bbbeeLevel" },
   bee_level: { section: "procurement", column: "bbbeeLevel" },
   certificate_recognition_level: { section: "procurement", column: "bbbeeLevel" },
@@ -206,6 +206,23 @@ const ELEMENT_SCOPED: Record<string, Partial<Record<"ESD" | "SED", FieldTarget>>
     SED: { section: "sed", column: "dateOfTransaction" },
   },
   date_of_contribution: {
+    ESD: { section: "esd", column: "dateOfTransaction" },
+    SED: { section: "sed", column: "dateOfTransaction" },
+  },
+  // A supplier's registration and VAT numbers fill its procurement row. On any
+  // other document they are the measured entity's own (a share certificate, a
+  // CIPC disclosure, a beneficial interest register, a company profile print
+  // them), and placed by name they opened nameless supplier rows. Unmapped
+  // there, never guessed into procurement.
+  registration_number: {
+    ESD: { section: "procurement", column: "registrationNumber" },
+  },
+  vat_number: {
+    ESD: { section: "procurement", column: "vatNumber" },
+  },
+  // The payment record's date (the SED / ESD proof-of-payment skills' name):
+  // the transaction date that tells two payments to one beneficiary apart.
+  payment_date: {
     ESD: { section: "esd", column: "dateOfTransaction" },
     SED: { section: "sed", column: "dateOfTransaction" },
   },

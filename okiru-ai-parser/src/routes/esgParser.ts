@@ -55,6 +55,7 @@ import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
 import { esgRunRecords, signParserRuns, verifiedQuoteId } from '../services/runAttestation.js';
+import { pageImageProviderFor } from '../services/agentExtraction.js';
 import { parseEsgFocus } from '../services/esgFocus.js';
 import { elementFromHint } from '../services/specRetrieval.js';
 import {
@@ -364,6 +365,11 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
   // Heartbeat so intermediaries don't drop a long-idle connection during the
   // cross-case AI step.
   const heartbeat = setInterval(() => res.write(': ping\n\n'), 15000);
+  // Aborted when the connection closes before the stream finished.
+  const clientGone = new AbortController();
+  res.on('close', () => {
+    if (!res.writableEnded) clientGone.abort();
+  });
 
   try {
     // Files the upload filter dropped never reach `files`, so without this they
@@ -403,8 +409,16 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
     send('resolving', { total: rawInputs.length });
     const caseId = typeof req.body?.case_id === 'string' ? req.body.case_id : undefined;
     // The element batch each file was filed under (C1): a hint, never an order.
+    // The agent-loop pass is reachable from THIS route only, as on the B-BBEE
+    // side (it can run for minutes; the plain JSON route times out at the
+    // proxy). Off unless PARSER_AGENT_EXTRACTION is hard|all.
     const entities = await extractEsgCaseEntities(rawInputs, undefined, (p) => send('resolve-progress', p), {
       focusByFile: parseEsgFocus(req.body?.focus_elements),
+      agent: {
+        pageImages: pageImageProviderFor(files),
+        // A client that disconnects stops its agent runs (and their retries).
+        signal: clientGone.signal,
+      },
     });
     await recordExtractionOutcome(paidQuoteId, {
       status: entities ? 'resolved' : 'failed',

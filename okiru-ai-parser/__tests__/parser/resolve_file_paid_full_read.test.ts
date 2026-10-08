@@ -219,6 +219,62 @@ describe('POST /api/parser/resolve-file-paid — read=full', () => {
     expect(asked).not.toContain('total_shares_in_issue');
   });
 
+  it('an ESG re-read is the ESG stream\'s read: the ESG skills, and the agent pass when PARSER_AGENT_EXTRACTION allows it', async () => {
+    const esgModel = () => {
+      const passA: string[] = [];
+      const extractionPrompts: string[] = [];
+      const model: ExtractionModel & { completeWithTools: ReturnType<typeof vi.fn> } = {
+        name: `stub-${Math.random().toString(36).slice(2)}`,
+        async complete(system, user) {
+          if (/Classify ONE client document/.test(system)) {
+            passA.push(system);
+            return JSON.stringify({ element: 'GHG_ENERGY', document_type: 'Bill', confidence: 0.9, document_type_id: 'municipal_electricity_bill' });
+          }
+          if (user.startsWith('ANALYST INSTRUCTION')) extractionPrompts.push(user);
+          // The first read finds nothing: only the agent can fill the figure.
+          return '{}';
+        },
+        completeWithTools: vi.fn(async () => ({
+          message: {
+            role: 'assistant' as const,
+            content: null,
+            tool_calls: [{
+              id: 'c1',
+              type: 'function' as const,
+              function: {
+                name: 'submit_values',
+                arguments: JSON.stringify({ values: [{ field: 'electricity_kwh', value: '18 250', page: 1, quote: 'Consumption: 18 250 kWh' }] }),
+              },
+            }],
+          },
+        })),
+      };
+      return { model, passA, extractionPrompts };
+    };
+
+    // Bytes of their own, so no earlier read of the same bill answers for this one.
+    const bill = (n: number) => Buffer.concat([BILL, Buffer.from(`Statement reference: ESG-REREAD-${n}\n`, 'utf8')]);
+
+    // Off: the skills still shape the read; no agent.
+    const off = esgModel();
+    setExtractionModel(off.model);
+    await read(await quoteFor(bill(1), 'power-march.txt'), bill(1), 'power-march.txt', { read: 'full', domain: 'esg' });
+    expect(off.passA[0]).toContain('municipal_electricity_bill');
+    expect(off.extractionPrompts.some((user) => user.includes('SKILL: municipal_electricity_bill'))).toBe(true);
+    expect(off.model.completeWithTools).not.toHaveBeenCalled();
+
+    // On: the agent reads the document the first pass got nothing from.
+    process.env.PARSER_AGENT_EXTRACTION = 'all';
+    resetExtractionCache();
+    const on = esgModel();
+    setExtractionModel(on.model);
+    const res = await read(await quoteFor(bill(2), 'power-march.txt'), bill(2), 'power-march.txt', { read: 'full', domain: 'esg' });
+    expect(on.model.completeWithTools).toHaveBeenCalled();
+    const claims = verified(res.body);
+    expect(claims.domain).toBe('esg');
+    expect(claims.aiValues?.find((value) => value.field === 'electricity_kwh')).toMatchObject({ layer: 'agent' });
+  });
+
   it('says it cannot sign rather than returning an unsigned record as if it were one', async () => {
     delete process.env.PARSER_INTERNAL_SECRET;
     setExtractionModel(stubModel(AFS_ANSWERS));

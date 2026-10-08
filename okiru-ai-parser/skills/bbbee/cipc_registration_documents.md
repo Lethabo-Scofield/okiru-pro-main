@@ -3,7 +3,7 @@ id: cipc_registration_documents
 appliesTo:
   - ownership__cipc_registration_documents_cor14_1_cor14_3
 element: OWNERSHIP
-version: 1
+version: 2
 hard: false
 classify:
   is: "A CIPC record of the entity's registration: a Disclosure Certificate / company or CC information printout, a COR14.3 registration certificate, or a CK1/CK2 for a close corporation — enterprise name, registration number and date, type, status, addresses, and the directors or members."
@@ -13,7 +13,7 @@ classify:
     - "a SETA registration certificate (names a SETA and an SDL number)"
     - "a SARS tax clearance / tax compliance status PIN letter"
     - "a B-BBEE certificate"
-  filenameHints: ["cipc", "cor14", "cor 14", "ck1", "ck2", "disclosure", "company registration", "registration certificate"]
+  filenameHints: ["cipc", "cor14", "cor 14", "ck1", "ck2", "disclosure certificate", "company registration"]
   contentSignals: ["Companies and Intellectual Property Commission", "CIPC", "Disclosure Certificate", "Enterprise Information", "Enterprise Name", "Enterprise Type", "Enterprise Status", "Registration Number", "Active Members / Directors", "Member's Interest", "COR14.3", "Close Corporation", "In Business"]
 rowsField: director_rows
 fields:
@@ -33,11 +33,11 @@ fields:
     description: "The date the entity was registered."
   - name: entity_type
     type: text
-    labels: ["Enterprise Type", "Company Type", "Type"]
+    labels: ["Enterprise Type", "Company Type"]
     description: "The entity type as printed: 'Close Corporation', 'Private Company', 'Public Company', 'Non Profit Company', 'Personal Liability Company'."
   - name: enterprise_status
     type: text
-    labels: ["Enterprise Status", "Status"]
+    labels: ["Enterprise Status", "Company Status"]
     description: "Registration status: 'In Business', 'Deregistration Process', 'Final Deregistration', 'AR Final Deregistration'."
   - name: financial_year_end_month
     type: text
@@ -57,7 +57,7 @@ fields:
     description: "The current postal address, when printed."
   - name: certificate_date
     type: date
-    labels: ["Date", "Printed on", "Issued", "Certificate date"]
+    labels: ["Printed on", "Date printed", "Certificate date", "Date issued"]
     description: "The date the certificate / printout was issued (usually in the page header with a time)."
   - name: accounting_officer_name
     type: text
@@ -71,7 +71,7 @@ fields:
     type: text
     required: true
     rowLevel: true
-    labels: ["Surname and First Names", "Name", "Full names"]
+    labels: ["Surname and First Names", "Full names"]
     description: "One active member or director per row, as printed ('SURNAME, FIRST NAMES')."
   - name: id_number
     type: idno
@@ -81,12 +81,12 @@ fields:
   - name: role_type
     type: text
     rowLevel: true
-    labels: ["Type", "Designation", "Capacity"]
+    labels: ["Member type", "Director type", "Designation", "Capacity"]
     description: "'Member', 'Director', 'Alternate Director', etc., as printed."
   - name: status
     type: text
     rowLevel: true
-    labels: ["Status"]
+    labels: ["Member status", "Director status", "Active / Resigned"]
     description: "'Active' / 'Resigned' as printed."
   - name: appointment_date
     type: date
