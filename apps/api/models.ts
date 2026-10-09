@@ -824,3 +824,44 @@ const jobLeaseSchema = new Schema({
 }, { collection: 'job_leases', versionKey: false });
 
 export const JobLeaseModel = mongoose.models.JobLease || mongoose.model('JobLease', jobLeaseSchema);
+
+// ---------------------------------------------------------------------------
+// Calculation review notes
+// ---------------------------------------------------------------------------
+//
+// A B-BBEE expert reviewing what the engine computes needs somewhere to write
+// down what they find, against the exact indicator they found it on. A note is
+// anchored by four things: the sector code, the scorecard type, the element, and
+// the row within that element ("indicator:<row>", or "pillar:<element>" for a
+// note about the element as a whole).
+//
+// One author holds one note per anchor — saving again replaces it rather than
+// appending — so a reviewer's position on an indicator is a single current
+// statement. Different reviewers' notes on the same anchor sit side by side.
+const calculationReviewNoteSchema = new Schema({
+  id: { type: String, default: uuid, unique: true },
+  sectorCode: { type: String, required: true },
+  scorecardType: { type: String, required: true },
+  pillarKey: { type: String, required: true },
+  /** "indicator:<row code>" or "pillar:<element key>". */
+  anchor: { type: String, required: true },
+  body: { type: String, required: true },
+  /** Where the reviewer landed: an open question, confirmed correct, or a defect. */
+  verdict: { type: String, default: "note" },
+  authorUserId: { type: String, required: true, index: true },
+  authorName: { type: String, default: null },
+  createdAt: { type: String, default: () => new Date().toISOString() },
+  updatedAt: { type: String, default: () => new Date().toISOString() },
+}, { collection: "calculation_review_notes" });
+
+// One current note per reviewer per anchor.
+calculationReviewNoteSchema.index(
+  { sectorCode: 1, scorecardType: 1, anchor: 1, authorUserId: 1 },
+  { unique: true },
+);
+// The page loads every note for one scorecard at once.
+calculationReviewNoteSchema.index({ sectorCode: 1, scorecardType: 1 });
+
+export const CalculationReviewNoteModel =
+  mongoose.models.CalculationReviewNote ||
+  mongoose.model("CalculationReviewNote", calculationReviewNoteSchema);

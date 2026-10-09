@@ -54,6 +54,10 @@ import { useClarityContext } from "@/lib/clarityContext";
 import { ScorecardAdviceChat } from "@toolkit/components/scorecard/ScorecardAdviceChat";
 import logoCircle from "@assets/Okiru_WHT_Circle_Logo_V1_1772535293807.png";
 
+// The sector expert's calculation review — long prose, only ever opened
+// deliberately, so it loads on demand rather than in the main bundle.
+const CalculationReview = lazy(() => import("@/pages/CalculationReview"));
+
 const ToolkitView = lazy(() => import("@/pages/ToolkitView"));
 const EsgToolkitView = lazy(() => import("@/pages/EsgToolkitView"));
 
@@ -210,6 +214,12 @@ function AppRouter() {
       </Route>
       <Route path="/workspace">
         <ProtectedRoute><Workspace /></ProtectedRoute>
+      </Route>
+      {/* Calculation Review — the B-BBEE scoring rules, element by element, for
+          a sector expert to read and annotate. Any signed-in user may open it:
+          the reviewers are external specialists, not administrators. */}
+      <Route path="/calculation-review">
+        <ProtectedRoute><CalculationReview /></ProtectedRoute>
       </Route>
       {/* Settings — account, billing/tokens, team, company in one shell.
           The bare /settings lands on Account; /settings/:tab picks a pane. */}

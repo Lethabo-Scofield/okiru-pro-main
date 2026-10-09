@@ -34,6 +34,7 @@ import hybridExtractionRouter from './hybridExtraction.js';
 import entityTemplatesRouter from './entityTemplates.js';
 import scorecardBuilderRouter from './scorecardBuilder.js';
 import sectorsRouter from './sectors.js';
+import calculationReviewRouter from './calculationReview.js';
 import constructionRouter from './construction.js';
 import { createProcessorSessionsRouter } from './processorSessions.js';
 import certificatesRouter from './certificates.js';
@@ -203,6 +204,11 @@ export async function registerRoutes(
   // Sectors: ArangoDB-backed sector configurations
   app.use('/api/sectors', sectorsRouter);
   app.use('/api/construction', constructionRouter);
+
+  // Calculation Review: a sector expert's notes against individual indicators.
+  // Mounted here rather than on web because the ingress /api catch-all points
+  // at this service — a new /api group on web answers 404 in production.
+  app.use('/api/calculation-review', calculationReviewRouter);
 
   // Processor sessions: document processing workflow persistence
   app.use('/api/processor-sessions', createProcessorSessionsRouter());
