@@ -558,8 +558,20 @@ export default function CalculationReview() {
   const [sectorCode, setSectorCode] = useState<string>("RCOGP");
   const [scorecardType, setScorecardType] = useState<string>("QSE");
 
+  // Named reviewers only — the api holds the allow-list and enforces it on the
+  // notes routes too; this only decides whether there is anything to render.
+  const accessQuery = useQuery<{ success: boolean; allowed: boolean }>({
+    queryKey: ["calcReviewAccess"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/calculation-review/access");
+      return res.json();
+    },
+  });
+  const allowed = accessQuery.data?.allowed === true;
+
   const sectorsQuery = useQuery<{ success: boolean; sectors: SectorConfigView[] }>({
     queryKey: ["calcReviewSectors"],
+    enabled: allowed,
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/sectors");
       return res.json();
@@ -568,6 +580,7 @@ export default function CalculationReview() {
 
   const notesQuery = useQuery<{ success: boolean; notes: ReviewNote[] }>({
     queryKey: ["calcReviewNotes", sectorCode, scorecardType],
+    enabled: allowed,
     queryFn: async () => {
       const res = await apiRequest(
         "GET",
@@ -622,6 +635,26 @@ export default function CalculationReview() {
     if (types.length && !types.includes(scorecardType)) setScorecardType(types[0]);
   }
 
+  if (!allowed) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+          <AppNavBack href="/hub" eyebrow="Suite" label="Hub" size="compact" />
+          {accessQuery.isLoading ? (
+            <div className="flex items-center gap-2 py-12 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading…
+            </div>
+          ) : (
+            <p className="py-12 text-sm text-muted-foreground">
+              This page is not available on your account.
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
@@ -647,6 +680,19 @@ export default function CalculationReview() {
             score does not match the data a client entered. Please record what you find in the note
             box under each indicator.
           </p>
+          <div className="mt-4 max-w-3xl rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm leading-relaxed">
+            <span className="font-medium text-amber-700 dark:text-amber-400">Which calculator this is. </span>
+            Okiru currently scores in two places. This page describes the <em>server</em> scoring
+            engine, which runs when a scorecard is calculated from uploaded documents. The scores a
+            client sees while filling in the toolkit workbook are worked out by a separate copy of
+            the calculators in the browser, and the two do not agree on every indicator. Known
+            differences so far: the browser applies the procurement recognition percentage to
+            supplier spend and the server does not; the browser measures designated-group ownership
+            against the sector's configured target (3% by default) and the server against a fixed 10%; and the browser measures black new entrants
+            against their target while the server awards the full points on the presence of one
+            new entrant. The same client data can therefore score differently depending on which
+            route it took.
+          </div>
         </header>
 
         {/* Scorecard picker */}
