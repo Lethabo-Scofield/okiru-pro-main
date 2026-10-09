@@ -113,6 +113,41 @@ function actorId(req: Request): string {
   return '';
 }
 
+/**
+ * Who may open the review at all.
+ *
+ * The review is for named reviewers only, so the list is an allow-list of user
+ * ids in CALC_REVIEW_USER_IDS (comma-separated) on the api deployment — kept out
+ * of the repository on purpose. Unset in production means NOBODY: the gate fails
+ * closed, so a redeploy that drops the variable hides the page rather than
+ * opening it to every signed-in user.
+ */
+function reviewerIds(): Set<string> {
+  return new Set(
+    (process.env.CALC_REVIEW_USER_IDS ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  );
+}
+
+function mayReview(id: string): boolean {
+  if (!id) return false;
+  if (process.env.NODE_ENV !== 'production' && id === 'demo-offline-user') return true;
+  return reviewerIds().has(id);
+}
+
+// GET /api/calculation-review/access — lets the page decide whether to render.
+router.get('/access', (req: Request, res: Response) => {
+  res.json({ success: true, allowed: mayReview(actorId(req)) });
+});
+
+// Everything below is for reviewers only.
+router.use((req: Request, res: Response, next) => {
+  if (mayReview(actorId(req))) return next();
+  res.status(403).json({ success: false, error: 'This review is not available on your account.' });
+});
+
 function memoryKey(n: {
   sectorCode: string;
   scorecardType: string;
