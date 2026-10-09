@@ -34,6 +34,11 @@ const PROXIED_PREFIXES = [
   "/api/calculate",
   "/api/assessments",
   "/api/sectors",
+  /** Calculation Review notes live beside the sector rules on apps/api. Without
+   *  this a note's PUT falls through to the SPA catch-all and answers HTML, so
+   *  the note vanishes in dev while working in prod (where the ingress routes
+   *  it). Same failure mode as /api/export-log below, mirrored. */
+  "/api/calculation-review",
   "/api/processor-sessions",
   "/api/certificates",
   /** Toolkit Excel import lives on the API app (`apps/api`); without this, requests hit the SPA and return HTML. */
