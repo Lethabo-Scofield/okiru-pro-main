@@ -296,6 +296,21 @@ describe("one person, one row", () => {
     expect(result.rows["management-control"]).toHaveLength(2);
   });
 
+  it("never makes an employee a shareholder from an ID document read on their sheet", () => {
+    const result = parserExtractionsToWorkbook([
+      employeeTable("Pack.xlsx › Employment Equity", [
+        { employee_name: "Dlamini, Zanele", id_number: "9001010001081", race: "African", gender: "Female", occupational_level: "Unskilled" },
+      ]),
+      {
+        documentId: "ownership__id_document_age_confirmation",
+        sourceFile: "Pack.xlsx › Employment Equity",
+        element: "OWNERSHIP",
+        values: [{ field: "id_number", value: "9001010001081" }, { field: "gender", value: "Female" }],
+      },
+    ]);
+    expect(result.rows.ownership ?? []).toHaveLength(0);
+  });
+
   it("on a one-to-one disagreement keeps the lower level", () => {
     const result = parserExtractionsToWorkbook([
       employeeTable("Prior.xlsm › Management Control", [{ employee_name: "Joseph Banda", occupational_level: "Top Management" }]),

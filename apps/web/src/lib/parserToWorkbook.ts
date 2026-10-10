@@ -351,6 +351,9 @@ function shareASourceFile(a: WorkbookRow, b: WorkbookRow): boolean {
 const rowReads = new WeakMap<WorkbookRow, Set<number>>();
 let readCounter = 0;
 
+/** Rows that are a line of a table the document printed (a register, a schedule), not a lone reading. */
+const registerLines = new WeakSet<WorkbookRow>();
+
 /** Are these two rows lines of ONE read? Falls back to the file for rows built elsewhere. */
 function fromTheSameRead(a: WorkbookRow, b: WorkbookRow): boolean {
   const left = rowReads.get(a);
@@ -1166,6 +1169,7 @@ export function parserExtractionsToWorkbook(
             const column = targetForField(field, extraction.element)?.column;
             if (column && !cellBlank(row[column])) setDerived(row, column, flag);
           }
+          registerLines.add(row);
           addRow(table.section, row);
         }
       }
@@ -1660,6 +1664,7 @@ function completeWorkbookRows(
     nameField: string,
     hasName: (r: WorkbookRow) => boolean,
     adoptName: (r: WorkbookRow, adopted: string) => void,
+    adoptable: (r: WorkbookRow) => boolean = () => true,
   ) => {
     let sectionRows = rows[section];
     if (!sectionRows) return;
@@ -1695,7 +1700,7 @@ function completeWorkbookRows(
       rows[section] = sectionRows;
     }
     for (const row of sectionRows) {
-      if (hasName(row)) continue;
+      if (hasName(row) || !adoptable(row)) continue;
       const adopted = nameById.get(idKey(row.idNumber));
       if (adopted) adoptName(row, adopted);
     }
@@ -1719,11 +1724,23 @@ function completeWorkbookRows(
     rows[section] = kept;
   };
 
+  // A nameless ownership row only borrows a name when it is a holder: a line
+  // of a share register, or a row that states shares or a holding. An ID
+  // document read on its own (an age check for a youth employee, read off the
+  // employee sheet) carries an ID and nothing else, and borrowing the
+  // employee's name made them a shareholder on the grid.
+  const holdsSomething = (r: WorkbookRow): boolean =>
+    registerLines.has(r)
+    || ["numberOfShares", "shareholding", "votingRights", "economicInterest"].some((column) => {
+      const n = Number(String(r[column] ?? "").replace(/[%\s,]/g, ""));
+      return Number.isFinite(n) && n > 0;
+    });
   parkNameless(
     "ownership",
     "shareholderName",
     (r) => Boolean(String(r.shareholderName ?? "").trim()),
     (r, adopted) => { r.shareholderName = adopted; },
+    holdsSomething,
   );
   parkNameless(
     "management-control",
