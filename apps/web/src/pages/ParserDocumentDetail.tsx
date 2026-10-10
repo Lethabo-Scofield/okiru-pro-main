@@ -64,6 +64,21 @@ function formatElapsed(ms: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+/** One sentence for a value the reader was unsure of, by its label, not its key. */
+function lowConfidenceSentence(key: string): string {
+  return `Check ${fieldLabel(key)}. We were not sure we read it correctly.`;
+}
+
+/**
+ * The parser words a doubtful value as "<raw_key> has low confidence". Say it
+ * the way the low-confidence list says it, so the same doubt is listed once,
+ * in plain words, rather than twice with the key showing.
+ */
+function plainWarning(message: string): string {
+  const doubt = /^s*([A-Za-z0-9_.]+) has low confidence.?s*$/i.exec(message);
+  return doubt ? lowConfidenceSentence(doubt[1]) : message;
+}
+
 export default function ParserDocumentDetail({ id }: { id: string }) {
   const [, navigate] = useLocation();
   const [document, setDocument] = useState<ParserDocumentSummary & { entityId?: string | null } | null>(null);
@@ -376,10 +391,8 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   const warnings = run
     ? Array.from(
         new Set([
-          ...run.lowConfidenceFields.map((key) => `Check ${fieldLabel(key)}. We were not sure we read it correctly.`),
-          ...run.warnings,
-          ...run.errors,
-          ...run.reviewReasons,
+          ...run.lowConfidenceFields.map(lowConfidenceSentence),
+          ...[...run.warnings, ...run.errors, ...run.reviewReasons].map(plainWarning),
         ]),
       )
     : [];

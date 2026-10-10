@@ -187,3 +187,16 @@ describe("ParserDocumentDetail — one header, the rest behind details", () => {
     expect(record).toHaveTextContent("How sure we are of the type");
   });
 });
+
+describe("ParserDocumentDetail — Needs attention says each doubt once", () => {
+  it("words the parser's '<key> has low confidence' warning by the field's label, and lists it once", async () => {
+    run = { ...freshRun(), lowConfidenceFields: ["bee_level"], warnings: ["bee_level has low confidence", "The stamp date is unclear."] };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const warnings = await screen.findByTestId("document-warnings");
+    expect(warnings).toHaveTextContent("Check Bee Level. We were not sure we read it correctly.");
+    expect(warnings).not.toHaveTextContent("bee_level");
+    expect(within(warnings).getAllByText(/Check Bee Level/)).toHaveLength(1);
+    // Anything else the parser said stays as it was.
+    expect(warnings).toHaveTextContent("The stamp date is unclear.");
+  });
+});
