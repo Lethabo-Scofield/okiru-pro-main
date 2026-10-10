@@ -29,6 +29,7 @@ import { describe, expect, it } from "vitest";
 import { mapParserCaseToWorkbookSections, type ParserCaseLike } from "@/lib/parserWorkbookMap";
 import { mergeWorkbookSections, parserExtractionsToWorkbook, toWorkbookSections } from "@/lib/parserToWorkbook";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
+import { applyOverlayToSections, periodFromYearEnd, scoreBothWays, verifyClaims } from "../../../../../api/pipeline/verification/index.js";
 import { projectWorkbookToClient, type WorkbookData } from "../../../../server/workbookRoutes";
 import { TRANSPORT_QSE_CALCULATOR_CONFIG as CFG } from "@toolkit/lib/sectors/transport-qse";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -108,31 +109,47 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
     }
     const reconciled = reconcileEntity(sections as never, { sectorCode: "TRANSPORT", scorecardType: "QSE", entityAliases: [companyName, ...aliases] });
 
-    const wb: WorkbookData = {
-      companyId: "eval", ownerOrganizationId: null, ownerUserId: "eval",
-      sections: reconciled.sections as never, updatedAt: new Date().toISOString(),
-    };
-    const p = projectWorkbookToClient(wb);
-    const fin = (p.financials as Record<string, unknown> | undefined) ?? {};
-    const finMeta = (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
-    const npat = Number(fin.npat ?? finMeta.npat ?? 0);
-    const tmps = Number(fin.tmps ?? finMeta.tmps ?? 0);
-    const leviable = Number(fin.payroll ?? finMeta.payroll ?? finMeta.leviable ?? 0);
+    // Claim-vs-evidence verification, as the create flow runs it: the
+    // rule-decided replacements go into the saved (CLAIMED) sections, and
+    // EVIDENCED drops what the documents do not prove.
+    const verification = verifyClaims({
+      sections: reconciled.sections as never,
+      evidence: extractions,
+      period: periodFromYearEnd(key.yearEnd),
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const any = (v: unknown) => v as any;
-    const mgmtData = any({ id: "", clientId: "", employees: p.employees });
-    const elems = [
-      { name: "Ownership", score: calculateOwnershipScore(any({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }), CFG).total },
-      { name: "Management Control", score: calculateTransportQseManagement(mgmtData, CFG).score },
-      { name: "Employment Equity", score: calculateTransportQseEmploymentEquity(mgmtData, CFG, "Gauteng").score },
-      { name: "Skills Development", score: calculateSkillsScore(any({ id: "", clientId: "", leviableAmount: leviable, trainingPrograms: any(p).trainingPrograms ?? [] }), CFG, "Gauteng", 2025).total },
-      { name: "Preferential Procurement", score: calculateProcurementScore(any({ id: "", clientId: "", tmps, suppliers: p.suppliers }), CFG).total },
-      { name: "Enterprise Development", score: calculateEsdScore(any({ id: "", clientId: "", contributions: p.esdContributions }), npat, CFG).edTotal },
-      { name: "Socio-Economic Development", score: calculateSedScore(any({ id: "", clientId: "", contributions: p.sedContributions }), npat, CFG).total },
-    ];
-    const bestFour = new Set([...elems].sort((a, b) => b.score - a.score).slice(0, 4).map((e) => e.name));
-    const total = [...elems].filter((e) => bestFour.has(e.name)).reduce((s, e) => s + e.score, 0);
+    const scoreSections = (scored: Record<string, unknown>) => {
+      const wb: WorkbookData = {
+        companyId: "eval", ownerOrganizationId: null, ownerUserId: "eval",
+        sections: scored as never, updatedAt: new Date().toISOString(),
+      };
+      const p = projectWorkbookToClient(wb);
+      const fin = (p.financials as Record<string, unknown> | undefined) ?? {};
+      const finMeta = ((scored["financial-information"] as { meta?: Record<string, unknown> } | undefined)?.meta ?? {});
+      const npat = Number(fin.npat ?? finMeta.npat ?? 0);
+      const tmps = Number(fin.tmps ?? finMeta.tmps ?? 0);
+      const leviable = Number(fin.payroll ?? finMeta.payroll ?? finMeta.leviable ?? 0);
+      const mgmtData = any({ id: "", clientId: "", employees: p.employees });
+      const elems = [
+        { name: "Ownership", score: calculateOwnershipScore(any({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }), CFG).total },
+        { name: "Management Control", score: calculateTransportQseManagement(mgmtData, CFG).score },
+        { name: "Employment Equity", score: calculateTransportQseEmploymentEquity(mgmtData, CFG, "Gauteng").score },
+        { name: "Skills Development", score: calculateSkillsScore(any({ id: "", clientId: "", leviableAmount: leviable, trainingPrograms: any(p).trainingPrograms ?? [] }), CFG, "Gauteng", 2025).total },
+        { name: "Preferential Procurement", score: calculateProcurementScore(any({ id: "", clientId: "", tmps, suppliers: p.suppliers }), CFG).total },
+        { name: "Enterprise Development", score: calculateEsdScore(any({ id: "", clientId: "", contributions: p.esdContributions }), npat, CFG).edTotal },
+        { name: "Socio-Economic Development", score: calculateSedScore(any({ id: "", clientId: "", contributions: p.sedContributions }), npat, CFG).total },
+      ];
+      const bestFour = new Set([...elems].sort((a, b) => b.score - a.score).slice(0, 4).map((e) => e.name));
+      const total = [...elems].filter((e) => bestFour.has(e.name)).reduce((sum, e) => sum + e.score, 0);
+      return { p, npat, tmps, leviable, elems, bestFour, total };
+    };
+
+    const claimedSections = applyOverlayToSections(reconciled.sections as never, verification, "claimed") as Record<string, unknown>;
+    const { p, npat, tmps, leviable, elems, bestFour, total } = scoreSections(claimedSections);
+    const both = scoreBothWays(reconciled.sections as never, verification, (s) => scoreSections(s as Record<string, unknown>).total);
+    const evidencedElems = scoreSections(applyOverlayToSections(reconciled.sections as never, verification, "evidenced") as Record<string, unknown>).elems;
 
     const certified = key.certified?.elements ?? {};
     const comparison = elems.map((e) => {
@@ -154,6 +171,19 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
       within,
       compared,
       elements: comparison,
+      verification: {
+        claimed: Math.round(both.claimed * 100) / 100,
+        evidenced: Math.round(both.evidenced * 100) / 100,
+        evidencedElements: evidencedElems.map((e) => ({ element: e.name, ours: Math.round(e.score * 100) / 100 })),
+        counts: verification.counts,
+        byCheck: Object.fromEntries(
+          [...new Set(verification.checks.map((c) => c.kind))].map((kind) => [kind,
+            Object.fromEntries(Object.entries(verification.checks.filter((c) => c.kind === kind)
+              .reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {})))]),
+        ),
+        needsYou: both.needsYou.map((n) => ({ check: n.checkId.split(":")[0], changesScore: n.changesScore, choices: n.choices.map((c) => ({ held: c.held, total: Math.round(c.total * 100) / 100 })) })),
+        rulesApplied: verification.checks.filter((c) => c.ops.some((op) => op.basis === "both")).map((c) => ({ check: c.kind, rule: c.rule })),
+      },
       ingested: {
         shareholders: p.shareholders.length,
         employees: p.employees.length,
