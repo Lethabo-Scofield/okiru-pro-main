@@ -21,9 +21,11 @@
  * holdings_table already takes.
  */
 import { createLogger } from '../logger.js';
-import { parseModelJson, type DocumentExtraction, type ExtractionModel } from './aiExtraction.js';
+import { parseModelJson, type DocumentExtraction, type ExtractedValueSource, type ExtractionModel } from './aiExtraction.js';
+import { parseMoney } from './moneyParsing.js';
+import type { StatedTotal } from './workbookSheetSplit.js';
 import type { VerificationElement } from '../../schemas/verification_document_matrix.js';
-import { applyColumnMapping, collectHeaders, mapSheetColumns } from './sheetColumnMapping.js';
+import { applyColumnMapping, collectHeaders, knownTemplateMapping, mapSheetColumns } from './sheetColumnMapping.js';
 import { mapLabelsToVocabulary } from './semanticVocabulary.js';
 import {
   decisionFingerprint,
@@ -41,15 +43,19 @@ const logger = createLogger('SheetTableExtraction');
 const ELEMENT_TABLE: Partial<Record<VerificationElement, { field: string; columns: string[]; what: string; guide?: string }>> = {
   OWNERSHIP: {
     field: 'shareholder_rows',
-    columns: ['shareholder_name', 'race', 'gender', 'id_number', 'voting_rights', 'economic_interest', 'number_of_shares'],
+    // new_entrant is the holder's "New Entrant" Yes/No flag (a black new
+    // entrant earns its own ownership indicator).
+    columns: ['shareholder_name', 'race', 'gender', 'id_number', 'voting_rights', 'economic_interest', 'number_of_shares', 'new_entrant'],
     what: 'each shareholder / holder of equity',
   },
   MANAGEMENT_CONTROL: {
     field: 'employee_rows',
     // designation is the SCORED job/role title (Managing Director, Admin Manager);
     // occupational_level is the EEA band. A sheet may carry either or both — give
-    // the model a slot for each so neither is dropped.
-    columns: ['employee_name', 'race', 'gender', 'designation', 'occupational_level', 'id_number', 'foreign'],
+    // the model a slot for each so neither is dropped. gross_monthly_salary is
+    // the register's MONTHLY figure, named so: the workbook's salary column is
+    // annual, and a monthly figure placed there would be a twelfth of the truth.
+    columns: ['employee_name', 'race', 'gender', 'designation', 'occupational_level', 'id_number', 'foreign', 'gross_monthly_salary'],
     what: 'each director and employee. designation is their job title / role; occupational_level is their management band (Executive Management, Senior, Middle, Junior); foreign is the Foreign-national Yes/No flag. Map a "designation"/"job title"/"position" column to designation, and a "level"/"occupational level"/"management level" column to occupational_level',
   },
   SKILLS_DEVELOPMENT: {
@@ -420,12 +426,126 @@ async function normaliseContributionTypes(
   );
 }
 
+/** The money column a sheet's stated total adds up, per table. */
+const TOTAL_COLUMN_BY_FIELD: Record<string, string> = {
+  supplier_rows: 'claimed_spend_ex_vat',
+  beneficiary_rows: 'contribution_value',
+  esd_contribution_rows: 'contribution_value',
+  learner_rows: 'total_cost',
+};
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/** "R1,234,567.89": the same on every server, whatever its locale. */
+function rand(n: number): string {
+  const [whole, cents] = Math.abs(round2(n)).toFixed(2).split('.');
+  return `${n < 0 ? '-' : ''}R${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${cents}`;
+}
+
+/**
+ * What the code can say about a table it read, beside the rows:
+ *
+ *  - `stated_schedule_total`: the total the sheet itself states above the
+ *    table ("Total Procurement Expenditure"), as printed, and whether the rows
+ *    add up to it. A disagreement is reported, never settled: the stated total
+ *    is the client's own figure and the rows are the evidence for it. When the
+ *    sheet states more than one total, the one the rows add up to is taken;
+ *    with none agreeing, none is.
+ *  - `derived_gross_monthly_salary_total`: an employee register's monthly
+ *    payroll, summed in code (the register prints no total), so it can be set
+ *    against the payroll report's. Labelled derived.
+ *
+ * `stated_*` and `derived_*` are reported, never scored (entityCalculatorMapping).
+ */
+export function tableFacts(
+  field: string,
+  rows: Array<Record<string, unknown>>,
+  statedTotals: StatedTotal[] = [],
+): { values: Array<{ field: string; value: number; source?: ExtractedValueSource }>; exceptions: string[] } {
+  const values: Array<{ field: string; value: number; source?: ExtractedValueSource }> = [];
+  const exceptions: string[] = [];
+
+  const column = TOTAL_COLUMN_BY_FIELD[field];
+  if (column && statedTotals.length > 0) {
+    let sum = 0;
+    let counted = 0;
+    for (const row of rows) {
+      const amount = parseMoney(row[column]);
+      if (amount !== null) { sum += amount; counted += 1; }
+    }
+    const agrees = (t: StatedTotal) => counted > 0 && Math.abs(t.value - sum) <= Math.max(Math.abs(t.value) * 0.005, 1);
+    const chosen = statedTotals.find(agrees) ?? (statedTotals.length === 1 ? statedTotals[0] : null);
+    if (chosen) {
+      values.push({ field: 'stated_schedule_total', value: chosen.value });
+      if (!agrees(chosen)) {
+        exceptions.push(
+          `The sheet states "${chosen.label}" as ${rand(chosen.value)} (${chosen.cell}), but its ${counted} row(s) add up to ${rand(sum)}: `
+            + 'the schedule and its total do not reconcile.',
+        );
+      }
+    } else {
+      exceptions.push(`The sheet states ${statedTotals.length} totals and its rows add up to none of them (${rand(sum)}); none is kept.`);
+    }
+  }
+
+  if (field === 'employee_rows') {
+    const salaries = rows.map((row) => row.gross_monthly_salary).filter((v) => v !== undefined && v !== null && String(v).trim() !== '');
+    const amounts = salaries.map(parseMoney);
+    if (amounts.length > 0 && amounts.every((a): a is number => a !== null)) {
+      values.push({
+        field: 'derived_gross_monthly_salary_total',
+        value: round2((amounts as number[]).reduce((a, b) => a + b, 0)),
+        source: { method: 'derived', quote: `derived: sum of the gross monthly salaries on ${amounts.length} employee row(s)` },
+      });
+    } else if (amounts.length > 0) {
+      exceptions.push('Not every gross monthly salary on the register is a readable amount, so the monthly payroll is not totalled.');
+    }
+  }
+  return { values, exceptions };
+}
+
+/**
+ * The sheet's table when its own headings settle both what the rows are and
+ * which column is which — a gathering template's register under its usual tab
+ * ("Employment Equity": "Name & Surname | ID Number | Race | …"). The tab's
+ * default shape is taken (an ESD tab named for development contributions takes
+ * the contribution shape, as the no-model path always did) and must be
+ * confirmed by its headings: the key column and two more fields recognised
+ * (knownTemplateMapping). Then no model is asked: what a template's columns
+ * mean does not change between uploads, and asking let one workbook read two
+ * ways. Anything less settled goes to the model exactly as before.
+ */
+function knownTemplateTable(
+  element: VerificationElement,
+  input: { filename: string; rows?: Array<Record<string, unknown>> },
+): { shape: TableShapeDef; mapping: Record<string, string> } | null {
+  const rows = input.rows ?? [];
+  if (rows.length === 0) return null;
+  const base = element === 'ESD' && isEsdContributionSheet(input.filename, rows)
+    ? { ...ESD_CONTRIBUTION_SHAPE, element: 'ESD' as VerificationElement }
+    : ELEMENT_TABLE[element] ? { ...ELEMENT_TABLE[element]!, element } : null;
+  if (!base) return null;
+  const shape: TableShapeDef = { ...base, columns: [...base.columns] };
+  const mapping = knownTemplateMapping(rows, shape);
+  return mapping ? { shape, mapping } : null;
+}
+
 export async function extractSheetTable(
   model: ExtractionModel,
   element: VerificationElement,
-  input: { filename: string; markdown?: string; raw_text: string; rows?: Array<Record<string, unknown>> },
+  input: {
+    filename: string;
+    markdown?: string;
+    raw_text: string;
+    rows?: Array<Record<string, unknown>>;
+    /** The totals the sheet states above its table (workbookSheetSplit statedTotalsAbove). */
+    statedTotals?: StatedTotal[];
+  },
 ): Promise<DocumentExtraction | null> {
-  const shape = await shapeForSheet(model, element, input);
+  const known = knownTemplateTable(element, input);
+  const shape = known?.shape ?? await shapeForSheet(model, element, input);
   if (!shape) return null;
   // The extraction is labelled by what the rows ARE (the chosen shape's element),
   // which the model may have corrected away from the tab-name hint.
@@ -439,7 +559,7 @@ export async function extractSheetTable(
   let placementFailure: string | null = null;
 
   if (input.rows && input.rows.length > 0) {
-    const mapping = await mapSheetColumns(model, shape, input.filename, input.rows);
+    const mapping = known?.mapping ?? await mapSheetColumns(model, shape, input.filename, input.rows);
     if (mapping && Object.values(mapping).includes(shape.columns[0])) {
       const table = applyColumnMapping(input.rows, mapping, shape);
       if (table.rows.length > 0) {
@@ -451,21 +571,7 @@ export async function extractSheetTable(
           exceptions: table.exceptions.length,
         });
         const typeNotes = await normaliseContributionTypes(model, table.rows);
-        return {
-          documentId: `sheet_table__${rowElement.toLowerCase()}`,
-          documentName: `${rowElement} table`,
-          element: rowElement,
-          sourceFile: input.filename,
-          values: [{
-            field: shape.field,
-            value: table.rows,
-            sourceFile: input.filename,
-            sourceDocumentId: `sheet_table__${rowElement.toLowerCase()}`,
-          }],
-          missingFields: [],
-          unexpectedFields: [],
-          exceptions: [...table.exceptions, ...typeNotes],
-        };
+        return tableExtraction(rowElement, shape.field, table.rows, input, [...table.exceptions, ...typeNotes]);
       }
     }
     const sheet = sheetNameOf(input.filename);
@@ -505,21 +611,31 @@ export async function extractSheetTable(
   logger.info('Extracted sheet table', { file: input.filename, element: rowElement, field: shape.field, rows: rows.length });
 
   const typeNotes = await normaliseContributionTypes(model, rows);
+  return tableExtraction(rowElement, shape.field, rows, input, typeNotes);
+}
 
+/** One table read as a document extraction: its rows, then what the code says about them (tableFacts). */
+function tableExtraction(
+  element: VerificationElement,
+  field: string,
+  rows: Array<Record<string, unknown>>,
+  input: { filename: string; statedTotals?: StatedTotal[] },
+  exceptions: string[],
+): DocumentExtraction {
+  const documentId = `sheet_table__${element.toLowerCase()}`;
+  const facts = tableFacts(field, rows, input.statedTotals);
   return {
-    documentId: `sheet_table__${rowElement.toLowerCase()}`,
-    documentName: `${rowElement} table`,
-    element: rowElement,
+    documentId,
+    documentName: `${element} table`,
+    element,
     sourceFile: input.filename,
-    values: [{
-      field: shape.field,
-      value: rows,
-      sourceFile: input.filename,
-      sourceDocumentId: `sheet_table__${rowElement.toLowerCase()}`,
-    }],
+    values: [
+      { field, value: rows, sourceFile: input.filename, sourceDocumentId: documentId },
+      ...facts.values.map((fact) => ({ ...fact, sourceFile: input.filename, sourceDocumentId: documentId })),
+    ],
     missingFields: [],
     unexpectedFields: [],
-    exceptions: typeNotes,
+    exceptions: [...exceptions, ...facts.exceptions],
   };
 }
 

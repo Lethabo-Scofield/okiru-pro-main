@@ -19,9 +19,10 @@
  * exactly as before.
  */
 import * as XLSX from 'xlsx';
-import { dittoFill, mainColumnRegion, type DittoOptions } from './sheetRegions.js';
+import { dittoFill, mainColumnRegion, residueRowsFor, type DittoOptions } from './sheetRegions.js';
 import { isSpreadsheetError, namedSheetCells, sheetMatrix, type CellReadOptions } from './sheetCellValues.js';
 import { boundWorkbookSheets } from './sheetBounds.js';
+import { parseMoney } from './moneyParsing.js';
 
 export interface SheetDocument {
   /** Sheet name, verbatim. */
@@ -52,6 +53,21 @@ export interface SheetDocument {
    * has no such sheet, or it states none of them.
    */
   instructions?: WorkbookInstructions;
+  /**
+   * The totals the sheet states ABOVE its table ("Total Procurement
+   * Expenditure | R 1 234 568" in a template's summary block), which the rows
+   * below should add up to. Omitted when it states none.
+   */
+  statedTotals?: StatedTotal[];
+}
+
+/** One labelled total from a sheet's summary block. */
+export interface StatedTotal {
+  /** The caption, verbatim ("Total Procurement Expenditure"). */
+  label: string;
+  value: number;
+  /** A1 reference of the figure. */
+  cell: string;
 }
 
 /**
@@ -336,8 +352,16 @@ function findHeaderRow(matrix: unknown[][]): number {
  *     fragment. Text columns inherit; numeric/date columns never do, so the
  *     event's cost is counted once, on the row that states it.
  */
-function sheetRowsWithHeader(matrix: unknown[][], maxRows: number, ditto: DittoOptions = {}): Array<Record<string, unknown>> {
-  if (matrix.length === 0) return [];
+interface SheetTable {
+  rows: Array<Record<string, unknown>>;
+  /** The header row's index in the matrix; -1 for an empty matrix. */
+  headerIdx: number;
+  /** The data table's columns in the matrix. */
+  region: { start: number; end: number };
+}
+
+function sheetRowsWithHeader(matrix: unknown[][], maxRows: number, ditto: DittoOptions = {}): SheetTable {
+  if (matrix.length === 0) return { rows: [], headerIdx: -1, region: { start: 0, end: -1 } };
 
   const asText = matrix.map((row) => row.map((c) => String(c ?? '')));
   const region = mainColumnRegion(asText) ?? { start: 0, end: matrix.reduce((w, r) => Math.max(w, r.length), 0) - 1 }; // not Math.max(...rows): spreading every row as an argument overflows the stack past ~120k rows
@@ -365,9 +389,13 @@ function sheetRowsWithHeader(matrix: unknown[][], maxRows: number, ditto: DittoO
     return cells.slice(0, width);
   });
   const filled = dittoFill(bodyText, width, ditto);
+  // The rows a template offers but nobody filled in (numbered, preset "No",
+  // zero formulas): dittoFill blanked them, and they are no row of the table.
+  const residue = residueRowsFor(bodyText, width, ditto);
 
   const rows: Array<Record<string, unknown>> = [];
   for (let i = 0; i < filled.length && rows.length < maxRows; i += 1) {
+    if (residue[i]) continue;
     const original = regionMatrix[headerIdx + 1 + i] ?? [];
     const obj: Record<string, unknown> = {};
     for (let c = 0; c < width; c += 1) {
@@ -379,7 +407,54 @@ function sheetRowsWithHeader(matrix: unknown[][], maxRows: number, ditto: DittoO
     }
     if (Object.keys(obj).length > 0) rows.push(obj);
   }
-  return rows;
+  return { rows, headerIdx, region };
+}
+
+/** A caption that names a total: "Total Procurement Expenditure", "Total Value of …". */
+const TOTAL_CAPTION = /^\s*(grand\s+)?total\b/i;
+
+/** A summary figure: a number, or money/percent text that parses as one. */
+function figureOf(cell: unknown): number | null {
+  if (typeof cell === 'number') return Number.isFinite(cell) ? cell : null;
+  if (typeof cell !== 'string') return null;
+  const bare = cell.replace(/^\s*R\s*/i, '');
+  if (!/\d/.test(bare) || !/^[-\d\s,.()]+$/.test(bare.trim())) return null;
+  return parseMoney(cell);
+}
+
+/**
+ * The totals a sheet states in the summary block ABOVE its table: a "Total …"
+ * caption with exactly one figure to its right on the same row. A row with
+ * several figures ("SUB TOTALS | 11 | 1 | 0 | 1 …", a summary matrix) is not
+ * one stated total, and is left out rather than guessed at.
+ */
+export function statedTotalsAbove(
+  matrix: unknown[][],
+  table: { headerIdx: number; region: { start: number; end: number } },
+  origin: { r: number; c: number } = { r: 0, c: 0 },
+): StatedTotal[] {
+  const totals: StatedTotal[] = [];
+  for (let r = 0; r < table.headerIdx; r += 1) {
+    const row = matrix[r] ?? [];
+    for (let c = table.region.start; c <= table.region.end && c < row.length; c += 1) {
+      const caption = row[c];
+      if (typeof caption !== 'string' || !TOTAL_CAPTION.test(caption)) continue;
+      const figures: Array<{ value: number; c: number }> = [];
+      for (let k = c + 1; k <= table.region.end && k < row.length; k += 1) {
+        const value = figureOf(row[k]);
+        if (value !== null) figures.push({ value, c: k });
+      }
+      if (figures.length === 1) {
+        totals.push({
+          label: caption.replace(/\s+/g, ' ').trim(),
+          value: figures[0].value,
+          cell: XLSX.utils.encode_cell({ r: origin.r + r, c: origin.c + figures[0].c }),
+        });
+      }
+      break;
+    }
+  }
+  return totals;
 }
 
 /**
@@ -428,6 +503,12 @@ export interface SplitOptions {
    * its inputs stay exactly as they were recorded.
    */
   instructions?: boolean;
+  /**
+   * Read each sheet's stated totals (`statedTotals`, see statedTotalsAbove).
+   * Default on; the ESG reading turns it off, so its inputs stay exactly as
+   * they were recorded.
+   */
+  statedTotals?: boolean;
 }
 
 /**
@@ -467,11 +548,14 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
 
     // Header-aware: skip the banner/legend rows and key data by the REAL column
     // headers, so the markdown the model reads has meaningful columns.
-    const rows = sheetRowsWithHeader(matrix, maxRows, options.ditto).filter(rowHasContent);
+    const table = sheetRowsWithHeader(matrix, maxRows, options.ditto);
+    const rows = table.rows.filter(rowHasContent);
     if (rows.length < minContent) continue;
 
     const visibility = workbook.Workbook?.Sheets?.find((entry) => entry.name === sheetName)?.Hidden ?? 0;
     const namedCells = options.namedCells === false ? {} : namedSheetCells(workbook, sheetName, options.cells);
+    const origin = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s : { r: 0, c: 0 };
+    const statedTotals = options.statedTotals === false ? [] : statedTotalsAbove(matrix, table, origin);
     documents.push({
       sheetName,
       rows,
@@ -480,6 +564,7 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
       matrix: boundedMatrix(matrix),
       hidden: visibility !== 0,
       ...(Object.keys(namedCells).length > 0 ? { namedCells } : {}),
+      ...(statedTotals.length > 0 ? { statedTotals } : {}),
     });
   }
 

@@ -172,6 +172,90 @@ export async function mapSheetColumns(
   return decision.value;
 }
 
+/**
+ * The column headings B-BBEE gathering templates print, per target field.
+ *
+ * A heading like "Name & Surname", "Race" or "Expenditure (excluding VAT)" means
+ * the same thing on every copy of the template, so asking a model what it means
+ * on every upload buys nothing but a call, a wait and a chance of a different
+ * answer (the deployment rejects a temperature, so every ask is sampled
+ * afresh). Each pattern is anchored to the heading's start or whole text, so a
+ * heading that merely mentions a word ("Date of Training Program" is a date,
+ * not a programme; "Expenditure … (Including VAT)" is not the ex-VAT spend)
+ * never matches.
+ */
+const HEADER_VOCABULARY: Record<string, RegExp[]> = {
+  shareholder_name: [/^name\s*&?\s*(and\s+)?surname\b/, /^(shareholder|holder|owner)('?s)?(\s+name)?$/, /^name of (share)?holder$/],
+  employee_name: [/^name\s*&?\s*(and\s+)?surname\b/, /^employee('?s)?(\s+(full\s+)?name)?$/, /^full name$/],
+  learner_name: [/^learner('?s)?\s+name\b/, /^learner$/, /^name\s*&?\s*(and\s+)?surname\b/],
+  supplier_name: [/^supplier('?s)?(\s+name)?$/, /^vendor(\s+name)?$/],
+  beneficiary_name: [/^beneficiary(\s+name)?$/, /^name of beneficiary$/],
+  race: [/^race\b/, /^population group$/],
+  gender: [/^gender\b/, /^sex$/],
+  id_number: [/^id\s*(number|no\.?)\b/, /^identity number\b/, /^id\s*\/\s*passport/],
+  voting_rights: [/^voting rights?\b/],
+  economic_interest: [/^economic interest\b/],
+  number_of_shares: [/^(number|no\.?) of shares$/, /^shares held$/],
+  new_entrant: [/^(black\s+)?new entrants?\b/],
+  designation: [/^job title\b/, /^designation$/, /^role$/],
+  occupational_level: [/^occupational level\b/, /^position \(occupational level\)$/, /^management level\b/],
+  foreign: [/^foreign( national)?\b/],
+  gross_monthly_salary: [/^gross monthly (salary|remuneration)\b/, /^monthly (gross )?salary\b/],
+  program_name: [/^training (course|programme|program)( name)?$/, /^(course|programme|program)( name)?$/],
+  training_provider: [/^(trainer|training provider|service provider)\b/, /^trainer or service provider\b/],
+  category_code: [/^category\b/],
+  total_cost: [/^total expenditure\b/, /^total (training )?cost\b/],
+  start_date: [/^date of training\b/, /^start date\b/],
+  end_date: [/^end date\b/],
+  employed: [/^employed\b/, /^employment status$/],
+  registration_number: [/^reg(istration)?\.?\s*(no\.?|number)$/, /^company registration\b/],
+  claimed_spend_ex_vat: [/^expenditure \(excl(uding|\.)? vat\)$/, /^spend (\()?excl(uding|\.)? vat\)?$/, /^amount excl(uding|\.)? vat$/],
+  bee_level: [/^b-?bbee (status )?level$/, /^bee (status )?level$/],
+  supplier_classification: [/^supplier classification$/, /^supplier size$/, /^enterprise size$/],
+  certificate_expiry_date: [/^(b-?bbee|bee) certificate expiry\b/, /^certificate expiry\b/],
+  supplier_black_ownership_percentage: [/^black ownership\b/],
+  supplier_black_women_ownership_percentage: [/^black wom[ae]n ownership\b/],
+  is_51_black_owned: [/^51\s*% or more black owned$/],
+  is_30_black_woman_owned: [/^30\s*% or more black wom[ae]n owned$/],
+  contribution_value: [/^amount of contribution$/, /^contribution (value|amount)$/],
+  contribution_type: [/^contribution type$/, /^type of contribution$/],
+  black_beneficiary_percentage_declared: [/^% black (participation|beneficiaries)$/],
+  date_of_contribution: [/^date of contribution$/],
+  description_of_contribution: [/^description of contribution$/, /^description$/],
+};
+
+/**
+ * Map a sheet's headings to target fields from the template vocabulary alone:
+ * each field takes the first unclaimed heading that matches it, each heading
+ * serves one field. Fields with no vocabulary are left for the model.
+ */
+export function vocabularyMapping(headers: string[], fields: string[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  const claimed = new Set<string>();
+  for (const field of fields) {
+    const patterns = HEADER_VOCABULARY[field];
+    if (!patterns) continue;
+    const header = headers.find((h) => !claimed.has(h) && patterns.some((p) => p.test(normHeader(h))));
+    if (!header) continue;
+    claimed.add(header);
+    mapping[header] = field;
+  }
+  return mapping;
+}
+
+/**
+ * The template's own mapping, when its headings settle the table: the key
+ * column (the first field) and at least two more fields are recognised. Null
+ * otherwise, and the model is asked as before. Recognised headings are a fact
+ * about the template, so this reads the same on every upload.
+ */
+export function knownTemplateMapping(rows: Array<Record<string, unknown>>, shape: TableShape): Record<string, string> | null {
+  const mapping = vocabularyMapping(collectHeaders(rows), shape.columns);
+  const fields = Object.values(mapping);
+  if (!fields.includes(shape.columns[0]) || fields.length < 3) return null;
+  return mapping;
+}
+
 /** The sheet name inside a split-workbook filename ("File.xlsx › Procurement"). */
 function templateSheetName(filename: string): string {
   const marker = filename.indexOf('›');

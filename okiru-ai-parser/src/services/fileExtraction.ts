@@ -607,6 +607,7 @@ export async function extractionInputsFromUpload(
       cells: cellsFor(options),
       namedCells: options.domain !== 'esg',
       instructions: options.domain !== 'esg',
+      statedTotals: options.domain !== 'esg',
     });
     /** One sheet's table, with the workbook's Instructions profile when this sheet carries it. */
     const sheetTable = (sheet: (typeof sheets)[number]) => ({
@@ -615,6 +616,7 @@ export async function extractionInputsFromUpload(
       matrix: sheet.matrix,
       ...(sheet.namedCells ? { namedCells: sheet.namedCells } : {}),
       ...(sheet.instructions ? { instructions: sheet.instructions } : {}),
+      ...(sheet.statedTotals ? { statedTotals: sheet.statedTotals } : {}),
     });
 
     // A SINGLE-sheet workbook is not worth splitting into one document, but it
