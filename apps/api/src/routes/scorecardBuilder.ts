@@ -15,6 +15,7 @@ const logger = createLogger("ScorecardBuilder");
 import { calculateScorecard } from '../../pipeline/rules/calculationEngine.js';
 import type { EntityValue, EmployeeInput, ShareholderInput, SupplierInput, ContributionInput } from '../../pipeline/rules/calculationEngine.js';
 import { mapToUCSPayload } from '../../pipeline/extraction/aiEntityMapper.js';
+import { applyOverlayToPillars, type VerificationReport } from '../../pipeline/verification/index.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
@@ -89,6 +90,11 @@ interface CalculateRequest {
   totalEmployees?: number;
   pillarData?: any;
   foundationData?: any;
+  /**
+   * The workbook's claim-vs-evidence report. With pillarData, the response
+   * also carries the EVIDENCED total, scored by this same engine.
+   */
+  verification?: VerificationReport;
 }
 
 /**
@@ -290,9 +296,32 @@ router.post('/calculate', requireAuth, async (req, res) => {
     });
 
 
+    // CLAIMED is the result above (the pillarData the workbook saved already
+    // carries the rule-decided replacements). EVIDENCED drops what the
+    // documents do not prove, by the same overlay the Toolkit store applies.
+    let verification: { claimed: number; evidenced: number } | undefined;
+    const report = body.verification;
+    if (hasPillarData && report?.version === 1 && Array.isArray(report.checks)) {
+      const ev = extractFromPillarData({ ...body, pillarData: applyOverlayToPillars(body.pillarData, report, 'evidenced') });
+      const evidenced = await calculateScorecard({
+        assessmentId: `${assessmentId}-evidenced`,
+        sectorCode,
+        scorecardType,
+        entityValues: ev.entityValues,
+        crossPillarValues: ev.crossPillarValues,
+        employees: ev.employees,
+        shareholders: ev.shareholders,
+        suppliers: ev.suppliers,
+        contributions: ev.contributions,
+        trainingPrograms: body.trainingPrograms,
+        financials: ev.financials,
+      });
+      verification = { claimed: result.totalPoints, evidenced: evidenced.totalPoints };
+    }
+
     logger.info('Scorecard calculated', { sessionId: assessmentId, sector: sectorCode, durationMs: Date.now() - start });
 
-    res.json({ success: true, scorecard: result });
+    res.json({ success: true, scorecard: result, ...(verification ? { verification } : {}) });
   } catch (err) {
     logger.error('Calculation error', err);
     res.status(500).json({ 

@@ -91,6 +91,12 @@ import {
   supplierSumTmps,
   resolveTmps,
 } from './calculators/shared';
+import {
+  applyOverlayToPillars,
+  type NeedsYouChoice,
+  type OverlayBasis,
+  type VerificationReport,
+} from '../../../../api/pipeline/verification/index.js';
 
 /**
  * TMPS after a supplier is added, changed or removed: a pinned, stated or held
@@ -1125,6 +1131,23 @@ function calculateScorecard(
     recognitionLevel: levelToRecognition(finalDiscountedLevel),
     chosenElectivePillar: chosenElectiveKey ? ELECTIVE_CONFIG_TO_SCORECARD[chosenElectiveKey] : null,
   };
+}
+
+/**
+ * The scorecard this data scores with a verification report applied — by the
+ * SAME calculator as the live score, so CLAIMED and EVIDENCED differ only by
+ * what the documents prove. `answers` scores a needs-you item answered one
+ * way. Null when no sector config is loaded. Never writes to the store.
+ */
+export function scoreWithVerification(
+  state: PillarState & { calculatorConfig?: CalculatorConfig | null; ignoreSubMinimum?: boolean; pipelineOverrides?: PipelineOverrides | null },
+  report: VerificationReport,
+  basis: OverlayBasis,
+  answers: NeedsYouChoice[] = [],
+): ScorecardResult | null {
+  if (!state.calculatorConfig) return null;
+  const overlaid = applyOverlayToPillars(state, report, basis, answers, { normalizeBand: normalizeDesignationForScoring });
+  return calculateScorecard(overlaid, state.pipelineOverrides ?? null);
 }
 
 function mapLegacyCategoryForStore(cat: string): TrainingCategoryCode {

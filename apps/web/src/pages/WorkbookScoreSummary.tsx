@@ -5,6 +5,9 @@ import { useBbeeStore } from "@toolkit/lib/store";
 import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
 import { ReconciliationReview } from "@/components/scorecard/ReconciliationReview";
+import { VerificationPanel } from "@/components/scorecard/VerificationPanel";
+import { verificationTotals } from "@/lib/verification/verificationTotals";
+import type { VerificationReport } from "../../../api/pipeline/verification/index.js";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
 import type { VerdictReport, EntityVerdict } from "@/lib/documentVerdicts";
 import { fscSubSectorDisplayLabel, normalizeFscSubSector } from "@toolkit/lib/sectors/fsc-utils";
@@ -61,6 +64,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
   // this page (same sessionStorage convention as the Excel import marker).
   const [verdictReport, setVerdictReport] = useState<VerdictReport | null>(null);
   const [reconcile, setReconcile] = useState<ReconcileResult | null>(null);
+  const [verification, setVerification] = useState<VerificationReport | null>(null);
   // The per-document ledger is long; collapsed by default so it can't bury the
   // Continue action. The reconciliation summary above already carries the gist.
   const [showVerdicts, setShowVerdicts] = useState(false);
@@ -79,6 +83,32 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
     } catch {
       // Reconciliation review is additive too.
     }
+    let fromSession = false;
+    try {
+      const ver = sessionStorage.getItem(`okiru-verification-${companyId}`);
+      if (ver) {
+        setVerification(JSON.parse(ver) as VerificationReport);
+        fromSession = true;
+      }
+    } catch {
+      // Falls back to the workbook copy below.
+    }
+    if (fromSession) return;
+    // The workbook keeps the report (company-information meta), so it is
+    // there in a later session too.
+    let cancelled = false;
+    fetch(`${API_BASE}/api/workbook/${encodeURIComponent(companyId)}?rebuild=0`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((wb) => {
+        const report = wb?.sections?.["company-information"]?.meta?._verification as VerificationReport | undefined;
+        if (!cancelled && report?.version === 1) setVerification(report);
+      })
+      .catch(() => {
+        // Additive: the score stands without it.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [provisional, companyId]);
   const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId } = useBbeeStore();
   const [refreshing, setRefreshing] = useState(true);
@@ -111,6 +141,17 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
   }, [companyId, loadClientData]);
 
   const loading = Boolean(companyId) && (refreshing || !isLoaded || activeClientId !== companyId);
+
+  // CLAIMED is the live score; EVIDENCED and each needs-you answer are scored
+  // by the same calculator over the same data with the report applied.
+  const verifiedTotals = useMemo(() => {
+    if (!verification || loading) return null;
+    try {
+      return verificationTotals(useBbeeStore.getState() as never, verification);
+    } catch {
+      return null;
+    }
+  }, [verification, loading, scorecard]);
 
   const pillarRows = useMemo(() => {
     const transportQse =
@@ -314,6 +355,10 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
               severity (handled / needs you / missing). The output face of the
               entity model; keeps the page short by summarising the handled. */}
           {provisional && <ReconciliationReview reconcile={reconcile} />}
+
+          {/* Every claim checked against the documents, with the evidence
+              it was checked against and the two totals side by side. */}
+          {provisional && <VerificationPanel report={verification} totals={verifiedTotals} />}
 
           {/* The honest ledger — what each document actually gave us. This is
               what a requote is argued from, so it names gaps rather than
