@@ -4,7 +4,7 @@ newType:
   name: "Company profile"
   aliases: ["Company overview", "Corporate profile", "Business profile"]
 element: OWNERSHIP
-version: 2
+version: 3
 hard: false
 classify:
   is: "A narrative company profile or overview the business wrote about itself: history, owners or directors, services or products, clients, fleet or equipment, contact details. Marketing text, not a statutory or financial record."
@@ -45,8 +45,8 @@ fields:
     description: "A short verbatim summary of what the business does. This is the evidence for its sector."
   - name: industry_sector
     type: text
-    labels: ["Industry", "Sector"]
-    description: "Only a sector the profile itself states. Never choose a B-BBEE sector code yourself."
+    labels: ["Industry", "Sector", "Primary function"]
+    description: "The industry the profile says the business works in, as ONE plain industry name when one fits what it says it does: Transport, Construction, Property, Tourism, ICT, Financial services, Agriculture, Forestry, Mining, Manufacturing, Retail, Wholesale, Marketing and advertising, Accounting, Professional services, Security, Cleaning, Healthcare, Education. Null when the profile does not say what the business does. It is the profile's evidence for the sector, never a B-BBEE sector code: do not name a Code or a scorecard."
   - name: ownership_statement
     type: text
     labels: []
@@ -111,8 +111,10 @@ profile.
 - Accountants are not auditors. Put an accounting firm in
   `accounting_officer_name`, and only a firm the profile calls auditors in
   `auditor_name`.
-- Describe what the business does in its own words; choosing a sector code is
-  the reviewer's job.
+- Describe what the business does in its own words in `core_business`, and
+  name its industry in `industry_sector` with one plain name from the list. The
+  industry is evidence a reviewer sets beside the sector chosen for the
+  scorecard; choosing the sector code is still the reviewer's job.
 - Never return phone numbers, e-mail addresses or bank details.
 
 ## Worked example
@@ -130,7 +132,7 @@ Page 3  Administration: "Accountants: Dlamini and Partners Inc."
 ```json
 {"entity_name": "MBEKI PLANT HIRE (PTY) LTD", "trading_name": "MPH Civils", "registration_number": null,
  "trading_since": "March 2004", "directors_or_members": "Sipho Dube",
- "core_business": "Bulk earthworks, trenching, road construction and plant hire.", "industry_sector": null,
+ "core_business": "Bulk earthworks, trenching, road construction and plant hire.", "industry_sector": "Construction",
  "ownership_statement": "a proudly 100% black-owned civil works contractor",
  "accounting_officer_name": "Dlamini and Partners Inc.", "auditor_name": null, "employee_count": null,
  "exceptions": ["The ownership claim is the profile's own statement, not ownership evidence."]}
