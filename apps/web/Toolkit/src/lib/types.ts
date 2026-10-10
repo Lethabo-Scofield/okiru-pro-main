@@ -362,6 +362,12 @@ export interface ProcurementData {
   clientId: string;
   tmps: number;
   tmpsManualOverride?: boolean;
+  /**
+   * Where `tmps` came from: pinned by the user, stated by a document, held open
+   * (stated but unusable — nothing scored until settled), or the supplier
+   * sum. See resolveTmps in calculators/shared.
+   */
+  tmpsSource?: 'manual' | 'stated' | 'held' | 'supplier_spend_sum';
   suppliers: Supplier[];
   // Note: graduation/jobs bonuses removed - these are ED only (Issue 3)
 }

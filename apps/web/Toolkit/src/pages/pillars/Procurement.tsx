@@ -595,8 +595,19 @@ export default function Procurement() {
                 </div>
               </div>
             ) : (
-              <div className="text-3xl font-bold font-heading">
-                {formatRand(tmps)}
+              <div className="space-y-1">
+                <div className="text-3xl font-bold font-heading">
+                  {formatRand(tmps)}
+                </div>
+                {/* Where the denominator came from — a computed sum is never
+                    shown as if it were the client's own figure. */}
+                <div className="text-[11px] text-muted-foreground" data-testid="text-tmps-source">
+                  {procurement.tmpsSource === 'stated'
+                    ? `As stated in your documents. The supplier schedule sums to ${formatRand(calculatedTmps)}.`
+                    : procurement.tmpsSource === 'held'
+                      ? 'Your documents state TMPS but it could not be used (two figures disagree, or the cell holds an error). Nothing is scored until you enter it.'
+                      : 'Sum of supplier spend — no document states TMPS.'}
+                </div>
               </div>
             )}
             <div className="flex justify-between items-center mt-4 text-sm border-t pt-2">
