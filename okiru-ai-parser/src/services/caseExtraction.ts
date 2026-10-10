@@ -24,6 +24,7 @@ import { classifyDocument, routingElement, specForSkill } from './documentClassi
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
+import type { StatedTotal } from './workbookSheetSplit.js';
 import { extractLedgerTable } from './sheetLedgerExtraction.js';
 import { extractSheetFinancials, isFinancialsSheet } from './sheetFinancialsExtraction.js';
 import {
@@ -76,6 +77,26 @@ export function structuredRows(tables: unknown[] | undefined): Array<Record<stri
   if (!Array.isArray(rows) || rows.length === 0) return undefined;
   if (!rows.every((row) => row !== null && typeof row === 'object' && !Array.isArray(row))) return undefined;
   return rows as Array<Record<string, unknown>>;
+}
+
+/** The sheet's cells as laid out (the split's bounded `matrix`), when the split kept them. */
+function structuredMatrix(tables: unknown[] | undefined): unknown[][] | undefined {
+  const first = tables?.[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const matrix = (first as { matrix?: unknown }).matrix;
+  return Array.isArray(matrix) && matrix.every(Array.isArray) ? matrix as unknown[][] : undefined;
+}
+
+/** The totals the sheet states above its table (workbookSheetSplit statedTotalsAbove), when any. */
+export function structuredStatedTotals(tables: unknown[] | undefined): StatedTotal[] | undefined {
+  const first = tables?.[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const totals = (first as { statedTotals?: unknown }).statedTotals;
+  if (!Array.isArray(totals)) return undefined;
+  const valid = totals.filter((t): t is StatedTotal => Boolean(t) && typeof t === 'object'
+    && typeof (t as StatedTotal).label === 'string' && typeof (t as StatedTotal).value === 'number'
+    && typeof (t as StatedTotal).cell === 'string');
+  return valid.length > 0 ? valid : undefined;
 }
 
 /** The sheet's named single cells (`TMPS_Inc` → value), when the split recorded any. */
@@ -215,6 +236,64 @@ export function addSkillDerivations(extractions: DocumentExtraction[]): void {
   }
 }
 
+/** An ID or passport number as a comparable key: letters and digits only, upper case. */
+function idKey(value: unknown): string {
+  const key = String(value ?? '').replace(/[^0-9a-z]/gi, '').toUpperCase();
+  return key.length >= 6 ? key : '';
+}
+
+/** A paid-employee figure on a register row: a register that pays its people is the workforce. */
+const SALARY_FIELDS = ['gross_monthly_salary', 'salary', 'basic_salary'];
+
+/**
+ * A learner on the measured entity's own payroll is an EMPLOYED learner.
+ *
+ * Training registers rarely fill in the "Employed?" column, and a blank there
+ * reads as unemployed — the category that earns the most Skills points. The
+ * case usually holds the answer: the employment equity register or the payroll
+ * lists the same people by ID number. A learner whose ID number is on a
+ * register that pays its people (a row with a salary) is marked employed;
+ * every other learner is left exactly as the training register states it.
+ * Each document whose learners were marked says so in a note.
+ */
+export function markRegisteredLearnersEmployed(extractions: DocumentExtraction[]): void {
+  const employed = new Map<string, string>();
+  for (const extraction of extractions) {
+    if (extraction.error) continue;
+    for (const value of extraction.values) {
+      if (value.field !== 'employee_rows' || !Array.isArray(value.value)) continue;
+      const rows = value.value.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object');
+      if (!rows.some((row) => SALARY_FIELDS.some((f) => String(row[f] ?? '').trim() !== ''))) continue;
+      for (const row of rows) {
+        const key = idKey(row.id_number);
+        if (key && !employed.has(key)) employed.set(key, extraction.sourceFile);
+      }
+    }
+  }
+  if (employed.size === 0) return;
+  for (const extraction of extractions) {
+    if (extraction.error) continue;
+    for (const value of extraction.values) {
+      if (value.field !== 'learner_rows' || !Array.isArray(value.value)) continue;
+      const registers = new Set<string>();
+      let marked = 0;
+      for (const row of value.value as Array<Record<string, unknown>>) {
+        if (!row || typeof row !== 'object' || String(row.employed ?? '').trim() !== '') continue;
+        const register = employed.get(idKey(row.id_number));
+        if (!register) continue;
+        row.employed = 'Yes';
+        registers.add(register);
+        marked += 1;
+      }
+      if (marked > 0) {
+        extraction.exceptions.push(
+          `${marked} learner row(s) marked employed: their ID numbers are on the employee register in ${[...registers].join(', ')}.`,
+        );
+      }
+    }
+  }
+}
+
 /** Cached so a case does not rebuild the client per file. */
 let cachedModel: ExtractionModel | null | undefined;
 
@@ -318,7 +397,7 @@ export async function extractCaseEntities(
         // things. Asking a model to "extract the supplier table" from one
         // yields nothing, which is what happened to every ledger until now.
         if (rows) {
-          const ledger = extractLedgerTable(rows, input.filename);
+          const ledger = extractLedgerTable(rows, input.filename, structuredMatrix(input.tables));
           if (ledger) return ledger;
         }
 
@@ -332,6 +411,8 @@ export async function extractCaseEntities(
           // deterministic table read consumes these so the model never has to
           // re-type rows the code already parsed.
           rows,
+          // The totals the sheet states above the table, to check the rows against.
+          statedTotals: structuredStatedTotals(input.tables),
         });
       })(),
       // Entity-level revenue + NPAT off a Finance / summary sheet OR a
@@ -396,6 +477,9 @@ export async function extractCaseEntities(
   // months filed, SED payments inside the period, a ledger's own total, the
   // payroll headcount), worked out here and labelled derived.
   addSkillDerivations(extractions);
+  // Learners on the entity's own payroll are employed learners, whatever the
+  // training register's blank "Employed?" column would otherwise say.
+  markRegisteredLearnersEmployed(extractions);
 
   // Surfaced as a values-free extraction: it cannot move a score, only explain
   // why one moved. Added before resolution so it travels with the case.

@@ -3,13 +3,14 @@
  *
  * A gathering workbook states the sector and the financial year end on its
  * Instructions sheet, and the parser now reads them (`sheet_instructions`).
- * The form is still where they are decided: the workbook fills a field the
- * user left empty, never one the user set, and a difference is shown rather
- * than resolved either way.
+ * The workbook fills a field the user left empty, never overwrites one that
+ * holds a value, and where the two differ the build waits for the user to
+ * take the workbook's value or keep the form's: a sector restored from an
+ * earlier session once scored a Transport company under the generic Codes.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import * as React from "react";
 import { DocumentUploadStart } from "../DocumentUploadStart";
 import { writeFlowSnapshot, type FlowSnapshot } from "../flowSnapshot";
@@ -78,15 +79,41 @@ describe("DocumentUploadStart — the workbook's sector and year end", () => {
     await waitFor(() => expect(screen.getByTestId("button-create-from-documents")).not.toBeDisabled());
   });
 
-  it("never overwrites what the user chose, and says where the workbook differs", async () => {
+  it("never overwrites what the form holds, and says where the workbook differs", async () => {
     restoreRun({ sector: "RCOGP", size: "Generic", yearEnd: "2025-06-30" });
     render(<DocumentUploadStart onCreate={vi.fn()} creating={false} />);
 
     const sectorNote = await screen.findByTestId("workbook-mismatch-sector");
     expect(sectorNote).toHaveTextContent(/sector is Transport/);
-    expect(screen.getByTestId("workbook-mismatch-yearEnd")).toHaveTextContent(/2026-02-28; you entered 2025-06-30/);
+    expect(screen.getByTestId("workbook-mismatch-yearEnd")).toHaveTextContent(/2026-02-28; the form says 2025-06-30/);
     expect((screen.getByTestId("sector-select-build") as HTMLSelectElement).value).toBe("RCOGP");
     expect((screen.getByTestId("docs-year-end") as HTMLInputElement).value).toBe("2025-06-30");
+  });
+
+  it("cannot build a generic scorecard from a restored RCOGP while the workbook says Transport, until the user decides", async () => {
+    restoreRun({ sector: "RCOGP", size: "Generic", yearEnd: "2026-02-28" });
+    render(<DocumentUploadStart onCreate={vi.fn()} creating={false} />);
+
+    await screen.findByTestId("workbook-mismatch-sector");
+    expect(screen.getByTestId("button-create-from-documents")).toBeDisabled();
+
+    // One click takes the workbook's sector; nothing is left to settle.
+    fireEvent.click(screen.getByTestId("workbook-mismatch-sector-use-workbook"));
+    await waitFor(() => expect((screen.getByTestId("sector-select-build") as HTMLSelectElement).value).toBe("TRANSPORT"));
+    expect(screen.queryByTestId("workbook-mismatch-sector")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("button-create-from-documents")).not.toBeDisabled());
+  });
+
+  it("keeping the form's value on purpose settles it, and the note stays", async () => {
+    restoreRun({ sector: "TRANSPORT", size: "QSE", yearEnd: "2025-06-30" });
+    render(<DocumentUploadStart onCreate={vi.fn()} creating={false} />);
+
+    await screen.findByTestId("workbook-mismatch-yearEnd");
+    expect(screen.getByTestId("button-create-from-documents")).toBeDisabled();
+    fireEvent.click(screen.getByTestId("workbook-mismatch-yearEnd-keep-form"));
+    await waitFor(() => expect(screen.getByTestId("button-create-from-documents")).not.toBeDisabled());
+    expect((screen.getByTestId("docs-year-end") as HTMLInputElement).value).toBe("2025-06-30");
+    expect(screen.getByTestId("workbook-mismatch-yearEnd")).toHaveTextContent(/kept the form's/);
   });
 
   it("stays silent when the user's value is the workbook's", async () => {

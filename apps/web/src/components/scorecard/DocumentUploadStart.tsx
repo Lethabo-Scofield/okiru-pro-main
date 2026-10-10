@@ -45,7 +45,7 @@ import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
-import { formFactMismatches, workbookFormFacts } from "@/lib/workbookInstructionFacts";
+import { formFactMismatches, unsettledMismatches, workbookFormFacts, type FormFactMismatch } from "@/lib/workbookInstructionFacts";
 import {
   autofillProcurementFromCertificates,
   type AutofillReport,
@@ -659,9 +659,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
 
   // The sector and year end the workbook's Instructions sheet states. They fill
   // the form only where it is EMPTY — once per stated value, so a field the user
-  // cleared stays cleared — and never replace what the user chose; where the
-  // user's value differs, the note under the Build bar says so.
+  // cleared stays cleared. Where the form already holds something else (chosen
+  // before the read, or restored from an earlier session), Build waits until
+  // the user takes the workbook's value or keeps their own.
   const workbookFacts = useMemo(() => workbookFormFacts(parserCase), [parserCase]);
+  const [keptFormFacts, setKeptFormFacts] = useState<FormFactMismatch[]>([]);
   const prefilledFactsRef = useRef("");
   useEffect(() => {
     const key = `${workbookFacts.sector ?? ""}|${workbookFacts.yearEnd ?? ""}`;
@@ -671,6 +673,12 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     if (workbookFacts.yearEnd) setYearEnd((prev) => prev || workbookFacts.yearEnd!);
   }, [workbookFacts]);
   const workbookMismatches = formFactMismatches({ sector, yearEnd }, workbookFacts);
+  const openMismatches = unsettledMismatches(workbookMismatches, keptFormFacts);
+  const takeWorkbookFact = (m: FormFactMismatch) => {
+    if (m.field === "sector") setSector(m.use);
+    else setYearEnd(m.use);
+  };
+  const keepFormFact = (m: FormFactMismatch) => setKeptFormFacts((prev) => [...prev, m]);
 
   const mapped: ParserWorkbookMapResult | null = useMemo(
     () => (parserCase ? mapParserCaseToWorkbookSections(parserCase) : null),
@@ -1867,9 +1875,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   // A document added after the read but never read would be filed under the
   // company with nothing taken from it — the forgotten document, forgotten
   // again. Read it or remove it first.
+  // A sector or year end the workbook contradicts is settled first (see
+  // unsettledMismatches): it decides the scorecard and the measured year.
   const canCreate =
     Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && yearEndValid &&
-    unreadFiles.length === 0 && !parsing && !creating;
+    unreadFiles.length === 0 && openMismatches.length === 0 && !parsing && !creating;
 
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
@@ -3232,16 +3242,43 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid || workbookMismatches.length > 0) && (
               <div className="mt-2.5 space-y-1 border-t border-white/[0.05] pt-2.5 text-[11.5px] leading-5">
                 {/* The workbook states a different sector or year end from the
-                    one chosen here. The choice here stands; this only makes
-                    sure it is a choice, not an oversight. */}
-                {workbookMismatches.map((m) => (
-                  <p key={m.field} className="text-amber-300/90" data-testid={`workbook-mismatch-${m.field}`}>
-                    {m.field === "sector"
-                      ? `Your workbook's Instructions sheet says the sector is ${m.workbook}; you chose ${activeSector?.label ?? m.form}.`
-                      : `Your workbook's Instructions sheet says the financial year-end is ${m.workbook}; you entered ${m.form}.`}{" "}
-                    We use yours — change it if the workbook is right.
-                  </p>
-                ))}
+                    form. It decides the scorecard or the measured year, so the
+                    build waits for a choice: the workbook's value (the default,
+                    one click) or the form's, kept on purpose. */}
+                {workbookMismatches.map((m) => {
+                  const open = openMismatches.includes(m);
+                  const formLabel = m.field === "sector" ? activeSector?.label ?? m.form : m.form;
+                  return (
+                    <div key={m.field} className={open ? "text-amber-300/90" : "text-[color:var(--muted)]"} data-testid={`workbook-mismatch-${m.field}`}>
+                      <p>
+                        {m.field === "sector"
+                          ? `Your workbook's Instructions sheet says the sector is ${m.workbook}; the form says ${formLabel}.`
+                          : `Your workbook's Instructions sheet says the financial year-end is ${m.workbook}; the form says ${formLabel}.`}
+                        {open ? " Choose one before building." : " You kept the form's."}
+                      </p>
+                      {open && (
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => takeWorkbookFact(m)}
+                            className="rounded-lg bg-white/90 px-2.5 py-1 text-[11.5px] font-semibold text-black"
+                            data-testid={`workbook-mismatch-${m.field}-use-workbook`}
+                          >
+                            Use the workbook's: {m.workbook}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => keepFormFact(m)}
+                            className="rounded-lg border border-white/15 px-2.5 py-1 text-[11.5px] text-white/80"
+                            data-testid={`workbook-mismatch-${m.field}-keep-form`}
+                          >
+                            Keep {formLabel}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {(!sector || !size) && (
                   <p className="text-amber-300/90" data-testid="scoring-as-line">
                     Choose the sector and size — they decide which scorecard rules your documents are scored against.

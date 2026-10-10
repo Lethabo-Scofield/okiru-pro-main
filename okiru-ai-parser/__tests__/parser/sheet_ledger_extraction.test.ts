@@ -156,7 +156,8 @@ describe('TMPS exclusions', () => {
       { DATE: '27/03/2024', DESCRIPTION: "INV'S FOR RATES ETC", DEBIT: 32901, 'O/S BALANCE': 32901 },
     ];
     const extraction = extractLedgerTable(rows, 'EKJURHULENI LEDGER.xlsx')!;
-    expect(extraction.values).toHaveLength(0);
+    // No supplier row: the spend is not handed over. The entries stay, as evidence only.
+    expect(extraction.values.map((v) => v.field)).toEqual(['ledger_entry_rows']);
     expect(extraction.exceptions.join(' ')).toContain('EXCLUDE');
   });
 });

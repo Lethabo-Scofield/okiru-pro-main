@@ -132,6 +132,78 @@ function isMeaningfulRow(row: string[]): boolean {
   return row.some((c) => !isBlank(c ?? '') && !isZeroResidue(c ?? ''));
 }
 
+/** A whole number as printed: "14", "14.0". Null otherwise. */
+function wholeNumber(cell: string): number | null {
+  const t = cell.trim();
+  if (!/^\d{1,6}(?:\.0+)?$/.test(t)) return null;
+  return Number(t);
+}
+
+/**
+ * Columns that only NUMBER the rows: "1, 2, 3 … 3000" down the left edge of a
+ * gathering template, typed or as `=A19+1`. A template numbers every row it
+ * offers, filled or not, so the number says nothing about whether the row
+ * holds a record. A column is a counter when it holds at least five whole
+ * numbers and nearly every one (90%) is the one above it plus one.
+ */
+export function counterColumns(body: string[][], width: number): boolean[] {
+  return Array.from({ length: width }, (_, c) => {
+    const values: number[] = [];
+    for (const row of body) {
+      const cell = row[c] ?? '';
+      if (isBlank(cell)) continue;
+      const n = wholeNumber(cell);
+      if (n === null) return false;
+      values.push(n);
+    }
+    if (values.length < 5) return false;
+    let steps = 0;
+    for (let i = 1; i < values.length; i++) if (values[i] === values[i - 1] + 1) steps++;
+    return steps / (values.length - 1) >= 0.9;
+  });
+}
+
+/** A template's default answer in a dropdown column: Yes / No / N/A, a dash, a tick. */
+function isFlagDefault(cell: string): boolean {
+  return /^(?:yes|no|y|n|n\/?a|true|false|-|–|x|✓)$/i.test(cell.trim());
+}
+
+/**
+ * Rows a TEMPLATE offers but nobody filled in. A gathering workbook numbers
+ * thousands of rows below its register (`=A19+1`), presets a dropdown's
+ * default ("No") on some of them and runs its formulas down every one (an age
+ * of 0.00, a blank youth flag). Such a row has no identity of its own, and
+ * nothing else on it is evidence: only its row number, preset Yes/No answers
+ * and zero results. Read as a continuation row, it inherited the last
+ * employee's name, race and level — thousands of copies of the last employee
+ * on one sheet, hundreds of the last director on another, a hundred owners
+ * where there was one.
+ *
+ * A real continuation row always carries something of its own: an SED
+ * ledger's date and amount, a training register's learner and ID number.
+ * Those are never flags, counters or zeros, so they are never residue.
+ */
+export function templateResidueRows(body: string[][], width: number, identityCol: number): boolean[] {
+  const counters = counterColumns(body, width);
+  return body.map((row) => {
+    if (identityCol >= 0 && !isBlank(row[identityCol] ?? '')) return false;
+    let any = false;
+    for (let c = 0; c < width; c++) {
+      const cell = row[c] ?? '';
+      if (isBlank(cell)) continue;
+      any = true;
+      if (counters[c] || isZeroResidue(cell) || isFlagDefault(cell)) continue;
+      return false;
+    }
+    return any;
+  });
+}
+
+/** The identity column `dittoFill` uses: the leftmost text-dominant column, or -1. */
+export function identityColumn(body: string[][], width: number): number {
+  return textDominantColumns(body, width).findIndex(Boolean);
+}
+
 /**
  * A text cell that breaks off mid-phrase because the sheet wrapped it onto the
  * next row: "Truck Mounted Crane -", "Basic Rigging and-" — a dash straight
@@ -257,10 +329,24 @@ export interface DittoOptions {
   joinWrappedText?: boolean;
   /** Never ditto-fill a per-row column (a learner's name, an employee number). */
   keepPerRowColumns?: boolean;
+  /**
+   * Drop the rows a template offers but nobody filled in (templateResidueRows):
+   * numbered, preset to "No", zero — never a record, never a continuation.
+   */
+  skipTemplateRows?: boolean;
 }
 
-/** The plain ditto, with neither refinement: what the ESG reading uses. */
-export const PLAIN_DITTO: DittoOptions = Object.freeze({ joinWrappedText: false, keepPerRowColumns: false });
+/** The plain ditto, with no refinement: what the ESG reading uses. */
+export const PLAIN_DITTO: DittoOptions = Object.freeze({ joinWrappedText: false, keepPerRowColumns: false, skipTemplateRows: false });
+
+/**
+ * Which body rows are template residue under these options: none when the
+ * reading keeps them (the ESG reading), else templateResidueRows.
+ */
+export function residueRowsFor(body: string[][], width: number, options: DittoOptions = {}): boolean[] {
+  if (options.skipTemplateRows === false) return body.map(() => false);
+  return templateResidueRows(body, width, identityColumn(body, width));
+}
 
 /**
  * Blank-means-ditto: fill blank TEXT cells of a continuation row from the last
@@ -272,6 +358,14 @@ export const PLAIN_DITTO: DittoOptions = Object.freeze({ joinWrappedText: false,
  * each unless `options` turns it off (see DittoOptions).
  */
 export function dittoFill(body: string[][], width: number, options: DittoOptions = {}): string[][] {
+  // Template residue is blanked first, so it neither inherits a record nor
+  // counts towards which columns are text or per-row.
+  const residue = residueRowsFor(body, width, options);
+  const kept = residue.some(Boolean) ? body.map((row, i) => (residue[i] ? row.map(() => '') : row)) : body;
+  return dittoFillRows(kept, width, options);
+}
+
+function dittoFillRows(body: string[][], width: number, options: DittoOptions): string[][] {
   const textCol = textDominantColumns(body, width);
   const identityCol = textCol.findIndex(Boolean);
   if (identityCol === -1) return body;
@@ -337,7 +431,9 @@ function renderMainRegion(rows: string[][], options: DittoOptions): string {
     return cell || `col${c + 1}`;
   });
 
-  const body = dittoFill(rows.slice(headerIdx + 1).filter((r) => r.some((c) => !isBlank(c))), width, options);
+  const hasContent = (r: string[]) => r.some((c) => !isBlank(c));
+  // Template residue comes back blank from the fill: it is not a row of the table.
+  const body = dittoFill(rows.slice(headerIdx + 1).filter(hasContent), width, options).filter(hasContent);
 
   const lines = [
     ...preamble,

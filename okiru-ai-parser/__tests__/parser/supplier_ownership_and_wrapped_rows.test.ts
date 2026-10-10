@@ -70,28 +70,32 @@ describe('supplier ownership columns', () => {
     expect(alpha['Black Woman Ownership (%)']).toBe('16.78%');
   });
 
-  it('the supplier table asks for, and keeps, black ownership, black woman ownership and both flags', async () => {
-    const [doc] = splitWorkbookIntoSheets(book({ Procurement: procurementSheet(), Notes: XLSX.utils.aoa_to_sheet([['a', 'b'], ['c', 'd']]) }));
+  it('a supplier table under headings the template does not print asks the model for black ownership, black woman ownership and both flags', async () => {
+    const sheet = procurementSheet();
+    // A creditor list, not the template's "Supplier Name": the headings do not settle the table.
+    (sheet.A3 as XLSX.CellObject).v = 'Creditor';
+    const [doc] = splitWorkbookIntoSheets(book({ Procurement: sheet, Notes: XLSX.utils.aoa_to_sheet([['a', 'b'], ['c', 'd']]) }));
     const prompts: string[] = [];
-    const result = await extractSheetTable(
-      mappingModel('suppliers', {
-        'Supplier Name': 'supplier_name',
-        'Expenditure (excluding VAT)': 'claimed_spend_ex_vat',
-        'Supplier Classification': 'supplier_classification',
-        'BEE Level': 'bee_level',
-        '51% or more black owned': 'is_51_black_owned',
-        'Black Ownership (%)': 'supplier_black_ownership_percentage',
-        '30% or more black woman owned': 'is_30_black_woman_owned',
-        'Black Woman Ownership (%)': 'supplier_black_women_ownership_percentage',
-      }, prompts),
+    await extractSheetTable(
+      mappingModel('suppliers', { Creditor: 'supplier_name', 'Expenditure (excluding VAT)': 'claimed_spend_ex_vat' }, prompts),
       'ESD',
       { filename: 'pp.xlsm › Procurement', raw_text: doc.text, markdown: doc.markdown, rows: doc.rows },
     );
-
     const mappingPrompt = prompts.find((p) => p.includes('TARGET FIELDS'))!;
     for (const field of ['supplier_black_ownership_percentage', 'supplier_black_women_ownership_percentage', 'is_51_black_owned', 'is_30_black_woman_owned']) {
       expect(mappingPrompt).toContain(field);
     }
+  });
+
+  it('the template\'s own supplier headings keep black ownership, black woman ownership and both flags, with no model asked', async () => {
+    const [doc] = splitWorkbookIntoSheets(book({ Procurement: procurementSheet(), Notes: XLSX.utils.aoa_to_sheet([['a', 'b'], ['c', 'd']]) }));
+    const prompts: string[] = [];
+    const result = await extractSheetTable(
+      mappingModel('suppliers', {}, prompts),
+      'ESD',
+      { filename: 'pp.xlsm › Procurement', raw_text: doc.text, markdown: doc.markdown, rows: doc.rows },
+    );
+    expect(prompts).toEqual([]);
 
     const rows = result!.values[0].value as Array<Record<string, unknown>>;
     expect(result!.values[0].field).toBe('supplier_rows');

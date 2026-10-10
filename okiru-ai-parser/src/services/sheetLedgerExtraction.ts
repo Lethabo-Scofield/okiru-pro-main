@@ -34,6 +34,8 @@ const DEBIT_HEADER = /^(debit|invoice[sd]?|invoice amount|charges?)$/i;
 const CREDIT_HEADER = /^(credit|payments?|paid|receipts?)$/i;
 const BALANCE_HEADER = /(balance|o\/?s)/i;
 const GENERIC_AMOUNT_HEADER = /^(amount|value|total|spend)$/i;
+const DESCRIPTION_HEADER = /^(description|details?|narrative|particulars)$/i;
+const REFERENCE_HEADER = /^(reference|ref\.?|invoice (no\.?|number)|doc(ument)? (no\.?|number))$/i;
 /** A column that names a party — its presence means this is a schedule, not a ledger. */
 const NAME_HEADER = /(supplier|vendor|beneficiary|creditor|payee|account name|company)/i;
 
@@ -104,12 +106,22 @@ const LIKELY_EXCLUSION_NAME = /\b(municipalit|metro|city of|local authority|esko
  */
 const LIKELY_EXCLUSION_DESCRIPTION = /\b(rates|municipal|electricity|water|refuse|sanitation|sewer|property tax|levies|licence|license)\b/i;
 
+/** One entry of a ledger, under the ledger skill's own row names. */
+export interface LedgerEntry {
+  entry_date?: unknown;
+  entry_reference?: unknown;
+  entry_description?: unknown;
+  entry_amount: number;
+}
+
 export interface LedgerReading {
   supplierName: string;
   /** Sum of the invoice lines — the spend this ledger evidences. */
   spend: number;
   /** How many invoice lines were summed. */
   lines: number;
+  /** The lines themselves, in sheet order: what the spend is the sum of. */
+  entries: LedgerEntry[];
   /** Which column was treated as spend, for the log and the audit trail. */
   spendColumn: string;
   /** A total stated on the sheet, when one is present. */
@@ -143,7 +155,11 @@ export function readLedgerSheet(
   if (!spendColumn) return null;
 
   const balanceColumn = findHeader(headers, BALANCE_HEADER);
+  const dateColumn = findHeader(headers, DATE_HEADER);
+  const descriptionColumn = findHeader(headers, DESCRIPTION_HEADER);
+  const referenceColumn = findHeader(headers, REFERENCE_HEADER);
   const amounts: number[] = [];
+  const entries: LedgerEntry[] = [];
   let labelledTotal: number | undefined;
 
   for (const row of rows) {
@@ -169,6 +185,12 @@ export function readLedgerSheet(
     }
 
     amounts.push(value);
+    const entry: LedgerEntry = { entry_amount: value };
+    const stated = (column: string | undefined) => (column && String(row[column] ?? '').trim() !== '' ? row[column] : undefined);
+    if (stated(dateColumn) !== undefined) entry.entry_date = stated(dateColumn);
+    if (stated(referenceColumn) !== undefined) entry.entry_reference = stated(referenceColumn);
+    if (stated(descriptionColumn) !== undefined) entry.entry_description = stated(descriptionColumn);
+    entries.push(entry);
   }
 
   if (amounts.length === 0) return null;
@@ -205,6 +227,7 @@ export function readLedgerSheet(
     supplierName,
     spend,
     lines: amounts.length,
+    entries,
     spendColumn,
     labelledTotal,
     possibleTmpsExclusion,
@@ -213,19 +236,42 @@ export function readLedgerSheet(
 }
 
 /**
+ * The period a ledger's title states ("RECON : ACME FOR PERIOD 01 MARCH '24 TO
+ * FEB '25"), as printed, from the rows above its table. Null when no title
+ * row names a period.
+ */
+export function ledgerTitlePeriod(matrix: unknown[][] | undefined): string | null {
+  for (const row of (matrix ?? []).slice(0, 15)) {
+    // The title sits above the table: stop at the header row.
+    if (row.some((cell) => typeof cell === 'string' && DATE_HEADER.test(cell.trim()))) break;
+    for (const cell of row) {
+      if (typeof cell !== 'string') continue;
+      const m = cell.match(/\b(?:for\s+(?:the\s+)?)?period(?:\s+(?:from|of))?\s*:?\s*(.*\d.*)$/i);
+      const period = m?.[1]?.replace(/\s+/g, ' ').trim();
+      if (period) return period;
+    }
+  }
+  return null;
+}
+
+/**
  * Read a ledger as a one-row supplier table, so it reaches the workbook by the
  * same path a spend schedule does.
  *
  * Deliberately NOT one row per invoice line: a ledger evidences one supplier's
  * total, and emitting its lines as separate supplier rows would present a
- * single account as twenty suppliers.
+ * single account as twenty suppliers. The lines travel beside it as
+ * `ledger_entry_rows` (the ledger skill's own names), evidence a reviewer can
+ * count and date, never placed as rows; the title's period as `ledger_period`.
  */
 export function extractLedgerTable(
   rows: Array<Record<string, unknown>>,
   filename: string,
+  matrix?: unknown[][],
 ): DocumentExtraction | null {
   const reading = readLedgerSheet(rows, filename);
   if (!reading) return null;
+  const period = ledgerTitlePeriod(matrix);
 
   logger.info('Read supplier ledger', {
     file: filename,
@@ -242,7 +288,7 @@ export function extractLedgerTable(
   // own judgement — the direction that gets a certificate revoked. The finding
   // still reaches the user, who can enter it deliberately if the agency rules
   // it includable.
-  const values = reading.possibleTmpsExclusion
+  const values: DocumentExtraction['values'] = reading.possibleTmpsExclusion
     ? []
     : [{
       field: 'supplier_rows',
@@ -253,6 +299,9 @@ export function extractLedgerTable(
       sourceFile: filename,
       sourceDocumentId: 'sheet_table__esd',
     }];
+  // The evidence behind the figure, whether or not the figure is handed over.
+  values.push({ field: 'ledger_entry_rows', value: reading.entries, sourceFile: filename, sourceDocumentId: 'sheet_table__esd' });
+  if (period) values.push({ field: 'ledger_period', value: period, sourceFile: filename, sourceDocumentId: 'sheet_table__esd' });
 
   return {
     documentId: 'sheet_table__esd',
