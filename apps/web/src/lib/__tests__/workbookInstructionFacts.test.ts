@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import * as XLSX from "xlsx";
-import { formFactMismatches, workbookFormFacts } from "../workbookInstructionFacts";
+import { formFactMismatches, unsettledMismatches, workbookFormFacts } from "../workbookInstructionFacts";
 import { extractBeeGatheringBuffer } from "../excelImport";
 
 const profile = (sourceFile: string, sector: string, yearEnd: unknown) => ({
@@ -51,6 +51,23 @@ describe("formFactMismatches", () => {
     expect(formFactMismatches({ sector: "RCOGP", yearEnd: "2025-06-30" }, facts).map((m) => m.field)).toEqual(["sector", "yearEnd"]);
     expect(formFactMismatches({ sector: "", yearEnd: "" }, facts)).toEqual([]);
     expect(formFactMismatches({ sector: "TRANSPORT", yearEnd: "2026-02-28" }, facts)).toEqual([]);
+  });
+
+  it("says what taking the workbook's value sets, in the form's own terms", () => {
+    expect(formFactMismatches({ sector: "RCOGP", yearEnd: "2025-06-30" }, facts).map((m) => m.use)).toEqual(["TRANSPORT", "2026-02-28"]);
+  });
+});
+
+describe("unsettledMismatches", () => {
+  const facts = workbookFormFacts(caseOf(profile("a.xlsx › Instructions", "Transport", "2026-02-28")));
+
+  it("a disagreement stays open until the user keeps the form's value for that exact pair", () => {
+    const mismatches = formFactMismatches({ sector: "RCOGP", yearEnd: "2025-06-30" }, facts);
+    expect(unsettledMismatches(mismatches, []).map((m) => m.field)).toEqual(["sector", "yearEnd"]);
+    expect(unsettledMismatches(mismatches, [mismatches[1]]).map((m) => m.field)).toEqual(["sector"]);
+    // Kept for one value, asked again for another.
+    const later = formFactMismatches({ sector: "RCOGP", yearEnd: "2025-03-31" }, facts);
+    expect(unsettledMismatches(later, [mismatches[1]]).map((m) => m.field)).toEqual(["sector", "yearEnd"]);
   });
 });
 

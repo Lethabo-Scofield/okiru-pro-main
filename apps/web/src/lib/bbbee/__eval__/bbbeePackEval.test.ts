@@ -29,6 +29,8 @@ import { describe, expect, it } from "vitest";
 import { mapParserCaseToWorkbookSections, type ParserCaseLike } from "@/lib/parserWorkbookMap";
 import { mergeWorkbookSections, parserExtractionsToWorkbook, toWorkbookSections } from "@/lib/parserToWorkbook";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
+import { workbookFormFacts } from "@/lib/workbookInstructionFacts";
+import { normalizeSectorDeterministic } from "@/lib/excelImport";
 import { projectWorkbookToClient, type WorkbookData } from "../../../../server/workbookRoutes";
 import { TRANSPORT_QSE_CALCULATOR_CONFIG as CFG } from "@toolkit/lib/sectors/transport-qse";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -94,9 +96,17 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
       .flatMap((d) => d.fields ?? [])
       .find((f) => /^measured entity$/i.test(f.label))?.value;
     const companyName = String(measured ?? "Measured entity");
+    // The sector and year end the create form builds with: an empty form takes
+    // the workbook's (workbookFormFacts), and a form that disagrees cannot
+    // build until the user settles it. Measured, not assumed: a live build once
+    // scored this pack under the generic Codes because a restored sector beat
+    // the workbook, and a hard-coded Transport here could not see it.
+    const facts = workbookFormFacts(parserCase);
+    expect(facts.sector, "the sector the workbook states, in the form's terms").toBe(normalizeSectorDeterministic(key.sector ?? ""));
+    if (key.yearEnd) expect(facts.yearEnd, "the year end the workbook states").toBe(key.yearEnd);
     sections["company-information"] = {
       ...(sections["company-information"] ?? {}),
-      meta: { ...(sections["company-information"]?.meta ?? {}), companyName, industrySector: "Transport", scorecardType: "QSE" },
+      meta: { ...(sections["company-information"]?.meta ?? {}), companyName, industrySector: facts.sector, scorecardType: "QSE" },
     };
 
     // Entity aliases from the extraction (registered names), as handleCreate builds them.
@@ -106,7 +116,7 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
     for (const e of parserCase.ai_entities?.extractions ?? []) {
       for (const v of e?.values ?? []) if (/entity_name|company_name/i.test(String(v?.field ?? ""))) add(v?.value);
     }
-    const reconciled = reconcileEntity(sections as never, { sectorCode: "TRANSPORT", scorecardType: "QSE", entityAliases: [companyName, ...aliases] });
+    const reconciled = reconcileEntity(sections as never, { sectorCode: facts.sector!, scorecardType: "QSE", entityAliases: [companyName, ...aliases] });
 
     const wb: WorkbookData = {
       companyId: "eval", ownerOrganizationId: null, ownerUserId: "eval",

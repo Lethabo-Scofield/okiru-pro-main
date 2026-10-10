@@ -6,9 +6,10 @@
  * The form is where the sector and year end are decided: the sector picks the
  * scorecard the company is judged against, the year end the period every dated
  * pillar is measured over. The workbook's statement of them is evidence the
- * form should not ignore, but never an authority over what the user chose. So
- * it fills a field the user left EMPTY and, where the user's value differs,
- * the difference is shown — never resolved silently either way.
+ * form must not ignore. So it fills a field the user left EMPTY and, where the
+ * form's value differs, the build waits for the user to take the workbook's
+ * value or keep their own (unsettledMismatches) — never resolved silently
+ * either way.
  */
 import { normalizeSectorDeterministic } from "@/lib/excelImport";
 import { parseWorkbookDate } from "@/components/workbook/sections";
@@ -85,6 +86,8 @@ export interface FormFactMismatch {
   form: string;
   /** What the workbook states. */
   workbook: string;
+  /** The workbook's value in the form's own terms (a sector code, an ISO date): what "use the workbook's" sets. */
+  use: string;
 }
 
 /**
@@ -100,11 +103,27 @@ export function formFactMismatches(
   const out: FormFactMismatch[] = [];
   const formSector = normalizeSectorDeterministic(form.sector) ?? form.sector;
   if (form.sector && facts.sector && formSector !== facts.sector) {
-    out.push({ field: "sector", form: form.sector, workbook: facts.sectorStated ?? facts.sector });
+    out.push({ field: "sector", form: form.sector, workbook: facts.sectorStated ?? facts.sector, use: facts.sector });
   }
   const formYearEnd = isoYearEnd(form.yearEnd);
   if (form.yearEnd && facts.yearEnd && formYearEnd !== facts.yearEnd) {
-    out.push({ field: "yearEnd", form: form.yearEnd, workbook: facts.yearEnd });
+    out.push({ field: "yearEnd", form: form.yearEnd, workbook: facts.yearEnd, use: facts.yearEnd });
   }
   return out;
+}
+
+/**
+ * The disagreements the user has not yet settled.
+ *
+ * The sector decides which scorecard the company is judged against and the
+ * year end which twelve months every dated pillar covers, so a form that
+ * disagrees with the workbook cannot build on its own: a value restored from an
+ * earlier session, or picked before the documents were read, silently beat the
+ * workbook and scored a Transport company under the generic Codes, five levels
+ * down. Each disagreement is settled by taking the workbook's value (the form
+ * then agrees) or by keeping the form's, which the user does for that exact
+ * pair of values; a new disagreement asks again.
+ */
+export function unsettledMismatches(mismatches: FormFactMismatch[], kept: FormFactMismatch[]): FormFactMismatch[] {
+  return mismatches.filter((m) => !kept.some((k) => k.field === m.field && k.form === m.form && k.workbook === m.workbook));
 }
