@@ -97,7 +97,7 @@ export function ConfirmUploadDialog({
           </ul>
         </div>
 
-        <Disclosure summary="What to check" testId="confirm-upload-checks" summaryClassName="text-[12px]">
+        <Disclosure summary="What to check" testId="confirm-upload-checks" summaryClassName="text-[12px]" tone="dialog">
           <ul className="list-disc space-y-1 pl-5 text-[12.5px] leading-5 text-muted-foreground">
             {CHECKS.map((check) => (
               <li key={check}>{check}</li>
