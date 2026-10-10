@@ -27,6 +27,7 @@ import { modelClassificationEnabled } from './documentClassification.js';
 import { VERIFICATION_DOCUMENT_MATRIX } from '../../schemas/verification_document_matrix.js';
 import { extractionDomain } from './extractionDomain.js';
 import { skillMenuLines, type Skill } from './skills.js';
+import { openReadMode } from './openFacts.js';
 import {
   ADJUDICATION_MENU,
   MIN_READABLE_CHARS,
@@ -194,6 +195,15 @@ export async function adjudicateDocumentType(
   const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0;
   const reason = String(parsed?.reason ?? '').trim().slice(0, 300);
 
+  // A confident "none of these" is an answer, not a shrug: the caller stops
+  // forcing the document into the keyword scorer's guess (an Other document).
+  // (PARSER_OPEN_READ=off keeps the old reading: NONE is no answer.)
+  if (openReadMode() !== 'off' && parsed && picked.toUpperCase() === 'NONE' && confidence >= ADJUDICATION_FLOOR) {
+    const none: TypeAdjudication = { documentType: '', none: true, confidence, reason };
+    cache.set(key, none);
+    logger.info('Document is none of the candidate types', { file: input.filename, confidence, reason });
+    return none;
+  }
   if (!parsed || !match || picked.toUpperCase() === 'NONE' || confidence < ADJUDICATION_FLOOR) {
     logger.info('Type adjudication declined', { file: input.filename, picked: picked || null, confidence });
     cache.set(key, null);

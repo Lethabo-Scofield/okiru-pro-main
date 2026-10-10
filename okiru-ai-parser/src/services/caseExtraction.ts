@@ -20,7 +20,7 @@ import {
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { extractEntityNameFallback } from './entityNameExtraction.js';
-import { classifyDocument, routingElement, specForSkill } from './documentClassification.js';
+import { classifyDocument, isOtherClassification, routingElement, specForSkill } from './documentClassification.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
@@ -42,7 +42,9 @@ import {
 } from './entityCalculatorMapping.js';
 import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
 import { reviewCase } from './caseReview.js';
-import { agentCasePass, agentPassForDocument, type AgentCaseContext } from './agentExtraction.js';
+import { agentCasePass, agentPassForDocument, namesListedType, type AgentCaseContext } from './agentExtraction.js';
+import { addOtherDocumentRead, agentOnOtherDocument, proposeOpenMappings } from './openRead.js';
+import { activeOpenSkill } from './openFacts.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -297,13 +299,18 @@ export async function extractCaseEntities(
     // with that type's spec, not with whatever keyword retrieval ranks first —
     // retrieval read a donation's proof of payment as an ESD invoice.
     const skillSpec = specForSkill(classification);
+    // Pass A says the document is NONE of the listed types: it is not read
+    // under whatever spec retrieval ranks first (that is a forced type); it is
+    // read for what it is, by the open read below.
+    // (Only with the open read on: with it off, every document is read as before.)
+    const otherByClassifier = activeOpenSkill('bbbee') !== null && isOtherClassification(classification);
 
     // Matrix-spec extraction (single evidence records) AND, for a workbook sheet
     // whose element is clear from its name, TABLE extraction (every row). The
     // matrix specs cannot emit a table of suppliers/beneficiaries; this does,
     // which is what carries the Procurement and SED points.
     const [specResults, tableResult, financialsResult] = await Promise.all([
-      extractDocument(model, {
+      otherByClassifier ? Promise.resolve([] as DocumentExtraction[]) : extractDocument(model, {
         filename: input.filename,
         markdown: input.markdown,
         raw_text: input.raw_text,
@@ -367,10 +374,32 @@ export async function extractCaseEntities(
       const profile = instructionsExtraction(instructions, workbookFile);
       if (profile) results.push(profile);
     }
+    // A standalone document no listed reader read anything from is an Other
+    // document: read for its identity and facts (openRead.ts). Never a
+    // workbook sheet: its rows are the readers' above.
+    let otherDocument = false;
+    if (!sheetName) {
+      const open = await addOtherDocumentRead(model, input, results, {
+        domain: 'bbbee',
+        classifierLabel: classification?.documentType ?? null,
+        byClassifier: otherByClassifier,
+        // A listed type a classifier named (Pass A's skill, or the rule-based
+        // type the route passes in) keeps the document that type.
+        typed: Boolean(skillSpec)
+          || namesListedType(options.agent?.deterministic?.find((d) => d.filename === input.filename)?.document_type),
+      });
+      results = open.results;
+      otherDocument = open.other;
+    }
     // Agent loop (off by default): a cited second read of a hard document.
     // It only fills gaps; disagreements become exceptions; a failure returns
-    // the first-pass results untouched.
-    if (agentPass) results = await agentPassForDocument(model, input, results, agentPass);
+    // the first-pass results untouched. An Other document is read as the open
+    // skill's target, and only when its open read read too little.
+    if (agentPass) {
+      results = otherDocument
+        ? await agentOnOtherDocument(model, input, results, agentPass, 'bbbee')
+        : await agentPassForDocument(model, input, results, agentPass);
+    }
     // Sub-progress: the resolve phase is the multi-minute, rate-limited part of
     // a paid run. Reporting each document as its AI read lands keeps the user on
     // the page (and makes the "reconciling your company profile" step visible).
@@ -513,6 +542,11 @@ export async function extractCaseEntities(
     unfilledKeys: unfilledCalculatorKeys(calculator.payload),
     files: inputs.map((input) => input.filename),
   });
+  // Open facts that mean a calculator input are PROPOSED on their document,
+  // as suggestions a person confirms in the review. After the payload is
+  // built, and never into it.
+  await proposeOpenMappings(model, extractions, 'bbbee');
+
   for (const finding of reviewFindings) {
     extractions[0]?.exceptions.push(
       `${finding.severity === 'error' ? 'Analyst review' : 'Analyst note'}: ${finding.finding}`

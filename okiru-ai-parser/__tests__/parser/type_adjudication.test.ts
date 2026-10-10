@@ -194,8 +194,10 @@ describe('adjudicateDocumentType — the model chooses from a closed menu, by pu
     expect(String(user)).toMatch(/Ownership Confirmation/);
   });
 
-  it('declines on NONE, on a guess below the floor, and on a name that is not on the menu', async () => {
-    expect(await adjudicateDocumentType(fakeModel('{"document_type":"NONE","confidence":0.9}'), input, candidates)).toBeNull();
+  it('declines on an unsure NONE, on a guess below the floor, and on a name that is not on the menu', async () => {
+    // A confident NONE is an answer (an Other document, pinned in
+    // open_read.test.ts); below the floor it is still no answer at all.
+    expect(await adjudicateDocumentType(fakeModel('{"document_type":"NONE","confidence":0.4}'), input, candidates)).toBeNull();
     resetAdjudicationCacheForTest();
     expect(await adjudicateDocumentType(fakeModel('{"document_type":"Ownership Confirmation","confidence":0.4}'), input, candidates)).toBeNull();
     resetAdjudicationCacheForTest();

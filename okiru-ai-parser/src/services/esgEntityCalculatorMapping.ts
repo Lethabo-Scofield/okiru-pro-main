@@ -1033,6 +1033,28 @@ export function esgFieldElementIndex(
   return index;
 }
 
+/**
+ * The ESG keys an open fact may be PROPOSED for (openRead.ts), in the
+ * allowlist's own words: the semantic pass's slots, nothing else.
+ */
+export function esgOpenFactSlots(): MappableKey[] {
+  return esgMappableKeys();
+}
+
+/**
+ * What an open fact would be as this ESG calculator input — the declared
+ * mapping's coercion for the key (or the key's own type), then the allowlist —
+ * and the parser field the declared table maps onto it. Proposals only:
+ * nothing here places a value in a payload.
+ */
+export function esgOpenFactSlot(key: string, value: unknown): { coerced: unknown; field: string | null } | null {
+  if (!esgCalculatorKeySpec(key)) return null;
+  const declared = FIELD_MAPPINGS.find((mapping) => mapping.calculatorKey === key);
+  const coerced = coerce(declared?.coerce ?? coercionForEsgKey(key), value);
+  if (coerced === null || !admitEsgCalculatorEntry(key, coerced).accepted) return null;
+  return { coerced, field: declared?.field ?? null };
+}
+
 /** Keys the ESG calculator understands but nothing in the case supplied. */
 export function unfilledEsgCalculatorKeys(payload: Record<string, unknown>): string[] {
   return ESG_CALCULATOR_KEYS.filter((key) => !(key in payload));

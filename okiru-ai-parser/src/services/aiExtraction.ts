@@ -64,6 +64,13 @@ import {
   skillPromptSections,
   type Skill,
 } from './skills.js';
+import {
+  OTHER_DETAILS_KEY,
+  otherDetailsEnabled,
+  otherDetailsFrom,
+  otherDetailsPromptLines,
+  type OpenRead,
+} from './openFacts.js';
 
 const logger = createLogger('AiExtraction');
 
@@ -118,6 +125,12 @@ export interface DocumentExtraction {
   error?: string;
   /** What the agent-loop pass did on this document, when it ran (agentExtraction.ts). */
   agent?: AgentPassReport;
+  /**
+   * The open read (openFacts.ts): an Other document's identity and facts, or
+   * the other details a listed read noted beyond its field list. Never values:
+   * nothing in here reaches resolution, the calculator mapping or a score.
+   */
+  open?: OpenRead;
 }
 
 export interface AgentPassReport {
@@ -621,6 +634,11 @@ export async function extractWithSpec(
   const skillRegistry = skill ? definition.skills() : null;
   const keys = skill ? expectedKeysWithSkill(skill, spec.expectedFields) : spec.expectedFields;
   const rowsField = skill?.rowsField ?? null;
+  // A standalone document's read also notes what its field list does not ask
+  // for ("other details", openFacts.ts). Never on a workbook sheet: its
+  // template text and dropdown lists are not details anyone would note.
+  const otherDetails = !options.sheet && otherDetailsEnabled(domain);
+  const otherDetailsRaw: unknown[] = [];
 
   // Multi-pass extraction is the right amount of work to do ONCE. Adding one
   // document to a pack must not re-read the other 25, and a requote must not
@@ -635,7 +653,7 @@ export async function extractWithSpec(
     // document yields, so pre-sweep cache entries must not serve for it. A
     // skill-shaped prompt is salted with the whole skill set's hash, so editing
     // any skill (or the global traps) invalidates what the old text produced.
-    model: `${model.name}#sweep2${skillRegistry ? `#skills:${skillRegistry.hash.slice(0, 16)}` : ''}`,
+    model: `${model.name}#sweep2${skillRegistry ? `#skills:${skillRegistry.hash.slice(0, 16)}` : ''}${otherDetails ? '#other-details1' : ''}`,
   });
   if (cachingEnabled()) {
     const hit = getExtractionCache().get(cacheKey);
@@ -690,6 +708,8 @@ export async function extractWithSpec(
         `\n${skillText}`,
         '\nWhere the analyst instruction and the skill name a field or a shape differently, follow the skill\'s FIELDS TO RETURN.',
         `\nEXPECTED JSON KEYS: ${keys.join(', ')}`,
+        // Spread, not an empty string: with other details off the prompt is byte-identical.
+        ...(otherDetails ? [otherDetailsPromptLines()] : []),
         chunkNote(chunk),
         `\nDOCUMENT (${input.filename}):\n${chunk.text}`,
       ].join('\n')
@@ -697,6 +717,8 @@ export async function extractWithSpec(
         `ANALYST INSTRUCTION:\n${spec.extractionPrompt}`,
         `\nEXPECTED JSON KEYS: ${spec.expectedFields.join(', ')}`,
         `\nWHAT CORRECT DATA LOOKS LIKE (for reference only, do not copy):\n${spec.exampleData}`,
+        // Spread, not an empty string: with other details off the prompt is byte-identical.
+        ...(otherDetails ? [otherDetailsPromptLines()] : []),
         chunkNote(chunk),
         `\nDOCUMENT (${input.filename}):\n${chunk.text}`,
       ].join('\n'));
@@ -732,6 +754,14 @@ export async function extractWithSpec(
   const parsedChunks = successes
     .map((r) => (r.ok ? parseModelJson(r.reply) : null))
     .filter((p): p is Record<string, unknown> => p !== null)
+    // Other details are not a field of the record: kept apart before the reply
+    // is unwrapped, hoisted or merged, so no reader mistakes them for one.
+    .map((reply) => {
+      if (!otherDetails || !(OTHER_DETAILS_KEY in reply)) return reply;
+      const { [OTHER_DETAILS_KEY]: details, ...rest } = reply;
+      if (Array.isArray(details)) otherDetailsRaw.push(...details);
+      return rest;
+    })
     .map((reply) => {
       if (grid) return reply;
       const { record, wrapper, multiple } = unwrapSingleRecord(reply, keys);
@@ -918,6 +948,14 @@ export async function extractWithSpec(
     }
   }
 
+  // ── OTHER DETAILS ───────────────────────────────────────────────────────
+  // What the document states beyond this type's field list, each cited and
+  // checked against the document (openFacts.ts). Kept apart from `values`:
+  // reported on the document, never resolved, mapped or scored.
+  const otherRead = otherDetails
+    ? otherDetailsFrom(otherDetailsRaw, input, values.map((v) => v.value))
+    : null;
+
   const result: DocumentExtraction = {
     ...base,
     values,
@@ -930,6 +968,7 @@ export async function extractWithSpec(
       ...groundingExceptions,
       ...checksumExceptions,
     ],
+    ...(otherRead ? { open: otherRead } : {}),
   };
 
   if (cachingEnabled()) getExtractionCache().set(cacheKey, result);

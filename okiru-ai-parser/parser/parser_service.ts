@@ -10,7 +10,7 @@ import { extractFields } from './extract_fields.js';
 import { extractSupplierRows, extractMeasuredProcurementSpend } from './extract_supplier_rows.js';
 import { parseRawExtractionInput } from './ingest.js';
 import { validateExtractedFields } from './validate.js';
-import { ADJUDICATION_MENU, type AdjudicationCandidate, type DocumentTypeAdjudicator } from './type_adjudicator.js';
+import { ADJUDICATION_MENU, OTHER_DOCUMENT_TYPE, type AdjudicationCandidate, type DocumentTypeAdjudicator } from './type_adjudicator.js';
 import type { DocumentClassification, DocumentClassificationCandidate } from '../schemas/document_types.js';
 
 const logger = createLogger('ParserService');
@@ -155,6 +155,32 @@ export class ParserService {
       return classification;
     }
     if (!verdict) return classification;
+
+    // The reader is sure the document is none of the listed types. A doubted
+    // keyword guess (ambiguous / low confidence) is then NOT forced onto it:
+    // reading a lease under a loan agreement's fields is how a forced type
+    // reports values the document never meant. It is reported as an Other
+    // document and read for what it is by the open read (openRead.ts). A
+    // confident keyword pick stands — listed types keep winning when they fit.
+    if (verdict.none) {
+      if (classification.status === 'classified') {
+        logger.info('Reader found none of the candidates; the confident keyword pick stands', {
+          fileId: input.file_id, documentType: classification.document_type,
+        });
+        return classification;
+      }
+      logger.info('Document is none of the listed types', { fileId: input.file_id, from: classification.document_type });
+      return {
+        ...classification,
+        document_type: OTHER_DOCUMENT_TYPE,
+        pillar: '',
+        confidence: verdict.confidence,
+        matched_evidence: [],
+        status: 'unsupported',
+        margin: 0,
+        reason: `Read as none of the listed document types (an Other document): ${verdict.reason || 'no candidate fits'}`,
+      };
+    }
 
     const chosen = shortlist.find((c) => c.document_type.toLowerCase() === verdict!.documentType.toLowerCase());
     if (!chosen) return classification;

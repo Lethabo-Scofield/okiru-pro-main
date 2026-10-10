@@ -581,3 +581,68 @@ describe('wave 3: the skills final contract under the key', () => {
     expect(acceptedTypes(['Securities / share register'], narrower).has('beneficial interest register')).toBe(false);
   });
 });
+
+describe('open facts are a separate layer (an Other document, or a listed read\'s other details)', () => {
+  const key: AnswerKey = {
+    version: 1,
+    documents: [
+      {
+        file: 'Lease.pdf',
+        path: 'parser',
+        type: 'Lease agreement',
+        typeAccepts: [],
+        fields: [
+          field({ label: 'Measured entity', keys: ['entity_name'], value: 'Baobab Engineering (Pty) Ltd', kind: 'text' }),
+          field({ label: 'Monthly rental', keys: [], value: 'R 18 500.00', kind: 'money' }),
+          field({ label: 'No NPAT on a lease', keys: ['current_year_npat'], value: null, kind: 'money', absentOk: true }),
+          field({ label: 'Black ownership', keys: ['black_ownership'], value: 51, kind: 'percent' }),
+        ],
+      },
+    ],
+  };
+  const openCase = (proposals: Array<{ field: string | null; value: unknown }>): PackCase => ({
+    documents_detected: [],
+    ai_entities: {
+      extractions: [{
+        documentId: 'open_read',
+        documentName: 'Other document — Lease agreement',
+        sourceFile: 'Lease.pdf',
+        values: [],
+        open: {
+          other: true,
+          facts: [
+            { label: 'Lessee', value: 'Baobab Engineering (Pty) Ltd' },
+            { label: 'Monthly rental', value: 'R 18 500.00' },
+            { label: 'Net profit', value: 'R 9 000' },
+            { label: 'Escalation', value: '7%' },
+          ],
+          proposals,
+        },
+      }],
+    },
+  });
+
+  it('unmapped open facts are never correct, wrong or invented in any layer, and fill no recall-only field', () => {
+    const score = scorePack(openCase([]), key);
+    for (const layer of ['det', 'ai', 'agent', 'union'] as const) {
+      expect(score.totals[layer]).toMatchObject({ correct: 0, wrong: 0, invented: 0 });
+    }
+    // The rental is printed among the facts, but an open fact fills no recall-only field.
+    expect(score.perField.find((f) => f.label === 'Monthly rental')?.union.status).toBe('missing');
+    expect(score.totals.open).toMatchObject({ otherDocuments: 1, facts: 4, proposedKeyedFields: 0, correct: 0, wrong: 0, invented: 0 });
+  });
+
+  it('a fact PROPOSED for a keyed field\'s bridge field is scored in the open layer only: correct, wrong or invented', () => {
+    const score = scorePack(openCase([
+      { field: 'entity_name', value: 'Baobab Engineering (Pty) Ltd' }, // correct
+      { field: 'current_year_npat', value: 'R 9 000' }, // the key says a lease has none: invented
+      { field: 'black_ownership_percentage', value: '7%' }, // an alias of black_ownership: wrong
+      { field: null, value: 'R 18 500.00' }, // no bridge field: not scored
+    ]), key);
+    expect(score.totals.open).toMatchObject({ proposedKeyedFields: 3, correct: 1, wrong: 1, invented: 1 });
+    // Proposals are suggestions, not delivered values: the gated layers do not move.
+    expect(score.totals.union).toMatchObject({ correct: 0, wrong: 0, invented: 0 });
+    expect(gateFailures(score, baselineFrom(scorePack(openCase([]), key), 'x'), { mode: 'replay', cassette: { misses: 0 } })).toEqual([]);
+    expect(scoreMarkdown(score)).toMatch(/Open facts \(outside every layer, never gated\): 4 on key documents, 1 read as Other documents; proposals onto keyed fields 3 \(correct 1, wrong 1, invented 1\)/);
+  });
+});

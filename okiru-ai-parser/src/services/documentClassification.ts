@@ -293,6 +293,19 @@ export function routingElement(cls: DocumentClassificationResult | null): Routab
 }
 
 /**
+ * Pass A's verdict that the document is NONE of the listed types: element
+ * OTHER, confidently, with no type id from the skills menu. Such a document is
+ * read as an Other document (openFacts.ts) instead of under whatever spec
+ * keyword retrieval ranks first — retrieval always offers some candidate, and
+ * reading a lease under a loan agreement's field names is exactly the forced
+ * type this exists to stop. A type id wins over the element: the company
+ * profile's skill files it under OTHER and it is still a listed type.
+ */
+export function isOtherClassification(cls: DocumentClassificationResult | null): boolean {
+  return Boolean(cls && !cls.skillId && cls.element === 'OTHER' && cls.confidence >= CONFIDENCE_FLOOR);
+}
+
+/**
  * The ONE spec to extract a document with when Pass A named its type (a skill
  * id), or null to leave the choice to retrieval. One spec, not every spec the
  * skill reads: a payroll read three times under three matrix specs is three
