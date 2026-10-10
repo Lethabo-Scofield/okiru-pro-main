@@ -11,9 +11,13 @@
  * (okiru-ai-parser/scripts/pack-eval.ts --domain bbbee) produces the case;
  * okiru-ai-parser/scripts/bbbee-key-from-review.mjs produces the key.
  *
- * Mirrors DocumentUploadStart.handleCreate (merge the deterministic and AI
- * sections, stamp sector/size) → reconcileEntity → projectWorkbookToClient →
- * the sector calculators → best four of seven. Only Transport QSE is wired.
+ * Runs the create flow's own code (createFlowAssembly — what
+ * DocumentUploadStart.handleCreate calls): the sector and year end the form
+ * takes from the workbook (asserted against the key, never given), the merged
+ * sections stamped with the form → reconcileEntity → projectWorkbookToClient →
+ * the sector calculators, with TMPS as the Toolkit store scores it (the supplier
+ * schedule's sum; the stated figure is reported beside it) → best four of
+ * seven. Only Transport QSE is wired.
  *
  * - Writes e2e.json beside the case.
  * - First run (or UPDATE_BASELINE=1) records e2e-baseline.json beside the key.
@@ -27,8 +31,10 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { mapParserCaseToWorkbookSections, type ParserCaseLike } from "@/lib/parserWorkbookMap";
-import { mergeWorkbookSections, parserExtractionsToWorkbook, toWorkbookSections } from "@/lib/parserToWorkbook";
+import { assembleCreateSections, formAfterRead, injectCase } from "@/lib/createFlowAssembly";
+import { normalizeSectorDeterministic } from "@/lib/excelImport";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
+import { supplierSumTmps } from "@toolkit/lib/calculators/shared";
 import { projectWorkbookToClient, type WorkbookData } from "../../../../server/workbookRoutes";
 import { TRANSPORT_QSE_CALCULATOR_CONFIG as CFG } from "@toolkit/lib/sectors/transport-qse";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -71,33 +77,37 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
   it("lands at least as many elements on the certified points as the baseline", () => {
     const parserCase = JSON.parse(readFileSync(CASE!, "utf8")) as PackCase;
     const key = JSON.parse(readFileSync(KEY!, "utf8")) as AnswerKey;
-    if (!/^transport$/i.test(key.sector ?? "") || !/^qse$/i.test(key.size ?? "")) {
-      throw new Error(`Only Transport QSE is wired into this gate; the key says ${key.sector} ${key.size}`);
-    }
 
-    const mapped = mapParserCaseToWorkbookSections(parserCase);
-    const extractions = (parserCase.ai_entities?.extractions ?? []).map((e) => ({
-      documentId: String(e.documentId ?? ""),
-      sourceFile: String(e.sourceFile ?? ""),
-      element: e.element,
-      values: e.values ?? [],
-      exceptions: (e.exceptions ?? []).map((note) => String(note ?? "")),
-    }));
-    const injected = extractions.length ? parserExtractionsToWorkbook(extractions) : null;
-    const sections = mergeWorkbookSections(
-      mapped.sections ?? {},
-      injected ? toWorkbookSections(injected) : {},
-    ) as Record<string, { rows?: Array<Record<string, unknown>>; meta?: Record<string, unknown> }>;
+    // THE FORM, as the create flow fills it. The sector and year end are not
+    // given to the gate: they come from the workbook, through the same code
+    // that fills (or, where the form disagrees, blocks) the create form. A
+    // pack built under the wrong scorecard used to pass here, because this
+    // gate hard-coded Transport QSE while the product built it as RCOGP.
+    const form = formAfterRead(parserCase, { sector: "", yearEnd: "" });
+    expect(form.undecided, "an empty form never waits on a decision").toEqual([]);
+    expect(form.sector, "the sector the create form takes from the workbook").toBe(normalizeSectorDeterministic(key.sector ?? "") ?? key.sector);
+    if (key.yearEnd) expect(form.yearEnd, "the year end the create form takes from the workbook").toBe(key.yearEnd);
+    // The size is the user's choice on the form; nothing in the pack states it.
+    const size = String(key.size ?? "");
+    if (form.sector !== "TRANSPORT" || !/^qse$/i.test(size)) {
+      throw new Error(`Only Transport QSE is wired into this gate; the form says ${form.sector} ${size}`);
+    }
 
     // The name the client types on the form: the measured entity as the key has it.
     const measured = (key.documents ?? [])
       .flatMap((d) => d.fields ?? [])
       .find((f) => /^measured entity$/i.test(f.label))?.value;
     const companyName = String(measured ?? "Measured entity");
-    sections["company-information"] = {
-      ...(sections["company-information"] ?? {}),
-      meta: { ...(sections["company-information"]?.meta ?? {}), companyName, industrySector: "Transport", scorecardType: "QSE" },
-    };
+
+    // The create flow's own assembly (DocumentUploadStart.handleCreate), less
+    // the certificate-registry lookup, which needs the network.
+    const mapped = mapParserCaseToWorkbookSections(parserCase);
+    const injected = injectCase(parserCase, { sector: form.sector, size });
+    const sections = assembleCreateSections(
+      mapped.sections as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>,
+      injected,
+      { companyName, sector: form.sector, size, yearEnd: form.yearEnd },
+    ) as Record<string, { rows?: Array<Record<string, unknown>>; meta?: Record<string, unknown> }>;
 
     // Entity aliases from the extraction (registered names), as handleCreate builds them.
     const aliases: string[] = [];
@@ -106,7 +116,7 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
     for (const e of parserCase.ai_entities?.extractions ?? []) {
       for (const v of e?.values ?? []) if (/entity_name|company_name/i.test(String(v?.field ?? ""))) add(v?.value);
     }
-    const reconciled = reconcileEntity(sections as never, { sectorCode: "TRANSPORT", scorecardType: "QSE", entityAliases: [companyName, ...aliases] });
+    const reconciled = reconcileEntity(sections as never, { sectorCode: form.sector, scorecardType: size, entityAliases: [companyName, ...aliases] });
 
     const wb: WorkbookData = {
       companyId: "eval", ownerOrganizationId: null, ownerUserId: "eval",
@@ -116,7 +126,11 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
     const fin = (p.financials as Record<string, unknown> | undefined) ?? {};
     const finMeta = (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
     const npat = Number(fin.npat ?? finMeta.npat ?? 0);
-    const tmps = Number(fin.tmps ?? finMeta.tmps ?? 0);
+    const statedTmps = Number(fin.tmps ?? finMeta.tmps ?? 0);
+    // TMPS as the Toolkit store scores it: on every load it is the sum of the
+    // supplier schedule's spend, unless someone pinned it — and the create flow
+    // never pins it. The stated figure is reported beside it, not scored.
+    const tmps = supplierSumTmps(p.suppliers as Array<{ spend?: number }>);
     const leviable = Number(fin.payroll ?? finMeta.payroll ?? finMeta.leviable ?? 0);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +161,14 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
     });
     const within = comparison.filter((c) => c.within === true).length;
     const compared = comparison.filter((c) => c.within !== null).length;
+    const procurementAtStatedTmps = calculateProcurementScore(any({ id: "", clientId: "", tmps: statedTmps, suppliers: p.suppliers }), CFG).total;
     const report = {
+      form: { sector: form.sector, yearEnd: form.yearEnd, size, from: "workbook Instructions sheet" },
+      tmps: {
+        scored: tmps,
+        stated: statedTmps,
+        procurementAtStatedTmps: Math.round(procurementAtStatedTmps * 100) / 100,
+      },
       certified: { score: key.certified?.score ?? null, level: key.certified?.level ?? null },
       ours: { total: Math.round(total * 100) / 100, level: total >= 100 ? 1 : total >= 95 ? 2 : total >= 90 ? 3 : "below 3" },
       tolerance: TOLERANCE,
