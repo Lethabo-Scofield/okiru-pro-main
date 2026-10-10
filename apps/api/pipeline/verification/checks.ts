@@ -611,7 +611,7 @@ export function checkSupplierSpend(ctx: CheckContext): VerificationCheck[] {
       seen.get(key)!.push(row);
     }
   }
-  for (const [key, dupes] of seen) {
+  for (const [key, dupes] of Array.from(seen.entries())) {
     if (dupes.length < 2 || !str(dupes[0].supplierName)) continue;
     const doc = key.split('\u0000')[0];
     out.push(check('procurement.supplierSpend', `duplicate:${dupes.map(idOf).join(',')}`, {
