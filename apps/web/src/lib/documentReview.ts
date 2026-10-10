@@ -42,6 +42,11 @@ export interface ReviewValue {
   answered?: string;
   /** Kept as evidence: no cell in the workbook needs this value. Not a failure to place. */
   evidence?: boolean;
+  /**
+   * An "other detail" the parser suggests for a workbook input, in words. Only
+   * a suggestion: nothing is placed until a person enters it.
+   */
+  suggested?: string;
 }
 
 /**
@@ -85,6 +90,70 @@ export interface ReviewDocument {
   notFound: string[];
   /** The same gaps with the parser's field key, so a person can fill them in. */
   missing?: Array<{ label: string; field: string }>;
+  /**
+   * What the document states beyond what is scored: an Other document's
+   * details (a lease, a bank letter), or a listed document's other details.
+   * Never in the workbook unless a person enters them.
+   */
+  otherDetails?: ReviewValue[];
+  /** None of the listed document types fits this document. */
+  otherDocument?: boolean;
+}
+
+/** The open read the parser attaches to an extraction (okiru-ai-parser openFacts.ts). */
+interface OpenReadLike {
+  other?: boolean;
+  identity?: { title?: string | null; issuedBy?: string | null; aboutEntity?: string | null; documentDate?: string | null; period?: string | null; referenceNumbers?: string[] };
+  facts?: Array<{ label?: string; value?: string; unit?: string | null; page?: number | null; quote?: string }>;
+  proposals?: Array<{ fact?: number; calculatorKey?: string }>;
+}
+
+const IDENTITY_ROWS: Array<[keyof NonNullable<OpenReadLike["identity"]>, string]> = [
+  ["title", "Title"],
+  ["issuedBy", "Issued by"],
+  ["aboutEntity", "About"],
+  ["documentDate", "Date"],
+  ["period", "Period"],
+];
+
+/**
+ * The open read of the extractions that belong to one document: whether it is
+ * an Other document (and what it is called — "Other document — Lease
+ * agreement"), and its details as review rows, each with the words it was
+ * read from and, when the parser suggests one, the workbook input it may be.
+ */
+export function otherDetailsOf(
+  extractions: Array<{ documentName?: unknown; sourceFile?: unknown; open?: unknown }>,
+  belongs: (sourceFile: string) => boolean,
+): { otherDocument: string | null; details: ReviewValue[] } {
+  let otherDocument: string | null = null;
+  const details: ReviewValue[] = [];
+  for (const extraction of extractions) {
+    const open = extraction.open as OpenReadLike | undefined;
+    if (!open || !belongs(String(extraction.sourceFile ?? ""))) continue;
+    if (open.other) {
+      otherDocument = String(extraction.documentName ?? "") || "Other document";
+      for (const [key, label] of IDENTITY_ROWS) {
+        const value = open.identity?.[key];
+        if (typeof value === "string" && value.trim()) details.push({ label, value: value.trim() });
+      }
+      const refs = open.identity?.referenceNumbers ?? [];
+      if (refs.length > 0) details.push({ label: "Reference", value: refs.join(" · ") });
+    }
+    (open.facts ?? []).forEach((fact, index) => {
+      const value = String(fact.value ?? "").trim();
+      if (!fact.label || !value || details.length >= MAX_VALUES) return;
+      const unit = fact.unit && !value.toLowerCase().includes(fact.unit.toLowerCase()) ? ` ${fact.unit}` : "";
+      const proposal = (open.proposals ?? []).find((p) => p.fact === index && p.calculatorKey);
+      details.push({
+        label: fact.label,
+        value: `${value}${unit}`,
+        ...(fact.quote ? { source: `${fact.quote}${typeof fact.page === "number" ? ` (page ${fact.page})` : ""}` } : {}),
+        ...(proposal ? { suggested: humanize(String(proposal.calculatorKey)) } : {}),
+      });
+    });
+  }
+  return { otherDocument, details };
 }
 
 export interface ReviewInputs {
@@ -271,10 +340,18 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
     let state: ReviewState = v.verdict === "found" ? "read" : v.verdict === "confused" ? "needs-look" : "not-read";
     const values = valuesFor(parserCase, v.filename);
     const problems: ReviewProblem[] = [];
+    // None of the listed types fits it (a lease, a bank letter): it was read
+    // for what it is. Nothing from it is scored, which is not a failure to read.
+    const other = otherDetailsOf(extractionsOf(parserCase), (source) => source === v.filename);
+    if (other.otherDocument && state === "not-read" && other.details.length > 0) state = "read";
     if (state === "not-read") {
       problems.push(whyNotRead(parserTexts, v.documentType, failedFiles.includes(v.filename), productNoun));
     } else {
-      problems.push(...troubleFor([...(detected?.validation?.errors ?? []).map(String), ...(review?.reasons ?? []).map(String)]));
+      // The classifier's own "none of the listed types fits" is what makes it
+      // an Other document, not trouble with it.
+      const trouble = [...(detected?.validation?.errors ?? []).map(String), ...(review?.reasons ?? []).map(String)]
+        .filter((t) => !(other.otherDocument && /none of the listed document types/i.test(t)));
+      problems.push(...troubleFor(trouble));
       for (const note of fileFlags) {
         problems.push({
           headline: "The figures in this document don't reconcile.",
@@ -314,14 +391,22 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
     docs.push({
       filename: v.filename,
       // The parser's "Unknown" is a classifier state, not a document type.
-      documentType: /^(unknown|unrecognised document)$/i.test(v.documentType.trim()) ? "" : v.documentType,
+      documentType: other.otherDocument
+        ?? (/^(unknown|unrecognised document)$/i.test(v.documentType.trim()) ? "" : v.documentType),
       state,
-      summary: state === "not-read" ? "" : v.summary,
+      summary: state === "not-read"
+        ? ""
+        : other.otherDocument && values.length === 0
+          ? `${other.details.length} detail${other.details.length === 1 ? "" : "s"} read · none scored`
+          : v.summary,
       values,
       unplaced,
       problems,
-      notFound,
-      missing,
+      // An Other document has no listed fields to miss.
+      notFound: other.otherDocument ? [] : notFound,
+      missing: other.otherDocument ? [] : missing,
+      ...(other.details.length > 0 ? { otherDetails: other.details } : {}),
+      ...(other.otherDocument ? { otherDocument: true } : {}),
     });
   }
 
