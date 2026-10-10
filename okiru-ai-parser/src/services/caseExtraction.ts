@@ -318,7 +318,7 @@ export async function extractCaseEntities(
         // things. Asking a model to "extract the supplier table" from one
         // yields nothing, which is what happened to every ledger until now.
         if (rows) {
-          const ledger = extractLedgerTable(rows, input.filename);
+          const ledger = extractLedgerTable(rows, input.filename, input.markdown || input.raw_text);
           if (ledger) return ledger;
         }
 

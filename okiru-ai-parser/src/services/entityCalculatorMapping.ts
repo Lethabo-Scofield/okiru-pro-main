@@ -400,6 +400,10 @@ const REPORTED_NOT_SCORED = new Set([
   // The ledger checks deriveLedger works out in code under the matrix's own
   // names: a count of invoices and a yes/no, never a calculator input.
   'supporting_invoices_reviewed', 'ledger_total_matches_entries',
+  // A ledger's own lines and the period its caption states: the evidence
+  // behind the supplier's spend (which travels as supplier_rows), never a
+  // calculator input of their own.
+  'ledger_entry_rows', 'ledger_period',
 ]);
 
 /**

@@ -15,8 +15,10 @@ import {
   extractLedgerTable,
   isLedgerSheet,
   readLedgerSheet,
+  statedLedgerPeriod,
   supplierNameFromFilename,
 } from '../../src/services/sheetLedgerExtraction.js';
+import { isReportedNotScored } from '../../src/services/entityCalculatorMapping.js';
 
 /** The BP Edenvale shape: DEBIT invoices, CREDIT payments, running balance. */
 function twoSidedLedger(): Array<Record<string, unknown>> {
@@ -71,8 +73,8 @@ describe('reading the money', () => {
     // The other convention (the real Outsurance ledger): one credit line per
     // debit-order instalment paid to the supplier.
     const rows = [
-      { DATE: '25/03/2024', DESCRIPTION: 'DEBIT ORDER', CREDIT: 26434.33 },
-      { DATE: '25/04/2024', DESCRIPTION: 'DEBIT ORDER', CREDIT: 26434.33 },
+      { DATE: '15/08/2023', DESCRIPTION: 'DEBIT ORDER', CREDIT: 26434.33 },
+      { DATE: '15/09/2023', DESCRIPTION: 'DEBIT ORDER', CREDIT: 26434.33 },
       { CREDIT: 52868.66 },
     ];
     const reading = readLedgerSheet(rows, 'Copy of OUTSURANCE - DETAILED LEDGER.xlsx')!;
@@ -175,5 +177,63 @@ describe('as an extraction', () => {
 
   it('returns null for a non-ledger so the schedule path still runs', () => {
     expect(extractLedgerTable([{ 'Supplier Name': 'Alpha', DATE: 'x', Amount: 1 }], 'a.xlsx')).toBeNull();
+  });
+});
+
+describe('the ledger\'s own lines and stated period', () => {
+  // Invented: a credit-side ledger of three instalments plus its unlabelled
+  // SUM row, under a caption that states the period with abbreviated years.
+  const rows = [
+    { DATE: '15/08/2023', DESCRIPTION: 'DEBIT ORDER', CREDIT: 1200.5 },
+    { DATE: '15/09/2023', DESCRIPTION: 'DEBIT ORDER', CREDIT: 1200.5 },
+    { DATE: '16/10/2023', DESCRIPTION: 'DEBIT ORDER', CREDIT: 980 },
+    { DESCRIPTION: 'DEBIT ORDER', CREDIT: 3381 },
+  ];
+  const sheetText = [
+    '## Sheet1',
+    '',
+    "RECON : ACME COVER FOR PERIOD 01 JULY '23 TO JUN '24",
+    '',
+    '| DATE | DESCRIPTION | DEBIT | CREDIT |',
+    '| --- | --- | --- | --- |',
+    '| 15/08/2023 | DEBIT ORDER |  | R1,200.50 |',
+  ].join('\n');
+
+  it('returns each counted line from its cells, never the total row, and counts them in code', () => {
+    const extraction = extractLedgerTable(rows, 'ACME COVER LEDGER.xlsx', sheetText)!;
+    const byField = Object.fromEntries(extraction.values.map((v) => [v.field, v]));
+    expect(byField.ledger_entry_rows.value).toEqual([
+      { entry_date: '15/08/2023', entry_description: 'DEBIT ORDER', entry_amount: 1200.5 },
+      { entry_date: '15/09/2023', entry_description: 'DEBIT ORDER', entry_amount: 1200.5 },
+      { entry_date: '16/10/2023', entry_description: 'DEBIT ORDER', entry_amount: 980 },
+    ]);
+    expect(byField.derived_entry_count.value).toBe(3);
+    expect(byField.derived_entry_count.source?.method).toBe('derived');
+    // The supplier row is unchanged and still first.
+    expect(extraction.values[0].field).toBe('supplier_rows');
+  });
+
+  it('reads the period its caption states, abbreviated years written in full', () => {
+    const extraction = extractLedgerTable(rows, 'ACME COVER LEDGER.xlsx', sheetText)!;
+    expect(extraction.values.find((v) => v.field === 'ledger_period')?.value).toBe('01 JULY 2023 TO JUN 2024');
+  });
+
+  it('reads the common printed period forms and nothing that is not one', () => {
+    expect(statedLedgerPeriod('Statement for the period 1 Jul 2023 - 30 Jun 2024')).toBe('1 Jul 2023 - 30 Jun 2024');
+    expect(statedLedgerPeriod('Period: 01/07/2023 to 30/06/2024')).toBe('01/07/2023 to 30/06/2024');
+    expect(statedLedgerPeriod('Payment period to be agreed')).toBeNull();
+    expect(statedLedgerPeriod('| period | 2024 to 2025 |')).toBeNull();
+    expect(statedLedgerPeriod(undefined)).toBeNull();
+  });
+
+  it('keeps the lines, the period and the count out of the calculator\'s semantic placement', () => {
+    for (const field of ['ledger_entry_rows', 'ledger_period', 'derived_entry_count']) {
+      expect(isReportedNotScored(field), field).toBe(true);
+    }
+  });
+
+  it('states no period when the sheet has none', () => {
+    const extraction = extractLedgerTable(rows, 'ACME COVER LEDGER.xlsx', '| DATE | CREDIT |')!;
+    expect(extraction.values.some((v) => v.field === 'ledger_period')).toBe(false);
   });
 });
