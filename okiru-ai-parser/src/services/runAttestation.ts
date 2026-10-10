@@ -33,6 +33,7 @@ import type { ParserCaseOutput } from '../../schemas/parser_output.js';
 import type { DocumentExtraction } from './aiExtraction.js';
 import type { UploadedFileLike } from './fileExtraction.js';
 import { SHEET_INSTRUCTIONS_DOCUMENT_ID } from './sheetInstructionsExtraction.js';
+import { parserBuild } from './parserBuild.js';
 
 const logger = createLogger('RunAttestation');
 
@@ -138,6 +139,8 @@ export interface ParserRunClaims {
   quoteId: string | null;
   filename: string;
   contentSha256: string;
+  /** The parser build that read the file (see parserBuild): never null, so every run traces to its code. */
+  parserVersion: string;
   reviewReasons: string[];
   parserOutput: Record<string, unknown>;
   /** Absent on a record with no model read (no model configured, or a failed file). */
@@ -173,7 +176,7 @@ export function signParserRuns(
   domain: ParserRunClaims['domain'],
   records: readonly RunRecord[],
   context: { caseId?: string | null; quoteId?: string | null },
-  options: { secret?: string; now?: number } = {},
+  options: { secret?: string; now?: number; build?: string } = {},
 ): SignedParserRun[] | undefined {
   const secret = options.secret ?? process.env.PARSER_INTERNAL_SECRET ?? '';
   if (!secret) {
@@ -184,6 +187,7 @@ export function signParserRuns(
     return undefined;
   }
   const iat = options.now ?? Date.now();
+  const build = options.build ?? parserBuild();
   return records.map((record) => {
     const claims: ParserRunClaims = {
       typ: RUN_ATTESTATION_TYPE,
@@ -195,8 +199,11 @@ export function signParserRuns(
       quoteId: context.quoteId ?? null,
       filename: record.filename,
       contentSha256: record.contentSha256,
+      parserVersion: build,
       reviewReasons: record.reviewReasons,
-      parserOutput: record.parserOutput,
+      // Also inside the stored output: the library keeps the output verbatim,
+      // so the build is on record even where the api does not read the claim.
+      parserOutput: { ...record.parserOutput, parser_build: build },
       ...(record.aiValues ? { aiValues: record.aiValues } : {}),
     };
     const payload = JSON.stringify(claims);
@@ -344,30 +351,55 @@ const STATUS_RANK: Record<string, number> = { passed: 0, review_required: 1, fai
  * workbook's: the sheets' fields together (the first sheet to read a field
  * wins, as in the case), the worst sheet's status, and each sheet listed.
  */
-function workbookOutput(filename: string, sheets: readonly DetectedDocument[]): Record<string, unknown> {
+function workbookOutput(
+  filename: string,
+  sheets: readonly DetectedDocument[],
+  context: WorkbookContext = { aiSheets: new Set(), template: false },
+): Record<string, unknown> {
   const outputs = sheets.map((sheet) => sheet.parser_output as unknown as Record<string, any>);
   const extracted: Record<string, unknown> = {};
   for (const output of outputs) {
     for (const [key, field] of Object.entries((output.extracted_fields ?? {}) as Record<string, any>)) {
-      const has = field?.normalized_value != null || field?.raw_value != null;
+      const has = hasFieldValue(field);
+      // A gathering template's empty slots are the guessed evidence type's
+      // field list, not anything the template asks for: hundreds of "not found"
+      // lines in the library for one workbook.
+      if (context.template && !has) continue;
       const current = extracted[key] as { normalized_value?: unknown; raw_value?: unknown } | undefined;
-      if (!current || (has && current.normalized_value == null && current.raw_value == null)) extracted[key] = field;
+      if (!current || (has && !hasFieldValue(current))) extracted[key] = field;
     }
   }
-  const status = sheets.reduce<string>(
+  // A sheet that gave nothing (a template's unused Imports sheet, a cover
+  // page) is listed, but neither fails the workbook nor sets its confidence.
+  const reading = sheets.filter((sheet, index) => sheetRead(sheet, outputs[index], context.aiSheets));
+  const judged = reading.length > 0 ? reading : sheets;
+  const judgedOutputs = judged.map((sheet) => outputs[sheets.indexOf(sheet)]);
+  const all = (pick: (output: Record<string, any>) => unknown, from = outputs) =>
+    Array.from(new Set(from.flatMap((output) => (Array.isArray(pick(output)) ? (pick(output) as unknown[]).map(String) : []))));
+  // On a gathering template the classifier's own complaints are about the
+  // evidence types it guessed for each sheet, not about the workbook.
+  const kept = (texts: string[]) => (context.template ? texts.filter((text) => !isGuessedTypeNoise(text)) : texts);
+  const warnings = kept(all((output) => output.validation?.warnings, judgedOutputs));
+  const errors = kept(all((output) => output.validation?.errors, judgedOutputs));
+  const worstSheet = judged.reduce<string>(
     (worst, sheet) => ((STATUS_RANK[sheet.status] ?? 0) > (STATUS_RANK[worst] ?? 0) ? sheet.status : worst),
     'passed',
   );
-  const all = (pick: (output: Record<string, any>) => unknown) =>
-    Array.from(new Set(outputs.flatMap((output) => (Array.isArray(pick(output)) ? (pick(output) as unknown[]).map(String) : []))));
+  // A template's sheet statuses grade the guessed types too. It fails only
+  // when no sheet gave anything, and needs a look only for a real problem.
+  const status = !context.template
+    ? worstSheet
+    : reading.length === 0
+      ? 'failed'
+      : errors.length > 0 || warnings.length > 0 ? 'review_required' : 'passed';
   const sheetName = (name: string) => name.slice(name.indexOf('›') + 1).trim();
   const types = Array.from(new Set(sheets.map((sheet) => sheet.document_type).filter(Boolean)));
   return {
     file_id: sheets[0]?.file_id ?? filename,
     filename,
-    document_type: types.length === 1 ? types[0] : 'Workbook',
-    pillar: types.length === 1 ? String(outputs[0]?.pillar ?? '') : '',
-    overall_confidence: Math.min(...sheets.map((sheet) => Number(sheet.overall_confidence ?? 0))),
+    document_type: context.template ? GATHERING_WORKBOOK_TYPE : types.length === 1 ? types[0] : 'Workbook',
+    pillar: !context.template && types.length === 1 ? String(outputs[0]?.pillar ?? '') : '',
+    overall_confidence: Math.min(...judged.map((sheet) => Number(sheet.overall_confidence ?? 0))),
     status,
     extracted_fields: extracted,
     calculator_payload: {},
@@ -378,16 +410,16 @@ function workbookOutput(filename: string, sheets: readonly DetectedDocument[]): 
       document_type: sheet.document_type,
       status: sheet.status,
       overall_confidence: sheet.overall_confidence,
+      read: reading.includes(sheet),
     })),
     validation: {
       passed: status === 'passed',
-      warnings: all((output) => output.validation?.warnings),
-      errors: all((output) => output.validation?.errors),
-      missing_fields: all((output) => output.validation?.missing_fields)
-        .filter((key) => {
-          const field = extracted[key] as { normalized_value?: unknown; raw_value?: unknown } | undefined;
-          return !field || (field.normalized_value == null && field.raw_value == null);
-        }),
+      warnings,
+      errors,
+      missing_fields: context.template
+        ? []
+        : all((output) => output.validation?.missing_fields)
+          .filter((key) => !hasFieldValue(extracted[key])),
     },
     audit_trail: {
       source_file: filename,
@@ -396,12 +428,83 @@ function workbookOutput(filename: string, sheets: readonly DetectedDocument[]): 
       graph_version: String(outputs[0]?.audit_trail?.graph_version ?? 'unknown'),
       requires_human_review: status !== 'passed',
       classification_candidates: [],
-      classification_reason: `Read sheet by sheet: ${sheets.map((sheet) => `${sheetName(sheet.filename)} as ${sheet.document_type}`).join('; ')}.`,
+      classification_reason: context.template
+        ? `A B-BBEE information-gathering workbook (its Instructions sheet was recognised), read sheet by sheet: ${sheets.map((sheet) => sheetName(sheet.filename)).join(', ')}.`
+        : `Read sheet by sheet: ${sheets.map((sheet) => `${sheetName(sheet.filename)} as ${sheet.document_type}`).join('; ')}.`,
       rejected_calculator_keys: outputs.flatMap((output) =>
         (Array.isArray(output.audit_trail?.rejected_calculator_keys) ? output.audit_trail.rejected_calculator_keys : [])),
     },
   };
 }
+
+/** How a recognised gathering template is named in the library. */
+export const GATHERING_WORKBOOK_TYPE = 'B-BBEE information-gathering workbook';
+
+interface WorkbookContext {
+  /** Sheets ("File.xlsx › Sheet") the model, the agent or a sheet reader read a value from. */
+  aiSheets: ReadonlySet<string>;
+  /** Its Instructions sheet was recognised: a gathering template, not a pack of evidence. */
+  template: boolean;
+}
+
+function hasFieldValue(field: unknown): boolean {
+  const f = field as { normalized_value?: unknown; raw_value?: unknown } | null | undefined;
+  return Boolean(f) && (f!.normalized_value != null || f!.raw_value != null);
+}
+
+/** Did this sheet give anything: a rule-layer value, a supplier row, or a value another reader took from it. */
+function sheetRead(sheet: DetectedDocument, output: Record<string, any> | undefined, aiSheets: ReadonlySet<string>): boolean {
+  if (aiSheets.has(sheet.filename)) return true;
+  if (Array.isArray(output?.supplier_rows) && output!.supplier_rows.length > 0) return true;
+  return Object.values((output?.extracted_fields ?? {}) as Record<string, unknown>).some(hasFieldValue);
+}
+
+/**
+ * The classifier's complaints that only describe its own guess of a type:
+ * a required field of that type, its confidence in the guess. Anything about
+ * the figures themselves (a percentage over 100, an expired certificate) is
+ * not noise and stays.
+ */
+export function isGuessedTypeNoise(text: string): boolean {
+  const line = text.trim();
+  return /\bis required$/i.test(line)
+    || /\bmissing$/i.test(line)
+    // The type's required-field rules: "role_title not found".
+    || /\bnot found$/i.test(line)
+    || /confidence is (too low|below)/i.test(line)
+    || /classification confidence/i.test(line)
+    || /document-type (candidates|confidence)/i.test(line)
+    || /^Read as .+ with some doubt\b/i.test(line);
+}
+
+/**
+ * A run the model or a sheet reader delivered values for is not "failed",
+ * whatever the rule layer made of the file. The rule layer's confidence is
+ * about its own guess of the document type; a company profile it could not
+ * type, whose details the model read five of six, was shown FAILED in the
+ * library beside the values. It needs a look, and says why.
+ */
+function settledOutput(output: Record<string, unknown>, aiValueCount: number): Record<string, unknown> {
+  if (output.status !== 'failed' || aiValueCount === 0) return output;
+  const validation = (output.validation ?? {}) as Record<string, unknown>;
+  const audit = output.audit_trail && typeof output.audit_trail === 'object' ? output.audit_trail as Record<string, unknown> : null;
+  return {
+    ...output,
+    status: 'review_required',
+    validation: {
+      ...validation,
+      passed: false,
+      warnings: [
+        ...(Array.isArray(validation.warnings) ? validation.warnings : []),
+        RULE_LAYER_UNSURE,
+      ],
+    },
+    ...(audit ? { audit_trail: { ...audit, requires_human_review: true } } : {}),
+  };
+}
+
+export const RULE_LAYER_UNSURE =
+  'The quick rule check could not confirm what kind of document this is, so its values were read by the model: check them.';
 
 /**
  * B-BBEE: one run per uploaded file, built from the parser's own
@@ -429,19 +532,31 @@ export function bbbeeRunRecords(
   const records: RunRecord[] = [];
   for (const [filename, documents] of byUpload) {
     const file = uploads.get(filename)!;
+    const mine = (ai.extractions ?? []).filter((extraction) => uploadOf(extraction.sourceFile) === filename);
+    const aiValues = ai.extractions ? aiValuesForUpload(ai.extractions, filename, uploadOf) : undefined;
+    // A workbook whose Instructions sheet was recognised is a gathering
+    // template: its sheets are not evidence of the types the classifier guessed.
+    const template = mine.some((extraction) =>
+      extraction.documentId === SHEET_INSTRUCTIONS_DOCUMENT_ID && (extraction.values?.length ?? 0) > 0);
+    const aiSheets = new Set((aiValues ?? []).map((value) => value.sourceFile));
     // The upload read as itself, when it was; otherwise it is a workbook read
     // sheet by sheet.
     const own = documents.find((doc) => doc.filename === filename);
+    const parserOutput = own
+      ? (own.parser_output as unknown as Record<string, unknown>)
+      : workbookOutput(filename, documents, { aiSheets, template });
+    const reasons = Array.from(new Set((result.documents_needing_review ?? [])
+      .filter((row) => uploadOf(row.filename) === filename)
+      .flatMap((row) => {
+        const own = (row.reasons ?? []).filter((reason) => !(template && isGuessedTypeNoise(String(reason))));
+        return row.filename === filename ? own : own.map((reason) => `${row.filename}: ${reason}`);
+      })));
     records.push({
       filename,
       contentSha256: contentSha256(file.buffer),
-      parserOutput: own
-        ? (own.parser_output as unknown as Record<string, unknown>)
-        : workbookOutput(filename, documents),
-      reviewReasons: Array.from(new Set((result.documents_needing_review ?? [])
-        .filter((row) => uploadOf(row.filename) === filename)
-        .flatMap((row) => (row.filename === filename ? row.reasons ?? [] : (row.reasons ?? []).map((reason) => `${row.filename}: ${reason}`))))),
-      ...(ai.extractions ? { aiValues: aiValuesForUpload(ai.extractions, filename, uploadOf) } : {}),
+      parserOutput: settledOutput(parserOutput, aiValues?.length ?? 0),
+      reviewReasons: reasons,
+      ...(aiValues ? { aiValues } : {}),
     });
   }
   return records;

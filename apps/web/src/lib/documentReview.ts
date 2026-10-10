@@ -16,6 +16,7 @@ import {
   isClassificationNote,
   isInternalArtifact,
   isInternalJargon,
+  rowSummaryForFiles,
   type SectionPatchLike,
 } from "./documentVerdicts";
 import type { ParserCaseLike } from "./parserWorkbookMap";
@@ -42,6 +43,19 @@ export interface ReviewValue {
   answered?: string;
   /** Kept as evidence: no cell in the workbook needs this value. Not a failure to place. */
   evidence?: boolean;
+  /** The workbook sheet it was read from, when the document is a workbook. */
+  sheet?: string;
+  /** The part of the upload a correction applies to ("Book.xlsx › Sheet"), when not the document itself. */
+  file?: string;
+}
+
+/** One sheet of a workbook the parser read sheet by sheet. */
+export interface ReviewSheet {
+  sheet: string;
+  /** The parser's name for it: "Book.xlsx › Sheet". */
+  file: string;
+  state: ReviewState;
+  summary: string;
 }
 
 /**
@@ -84,7 +98,9 @@ export interface ReviewDocument {
   /** Things this document should have carried and did not. */
   notFound: string[];
   /** The same gaps with the parser's field key, so a person can fill them in. */
-  missing?: Array<{ label: string; field: string }>;
+  missing?: Array<{ label: string; field: string; file?: string }>;
+  /** A workbook's sheets, when it was read sheet by sheet. */
+  sheets?: ReviewSheet[];
 }
 
 export interface ReviewInputs {
@@ -131,7 +147,7 @@ function sourceText(v: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-type Extraction = { sourceFile?: unknown; values?: Array<Record<string, unknown>> };
+type Extraction = { documentId?: unknown; sourceFile?: unknown; values?: Array<Record<string, unknown>> };
 const extractionsOf = (parserCase: ParserCaseLike): Extraction[] =>
   (parserCase as { ai_entities?: { extractions?: Extraction[] } }).ai_entities?.extractions ?? [];
 
@@ -325,9 +341,118 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
     });
   }
 
+  const grouped = groupWorkbookSheets(docs, { parserCase, sections, failedFiles, productNoun });
+
   // Worst first: what needs the user is what they came to the review for.
   const rank: Record<ReviewState, number> = { "not-read": 0, "needs-look": 1, read: 2 };
-  return docs.sort((a, b) => rank[a.state] - rank[b.state] || a.filename.localeCompare(b.filename));
+  return grouped.sort((a, b) => rank[a.state] - rank[b.state] || a.filename.localeCompare(b.filename));
+}
+
+/** "Book.xlsx › Sheet" → the workbook and the sheet; null for anything else. */
+export function workbookSheetOf(name: string): { book: string; sheet: string } | null {
+  const marker = name.indexOf("›");
+  if (marker < 0) return null;
+  const book = name.slice(0, marker).trim();
+  const sheet = name.slice(marker + 1).trim();
+  return book && sheet ? { book, sheet } : null;
+}
+
+/**
+ * One review entry per uploaded workbook, however many sheets it was read as.
+ *
+ * The parser reads a workbook sheet by sheet and reports each sheet as a
+ * document, typed by a classifier that only knows evidence types: a gathering
+ * workbook's Finance sheet became "a payroll schedule for directors", its
+ * Procurement sheet "a SARS VAT import declaration", each with a not-found
+ * list for the fields such a document would carry, and the template's empty
+ * sheets became documents "we couldn't tell what kind of". The user uploaded
+ * one file. So the review shows one: what it gave (rows counted once, across
+ * its sheets), each sheet beside it, and real trouble on any sheet. A sheet
+ * that gave nothing is listed as empty, not as a failure; the workbook is "not
+ * read" only when none of its sheets gave anything.
+ *
+ * A gathering template (its Instructions sheet was recognised) is named as
+ * one, and the classifier's not-found lists are dropped: they describe the
+ * evidence types it guessed, not anything the template asks for. Every value
+ * keeps the sheet it was read from, so a correction still lands there.
+ */
+function groupWorkbookSheets(
+  docs: ReviewDocument[],
+  context: { parserCase: ParserCaseLike; sections?: Record<string, SectionPatchLike>; failedFiles: string[]; productNoun: string },
+): ReviewDocument[] {
+  const books = new Map<string, Array<{ sheet: string; doc: ReviewDocument }>>();
+  const out: ReviewDocument[] = [];
+  for (const doc of docs) {
+    const at = workbookSheetOf(doc.filename);
+    if (!at) continue;
+    const list = books.get(at.book) ?? [];
+    list.push({ sheet: at.sheet, doc });
+    books.set(at.book, list);
+  }
+  if (books.size === 0) return docs;
+
+  const templates = new Set(
+    extractionsOf(context.parserCase)
+      .filter((e) => String(e.documentId ?? "") === "sheet_instructions")
+      .map((e) => workbookSheetOf(String(e.sourceFile ?? ""))?.book)
+      .filter((book): book is string => Boolean(book)),
+  );
+
+  for (const doc of docs) {
+    if (workbookSheetOf(doc.filename) || books.has(doc.filename)) continue;
+    out.push(doc);
+  }
+
+  for (const [book, sheetDocs] of Array.from(books.entries())) {
+    const template = templates.has(book);
+    const sheets: ReviewSheet[] = sheetDocs.map(({ sheet, doc }) => ({
+      sheet,
+      file: doc.filename,
+      state: doc.state,
+      summary: doc.state === "not-read" ? "" : doc.summary,
+    }));
+    const read = sheetDocs.filter(({ doc }) => doc.state !== "not-read");
+    const tag = <T extends ReviewValue>(sheet: string, file: string) => (v: T): T => ({ ...v, sheet, file });
+
+    const values = read.flatMap(({ sheet, doc }) => doc.values.map(tag(sheet, doc.filename)));
+    const unplaced = read.flatMap(({ sheet, doc }) => doc.unplaced.map(tag(sheet, doc.filename)));
+    const problems: ReviewProblem[] = read.flatMap(({ sheet, doc }) =>
+      doc.problems.map((p) => ({ ...p, detail: p.detail ? `${sheet}: ${p.detail}` : `On the ${sheet} sheet.` })));
+    const notFound = template ? [] : read.flatMap(({ sheet, doc }) => doc.notFound.map((label) => `${label} (${sheet})`));
+    const missing = template
+      ? []
+      : read.flatMap(({ sheet, doc }) => (doc.missing ?? []).map((m) => ({ ...m, label: `${m.label} (${sheet})`, file: doc.filename })));
+
+    let state: ReviewState;
+    if (read.length === 0) {
+      state = "not-read";
+      const texts = sheetDocs.flatMap(({ doc }) => doc.problems.map((p) => `${p.headline} ${p.detail ?? ""}`));
+      problems.push(whyNotRead(texts, "", context.failedFiles.includes(book), context.productNoun));
+    } else {
+      state = problems.length > 0 || read.some(({ doc }) => doc.state === "needs-look") ? "needs-look" : "read";
+    }
+
+    const rowBits = rowSummaryForFiles(context.sections, sheetDocs.map(({ doc }) => doc.filename));
+    const summary = state === "not-read"
+      ? ""
+      : rowBits.length > 0
+        ? rowBits.join(" · ")
+        : Array.from(new Set(read.map(({ doc }) => doc.summary).filter(Boolean))).slice(0, 3).join(" · ");
+
+    out.push({
+      filename: book,
+      documentType: template ? "B-BBEE information-gathering workbook" : "Workbook",
+      state,
+      summary,
+      values,
+      unplaced,
+      problems,
+      notFound,
+      missing,
+      sheets,
+    });
+  }
+  return out;
 }
 
 /** Lowercase letters and digits only — "Signed date" and "signed_date" are the same key. */
@@ -408,6 +533,14 @@ export function applyReviewEdit(parserCase: ParserCaseLike, filename: string, ed
     r.filename !== filename ? r : { ...r, reasons: (r.reasons ?? []).filter((t) => !isGapLine(t, key)) },
   );
   return { ...parserCase, fields_extracted, documents_detected, documents_needing_review };
+}
+
+/**
+ * Whether the review lists this part of the upload — as a document, or as a
+ * sheet of a workbook listed once. Anything it does not list belongs beside it.
+ */
+export function reviewListsFile(docs: ReviewDocument[], sourceFile: string): boolean {
+  return docs.some((d) => d.filename === sourceFile || (d.sheets ?? []).some((s) => s.file === sourceFile));
 }
 
 export function reviewCounts(docs: ReviewDocument[]): Record<ReviewState, number> {

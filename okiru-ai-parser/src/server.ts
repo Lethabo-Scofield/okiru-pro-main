@@ -13,6 +13,7 @@ import { setQuoteStore } from './services/quoteStore.js';
 import { createRedisQuoteStore } from './services/redisQuoteStore.js';
 import { loadSkillsAtBoot } from './services/skills.js';
 import { RedisRunResultStore, setRunResultStore } from './services/runResultStore.js';
+import { parserBuild } from './services/parserBuild.js';
 
 const logger = createLogger('OkiruPaser');
 const app = express();
@@ -36,6 +37,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   (req as Request & { requestId: string }).requestId = requestId;
   res.setHeader('x-request-id', requestId);
   res.setHeader('x-parser-version', PARSER_VERSION);
+  res.setHeader('x-parser-build', parserBuild());
   next();
 });
 
@@ -54,6 +56,7 @@ app.get('/health', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     service: 'okiru-ai-parser',
     version: PARSER_VERSION,
+    build: parserBuild(),
     neo4jConfigured: neo4jConfigured(),
   });
 });
@@ -70,6 +73,7 @@ app.get('/ready', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     service: 'okiru-ai-parser',
     version: PARSER_VERSION,
+    build: parserBuild(),
     ontology_version: ONTOLOGY_VERSION,
     dependencies: {
       neo4j_configured: hasNeo4j,

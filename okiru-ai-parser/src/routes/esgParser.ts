@@ -55,6 +55,7 @@ import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 import { concurrentMap } from '../services/concurrentMap.js';
 import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
 import { esgRunRecords, signParserRuns, verifiedQuoteId } from '../services/runAttestation.js';
+import { parserBuild } from '../services/parserBuild.js';
 import { pageImageProviderFor } from '../services/agentExtraction.js';
 import { parseEsgFocus } from '../services/esgFocus.js';
 import { recorderForRun } from '../services/paidRunTracking.js';
@@ -305,6 +306,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
       esg_entities: entities,
       unreadable_files: unreadableFiles,
       // One signed record per uploaded file: the only form the library accepts.
+      parser_build: parserBuild(),
       run_attestations: signParserRuns('esg', esgRunRecords({
         files,
         inputs: rawInputs,
@@ -440,6 +442,7 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       ai_entities: entities,
       esg_entities: entities,
       // One signed record per uploaded file: the only form the library accepts.
+      parser_build: parserBuild(),
       run_attestations: signParserRuns('esg', esgRunRecords({
         files,
         inputs: rawInputs,

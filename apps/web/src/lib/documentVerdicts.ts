@@ -315,7 +315,8 @@ function financialValueFiles(parserCase: ParserCaseLike): Set<string> {
 
 const SECTION_NOUN: Record<string, [string, string]> = {
   ownership: ['shareholder', 'shareholders'],
-  'management-control': ['manager', 'managers'],
+  // The grid holds the whole EE register, not only managers.
+  'management-control': ['person', 'people'],
   'skills-development': ['learner', 'learners'],
   procurement: ['supplier', 'suppliers'],
   esd: ['ESD contribution', 'ESD contributions'],
@@ -346,6 +347,25 @@ function sectionRowsByFile(
     }
   }
   return byFile;
+}
+
+/**
+ * What several parts of one upload put in the workbook, each row counted once
+ * — "41 suppliers · 14 managers". A row merged from three sheets of the same
+ * workbook is one supplier, not three.
+ */
+export function rowSummaryForFiles(sections: Record<string, SectionPatchLike> | undefined, files: string[]): string[] {
+  const wanted = new Set(files.map((f) => str(f)));
+  const counts = new Map<string, number>();
+  for (const [key, patch] of Object.entries(sections ?? {})) {
+    let n = 0;
+    for (const row of patch?.rows ?? []) {
+      const src = (row as { _sourceFiles?: unknown } | null)?._sourceFiles;
+      if (Array.isArray(src) && src.some((f) => wanted.has(str(f)))) n += 1;
+    }
+    if (n > 0) counts.set(key, n);
+  }
+  return sectionBitsFor(counts);
 }
 
 function sectionBitsFor(counts: Map<string, number> | undefined): string[] {

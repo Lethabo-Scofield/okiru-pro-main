@@ -78,3 +78,38 @@ describe("postParserRun", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("postParserRun — a save that meets a deploy or a dropped connection", () => {
+  const noWait = async () => {};
+  const reply = (status: number, body: unknown = {}) => ({ ok: status < 300, status, json: async () => body });
+
+  it("sends a signed run again until the library takes it", async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(reply(503, { message: "Service Unavailable" }))
+      .mockResolvedValueOnce(reply(201));
+    vi.stubGlobal("fetch", fetchMock);
+    await postParserRun("doc-1", "cert.pdf", { signed: run }, { wait: noWait });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("gives up after its attempts and names the file", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(postParserRun("doc-1", "cert.pdf", { signed: run }, { wait: noWait, attempts: 2 }))
+      .rejects.toThrow(/save cert\.pdf/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not repeat a refusal, or a body that is not safe to send twice", async () => {
+    const refused = vi.fn().mockResolvedValue(reply(409, { message: "This parser result was read from a different file than this document holds." }));
+    vi.stubGlobal("fetch", refused);
+    await expect(postParserRun("doc-1", "cert.pdf", { signed: run }, { wait: noWait })).rejects.toThrow(/different file/);
+    expect(refused).toHaveBeenCalledTimes(1);
+
+    const unsigned = vi.fn().mockResolvedValue(reply(503));
+    vi.stubGlobal("fetch", unsigned);
+    await expect(postParserRun("doc-1", "cert.pdf", { legacy: { parserOutput: { status: "passed" } } }, { wait: noWait })).rejects.toThrow();
+    expect(unsigned).toHaveBeenCalledTimes(1);
+  });
+});

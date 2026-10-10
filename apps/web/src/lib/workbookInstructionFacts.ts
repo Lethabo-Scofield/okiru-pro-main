@@ -5,11 +5,17 @@
  *
  * The form is where the sector and year end are decided: the sector picks the
  * scorecard the company is judged against, the year end the period every dated
- * pillar is measured over. The workbook's statement of them is evidence the
- * form must not ignore. So it fills a field the user left EMPTY and, where the
- * form's value differs, the build waits for the user to take the workbook's
- * value or keep their own (unsettledMismatches) — never resolved silently
- * either way.
+ * pillar is measured over. The workbook's statement of them is the client's
+ * own declaration, so it fills a field the user left EMPTY and, where the form
+ * holds something else, the difference is put to the user as a decision that
+ * blocks Build until it is made — never resolved silently either way.
+ *
+ * Why a decision and not a note: the form's value is often not a choice at
+ * all. It was picked before the read, or restored from an earlier run's
+ * snapshot, and a single amber line under the Build bar let a Transport pack
+ * be built as RCOGP with a year end twenty months out — the parser had read
+ * both correctly. Accepting the workbook's value is one click; keeping the
+ * form's is a second, explicit click.
  */
 import { normalizeSectorDeterministic } from "@/lib/excelImport";
 import { parseWorkbookDate } from "@/components/workbook/sections";
@@ -84,10 +90,10 @@ export interface FormFactMismatch {
   field: "sector" | "yearEnd";
   /** What the form holds. */
   form: string;
-  /** What the workbook states. */
+  /** What the workbook states, as the user should read it. */
   workbook: string;
-  /** The workbook's value in the form's own terms (a sector code, an ISO date): what "use the workbook's" sets. */
-  use: string;
+  /** The value the form takes when the user accepts the workbook's (a sector code, an ISO date). */
+  workbookValue: string;
 }
 
 /**
@@ -103,27 +109,33 @@ export function formFactMismatches(
   const out: FormFactMismatch[] = [];
   const formSector = normalizeSectorDeterministic(form.sector) ?? form.sector;
   if (form.sector && facts.sector && formSector !== facts.sector) {
-    out.push({ field: "sector", form: form.sector, workbook: facts.sectorStated ?? facts.sector, use: facts.sector });
+    out.push({ field: "sector", form: form.sector, workbook: facts.sectorStated ?? facts.sector, workbookValue: facts.sector });
   }
   const formYearEnd = isoYearEnd(form.yearEnd);
   if (form.yearEnd && facts.yearEnd && formYearEnd !== facts.yearEnd) {
-    out.push({ field: "yearEnd", form: form.yearEnd, workbook: facts.yearEnd, use: facts.yearEnd });
+    out.push({ field: "yearEnd", form: form.yearEnd, workbook: facts.yearEnd, workbookValue: facts.yearEnd });
   }
   return out;
 }
 
 /**
- * The disagreements the user has not yet settled.
- *
- * The sector decides which scorecard the company is judged against and the
- * year end which twelve months every dated pillar covers, so a form that
- * disagrees with the workbook cannot build on its own: a value restored from an
- * earlier session, or picked before the documents were read, silently beat the
- * workbook and scored a Transport company under the generic Codes, five levels
- * down. Each disagreement is settled by taking the workbook's value (the form
- * then agrees) or by keeping the form's, which the user does for that exact
- * pair of values; a new disagreement asks again.
+ * What a "keep mine" decision is recorded under: the field and BOTH values it
+ * was made between. If either side changes afterwards — the user picks a third
+ * sector, a re-read states another year end — the old decision no longer
+ * answers the new question, and it is asked again.
  */
-export function unsettledMismatches(mismatches: FormFactMismatch[], kept: FormFactMismatch[]): FormFactMismatch[] {
-  return mismatches.filter((m) => !kept.some((k) => k.field === m.field && k.form === m.form && k.workbook === m.workbook));
+export function mismatchKey(mismatch: FormFactMismatch): string {
+  return `${mismatch.field}|${mismatch.form}|${mismatch.workbook}`;
+}
+
+/**
+ * The mismatches still waiting for the user. Build is blocked while any
+ * remain. Accepting the workbook's value removes a mismatch by making the form
+ * agree; keeping the form's value is recorded in `keptOwn` (see mismatchKey).
+ */
+export function undecidedMismatches(
+  mismatches: readonly FormFactMismatch[],
+  keptOwn: ReadonlySet<string>,
+): FormFactMismatch[] {
+  return mismatches.filter((mismatch) => !keptOwn.has(mismatchKey(mismatch)));
 }

@@ -71,22 +71,56 @@ export async function postParserRun(
   documentId: string,
   filename: string,
   run: { signed?: SignedParserRun | null; legacy?: LegacyRunBody | null },
+  options: { attempts?: number; wait?: (ms: number) => Promise<void> } = {},
 ): Promise<void> {
   if (!run.signed && !run.legacy) throw new Error(`The parser did not sign its result for ${filename}`);
-  const body = {
+  const body = JSON.stringify({
     ...(run.legacy ?? {}),
     ...(run.signed ? { attestation: { payload: run.signed.payload, signature: run.signed.signature } } : {}),
-  };
-  const res = await fetch(`/api/parser-documents/${encodeURIComponent(documentId)}/runs`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
   });
-  if (!res.ok) {
+  // A signed record files once however often it is sent (the library answers
+  // a repeat with the run it already holds), so a save that met a dropped
+  // connection or a pod being replaced mid-deploy is simply sent again. A paid
+  // read whose library save failed that way left the documents page showing
+  // an older reading than the company built from it. An unsigned body is not
+  // safe to repeat, so it gets one try.
+  const attempts = run.signed ? Math.max(1, options.attempts ?? RUN_SAVE_ATTEMPTS) : 1;
+  const wait = options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  for (let attempt = 1; ; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetch(`/api/parser-documents/${encodeURIComponent(documentId)}/runs`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+    } catch (error) {
+      if (attempt < attempts) {
+        await wait(retryDelayMs(attempt));
+        continue;
+      }
+      throw new Error(`Could not reach the document library to save ${filename}${error instanceof Error && error.message ? ` (${error.message})` : ""}`);
+    }
+    if (res.ok) return;
+    if (attempt < attempts && TRANSIENT_STATUS.has(res.status)) {
+      await wait(retryDelayMs(attempt));
+      continue;
+    }
     const reply = await res.json().catch(() => ({}));
     throw new Error(reply?.message ?? `Could not save parser result for ${filename}`);
   }
+}
+
+/** How many times a signed run is sent before the save is reported as failed. */
+export const RUN_SAVE_ATTEMPTS = 4;
+
+/** Answers that say "not now" rather than "no": overloaded, restarting, or a gateway between pods. */
+const TRANSIENT_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+/** 1s, 3s, 9s — long enough to outlast a pod being replaced. */
+function retryDelayMs(attempt: number): number {
+  return 1000 * 3 ** (attempt - 1);
 }
 
 /** File one signed run against the library document it was read from. */

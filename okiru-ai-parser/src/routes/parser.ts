@@ -49,6 +49,7 @@ import {
   verifiedQuoteId,
   type RunRecord,
 } from '../services/runAttestation.js';
+import { parserBuild } from '../services/parserBuild.js';
 import esgRouter from './esgParser.js';
 import { markResultCollected, recorderForRun } from '../services/paidRunTracking.js';
 import { getRunResultStore, runMaxMs } from '../services/runResultStore.js';
@@ -434,6 +435,7 @@ router.post('/resolve-file-paid', upload.single('file'), async (req: Request, re
         ...record.parserOutput,
         // The signed record — the rule layer above plus every model and agent
         // value — is what the library stores. Null when this parser cannot sign.
+        parser_build: parserBuild(),
         run_attestation: signed ?? null,
         ai_value_count: record.aiValues?.length ?? 0,
       });
@@ -574,6 +576,7 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
       unreadable_files: unreadableFiles,
       // One signed record per uploaded file — both layers of its read — the
       // only form the document library accepts.
+      parser_build: parserBuild(),
       run_attestations: signParserRuns('bbbee', bbbeeRunRecords(result, files, {
         extractions: entities?.extractions ?? null,
         inputs: rawInputs,
@@ -739,6 +742,7 @@ router.post('/resolve-case-files-stream', upload.array('files', 100), async (req
       ai_entities: entities,
       // One signed record per uploaded file — both layers of its read — the
       // only form the document library accepts.
+      parser_build: parserBuild(),
       run_attestations: signParserRuns('bbbee', bbbeeRunRecords(result, files, {
         extractions: entities?.extractions ?? null,
         inputs: rawInputs,

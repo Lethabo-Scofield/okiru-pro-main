@@ -334,6 +334,56 @@ function shareASourceFile(a: WorkbookRow, b: WorkbookRow): boolean {
   return left.some((file) => right.includes(file));
 }
 
+/**
+ * The READS each row came from — one per extraction, so a row merged from
+ * three documents carries three.
+ *
+ * "Two rows from the same document are two line items" is a rule about one
+ * READ of a document: a register's lines. The parser reads many files more
+ * than once — a supplier ledger as a ledger AND as a table, a workbook sheet by
+ * the table reader AND by a certificate spec that picked one supplier off it.
+ * Two reads of one file state the same facts twice. Judged by file name, the
+ * second read was refused as "a second line of the same document" and became
+ * its own row: a supplier three times on the grid, its spend counted twice.
+ *
+ * Kept beside the row, not on it — the row is what the workbook stores.
+ */
+const rowReads = new WeakMap<WorkbookRow, Set<number>>();
+let readCounter = 0;
+
+/** Rows that are a line of a table the document printed (a register, a schedule), not a lone reading. */
+const registerLines = new WeakSet<WorkbookRow>();
+
+/** Are these two rows lines of ONE read? Falls back to the file for rows built elsewhere. */
+function fromTheSameRead(a: WorkbookRow, b: WorkbookRow): boolean {
+  const left = rowReads.get(a);
+  const right = rowReads.get(b);
+  if (left && right) return Array.from(left).some((read) => right.has(read));
+  return shareASourceFile(a, b);
+}
+
+/**
+ * The files that STATED each cell's value, so precedence between two figures
+ * follows the document each figure came from — not every document the row has
+ * since absorbed. A schedule row that a ledger's name-only read had already
+ * joined carried the ledger's file name, so the ledger's own spend arriving
+ * next was weighed as ledger-against-ledger and lost to the schedule's figure.
+ */
+const cellSourceMap = new WeakMap<WorkbookRow, Map<string, string[]>>();
+
+function cellSources(row: WorkbookRow, column: string): string[] {
+  return cellSourceMap.get(row)?.get(column) ?? row._sourceFiles ?? [];
+}
+
+function setCellSources(row: WorkbookRow, column: string, sources: string[]): void {
+  let map = cellSourceMap.get(row);
+  if (!map) {
+    map = new Map();
+    cellSourceMap.set(row, map);
+  }
+  map.set(column, Array.from(new Set(sources)));
+}
+
 export interface ReconciliationFinding {
   section: WorkbookSectionKey;
   entity: string;
@@ -344,11 +394,68 @@ export interface ReconciliationFinding {
 interface MergeDecision {
   merge: boolean;
   finding?: string;
+  /** The column the finding is about. */
+  column?: string;
 }
 
-/** Does this row's evidence come from an accounting SOURCE document? */
-function fromAccountingRecord(row: WorkbookRow): boolean {
-  return (row._sourceFiles ?? []).some((file) => /ledger|statement|accounts?\s*payable/i.test(file));
+/** Did this cell's value come from an accounting SOURCE document? */
+function fromAccountingRecord(row: WorkbookRow, column: string): boolean {
+  return cellSources(row, column).some((file) => /ledger|statement|accounts?\s*payable/i.test(file));
+}
+
+/**
+ * An occupational level's rank, highest first; null when the text names none.
+ * Checked most specific first: "unskilled" and "semi-skilled" both contain
+ * "skilled".
+ */
+function occupationalRank(value: unknown): number | null {
+  const text = String(value ?? "").toLowerCase();
+  if (!text.trim()) return null;
+  if (/unskilled|defined.?decision/.test(text)) return 1;
+  if (/semi.?skilled|discretionary/.test(text)) return 2;
+  if (/junior|skilled technical|academically qualified/.test(text)) return 3;
+  if (/middle|professionally qualified|experienced specialist/.test(text)) return 4;
+  if (/senior/.test(text)) return 5;
+  if (/top|executive|board/.test(text)) return 6;
+  return null;
+}
+
+/**
+ * Two lines of one register naming the same person, where neither says
+ * anything the other contradicts: the same person written twice (a template
+ * drag-filled down 500 rows, its first line carrying the ID number and the
+ * rest not). Identical lines were already collapsed; a line that only LACKS
+ * something its twin has is the same repeat. Lines that differ on any value
+ * (another ID, another level) stay two people who share a name. People only —
+ * two equal spend lines are two transactions.
+ */
+function repeatedPersonLine(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow): boolean {
+  if (section !== "management-control") return false;
+  for (const column of Array.from(new Set([...Object.keys(a), ...Object.keys(b)]))) {
+    if (ROW_BOOKKEEPING.has(column)) continue;
+    if (!cellBlank(a[column]) && !cellBlank(b[column]) && !cellsAgree(a[column], b[column])) return false;
+  }
+  return true;
+}
+
+/**
+ * Which of two stated occupational levels one person's row keeps.
+ *
+ * A person is one row however many documents name them, so two documents that
+ * put them at different levels are a question about ONE person — never two
+ * people. The level more documents state is kept (a register repeated in
+ * three workbooks against one prior-year sheet); between equals, the LOWER
+ * level, because a higher one claims more management-control credit and that
+ * is not ours to grant on a guess. Either way the difference is reported.
+ */
+function keptOccupationalLevel(a: WorkbookRow, b: WorkbookRow, column: string): "a" | "b" {
+  const aCount = cellSources(a, column).length;
+  const bCount = cellSources(b, column).length;
+  if (aCount !== bCount) return aCount > bCount ? "a" : "b";
+  const aRank = occupationalRank(a[column]);
+  const bRank = occupationalRank(b[column]);
+  if (aRank === null || bRank === null) return "a";
+  return bRank < aRank ? "b" : "a";
 }
 
 /**
@@ -356,9 +463,10 @@ function fromAccountingRecord(row: WorkbookRow): boolean {
  *
  * The distinction is WHICH DOCUMENT each came from.
  *
- * - SAME document: two line items, never merged. Thirteen monthly R500
- *   donations to one beneficiary are thirteen contributions; collapsing equal
- *   figures deletes money.
+ * - SAME read of a document: two line items, never merged. Thirteen monthly
+ *   R500 donations to one beneficiary are thirteen contributions; collapsing
+ *   equal figures deletes money. (A second READ of the same file is not a
+ *   second line — see rowReads.)
  * - DIFFERENT documents: the same fact stated twice — a supplier's ledger and
  *   the client's schedule both reporting that supplier's spend. Merged, so a
  *   ledger corroborates a schedule row instead of doubling it.
@@ -374,10 +482,11 @@ function fromAccountingRecord(row: WorkbookRow): boolean {
  */
 function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow, entity: string): MergeDecision {
   let finding: string | undefined;
+  let findingColumn: string | undefined;
 
   const instanceColumns = INSTANCE_COLUMNS[section];
   if (instanceColumns) {
-    if (shareASourceFile(a, b)) return { merge: false };
+    if (fromTheSameRead(a, b)) return { merge: false };
     const differ = instanceColumns.some((column) =>
       !cellBlank(a[column]) && !cellBlank(b[column]) && !cellsAgree(a[column], b[column]));
     if (differ) return { merge: false };
@@ -385,27 +494,39 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
 
   for (const column of EVIDENCE_COLUMNS[section] ?? []) {
     if (cellBlank(a[column]) || cellBlank(b[column])) continue;
-    if (shareASourceFile(a, b)) return { merge: false };
+    if (fromTheSameRead(a, b) && !repeatedPersonLine(section, a, b)) return { merge: false };
     if (cellsAgree(a[column], b[column])) continue;
+    findingColumn = column;
 
     const left = Number(String(a[column]).replace(/[R\s,]/g, ""));
     const right = Number(String(b[column]).replace(/[R\s,]/g, ""));
     if (Number.isFinite(left) && Number.isFinite(right)) {
-      const aLedger = fromAccountingRecord(a);
-      const bLedger = fromAccountingRecord(b);
+      const aLedger = fromAccountingRecord(a, column);
+      const bLedger = fromAccountingRecord(b, column);
       const useLedger = aLedger !== bLedger;
       const keep = useLedger ? (aLedger ? left : right) : Math.min(left, right);
-      const keptFile = (useLedger ? (aLedger ? a : b) : (left <= right ? a : b))._sourceFiles?.[0] ?? "one document";
-      const otherFile = (useLedger ? (aLedger ? b : a) : (left <= right ? b : a))._sourceFiles?.[0] ?? "another document";
+      const keptRow = useLedger ? (aLedger ? a : b) : (left <= right ? a : b);
+      const otherRow = keptRow === a ? b : a;
+      const keptFile = cellSources(keptRow, column)[0] ?? "one document";
+      const otherFile = cellSources(otherRow, column)[0] ?? "another document";
       const other = keep === left ? right : left;
       finding = `${entity}: ${keptFile} states ${column} of ${keep.toLocaleString()} but ${otherFile} says ${other.toLocaleString()} — a difference of ${Math.abs(other - keep).toLocaleString()}. ${useLedger ? "The accounting record's figure is being used" : "The lower figure is being used"}; confirm which is in scope.`;
+      setCellSources(a, column, cellSources(keptRow, column));
       a[column] = keep;
+    } else if (section === "management-control" && column === "occupationalLevel") {
+      const kept = keptOccupationalLevel(a, b, column) === "a" ? a : b;
+      const other = kept === a ? b : a;
+      finding = `${entity}: ${cellSources(kept, column).join(", ") || "one document"} ${cellSources(kept, column).length === 1 ? "puts" : "put"} this person at ${String(kept[column])}, but ${cellSources(other, column).join(", ") || "another document"} says ${String(other[column])}. One person is one row: ${String(kept[column])} is being used — confirm their level.`;
+      if (kept === b) {
+        a[column] = b[column];
+        setCellSources(a, column, cellSources(b, column));
+      }
     } else {
       finding = `${entity}: documents disagree on ${column} (${String(a[column])} vs ${String(b[column])}).`;
     }
   }
 
-  return { merge: true, finding };
+  return { merge: true, finding, column: findingColumn };
 }
 
 /**
@@ -413,19 +534,86 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
  * except a value derived from a declaration flag, which a value `from` actually
  * STATES replaces (a certificate's 75% beats a schedule's "51% or more: Yes").
  */
-function mergeInto(into: WorkbookRow, from: WorkbookRow): void {
+function mergeInto(into: WorkbookRow, from: WorkbookRow, options: { only?: ReadonlySet<string> } = {}): void {
   for (const [column, value] of Object.entries(from)) {
     if (ROW_BOOKKEEPING.has(column) || cellBlank(value)) continue;
+    if (options.only && !options.only.has(column)) continue;
     if (cellBlank(into[column])) {
       into[column] = value;
       setDerived(into, column, derivedNote(from, column));
+      setCellSources(into, column, cellSources(from, column));
     } else if (derivedNote(into, column) && !derivedNote(from, column)) {
       into[column] = value;
       setDerived(into, column, undefined);
+      setCellSources(into, column, cellSources(from, column));
+    } else if (cellsAgree(into[column], value)) {
+      // The same value stated by another document: corroboration, kept with the cell.
+      setCellSources(into, column, [...cellSources(into, column), ...cellSources(from, column)]);
     }
   }
   const sources = new Set([...(into._sourceFiles ?? []), ...(from._sourceFiles ?? [])]);
   if (sources.size > 0) into._sourceFiles = Array.from(sources);
+  const reads = new Set([...Array.from(rowReads.get(into) ?? []), ...Array.from(rowReads.get(from) ?? [])]);
+  if (reads.size > 0) rowReads.set(into, reads);
+}
+
+/** What a supplier's certificate certifies — compared before a group certificate is linked. */
+const CERTIFIED_COLUMNS = ["bbbeeLevel", "certificateExpiryDate", "currentBlackOwnership", "currentBlackFemaleOwnership"];
+
+/**
+ * A certificate issued to a supplier's GROUP joins the supplier it certifies.
+ *
+ * Suppliers that belong to a group are often certified under the group's
+ * registered name: the schedule says "Plover Insurance", the certificate
+ * "Plover Insurance Group Limited". Exact name matching (rightly) keeps them
+ * apart, so the certificate became a spend-less supplier row of its own — one
+ * more line on a grid the user then has to explain.
+ *
+ * Linked only when the evidence says it is the same certificate, not when the
+ * names look alike: the certificate carries no spend; the schedule supplier's
+ * full name is how the certificate's name BEGINS (whole words); exactly one
+ * schedule row fits; and the level plus at least one other certified figure
+ * (expiry, black or black-women ownership) agree with that row, with none
+ * disagreeing. Registration and VAT numbers are not compared and not copied:
+ * a group certificate states the group's, which are not the supplier's.
+ *
+ * Returns the certificate rows folded in, for the caller to drop.
+ */
+function linkGroupCertificates(rows: WorkbookRow[], reconciliation: ReconciliationFinding[]): WorkbookRow[] {
+  const tokens = (row: WorkbookRow) => normaliseEntityName(row.supplierName).split(" ").filter(Boolean).map((t) => t.replace(/s$/, ""));
+  const folded: WorkbookRow[] = [];
+  const fillable = new Set(Object.keys(Object.assign({}, ...rows)).filter((column) => !IDENTIFIER_COLUMNS.has(column)));
+  for (const certificate of rows) {
+    if (!cellBlank(certificate.spend)) continue;
+    const certName = tokens(certificate);
+    if (certName.length < 2) continue;
+    const fits = rows.filter((row) => {
+      if (row === certificate || cellBlank(row.spend)) return false;
+      const name = tokens(row);
+      return name.length > 0 && name.length < certName.length && name.every((token, i) => certName[i] === token);
+    });
+    if (fits.length !== 1) continue;
+    const supplier = fits[0];
+    let agree = 0;
+    let levelAgrees = false;
+    let disagree = false;
+    for (const column of CERTIFIED_COLUMNS) {
+      if (cellBlank(certificate[column]) || cellBlank(supplier[column])) continue;
+      if (!cellsAgree(certificate[column], supplier[column])) { disagree = true; break; }
+      agree += 1;
+      if (column === "bbbeeLevel") levelAgrees = true;
+    }
+    if (disagree || !levelAgrees || agree < 2) continue;
+    mergeInto(supplier, certificate, { only: fillable });
+    folded.push(certificate);
+    reconciliation.push({
+      section: "procurement",
+      entity: String(supplier.supplierName),
+      column: "supplierName",
+      message: `${String(certificate.supplierName)} (${certificate._sourceFiles?.[0] ?? "a certificate"}) is taken as ${String(supplier.supplierName)}'s certificate: it is issued to the group, and its level and ${agree - 1 === 1 ? "one other certified figure" : `${agree - 1} other certified figures`} match that supplier's row. Check it covers this supplier.`,
+    });
+  }
+  return folded;
 }
 
 /**
@@ -469,7 +657,7 @@ export function linkWorkbookRows(
         const decision = mergeDecision(section, candidate, row, display);
         if (!decision.merge) continue;
         if (decision.finding) {
-          reconciliation.push({ section, entity: display, column: "spend", message: decision.finding });
+          reconciliation.push({ section, entity: display, column: decision.column ?? "spend", message: decision.finding });
         }
         mergeInto(candidate, row);
         merged = true;
@@ -481,6 +669,12 @@ export function linkWorkbookRows(
       }
       byName.set(squashed, candidates);
       byName.set(sorted, candidates);
+    }
+
+    if (section === "procurement") {
+      for (const certificate of linkGroupCertificates(kept, reconciliation)) {
+        kept.splice(kept.indexOf(certificate), 1);
+      }
     }
 
     // A ledger row that never linked to anything is either a supplier the
@@ -584,6 +778,24 @@ function identifiersOnlySupplierRow(section: WorkbookSectionKey, values: Array<{
   return section === "procurement" && values.length > 0 && values.every((v) => IDENTIFIER_COLUMNS.has(v.field));
 }
 
+/**
+ * May a document read under this verification element open rows in this grid?
+ *
+ * Only supplier evidence opens procurement rows. The matrix files every
+ * supplier document (schedules, certificates, ledgers, invoices) under ESD, and
+ * a workbook's own Instructions or Finance sheet carries no element at all; a
+ * document read under any OTHER element that names a "supplier" is talking
+ * about someone else. An SED proof of payment's "supplier" is the beneficiary
+ * whose invoice was paid — it became a supplier, with spend. Ownership
+ * and management documents print the measured entity's own registration
+ * numbers, which became nameless supplier rows. Such values are reported as
+ * unmapped, so they stay visible.
+ */
+function opensRowsIn(section: WorkbookSectionKey, element: string | undefined): boolean {
+  if (section !== "procurement" || !element) return true;
+  return element === "ESD" || /PROCUREMENT/i.test(element);
+}
+
 /** The employment-equity columns that make an employee table a register Management Control can score. */
 const EE_COLUMNS = ["race", "declared_race", "gender", "derived_gender", "occupational_level"];
 
@@ -648,7 +860,13 @@ export function parserExtractionsToWorkbook(
   /** Entity-level figures settled by rule rather than by the user — each one explained. */
   const metaResolutions: ReconciliationFinding[] = [];
 
+  /** The read (extraction) rows are being added for — see rowReads. */
+  let currentRead = 0;
   const addRow = (section: WorkbookSectionKey, row: WorkbookRow) => {
+    rowReads.set(row, new Set([currentRead]));
+    for (const column of Object.keys(row)) {
+      if (!ROW_BOOKKEEPING.has(column)) setCellSources(row, column, row._sourceFiles ?? []);
+    }
     (rows[section] ??= []).push(row);
   };
 
@@ -679,6 +897,7 @@ export function parserExtractionsToWorkbook(
   const metaAuthoritativeContested = new Set<string>();
 
   for (const extraction of extractions) {
+    currentRead = ++readCounter;
     // Values for THIS document, split into the scalar ones (which together make
     // one row per section) and the tabular ones (which make many).
     const scalarBySection = new Map<WorkbookSectionKey, Array<{ field: string; value: unknown }>>();
@@ -694,7 +913,7 @@ export function parserExtractionsToWorkbook(
         // section from the FIRST entry's keys rather than from the table name.
         const firstKey = Object.keys(value[0]).find((key) => targetForField(key, extraction.element));
         const target = firstKey ? targetForField(firstKey, extraction.element) : null;
-        if (!target) {
+        if (!target || !opensRowsIn(target.section, extraction.element)) {
           unmapped.add(field);
           continue;
         }
@@ -892,6 +1111,10 @@ export function parserExtractionsToWorkbook(
         continue;
       }
 
+      if (!opensRowsIn(target.section, extraction.element)) {
+        unmapped.add(field);
+        continue;
+      }
       const list = scalarBySection.get(target.section) ?? [];
       list.push({ field: target.column, value });
       scalarBySection.set(target.section, list);
@@ -932,6 +1155,9 @@ export function parserExtractionsToWorkbook(
           .filter((v): v is { field: string; value: unknown; sourceFile: string } => v !== null);
 
         if (values.length === 0) continue;
+        // A supplier-table line with nothing but a registration or VAT number
+        // names no supplier and states nothing about one (see the scalar case).
+        if (identifiersOnlySupplierRow(table.section, values)) continue;
 
         const injected = injectIntoSection(table.section, values, options);
         for (const rejection of injected.rejected) {
@@ -943,11 +1169,18 @@ export function parserExtractionsToWorkbook(
             const column = targetForField(field, extraction.element)?.column;
             if (column && !cellBlank(row[column])) setDerived(row, column, flag);
           }
+          registerLines.add(row);
           addRow(table.section, row);
         }
       }
     }
   }
+
+  // A sheet that repeats one line (a drag-filled template: 500 copies of the
+  // same manager) is collapsed BEFORE linking too. Otherwise the first copy
+  // links to the person's register row and the second, being the same read,
+  // may not — and stays as the same person a second time.
+  const repeatFindings = dedupeExactDuplicateRows(rows);
 
   // Link before coverage: a certificate row enriched with its schedule row's
   // spend is complete; counted separately both halves would report gaps.
@@ -956,7 +1189,11 @@ export function parserExtractionsToWorkbook(
   // Completion pass: derive required fields from values ALREADY in the row and
   // drop identity-less fragments. The 64-file Thandanani pack produced 339
   // "Required" validation issues, most of them derivable — never fabricated.
-  completeWorkbookRows(linked.rows, rejected);
+  const completionFindings = completeWorkbookRows(linked.rows, rejected);
+
+  // People named by initials on a declaration ("R.A. PILLAY") join the one
+  // person those initials fit — after completion, which splits the names.
+  const initialsFindings = linkInitialsToPeople(linked.rows);
 
   // Collapse exact same-document duplicates AFTER completion: ledger-block
   // inheritance fills a continuation row's blank type/%-black to match its
@@ -1002,7 +1239,17 @@ export function parserExtractionsToWorkbook(
     meta,
     rejected,
     coverage,
-    reconciliation: [...linked.reconciliation, ...duplicateFindings, ...metaResolutions, ...tmpsFindings, ...raceFindings, ...derivedFindings],
+    reconciliation: [
+      ...repeatFindings,
+      ...linked.reconciliation,
+      ...completionFindings,
+      ...initialsFindings,
+      ...duplicateFindings,
+      ...metaResolutions,
+      ...tmpsFindings,
+      ...raceFindings,
+      ...derivedFindings,
+    ],
     metaConflicts,
     metaCorroboration,
     metaWithdrawn,
@@ -1294,13 +1541,46 @@ function dedupeExactDuplicateRows(
 function completeWorkbookRows(
   rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>,
   rejected: ParserToWorkbookResult["rejected"],
-): void {
-  const splitName = (full: string): { name: string; surname: string } | null => {
+): ReconciliationFinding[] {
+  const findings: ReconciliationFinding[] = [];
+  // A comma states WHERE the boundary is, not which side the surname is on.
+  // Registers and payrolls write "Surname, Name" ("Mokoena, Thabo Peter" — the
+  // Excel import reads it that way too); some sheets write "Given Names,
+  // Surname". The side with more words is the given names (people have more
+  // given names than surnames); when both sides have one word, the sheet's own
+  // other rows decide, and a sheet that never says reads surname first.
+  const commaOrder = (left: string, right: string): "surname-first" | "given-first" | null => {
+    const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
+    if (words(left) > words(right)) return "given-first";
+    if (words(right) > words(left)) return "surname-first";
+    return null;
+  };
+  const COMMA_NAME = /^(.+?),\s*(\S.*)$/;
+  const orderBySheet = new Map<string, { surnameFirst: number; givenFirst: number }>();
+  for (const row of rows["management-control"] ?? []) {
+    if (String(row.surname ?? "").trim()) continue;
+    const comma = String(row.name ?? "").trim().match(COMMA_NAME);
+    const order = comma ? commaOrder(comma[1], comma[2]) : null;
+    if (!order) continue;
+    const sheet = row._sourceFiles?.[0] ?? "";
+    const tally = orderBySheet.get(sheet) ?? { surnameFirst: 0, givenFirst: 0 };
+    if (order === "surname-first") tally.surnameFirst += 1;
+    else tally.givenFirst += 1;
+    orderBySheet.set(sheet, tally);
+  }
+
+  const splitName = (full: string, sheet = ""): { name: string; surname: string } | null => {
     const trimmed = full.trim();
     if (!trimmed) return null;
-    // "Given Names, Surname" — the comma states the boundary explicitly.
-    const comma = trimmed.match(/^(.+),\s*(\S.*)$/);
-    if (comma) return { name: comma[1].trim(), surname: comma[2].trim() };
+    const comma = trimmed.match(COMMA_NAME);
+    if (comma) {
+      const tally = orderBySheet.get(sheet);
+      const order = commaOrder(comma[1], comma[2])
+        ?? (tally && tally.givenFirst > tally.surnameFirst ? "given-first" : "surname-first");
+      return order === "given-first"
+        ? { name: comma[1].trim(), surname: comma[2].trim() }
+        : { name: comma[2].trim(), surname: comma[1].trim() };
+    }
     if (!/\s/.test(trimmed)) return null;
     const parts = trimmed.split(/\s+/);
     const surname = parts.pop() as string;
@@ -1310,7 +1590,7 @@ function completeWorkbookRows(
   for (const row of rows["management-control"] ?? []) {
     const nm = String(row.name ?? "").trim();
     if (nm && !String(row.surname ?? "").trim()) {
-      const split = splitName(nm);
+      const split = splitName(nm, row._sourceFiles?.[0]);
       if (split) { row.name = split.name; row.surname = split.surname; }
     }
     // NOTE: designation is NOT back-filled from occupationalLevel. They are
@@ -1384,11 +1664,43 @@ function completeWorkbookRows(
     nameField: string,
     hasName: (r: WorkbookRow) => boolean,
     adoptName: (r: WorkbookRow, adopted: string) => void,
+    adoptable: (r: WorkbookRow) => boolean = () => true,
   ) => {
-    const sectionRows = rows[section];
+    let sectionRows = rows[section];
     if (!sectionRows) return;
+    // A nameless row whose ID number is on a NAMED row of this same grid is
+    // that person — an ID document read on its own, a register line read twice.
+    // It joins them (filling blanks) instead of borrowing their name and
+    // standing beside them as the same person a second time.
+    const namedById = new Map<string, WorkbookRow>();
+    for (const row of sectionRows) {
+      const key = idKey(row.idNumber);
+      if (hasName(row) && /^\d{13}$/.test(key) && !namedById.has(key)) namedById.set(key, row);
+    }
+    const folded = new Set<WorkbookRow>();
     for (const row of sectionRows) {
       if (hasName(row)) continue;
+      const person = namedById.get(idKey(row.idNumber));
+      if (!person) continue;
+      for (const column of Array.from(PERSON_IDENTITY)) {
+        if (!cellBlank(row[column]) && !cellBlank(person[column]) && !cellsAgree(row[column], person[column])) {
+          findings.push({
+            section,
+            entity: String(person[nameField] ?? ""),
+            column,
+            message: `${row._sourceFiles?.[0] ?? "A document"} gives ID ${idKey(row.idNumber)} the ${column} ${String(row[column])}; ${person._sourceFiles?.[0] ?? "the register"} says ${String(person[column])}. The register's is kept — check which is right.`,
+          });
+        }
+      }
+      mergeInto(person, row);
+      folded.add(row);
+    }
+    if (folded.size > 0) {
+      sectionRows = sectionRows.filter((row) => !folded.has(row));
+      rows[section] = sectionRows;
+    }
+    for (const row of sectionRows) {
+      if (hasName(row) || !adoptable(row)) continue;
       const adopted = nameById.get(idKey(row.idNumber));
       if (adopted) adoptName(row, adopted);
     }
@@ -1412,11 +1724,23 @@ function completeWorkbookRows(
     rows[section] = kept;
   };
 
+  // A nameless ownership row only borrows a name when it is a holder: a line
+  // of a share register, or a row that states shares or a holding. An ID
+  // document read on its own (an age check for a youth employee, read off the
+  // employee sheet) carries an ID and nothing else, and borrowing the
+  // employee's name made them a shareholder on the grid.
+  const holdsSomething = (r: WorkbookRow): boolean =>
+    registerLines.has(r)
+    || ["numberOfShares", "shareholding", "votingRights", "economicInterest"].some((column) => {
+      const n = Number(String(r[column] ?? "").replace(/[%\s,]/g, ""));
+      return Number.isFinite(n) && n > 0;
+    });
   parkNameless(
     "ownership",
     "shareholderName",
     (r) => Boolean(String(r.shareholderName ?? "").trim()),
     (r, adopted) => { r.shareholderName = adopted; },
+    holdsSomething,
   );
   parkNameless(
     "management-control",
@@ -1428,6 +1752,71 @@ function completeWorkbookRows(
       else r.name = adopted;
     },
   );
+  return findings;
+}
+
+/** The identity a person's row carries — the only cells a weaker identification may fill. */
+const PERSON_IDENTITY = new Set(["race", "gender", "idNumber"]);
+
+/**
+ * A person named only by initials joins the ONE person those initials fit.
+ *
+ * Declarations are signed "V.L. SMITH"; the register names "Victor Leon
+ * Smith". Exact name matching kept them apart, so the owner appeared on the
+ * grid twice — once by initials, with nothing to score him on. The link is
+ * made only when the initials are all the given names are (single letters),
+ * the surname is the same, exactly one person in the case fits, and nothing
+ * on the two rows contradicts the other (race, gender, ID number).
+ *
+ * Linked, the initials row is evidence of WHO the person is, not new facts
+ * about them: it may fill their race, gender or ID where the full row has
+ * none, and nothing else. Any other value it carried is named in the finding
+ * so a person can carry it over if it is right.
+ */
+function linkInitialsToPeople(rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>): ReconciliationFinding[] {
+  const people = rows["management-control"];
+  if (!people || people.length < 2) return [];
+  const findings: ReconciliationFinding[] = [];
+  const givenTokens = (row: WorkbookRow) => String(row.name ?? "").split(/[\s.]+/).filter(Boolean);
+  const initialsOnly = (row: WorkbookRow) => {
+    const given = String(row.name ?? "").trim();
+    const tokens = givenTokens(row);
+    return tokens.length > 0 && tokens.every((t) => t.length === 1) && (given.includes(".") || tokens.length > 1 || given.length === 1);
+  };
+  const surnameKey = (row: WorkbookRow) => normaliseEntityName(row.surname);
+  const initialsOf = (row: WorkbookRow) => givenTokens(row).map((t) => t[0]).join("").toLowerCase();
+
+  const dropped = new Set<WorkbookRow>();
+  for (const short of people) {
+    if (!initialsOnly(short) || !surnameKey(short)) continue;
+    const fits = people.filter((full) =>
+      full !== short
+      && !dropped.has(full)
+      && !initialsOnly(full)
+      && surnameKey(full) === surnameKey(short)
+      && initialsOf(full) === initialsOf(short)
+      && !fromTheSameRead(full, short));
+    if (fits.length !== 1) continue;
+    const person = fits[0];
+    const contradicts = Array.from(PERSON_IDENTITY).some((column) =>
+      !cellBlank(short[column]) && !cellBlank(person[column]) && !cellsAgree(short[column], person[column]));
+    if (contradicts) continue;
+    const leftBehind = Object.keys(short).filter((column) =>
+      !ROW_BOOKKEEPING.has(column) && !PERSON_IDENTITY.has(column) && !["name", "surname"].includes(column)
+      && !cellBlank(short[column]) && cellBlank(person[column]));
+    mergeInto(person, short, { only: PERSON_IDENTITY });
+    dropped.add(short);
+    const shortName = `${String(short.name ?? "")} ${String(short.surname ?? "")}`.trim();
+    const fullName = `${String(person.name ?? "")} ${String(person.surname ?? "")}`.trim();
+    findings.push({
+      section: "management-control",
+      entity: fullName,
+      column: "name",
+      message: `${shortName} (${short._sourceFiles?.[0] ?? "a document"}) is taken to be ${fullName}: the same surname, initials that fit only them, and nothing that contradicts it.${leftBehind.length > 0 ? ` What it also said (${leftBehind.join(", ")}) was not copied onto their row — add it there if it is right.` : ""}`,
+    });
+  }
+  if (dropped.size > 0) rows["management-control"] = people.filter((row) => !dropped.has(row));
+  return findings;
 }
 
 /**

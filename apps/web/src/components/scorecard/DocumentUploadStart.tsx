@@ -37,7 +37,8 @@ import {
   type ParserCaseLike,
   type ParserWorkbookMapResult,
 } from "@/lib/parserWorkbookMap";
-import { parserExtractionsToWorkbook, toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
+import { toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
+import { SECTOR_TO_WORKBOOK, assembleCreateSections, injectCase } from "@/lib/createFlowAssembly";
 import { vocabularyDecisionKey, type VocabularyDecisions } from "@/lib/workbookInjection";
 import { getSection, parseWorkbookDate } from "@/components/workbook/sections";
 import PillarDocumentBatches, { batchLabel, type UploadOrigin } from "./PillarDocumentBatches";
@@ -45,7 +46,13 @@ import ConfirmUploadDialog, { type PendingUpload } from "./ConfirmUploadDialog";
 import { assessDocuments, isClassificationNote, isInternalJargon, type VerdictReport } from "@/lib/documentVerdicts";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
-import { formFactMismatches, unsettledMismatches, workbookFormFacts, type FormFactMismatch } from "@/lib/workbookInstructionFacts";
+import {
+  formFactMismatches,
+  mismatchKey,
+  undecidedMismatches,
+  workbookFormFacts,
+  type FormFactMismatch,
+} from "@/lib/workbookInstructionFacts";
 import {
   autofillProcurementFromCertificates,
   type AutofillReport,
@@ -306,23 +313,9 @@ import { mergeParserCases } from "@/lib/parserCaseMerge";
 // The review that replaced the list under the Build button: each document,
 // side by side with what we took from it and why anything was not read.
 import { DocumentReview } from "@/components/review/DocumentReview";
-import { applyReviewEdit, buildDocumentReview } from "@/lib/documentReview";
+import { applyReviewEdit, buildDocumentReview, reviewListsFile } from "@/lib/documentReview";
 
 /** workbook company-information meta value for each parser sector code. */
-const SECTOR_TO_WORKBOOK: Record<string, string> = {
-  // The parser's generic option is coded "Generic", but every Toolkit sector
-  // config (and okiruHubSectors) keys the generic Codes as "RCOGP". Mapping
-  // "Generic" → "Generic" produced an industrySector no config matched, so the
-  // workbook silently fell back and the chosen sector "didn't reflect". Both
-  // "Generic" and "RCOGP" now resolve to the RCOGP config.
-  Generic: "RCOGP",
-  RCOGP: "RCOGP",
-  CONSTRUCTION: "CONSTRUCTION",
-  FSC: "FSC",
-  TRANSPORT: "TRANSPORT",
-  ICT: "ICT",
-  AGRI: "AGRI",
-};
 
 /** A file's size in whatever unit the structure scan actually established. */
 function fileUnits(file: ParserQuote["files"][number]): string {
@@ -658,12 +651,12 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   const activeSector = sectorOptions.find((s) => s.code === sector);
 
   // The sector and year end the workbook's Instructions sheet states. They fill
-  // the form only where it is EMPTY — once per stated value, so a field the user
-  // cleared stays cleared. Where the form already holds something else (chosen
-  // before the read, or restored from an earlier session), Build waits until
-  // the user takes the workbook's value or keeps their own.
+  // the form where it is EMPTY — once per stated value, so a field the user
+  // cleared stays cleared. Where the form holds something else (picked before
+  // the read, or restored from an earlier run's snapshot) nothing is changed
+  // behind the user's back, but Build waits for a decision: the workbook's
+  // value is one click, keeping theirs is another. See workbookInstructionFacts.
   const workbookFacts = useMemo(() => workbookFormFacts(parserCase), [parserCase]);
-  const [keptFormFacts, setKeptFormFacts] = useState<FormFactMismatch[]>([]);
   const prefilledFactsRef = useRef("");
   useEffect(() => {
     const key = `${workbookFacts.sector ?? ""}|${workbookFacts.yearEnd ?? ""}`;
@@ -673,12 +666,17 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     if (workbookFacts.yearEnd) setYearEnd((prev) => prev || workbookFacts.yearEnd!);
   }, [workbookFacts]);
   const workbookMismatches = formFactMismatches({ sector, yearEnd }, workbookFacts);
-  const openMismatches = unsettledMismatches(workbookMismatches, keptFormFacts);
-  const takeWorkbookFact = (m: FormFactMismatch) => {
-    if (m.field === "sector") setSector(m.use);
-    else setYearEnd(m.use);
+  // "Keep mine" decisions, by the values they were made between. Held in memory
+  // only: a run restored from its snapshot asks again.
+  const [keptOwnFacts, setKeptOwnFacts] = useState<ReadonlySet<string>>(() => new Set());
+  const undecidedFacts = undecidedMismatches(workbookMismatches, keptOwnFacts);
+  const acceptWorkbookFact = (mismatch: FormFactMismatch) => {
+    if (mismatch.field === "sector") setSector(mismatch.workbookValue);
+    else setYearEnd(mismatch.workbookValue);
   };
-  const keepFormFact = (m: FormFactMismatch) => setKeptFormFacts((prev) => [...prev, m]);
+  const keepOwnFact = (mismatch: FormFactMismatch) => {
+    setKeptOwnFacts((prev) => new Set([...Array.from(prev), mismatchKey(mismatch)]));
+  };
 
   const mapped: ParserWorkbookMapResult | null = useMemo(
     () => (parserCase ? mapParserCaseToWorkbookSections(parserCase) : null),
@@ -692,25 +690,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
    * the transition, and this one is preferred where it has data because it
    * carries provenance, rejections and coverage the legacy shape does not.
    */
-  const injected = useMemo(() => {
-    const extractions = (parserCase as {
-      ai_entities?: { extractions?: Array<{ documentId?: string; sourceFile?: string; element?: string; values?: Array<{ field: string; value: unknown }>; exceptions?: unknown[] }> };
-    } | null)?.ai_entities?.extractions;
-    if (!extractions?.length) return null;
-
-    return parserExtractionsToWorkbook(
-      extractions.map((e) => ({
-        documentId: String(e.documentId ?? ""),
-        sourceFile: String(e.sourceFile ?? ""),
-        element: e.element,
-        values: e.values ?? [],
-        // The reader's findings travel too: a TMPS cell holding #REF! is
-        // filed in the workbook as withdrawn, so the sync leaves it blank.
-        exceptions: (e.exceptions ?? []).map((note) => String(note ?? "")),
-      })),
-      { sectorCode: sector || "Generic", scorecardType: size || "Generic", vocabulary },
-    );
-  }, [parserCase, sector, size, vocabulary]);
+  const injected = useMemo(
+    () => injectCase(parserCase, { sector, size, vocabulary }),
+    [parserCase, sector, size, vocabulary],
+  );
 
   /**
    * THE GENERAL MECHANISM behind every dropdown. Values the deterministic maps
@@ -1875,11 +1858,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   // A document added after the read but never read would be filed under the
   // company with nothing taken from it — the forgotten document, forgotten
   // again. Read it or remove it first.
-  // A sector or year end the workbook contradicts is settled first (see
-  // unsettledMismatches): it decides the scorecard and the measured year.
+  // A sector or year end that differs from the workbook's is decided before
+  // anything is built on it (see workbookInstructionFacts).
   const canCreate =
     Boolean(companyName.trim()) && Boolean(sector) && Boolean(size) && yearEndValid &&
-    unreadFiles.length === 0 && openMismatches.length === 0 && !parsing && !creating;
+    undecidedFacts.length === 0 && unreadFiles.length === 0 && !parsing && !creating;
 
   // Create the scorecard, stamping the chosen sector into company-information
   // meta so the workbook scores under the correct sector calculator (Generic /
@@ -1893,23 +1876,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     // REPLACE the legacy rows for that section — adding them double-counts the
     // same evidence once it scores. Legacy rows survive for sections the AI path
     // left empty; meta is merged with the legacy (deterministic) value winning.
-    const sections: Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }> = mergeWorkbookSections(
-      mapped?.sections ?? {},
-      injected ? toWorkbookSections(injected) : {},
+    const sections = assembleCreateSections(
+      mapped?.sections as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }> | undefined,
+      injected,
+      { companyName, sector, size, yearEnd, subSector },
     );
-
-    const companyMeta: Record<string, unknown> = {
-      companyName: companyName.trim(),
-      industrySector: SECTOR_TO_WORKBOOK[sector] ?? "Generic",
-      scorecardType: size,
-      financialYearEnd: yearEnd,
-    };
-    if (sector === "CONSTRUCTION" && subSector) companyMeta.constructionSubSector = subSector;
-    if (sector === "FSC" && subSector) companyMeta.fscSubSector = subSector;
-    sections["company-information"] = {
-      ...(sections["company-information"] ?? {}),
-      meta: { ...(sections["company-information"]?.meta ?? {}), ...companyMeta },
-    };
 
     // AUTO-DETECT AGAINST THE CERTIFICATE REGISTRY.
     //
@@ -3242,37 +3213,44 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid || workbookMismatches.length > 0) && (
               <div className="mt-2.5 space-y-1 border-t border-white/[0.05] pt-2.5 text-[11.5px] leading-5">
                 {/* The workbook states a different sector or year end from the
-                    form. It decides the scorecard or the measured year, so the
-                    build waits for a choice: the workbook's value (the default,
-                    one click) or the form's, kept on purpose. */}
+                    one in the form. Build waits until the user says which one
+                    is right: the workbook's is the first button, theirs the
+                    second. Nothing changes until they click. */}
                 {workbookMismatches.map((m) => {
-                  const open = openMismatches.includes(m);
-                  const formLabel = m.field === "sector" ? activeSector?.label ?? m.form : m.form;
+                  const kept = !undecidedFacts.includes(m);
                   return (
-                    <div key={m.field} className={open ? "text-amber-300/90" : "text-[color:var(--muted)]"} data-testid={`workbook-mismatch-${m.field}`}>
+                    <div
+                      key={m.field}
+                      className={kept ? "text-[color:var(--muted)]" : "text-amber-300/90"}
+                      data-testid={`workbook-mismatch-${m.field}`}
+                    >
                       <p>
                         {m.field === "sector"
-                          ? `Your workbook's Instructions sheet says the sector is ${m.workbook}; the form says ${formLabel}.`
-                          : `Your workbook's Instructions sheet says the financial year-end is ${m.workbook}; the form says ${formLabel}.`}
-                        {open ? " Choose one before building." : " You kept the form's."}
+                          ? `Your workbook's Instructions sheet says the sector is ${m.workbook}; the form says ${activeSector?.label ?? m.form}.`
+                          : `Your workbook's Instructions sheet says the financial year-end is ${m.workbook}; the form says ${m.form}.`}{" "}
+                        {kept
+                          ? "Keeping yours."
+                          : m.field === "sector"
+                            ? "The sector picks the scorecard you are scored against — choose one to build."
+                            : "The year-end sets the period every dated element is measured over — choose one to build."}
                       </p>
-                      {open && (
-                        <div className="mt-1 flex flex-wrap gap-2">
+                      {!kept && (
+                        <div className="mt-1.5 flex flex-wrap gap-2">
                           <button
                             type="button"
-                            onClick={() => takeWorkbookFact(m)}
-                            className="rounded-lg bg-white/90 px-2.5 py-1 text-[11.5px] font-semibold text-black"
+                            onClick={() => acceptWorkbookFact(m)}
+                            className="rounded-lg bg-white px-2.5 py-1 text-[11.5px] font-semibold text-black transition-colors hover:bg-violet-100"
                             data-testid={`workbook-mismatch-${m.field}-use-workbook`}
                           >
                             Use the workbook's: {m.workbook}
                           </button>
                           <button
                             type="button"
-                            onClick={() => keepFormFact(m)}
-                            className="rounded-lg border border-white/15 px-2.5 py-1 text-[11.5px] text-white/80"
-                            data-testid={`workbook-mismatch-${m.field}-keep-form`}
+                            onClick={() => keepOwnFact(m)}
+                            className="rounded-lg border border-[color:var(--rule-strong)] px-2.5 py-1 text-[11.5px] text-[color:var(--body)] transition-colors hover:border-white/30 hover:text-white"
+                            data-testid={`workbook-mismatch-${m.field}-keep-mine`}
                           >
-                            Keep {formLabel}
+                            Keep mine: {m.field === "sector" ? activeSector?.label ?? m.form : m.form}
                           </button>
                         </div>
                       )}
@@ -3344,7 +3322,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
                 belong to no single document, so they are not in the review. */}
             {(() => {
               const crossDocument = reconciliationFlags.filter(
-                (f) => !reviewDocuments.some((d) => d.filename === f.sourceFile),
+                (f) => !reviewListsFile(reviewDocuments, f.sourceFile),
               );
               return crossDocument.length > 0 ? (
                 <ReviewSection
