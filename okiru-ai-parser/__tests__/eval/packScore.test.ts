@@ -218,6 +218,69 @@ describe('lists and counts', () => {
   });
 });
 
+describe('tallies and distinct counts (a summary the key states as counts)', () => {
+  const employees = [
+    { employee_name: 'P One', race: 'African', gender: 'Male', occupational_level: 'Semi-Skilled' },
+    { employee_name: 'P Two', race: 'African', gender: 'Male', occupational_level: 'Semi-Skilled' },
+    { employee_name: 'P Three', race: 'Indian', gender: 'Female', occupational_level: 'Senior Management' },
+    { employee_name: 'P Four', race: 'African', gender: 'Female', occupational_level: 'Unskilled' },
+  ];
+  const learners = [
+    { learner_name: 'Q One', program_name: 'First Aid' },
+    { learner_name: 'Q  One', program_name: 'Forklift' },
+    { learner_name: 'Q Two', program_name: 'Forklift' },
+  ];
+  const suppliers = [
+    { supplier_name: 'S1', is_51_black_owned: 'Yes' },
+    { supplier_name: 'S2', is_51_black_owned: 'No' },
+    { supplier_name: 'S3', is_51_black_owned: 'Yes' },
+    { supplier_name: 'S4' },
+  ];
+  const tallyCase: PackCase = {
+    ai_entities: { extractions: [{ documentId: 'sheet_table__management_control', sourceFile: 'Book.xlsx › Registers', values: [
+      { field: 'employee_rows', value: employees },
+      { field: 'learner_rows', value: learners },
+      { field: 'supplier_rows', value: suppliers },
+    ] }] },
+  };
+  const doc = (fields: KeyField[]): AnswerKey => ({ version: 1, documents: [{ file: 'Book.xlsx', path: 'workbook', type: 'x', typeAccepts: [], fields }] });
+  const one = (f: KeyField) => scorePack(tallyCase, doc([f])).perField[0].ai.status;
+
+  it('counts rows under their values in the tally columns, read together', () => {
+    const raceGender = (value: string) => field({ label: 'Race / gender', keys: ['employee_rows.race', 'employee_rows.gender'], value, kind: 'tally' });
+    expect(one(raceGender('African male 2, African female 1, Indian female 1'))).toBe('correct');
+    expect(one(raceGender('African male 3, Indian female 1'))).toBe('wrong');
+  });
+
+  it('lets a short label stand for the groups it opens, and leaves unnamed groups alone', () => {
+    const levels = (value: string) => field({ label: 'Levels', keys: ['employee_rows.occupational_level'], value, kind: 'tally' });
+    expect(one(levels('Senior 1, Semi-skilled 2, Unskilled 1'))).toBe('correct');
+    expect(one(levels('Senior 2'))).toBe('wrong');
+    // A flag column's "Yes" count, its "No" rows and blanks not named.
+    expect(one(field({ label: '51% flag', keys: ['supplier_rows.is_51_black_owned'], value: 'Yes 2', kind: 'tally' }))).toBe('correct');
+  });
+
+  it('a template\'s fill-down rows make a tally wrong, never right', () => {
+    const cloned = [...employees, ...Array.from({ length: 50 }, () => ({ ...employees[3] }))];
+    const clonedCase: PackCase = { ai_entities: { extractions: [{ documentId: 'sheet_table__management_control', sourceFile: 'Book.xlsx › Registers', values: [{ field: 'employee_rows', value: cloned }] }] } };
+    const f = field({ label: 'Race / gender', keys: ['employee_rows.race', 'employee_rows.gender'], value: 'African male 2, African female 1, Indian female 1', kind: 'tally' });
+    expect(scorePack(clonedCase, doc([f])).perField[0].ai.status).toBe('wrong');
+  });
+
+  it('counts the distinct values of a column (learners, not training entries)', () => {
+    expect(one(field({ label: 'Learners', keys: ['learner_rows.learner_name'], value: 2, kind: 'count', aggregate: 'distinct' }))).toBe('correct');
+    expect(one(field({ label: 'Entries', keys: ['learner_rows.learner_name'], value: 3, kind: 'count' }))).toBe('correct');
+  });
+
+  it('validates a tally key and the distinct aggregate', () => {
+    const keyWith = (f: Record<string, unknown>) => ({ version: 1, documents: [{ file: 'Book.xlsx', path: 'workbook', type: 'x', typeAccepts: [], fields: [{ label: 'F', tolerance: null, absentOk: false, ...f }] }] });
+    expect(answerKeyProblems(keyWith({ keys: ['employee_rows.race', 'employee_rows.gender'], value: 'African male 2', kind: 'tally' }))).toEqual([]);
+    expect(answerKeyProblems(keyWith({ keys: ['employee_rows.race', 'learner_rows.gender'], value: 'African male 2', kind: 'tally' })).join()).toMatch(/one rows field/);
+    expect(answerKeyProblems(keyWith({ keys: ['employee_rows.race'], value: 'mostly African', kind: 'tally' })).join()).toMatch(/<label> <count>/);
+    expect(answerKeyProblems(keyWith({ keys: ['learner_rows'], value: 2, kind: 'count', aggregate: 'distinct' })).join()).toMatch(/distinct/);
+  });
+});
+
 describe('scorePack', () => {
   const score = scorePack(caseResult, key);
   const status = (file: string, label: string) => score.perField.find((f) => f.file === file && f.label === label)!;

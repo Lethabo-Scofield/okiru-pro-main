@@ -33,17 +33,20 @@ import { dirname, join } from 'node:path';
 import { valuesAgree } from '../../src/services/entityResolution.js';
 import { loadSkills } from '../../src/services/skills.js';
 
-export type FieldKind = 'regno' | 'date' | 'number' | 'money' | 'percent' | 'text' | 'bool' | 'level' | 'count' | 'list';
+export type FieldKind = 'regno' | 'date' | 'number' | 'money' | 'percent' | 'text' | 'bool' | 'level' | 'count' | 'list' | 'tally';
 
 /** The kinds a list's items can be compared as. */
-export type ItemKind = Exclude<FieldKind, 'count' | 'list'>;
+export type ItemKind = Exclude<FieldKind, 'count' | 'list' | 'tally'>;
 
 export interface KeyField {
   label: string;
   /**
    * Parser field names. `rows.column` reads a column across an array-of-rows
    * field. For a `count`, a plain name counts the rows of each array under it;
-   * `rows.column` counts the non-empty cells in that column.
+   * `rows.column` counts the non-empty cells in that column (or, with
+   * aggregate 'distinct', its distinct values). For a `tally`, every key is a
+   * column of the same rows field, and each row is counted under its values
+   * in those columns read together ("African Male").
    */
   keys: string[];
   value: unknown;
@@ -56,8 +59,12 @@ export interface KeyField {
   absentOk: boolean;
   /** Other renderings that also count as correct ("CC" for "Close Corporation"). */
   alternatives?: unknown[];
-  /** How several values under `keys` combine: any one agreeing (default), or their sum. */
-  aggregate?: 'any' | 'sum';
+  /**
+   * How several values under `keys` combine: any one agreeing (default), their
+   * sum, or (a `count` of `rows.column`) how many DISTINCT values one table
+   * holds — eleven learners over twenty-eight training entries.
+   */
+  aggregate?: 'any' | 'sum' | 'distinct';
   source?: string;
   review?: string;
 }
@@ -607,16 +614,68 @@ function listMatches(field: KeyField, candidates: unknown[]): boolean {
  * each array's rows (a stated number counts as itself); under `rows.column`,
  * each table's non-empty cells in that column.
  */
-function countsFor(names: string[], bag: FieldBag): number[] {
+function countsFor(names: string[], bag: FieldBag, distinct = false): number[] {
   return names.flatMap((key) => {
     const dot = key.indexOf('.');
     if (dot > 0 && !bag.has(key)) {
       const column = key.slice(dot + 1);
-      return (bag.get(key.slice(0, dot)) ?? []).map((table) => (Array.isArray(table) ? table : [table])
-        .filter((row) => row && typeof row === 'object' && !isEmpty((row as Record<string, unknown>)[column])).length)
-        .filter((n) => n > 0);
+      return (bag.get(key.slice(0, dot)) ?? []).map((table) => {
+        const cells = (Array.isArray(table) ? table : [table])
+          .filter((row) => row && typeof row === 'object' && !isEmpty((row as Record<string, unknown>)[column]))
+          .map((row) => (row as Record<string, unknown>)[column]);
+        return distinct ? new Set(cells.map(normaliseText)).size : cells.length;
+      }).filter((n) => n > 0);
     }
     return (bag.get(key) ?? []).map((v) => (Array.isArray(v) ? v.length : toNumber(v))).filter((n): n is number => n !== null);
+  });
+}
+
+/**
+ * A tally's expectation, "African male 11, African female 1" or "Yes 5", as
+ * label → count. Null when a part is not "<label> <count>".
+ */
+export function parseTally(value: unknown): Array<{ label: string; count: number }> | null {
+  const parts = String(value ?? '').split(/[,;]/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length === 0) return null;
+  const out: Array<{ label: string; count: number }> = [];
+  for (const part of parts) {
+    const m = part.match(/^(.*\S)\s+(\d+)$/);
+    const label = m ? normaliseText(m[1]) : '';
+    if (!m || !label) return null;
+    out.push({ label, count: Number(m[2]) });
+  }
+  return out;
+}
+
+/**
+ * One table's rows counted under their values in the tally's columns, read
+ * together and normalised ("African", "Male" → "african male"). Rows blank in
+ * every column are not counted.
+ */
+function tallyGroups(rowsField: string, columns: string[], bag: FieldBag): Array<Map<string, number>> {
+  return (bag.get(rowsField) ?? []).map((table) => {
+    const groups = new Map<string, number>();
+    for (const row of Array.isArray(table) ? table : [table]) {
+      if (!row || typeof row !== 'object') continue;
+      const label = normaliseText(columns.map((c) => String((row as Record<string, unknown>)[c] ?? '')).join(' '));
+      if (!label) continue;
+      groups.set(label, (groups.get(label) ?? 0) + 1);
+    }
+    return groups;
+  }).filter((groups) => groups.size > 0);
+}
+
+/**
+ * Does one table's tally agree with the expectation? Every expected label
+ * must count exactly as expected, where an expected label stands for every
+ * group it opens ("senior" for "senior management"). Labels the expectation
+ * does not name are not compared: a summary names the groups it counts.
+ */
+function tallyAgrees(expected: Array<{ label: string; count: number }>, groups: Map<string, number>): boolean {
+  return expected.every(({ label, count }) => {
+    let n = 0;
+    for (const [group, size] of groups) if (group === label || group.startsWith(`${label} `)) n += size;
+    return n === count;
   });
 }
 
@@ -627,8 +686,17 @@ function keyedStatus(field: KeyField, bag: FieldBag, options: ScoreOptions): { s
   if (raw.length === 0) return { status: 'missing', ours: raw };
 
   let ok: boolean;
-  if (field.kind === 'count') {
-    const counts = countsFor(names, bag);
+  if (field.kind === 'tally') {
+    // Every key is a column of one rows field (answerKeyProblems checks it).
+    const rowsField = field.keys[0].split('.')[0];
+    const columns = field.keys.map((k) => k.split('.')[1]);
+    const tables = tallyGroups(rowsField, columns, bag);
+    const expected = expectations(field).map(parseTally).filter((t): t is Array<{ label: string; count: number }> => t !== null);
+    ok = tables.some((groups) => expected.some((e) => tallyAgrees(e, groups)));
+    const shownGroups = tables.map((groups) => [...groups].map(([label, n]) => `${label} ${n}`).join(', '));
+    return { status: ok ? 'correct' : 'wrong', ours: shownGroups };
+  } else if (field.kind === 'count') {
+    const counts = countsFor(names, bag, field.aggregate === 'distinct');
     ok = anyAgrees(field, counts);
     return { status: ok ? 'correct' : 'wrong', ours: counts };
   } else if (field.kind === 'list') {
@@ -827,7 +895,7 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
 
 // ── key validation ─────────────────────────────────────────────────────────
 
-const FIELD_KINDS: readonly FieldKind[] = ['regno', 'date', 'number', 'money', 'percent', 'text', 'bool', 'level', 'count', 'list'];
+const FIELD_KINDS: readonly FieldKind[] = ['regno', 'date', 'number', 'money', 'percent', 'text', 'bool', 'level', 'count', 'list', 'tally'];
 const ITEM_KINDS: readonly ItemKind[] = ['regno', 'date', 'number', 'money', 'percent', 'text', 'bool', 'level'];
 const KEY_TOP_LEVEL = new Set(['version', 'domain', 'from', 'entity', 'sector', 'size', 'yearEnd', 'reportingPeriod', 'certified', 'documents']);
 const KEY_DOCUMENT_PROPS = new Set(['file', 'path', 'type', 'typeAccepts', 'fields']);
@@ -904,10 +972,23 @@ export function answerKeyProblems(key: unknown): string[] {
       } else if (kind === 'list' && typeof tolerance === 'number' && (tolerance <= 0 || tolerance > 1)) {
         problems.push(`${at}: a list tolerance is the fraction of items to find, in (0, 1]`);
       }
-      if (field.aggregate !== undefined && field.aggregate !== 'any' && field.aggregate !== 'sum') problems.push(`${at}: aggregate must be any or sum`);
+      if (field.aggregate !== undefined && field.aggregate !== 'any' && field.aggregate !== 'sum' && field.aggregate !== 'distinct') {
+        problems.push(`${at}: aggregate must be any, sum or distinct`);
+      } else if (field.aggregate === 'distinct' && (kind !== 'count' || !Array.isArray(field.keys) || !field.keys.every((k) => typeof k === 'string' && k.includes('.')))) {
+        problems.push(`${at}: aggregate distinct belongs only to a count of rows.column keys`);
+      }
       if (field.alternatives !== undefined && !Array.isArray(field.alternatives)) problems.push(`${at}: alternatives must be a list`);
       for (const name of ['source', 'review'] as const) {
         if (field[name] !== undefined && typeof field[name] !== 'string') problems.push(`${at}: ${name} must be a string`);
+      }
+      if (kind === 'tally') {
+        const keys = Array.isArray(field.keys) ? field.keys.filter((k): k is string => typeof k === 'string') : [];
+        const rowsFields = new Set(keys.map((k) => k.split('.')[0]));
+        if (keys.length === 0 || keys.some((k) => !k.includes('.')) || rowsFields.size !== 1) {
+          problems.push(`${at}: a tally's keys must be columns of one rows field (rows.column)`);
+        }
+        if (field.absentOk !== true && parseTally(field.value) === null) problems.push(`${at}: a tally's value must read "<label> <count>, …"`);
+        return;
       }
       if (field.absentOk === true) return;
       // A value the document holds must be one its kind can read.
