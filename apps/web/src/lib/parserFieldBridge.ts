@@ -57,6 +57,10 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   total_economic_interest_received: { section: "ownership", column: "economicInterest" },
   black_ownership_percentage: { section: "ownership", column: "blackOwnership" },
   black_women_ownership_percentage: { section: "ownership", column: "blackWomenOwnership" },
+  // The register's "Outstanding Debt by Black Participants" column, per holder.
+  // Ownership fulfilment and net value turn on it; never read, a stated nil
+  // debt could not earn the fulfilment point.
+  black_participant_outstanding_debt: { section: "ownership", column: "rowOutstandingDebt" },
 
   // ── Management control / employment equity (one row per person) ──
   // race / gender / id_number are NOT here: they exist under the same column key

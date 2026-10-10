@@ -15,6 +15,31 @@ const DEFAULT_WOMEN_VOTING_TARGET = 0.10;
 const DEFAULT_WOMEN_EI_TARGET = 0.10;
 const DEFAULT_DG_TARGET = 0.03;
 const DEFAULT_NEW_ENTRANTS_TARGET = 0.02;
+/** Transport Codes: "Bonus: ESOP, BBOS, co-ops" — 10% (Road Freight QSE and Large). */
+const DEFAULT_ESOP_TARGET = 0.10;
+const SCHEME_ROW = /esop|bbos|employee share|broad.?based (ownership|scheme)|co-?operative/;
+
+/** Is this register row an employee / broad-based ownership scheme or co-op? Read from the row itself, never assumed. */
+function isSchemeRow(sh: { name?: string; ownershipType?: unknown }): boolean {
+  return SCHEME_ROW.test(`${String(sh.ownershipType ?? '')} ${String(sh.name ?? '')}`.toLowerCase());
+}
+
+/**
+ * Ownership fulfilment (Transport Codes, Yes/No): the black participants' stake
+ * is fulfilled — every black holder's acquisition debt is STATED and is nil,
+ * and no entity-level acquisition debt is recorded. A holder whose debt nobody
+ * stated leaves the question unanswered, and an unanswered question earns
+ * nothing.
+ */
+export function ownershipFulfilled(
+  shareholders: Array<{ blackOwnership: number; outstandingDebt?: number | null }>,
+  entityOutstandingDebt: number,
+): boolean {
+  const black = shareholders.filter((sh) => sh.blackOwnership > 0);
+  if (black.length === 0) return false;
+  if (entityOutstandingDebt > 0) return false;
+  return black.every((sh) => typeof sh.outstandingDebt === 'number' && Number.isFinite(sh.outstandingDebt) && sh.outstandingDebt === 0);
+}
 
 const GRADUATION_TABLE: Record<number, number> = {
   1: 0.1, 2: 0.2, 3: 0.4, 4: 0.4,
@@ -49,6 +74,8 @@ export interface OwnershipResult {
   economicInterestBWO: number;
   designatedGroups: number;
   newEntrants: number;
+  /** Ownership fulfilment (Transport), 0 where the sector has no such line. */
+  ownershipFulfilment: number;
   netValue: number;
   total: number;
   subMinimumMet: boolean;
@@ -98,6 +125,8 @@ function resolveOwnershipTargets(config: CalculatorConfig) {
     designatedGroupsTarget: oc?.designatedGroupsTarget ?? DEFAULT_DG_TARGET,
     subMinNetValue: oc?.subMinNetValue ?? 3.2,
     esopBonusMaxPts: oc?.esopBonusMaxPts ?? 0,
+    esopBonusTarget: oc?.esopBonusTarget ?? DEFAULT_ESOP_TARGET,
+    ownershipFulfilmentMaxPts: oc?.ownershipFulfilmentMax ?? 0,
     // Sector-declared bonus indicators. Default false: under the generic Codes
     // black-women voting rights and black-women economic interest are BASE
     // indicators. The Transport Codes award both as bonus (QSE: 2 + 1 = the 3
@@ -236,20 +265,34 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     );
   }
 
-  // ESOP/BBOS scheme bonus (Transport): points only when an employee-ownership
-  // scheme actually appears among the shareholders — detected from the row's
-  // own ownershipType/name, never assumed. This was previously conflated into
-  // the women-voting line, which awarded the scheme bonus to any entity with
-  // 10% black-women voting and no scheme at all.
-  const esopEvidence = shareholders.some((sh) => {
-    const t = `${String((sh as { ownershipType?: unknown }).ownershipType ?? "")} ${String(sh.name ?? "")}`.toLowerCase();
-    return /esop|bbos|employee share|broad.?based (ownership|scheme)/.test(t);
-  });
-  const esopBonus = ot.esopBonusMaxPts > 0 && esopEvidence ? ot.esopBonusMaxPts : 0;
+  // ESOP/BBOS/co-op scheme bonus (Transport): scored on the BLACK ECONOMIC
+  // INTEREST held through scheme rows against the Codes' 10% target —
+  // detected from the row's own ownershipType/name, never assumed. It was
+  // conflated into the women lines once (any 10% black-women holding earned
+  // it), then awarded in FULL the moment any scheme row appeared, however
+  // small its stake.
+  let schemeBlackEI = 0;
+  for (const sh of shareholders) {
+    if (!isSchemeRow(sh as { name?: string; ownershipType?: unknown })) continue;
+    const pct = hasShares ? sh.shares / totalSharesRaw : shareholders.length > 0 ? 1 / shareholders.length : 0;
+    schemeBlackEI += pct * sh.blackOwnership;
+  }
+  const esopBonus = ot.esopBonusMaxPts > 0
+    ? clampScore(safeRatio(schemeBlackEI, ot.esopBonusTarget, ot.esopBonusMaxPts), ot.esopBonusMaxPts)
+    : 0;
+
+  // Ownership fulfilment (Transport Codes "Ownership fulfilment | Yes | 1").
+  const fulfilment = ot.ownershipFulfilmentMaxPts > 0
+    && ownershipFulfilled(
+      shareholders as Array<{ blackOwnership: number; outstandingDebt?: number | null }>,
+      outstandingDebt,
+    )
+    ? ot.ownershipFulfilmentMaxPts
+    : 0;
 
   const subMinimumMet = netValuePoints >= ot.subMinNetValue;
   const totalPoints = votingRightsBlack + votingRightsBWO + economicInterestBlack + economicInterestBWO
-    + designatedGroups + newEntrants + netValuePoints + esopBonus;
+    + designatedGroups + newEntrants + fulfilment + netValuePoints + esopBonus;
 
   // Each line is emitted only when the sector actually allocates points to it.
   // A sector that folds new entrants into the combined designated line (QSE), or
@@ -262,7 +305,10 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     { name: 'Exercisable voting rights of black individuals', target: `${(ot.votingRightsTarget * 100).toFixed(0)}% + 1 vote`, weighting: ot.votingRightsMaxPts, score: votingRightsBlack },
     { name: 'Exercisable voting rights of black females', target: `${(ot.womenVotingTarget * 100).toFixed(0)}%`, weighting: ot.womenVotingMaxPts, score: votingRightsBWO, isBonus: ot.womenVotingIsBonus || undefined },
     { name: 'Economic interest of black individuals', target: `${(ot.economicInterestTarget * 100).toFixed(0)}%`, weighting: ot.economicInterestMaxPts, score: economicInterestBlack },
-    { name: 'Economic interest of black females', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO, isBonus: ot.womenEIIsBonus || undefined },
+    // Only when the sector has the line (Transport QSE does not).
+    ...(ot.womenEIMaxPts > 0
+      ? [{ name: 'Economic interest of black females', target: `${(ot.womenEITarget * 100).toFixed(0)}%`, weighting: ot.womenEIMaxPts, score: economicInterestBWO, isBonus: ot.womenEIIsBonus || undefined }]
+      : []),
     // Designated-groups line: shown when the sector allocates points to it, or
     // when it is the combined "new entrants OR designated groups" QSE indicator.
     ...(ot.designatedGroupsMax > 0 || ot.combinedNewEntrantsDesignated
@@ -273,9 +319,12 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     ...(ot.newEntrantsMaxPts > 0 && !ot.combinedNewEntrantsDesignated
       ? [{ name: 'Economic interest of black new entrants', target: `${(ot.newEntrantsTarget * 100).toFixed(0)}%`, weighting: ot.newEntrantsMaxPts, score: newEntrants }]
       : []),
+    ...(ot.ownershipFulfilmentMaxPts > 0
+      ? [{ name: 'Ownership fulfilment', target: 'Yes — black participants\' acquisition debt stated and nil', weighting: ot.ownershipFulfilmentMaxPts, score: fulfilment }]
+      : []),
     { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
     ...(ot.esopBonusMaxPts > 0
-      ? [{ name: 'ESOP / broad-based scheme participation (bonus)', target: 'scheme in share register', weighting: ot.esopBonusMaxPts, score: esopBonus, isBonus: true }]
+      ? [{ name: 'ESOP / broad-based scheme / co-op participation (bonus)', target: `${(ot.esopBonusTarget * 100).toFixed(0)}% economic interest through schemes`, weighting: ot.esopBonusMaxPts, score: esopBonus, isBonus: true }]
       : []),
   ];
 
@@ -288,6 +337,7 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     economicInterestBWO: round2(economicInterestBWO),
     designatedGroups: round2(designatedGroups),
     newEntrants: round2(newEntrants),
+    ownershipFulfilment: round2(fulfilment),
     netValue: round2(netValuePoints),
     total,
     subMinimumMet,

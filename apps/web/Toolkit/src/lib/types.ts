@@ -112,6 +112,13 @@ export interface Shareholder {
   // Shares and value
   shares: number;
   shareValue: number;
+  /**
+   * This holder's outstanding acquisition debt, when a document STATES it
+   * (the register's "Outstanding Debt by Black Participants" column). Absent =
+   * not stated, which is not the same as nil: ownership fulfilment needs a
+   * stated nil.
+   */
+  outstandingDebt?: number;
 }
 
 export interface OwnershipData {

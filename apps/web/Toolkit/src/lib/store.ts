@@ -1364,6 +1364,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
             normalizeFraction(sh.votingRightsPercent ?? sh.blackOwnership ?? 0),
           economicInterestPercent:
             normalizeFraction(sh.economicInterestPercent ?? sh.blackOwnership ?? 0),
+          // Stated acquisition debt only — absent stays absent (ownership
+          // fulfilment needs a STATED nil, never a default 0).
+          ...(typeof sh.outstandingDebt === 'number' && Number.isFinite(sh.outstandingDebt) ? { outstandingDebt: sh.outstandingDebt } : {}),
         };
         }),
         companyValue:

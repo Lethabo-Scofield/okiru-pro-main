@@ -25,8 +25,15 @@ export interface CalculatorConfig {
   ownership: {
     votingRightsMax: number;
     womenBonusMax: number;
-    /** ESOP/BBOS scheme bonus points — awarded only when scheme rows exist (Transport). */
+    /** ESOP/BBOS scheme bonus points — earned only by scheme rows' black economic interest (Transport). */
     esopBonusMaxPts?: number;
+    /** Target for the ESOP/BBOS bonus: scheme rows' black economic interest (Transport Codes: 10%). */
+    esopBonusTarget?: number;
+    /**
+     * "Ownership fulfilment" (Transport Codes, Yes/No): full points when every
+     * black holder's acquisition debt is stated and nil; nothing when unstated.
+     */
+    ownershipFulfilmentMax?: number;
     economicInterestMax: number;
     netValueMax: number;
     targetEconomicInterest: number;

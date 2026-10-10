@@ -51,12 +51,18 @@ export function sectorConfigToTransportQseCalculatorConfig(sc: SectorConfig): Ca
       subMinNetValue: 0,                                   // no ownership sub-minimum
       votingRightsTarget: own.votingRightsTarget,          // 0.25
       womenVotingTarget: own.womenVotingTarget,            // 0.10
-      womenEIMax: own.womenEIMaxPts,                       // 1 (bonus: ESOP/BBOS/co-ops)
+      womenEIMax: own.womenEIMaxPts,                       // 0 — no black-women EI line on this scorecard
       womenEITarget: own.womenEITarget,                    // 0.10
-      newEntrantsMax: own.newEntrantsMaxPts,               // 1 (ownership fulfilment)
+      newEntrantsMax: own.newEntrantsMaxPts,               // 0 — no new-entrant line on this scorecard
+      // The two lines that used to borrow the slots above, scored as what the
+      // Codes call them: "Ownership fulfilment | Yes | 1" and "Bonus: ESOP,
+      // BBOS or co-ops | 10% | 1".
+      ownershipFulfilmentMax: own.ownershipFulfilmentMaxPts ?? 0, // 1
+      esopBonusMaxPts: own.esopBonusMaxPts ?? 0,           // 1 (bonus)
+      esopBonusTarget: own.esopBonusTarget,                // 0.10
       // Transport QSE ownership is exactly six indicators summing to the 28-pt
-      // cap (voting 6 + women-voting 2 + EI 9 + womenEI 1 + newEntrants 1 +
-      // netValue 9). It has NO separate "designated groups" line — pin it to 0
+      // cap (voting 6 + women-voting 2 + EI 9 + fulfilment 1 + netValue 9 +
+      // ESOP bonus 1). It has NO separate "designated groups" line — pin it to 0
       // so the calculator does not fall back to its generic default of 3, which
       // put a phantom 7th line into the breakdown (Σ 31 > 28 cap).
       designatedGroupsMax: 0,
