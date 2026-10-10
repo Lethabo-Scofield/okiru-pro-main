@@ -147,6 +147,8 @@ describe("DocumentUploadStart — decluttered", () => {
     expect(screen.queryByText("Digital")).not.toBeInTheDocument();
 
     const root = screen.getByTestId("document-upload-start");
+    // Once something is staged the step is about these documents, not adding.
+    expect(within(root).getByRole("heading", { level: 3, name: "Your documents" })).toBeInTheDocument();
     expect(filledButtons(root).map((b) => b.textContent)).toEqual(["Read 1 document"]);
   });
 
@@ -216,6 +218,10 @@ describe("DocumentUploadStart — decluttered", () => {
     expect(screen.queryByTestId("pillar-upload-batches")).not.toBeInTheDocument();
     expect(screen.queryByTestId("company-details")).not.toBeInTheDocument();
     expect(screen.queryByTestId("read-bar")).not.toBeInTheDocument();
+    // The sub-line stops promising a price that has already been paid.
+    const root = screen.getByTestId("document-upload-start");
+    expect(root).toHaveTextContent("Long or scanned documents can take a few minutes.");
+    expect(root).not.toHaveTextContent("We'll show the cost before anything is read.");
 
     held!.finish();
     await screen.findByTestId("button-create-from-documents");

@@ -2137,12 +2137,18 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
           landing page. The cost line is said here once. */}
       <div className="mb-4">
         <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
-          {parserCase ? "Your documents" : addMode ? `Add documents to ${existingCompany!.name}` : "Add your documents"}
+          {parserCase || (!addMode && files.length > 0)
+            ? "Your documents"
+            : addMode
+              ? `Add documents to ${existingCompany!.name}`
+              : "Add your documents"}
         </h3>
         <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
           {parserCase
             ? "Read and placed. Check anything marked, then build."
-            : "We'll show the cost before anything is read."}
+            : parsing
+              ? "Long or scanned documents can take a few minutes."
+              : "We'll show the cost before anything is read."}
         </p>
       </div>
 

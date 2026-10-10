@@ -13,6 +13,7 @@ import { READABLE_EXTENSIONS, sortPickedFiles, temporarySentence, unreadableSent
 import { StatusLine, statusLineText } from "../StatusLine";
 import { DocumentList } from "../DocumentList";
 import { ReadBar } from "../ReadBar";
+import { CostDetails } from "../CostDetails";
 
 const file = (name: string, size = 10) => ({ name, size });
 
@@ -132,5 +133,49 @@ describe("ReadBar", () => {
     );
     expect(screen.queryByTestId("button-read-now")).not.toBeInTheDocument();
     expect(screen.getByTestId("button-add-tokens")).toHaveTextContent("Add tokens — 150 short");
+  });
+});
+
+describe("CostDetails", () => {
+  const files = [
+    { filename: "register.pdf", requiresOcr: false, structure: { pages: 2, sheets: null, rows: null } },
+    { filename: "scan.pdf", requiresOcr: true, structure: { pages: 9, sheets: null, rows: null } },
+  ];
+  const tokenCost = {
+    quoteId: "q", tokens: 900, balance: 2_000, balanceAfter: 1_100, sufficient: true, shortfall: 0, alreadyAuthorized: false,
+    files: [{ filename: "register.pdf", tokens: 300, effort: "standard" }, { filename: "scan.pdf", tokens: 600, effort: "high" }],
+    effortRules: [{ tier: "standard", label: "Standard", rule: "Digital documents up to 20 pages." }],
+  };
+
+  it("is a price per document and a total, with the rules behind a closed details and one read button", () => {
+    render(<CostDetails testIdPrefix="" files={files} tokenCost={tokenCost} charging isUpperBound onRead={vi.fn()} busy={false} />);
+    const panel = screen.getByTestId("payment-summary");
+    expect(within(panel).getByRole("table", { name: "Cost per document" })).toBeInTheDocument();
+    expect(screen.getByTestId("quote-total-cost")).toHaveTextContent(/900 tokens/);
+    expect(panel).toHaveTextContent("Price: scanned or long");
+    expect(panel).not.toHaveTextContent("Effort");
+    // Rules, balance after and the upper-bound note sit in one closed details.
+    const how = screen.getByTestId("effort-rules").closest("details")!;
+    expect(how).not.toHaveAttribute("open");
+    expect(within(how).getByTestId("balance-after")).toHaveTextContent(/You'll have 1\s?100 tokens left of 2\s?000\./);
+    expect(how).toHaveTextContent("You won't pay more than this.");
+    // One button outside the details: the read.
+    expect(within(panel).getAllByRole("button").filter((b) => !b.closest("details"))).toHaveLength(1);
+    expect(screen.getByTestId("button-spend-tokens")).toHaveTextContent("Read 2 documents");
+  });
+
+  it("disables the read and offers Add tokens when the balance is short", () => {
+    render(
+      <CostDetails
+        testIdPrefix="esg-"
+        files={files}
+        tokenCost={{ ...tokenCost, sufficient: false, shortfall: 400, balance: 500, balanceAfter: -400 }}
+        charging
+        onRead={vi.fn()}
+        busy={false}
+      />,
+    );
+    expect(screen.getByTestId("esg-insufficient-tokens")).toHaveTextContent("400 tokens short.");
+    expect(screen.getByTestId("esg-button-spend-tokens")).toBeDisabled();
   });
 });

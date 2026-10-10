@@ -53,6 +53,15 @@ describe("EsgDocumentUploadStart — decluttered", () => {
     expect(screen.getByTestId("esg-docs-file-input")).not.toHaveAttribute("accept");
   });
 
+  it("calls the step 'Your ESG evidence' once something is staged, with one list of files", async () => {
+    const user = userEvent.setup();
+    render(<EsgDocumentUploadStart companyId="company-1" onComplete={vi.fn(async () => {})} />);
+    await user.upload(screen.getByTestId("esg-docs-file-input"), [new File(["%PDF"], "water-bill.pdf", { type: "application/pdf" })]);
+    const root = screen.getByTestId("esg-document-upload-start");
+    expect(await within(root).findByRole("heading", { level: 3, name: "Your ESG evidence" })).toBeInTheDocument();
+    expect(within(root).getAllByText("water-bill.pdf")).toHaveLength(1);
+  });
+
   it("names a file it cannot open instead of the picker refusing it", async () => {
     const user = userEvent.setup({ applyAccept: false });
     render(<EsgDocumentUploadStart companyId="company-1" onComplete={vi.fn(async () => {})} />);

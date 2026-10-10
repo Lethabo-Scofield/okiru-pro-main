@@ -1528,12 +1528,14 @@ export function EsgDocumentUploadStart({
         {/* Document scale, left aligned, matching the B-BBEE step exactly. The
             evidence types are listed once, in the drop zone, not here too. */}
         <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
-          {parserCase ? "Your ESG evidence" : "Add your ESG evidence"}
+          {parserCase || files.length > 0 ? "Your ESG evidence" : "Add your ESG evidence"}
         </h3>
         <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
           {parserCase
             ? "Read and placed. Check anything marked, then continue."
-            : "We'll show the cost before anything is read."}
+            : parsing
+              ? "Long or scanned documents can take a few minutes."
+              : "We'll show the cost before anything is read."}
         </p>
         {focus ? (
           // Added from inside one section (C1): say what that means before anything is read.
