@@ -914,28 +914,21 @@ export function CompanyPicker({
       <div className="max-w-5xl mx-auto py-5">
         <div className="rounded-[28px] bg-[color:var(--ink-2)] border border-white/[0.10] overflow-hidden shadow-[0_22px_70px_rgba(0,0,0,0.28)]">
           <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-white/[0.07]">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2
-                  className="text-[26px] sm:text-[32px] font-semibold tracking-tight text-white leading-tight"
-                >
-                  Create scorecard
-                </h2>
-                <p className="text-[13px] text-[color:var(--body)] mt-2 max-w-xl leading-5">
-                  Upload documents for a quote, or use a free setup path.
-                </p>
-              </div>
-              <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-[color:var(--body)]">
-                <Upload className="h-3.5 w-3.5 text-[#a78bfa]" />
-                Quote before processing
-              </div>
-            </div>
+            <h2
+              className="text-[26px] sm:text-[32px] font-semibold tracking-tight text-white leading-tight"
+            >
+              Create scorecard
+            </h2>
+            <p className="text-[13px] text-[color:var(--body)] mt-2 max-w-xl leading-5">
+              Upload documents, or use a free setup path.
+            </p>
           </div>
 
           <div className="px-4 sm:px-5 py-5 space-y-4">
-            {/* HERO — document-upload start: preset expected-documents flow
-                (parser-classified evidence → workbook sections → same submit path). */}
-            <div className="rounded-[24px] border border-violet-300/20 bg-[#17151d] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            {/* Document upload: parser-read evidence → workbook sections → the
+                same submit path. One container — the page card — not a card in
+                a card in a card. */}
+            <div>
               <DocumentUploadStart
                 onCreate={async (companyName, sections, extras) => {
                   // Document flow lands on the provisional live-score page, not the workbook.

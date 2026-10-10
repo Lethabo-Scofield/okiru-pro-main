@@ -170,6 +170,9 @@ function valuesFor(parserCase: ParserCaseLike, filename: string): ReviewValue[] 
   return out;
 }
 
+/** What a document the reader could not name, but read figures from, is called. */
+export const GENERAL_DOCUMENT = "Read as a general document";
+
 /** Why nothing came out of a document, as the client should hear it. */
 export function whyNotRead(texts: string[], documentType: string, couldNotOpen: boolean, productNoun: string): ReviewProblem {
   const all = texts.join(" \n ");
@@ -271,6 +274,12 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
     let state: ReviewState = v.verdict === "found" ? "read" : v.verdict === "confused" ? "needs-look" : "not-read";
     const values = valuesFor(parserCase, v.filename);
     const problems: ReviewProblem[] = [];
+    const unknownType = !v.documentType.trim() || /^(unknown|unrecognised document)$/i.test(v.documentType.trim());
+    // Unclassified is not unread. The reader can take figures out of a
+    // document it could not name — "AI decides what things MEAN" — and those
+    // figures are shown, not hidden behind "we couldn't tell what this is".
+    const generalDocument = unknownType && values.length > 0 && !failedFiles.includes(v.filename);
+    if (state === "not-read" && generalDocument) state = "read";
     if (state === "not-read") {
       problems.push(whyNotRead(parserTexts, v.documentType, failedFiles.includes(v.filename), productNoun));
     } else {
@@ -313,8 +322,9 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
 
     docs.push({
       filename: v.filename,
-      // The parser's "Unknown" is a classifier state, not a document type.
-      documentType: /^(unknown|unrecognised document)$/i.test(v.documentType.trim()) ? "" : v.documentType,
+      // The parser's "Unknown" is a classifier state, not a document type —
+      // but one it read figures from is a general document, and says so.
+      documentType: generalDocument ? GENERAL_DOCUMENT : unknownType ? "" : v.documentType,
       state,
       summary: state === "not-read" ? "" : v.summary,
       values,

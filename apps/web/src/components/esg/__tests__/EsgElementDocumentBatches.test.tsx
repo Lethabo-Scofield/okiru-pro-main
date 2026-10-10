@@ -99,7 +99,7 @@ describe("EsgElementDocumentBatches", () => {
 
     // Before anything is read, nothing claims to be covered.
     await waitFor(() =>
-      expect(screen.getByTestId("esg-batch-toggle-GHG_ENERGY")).toHaveTextContent("1 document types"),
+      expect(screen.getByTestId("esg-batch-toggle-GHG_ENERGY")).toHaveTextContent("1 kind of document"),
     );
 
     rerender(
@@ -107,7 +107,7 @@ describe("EsgElementDocumentBatches", () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId("esg-batch-toggle-GHG_ENERGY")).toHaveTextContent(
-        "1 of 1 document types covered",
+        "1 of 1 found",
       ),
     );
   });
@@ -130,7 +130,7 @@ describe("EsgElementDocumentBatches", () => {
 describe("esgBatchLabel", () => {
   it("names known elements, the holistic batch, and unknown codes", () => {
     expect(esgBatchLabel("GHG_ENERGY")).toBe("Energy & emissions");
-    expect(esgBatchLabel("HOLISTIC")).toBe("Packs & whole folders");
+    expect(esgBatchLabel("HOLISTIC")).toBe("Whole packs and workbooks");
     expect(esgBatchLabel("BOARD_GOVERNANCE")).toBe("Board & governance");
     expect(esgBatchLabel("SOMETHING_NEW")).toBe("Something new");
   });

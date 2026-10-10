@@ -23,15 +23,16 @@ import { ChevronRight } from "lucide-react";
 
 export type ReviewTone = "decide" | "check" | "good" | "neutral";
 
-const TONE_STYLES: Record<ReviewTone, { border: string; background: string; title: string }> = {
+/** Token and palette classes only; the tone is also carried by an icon and a counted title. */
+const TONE_STYLES: Record<ReviewTone, { box: string; title: string }> = {
   // Needs a human decision before the score means anything.
-  decide: { border: "rgba(255,214,10,0.22)", background: "rgba(255,214,10,0.05)", title: "#fde68a" },
+  decide: { box: "border-amber-300/25 bg-amber-400/[0.05]", title: "text-amber-200" },
   // Worth a look, but nothing is blocked on it.
-  check: { border: "rgba(255,214,10,0.16)", background: "rgba(255,214,10,0.03)", title: "#e5e5ea" },
+  check: { box: "border-amber-300/15 bg-amber-400/[0.03]", title: "text-[color:var(--hi)]" },
   // Confirmation — evidence that agreed with itself.
-  good: { border: "rgba(48,209,88,0.20)", background: "rgba(48,209,88,0.04)", title: "#a7f3c0" },
+  good: { box: "border-emerald-400/20 bg-emerald-400/[0.04]", title: "text-emerald-200" },
   // Plain detail.
-  neutral: { border: "rgba(255,255,255,0.07)", background: "#0e0e10", title: "#e5e5ea" },
+  neutral: { box: "border-white/[0.07] bg-[color:var(--ink-2)]", title: "text-[color:var(--hi)]" },
 };
 
 interface Props {
@@ -63,22 +64,21 @@ export function ReviewSection({
 
   return (
     <div
-      className="dus-fade-up overflow-hidden rounded-xl text-left"
-      style={{ background: style.background, border: `1px solid ${style.border}` }}
+      className={`overflow-hidden rounded-xl border text-left ${style.box}`}
       data-testid={testId}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left"
+        className="flex w-full items-center gap-2 rounded-xl px-3.5 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       >
         <ChevronRight
           className={`h-3.5 w-3.5 shrink-0 text-[color:var(--muted)] transition-transform ${open ? "rotate-90" : ""}`}
           aria-hidden
         />
         {icon}
-        <span className="text-[12.5px] font-medium" style={{ color: style.title }}>
+        <span className={`text-[12.5px] font-medium ${style.title}`}>
           {title}
         </span>
         {meta && <span className="ml-auto shrink-0 text-[11.5px] text-[color:var(--body)]">{meta}</span>}

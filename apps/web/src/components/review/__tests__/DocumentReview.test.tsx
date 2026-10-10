@@ -140,7 +140,7 @@ describe("a value waiting for an answer", () => {
     fireEvent.click(put);
     expect(onAnswer).toHaveBeenCalledWith("CPT JULY 2025.pdf", question, { site: "1" });
     // Evidence is kept apart, folded — not a failure to place.
-    expect(screen.getByTestId("review-evidence")).toHaveTextContent("Kept as evidence · 1");
+    expect(screen.getByTestId("review-evidence")).toHaveTextContent("Kept with the document · 1");
     expect(screen.queryByTestId("review-unplaced")).toBeNull();
   });
 

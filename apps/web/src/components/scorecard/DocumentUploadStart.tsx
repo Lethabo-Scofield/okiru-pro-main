@@ -1,12 +1,15 @@
 /**
  * Document-upload start for /create-scorecard — the flagship entry.
  *
- * Three acts:
- *  1. The stage — an inviting drop surface + the expected-documents checklist.
- *  2. Scanning theatre — files slide in, a shimmer sweeps while the parser
- *     reads, then each file is stamped with its classification.
- *  3. The reveal — the pillar rack lights up, stat tiles count up, and the
- *     scorecard is created from the extracted values.
+ * Each step does one job and has one main button:
+ *  1. Add — a drop zone (Upload files), with the checklist and the company
+ *     details folded away under it.
+ *  2. Read — one read bar with the price (Read N documents); the price per
+ *     document is behind "Cost details". While reading, one status line.
+ *  3. Build — the figures the documents disagree on, the Build bar, one row
+ *     of pillar chips and the side-by-side review (Build scorecard).
+ * Everything not needed for the next decision sits behind a closed "details",
+ * so nothing a user could do before has gone — it has moved.
  *
  * Data flow is unchanged: okiru-ai-parser (/api/parser/resolve-case-files) →
  * mapParserCaseToWorkbookSections → the SAME create → workbook import → submit
@@ -16,22 +19,16 @@
  * alone; numbers/labels wear ink tokens, colored marks carry the state.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  AlertTriangle,
-  FolderOpen,
-  ArrowRight,
-  Check,
-  ChevronLeft,
-  CloudUpload,
-  CreditCard,
-  FileText,
-  Loader2,
-  Minus,
-  Sparkles,
-  Upload,
-  X,
-} from "lucide-react";
+import { AlertTriangle, Check, Loader2, Minus } from "lucide-react";
+import { UploadSurface } from "@/components/upload/flow/UploadSurface";
+import { ReadBar, type ReadBarState } from "@/components/upload/flow/ReadBar";
+import { CostDetails } from "@/components/upload/flow/CostDetails";
+import { DocumentList, type DocumentListRow, type DocumentStatus } from "@/components/upload/flow/DocumentList";
+import { StatusLine } from "@/components/upload/flow/StatusLine";
+import { Disclosure } from "@/components/upload/flow/Disclosure";
+import { sortPickedFiles, temporarySentence, unreadableSentence } from "@/components/upload/flow/readableFiles";
+import { fileUnits, type TokenCost } from "@/components/upload/flow/tokenCost";
+import { textButton } from "@/components/upload/flow/buttonStyles";
 import {
   mapParserCaseToWorkbookSections,
   type ParserCaseLike,
@@ -230,46 +227,8 @@ interface ParserQuote {
   paymentRequired?: boolean;
 }
 
-/**
- * What a batch costs in credit tokens, and what the wallet holds.
- *
- * The server converts the quote's price into tokens and reports the balance in
- * the same call, so the number shown here and the number charged are the same
- * number — there is no client-side arithmetic to drift.
- */
-interface TokenCostFile {
-  filename: string;
-  tokens: number;
-  /** Which pricing rule the server put this document under. */
-  effort: "standard" | "high" | "workbook";
-  requiresOcr: boolean;
-  pages: number | null;
-  sheets: number | null;
-  rows: number | null;
-}
-
-interface TokenCost {
-  quoteId: string;
-  tokens: number;
-  /** Per-document itemisation — each file priced under its effort rule. */
-  files?: TokenCostFile[];
-  /** Tokens the batch minimum adds beyond the itemised documents. */
-  minimumTopUp?: number;
-  /** The effort rules themselves, served so the UI never restates them wrong. */
-  effortRules?: Array<{ tier: string; label: string; rule: string }>;
-  balance: number;
-  balanceAfter: number;
-  sufficient: boolean;
-  shortfall: number;
-  alreadyAuthorized: boolean;
-  /** Uploads are not charged for (TOKENS_REQUIRE_PAYMENT=false). */
-  free?: boolean;
-}
-
-const tokenText = (value: number): string => value.toLocaleString("en-ZA");
-
-const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workbook", standard: "Standard" };
-
+// What a batch costs in credit tokens (TokenCost) is shared with the ESG flow
+// — one wallet, one shape: see components/upload/flow/tokenCost.
 // The flow snapshot — how a paid extraction survives navigation. Shared with
 // the Hub's "continue where you left off" strip, so it lives in its own module.
 import {
@@ -324,14 +283,6 @@ const SECTOR_TO_WORKBOOK: Record<string, string> = {
   AGRI: "AGRI",
 };
 
-/** A file's size in whatever unit the structure scan actually established. */
-function fileUnits(file: ParserQuote["files"][number]): string {
-  if (file.structure.pages) return `${file.structure.pages} page${file.structure.pages === 1 ? "" : "s"}`;
-  if (file.structure.sheets) return `${file.structure.sheets} sheet${file.structure.sheets === 1 ? "" : "s"}`;
-  if (file.structure.rows) return `${file.structure.rows.toLocaleString()} rows`;
-  return "Structure scan";
-}
-
 const CANONICAL_PILLARS: Record<string, string> = {
   ESD: "Enterprise & Supplier Development",
   OWN: "Ownership",
@@ -349,29 +300,6 @@ const PILLAR_TILES: Array<{ pillar: string; short: string }> = [
   { pillar: "Socio-Economic Development", short: "SED" },
   { pillar: "Financials", short: "Financials" },
 ];
-
-/** rAF count-up for hero numbers. */
-function useCountUp(target: number, durationMs = 900): number {
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (target <= 0) {
-      setValue(0);
-      return;
-    }
-    let raf = 0;
-    const t0 = performance.now();
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - t0) / durationMs);
-      // ease-out cubic
-      const eased = 1 - Math.pow(1 - p, 3);
-      setValue(Math.round(target * eased));
-      if (p < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [target, durationMs]);
-  return value;
-}
 
 export interface DocumentUploadStartProps {
   /**
@@ -575,6 +503,8 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   /** Files a folder upload could not read — shown as a warning, not an error. */
   const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
+  /** Office lock files set aside from the last pick — a notice, not an error. */
+  const [temporaryNotice, setTemporaryNotice] = useState<string | null>(null);
   /**
    * Procurement rows enriched from the certificate registry, plus the account of
    * what was matched. Computed during the reveal so the user SEES the registry's
@@ -1616,37 +1546,15 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     if (unreadFiles.length > 0) void prepareAndQuote(files);
   };
 
-  /** Extensions the parser can read. Anything else is filtered with a warning. */
-  const READABLE = new Set([
-    ".pdf", ".docx", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx", ".ppt",
-    ".csv", ".txt", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".webp",
-  ]);
-
   /**
    * Whole-folder upload.
    *
    * A folder carries everything — including desktop.ini, thumbnails and
-   * whatever else lives alongside the evidence. Silently dropping those would
-   * be dishonest about what we read, and refusing the whole folder over one
-   * stray file would be worse. So: take what we can read, say plainly what was
-   * skipped, and let the user decide.
+   * whatever else lives alongside the evidence. The same rule as any other
+   * pick applies (see `addFiles`): take what we can read, say plainly what was
+   * set aside, and let the user decide.
    */
-  const addFolder = (incoming: File[], origin?: UploadOrigin) => {
-    const readable: File[] = [];
-    const skipped: string[] = [];
-
-    for (const file of incoming) {
-      const dot = file.name.lastIndexOf(".");
-      const ext = dot === -1 ? "" : file.name.slice(dot).toLowerCase();
-      // Hidden/system files a folder picker sweeps up.
-      if (file.name.startsWith(".") || file.name === "Thumbs.db" || file.name === "desktop.ini") continue;
-      if (READABLE.has(ext) && file.size > 0) readable.push(file);
-      else skipped.push(file.name);
-    }
-
-    setSkippedFiles(skipped);
-    if (readable.length > 0) addFiles(readable, origin);
-  };
+  const addFolder = (incoming: File[], origin?: UploadOrigin) => addFiles(incoming, origin);
 
   /**
    * A batch was picked. Nothing is staged yet — the double-check dialog gets
@@ -1677,21 +1585,18 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   };
 
   const addFiles = (incoming: File[], origin?: UploadOrigin) => {
-    // Skip OS / Office junk that is never a real document: Excel/Word lock files
-    // (~$name.xlsx, created while the file is open in the app), macOS resource
-    // forks (._name), and Thumbs.db / .DS_Store. These are unreadable and used to
-    // fail the whole quote with "Failed to fetch".
-    const isJunk = (name: string) => {
-      const base = name.split(/[\\/]/).pop() ?? name;
-      return /^~\$/.test(base) || /^\._/.test(base) || /^\.(ds_store)$/i.test(base) || /^thumbs\.db$/i.test(base);
-    };
-    const skipped = incoming.filter((f) => isJunk(f.name)).map((f) => f.name.split(/[\\/]/).pop() ?? f.name);
-    const usable = incoming.filter((f) => !isJunk(f.name));
-    if (skipped.length > 0) {
-      setParseError(
-        `Skipped ${skipped.length} temporary file${skipped.length === 1 ? "" : "s"} (${skipped.slice(0, 2).join(", ")}${skipped.length > 2 ? "…" : ""}) — these are Excel/Office lock files, not documents. Close the workbook in Excel and upload the real file.`,
-      );
-    }
+    // One rule for every way in — the drop zone, a picked file, a folder, a
+    // checklist group. The pickers no longer filter (a greyed-out file is a
+    // silent refusal), so this is where the sorting happens, out loud:
+    //  - OS bookkeeping (Thumbs.db, .DS_Store) is dropped silently;
+    //  - Office lock files (~$Book.xlsx) and resource forks get one neutral
+    //    line — they look like documents and are not;
+    //  - anything the parser cannot open is named, with what to do about it.
+    // Before, a lock file failed the whole quote with "Failed to fetch".
+    const sorted = sortPickedFiles(incoming);
+    setTemporaryNotice(sorted.temporary.length > 0 ? temporarySentence(sorted.temporary) : null);
+    setSkippedFiles(sorted.unreadable);
+    const usable = sorted.usable;
     if (usable.length === 0) return;
     const next = [...files];
     for (const f of usable) {
@@ -1830,13 +1735,8 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
   // `files.length` OR a restore: File objects never survive navigation, so a
   // rehydrated run must reveal from the case alone.
   const revealed = Boolean((mapped || injected) && !parsing && (files.length > 0 || restoredAt));
-  // Requires `doneStaging`: this flag collapses the stage into the checkout
-  // layout, and doing that the moment a quote landed is what left people with
-  // "files appear but there is nowhere to carry on".
-  const quoteReady = Boolean(quote && doneStaging && unreadFiles.length > 0 && !quoting && !parsing);
-  /** Whether reading the unread files spends tokens, and whether the balance covers it. */
+  /** Whether reading the unread files spends tokens (the read bar works out whether the balance covers it). */
   const readCharging = Boolean(quote && quote.paymentRequired !== false && tokenCost !== null);
-  const readUnaffordable = readCharging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
   /**
    * Read the unread files — one click from the bar under the uploader.
    *
@@ -2024,959 +1924,151 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     { value: "EME", label: "EME", detail: "Annual turnover below R10m" },
   ];
 
+  // ── What is on screen ────────────────────────────────────────────────────
+  // Every step does one job and has one filled button: Upload files (empty),
+  // Read N documents (staged), nothing while reading, Build scorecard after.
+  // Anything not needed for the next decision sits behind a closed "details".
+  const readBarState: ReadBarState = quoting ? "pricing" : quote ? "priced" : "failed";
+  const showReadBar = unreadFiles.length > 0 && !parsing;
+  /** A pricing failure is said in the read bar, so it is not said again below. */
+  const pricingFailedInBar = showReadBar && readBarState === "failed";
+  /** The checklist and company details: before the first read only, never while reading. */
+  const showStageExtras = !bareUpload && !parsing && !parserCase;
 
-  return (
-    <div data-testid="document-upload-start">
-      {/* Scoped animation keyframes */}
-      <style>{`
-        @keyframes dusFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes dusShimmer { from { transform: translateX(-100%); } to { transform: translateX(220%); } }
-        @keyframes dusPulseRing { 0% { box-shadow: 0 0 0 0 rgba(167,139,250,0.28); } 70% { box-shadow: 0 0 0 14px rgba(167,139,250,0); } 100% { box-shadow: 0 0 0 0 rgba(167,139,250,0); } }
-        @keyframes dusStamp { 0% { opacity: 0; transform: scale(0.85); } 60% { opacity: 1; transform: scale(1.06); } 100% { opacity: 1; transform: scale(1); } }
-        .dus-fade-up { animation: dusFadeUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-        .dus-stamp { animation: dusStamp 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-      `}</style>
+  /** One row of the file list: a name, one status word and its own action. */
+  const rowFor = (f: File): DocumentListRow => {
+    const perFile = docProgress[f.name];
+    const alreadyRead = !isUnread(f);
+    const detected = (parserCase?.documents_detected ?? []).find((d) => d.filename === f.name);
+    const missing = parsing ? { fields: [] as string[], notes: [] as string[] } : docMissingContent(f.name);
+    const hasGaps = missing.fields.length > 0 || missing.notes.length > 0;
+    const quotedFile = quoted(f.name);
+    // A round reads only the new files; the ones already read keep their verdict.
+    const status: DocumentStatus =
+      parsing && !alreadyRead
+        ? perFile === "done"
+          ? "read"
+          : perFile === "error"
+            ? "failed"
+            : resolving
+              ? "read"
+              : "reading"
+        : perFile === "error"
+          ? "failed"
+          : detected
+            ? detected.status === "passed" && !hasGaps
+              ? "read"
+              : detected.status === "review_required" || hasGaps
+                ? "needs-look"
+                : "failed"
+            : "ready";
+    const gaps = [
+      missing.fields.length > 0
+        ? `Not read: ${missing.fields.slice(0, 4).join(", ")}${missing.fields.length > 4 ? ` +${missing.fields.length - 4}` : ""}`
+        : "",
+      missing.notes.slice(0, 1).join("; "),
+    ].filter(Boolean).join(" · ");
+    return {
+      name: f.name,
+      status,
+      details: [
+        filedBatchByFile[f.name] ? `Added to ${batchLabel(filedBatchByFile[f.name])}` : "",
+        quotedFile ? fileUnits(quotedFile) : "",
+        quotedFile?.requiresOcr ? "scanned" : "",
+      ].filter(Boolean),
+      error:
+        status === "failed"
+          ? parsing
+            ? "We couldn't read this file. The rest carry on."
+            : "We couldn't read this file. Replace it with a clearer copy, or remove it."
+          : null,
+      removable: !alreadyRead,
+      gaps: hasGaps ? gaps : null,
+    };
+  };
+  const listFiles = revealed ? unreadFiles : files;
 
-      {/* Left-aligned and at document scale. A 34px centred headline over a
-          working step read like a landing page rather than a step in an
-          assessment, which is what made the flow feel unserious. */}
-      <div className="mb-5">
-        <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
-          {quoteReady && quote
-            ? quote.paymentRequired === false
-              ? "Review your documents"
-              : "Review and pay"
-            : parserCase
-              ? "Your documents"
-              : addMode
-                ? `Add documents to ${existingCompany!.name}`
-                : "Add your documents"}
-        </h3>
-        <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
-          {quoteReady && quote
-            ? quote.paymentRequired === false
-              ? "Processing is free. Review the documents below, then continue."
-              : "Nothing is read until you pay."
-            : parserCase
-              ? "Read and placed below. Forgot one? Add it — only the new documents are read and charged."
-              : "We identify what is present, what is missing and what needs review."}
-        </p>
-      </div>
+  const restoredLabel = (() => {
+    if (!restoredAt) return "";
+    const at = new Date(restoredAt);
+    return Number.isNaN(at.getTime())
+      ? ""
+      : ` from ${at.toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`;
+  })();
 
-      {/* A restored run announces itself. Without this, coming back to data
-          you don't remember paying for looks like a glitch — and the only way
-          out of a restore you don't want would be a hard refresh. */}
-      {restoredAt && parserCase && (
-        <div
-          className="mb-4 flex flex-col gap-3 rounded-[18px] border border-emerald-400/25 bg-emerald-500/[0.06] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-          data-testid="restored-run-banner"
-        >
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-[13px] font-semibold text-emerald-200">
-              <Check className="h-4 w-4 shrink-0" />
-              Your processed documents were saved
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
-              We restored the extraction you already paid for
-              {(() => {
-                const at = new Date(restoredAt);
-                return Number.isNaN(at.getTime())
-                  ? ""
-                  : ` from ${at.toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}`;
-              })()}
-              . Review it below and create the scorecard — no tokens were spent again.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={discardRun}
-            className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/[0.10] px-4 py-2 text-[12px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
-            data-testid="button-discard-restored-run"
-          >
-            Discard and start over
-          </button>
-        </div>
+  const readBar = showReadBar ? (
+    <ReadBar
+      testIdPrefix=""
+      count={unreadFiles.length}
+      newRound={Boolean(parserCase)}
+      state={readBarState}
+      charging={readCharging}
+      free={quote?.paymentRequired === false}
+      tokenCost={tokenCost}
+      failureDetail={parseError}
+      costOpen={doneStaging}
+      onToggleCost={() => setDoneStaging((open) => !open)}
+      onRetry={() => void prepareAndQuote(files)}
+      onRead={readNow}
+      busy={paying || parsing}
+    >
+      {quote && (
+        <CostDetails
+          testIdPrefix=""
+          files={quote.files}
+          tokenCost={tokenCost}
+          charging={readCharging}
+          isUpperBound={quote.totals?.isUpperBound}
+          expiresAt={quote.expiresAt}
+          onRead={() => void (readCharging ? spendAndExtract() : readFree(unreadFiles, quote.quoteId))}
+          busy={paying || parsing}
+        />
       )}
+    </ReadBar>
+  ) : null;
 
-      {/* Sector selector — drives the sector-aware document checklist and the
-          scorecard's calculator. B-BBEE evidence differs by sector + size. */}
-
-      {/* ACT 1 — the stage */}
-      <motion.div
-        layout
-        className={
-          quoteReady || bareUpload || revealed ? "grid gap-5" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"
-        }
-      >
-        {!quoteReady && !bareUpload && !revealed && (
-        <motion.aside layout className="rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)] p-4 lg:order-2 lg:self-start">
-          <AnimatePresence initial={false}>
-          {quote && !parserCase && (
-            <motion.div
-              key="quoted-documents"
-              initial={{ opacity: 0, y: -8, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: -6, height: 0 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-              className="mb-5 overflow-hidden border-b border-white/[0.06] pb-5"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Documents</p>
-                  <p className="mt-1 text-[13px] text-[color:var(--body)]">
-                    {files.length} file{files.length === 1 ? "" : "s"} ready
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  className="rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-                >
-                  Change
-                </button>
-              </div>
-              <div className="mt-3 max-h-44 space-y-1 overflow-auto pr-1">
-                {files.map((file) => {
-                  const quotedFile = quoted(file.name);
-                  return (
-                    <div key={file.name} className="flex items-center gap-2 rounded-xl bg-white/[0.035] px-2.5 py-2">
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-[color:var(--muted)]" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[12px] font-medium text-[#e5e5ea]">{file.name}</p>
-                        <p className="mt-0.5 text-[10.5px] text-[color:var(--muted)]">
-                          {quotedFile?.requiresOcr ? "Scan" : quotedFile ? "Digital" : "Waiting"}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(file.name)}
-                        className="rounded-full p-1 text-[color:var(--muted)] transition-colors hover:bg-white/[0.06] hover:text-[color:var(--body)]"
-                        aria-label={`Remove ${file.name}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
-          </AnimatePresence>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">Company profile</p>
-          <div className="mt-4 space-y-5">
-            {sectorOptions.length > 0 && (
-              <div>
-                <label className="mb-2 block text-[12px] font-medium text-[color:var(--body)]">Sector</label>
-                <select
-                  value={sector}
-                  onChange={(e) => {
-                    setSector(e.target.value);
-                    setSubSector("");
-                  }}
-                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
-                  data-testid="sector-select-side"
-                >
-                  <option value="">Select sector…</option>
-                  {sectorOptions.map((s) => (
-                    <option key={s.code} value={s.code}>{s.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {activeSector?.subSectors && (
-              <div>
-                <label className="mb-2 block text-[12px] font-medium text-[color:var(--body)]">Sub-sector</label>
-                <select
-                  value={subSector}
-                  onChange={(e) => setSubSector(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/[0.08] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
-                  data-testid="subsector-select-side"
-                >
-                  <option value="">Select</option>
-                  {activeSector.subSectors.map((ss) => (
-                    <option key={ss.value} value={ss.value}>{ss.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div>
-              <p className="mb-2 text-[12px] font-medium text-[color:var(--body)]">Organisation size</p>
-              <div className="space-y-1.5">
-                {sizeOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setSize(option.value)}
-                    className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] transition-colors hover:bg-white/[0.04]"
-                    data-testid={`size-option-side-${option.value}`}
-                  >
-                    <span>
-                      <span className="block font-medium text-white">{option.label}</span>
-                      <span className="block text-[11px] text-[color:var(--muted)]">{option.detail}</span>
-                    </span>
-                    {size === option.value && <Check className="h-3.5 w-3.5 text-[color:var(--body)]" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </motion.aside>
-        )}
-
-        <motion.section layout className="min-w-0 lg:order-1">
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            className="hidden"
-            accept=".pdf,.txt,.csv,.doc,.docx,.xlsx,.xlsm,.xls,.pptx,.png,.jpg,.jpeg"
-            onChange={(e) => {
-              if (e.target.files?.length) addFiles(Array.from(e.target.files));
-              e.currentTarget.value = "";
-            }}
-            data-testid="docs-file-input"
-          />
-          {/* Whole-folder upload. Clients keep their evidence in a folder, not
-              as a hand-picked list, and making them select 26 files one by one
-              is how documents get left out. Unsupported files are filtered with
-              a warning rather than failing the whole drop. */}
-          <input
-            ref={folderInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            // Non-standard but supported everywhere that matters; React needs
-            // these lowercased via the DOM attribute spelling.
-            {...{ webkitdirectory: "", directory: "" }}
-            onChange={(e) => {
-              if (e.target.files?.length) addFolder(Array.from(e.target.files));
-              e.currentTarget.value = "";
-            }}
-            data-testid="docs-folder-input"
-          />
-      <AnimatePresence mode="wait" initial={false}>
-      {quoteReady && quote && (
-        (() => {
-          const totalPages = quote.files.reduce((sum, file) => sum + (file.structure.pages ?? 0), 0);
-          const spreadsheetCount = quote.files.filter((file) => (file.structure.sheets ?? 0) > 0).length;
-          // The server decides whether tokens are involved. With the gate off
-          // this is a review step, not a spend — never show a cost we won't take.
-          const charging = quote.paymentRequired !== false && tokenCost !== null;
-          const cannotAfford = charging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
-          const expiry = new Date(quote.expiresAt);
-          const expiryLabel = Number.isNaN(expiry.getTime())
-            ? "Today"
-            : expiry.toLocaleString("en-ZA", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-          return (
-            <motion.div
-              key="processing-quote"
-              layout
-              initial={{ opacity: 0, x: 28, scale: 0.985 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -24, scale: 0.985 }}
-              transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
-              className="mb-4 rounded-[22px] border border-white/[0.08] bg-[color:var(--ink-2)] p-5"
-              data-testid="payment-summary"
-            >
-              {/* Reviewing the cost is not a one-way door either. Without this,
-                  the only route back to the uploader was removing a document. */}
-              <button
-                type="button"
-                onClick={() => setDoneStaging(false)}
-                className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--body)] transition-colors hover:text-white"
-                data-testid="button-add-more-documents"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Add more documents
-              </button>
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[color:var(--muted)]">
-                    {charging ? "This batch costs" : "Ready to process"}
-                  </p>
-                  <h4
-                    className="mt-2 text-[30px] font-semibold leading-none text-white"
-                  >
-                    {charging && tokenCost
-                      ? `${tokenText(tokenCost.tokens)} tokens`
-                      : `${quote.files.length} document${quote.files.length === 1 ? "" : "s"}`}
-                  </h4>
-                  <p className="mt-2 max-w-sm text-[13px] leading-5 text-[color:var(--body)]">
-                    {charging
-                      ? "Longer documents and scans cost more to read. Nothing is spent until you start."
-                      : "Check what we picked up before we extract and map your documents."}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-white/[0.07] bg-[color:var(--ink-3)] px-4 py-3 text-right">
-                  {charging && tokenCost ? (
-                    <>
-                      <p className="text-[11px] text-[color:var(--muted)]">Balance after</p>
-                      <p
-                        className={`mt-1 text-[13px] font-medium tabular-nums ${
-                          tokenCost.sufficient ? "text-[color:var(--body)]" : "text-red-300"
-                        }`}
-                        data-testid="balance-after"
-                      >
-                        {tokenText(Math.max(0, tokenCost.balanceAfter))}
-                      </p>
-                      <p className="mt-0.5 text-[10.5px] text-[color:var(--muted)]">
-                        of {tokenText(tokenCost.balance)} now
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-[11px] text-[color:var(--muted)]">Expires</p>
-                      <p className="mt-1 text-[13px] font-medium text-[color:var(--body)]">{expiryLabel}</p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-5 grid grid-cols-3 gap-2">
-                <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                  <p className="text-[11px] text-[color:var(--muted)]">Documents</p>
-                  <p className="mt-1 text-[20px] font-semibold text-white">{quote.files.length}</p>
-                </div>
-                <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                  <p className="text-[11px] text-[color:var(--muted)]">Pages</p>
-                  <p className="mt-1 text-[20px] font-semibold text-white">{totalPages || "Auto"}</p>
-                </div>
-                <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                  <p className="text-[11px] text-[color:var(--muted)]">Workbooks</p>
-                  <p className="mt-1 text-[20px] font-semibold text-white">{spreadsheetCount}</p>
-                </div>
-              </div>
-
-              {/* One "tokens" in this UI, and it is the credit kind. The
-                  model's own token estimate is an internal cost input — showing
-                  it beside a credit cost invited people to read one as the
-                  other. Each document shows the credit tokens IT costs, under
-                  the effort rule that priced it, so the total is explained
-                  line by line rather than asserted. */}
-              <div className="mt-5 overflow-hidden rounded-2xl border border-white/[0.07]">
-                <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--muted)] max-md:hidden">
-                  <span>Document</span>
-                  <span>Effort</span>
-                  <span className="text-right">{charging ? "Tokens" : "Size"}</span>
-                </div>
-                {quote.files.map((file) => {
-                  const units = fileUnits(file);
-                  const priced = tokenCost?.files?.find((f) => f.filename === file.filename);
-                  const effort = priced ? EFFORT_LABELS[priced.effort] ?? "Standard" : file.requiresOcr ? "High" : "Standard";
-                  return (
-                    <div
-                      key={file.filename}
-                      className="grid gap-2 border-b border-white/[0.05] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
-                    >
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
-                        <p className="mt-0.5 text-[11px] text-[color:var(--muted)]">
-                          <span className="md:hidden">{effort} effort · </span>
-                          {units}
-                          {charging && priced ? (
-                            <span className="md:hidden"> · {tokenText(priced.tokens)} tokens</span>
-                          ) : null}
-                        </p>
-                      </div>
-                      <span className="hidden text-[12px] text-[color:var(--body)] md:block">{effort}</span>
-                      <span className="hidden text-[12px] tabular-nums text-[color:var(--body)] md:block md:text-right">
-                        {charging && priced ? `${tokenText(priced.tokens)} tokens` : units}
-                      </span>
-                    </div>
-                  );
-                })}
-                {charging && (tokenCost?.minimumTopUp ?? 0) > 0 && (
-                  <div
-                    className="grid gap-2 border-b border-white/[0.05] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
-                    data-testid="quote-minimum-charge"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-medium text-[color:var(--body)]">Small-batch minimum</p>
-                      <p className="mt-0.5 text-[11px] text-[color:var(--muted)]">
-                        Batches this small are topped up to the minimum processing charge.
-                      </p>
-                    </div>
-                    <span className="hidden md:block" />
-                    <span className="text-[12px] tabular-nums text-[color:var(--body)] md:text-right">
-                      {tokenText(tokenCost!.minimumTopUp!)} tokens
-                    </span>
-                  </div>
-                )}
-                <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
-                  <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[color:var(--body)]">
-                    {charging ? "Total" : "This batch"}
-                  </span>
-                  <span className="hidden md:block" />
-                  <span className="text-[14px] font-bold text-white md:text-right" data-testid="quote-total-cost">
-                    {charging && tokenCost
-                      ? `${tokenText(tokenCost.tokens)} tokens`
-                      : `${quote.files.length} document${quote.files.length === 1 ? "" : "s"}`}
-                  </span>
-                </div>
-              </div>
-
-              {/* The rules the prices above came from — served by the same
-                  endpoint that priced them, so the explanation cannot drift
-                  from the charge. */}
-              {charging && (tokenCost?.effortRules?.length ?? 0) > 0 && (
-                <div className="mt-3 rounded-2xl border border-white/[0.06] bg-[color:var(--ink-2)] p-4" data-testid="effort-rules">
-                  <p className="text-[12px] font-semibold text-white">How effort sets the token cost</p>
-                  <div className="mt-2 space-y-1.5">
-                    {tokenCost!.effortRules!.map((rule) => (
-                      <p key={rule.tier} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                        <span className="font-semibold text-[color:var(--body)]">{rule.label}</span> — {rule.rule}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!charging && (
-                <p className="mt-3 text-[11px] text-[color:var(--muted)]">
-                  Processing is not being charged for this run.
-                </p>
-              )}
-
-              {cannotAfford && tokenCost && (
-                <div
-                  className="mt-4 rounded-2xl border border-red-400/25 bg-red-500/[0.06] p-4"
-                  data-testid="insufficient-tokens"
-                >
-                  <p className="flex items-center gap-2 text-[13px] font-semibold text-red-200">
-                    <AlertTriangle className="h-4 w-4" />
-                    {tokenText(tokenCost.shortfall)} tokens short
-                  </p>
-                  <p className="mt-1 text-[12px] leading-5 text-[color:var(--body)]">
-                    This batch needs {tokenText(tokenCost.tokens)} tokens and you have{" "}
-                    {tokenText(tokenCost.balance)}. Top up, or remove some documents and process the rest first.
-                  </p>
-                  <a
-                    href="/settings/billing"
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-[13px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-                  >
-                    <CreditCard className="h-3.5 w-3.5" />
-                    Add tokens
-                  </a>
-                </div>
-              )}
-
-              <div className="mt-5 rounded-2xl border border-white/[0.06] bg-[color:var(--ink-2)] p-4">
-                <p className="text-[13px] font-semibold text-white">Included</p>
-                <div className="mt-3 grid gap-2 text-[12px] text-[color:var(--body)] sm:grid-cols-2">
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Document reading</span>
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Field extraction</span>
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Scorecard mapping</span>
-                  <span className="inline-flex items-center gap-2"><Check className="h-3.5 w-3.5 text-[color:var(--body)]" /> Review flags where needed</span>
-                </div>
-              </div>
-
-              {charging && quote.totals.isUpperBound && (
-                <p className="mt-3 text-[11px] text-[color:var(--muted)]">
-                  Scanned documents are estimated conservatively. You will not be charged more than this.
-                </p>
-              )}
-
-              <div className="mt-5 space-y-2">
-                <button
-                  onClick={() => void (charging ? spendAndExtract() : readFree(unreadFiles, quote.quoteId))}
-                  disabled={paying || parsing || cannotAfford}
-                  className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
-                  style={{ background: "#0e6fff", color: "#ffffff" }}
-                  data-testid={charging ? "button-spend-tokens" : "button-process"}
-                >
-                  {paying || parsing ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <ArrowRight className="h-[18px] w-[18px]" />
-                  )}
-                  {charging && tokenCost
-                    ? tokenCost.alreadyAuthorized
-                      ? "Read my documents"
-                      : `Read my documents — ${tokenText(tokenCost.tokens)} tokens`
-                    : "Read my documents"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
-                >
-                  Change documents
-                </button>
-              </div>
-            </motion.div>
-          );
-        })()
-      )}
-      {!quoteReady && !revealed && (!quote || parserCase || quoting) && (
-      <motion.div
-        key={quoting ? "pricing-documents" : parserCase ? "parsed-upload" : "upload-documents"}
-        layout
-        initial={{ opacity: 0, x: -22, scale: 0.985 }}
-        animate={{ opacity: 1, x: 0, scale: 1 }}
-        exit={{ opacity: 0, x: 24, scale: 0.985 }}
-        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-        className="relative rounded-[20px] text-center cursor-pointer transition-all duration-300 overflow-hidden"
-        style={{
-          background: dragActive
-            ? "#111827"
-            : "#0e0e10",
-          border: `1px dashed ${dragActive ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.16)"}`,
-          padding: files.length > 0 ? "16px 18px" : "28px 20px 26px",
-          transform: dragActive ? "scale(1.008)" : "scale(1)",
-        }}
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-        onDragLeave={(e) => { e.preventDefault(); setDragActive(false); }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragActive(false);
-          if (e.dataTransfer.files?.length) addFiles(Array.from(e.dataTransfer.files));
-        }}
-        data-testid="docs-drop-zone"
-      >
-        {files.length === 0 ? (
-          <>
-            <div
-              className="w-11 h-11 rounded-2xl mx-auto mb-3 flex items-center justify-center transition-transform duration-300"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.10)",
-                transform: dragActive ? "scale(1.1)" : "scale(1)",
-              }}
-            >
-              <CloudUpload className="w-5 h-5 text-[color:var(--body)]" />
-            </div>
-            {/* No heading here. The step above already says "Add your
-                documents"; repeating it, then labelling the button with the
-                same words a third time, is what made choosing "upload" and
-                then being asked to upload feel like being asked twice. */}
-            <p className="text-[13px] text-[color:var(--body)] mb-4 max-w-sm mx-auto leading-5">
-              Certificates, affidavits, spend schedules, payroll and EE reports.
-              PDF, Word, Excel or scans.
-            </p>
-            <button
-              type="button"
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] focus:outline-none focus:ring-4 focus:ring-white/[0.08]"
-              onClick={(e) => {
-                e.stopPropagation();
-                inputRef.current?.click();
-              }}
-              data-testid="button-upload-documents"
-            >
-              <Upload className="h-4 w-4" />
-              Upload documents
-            </button>
-            <button
-              type="button"
-              className="ml-2 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-5 py-2.5 text-[14px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.06]"
-              onClick={(e) => {
-                e.stopPropagation();
-                folderInputRef.current?.click();
-              }}
-              data-testid="button-upload-folder"
-            >
-              <FolderOpen className="h-4 w-4" />
-              Upload a folder
-            </button>
-            <p className="mt-3 text-[11px] text-[#86868b]">
-              Token cost shown before anything is read.
-            </p>
-            <div className="hidden">
-              {["PDF", "DOCX", "XLSX", "CSV", "SCANS"].map((ext) => (
-                <span key={ext} className="px-2 py-0.5 rounded text-[10px] tracking-wide text-[color:var(--muted)]" style={{ background: "var(--ink-3)" }}>
-                  {ext}
-                </span>
-              ))}
-            </div>
-          </>
-        ) : (
-          <div className="flex items-center justify-center gap-2 text-[color:var(--body)] hover:text-violet-300 transition-colors">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="text-[13px] font-medium" data-testid="add-more-documents-label">
-              {parserCase
-                ? "Add a document you forgot — only new ones are read and charged"
-                : "Add more documents"}
-            </span>
-          </div>
-        )}
-      </motion.div>
-      )}
-      </AnimatePresence>
-
-      {/* Folder upload skipped some files. A warning, not an error: the upload
-          still went ahead with everything readable, and the user decides
-          whether the skipped ones mattered. */}
-      {skippedFiles.length > 0 && (
-        <div
-          className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4"
-          data-testid="skipped-files-warning"
-        >
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-200">
-            <AlertTriangle className="h-4 w-4" />
-            {skippedFiles.length} file{skippedFiles.length === 1 ? "" : "s"} in that folder could not be read
-          </p>
-          <p className="mt-1 text-[12px] leading-5 text-[color:var(--body)]">
-            We only read PDFs, Word, Excel, PowerPoint, CSV and images. Everything else was left out —
-            if one of these was evidence, convert it and add it.
-          </p>
-          <p className="mt-2 truncate font-mono text-[11px] text-[color:var(--body)]">
-            {skippedFiles.slice(0, 6).join(", ")}
-            {skippedFiles.length > 6 ? ` +${skippedFiles.length - 6} more` : ""}
-          </p>
-        </div>
-      )}
-
-      {/* The way ON from staging — kept at the TOP, directly under the drop
-          zone. It used to sit below the pillar batches, which on any real
-          screen put the one button that advances the flow beneath a long grid:
-          you staged files and then had to go hunting for how to continue.
-          Whether the documents arrived through the main button or a pillar
-          batch is irrelevant here: both stage into the same list, so both end
-          at the same control. */}
-      {!doneStaging && unreadFiles.length > 0 && !parsing && (() => {
-        const n = unreadFiles.length;
-        const docs = `${n} ${parserCase ? "new " : ""}document${n === 1 ? "" : "s"}`;
-        const priceLine = quoting
-          ? "Working out the cost — nothing is read yet."
-          : !quote
-            ? "We could not work out the cost of these documents. Nothing has been read or charged."
-            : readCharging && tokenCost
-              ? `${tokenText(tokenCost.tokens)} tokens · you have ${tokenText(tokenCost.balance)}.`
-              : quote.paymentRequired === false
-                ? "Reading is free for this run."
-                : "Checking your balance…";
-        return (
-          <div
-            className="mt-3 flex flex-col gap-3 rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-            data-testid="read-bar"
-          >
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-white">{docs} ready to read</p>
-              <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]" data-testid="read-bar-price">
-                {priceLine}{" "}
-                {parserCase
-                  ? "Documents already read are not charged again."
-                  : "Keep adding if you have more — nothing is read until you press read."}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {!quoting && !quote && (
-                <button
-                  type="button"
-                  onClick={() => void prepareAndQuote(files)}
-                  className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white"
-                  data-testid="button-retry-quote-inline"
-                >
-                  Try again
-                </button>
-              )}
-              <button
-                type="button"
-                disabled={quoting}
-                onClick={() => setDoneStaging(true)}
-                className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white disabled:opacity-50"
-                data-testid="button-done-staging"
-              >
-                See cost breakdown
-              </button>
-              {readUnaffordable && tokenCost ? (
-                <a
-                  href="/settings/billing"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-                  data-testid="button-add-tokens"
-                >
-                  <CreditCard className="h-4 w-4" />
-                  Add tokens — {tokenText(tokenCost.shortfall)} short
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  disabled={!quote || quoting || paying}
-                  onClick={readNow}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
-                  data-testid="button-read-now"
-                >
-                  {quoting || paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                  {readCharging && tokenCost && !tokenCost.alreadyAuthorized
-                    ? `Read ${n === 1 ? "it" : `all ${n}`} — ${tokenText(tokenCost.tokens)} tokens`
-                    : `Read ${n === 1 ? "it" : `all ${n}`}`}
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* The dead end. "Done adding" hides the staging bar above, and the review
-          panel below only renders once a quote exists — so when pricing failed
-          the button appeared to do nothing at all: the way ON vanished and
-          nothing replaced it. The only escape was adding or removing a file
-          (which resets doneStaging), and the only clue was a red line far below
-          the fold. Say what went wrong where the button was, and offer both
-          ways forward. */}
-      {doneStaging && !quote && !quoting && unreadFiles.length > 0 && (
-        <div
-          className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-          data-testid="quote-unavailable"
-        >
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-amber-100">
-              We could not work out the cost of these {files.length} document{files.length === 1 ? "" : "s"}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[#a1a1aa]">
-              {parseError ?? "Pricing did not finish, so there is nothing to review yet."} Nothing has
-              been read and nothing has been charged.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDoneStaging(false)}
-              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[color:var(--body)] transition-colors hover:text-white"
-              data-testid="button-back-to-staging"
-            >
-              Back to adding
-            </button>
-            <button
-              type="button"
-              onClick={() => void prepareAndQuote(files)}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-              data-testid="button-retry-quote"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* The upload surface itself, one batch per pillar plus the whole-file
-          uploads. Shown before processing so the user can go and fetch what is
-          missing rather than spending tokens to be told their score is low.
-          Once documents have been read it doubles as a coverage ledger.
-
-          Gated on `parserCase`, NOT on `quote`. A quote arrives the moment the
-          first pillar's files land, and gating on it tore the uploader off the
-          screen mid-task: you could fill Ownership and then had nowhere to put
-          Skills. A quote is just a price for what is staged so far — it is
-          re-issued whenever the list changes, so it is not a commitment and must
-          not behave like one. Extraction is the point of no return, so that is
-          what closes the uploader. */}
-      {!parserCase && !bareUpload && (
-        <div className="mt-3">
-          <PillarDocumentBatches
-            satisfiedDocumentIds={satisfiedDocumentIds}
-            filedBatchByFile={filedBatchByFile}
-            stagedFileNames={files.map((f) => f.name)}
-            onPick={handleBatchPick}
-            disabled={parsing}
-          />
-        </div>
-      )}
-
-      {/* Double-check before anything is staged. */}
-      <ConfirmUploadDialog
-        pending={pendingUpload}
-        onConfirm={confirmPendingUpload}
-        onCancel={() => setPendingUpload(null)}
+  const fileList =
+    !parsing && listFiles.length > 0 ? (
+      <DocumentList
+        testIdPrefix=""
+        className="mt-3"
+        rows={listFiles.map(rowFor)}
+        onRemove={removeFile}
+        onReplace={() => inputRef.current?.click()}
       />
+    ) : null;
 
-      {/* Expected documents — sector-aware checklist (below the stage) */}
-
-      {/* Phase banner — names where we are (Reading → Reconciling → Scoring) so
-          the multi-minute paid wait shows movement, not a frozen spinner. */}
-      {parsing && (
-        <div ref={extractionPhaseRef} className="mt-3 flex items-center gap-3 rounded-xl border border-violet-300/20 bg-[#17151d] px-4 py-3" data-testid="extraction-phase">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-300" />
-          <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold text-violet-100">
-              {resolving ? "Reconciling into your company profile" : "Reading your documents"}
-            </div>
-            <div className="text-[12px] text-[color:var(--body)]">
-              {resumeNotice
-                ? <span data-testid="read-resume-notice">{resumeNotice}</span>
-                : resolving
-                ? resolveProgress
-                  ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking names, IDs and figures across every file`
-                  : "Cross-checking names, IDs and figures across every file"
-                : `${Object.values(docProgress).filter((s) => s === "done").length} of ${unreadFiles.length} read`}
-            </div>
-          </div>
-          {resolving && resolveProgress && resolveProgress.total > 0 && (
-            <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10 shrink-0">
-              <div className="h-full rounded-full bg-violet-400 transition-all" style={{ width: `${Math.round((resolveProgress.done / resolveProgress.total) * 100)}%` }} />
-            </div>
-          )}
+  // Set-aside files: one line under the list, never a red error.
+  const pickNotices = (
+    <>
+      {skippedFiles.length > 0 && (
+        <div className="mt-2 text-[12px] leading-5 text-amber-200/90" data-testid="skipped-files-warning">
+          <Disclosure
+            summary={
+              <span className="inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
+                {unreadableSentence(skippedFiles)}
+              </span>
+            }
+            summaryClassName="text-[12px] font-normal text-amber-200/90"
+          >
+            <p className="pl-5 font-mono text-[11px] text-[color:var(--body)]">{skippedFiles.join(", ")}</p>
+          </Disclosure>
         </div>
       )}
-
-      {/* ACT 2 — scanning theatre */}
-      {(revealed ? unreadFiles.length > 0 : files.length > 0) && !quoteReady && (!quote || parserCase || quoting) && (
-        <div className="mt-3 overflow-hidden rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)]">
-          <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--muted)] sm:grid">
-            <span>File</span>
-            <span>Status</span>
-            <span>Type</span>
-            <span />
-          </div>
-          {(revealed ? unreadFiles : files).map((f, i) => {
-            const detected = (parserCase?.documents_detected ?? []).find((d) => d.filename === f.name);
-            const missing = parsing ? { fields: [], notes: [] } : docMissingContent(f.name);
-            const hasGaps = missing.fields.length > 0 || missing.notes.length > 0;
-            const quotedFile = quoted(f.name);
-            const fileType = quotedFile?.requiresOcr ? "Scan" : quotedFile ? "Digital" : f.name.split(".").pop()?.toUpperCase() ?? "File";
-            // Per-file progress from the streaming parser: this file's own state,
-            // not a single spinner across the whole batch.
-            const perFile = docProgress[f.name];
-            const isReadingThis = perFile === "parsing";
-            const alreadyRead = !isUnread(f);
-            // A round reads only the new files; the ones already read keep their verdict.
-            const statusLabel = parsing && !alreadyRead
-              ? perFile === "done"
-                ? "Read"
-                : perFile === "error"
-                  ? "Error"
-                  : isReadingThis
-                    ? "Reading"
-                    : resolving
-                      ? "Read"
-                      : "Queued"
-              : detected
-                ? detected.status === "passed" && !hasGaps
-                  ? "Ready"
-                  : detected.status === "review_required" || hasGaps
-                    ? "Review"
-                    : "Failed"
-                : quotedFile
-                  ? "Not read yet"
-                  : quoting
-                    ? "Pricing"
-                    : "Queued";
-            return (
-              <div
-                key={f.name}
-                className="dus-fade-up relative overflow-hidden border-b border-white/[0.05] px-3.5 py-3 last:border-b-0"
-                style={{ animationDelay: `${i * 70}ms` }}
-              >
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1.5fr)_110px_120px_36px] sm:items-center sm:gap-3">
-                  {/* shimmer sweep while THIS file is being read */}
-                  {isReadingThis && (
-                    <div className="absolute inset-y-0 left-0 w-1/3 pointer-events-none" style={{
-                      background: "linear-gradient(100deg, transparent, rgba(167,139,250,0.09), transparent)",
-                      animation: "dusShimmer 1.4s ease-in-out infinite",
-                    }} />
-                  )}
-                  <div className="flex min-w-0 items-center gap-2 text-left">
-                    <FileText className="w-4 h-4 text-[color:var(--muted)] shrink-0" />
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-medium text-[#e5e5ea]">{f.name}</div>
-                      {/* Where the user filed it, and how big it is. The pillar
-                          it eventually SCORES against is the classifier's call
-                          and shows in the Type column once we have read it. */}
-                      {(quotedFile || filedBatchByFile[f.name]) && (
-                        <div className="mt-0.5 truncate text-[11px] text-[color:var(--muted)]">
-                          {filedBatchByFile[f.name] ? batchLabel(filedBatchByFile[f.name]) : null}
-                          {filedBatchByFile[f.name] && quotedFile ? " · " : null}
-                          {quotedFile ? fileUnits(quotedFile) : null}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1 text-[11px] text-[color:var(--body)]">
-                    {isReadingThis && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {perFile === "done" && parsing && <Check className="h-3 w-3 text-emerald-400" />}
-                    {statusLabel}
-                  </span>
-                  <span className="text-[12px] text-[color:var(--body)]">{fileType}</span>
-                  <FileText className="hidden w-4 h-4 text-[color:var(--muted)] shrink-0" />
-                  <div className="hidden flex-1 min-w-0 text-left">
-                    <div className="text-[13px] text-[#e5e5ea] truncate font-medium">{f.name}</div>
-                    <div className="text-[11px] mt-0.5">
-                      {parsing ? (
-                        <span className="text-[color:var(--muted)] inline-flex items-center gap-1.5">
-                          <Loader2 className="w-3 h-3 animate-spin" /> Reading document…
-                        </span>
-                      ) : detected ? (
-                        <span className="dus-stamp inline-flex items-center gap-1.5">
-                          <span className={`w-1.5 h-1.5 rounded-full ${detected.status === "passed" ? "bg-emerald-400" : detected.status === "review_required" ? "bg-amber-400" : "bg-red-400"}`} />
-                          <span className="text-[color:var(--body)]">{detected.document_type}</span>
-                          {detected.status === "passed" && !hasGaps && (
-                            <span className="text-emerald-400/70">· all read</span>
-                          )}
-                        </span>
-                      ) : quoted(f.name) ? (
-                        // Priced, not read. Say only what we actually know from
-                        // the structure scan — never claim a verdict yet.
-                        <span className="inline-flex items-center gap-1.5 text-[color:var(--muted)]">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[rgba(255,255,255,0.12)]" />
-                          {quoted(f.name)!.requiresOcr ? "Scan — needs OCR" : "Digital"}
-                          <span className="text-[color:var(--muted)]">·</span>
-                          <span className="font-mono">{quoted(f.name)!.tokens.input.toLocaleString()} tok</span>
-                          <span className="text-[color:var(--muted)]">· not read yet</span>
-                        </span>
-                      ) : quoting ? (
-                        <span className="text-[color:var(--muted)]">Sizing…</span>
-                      ) : (
-                        <span className="text-[color:var(--muted)]">Queued</span>
-                      )}
-                    </div>
-                  </div>
-                  {/* A read document is part of the scorecard now — no remove. */}
-                  {alreadyRead ? (
-                    <span />
-                  ) : (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); removeFile(f.name); }}
-                      className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[color:var(--body)] sm:justify-self-end"
-                      data-testid={`remove-${f.name}`}
-                      aria-label={`Remove ${f.name}`}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
-
-                {/* Gaps WITHIN this document — one compact line, no per-row
-                    reassurance (that's said once below), no internal jargon. */}
-                {hasGaps && (
-                  <div
-                    className="mt-1 ml-6 flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-200/70"
-                    data-testid={`missing-content-${f.name}`}
-                  >
-                    <AlertTriangle className="w-3 h-3 text-amber-400/80 shrink-0 mt-0.5" />
-                    <span>
-                      {missing.fields.length > 0 && (
-                        <>Not read: {missing.fields.slice(0, 4).join(", ")}
-                          {missing.fields.length > 4 ? ` +${missing.fields.length - 4}` : ""}</>
-                      )}
-                      {missing.fields.length > 0 && missing.notes.length > 0 && " · "}
-                      {missing.notes.length > 0 && <>{missing.notes.slice(0, 1).join("; ")}</>}
-                    </span>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {!parsing && files.some((f) => { const m = docMissingContent(f.name); return m.fields.length > 0 || m.notes.length > 0; }) && (
-            <div className="px-3.5 py-2.5 text-[11px] text-[color:var(--body)] flex items-center gap-1.5 border-t border-white/[0.05]">
-              <AlertTriangle className="w-3 h-3 text-amber-400/70 shrink-0" />
-              Anything not read, you can fill in on the workbook after — it won&apos;t block you from continuing.
-            </div>
-          )}
-        </div>
+      {temporaryNotice && (
+        <p className="mt-2 text-[12px] leading-5 text-[color:var(--body)]" data-testid="skipped-temporary-files">
+          {temporaryNotice}
+        </p>
       )}
+    </>
+  );
 
-      {parseError && <p className="text-[12px] text-red-400 mt-3">{parseError}</p>}
-      {/* A read whose connection dropped and could not be collected: what
-          happened, whether the tokens come back, and a way on. */}
+  /** What happened to a paid run, said once wherever the screen is. */
+  const runNotices = (
+    <>
       {readLost && !parsing && (
-        <div className="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/[0.06] px-4 py-3" data-testid="read-lost">
+        <div className="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/[0.06] px-4 py-3" data-testid="read-lost" role="alert">
           <p className="text-[12px] leading-5 text-amber-100">{readLost.message}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {readLost.canCheckAgain && (
@@ -3000,100 +2092,261 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
           </div>
         </div>
       )}
-      {libraryWarning && <p className="text-[12px] text-amber-300 mt-3">{libraryWarning}</p>}
-
-      {/* Pricing the documents — free, structure-only, nothing read yet. */}
-      {quoting && (
-        <div className="mt-3 flex items-center gap-2 text-[12px] text-[color:var(--body)]">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-300" />
-          Checking size and format to price these documents — nothing is read yet.
-        </div>
-      )}
-
-      {/* A paid run that delivered less than it cost — the server says what came back. */}
       {refundNotice && (
-        <p className="mt-3 text-[12px] leading-5 text-emerald-200/90" data-testid="bbbee-refund-notice">
+        <p className="mt-3 text-[12px] leading-5 text-emerald-200/90" role="status" data-testid="bbbee-refund-notice">
           {refundNotice}
         </p>
       )}
+    </>
+  );
 
-      {revealed && mapped && (
-        <div className="mt-4">
-          {/* Pillar rack — status tiles light up */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 mb-3" data-testid="coverage-preview">
-            {PILLAR_TILES.map((tile, i) => {
-              const c = coverageByPillar[tile.pillar];
-              const status = c?.status ?? "no-document";
-              const lit = status === "mapped";
-              const partial = status === "needs-detail";
-              return (
-                <div
-                  key={tile.pillar}
-                  className="dus-fade-up rounded-lg px-2 py-2 text-center transition-all duration-500"
-                  style={{
-                    animationDelay: `${120 + i * 90}ms`,
-                    background: lit ? "rgba(48,209,88,0.07)" : partial ? "rgba(255,214,10,0.05)" : "#111113",
-                    border: `1px solid ${lit ? "rgba(48,209,88,0.35)" : partial ? "rgba(255,214,10,0.25)" : "#1f1f21"}`,
-                  }}
-                  title={c ? `${tile.pillar}: ${c.detail}${c.extractedValue ? ` (extracted: ${c.extractedValue})` : ""}` : tile.pillar}
-                >
-                  <div className="flex items-center justify-center mb-1">
-                    {lit ? (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    ) : partial ? (
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                    ) : (
-                      <Minus className="w-3.5 h-3.5 text-[color:var(--muted)]" />
-                    )}
-                  </div>
-                  <div className={`text-[10px] font-medium leading-tight ${lit ? "text-emerald-200/90" : partial ? "text-amber-200/80" : "text-[color:var(--muted)]"}`}>
-                    {tile.short}
-                  </div>
+  return (
+    <div data-testid="document-upload-start">
+      {/* No `accept` on either picker: any file can be chosen, and whatever
+          the parser cannot open is named after the pick (see addFiles). */}
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) addFiles(Array.from(e.target.files));
+          e.currentTarget.value = "";
+        }}
+        data-testid="docs-file-input"
+      />
+      {/* Whole-folder upload. Clients keep their evidence in a folder, not as a
+          hand-picked list, and making them select 26 files one by one is how
+          documents get left out. */}
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        // Non-standard but supported everywhere that matters; React needs
+        // these lowercased via the DOM attribute spelling.
+        {...{ webkitdirectory: "", directory: "" }}
+        onChange={(e) => {
+          if (e.target.files?.length) addFolder(Array.from(e.target.files));
+          e.currentTarget.value = "";
+        }}
+        data-testid="docs-folder-input"
+      />
+
+      {/* Left-aligned and at document scale: a step in an assessment, not a
+          landing page. The cost line is said here once. */}
+      <div className="mb-4">
+        <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
+          {parserCase ? "Your documents" : addMode ? `Add documents to ${existingCompany!.name}` : "Add your documents"}
+        </h3>
+        <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
+          {parserCase
+            ? "Read and placed. Check anything marked, then build."
+            : "We'll show the cost before anything is read."}
+        </p>
+      </div>
+
+      {parsing ? (
+        // While reading: one calm line; the files are behind "Show documents".
+        <StatusLine
+          testIdPrefix=""
+          containerRef={extractionPhaseRef}
+          total={unreadFiles.length}
+          done={Object.values(docProgress).filter((s) => s === "done").length}
+          failed={Object.values(docProgress).filter((s) => s === "error").length}
+          checking={resolving}
+          checkProgress={resolveProgress}
+          notice={resumeNotice}
+        >
+          {unreadFiles.length > 0 ? (
+            <DocumentList testIdPrefix="" rows={unreadFiles.map(rowFor)} onRemove={removeFile} locked />
+          ) : null}
+        </StatusLine>
+      ) : revealed ? (
+        // A round after a read: the new documents and the bar that reads them,
+        // straight under the heading.
+        <>
+          {readBar}
+          {fileList}
+          {pickNotices}
+          {unreadFiles.length > 0 && (
+            <div className="mt-3">
+              <UploadSurface
+                testIdPrefix=""
+                staged
+                lead=""
+                onPickFiles={() => inputRef.current?.click()}
+                onPickFolder={() => folderInputRef.current?.click()}
+                onDropFiles={(dropped) => addFiles(dropped)}
+              />
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <UploadSurface
+            testIdPrefix=""
+            staged={files.length > 0}
+            lead="Drop files or a folder."
+            onPickFiles={() => inputRef.current?.click()}
+            onPickFolder={() => folderInputRef.current?.click()}
+            onDropFiles={(dropped) => addFiles(dropped)}
+          />
+          {parseError && !pricingFailedInBar && (
+            <p className="mt-2 text-[12px] leading-5 text-red-300" role="alert" data-testid="parse-error">
+              {parseError}
+            </p>
+          )}
+          {readBar}
+          {fileList}
+          {pickNotices}
+        </>
+      )}
+
+      {runNotices}
+      {!revealed && libraryWarning && (
+        <p className="mt-3 text-[12px] leading-5 text-[color:var(--body)]" role="status">{libraryWarning}</p>
+      )}
+
+      {/* The checklist and the company profile: before the first read, closed.
+          Neither is needed to upload — the checklist is guidance, and sector
+          and size are asked for again on the Build bar after the read. */}
+      {showStageExtras && (
+        <>
+          <PillarDocumentBatches
+            satisfiedDocumentIds={satisfiedDocumentIds}
+            filedBatchByFile={filedBatchByFile}
+            stagedFileNames={files.map((f) => f.name)}
+            onPick={handleBatchPick}
+            disabled={parsing}
+          />
+          <Disclosure
+            summary="Company details"
+            meta="optional now, needed before you build"
+            className="mt-3 rounded-[18px] border border-white/[0.07] bg-[color:var(--ink-2)] px-4 py-3"
+            summaryClassName="text-[13px]"
+            testId="company-details"
+          >
+            <p className="text-[12px] leading-5 text-[color:var(--body)]">
+              Sector and size decide which scorecard rules apply, and tailor the checklist above.
+            </p>
+            <div className="mt-3 grid gap-4 sm:grid-cols-2">
+              {sectorOptions.length > 0 && (
+                <div className="space-y-3">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--body)]">Sector</span>
+                    <select
+                      value={sector}
+                      onChange={(e) => {
+                        setSector(e.target.value);
+                        setSubSector("");
+                      }}
+                      className="h-10 w-full rounded-xl border border-white/[0.08] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
+                      data-testid="sector-select-side"
+                    >
+                      <option value="">Select sector…</option>
+                      {sectorOptions.map((s) => (
+                        <option key={s.code} value={s.code}>{s.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  {activeSector?.subSectors && (
+                    <label className="block">
+                      <span className="mb-1.5 block text-[12px] font-medium text-[color:var(--body)]">Sub-sector</span>
+                      <select
+                        value={subSector}
+                        onChange={(e) => setSubSector(e.target.value)}
+                        className="h-10 w-full rounded-xl border border-white/[0.08] bg-[color:var(--ink-3)] px-3 text-[13px] text-white outline-none focus:border-white/25 focus:ring-2 focus:ring-white/[0.05]"
+                        data-testid="subsector-select-side"
+                      >
+                        <option value="">Select</option>
+                        {activeSector.subSectors.map((ss) => (
+                          <option key={ss.value} value={ss.value}>{ss.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+              )}
+              <fieldset>
+                <legend className="mb-1.5 text-[12px] font-medium text-[color:var(--body)]">Organisation size</legend>
+                <div className="space-y-1">
+                  {sizeOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setSize(option.value)}
+                      aria-pressed={size === option.value}
+                      className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-[13px] transition-colors duration-200 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                      data-testid={`size-option-side-${option.value}`}
+                    >
+                      <span>
+                        <span className="block font-medium text-white">{option.label}</span>
+                        <span className="block text-[11px] text-[color:var(--muted)]">{option.detail}</span>
+                      </span>
+                      {size === option.value && <Check className="h-3.5 w-3.5 text-[color:var(--body)]" />}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          </Disclosure>
+        </>
+      )}
 
+      {/* Double-check before anything from a checklist group is staged. */}
+      <ConfirmUploadDialog
+        pending={pendingUpload}
+        onConfirm={confirmPendingUpload}
+        onCancel={() => setPendingUpload(null)}
+      />
+
+      {revealed && (
+        <div className="mt-4 space-y-4">
+          {/* A restored run announces itself — coming back to data you don't
+              remember paying for otherwise looks like a glitch — and offers
+              the way out. */}
+          {restoredAt && parserCase && (
+            <div
+              className="flex flex-col gap-2 rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+              data-testid="restored-run-banner"
+            >
+              <p className="flex items-center gap-2 text-[12.5px] leading-5 text-[color:var(--body)]">
+                <Check className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+                Restored your last read{restoredLabel}. No tokens were spent again.
+              </p>
+              <button type="button" onClick={discardRun} className={textButton("sm")} data-testid="button-discard-restored-run">
+                Discard and start over
+              </button>
+            </div>
+          )}
 
           {/* ── THE ONE THING THAT NEEDS A DECISION ────────────────────────
-              Figures the documents disagree on stay ABOVE the Build button and
-              are never collapsed. A withheld entity-level figure leaves a hole
-              in the score, and the person who can close it is standing here
-              with the documents open — inside an accordion it gets found after
-              the scorecard looks wrong, not before. Everything else is detail
-              and lives below the button. */}
+              Figures the documents disagree on stay above the Build button and
+              are never collapsed: a withheld figure leaves a hole in the score,
+              and the person who can close it is standing here. The only amber
+              panel above Build. */}
           {(injected?.metaConflicts.length ?? 0) > 0 && (
-            <div
-              className="dus-fade-up mb-4 rounded-xl px-4 py-3 text-left"
-              style={{ background: "rgba(255,214,10,0.05)", border: "1px solid rgba(255,214,10,0.22)" }}
-              data-testid="meta-conflicts"
-            >
-              <p className="flex items-center gap-1.5 text-[12.5px] font-medium text-amber-200/90">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                {injected!.metaConflicts.length} figure
-                {injected!.metaConflicts.length === 1 ? "" : "s"} your documents disagree on
+            <div className="rounded-xl border border-amber-300/25 bg-amber-400/[0.05] px-4 py-3 text-left" data-testid="meta-conflicts">
+              <p className="flex items-center gap-1.5 text-[13px] font-semibold text-amber-100">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
+                Your documents disagree on {injected!.metaConflicts.length} figure
+                {injected!.metaConflicts.length === 1 ? "" : "s"}.
               </p>
-              <p className="mt-1 text-[11.5px] text-[color:var(--body)]">
-                Left blank rather than guessed — pick the right one in the workbook and the score
-                follows.
+              <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
+                We left {injected!.metaConflicts.length === 1 ? "it" : "them"} blank. Pick the right one in the workbook.
               </p>
-              {/* One candidate per line. Joining them into `a (src) vs b (src)`
-                  produced a wrapping run of text at exactly the moment the user
-                  had to compare two numbers. */}
+              {/* One candidate per line: comparing two numbers on one wrapping
+                  run of text is where the wrong one gets picked. */}
               <div className="mt-2 space-y-2">
                 {injected!.metaConflicts.map((c) => (
-                  <div
-                    key={`${c.section}.${c.column}`}
-                    className="rounded-lg border border-white/[0.06] bg-[color:var(--ink)]/20 px-3 py-2"
-                  >
-                    <p className="text-[11.5px] font-medium text-[color:var(--body)]">{c.column}</p>
+                  <div key={`${c.section}.${c.column}`} className="rounded-lg border border-white/[0.06] bg-[color:var(--ink-2)] px-3 py-2">
+                    <p className="text-[12px] font-medium text-[color:var(--hi)]">{c.column}</p>
                     <ul className="mt-1 space-y-0.5">
                       {c.candidates.map((cand, i) => (
-                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[11.5px] leading-5">
+                        <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-5">
                           <span className="tabular-nums text-white">{String(cand.value)}</span>
-                          <span className="text-[11px] text-[color:var(--muted)]">
-                            {cand.sources.join(", ") || "unknown source"}
-                          </span>
+                          <span className="text-[11px] text-[color:var(--muted)]">{cand.sources.join(", ") || "unknown source"}</span>
                         </li>
                       ))}
                     </ul>
@@ -3103,33 +2356,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             </div>
           )}
 
-          {/* What the certificate registry added to Procurement.
-              Shown before Create so the registry's contribution is visible and
-              questionable, never a silent edit to the user's data. */}
-          {certificateFillRunning && (
-            <div
-              className="dus-fade-up mb-4 rounded-lg px-3 py-2.5 text-left"
-              style={{ background: "#111113", border: "1px solid #1f1f21", animationDelay: "660ms" }}
-              data-testid="certificate-autofill-running"
-            >
-              <p className="text-[11px] text-[color:var(--body)] flex items-center gap-1.5">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Checking suppliers against the certificate database…
-              </p>
-            </div>
-          )}
-
-          {/* BUILD — one compact bar, above the review. Everything the scorecard
-              needs to be built sits in a single row: the company, the rules it
-              is scored under and the year it is measured over. The side panel
-              that held sector and size is gone once the documents are read, so
-              they are editable here. Missing documents or missing content never
-              block building: the workbook scores on what we have. */}
-          <div
-            className="dus-fade-up rounded-2xl border border-white/[0.08] bg-[color:var(--ink-2)] p-3"
-            style={{ animationDelay: "300ms" }}
-            data-testid="build-bar"
-          >
+          {/* BUILD — the company, the rules it is scored under and the year it
+              is measured over, in one bar above the review. Missing documents
+              never block building: the workbook scores on what we have. */}
+          <div className="rounded-2xl border border-white/[0.08] bg-[color:var(--ink-2)] p-3" data-testid="build-bar">
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_auto] lg:items-end">
               <label className="min-w-0">
                 <span className="mb-1 block text-[11px] font-medium text-[color:var(--muted)]">Company</span>
@@ -3138,7 +2368,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
                   onChange={(e) => setCompanyName(e.target.value)}
                   readOnly={addMode}
                   placeholder="e.g. Acme Holdings (Pty) Ltd"
-                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-[13.5px] text-white placeholder-[rgba(255,255,255,0.32)] outline-none transition-colors focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 read-only:text-[color:var(--body)]"
+                  className="h-10 w-full rounded-xl border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-[13.5px] text-white placeholder-[color:var(--muted)] outline-none transition-colors focus:border-violet-500/50 focus:ring-2 focus:ring-violet-500/10 read-only:text-[color:var(--body)]"
                   data-testid="docs-company-name"
                 />
               </label>
@@ -3200,40 +2430,23 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
                 />
               </label>
               <button
+                type="button"
                 onClick={() => void handleCreate()}
                 disabled={!canCreate}
-                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl px-4 text-[13.5px] font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-40 sm:col-span-2 lg:col-span-1"
-                style={{
-                  background: canCreate ? "linear-gradient(135deg, #ffffff, #e7e2ff)" : "var(--ink-3)",
-                  color: canCreate ? "#000" : "var(--muted)",
-                  boxShadow: canCreate ? "0 0 24px rgba(167,139,250,0.15)" : "none",
-                }}
+                className="inline-flex h-10 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 text-[13.5px] font-semibold text-black transition-colors duration-200 hover:bg-white/90 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-400/30 disabled:cursor-not-allowed disabled:bg-[color:var(--ink-3)] disabled:text-[color:var(--muted)] sm:col-span-2 lg:col-span-1"
                 data-testid="button-create-from-documents"
               >
-                {creating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    {addMode
-                      ? totalMappedRows > 0
-                        ? `Add ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""} to the workbook`
-                        : "Add these documents to the workbook"
-                      : totalMappedRows > 0
-                        ? `Build scorecard · ${totalMappedRows} value${totalMappedRows !== 1 ? "s" : ""}`
-                        : "Continue to workbook"}
-                  </>
-                )}
+                {creating ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : null}
+                {addMode ? "Add to the workbook" : "Build scorecard"}
               </button>
             </div>
 
             {/* Only what stops the build, or what changes how it is scored —
                 said once, under the bar. The happy path shows nothing here. */}
-            {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid || workbookMismatches.length > 0) && (
+            {(!sector || !size || activeSector?.provisional || unreadFiles.length > 0 || !yearEndValid || workbookMismatches.length > 0 || certificateFillRunning || addMode) && (
               <div className="mt-2.5 space-y-1 border-t border-white/[0.05] pt-2.5 text-[11.5px] leading-5">
                 {/* The workbook states a different sector or year end from the
-                    one chosen here. The choice here stands; this only makes
-                    sure it is a choice, not an oversight. */}
+                    one chosen here. The choice here stands. */}
                 {workbookMismatches.map((m) => (
                   <p key={m.field} className="text-amber-300/90" data-testid={`workbook-mismatch-${m.field}`}>
                     {m.field === "sector"
@@ -3260,41 +2473,83 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
                     {unreadFiles.length === 1 ? "it" : "them"}, before building.
                   </p>
                 )}
-                {/* A sector whose ladder was applied by analogy rather than
-                    transcribed says so next to the button that builds the
-                    scorecard — not in a footnote. A level nobody flagged is a
-                    level someone will certify. */}
+                {/* A sector whose ladder was applied by analogy says so next to
+                    the button that builds the scorecard — not in a footnote. */}
                 {activeSector?.provisional && (
                   <p className="flex items-start gap-1.5 text-amber-200/80" data-testid="sector-provisional-note">
-                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
                     <span>{activeSector.provisionalNote}</span>
+                  </p>
+                )}
+                {certificateFillRunning && (
+                  <p className="flex items-center gap-1.5 text-[color:var(--body)]" data-testid="certificate-autofill-running">
+                    <Loader2 className="h-3 w-3 animate-spin motion-reduce:animate-none" aria-hidden />
+                    Checking supplier certificates…
+                  </p>
+                )}
+                {addMode && (
+                  <p className="text-[color:var(--muted)]">
+                    Blanks in the workbook take these values. Nothing already there is overwritten — where a document
+                    disagrees, you’ll see both and we keep yours.
                   </p>
                 )}
               </div>
             )}
-            {addMode && (
-              <p className="mt-2 text-[11px] leading-5 text-[color:var(--muted)]">
-                Blanks in the workbook take these values. Nothing already there is overwritten — where a document
-                disagrees, you’ll see both and we keep yours.
+            {(parseError || libraryWarning) && (
+              <p className="mt-2 text-[11.5px] leading-5 text-[color:var(--body)]" role="status" data-testid="docs-notice">
+                {[parseError, libraryWarning].filter(Boolean).join(" ")}
               </p>
             )}
           </div>
 
-          {/* THE REVIEW — the main content after a read: each document beside
-              what we took from it, worst first, at a fixed height. It replaced
-              a stack of collapsed sections ("What we read", "Documents still
-              worth adding", "Evidence that didn't reconcile"…) that said the
-              same things detached from the documents they were about.
-              Optional: the Build bar above never waits for it. */}
+          {/* What we found, by pillar, in one row — and what is not here yet. */}
+          {mapped && (
+            <div>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1.5" data-testid="coverage-preview" aria-label="What we found, by pillar">
+                {PILLAR_TILES.map((tile) => {
+                  const c = coverageByPillar[tile.pillar];
+                  const status = c?.status ?? "no-document";
+                  const lit = status === "mapped";
+                  const partial = status === "needs-detail";
+                  return (
+                    <li
+                      key={tile.pillar}
+                      className={`inline-flex items-center gap-1.5 text-[12.5px] ${lit ? "text-[color:var(--hi)]" : partial ? "text-amber-200" : "text-[color:var(--muted)]"}`}
+                      title={c ? `${tile.pillar}: ${c.detail}${c.extractedValue ? ` (read: ${c.extractedValue})` : ""}` : tile.pillar}
+                    >
+                      {lit ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden />
+                      ) : partial ? (
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" aria-hidden />
+                      ) : (
+                        <Minus className="h-3.5 w-3.5" aria-hidden />
+                      )}
+                      {tile.short}
+                      <span className="sr-only">{lit ? ": found" : partial ? ": needs more detail" : ": not in this pack"}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+              {(missingDocGroups.detectable.length > 0 || needsDetailPillars.length > 0) && (
+                <p className="mt-1.5 text-[12px] leading-5 text-[color:var(--body)]" data-testid="review-still-to-add">
+                  <span className="font-medium text-white">Not in this pack yet:</span>{" "}
+                  {[
+                    ...missingDocGroups.detectable.map((g) => g.label),
+                    ...needsDetailPillars.map((c) => `${c.pillar}: we read ${c.extractedValue}, but it needs per-person rows to score.`),
+                  ].join(" · ")}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* THE REVIEW — each document beside what we took from it, worst
+              first, at a fixed height. Optional: Build never waits for it. Its
+              "Add documents" is the one way to add a forgotten document here. */}
           <DocumentReview
             documents={reviewDocuments}
             fileFor={(name) => files.find((f) => f.name === name) ?? null}
             documentIdFor={(name) => documentIdsByName()[name] ?? null}
             onAddDocuments={() => inputRef.current?.click()}
-            stillToAdd={missingDocGroups.detectable.map((g) => g.label)}
-            needsDetail={needsDetailPillars.map(
-              (c) => `${c.pillar}: we read ${c.extractedValue}, but it needs per-person rows to score.`,
-            )}
             // A correction here is what gets built: it rewrites the case the
             // workbook is mapped from, and the parser's reading rides along.
             onEditValue={(filename, edit, value) =>
@@ -3302,7 +2557,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
             }
           />
 
-          <div className="mt-4 space-y-1.5" data-testid="extraction-review">
+          <div className="space-y-1.5" data-testid="extraction-review">
             {/* Disagreements found while linking documents to each other — they
                 belong to no single document, so they are not in the review. */}
             {(() => {
@@ -3311,17 +2566,15 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
               );
               return crossDocument.length > 0 ? (
                 <ReviewSection
-                  title="Figures your documents disagree on"
+                  title="Disagreements between documents"
                   meta={`${crossDocument.length}`}
-                  tone="check"
-                  icon={<AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" />}
                   summary="Where two documents describe the same thing differently, the lower figure is scored."
                   testId="reconciliation-flags"
                 >
                   <ul className="space-y-1">
                     {crossDocument.map((flag, i) => (
                       <li key={i} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                        <span className="text-amber-300/80">{flag.sourceFile}:</span> {flag.note}
+                        <span className="text-[color:var(--hi)]">{flag.sourceFile}:</span> {flag.note}
                       </li>
                     ))}
                   </ul>
@@ -3329,35 +2582,28 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
               ) : null;
             })()}
 
+            {/* What the certificate registry added to Procurement — visible and
+                questionable, never a silent edit to the user's data. */}
             {certificateFill && (
               <ReviewSection
-                title="Certificate database"
-                meta={
-                  certificateFill.report.cellsFilled > 0
-                    ? `${certificateFill.report.cellsFilled} filled`
-                    : "nothing added"
-                }
-                tone={certificateFill.report.cellsFilled > 0 ? "good" : "neutral"}
-                icon={<Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />}
+                title="Supplier certificates"
+                meta={certificateFill.report.cellsFilled > 0 ? `${certificateFill.report.cellsFilled} filled` : "nothing added"}
                 testId="certificate-autofill-summary"
               >
                 {certificateFill.report.cellsFilled > 0 ? (
                   <>
-                    <p className="text-[11.5px] leading-5 text-emerald-200/90">
+                    <p className="text-[11.5px] leading-5 text-[color:var(--body)]">
                       Filled {certificateFill.report.cellsFilled} field
                       {certificateFill.report.cellsFilled === 1 ? "" : "s"} across{" "}
                       {certificateFill.report.rowsChanged} supplier
                       {certificateFill.report.rowsChanged === 1 ? "" : "s"} — blanks only, nothing
                       your documents stated was changed.
                     </p>
-                    {/* The financial period is not known yet at upload — it is
-                        entered on the workbook — so validity was judged against
-                        today. Most certificates on file expire within the current
-                        year, so this is expected rather than a data problem, and
-                        the levels fill once the period is set. Saying so here
-                        stops it reading as "we hold nothing for these suppliers". */}
+                    {/* The financial period is not known yet at upload, so
+                        validity was judged against today; the levels fill once
+                        the period is set. */}
                     {certificateFill.report.notValid.length > 0 && (
-                      <p className="mt-1 text-[11.5px] leading-5 text-amber-200/80">
+                      <p className="mt-1 text-[11.5px] leading-5 text-[color:var(--body)]">
                         {certificateFill.report.notValid.length} matched certificate
                         {certificateFill.report.notValid.length === 1 ? " is" : "s are"} not current
                         today, so their B-BBEE levels were left blank. Set the financial period on
@@ -3366,7 +2612,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
                       </p>
                     )}
                     {certificateFill.report.conflicts.length > 0 && (
-                      <p className="mt-1 text-[11.5px] leading-5 text-amber-200/80">
+                      <p className="mt-1 text-[11.5px] leading-5 text-[color:var(--body)]">
                         {certificateFill.report.conflicts.length} supplier
                         {certificateFill.report.conflicts.length === 1 ? "" : "s"} on file disagree
                         with the uploaded figures — your figures were kept.
@@ -3382,11 +2628,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
                   </>
                 ) : certificateFill.report.registryUnavailable ? (
                   <p className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                    Certificate database unavailable — procurement was left exactly as extracted.
+                    Supplier certificates could not be checked — procurement was left exactly as read.
                   </p>
                 ) : (
                   <p className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                    No new supplier details found in the certificate database.
+                    No new supplier details found in the certificates we hold.
                   </p>
                 )}
               </ReviewSection>
@@ -3394,8 +2640,6 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
           </div>
         </div>
       )}
-        </motion.section>
-      </motion.div>
     </div>
   );
 }

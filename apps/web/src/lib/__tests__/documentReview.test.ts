@@ -101,6 +101,26 @@ describe("buildDocumentReview", () => {
   });
 });
 
+describe("buildDocumentReview — a document we could not name", () => {
+  it("shows what was read from it as a general document, instead of calling it unread", () => {
+    const unnamed = {
+      documents_detected: [
+        { filename: "memo.pdf", document_type: "Unknown", status: "failed", validation: { errors: ["Best document-type confidence is below review threshold"], warnings: [], missing_fields: [] } },
+      ],
+      ai_entities: {
+        extractions: [{ sourceFile: "memo.pdf", element: "", values: [{ field: "total_spend", value: 1200 }] }],
+      },
+    } as unknown as ParserCaseLike;
+    const [memo] = buildDocumentReview({ parserCase: unnamed, sections: {}, rejected: [], failedFiles: [] });
+    expect(memo.state).toBe("read");
+    expect(memo.documentType).toBe("Read as a general document");
+    expect(memo.problems.map((p) => p.headline)).not.toContain(
+      "We couldn't tell what kind of document this is, so we didn't know what to look for in it.",
+    );
+    expect(memo.values.map((v) => v.label)).toEqual(["Total spend"]);
+  });
+});
+
 describe("applyReviewEdit — a correction made in the review is what gets built", () => {
   it("corrects a read value, keeps the parser's reading, and keeps its type", () => {
     const edited = applyReviewEdit(CASE, "certificate.pdf", { kind: "field", field: "bee_level" }, "1");
