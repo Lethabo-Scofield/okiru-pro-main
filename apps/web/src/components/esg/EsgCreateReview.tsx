@@ -16,11 +16,11 @@
 import { AlertTriangle, ArrowRight, ChevronLeft, FileSpreadsheet, Loader2 } from "lucide-react";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
 import type { EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
-import EsgExtractionSummary from "./EsgExtractionSummary";
 import EsgFlowSteps from "./EsgFlowSteps";
+import { primaryButton } from "@/components/upload/flow/buttonStyles";
 import { EsgImportAnalysisPanel } from "@/components/esg-workbook/EsgImportAnalysisPanel";
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
-import type { EsgInjectionResult, EsgParserCaseLike } from "./esgParserInjection";
+import { esgCaseFileNames, type EsgInjectionResult, type EsgParserCaseLike } from "./esgParserInjection";
 import { useState } from "react";
 import { DocumentReview } from "@/components/review/DocumentReview";
 import { buildEsgDocumentReview } from "./esgDocumentReview";
@@ -108,16 +108,13 @@ export function EsgCreateReview({
     <div className="mx-auto w-full max-w-2xl" data-testid="esg-create-review">
       <EsgFlowSteps current={3} className="mb-6" />
 
-      <div className="mb-6 text-center">
-        <h2
-          className="text-[30px] font-semibold leading-tight tracking-tight text-[var(--esg-text,#fff)]"
-        >
-          Check this before we create it
-        </h2>
-        <p className="mx-auto mt-2 max-w-md text-[14px] leading-6 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+      {/* Left-aligned at document scale, like every other step in the flow. */}
+      <div className="mb-5">
+        <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">Name the company</h2>
+        <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
           {route === "manual"
             ? "Nothing has been read yet — you will complete the workbook yourself."
-            : "This is what we read. Nothing has been created and nothing has been scored yet."}
+            : "Nothing has been created and nothing has been scored yet."}
         </p>
       </div>
 
@@ -153,10 +150,16 @@ export function EsgCreateReview({
 
       {route === "documents" && injection ? (
         <div className="mt-4">
-          {/* The headline — the per-document review is the step before. A
-              restored run arrives here without passing it, so the review is
-              one click away rather than repeated in full. */}
-          <EsgExtractionSummary injection={injection} parserCase={parserCase ?? null} compact />
+          {/* One line — the summary and the per-document review were the step
+              before. A restored run arrives here without passing it, so the
+              review is one click away rather than repeated in full. */}
+          <p className="text-[13px] leading-5 text-[color:var(--body)]" data-testid="esg-review-documents-summary">
+            {(() => {
+              const figures = injection.figuresPlaced ?? injection.placed.length;
+              const documents = esgCaseFileNames(parserCase ?? null).length;
+              return `${figures} figure${figures === 1 ? "" : "s"} from ${documents} document${documents === 1 ? "" : "s"}`;
+            })()}
+          </p>
           {parserCase ? <ReviewAgain injection={injection} parserCase={parserCase} /> : null}
         </div>
       ) : null}
@@ -217,8 +220,7 @@ export function EsgCreateReview({
           type="button"
           onClick={onConfirm}
           disabled={!trimmed || creating}
-          className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
-          style={{ background: "var(--esg-acc-e, #1de9a0)", color: "#080e14" }}
+          className={`${primaryButton("esg", "lg")} w-full`}
           data-testid="esg-review-create"
         >
           {creating ? (

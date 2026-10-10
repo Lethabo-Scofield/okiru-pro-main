@@ -7,7 +7,7 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import "@testing-library/jest-dom/vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import EsgDocumentUploadStart from "../EsgDocumentUploadStart";
 
@@ -147,7 +147,10 @@ describe("EsgDocumentUploadStart — adding a forgotten document after the read"
     await waitFor(() => expect(screen.getByTestId("esg-button-continue-to-workbook")).not.toBeDisabled());
     expect(screen.queryByTestId("esg-remove-city-power-oct.pdf")).not.toBeInTheDocument();
     expect(screen.queryByTestId("esg-remove-diesel-oct.pdf")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Read").length).toBeGreaterThanOrEqual(2);
+    // Both are in the one review (the post-read file table that repeated it is gone).
+    const review = screen.getByTestId("document-review");
+    expect(within(review).getByTestId("review-doc-city-power-oct.pdf")).toBeInTheDocument();
+    expect(within(review).getByTestId("review-doc-diesel-oct.pdf")).toBeInTheDocument();
   });
 
   it("keeps the first round's figures in the workbook after a document is added", async () => {

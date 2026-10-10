@@ -23,9 +23,10 @@
  *    opens to show the rows.
  *  - Never let colour be the only signal — each state carries an icon and a word.
  */
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, FileWarning, HelpCircle } from "lucide-react";
 import { esgSectionById } from "@/lib/esg/esgSections";
+import { Disclosure } from "@/components/upload/flow/Disclosure";
 import {
   esgCaseFileNames,
   esgUnplacedKinds,
@@ -44,6 +45,10 @@ interface Props {
    * document they are about.
    */
   compact?: boolean;
+  /** The step's main button, on the summary line — never below the review. */
+  action?: ReactNode;
+  /** One line that belongs with the summary (documents that couldn't be read). */
+  notice?: ReactNode;
 }
 
 /** Element code → the wording a practitioner would recognise. */
@@ -200,23 +205,48 @@ function ElementGroup({
   );
 }
 
-export function EsgExtractionSummary({ injection, parserCase, compact = false }: Props) {
+/**
+ * The element each placed figure came from. A placed value carries its
+ * document, not its element, so it is looked up on the extraction it was read
+ * in — counting only the unplaced ones (as this panel used to) made the
+ * "Covered" line under-report exactly the elements that worked best.
+ */
+function elementOfPlaced(parserCase: EsgParserCaseLike | null): (placed: { documentId: string; sourceFile: string }) => string {
+  const byDocAndFile = new Map<string, string>();
+  const byDoc = new Map<string, string>();
+  for (const extraction of parserCase?.ai_entities?.extractions ?? []) {
+    const element = String((extraction as { element?: unknown }).element ?? "");
+    if (!element) continue;
+    const documentId = String((extraction as { documentId?: unknown }).documentId ?? "");
+    byDocAndFile.set(`${documentId}\u0000${String(extraction.sourceFile ?? "")}`, element);
+    if (!byDoc.has(documentId)) byDoc.set(documentId, element);
+  }
+  return (placed) => byDocAndFile.get(`${placed.documentId}\u0000${placed.sourceFile}`) ?? byDoc.get(placed.documentId) ?? "";
+}
+
+export function EsgExtractionSummary({ injection, parserCase, compact = false, action, notice }: Props) {
   const { placed, unplaced, conflicts, valuesRead } = injection;
   // What needs a person: figures to place, values to check, disagreements.
   // Evidence no cell needs is not outstanding — it is kept, and said so.
   const kinds = esgUnplacedKinds(unplaced);
   const outstanding = kinds.toPlace + kinds.toCheck + conflicts.length;
+  /** Figures written to the workbook — one per cell (a dashboard is one reading holding many). */
+  const figures = injection.figuresPlaced ?? placed.length;
 
   // Which elements the evidence actually covered, and how many values each
-  // contributed. Counted from the extraction itself — never from a wish list.
+  // contributed — placed and unplaced alike. Counted from the extraction
+  // itself, never from a wish list.
+  const elementOf = elementOfPlaced(parserCase);
   const byElement = new Map<string, number>();
-  for (const value of [...unplaced, ...placed.map((p) => ({ ...p, element: "" }))]) {
-    const code = String((value as { element?: string }).element ?? "");
-    byElement.set(code, (byElement.get(code) ?? 0) + 1);
+  for (const value of unplaced) {
+    const code = String(value.element ?? "");
+    if (code) byElement.set(code, (byElement.get(code) ?? 0) + 1);
   }
-  const elementRows = Array.from(byElement.entries())
-    .filter(([code]) => code)
-    .sort((a, b) => b[1] - a[1]);
+  for (const value of placed) {
+    const code = elementOf(value);
+    if (code) byElement.set(code, (byElement.get(code) ?? 0) + 1);
+  }
+  const elementRows = Array.from(byElement.entries()).sort((a, b) => b[1] - a[1]);
 
   // The unplaced readings, grouped the way the user thinks about them. A flat
   // list of every reading across every element is the thing this replaces.
@@ -248,124 +278,138 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false }:
       .map((note) => ({ sourceFile: String(extraction.sourceFile ?? ""), note })),
   );
 
-  return (
-    <div
-      className="rounded-[22px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] p-5"
-      data-testid="esg-extraction-summary"
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-            What we read from your documents
+  // One sentence: how many figures are ready, and what needs a person.
+  const headline = `${figures} figure${figures === 1 ? "" : "s"} ready for your workbook`;
+  const status =
+    valuesRead === 0
+      ? "nothing could be read"
+      : outstanding === 0
+        ? "nothing needs a look"
+        : `${outstanding} need${outstanding === 1 ? "s" : ""} a look`;
+
+  const kindsLine =
+    kinds.toPlace > 0 || kinds.evidence > 0 ? (
+      <p className="text-[12px] leading-5 text-[color:var(--body)]" data-testid="esg-unplaced-kinds">
+        {[
+          kinds.toPlace > 0 ? `${kinds.toPlace} figure${kinds.toPlace === 1 ? "" : "s"} need${kinds.toPlace === 1 ? "s" : ""} you to say where ${kinds.toPlace === 1 ? "it goes" : "they go"}` : "",
+          kinds.evidence > 0 ? `${kinds.evidence} value${kinds.evidence === 1 ? "" : "s"} kept with ${kinds.evidence === 1 ? "its document" : "their documents"} (not needed in the workbook)` : "",
+        ].filter(Boolean).join(" · ")}
+      </p>
+    ) : null;
+
+  // Added from inside a section (C1): what was read for another part of the
+  // workbook was not written, and says where it belongs.
+  const outsideFocus =
+    (injection.outsideFocus?.length ?? 0) > 0 ? (
+      <p className="text-[12px] leading-5 text-[color:var(--body)]" data-testid="esg-outside-focus">
+        Not written from here:{" "}
+        {injection.outsideFocus!
+          .map(({ sectionId, figures: n }) => `${n} figure${n === 1 ? "" : "s"} for ${esgSectionById(sectionId)?.title ?? sectionId}`)
+          .join(", ")}
+        {" "}— add these documents there, or to the whole workbook, to place them.
+      </p>
+    ) : null;
+
+  // ZERO EXTRACTION. The documents were read and produced nothing we can use —
+  // say it, and say what to do, rather than an empty panel that reads like a
+  // loading state that never finished.
+  const zero =
+    valuesRead === 0 ? (
+      <div className="rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-4 py-3" data-testid="esg-zero-extraction">
+        <p className="text-[13px] font-semibold text-amber-200">We could not extract any values from these documents</p>
+        <p className="mt-1 text-[12px] leading-5 text-[color:var(--body)]">
+          Nothing has been written to your workbook. This usually means the files were scans we could not read, or
+          documents outside the ESG evidence set. You can add different documents above, or continue and complete
+          the workbook by hand — the score is calculated the same way either way.
+        </p>
+      </div>
+    ) : null;
+
+  // Coverage BY ELEMENT — one line of text, counted from the extraction.
+  const covered =
+    elementRows.length > 0 ? (
+      <p className="text-[12px] leading-5 text-[color:var(--body)]" data-testid="esg-element-coverage">
+        <span className="font-medium text-[color:var(--hi)]">Covered:</span>{" "}
+        {elementRows.map(([code, count], i) => (
+          <span key={code}>
+            {i > 0 ? " · " : ""}
+            <CheckCircle2 className="mr-1 inline h-3 w-3 align-[-1px] text-emerald-400" aria-hidden />
+            {elementLabel(code)} <span className="tabular-nums text-[color:var(--muted)]">{count}</span>
+          </span>
+        ))}
+      </p>
+    ) : null;
+
+  if (compact) {
+    return (
+      <div className="rounded-[18px] border border-white/[0.08] bg-[color:var(--ink-3)] px-4 py-3" data-testid="esg-extraction-summary">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="min-w-0 text-[14px] leading-6 text-[color:var(--body)]">
+            <span className="font-semibold text-white">{headline}</span>
+            {" · "}
+            <span className={valuesRead === 0 || outstanding > 0 ? "text-amber-200" : ""}>{status}</span>
           </p>
-          <h4
-            className="mt-2 text-[22px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-          >
-            {valuesRead} value{valuesRead === 1 ? "" : "s"} read · {placed.length} placed
-          </h4>
+          {action}
         </div>
-        {valuesRead === 0 ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/[0.12] px-3 py-1.5 text-[12px] font-medium text-amber-300">
-            <AlertTriangle className="h-3.5 w-3.5" /> Nothing extracted
-          </span>
-        ) : outstanding === 0 ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#30d158]/[0.12] px-3 py-1.5 text-[12px] font-medium text-[#30d158]">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Nothing outstanding
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/[0.12] px-3 py-1.5 text-[12px] font-medium text-amber-300">
-            <AlertTriangle className="h-3.5 w-3.5" /> {outstanding} to review
-          </span>
+        <div className="mt-2 space-y-2 empty:hidden">
+          {notice}
+          {outsideFocus}
+          {zero}
+          {covered}
+        </div>
+        {(kindsLine || valuesRead > 0) && (
+          <Disclosure summary="Details" className="mt-2" summaryClassName="text-[12px]" testId="esg-summary-details">
+            <div className="space-y-1">
+              <p className="text-[12px] leading-5 text-[color:var(--body)]">
+                {valuesRead} value{valuesRead === 1 ? "" : "s"} read in all; each document is reviewed below — what we
+                took from it, what we couldn&apos;t place, and why anything wasn&apos;t read.
+              </p>
+              {kindsLine}
+            </div>
+          </Disclosure>
         )}
       </div>
-      {(kinds.toPlace > 0 || kinds.evidence > 0) && (
-        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-unplaced-kinds">
-          {[
-            kinds.toPlace > 0 ? `${kinds.toPlace} figure${kinds.toPlace === 1 ? "" : "s"} need${kinds.toPlace === 1 ? "s" : ""} you to say where ${kinds.toPlace === 1 ? "it goes" : "they go"}` : "",
-            kinds.evidence > 0 ? `${kinds.evidence} value${kinds.evidence === 1 ? " is" : "s are"} kept as evidence — no cell in the workbook needs ${kinds.evidence === 1 ? "it" : "them"}` : "",
-          ].filter(Boolean).join(" · ")}
-        </p>
-      )}
-      {/* Added from inside a section (C1): what was read for another part of the
-          workbook was not written, and says where it belongs. */}
-      {(injection.outsideFocus?.length ?? 0) > 0 && (
-        <p className="mt-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-outside-focus">
-          Not written from here:{" "}
-          {injection.outsideFocus!
-            .map(({ sectionId, figures }) => `${figures} figure${figures === 1 ? "" : "s"} for ${esgSectionById(sectionId)?.title ?? sectionId}`)
-            .join(", ")}
-          {" "}— add these documents there, or to the whole workbook, to place them.
-        </p>
-      )}
+    );
+  }
 
-      {/* ZERO EXTRACTION. The documents were read and produced nothing we can
-          use — say it, and say what to do, rather than showing an empty panel
-          that reads like a loading state that never finished. */}
-      {valuesRead === 0 && (
-        <div
-          className="mt-4 rounded-xl border border-amber-400/25 bg-amber-500/[0.06] px-4 py-3"
-          data-testid="esg-zero-extraction"
-        >
-          <p className="text-[13px] font-semibold text-amber-200">
-            We could not extract any values from these documents
-          </p>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-            Nothing has been written to your workbook. This usually means the files were scans we
-            could not read, or documents outside the ESG evidence set. You can add different
-            documents above, or continue and complete the workbook by hand — the score is
-            calculated the same way either way.
-          </p>
-        </div>
-      )}
-
-      {/* Coverage BY ELEMENT — counted from the extraction, so it can never
-          claim an element the documents did not speak to. */}
-      {elementRows.length > 0 && (
-        <div className="mt-4">
-          <p className="text-[13px] font-semibold text-[color:var(--body)]">Evidence by element</p>
-          <div className="mt-2 flex flex-wrap gap-1.5" data-testid="esg-element-coverage">
-            {elementRows.map(([code, count]) => (
-              <span
-                key={code}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[#30d158]/25 bg-[#30d158]/[0.07] px-2.5 py-1 text-[11.5px] text-[#a8e6c0]"
-              >
-                <CheckCircle2 className="h-3 w-3" aria-hidden />
-                {elementLabel(code)}
-                <span className="tabular-nums text-[var(--esg-text2,rgba(255,255,255,0.56))]">{count}</span>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+  return (
+    <div className="rounded-[22px] border border-white/[0.08] bg-[color:var(--ink-2)] p-5" data-testid="esg-extraction-summary">
+      <div className="flex items-start justify-between gap-4">
+        <h4 className="text-[18px] font-semibold leading-tight text-white">
+          {headline}
+          <span className="block text-[13px] font-normal text-[color:var(--body)]">
+            {status} · {valuesRead} value{valuesRead === 1 ? "" : "s"} read
+          </span>
+        </h4>
+        {action}
+      </div>
+      <div className="mt-3 space-y-3">
+        {kindsLine}
+        {notice}
+        {outsideFocus}
+        {zero}
+        {covered}
+      </div>
 
       {/* FIGURES THE DOCUMENTS DISAGREE ON. Left blank rather than guessed.
           One candidate per line: `a (src) vs b (src)` on one wrapping line was
           unreadable at exactly the moment the user had to choose between them. */}
-      {!compact && conflicts.length > 0 && (
+      {conflicts.length > 0 && (
         <div className="mt-4" data-testid="esg-value-conflicts">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
-            <AlertTriangle className="h-4 w-4 text-amber-300" />
-            {conflicts.length} figure{conflicts.length === 1 ? "" : "s"} your documents disagree on
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--hi)]">
+            <AlertTriangle className="h-4 w-4 text-amber-300" aria-hidden />
+            Your documents disagree on {conflicts.length} figure{conflicts.length === 1 ? "" : "s"}
           </p>
-          <p className="mt-1 text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-            Left blank rather than guessed — pick the right one in the workbook.
-          </p>
+          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">We left them blank. Pick the right one in the workbook.</p>
           <div className="mt-2 space-y-2">
             {conflicts.map((conflict) => (
-              <div
-                key={`${conflict.sectionId}.${conflict.cellRef}`}
-                className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2"
-              >
-                <p className="text-[12px] font-medium text-[color:var(--body)]">{conflict.label}</p>
+              <div key={`${conflict.sectionId}.${conflict.cellRef}`} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                <p className="text-[12px] font-medium text-[color:var(--hi)]">{conflict.label}</p>
                 <ul className="mt-1 space-y-0.5">
                   {conflict.candidates.map((candidate, i) => (
                     <li key={i} className="flex flex-wrap items-baseline gap-x-2 text-[12px] leading-5">
-                      <span className="tabular-nums text-[var(--esg-text,#fff)]">
-                        {formatScalar(candidate.value)}
-                      </span>
-                      <span className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                        {candidate.sources.join(", ") || "unknown source"}
-                      </span>
+                      <span className="tabular-nums text-white">{formatScalar(candidate.value)}</span>
+                      <span className="text-[11px] text-[color:var(--muted)]">{candidate.sources.join(", ") || "unknown source"}</span>
                     </li>
                   ))}
                 </ul>
@@ -375,95 +419,66 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false }:
         </div>
       )}
 
-      {/* THE VALUES THEMSELVES, grouped by element and collapsible. Forty
-          readings in one flat list is a wall; the same forty behind four
-          element headings is a summary someone will actually open. */}
-      {!compact && unplaced.length > 0 && (
+      {/* THE VALUES THEMSELVES, grouped by element and collapsible. */}
+      {unplaced.length > 0 && (
         <div className="mt-4">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
-            <FileWarning className="h-4 w-4 text-amber-300" />
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--hi)]">
+            <FileWarning className="h-4 w-4 text-amber-300" aria-hidden />
             Read, but could not be placed automatically
           </p>
-          <p className="mt-1 text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
+          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">
             Enter the ones you need in the workbook — nothing here has been guessed for you.
           </p>
           <div className="mt-2 space-y-1.5" data-testid="esg-unplaced-values">
             {/* The biggest group opens on arrival: a panel whose every group is
                 shut shows the user nothing and reads as empty. */}
             {unplacedGroups.map(([code, entries], index) => (
-              <ElementGroup
-                key={code || "unclassified"}
-                code={code}
-                entries={entries}
-                defaultOpen={index === 0}
-              />
+              <ElementGroup key={code || "unclassified"} code={code} entries={entries} defaultOpen={index === 0} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Evidence that did not reconcile. Not hidden behind a toggle: a total
-          the rows do not sum to is exactly the thing an assurance provider will
-          ask about, and the person who can answer is standing here with the
-          documents open. */}
-      {!compact && exceptions.length > 0 && (
+      {/* Evidence that did not reconcile — exactly what an assurance provider
+          asks about, and the person who can answer is here. */}
+      {exceptions.length > 0 && (
         <div className="mt-4" data-testid="esg-extraction-exceptions">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
-            <AlertTriangle className="h-4 w-4 text-amber-300" />
-            {exceptions.length} thing{exceptions.length === 1 ? "" : "s"} worth checking in your
-            evidence
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--hi)]">
+            <AlertTriangle className="h-4 w-4 text-amber-300" aria-hidden />
+            {exceptions.length} thing{exceptions.length === 1 ? "" : "s"} worth checking in your evidence
           </p>
           <ul className="mt-2 space-y-1">
             {exceptions.slice(0, 8).map((entry, index) => (
-              <li
-                key={`${entry.sourceFile}-${index}`}
-                className="text-[11.5px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]"
-              >
-                <span className="text-amber-300/80">{entry.sourceFile || "This case"}:</span>{" "}
-                {entry.note}
+              <li key={`${entry.sourceFile}-${index}`} className="text-[11.5px] leading-5 text-[color:var(--body)]">
+                <span className="text-[color:var(--hi)]">{entry.sourceFile || "This case"}:</span> {entry.note}
               </li>
             ))}
-            {exceptions.length > 8 && (
-              <li className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                +{exceptions.length - 8} more
-              </li>
-            )}
+            {exceptions.length > 8 && <li className="text-[11px] text-[color:var(--muted)]">+{exceptions.length - 8} more</li>}
           </ul>
         </div>
       )}
 
-      {/* Documents that produced nothing. Named one per line, so the user can
-          replace the specific file rather than re-uploading everything — a
-          comma-joined run of filenames truncated exactly where it mattered. */}
-      {!compact && readNothing.length > 0 && (
+      {/* Documents that produced nothing, named one per line. */}
+      {readNothing.length > 0 && (
         <div className="mt-4">
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--body)]">
-            <HelpCircle className="h-4 w-4 text-amber-300" />
+          <p className="flex items-center gap-2 text-[13px] font-semibold text-[color:var(--hi)]">
+            <HelpCircle className="h-4 w-4 text-amber-300" aria-hidden />
             {readNothing.length} document{readNothing.length === 1 ? "" : "s"} we read nothing from
           </p>
           <ul className="mt-2 space-y-0.5">
             {readNothing.slice(0, 6).map((name) => (
-              <li
-                key={name}
-                className="truncate font-mono text-[11px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]"
-                title={name}
-              >
+              <li key={name} className="truncate font-mono text-[11px] leading-5 text-[color:var(--body)]" title={name}>
                 {name}
               </li>
             ))}
-            {readNothing.length > 6 && (
-              <li className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                +{readNothing.length - 6} more
-              </li>
-            )}
+            {readNothing.length > 6 && <li className="text-[11px] text-[color:var(--muted)]">+{readNothing.length - 6} more</li>}
           </ul>
         </div>
       )}
 
-      <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-        {compact
-          ? "Each document is reviewed below — what we took from it, what we couldn't place, and why anything wasn't read."
-          : "Everything above is editable in the workbook. A value we could not place is left blank rather than guessed — a wrong entry would score as nothing without telling you."}
+      <p className="mt-4 border-t border-white/[0.06] pt-3 text-[11px] leading-5 text-[color:var(--muted)]">
+        Everything above is editable in the workbook. A value we could not place is left blank rather than guessed — a
+        wrong entry would score as nothing without telling you.
       </p>
     </div>
   );

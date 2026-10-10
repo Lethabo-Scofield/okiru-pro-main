@@ -324,7 +324,15 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
 
     // The reveal arrives with the honest account of the read.
     const summary = await screen.findByTestId("esg-extraction-summary", {}, { timeout: 10_000 });
-    expect(summary).toHaveTextContent("2 values read");
+    expect(summary).toHaveTextContent("0 figures ready for your workbook");
+    // The count of what was read sits in the summary's closed details.
+    expect(within(summary).getByTestId("esg-summary-details")).toHaveTextContent("2 values read in all");
+    // The way on is on the summary line, above the review — not below it.
+    const continueButton = screen.getByTestId("esg-button-continue-to-workbook");
+    expect(summary).toContainElement(continueButton);
+    expect(
+      continueButton.compareDocumentPosition(screen.getByTestId("document-review")) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     // The mapping layer is built, so the "not built yet" banner is gone — but
     // this bill carries no billing period, so neither value has a cell it can
     // go in. The user is told that in the panel, not by discovering an empty
@@ -345,7 +353,9 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // The file's verdict is derived from its extraction, not from a key the
     // ESG parser does not send.
     expect(screen.getByTestId("esg-docs-file-input").closest("div")).toBeTruthy();
-    expect(screen.getByText("Read")).toBeInTheDocument();
+    expect(within(review).getByTestId("review-doc-city-power-oct.pdf")).toBeInTheDocument();
+    // Said once: the review is the only per-document list after the read.
+    expect(screen.queryByTestId("esg-document-list")).not.toBeInTheDocument();
 
     // The paid read happened over the ESG stream, and every document got an
     // immutable run record in the shared library.
@@ -422,13 +432,14 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     await waitFor(() => expect(done).not.toBeDisabled());
     await user.click(done);
 
-    // The staging bar is gone, so something must stand in its place.
-    expect(screen.queryByTestId("esg-button-done-staging")).not.toBeInTheDocument();
+    // "Cost details" opens in place; what it opens names the failure and the ways on.
+    expect(screen.getByTestId("esg-button-done-staging")).toHaveAttribute("aria-expanded", "true");
     expect(await screen.findByTestId("esg-quote-unavailable")).toBeInTheDocument();
     expect(screen.getByTestId("esg-button-retry-quote")).toBeInTheDocument();
 
     await user.click(screen.getByTestId("esg-button-back-to-staging"));
-    expect(await screen.findByTestId("esg-button-done-staging")).toBeInTheDocument();
+    expect(await screen.findByTestId("esg-button-done-staging")).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("esg-quote-unavailable")).not.toBeInTheDocument();
   });
 
   it("says so when the documents were read but produced nothing", async () => {
@@ -462,7 +473,9 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     // rather than re-uploading the whole pack.
     expect(await screen.findByTestId("esg-failed-documents")).toHaveTextContent("city-power-oct.pdf");
     // No fabricated count anywhere.
-    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("0 values read");
+    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("0 figures ready for your workbook · nothing could be read");
+    // The failed file is said once on the summary, and listed in the review's Not read group.
+    expect(screen.getByTestId("esg-extraction-summary")).toContainElement(screen.getByTestId("esg-failed-documents"));
     // The paid read still leaves an archive: a failure that is not recorded is
     // a failure the user cannot show anyone.
     expect(calls).toContain("POST /api/parser-documents/doc-1/runs");

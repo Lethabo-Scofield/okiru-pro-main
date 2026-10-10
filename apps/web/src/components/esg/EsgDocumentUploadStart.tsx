@@ -2,13 +2,14 @@
  * Document-upload start for the ESG workbook — the ESG sibling of
  * `scorecard/DocumentUploadStart`.
  *
- * Same three acts, same lifecycle, same guarantees:
- *   1. The stage — a drop surface plus per-element batches driven by the ESG
- *      evidence matrix.
- *   2. Scanning theatre — a free structure-only quote, then (once tokens are
- *      authorised) the paid read, streamed per document over SSE.
- *   3. The reveal — an honest account of what was read, what was placed, and
- *      what was not, before anything touches the workbook.
+ * Same steps, same lifecycle, same guarantees — and the same shared parts
+ * (components/upload/flow), one main button per step:
+ *   1. Add — a drop zone, with the per-element checklist folded away under it.
+ *   2. Read — a free structure-only quote in the read bar, then (once tokens
+ *      are authorised) the paid read, streamed per document over SSE and shown
+ *      as one status line.
+ *   3. Continue — one summary line with Continue beside it, above the review of
+ *      what was read, what was placed, and what was not.
  *
  * WHAT IS SHARED WITH THE B-BBEE FLOW
  *   - `ConfirmUploadDialog` is imported unchanged (it is domain-agnostic).
@@ -34,21 +35,16 @@
  * provide and the parser did not extract. Unknown renders as unknown.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  AlertTriangle,
-  ArrowRight,
-  Check,
-  ChevronLeft,
-  CloudUpload,
-  CreditCard,
-  FileText,
-  FolderOpen,
-  Leaf,
-  Loader2,
-  Upload,
-  X,
-} from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronLeft, Loader2 } from "lucide-react";
+import { UploadSurface } from "@/components/upload/flow/UploadSurface";
+import { ReadBar, type ReadBarState } from "@/components/upload/flow/ReadBar";
+import { CostDetails } from "@/components/upload/flow/CostDetails";
+import { DocumentList, type DocumentListRow, type DocumentStatus } from "@/components/upload/flow/DocumentList";
+import { StatusLine } from "@/components/upload/flow/StatusLine";
+import { Disclosure } from "@/components/upload/flow/Disclosure";
+import { primaryButton } from "@/components/upload/flow/buttonStyles";
+import { sortPickedFiles, temporarySentence, unreadableSentence } from "@/components/upload/flow/readableFiles";
+import { fileUnits, type TokenCost } from "@/components/upload/flow/tokenCost";
 import ConfirmUploadDialog, { type PendingUpload } from "@/components/scorecard/ConfirmUploadDialog";
 import EsgElementDocumentBatches, {
   esgBatchLabel,
@@ -126,43 +122,8 @@ interface ParserQuote {
   paymentRequired?: boolean;
 }
 
-/**
- * What a batch costs in credit tokens, and what the wallet holds. The server
- * converts the quote into tokens and reports the balance in the same call, so
- * the number shown and the number charged are the same number.
- */
-interface TokenCostFile {
-  filename: string;
-  tokens: number;
-  /** Which pricing rule the server put this document under. */
-  effort: "standard" | "high" | "workbook";
-  requiresOcr: boolean;
-  pages: number | null;
-  sheets: number | null;
-  rows: number | null;
-}
-
-interface TokenCost {
-  quoteId: string;
-  tokens: number;
-  /** Per-document itemisation — each file priced under its effort rule. */
-  files?: TokenCostFile[];
-  /** Tokens the batch minimum adds beyond the itemised documents. */
-  minimumTopUp?: number;
-  /** The effort rules themselves, served so the UI never restates them wrong. */
-  effortRules?: Array<{ tier: string; label: string; rule: string }>;
-  balance: number;
-  balanceAfter: number;
-  sufficient: boolean;
-  shortfall: number;
-  alreadyAuthorized: boolean;
-  /** Uploads are not charged for (TOKENS_REQUIRE_PAYMENT=false). */
-  free?: boolean;
-}
-
-const tokenText = (value: number): string => value.toLocaleString("en-ZA");
-
-const EFFORT_LABELS: Record<string, string> = { high: "High", workbook: "Workbook", standard: "Standard" };
+// What a batch costs in credit tokens (TokenCost), and which files the parser
+// can open, are shared with the B-BBEE flow: components/upload/flow.
 
 /** A full ESG evidence pack is large, but not unbounded. */
 const MAX_UPLOAD_FILES = 100;
@@ -178,25 +139,6 @@ const MAX_UPLOAD_FILES = 100;
  * takes minutes per document.
  */
 const STREAM_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
-
-/**
- * Extensions the parser can read. Anything else is filtered with a warning.
- *
- * Mirrors SUPPORTED_UPLOAD_EXTENSIONS in the parser service — `.ppt` was
- * missing here while the server accepted it, so a real deck was refused before
- * it was ever offered.
- */
-const READABLE = new Set([
-  ".pdf", ".docx", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx", ".ppt",
-  ".csv", ".txt", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".webp",
-]);
-
-/**
- * The same list as an `accept` attribute, so the picker and the filter agree.
- * `Array.from` rather than a spread: this project's tsconfig targets below
- * ES2015 for iteration and a spread over a Set is a compile error here.
- */
-const READABLE_ACCEPT = Array.from(READABLE).join(",");
 
 /**
  * Fold a newly-read case into what we already had.
@@ -243,14 +185,6 @@ function mergeEsgCases(kept: EsgParserCaseLike | null, fresh: EsgParserCaseLike)
       calculator: mergeEsgCalculators(kept.ai_entities?.calculator, fresh.ai_entities?.calculator, freshFiles),
     },
   };
-}
-
-/** A file's size in whatever unit the structure scan actually established. */
-function fileUnits(file: ParserQuote["files"][number]): string {
-  if (file.structure.pages) return `${file.structure.pages} page${file.structure.pages === 1 ? "" : "s"}`;
-  if (file.structure.sheets) return `${file.structure.sheets} sheet${file.structure.sheets === 1 ? "" : "s"}`;
-  if (file.structure.rows) return `${file.structure.rows.toLocaleString()} rows`;
-  return "Structure scan";
 }
 
 export interface EsgDocumentUploadStartProps {
@@ -342,7 +276,6 @@ export function EsgDocumentUploadStart({
   /** True once every file is read and the cross-document resolve is running. */
   const [resolving, setResolving] = useState(false);
   const [resolveProgress, setResolveProgress] = useState<{ done: number; total: number } | null>(null);
-  const [dragActive, setDragActive] = useState(false);
 
   const [quote, setQuote] = useState<ParserQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
@@ -380,6 +313,8 @@ export function EsgDocumentUploadStart({
   }, [readKeys]);
   /** Files a folder upload could not read — a warning, not an error. */
   const [skippedFiles, setSkippedFiles] = useState<string[]>([]);
+  /** Office lock files set aside from the last pick — a notice, not an error. */
+  const [temporaryNotice, setTemporaryNotice] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -1250,16 +1185,7 @@ export function EsgDocumentUploadStart({
    * thumbnails and whatever else lives alongside the evidence. Take what we can
    * read, say plainly what was skipped, and let the user decide.
    */
-  const addFolder = (incoming: File[], origin?: EsgUploadOrigin) => {
-    // Only the silent drops belong here — OS bookkeeping the user never chose
-    // and would not want listed back at them. Deciding what is READABLE now
-    // lives in `addFiles`, so a dragged folder, a dragged file and a picked
-    // file are all judged by the same rule.
-    const candidates = incoming.filter(
-      (file) => !(file.name.startsWith(".") || file.name === "Thumbs.db" || file.name === "desktop.ini"),
-    );
-    addFiles(candidates, origin);
-  };
+  const addFolder = (incoming: File[], origin?: EsgUploadOrigin) => addFiles(incoming, origin);
 
   /**
    * A batch was picked. Nothing is staged yet — the double-check dialog gets
@@ -1286,39 +1212,15 @@ export function EsgDocumentUploadStart({
   };
 
   const addFiles = (incoming: File[], origin?: EsgUploadOrigin) => {
-    // Skip OS / Office junk that is never a real document: Excel/Word lock
-    // files (~$name.xlsx), macOS resource forks (._name), Thumbs.db, .DS_Store.
-    const isJunk = (name: string) => {
-      const base = name.split(/[\\/]/).pop() ?? name;
-      return /^~\$/.test(base) || /^\._/.test(base) || /^\.(ds_store)$/i.test(base) || /^thumbs\.db$/i.test(base);
-    };
-    const skipped = incoming.filter((f) => isJunk(f.name)).map((f) => f.name.split(/[\\/]/).pop() ?? f.name);
-    if (skipped.length > 0) {
-      setParseError(
-        `Skipped ${skipped.length} temporary file${skipped.length === 1 ? "" : "s"} (${skipped.slice(0, 2).join(", ")}${skipped.length > 2 ? "…" : ""}) — these are Excel/Office lock files, not documents. Close the workbook in Excel and upload the real file.`,
-      );
-    }
-
-    /**
-     * Types the parser cannot read — a README beside the evidence, an .eml
-     * export, a stray .zip.
-     *
-     * This used to run only for whole-folder uploads, so a drag-and-drop or a
-     * hand-picked batch sent them to the server, where ONE of them failed the
-     * entire multipart request. The server no longer does that, but catching it
-     * here is what turns a server round-trip into an immediate, specific
-     * "these two were not documents" — before anything is priced.
-     */
-    const unreadable: string[] = [];
-    const usable = incoming.filter((f) => {
-      if (isJunk(f.name)) return false;
-      const dot = f.name.lastIndexOf(".");
-      const ext = dot === -1 ? "" : f.name.slice(dot).toLowerCase();
-      if (READABLE.has(ext) && f.size > 0) return true;
-      unreadable.push(f.name.split(/[\\/]/).pop() ?? f.name);
-      return false;
-    });
-    setSkippedFiles(unreadable);
+    // One rule for every way in — a dragged folder, a dragged file, a picked
+    // file, a checklist group (see readableFiles): OS bookkeeping is dropped
+    // silently, Office lock files get one neutral line, and anything the
+    // parser cannot open is named before anything is priced. The pickers no
+    // longer filter, so this is the only place a file is set aside.
+    const sorted = sortPickedFiles(incoming);
+    setTemporaryNotice(sorted.temporary.length > 0 ? temporarySentence(sorted.temporary) : null);
+    setSkippedFiles(sorted.unreadable);
+    const usable = sorted.usable;
     if (usable.length === 0) return;
     const next = [...files];
     for (const f of usable) {
@@ -1407,13 +1309,8 @@ export function EsgDocumentUploadStart({
 
   // A read collected after a reload has no File objects, only the case.
   const revealed = Boolean(parserCase && !parsing && (files.length > 0 || collectedWithoutFiles));
-  // Requires `doneStaging`: collapsing the stage into the checkout the moment a
-  // quote landed is what left people with "files appear but there is nowhere to
-  // carry on".
-  const quoteReady = Boolean(quote && doneStaging && unreadFiles.length > 0 && !quoting && !parsing);
-  /** Whether reading the unread files spends tokens, and whether the balance covers it. */
+  /** Whether reading the unread files spends tokens (the read bar works out whether the balance covers it). */
   const readCharging = Boolean(quote && quote.paymentRequired !== false && tokenCost !== null);
-  const readUnaffordable = readCharging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
   /** One click from the bar under the uploader — the breakdown stays one click away. */
   const readNow = () => {
     if (!quote) return;
@@ -1491,53 +1388,160 @@ export function EsgDocumentUploadStart({
     saveCreateFlowSnapshot(next, injectFor(next));
   };
 
+  // ── What is on screen ────────────────────────────────────────────────────
+  // The same steps as the B-BBEE flow, built from the same parts: Upload files
+  // (empty), Read N documents (staged), one status line (reading), and the
+  // summary with Continue ABOVE the review once read.
+  const readBarState: ReadBarState = quoting ? "pricing" : quote ? "priced" : "failed";
+  const showReadBar = unreadFiles.length > 0 && !parsing;
+  /** A pricing failure is said in the read bar, so it is not said again below. */
+  const pricingFailedInBar = showReadBar && readBarState === "failed";
+  /** The checklist: before the first read only, never while reading. */
+  const showChecklist = !parserCase && !parsing && !(focused && files.length === 0 && !quote);
+
+  /** One row of the file list: a name, one status word and its own action. */
+  const rowFor = (f: File): DocumentListRow => {
+    const outcome = readOutcomeByFile[f.name];
+    const quotedFile = quoted(f.name);
+    const perFile = docProgress[f.name];
+    const alreadyRead = !isUnread(f);
+    // A round reads only the new files; the ones already read keep their verdict.
+    const status: DocumentStatus =
+      parsing && !alreadyRead
+        ? perFile === "done"
+          ? "read"
+          : perFile === "error"
+            ? "failed"
+            : resolving
+              ? "read"
+              : "reading"
+        : perFile === "error"
+          ? "failed"
+          : outcome === "values"
+            ? "read"
+            : outcome === "none"
+              ? "needs-look"
+              : "ready";
+    return {
+      name: f.name,
+      status,
+      details: [
+        filedBatchByFile[f.name] ? `Added to ${esgBatchLabel(filedBatchByFile[f.name])}` : "",
+        quotedFile ? fileUnits(quotedFile) : "",
+        quotedFile?.requiresOcr ? "scanned" : "",
+        outcome === "none" ? "nothing was read from it" : "",
+      ].filter(Boolean),
+      error:
+        status === "failed"
+          ? parsing
+            ? "We couldn't read this file. The rest carry on."
+            : "We couldn't read this file. Replace it with a clearer copy, or remove it."
+          : null,
+      removable: !alreadyRead,
+    };
+  };
+  const listFiles = revealed ? unreadFiles : files;
+  const willFill = injection.implemented && injection.placed.length > 0;
+
+  const readBar = showReadBar ? (
+    <ReadBar
+      testIdPrefix="esg-"
+      count={unreadFiles.length}
+      newRound={Boolean(parserCase)}
+      state={readBarState}
+      charging={readCharging}
+      free={quote?.paymentRequired === false}
+      tokenCost={tokenCost}
+      failureDetail={parseError}
+      costOpen={doneStaging}
+      onToggleCost={() => setDoneStaging((open) => !open)}
+      onRetry={() => void prepareAndQuote(files)}
+      onRead={readNow}
+      busy={paying || parsing}
+    >
+      {quote && (
+        <CostDetails
+          testIdPrefix="esg-"
+          files={quote.files}
+          tokenCost={tokenCost}
+          charging={readCharging}
+          isUpperBound={quote.totals?.isUpperBound}
+          expiresAt={quote.expiresAt}
+          onRead={() => void (readCharging ? spendAndExtract() : readFree(unreadFiles, quote.quoteId))}
+          busy={paying || parsing}
+        />
+      )}
+    </ReadBar>
+  ) : null;
+
+  const fileList =
+    !parsing && listFiles.length > 0 ? (
+      <DocumentList
+        testIdPrefix="esg-"
+        className="mt-3"
+        rows={listFiles.map(rowFor)}
+        onRemove={removeFile}
+        onReplace={() => inputRef.current?.click()}
+      />
+    ) : null;
+
+  // Set-aside files: one line under the list, never a red error.
+  const pickNotices = (
+    <>
+      {skippedFiles.length > 0 && (
+        <div className="mt-2 text-[12px] leading-5" data-testid="esg-skipped-files-warning">
+          <Disclosure
+            summary={
+              <span className="inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-400" aria-hidden />
+                {unreadableSentence(skippedFiles)}
+              </span>
+            }
+            summaryClassName="text-[12px] font-normal text-amber-200/90"
+          >
+            <p className="pl-5 font-mono text-[11px] text-[color:var(--body)]">{skippedFiles.join(", ")}</p>
+          </Disclosure>
+        </div>
+      )}
+      {temporaryNotice && (
+        <p className="mt-2 text-[12px] leading-5 text-[color:var(--body)]" data-testid="esg-skipped-temporary-files">
+          {temporaryNotice}
+        </p>
+      )}
+    </>
+  );
+
   return (
     <div data-testid="esg-document-upload-start">
-      <style>{`
-        @keyframes esgFadeUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes esgShimmer { from { transform: translateX(-100%); } to { transform: translateX(220%); } }
-        .esg-fade-up { animation: esgFadeUp 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-      `}</style>
-
-      <div className="mb-5">
+      <div className="mb-4">
         {onBack && (
           <button
             type="button"
             onClick={onBack}
-            className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
+            className="mb-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium text-[color:var(--body)] transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
             data-testid="esg-upload-back"
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
             Choose a different way to start
           </button>
         )}
-        {/* Document scale, left aligned, matching the B-BBEE step exactly. A
-            34px centred headline over a working step read like a landing page. */}
-        <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-[var(--esg-text,#fff)]">
-          {quoteReady && quote
-            ? quote.paymentRequired === false
-              ? "Review your documents"
-              : "Review and process"
-            : parserCase
-              ? "Your ESG evidence"
-              : "Add your ESG evidence"}
+        {/* Document scale, left aligned, matching the B-BBEE step exactly. The
+            evidence types are listed once, in the drop zone, not here too. */}
+        <h3 className="text-[20px] font-semibold leading-tight tracking-[-0.01em] text-white">
+          {parserCase ? "Your ESG evidence" : "Add your ESG evidence"}
         </h3>
-        <p className="mt-1.5 text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-          {quoteReady && quote
-            ? quote.paymentRequired === false
-              ? "Processing is free. Review the documents below, then continue."
-              : "Nothing is read until you spend."
-            : parserCase
-              ? "Read and placed below. Forgot one? Add it — only the new documents are read and charged."
-              : `Utility bills, fuel statements, waste manifests, certificates, registers and policies${companyName ? ` for ${companyName}` : ""}. We identify what is present, what is missing and what needs review.`}
+        <p className="mt-1.5 text-[13px] leading-5 text-[color:var(--body)]">
+          {parserCase
+            ? "Read and placed. Check anything marked, then continue."
+            : "We'll show the cost before anything is read."}
         </p>
         {focus ? (
           // Added from inside one section (C1): say what that means before anything is read.
           <p
-            className="mt-3 rounded-lg border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-white/[0.03] px-3 py-2 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]"
+            className="mt-3 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-2 text-[12px] leading-5 text-[color:var(--body)]"
             data-testid="esg-upload-focus"
           >
-            Adding documents to <span className="font-semibold text-[var(--esg-text,#fff)]">{focus.title}</span>. Figures
+            Adding documents to <span className="font-semibold text-white">{focus.title}</span>. Figures
             are written to{" "}
             {focus.sections.length > 1
               ? focus.sections.map((id) => esgSectionById(id)?.title ?? id).join(", ")
@@ -1547,12 +1551,13 @@ export function EsgDocumentUploadStart({
         ) : null}
       </div>
 
+      {/* No `accept` on either picker: any file can be chosen, and whatever
+          the parser cannot open is named after the pick (see addFiles). */}
       <input
         ref={inputRef}
         type="file"
         multiple
         className="hidden"
-        accept={READABLE_ACCEPT}
         onChange={(e) => {
           if (e.target.files?.length) addFiles(Array.from(e.target.files));
           e.currentTarget.value = "";
@@ -1572,710 +1577,73 @@ export function EsgDocumentUploadStart({
         data-testid="esg-docs-folder-input"
       />
 
-      <AnimatePresence mode="wait" initial={false}>
-        {quoteReady &&
-          (() => {
-            const totalPages = quote!.files.reduce((sum, file) => sum + (file.structure.pages ?? 0), 0);
-            const spreadsheetCount = quote!.files.filter((file) => (file.structure.sheets ?? 0) > 0).length;
-            // The server decides whether tokens are involved. With the gate off
-            // this is a review step, not a spend — never show a cost we won't take.
-            const charging = quote!.paymentRequired !== false && tokenCost !== null;
-            const cannotAfford =
-              charging && tokenCost !== null && !tokenCost.sufficient && !tokenCost.alreadyAuthorized;
-            const expiry = new Date(quote!.expiresAt);
-            const expiryLabel = Number.isNaN(expiry.getTime())
-              ? "Today"
-              : expiry.toLocaleString("en-ZA", {
-                  day: "2-digit",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
-            return (
-              <motion.div
-                key="esg-processing-quote"
-                layout
-                initial={{ opacity: 0, x: 28, scale: 0.985 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                exit={{ opacity: 0, x: -24, scale: 0.985 }}
-                transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
-                className="mb-4 rounded-[22px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] p-5"
-                data-testid="esg-payment-summary"
-              >
-                {/* Reviewing the cost is not a one-way door. */}
-                <button
-                  type="button"
-                  onClick={() => setDoneStaging(false)}
-                  className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
-                  data-testid="esg-button-add-more-documents"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  Add more documents
-                </button>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                      {charging ? "This batch costs" : "Ready to process"}
-                    </p>
-                    <h4
-                      className="mt-2 text-[30px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-                    >
-                      {charging && tokenCost
-                        ? `${tokenText(tokenCost.tokens)} tokens`
-                        : `${quote!.files.length} document${quote!.files.length === 1 ? "" : "s"}`}
-                    </h4>
-                    <p className="mt-2 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-                      {charging
-                        ? "Longer documents and scans cost more to read. Nothing is spent until you start."
-                        : "Check what we picked up before we read your documents."}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-4 py-3 text-right">
-                    {charging && tokenCost ? (
-                      <>
-                        <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Balance after</p>
-                        <p
-                          className={`mt-1 text-[13px] font-medium tabular-nums ${
-                            tokenCost.sufficient ? "text-[color:var(--body)]" : "text-red-300"
-                          }`}
-                          data-testid="esg-balance-after"
-                        >
-                          {tokenText(Math.max(0, tokenCost.balanceAfter))}
-                        </p>
-                        <p className="mt-0.5 text-[10.5px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                          of {tokenText(tokenCost.balance)} now
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Expires</p>
-                        <p className="mt-1 text-[13px] font-medium text-[color:var(--body)]">{expiryLabel}</p>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-5 grid grid-cols-3 gap-2">
-                  <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                    <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Documents</p>
-                    <p className="mt-1 text-[20px] font-semibold text-[var(--esg-text,#fff)]">
-                      {quote!.files.length}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                    <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Pages</p>
-                    <p className="mt-1 text-[20px] font-semibold text-[var(--esg-text,#fff)]">
-                      {totalPages || "Auto"}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-white/[0.04] px-3 py-3">
-                    <p className="text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">Workbooks</p>
-                    <p className="mt-1 text-[20px] font-semibold text-[var(--esg-text,#fff)]">
-                      {spreadsheetCount}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Each document shows the credit tokens IT costs, under the
-                    effort rule that priced it — the total is explained line by
-                    line rather than asserted. */}
-                <div className="mt-5 overflow-hidden rounded-2xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))]">
-                  <div className="grid grid-cols-[minmax(0,1.6fr)_110px_140px] gap-3 border-b border-white/[0.06] bg-white/[0.035] px-4 py-2.5 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--esg-text3,rgba(255,255,255,0.32))] max-md:hidden">
-                    <span>Document</span>
-                    <span>Effort</span>
-                    <span className="text-right">{charging ? "Tokens" : "Size"}</span>
-                  </div>
-                  {quote!.files.map((file) => {
-                    const units = fileUnits(file);
-                    const priced = tokenCost?.files?.find((f) => f.filename === file.filename);
-                    const effort = priced
-                      ? EFFORT_LABELS[priced.effort] ?? "Standard"
-                      : file.requiresOcr
-                        ? "High"
-                        : "Standard";
-                    return (
-                      <div
-                        key={file.filename}
-                        className="grid gap-2 border-b border-white/[0.05] px-4 py-3 last:border-b-0 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-[#f2f2f7]">{file.filename}</p>
-                          <p className="mt-0.5 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                            <span className="md:hidden">{effort} effort · </span>
-                            {units}
-                            {charging && priced ? (
-                              <span className="md:hidden"> · {tokenText(priced.tokens)} tokens</span>
-                            ) : null}
-                          </p>
-                        </div>
-                        <span className="hidden text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))] md:block">
-                          {effort}
-                        </span>
-                        <span className="hidden text-[12px] tabular-nums text-[var(--esg-text2,rgba(255,255,255,0.56))] md:block md:text-right">
-                          {charging && priced ? `${tokenText(priced.tokens)} tokens` : units}
-                        </span>
-                      </div>
-                    );
-                  })}
-                  {charging && (tokenCost?.minimumTopUp ?? 0) > 0 && (
-                    <div
-                      className="grid gap-2 border-b border-white/[0.05] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3"
-                      data-testid="esg-quote-minimum-charge"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))]">Small-batch minimum</p>
-                        <p className="mt-0.5 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                          Batches this small are topped up to the minimum processing charge.
-                        </p>
-                      </div>
-                      <span className="hidden md:block" />
-                      <span className="text-[12px] tabular-nums text-[var(--esg-text2,rgba(255,255,255,0.56))] md:text-right">
-                        {tokenText(tokenCost!.minimumTopUp!)} tokens
-                      </span>
-                    </div>
-                  )}
-                  <div className="grid gap-2 border-t border-white/[0.12] bg-white/[0.045] px-4 py-3 md:grid-cols-[minmax(0,1.6fr)_110px_140px] md:items-center md:gap-3">
-                    <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-                      {charging ? "Total" : "This batch"}
-                    </span>
-                    <span className="hidden md:block" />
-                    <span
-                      className="text-[14px] font-bold text-[var(--esg-text,#fff)] md:text-right"
-                      data-testid="esg-quote-total-cost"
-                    >
-                      {charging && tokenCost
-                        ? `${tokenText(tokenCost.tokens)} tokens`
-                        : `${quote!.files.length} document${quote!.files.length === 1 ? "" : "s"}`}
-                    </span>
-                  </div>
-                </div>
-
-                {/* The rules the prices above came from — served by the same
-                    endpoint that priced them, so the explanation cannot drift
-                    from the charge. */}
-                {charging && (tokenCost?.effortRules?.length ?? 0) > 0 && (
-                  <div
-                    className="mt-3 rounded-2xl border border-white/[0.06] bg-[color:var(--ink-2)] p-4"
-                    data-testid="esg-effort-rules"
-                  >
-                    <p className="text-[12px] font-semibold text-[var(--esg-text,#fff)]">How effort sets the token cost</p>
-                    <div className="mt-2 space-y-1.5">
-                      {tokenCost!.effortRules!.map((rule) => (
-                        <p key={rule.tier} className="text-[11.5px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-                          <span className="font-semibold text-[color:var(--body)]">{rule.label}</span> — {rule.rule}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {!charging && (
-                  <p className="mt-3 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                    Processing is not being charged for this run.
-                  </p>
-                )}
-
-                {cannotAfford && tokenCost && (
-                  <div
-                    className="mt-4 rounded-2xl border border-red-400/25 bg-red-500/[0.06] p-4"
-                    data-testid="esg-insufficient-tokens"
-                    role="alert"
-                  >
-                    <p className="flex items-center gap-2 text-[13px] font-semibold text-red-200">
-                      <AlertTriangle className="h-4 w-4" />
-                      {tokenText(tokenCost.shortfall)} tokens short
-                    </p>
-                    <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-                      This batch needs {tokenText(tokenCost.tokens)} tokens and you have{" "}
-                      {tokenText(tokenCost.balance)}. Top up, or remove some documents and process the
-                      rest first.
-                    </p>
-                    <a
-                      href="/settings/billing"
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-[13px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-                    >
-                      <CreditCard className="h-3.5 w-3.5" />
-                      Add tokens
-                    </a>
-                  </div>
-                )}
-
-                {charging && quote!.totals.isUpperBound && (
-                  <p className="mt-3 text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                    Scanned documents are estimated conservatively. You will not be charged more than
-                    this.
-                  </p>
-                )}
-
-                <div className="mt-5 space-y-2">
-                  <button
-                    onClick={() => void (charging ? spendAndExtract() : readFree(unreadFiles, quote!.quoteId))}
-                    disabled={paying || parsing || cannotAfford}
-                    className="inline-flex w-full items-center justify-center gap-2.5 rounded-2xl px-6 py-4 text-[15px] font-semibold transition-colors disabled:opacity-50"
-                    style={{ background: "var(--esg-acc-e, #1de9a0)", color: "#080e14" }}
-                    data-testid={charging ? "esg-button-spend-tokens" : "esg-button-process"}
-                  >
-                    {paying || parsing ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <ArrowRight className="h-[18px] w-[18px]" />
-                    )}
-                    {charging && tokenCost
-                      ? tokenCost.alreadyAuthorized
-                        ? "Read my documents"
-                        : `Read my documents — ${tokenText(tokenCost.tokens)} tokens`
-                      : "Read my documents"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => inputRef.current?.click()}
-                    className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-white/[0.10] px-5 text-[13.5px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.04]"
-                  >
-                    Change documents
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })()}
-
-        {!quoteReady && (
-          <motion.div
-            key={quoting ? "esg-pricing" : parserCase ? "esg-parsed" : "esg-upload"}
-            layout
-            initial={{ opacity: 0, x: -22, scale: 0.985 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 24, scale: 0.985 }}
-            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-            className="relative cursor-pointer overflow-hidden rounded-[20px] text-center transition-all duration-300"
-            style={{
-              background: dragActive ? "#111827" : "var(--esg-input-bg, #0e0e10)",
-              border: `1px dashed ${dragActive ? "rgba(255,255,255,0.45)" : "rgba(255,255,255,0.16)"}`,
-              padding: files.length > 0 ? "16px 18px" : "28px 20px 26px",
-              transform: dragActive ? "scale(1.008)" : "scale(1)",
-            }}
-            onClick={() => inputRef.current?.click()}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragActive(true);
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              setDragActive(false);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragActive(false);
-              if (e.dataTransfer.files?.length) addFiles(Array.from(e.dataTransfer.files));
-            }}
-            data-testid="esg-docs-drop-zone"
-          >
-            {files.length === 0 ? (
-              <>
-                <div
-                  className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl transition-transform duration-300"
-                  style={{
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    transform: dragActive ? "scale(1.1)" : "scale(1)",
-                  }}
-                >
-                  <CloudUpload className="h-5 w-5 text-[color:var(--body)]" />
-                </div>
-                {/* No heading: the step above already says "Add your ESG
-                    evidence", and the button says upload. Saying it three
-                    times is what made the step feel like a second request. */}
-                <p className="mx-auto mb-4 max-w-sm text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-                  Utility bills, fuel statements, waste manifests and registers.
-                  PDF, Word, Excel or scans.
-                </p>
-                <button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] focus:outline-none focus:ring-4 focus:ring-white/[0.08]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    inputRef.current?.click();
-                  }}
-                  data-testid="esg-button-upload-documents"
-                >
-                  <Upload className="h-4 w-4" />
-                  Upload documents
-                </button>
-                <button
-                  type="button"
-                  className="ml-2 inline-flex items-center justify-center gap-2 rounded-full border border-white/[0.12] px-5 py-2.5 text-[14px] font-semibold text-[color:var(--body)] transition-colors hover:bg-white/[0.06]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    folderInputRef.current?.click();
-                  }}
-                  data-testid="esg-button-upload-folder"
-                >
-                  <FolderOpen className="h-4 w-4" />
-                  Upload a folder
-                </button>
-                <p className="mt-3 text-[11px] text-[#86868b]">
-                  Token cost shown before anything is read.
-                </p>
-              </>
-            ) : (
-              <div className="flex items-center justify-center gap-2 text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-[var(--esg-acc-e,#1de9a0)]">
-                <Leaf className="h-3.5 w-3.5" />
-                <span className="text-[13px] font-medium">Add more documents</span>
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Folder upload skipped some files. A warning, not an error. */}
-      {skippedFiles.length > 0 && (
-        <div
-          className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] p-4"
-          data-testid="esg-skipped-files-warning"
+      {parsing ? (
+        // While reading: one calm line; the files are behind "Show documents".
+        <StatusLine
+          testIdPrefix="esg-"
+          containerRef={extractionPhaseRef}
+          total={unreadFiles.length}
+          done={readCount}
+          failed={failedDocuments.length}
+          checking={resolving}
+          checkProgress={resolveProgress}
+          notice={resumeNotice}
         >
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-200">
-            <AlertTriangle className="h-4 w-4" />
-            {/* Not "in that folder" any more: the same filter now runs for a
-                dragged file and a picked one, so this banner is reachable
-                without a folder ever being involved. */}
-            {skippedFiles.length} file{skippedFiles.length === 1 ? "" : "s"} could not be read
-          </p>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-            We only read PDFs, Word, Excel, PowerPoint, CSV and images. Everything else was left out —
-            if one of these was evidence, convert it and add it.
-          </p>
-          <p className="mt-2 truncate font-mono text-[11px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-            {skippedFiles.slice(0, 6).join(", ")}
-            {skippedFiles.length > 6 ? ` +${skippedFiles.length - 6} more` : ""}
-          </p>
-        </div>
-      )}
-
-      {/* The way ON from staging — kept at the TOP, directly under the drop
-          zone. It used to sit below the element batches, which put the one
-          button that advances the flow beneath a long grid: you staged files
-          and then had to go hunting for how to continue. */}
-      {!doneStaging && unreadFiles.length > 0 && !parsing && (() => {
-        const n = unreadFiles.length;
-        const docs = `${n} ${parserCase ? "new " : ""}document${n === 1 ? "" : "s"}`;
-        const priceLine = quoting
-          ? "Working out the cost — nothing is read yet."
-          : !quote
-            ? "We could not work out the cost of these documents. Nothing has been read or charged."
-            : readCharging && tokenCost
-              ? `${tokenText(tokenCost.tokens)} tokens · you have ${tokenText(tokenCost.balance)}.`
-              : quote.paymentRequired === false
-                ? "Reading is free for this run."
-                : "Checking your balance…";
-        return (
-          <div
-            className="mt-3 flex flex-col gap-3 rounded-[18px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-            data-testid="esg-read-bar"
-          >
-            <div className="min-w-0">
-              <p className="text-[13px] font-semibold text-[var(--esg-text,#fff)]">{docs} ready to read</p>
-              <p className="mt-0.5 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]" data-testid="esg-read-bar-price">
-                {priceLine}{" "}
-                {parserCase
-                  ? "Documents already read are not charged again."
-                  : "Keep adding if you have more — nothing is read until you press read."}
-              </p>
-            </div>
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {!quoting && !quote && (
-                <button
-                  type="button"
-                  onClick={() => void prepareAndQuote(files)}
-                  className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
-                  data-testid="esg-button-retry-quote-inline"
-                >
-                  Try again
-                </button>
-              )}
-              <button
-                type="button"
-                disabled={quoting}
-                onClick={() => setDoneStaging(true)}
-                className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white disabled:opacity-50"
-                data-testid="esg-button-done-staging"
-              >
-                See cost breakdown
-              </button>
-              {readUnaffordable && tokenCost ? (
-                <a
-                  href="/settings/billing"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-                  data-testid="esg-button-add-tokens"
-                >
-                  <CreditCard className="h-4 w-4" />
-                  Add tokens — {tokenText(tokenCost.shortfall)} short
-                </a>
-              ) : (
-                <button
-                  type="button"
-                  disabled={!quote || quoting || paying}
-                  onClick={readNow}
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-50"
-                  data-testid="esg-button-read-now"
-                >
-                  {quoting || paying ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                  {readCharging && tokenCost && !tokenCost.alreadyAuthorized
-                    ? `Read ${n === 1 ? "it" : `all ${n}`} — ${tokenText(tokenCost.tokens)} tokens`
-                    : `Read ${n === 1 ? "it" : `all ${n}`}`}
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* The dead end. "Done adding" hides the staging bar above, and the review
-          panel only renders once a quote exists — so when pricing fails the
-          button appears to do nothing at all. Say what went wrong where the
-          button was, and offer both ways forward. */}
-      {doneStaging && !quote && !quoting && unreadFiles.length > 0 && (
-        <div
-          className="mt-3 flex flex-col gap-3 rounded-[18px] border border-amber-300/20 bg-[#1d1a14] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between"
-          data-testid="esg-quote-unavailable"
-          role="alert"
-        >
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-amber-100">
-              We could not work out the cost of these {files.length} document
-              {files.length === 1 ? "" : "s"}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[#a1a1aa]">
-              {parseError ?? "Pricing did not finish, so there is nothing to review yet."} Nothing has
-              been read and nothing has been charged.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setDoneStaging(false)}
-              className="inline-flex items-center justify-center rounded-full px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:text-white"
-              data-testid="esg-button-back-to-staging"
-            >
-              Back to adding
-            </button>
-            <button
-              type="button"
-              onClick={() => void prepareAndQuote(files)}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-5 py-2.5 text-[14px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7]"
-              data-testid="esg-button-retry-quote"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* The upload surface itself, one batch per ESG element plus the whole-file
-          uploads. Gated on `parserCase`, NOT on `quote`: a quote arrives the
-          moment the first batch lands, and gating on it would tear the uploader
-          off the screen mid-task. Extraction is the point of no return, so that
-          is what closes the uploader. */}
-      {!parserCase && !(focused && files.length === 0 && !quote) && (
-        <div className="mt-3">
-          <EsgElementDocumentBatches
-            satisfiedDocumentIds={satisfiedDocumentIds}
-            filedBatchByFile={filedBatchByFile}
-            stagedFileNames={files.map((f) => f.name)}
-            onPick={handleBatchPick}
-            disabled={parsing}
-          />
-        </div>
-      )}
-
-      {/* Double-check before anything is staged. Reused verbatim from the
-          B-BBEE flow — it is about files and money, not about a domain. */}
-      <ConfirmUploadDialog
-        pending={pendingUpload}
-        onConfirm={confirmPendingUpload}
-        onCancel={() => setPendingUpload(null)}
-      />
-
-      {/* Phase banner — names where we are so the multi-minute paid wait shows
-          movement rather than a frozen spinner. */}
-      {parsing && (
-        <div
-          ref={extractionPhaseRef}
-          className="mt-3 flex items-center gap-3 rounded-xl border border-[var(--esg-acc-e,#1de9a0)]/20 bg-[#101a16] px-4 py-3"
-          data-testid="esg-extraction-phase"
-          role="status"
-          aria-live="polite"
-        >
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[var(--esg-acc-e,#1de9a0)]" />
-          <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold text-[#d8fff0]">
-              {resolving ? "Reconciling across your documents" : "Reading your documents"}
-            </div>
-            <div className="text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-              {resumeNotice
-                ? <span data-testid="esg-read-resume-notice">{resumeNotice}</span>
-                : resolving
-                ? resolveProgress
-                  ? `Understanding document ${Math.min(resolveProgress.done + 1, resolveProgress.total)} of ${resolveProgress.total} — cross-checking sites, periods and figures across every file`
-                  : "Cross-checking sites, periods and figures across every file"
-                : `${readCount} of ${unreadFiles.length} read`}
-            </div>
-          </div>
-          {resolving && resolveProgress && resolveProgress.total > 0 && (
-            <div className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-[var(--esg-acc-e,#1de9a0)] transition-all"
-                style={{ width: `${Math.round((resolveProgress.done / resolveProgress.total) * 100)}%` }}
+          {unreadFiles.length > 0 ? (
+            <DocumentList testIdPrefix="esg-" rows={unreadFiles.map(rowFor)} onRemove={removeFile} locked />
+          ) : null}
+        </StatusLine>
+      ) : revealed ? (
+        // A round after a read: the new documents and the bar that reads them.
+        <>
+          {readBar}
+          {fileList}
+          {pickNotices}
+          {unreadFiles.length > 0 && (
+            <div className="mt-3">
+              <UploadSurface
+                testIdPrefix="esg-"
+                staged
+                lead=""
+                onPickFiles={() => inputRef.current?.click()}
+                onPickFolder={() => folderInputRef.current?.click()}
+                onDropFiles={(dropped) => addFiles(dropped)}
               />
             </div>
           )}
-        </div>
+        </>
+      ) : (
+        <>
+          <UploadSurface
+            testIdPrefix="esg-"
+            staged={files.length > 0}
+            lead="Utility bills, fuel statements, waste manifests, registers, or anything else you have."
+            onPickFiles={() => inputRef.current?.click()}
+            onPickFolder={() => folderInputRef.current?.click()}
+            onDropFiles={(dropped) => addFiles(dropped)}
+          />
+          {readBar}
+          {fileList}
+          {pickNotices}
+        </>
       )}
 
-      {/* The staged / scanning list. */}
-      {files.length > 0 && !quoteReady && (
-        <div className="mt-3 overflow-hidden rounded-xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)]">
-          <div className="hidden grid-cols-[minmax(0,1.5fr)_110px_120px_36px] gap-3 border-b border-white/[0.06] px-3.5 py-2 text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--esg-text3,rgba(255,255,255,0.32))] sm:grid">
-            <span>File</span>
-            <span>Status</span>
-            <span>Type</span>
-            <span />
-          </div>
-          {files.map((f, i) => {
-            const outcome = readOutcomeByFile[f.name];
-            const quotedFile = quoted(f.name);
-            const fileType = quotedFile?.requiresOcr
-              ? "Scan"
-              : quotedFile
-                ? "Digital"
-                : (f.name.split(".").pop()?.toUpperCase() ?? "File");
-            const perFile = docProgress[f.name];
-            const isReadingThis = perFile === "parsing";
-            const alreadyRead = !isUnread(f);
-            // A round reads only the new files; the ones already read keep their verdict.
-            const statusLabel = parsing && !alreadyRead
-              ? perFile === "done"
-                ? "Read"
-                : perFile === "error"
-                  ? "Failed"
-                  : isReadingThis
-                    ? "Reading"
-                    : resolving
-                      ? "Read"
-                      : "Queued"
-              : perFile === "error"
-                ? "Failed"
-                : outcome === "values"
-                  ? "Read"
-                  : outcome === "none"
-                    ? "Nothing read"
-                    : quotedFile
-                      ? "Not read yet"
-                      : quoting
-                        ? "Pricing"
-                        : "Queued";
-            return (
-              <div
-                key={f.name}
-                className="esg-fade-up relative overflow-hidden border-b border-white/[0.05] px-3.5 py-3 last:border-b-0"
-                style={{ animationDelay: `${i * 70}ms` }}
-              >
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1.5fr)_110px_120px_36px] sm:items-center sm:gap-3">
-                  {isReadingThis && (
-                    <div
-                      className="pointer-events-none absolute inset-y-0 left-0 w-1/3"
-                      style={{
-                        background:
-                          "linear-gradient(100deg, transparent, rgba(29,233,160,0.09), transparent)",
-                        animation: "esgShimmer 1.4s ease-in-out infinite",
-                      }}
-                    />
-                  )}
-                  <div className="flex min-w-0 items-center gap-2 text-left">
-                    <FileText className="h-4 w-4 shrink-0 text-[var(--esg-text3,rgba(255,255,255,0.32))]" />
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-medium text-[#e5e5ea]">{f.name}</div>
-                      {/* Where the user filed it, and how big it is. What it
-                          eventually counts as is the classifier's call. */}
-                      {(quotedFile || filedBatchByFile[f.name]) && (
-                        <div className="mt-0.5 truncate text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                          {filedBatchByFile[f.name] ? esgBatchLabel(filedBatchByFile[f.name]) : null}
-                          {filedBatchByFile[f.name] && quotedFile ? " · " : null}
-                          {quotedFile ? fileUnits(quotedFile) : null}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-white/[0.04] px-2 py-1 text-[11px] text-[color:var(--body)]">
-                    {isReadingThis && <Loader2 className="h-3 w-3 animate-spin" />}
-                    {perFile === "done" && parsing && <Check className="h-3 w-3 text-emerald-400" />}
-                    {perFile === "error" && <AlertTriangle className="h-3 w-3 text-red-400" />}
-                    {statusLabel}
-                  </span>
-                  <span className="text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">{fileType}</span>
-                  {/* A read document is part of the workbook now — no remove. */}
-                  {alreadyRead ? (
-                    <span />
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        removeFile(f.name);
-                      }}
-                      disabled={parsing}
-                      className="justify-self-start p-1 text-[color:var(--muted)] transition-colors hover:text-[var(--esg-text2,rgba(255,255,255,0.56))] disabled:opacity-30 sm:justify-self-end"
-                      aria-label={`Remove ${f.name}`}
-                      data-testid={`esg-remove-${f.name}`}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Documents the parser failed on. Named individually so the user replaces
-          the one file rather than re-uploading everything. */}
-      {failedDocuments.length > 0 && !parsing && (
-        <div
-          className="mt-3 rounded-2xl border border-red-400/25 bg-red-500/[0.06] p-4"
-          data-testid="esg-failed-documents"
-          role="alert"
-        >
-          <p className="flex items-center gap-2 text-[13px] font-semibold text-red-200">
-            <AlertTriangle className="h-4 w-4" />
-            {failedDocuments.length} document{failedDocuments.length === 1 ? "" : "s"} could not be
-            read
-          </p>
-          <p className="mt-1 text-[12px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-            Everything else was read normally. These produced nothing, so nothing from them has been
-            used: {failedDocuments.slice(0, 5).join(", ")}
-            {failedDocuments.length > 5 ? ` +${failedDocuments.length - 5} more` : ""}.
-          </p>
-        </div>
-      )}
-
-      {parseError && (
-        <p className="mt-3 text-[12px] text-red-400" role="alert" data-testid="esg-parse-error">
+      {parseError && !pricingFailedInBar && !parsing && (
+        <p className="mt-3 text-[12px] leading-5 text-red-300" role="alert" data-testid="esg-parse-error">
           {parseError}
         </p>
       )}
       {/* A read whose connection dropped and could not be collected: what
           happened, whether the tokens come back, and a way on. */}
       {readLost && !parsing && (
-        <div
-          className="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/[0.06] px-4 py-3"
-          role="alert"
-          data-testid="esg-read-lost"
-        >
+        <div className="mt-3 rounded-xl border border-amber-300/25 bg-amber-500/[0.06] px-4 py-3" role="alert" data-testid="esg-read-lost">
           <p className="text-[12px] leading-5 text-amber-100">{readLost.message}</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {readLost.canCheckAgain && (
               <button
                 type="button"
                 onClick={checkLostReadAgain}
-                className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] hover:bg-white/[0.04]"
+                className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--body)] hover:bg-white/[0.04]"
                 data-testid="esg-button-read-check-again"
               >
                 Check again
@@ -2284,7 +1652,7 @@ export function EsgDocumentUploadStart({
             <button
               type="button"
               onClick={uploadLostReadAgain}
-              className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] hover:bg-white/[0.04]"
+              className="rounded-lg border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[color:var(--body)] hover:bg-white/[0.04]"
               data-testid="esg-button-read-upload-again"
             >
               Upload the documents again
@@ -2293,31 +1661,87 @@ export function EsgDocumentUploadStart({
         </div>
       )}
       {libraryWarning && (
-        <p className="mt-3 text-[12px] text-amber-300" role="alert" data-testid="esg-library-warning">
+        <p className="mt-3 text-[12px] leading-5 text-[color:var(--body)]" role="status" data-testid="esg-library-warning">
           {libraryWarning}
         </p>
       )}
       {refundNotice && (
-        <p
-          className="mt-3 text-[12px] text-[var(--esg-acc-e,#1de9a0)]"
-          role="status"
-          data-testid="esg-refund-notice"
-        >
+        <p className="mt-3 text-[12px] leading-5 text-emerald-200/90" role="status" data-testid="esg-refund-notice">
           {refundNotice}
         </p>
       )}
 
-      {quoting && (
-        <p className="mt-3 flex items-center gap-2 text-[12px] text-[var(--esg-text2,rgba(255,255,255,0.56))]" role="status">
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--esg-acc-e,#1de9a0)]" />
-          Checking size and format to price these documents — nothing is read yet.
-        </p>
+      {/* The checklist, closed under the drop zone, before the first read. The
+          group a file is added to travels to the reader as a hint (C1). */}
+      {showChecklist && (
+        <EsgElementDocumentBatches
+          satisfiedDocumentIds={satisfiedDocumentIds}
+          filedBatchByFile={filedBatchByFile}
+          stagedFileNames={files.map((f) => f.name)}
+          onPick={handleBatchPick}
+          disabled={parsing}
+        />
       )}
 
-      {/* ACT 3 — the reveal. */}
+      {/* Double-check before anything from a checklist group is staged. Shared
+          with the B-BBEE flow — it is about files and money, not a domain. */}
+      <ConfirmUploadDialog
+        pending={pendingUpload}
+        onConfirm={confirmPendingUpload}
+        onCancel={() => setPendingUpload(null)}
+      />
+
+      {/* After the read: one summary line with Continue beside it, ABOVE the
+          review — the main button used to sit below a 780px panel, out of view. */}
       {revealed && (
         <div className="mt-4">
-          <EsgExtractionSummary injection={injection} parserCase={parserCase} compact />
+          <EsgExtractionSummary
+            injection={injection}
+            parserCase={parserCase}
+            compact
+            notice={
+              failedDocuments.length > 0 ? (
+                <p className="text-[12px] leading-5 text-red-200" role="alert" data-testid="esg-failed-documents">
+                  {failedDocuments.length} document{failedDocuments.length === 1 ? "" : "s"} couldn&apos;t be read (
+                  {failedDocuments.slice(0, 3).join(", ")}
+                  {failedDocuments.length > 3 ? ` +${failedDocuments.length - 3} more` : ""}). See{" "}
+                  {failedDocuments.length === 1 ? "it" : "them"} under Not read below.
+                </p>
+              ) : null
+            }
+            action={
+              <div className="flex shrink-0 flex-col items-stretch gap-1 sm:items-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void onComplete({
+                      injection,
+                      parserCase,
+                      documentIds: allDocumentIds(),
+                    })
+                  }
+                  // A document added after the read but never read would arrive
+                  // with nothing taken from it — read it or remove it first.
+                  disabled={busy || unreadFiles.length > 0}
+                  className={primaryButton("esg")}
+                  data-testid="esg-button-continue-to-workbook"
+                >
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <ArrowRight className="h-4 w-4" aria-hidden />}
+                  Continue
+                </button>
+                <p className="text-[11px] leading-5 text-[color:var(--muted)] sm:text-right">
+                  {willFill ? "Opens a pre-filled workbook" : "Nothing was filled in. You'll complete the workbook yourself"}
+                </p>
+              </div>
+            }
+          />
+          {unreadFiles.length > 0 && (
+            <p className="mt-2 text-[11.5px] leading-5 text-amber-300/90" data-testid="esg-unread-hint">
+              {unreadFiles.length} document{unreadFiles.length === 1 ? " you added has" : "s you added have"} not been
+              read yet — read {unreadFiles.length === 1 ? "it" : "them"} above, or remove{" "}
+              {unreadFiles.length === 1 ? "it" : "them"}, before continuing.
+            </p>
+          )}
 
           <DocumentReview
             documents={reviewDocuments}
@@ -2326,41 +1750,6 @@ export function EsgDocumentUploadStart({
             onAddDocuments={() => inputRef.current?.click()}
             onAnswer={(_filename, question, answer) => answerPlacement(question.id, answer)}
           />
-
-          <div className="esg-fade-up mt-4" style={{ animationDelay: "200ms" }}>
-            <button
-              onClick={() =>
-                void onComplete({
-                  injection,
-                  parserCase,
-                  documentIds: allDocumentIds(),
-                })
-              }
-              // A document added after the read but never read would arrive with
-              // nothing taken from it — read it or remove it first.
-              disabled={busy || unreadFiles.length > 0}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3 text-[14px] font-semibold transition-all duration-200 disabled:opacity-40"
-              style={{ background: "var(--esg-acc-e, #1de9a0)", color: "#080e14" }}
-              data-testid="esg-button-continue-to-workbook"
-            >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Leaf className="h-4 w-4" />}
-              {injection.implemented && injection.placed.length > 0
-                ? `Open the workbook with ${injection.placed.length} value${injection.placed.length === 1 ? "" : "s"} filled in`
-                : "Continue to the workbook"}
-            </button>
-            {unreadFiles.length > 0 && (
-              <p className="mt-2 text-center text-[11.5px] leading-5 text-amber-300/90" data-testid="esg-unread-hint">
-                {unreadFiles.length} document{unreadFiles.length === 1 ? " you added has" : "s you added have"} not been
-                read yet — read {unreadFiles.length === 1 ? "it" : "them"} above, or remove{" "}
-                {unreadFiles.length === 1 ? "it" : "them"}, before continuing.
-              </p>
-            )}
-            <p className="mt-2 text-center text-[11px] text-[color:var(--muted)]">
-              {injection.implemented && injection.placed.length > 0
-                ? "You’ll land in a pre-filled workbook — review, complete anything missing, then continue to Summary."
-                : "Nothing has been written into the workbook. You’ll land there to complete it, and your documents stay in your library."}
-            </p>
-          </div>
         </div>
       )}
     </div>
