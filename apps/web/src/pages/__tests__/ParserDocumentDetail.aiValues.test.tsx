@@ -199,4 +199,19 @@ describe("ParserDocumentDetail — Needs attention says each doubt once", () => 
     // Anything else the parser said stays as it was.
     expect(warnings).toHaveTextContent("The stamp date is unclear.");
   });
+
+  it("keeps a key's leading s or S (the pattern's escapes matter under the i flag)", async () => {
+    run = {
+      ...freshRun(),
+      lowConfidenceFields: ["supplier_name", "skills_spend", "Sector"],
+      warnings: ["supplier_name has low confidence", "  skills_spend has low confidence.  ", "Sector has low confidence"],
+    };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const warnings = await screen.findByTestId("document-warnings");
+    expect(within(warnings).getAllByText(/Check Supplier Name\./)).toHaveLength(1);
+    expect(within(warnings).getAllByText(/Check Skills Spend\./)).toHaveLength(1);
+    expect(within(warnings).getAllByText(/Check Sector\./)).toHaveLength(1);
+    expect(warnings).not.toHaveTextContent(/Upplier|Kills Spend|Check Ector/);
+    expect(warnings).not.toHaveTextContent("has low confidence");
+  });
 });

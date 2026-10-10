@@ -75,7 +75,7 @@ function lowConfidenceSentence(key: string): string {
  * in plain words, rather than twice with the key showing.
  */
 function plainWarning(message: string): string {
-  const doubt = /^s*([A-Za-z0-9_.]+) has low confidence.?s*$/i.exec(message);
+  const doubt = /^\s*([A-Za-z0-9_.]+) has low confidence\.?\s*$/i.exec(message);
   return doubt ? lowConfidenceSentence(doubt[1]) : message;
 }
 
