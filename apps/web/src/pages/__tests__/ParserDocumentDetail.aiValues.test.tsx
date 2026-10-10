@@ -91,8 +91,17 @@ beforeEach(() => {
 describe("ParserDocumentDetail — what the AI and the agent read", () => {
   it("lists every AI and agent value with its reader, citation and the words it was read from", async () => {
     render(<ParserDocumentDetail id="doc-1" />);
-    const section = await screen.findByTestId("ai-values");
-    expect(section).toHaveTextContent("3 read · 1 by the agent");
+    await screen.findByTestId("ai-values");
+    // ONE list: the rule field and the three AI values together, under one heading.
+    const list = screen.getByTestId("read-values");
+    expect(list).toHaveTextContent("What we read from it");
+    expect(list).toHaveTextContent("4 values");
+    expect(list).toContainElement(screen.getByTestId("extracted-fields"));
+    expect(list).toContainElement(screen.getByTestId("ai-values"));
+    // Who read it is behind the row's own "How we read this", closed.
+    expect(screen.getByTestId("ai-value-ai.afs.npat-how")).not.toHaveAttribute("open");
+    // The document's own name is not repeated on every row.
+    expect(list).not.toHaveTextContent("Annual financial statements");
 
     const npat = screen.getByTestId("ai-value-row-ai.afs.npat");
     expect(within(npat).getByTestId("layer-agent")).toHaveTextContent("Agent");
@@ -119,10 +128,10 @@ describe("ParserDocumentDetail — what the AI and the agent read", () => {
     fireEvent.change(screen.getByTestId("field-ai.afs.npat-input"), { target: { value: "1250" } });
     fireEvent.click(screen.getByTestId("field-ai.afs.npat-save"));
 
-    await waitFor(() => expect(screen.getByTestId("field-ai.afs.npat-corrected")).toHaveTextContent("the agent read “1200”"));
+    await waitFor(() => expect(screen.getByTestId("field-ai.afs.npat-corrected")).toHaveTextContent("Corrected by your team. Originally read as “1200”"));
     expect(patches).toEqual([{ fields: { "ai.afs.npat": "1250" } }]);
     expect(screen.getByTestId("field-ai.afs.npat-edit")).toHaveTextContent("1250");
-    expect(screen.getByTestId("ai-values")).toHaveTextContent("1 checked by your team");
+    expect(screen.getByTestId("read-values")).toHaveTextContent("1 checked by your team");
     // It is the AI value's correction, not a new rule-layer field.
     expect(screen.queryByTestId("field-row-ai.afs.npat")).not.toBeInTheDocument();
     expect(screen.getByTestId("document-notice")).toHaveTextContent("Saved Npat.");
@@ -141,7 +150,8 @@ describe("ParserDocumentDetail — what the AI and the agent read", () => {
     fireEvent.click(await screen.findByTestId("document-fresh-read-confirm"));
 
     const progress = await screen.findByTestId("document-reading-progress");
-    expect(progress).toHaveTextContent("rules, AI and agent");
+    expect(progress).toHaveTextContent("Reading afs.pdf…");
+    expect(progress).not.toHaveTextContent("rules, AI and agent");
     expect(progress).toHaveTextContent(/0:0\d/);
     expect(screen.queryByTestId("document-fresh-read-price")).not.toBeInTheDocument();
 
@@ -149,5 +159,31 @@ describe("ParserDocumentDetail — what the AI and the agent read", () => {
     rereadGate!();
     await waitFor(() => expect(screen.queryByTestId("document-reading-progress")).not.toBeInTheDocument());
     expect(screen.getByTestId("document-notice")).toHaveTextContent("Read again from scratch.");
+  });
+});
+
+describe("ParserDocumentDetail — one header, the rest behind details", () => {
+  it("has one heading, one status word and one main button; the actions and the audit are closed", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByTestId("document-type")).toHaveTextContent("AFS");
+    expect(screen.getByTestId("document-status")).toHaveTextContent("Needs a look");
+    expect(screen.getByTestId("document-mark-reviewed")).toHaveTextContent("Mark as reviewed");
+    expect(screen.queryByText(/Classification confidence/)).not.toBeInTheDocument();
+
+    // File under a company, change the type, read again: one closed "More actions".
+    const more = screen.getByTestId("document-more-actions");
+    expect(more.tagName).toBe("DETAILS");
+    expect(more).not.toHaveAttribute("open");
+    for (const id of ["document-company-select", "document-type-input", "document-reparse", "document-read-fresh", "document-replace"]) {
+      expect(within(more).getByTestId(id)).toBeInTheDocument();
+    }
+
+    // The audit is a closed "Technical record".
+    const record = screen.getByTestId("technical-record");
+    expect(record).not.toHaveAttribute("open");
+    expect(record).toHaveTextContent("How sure we are of the type");
   });
 });

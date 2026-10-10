@@ -61,7 +61,7 @@ describe("ParserDocumentDetail — correcting and filling in values", () => {
     fireEvent.change(screen.getByTestId("field-bee_level-input"), { target: { value: "2" } });
     fireEvent.click(screen.getByTestId("field-bee_level-save"));
 
-    await waitFor(() => expect(screen.getByTestId("field-bee_level-corrected")).toHaveTextContent("the parser read “4”"));
+    await waitFor(() => expect(screen.getByTestId("field-bee_level-corrected")).toHaveTextContent("Corrected by your team. Originally read as “4”"));
     expect(patches).toEqual([{ fields: { bee_level: "2" } }]);
     expect(screen.getByTestId("field-bee_level-edit")).toHaveTextContent("2");
   });
@@ -74,7 +74,7 @@ describe("ParserDocumentDetail — correcting and filling in values", () => {
 
     await waitFor(() => expect(screen.getByTestId("field-row-expiry_date")).toBeInTheDocument());
     expect(screen.queryByTestId("missing-row-expiry_date")).not.toBeInTheDocument();
-    expect(screen.getByTestId("field-expiry_date-corrected")).toHaveTextContent("the parser did not find this");
+    expect(screen.getByTestId("field-expiry_date-corrected")).toHaveTextContent("Added by your team. It wasn't found in the document.");
     expect(patches).toEqual([{ fields: { expiry_date: "2026-12-31" } }]);
   });
 });
