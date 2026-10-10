@@ -14,6 +14,7 @@ import { StatusLine, statusLineText } from "../StatusLine";
 import { DocumentList } from "../DocumentList";
 import { ReadBar } from "../ReadBar";
 import { CostDetails } from "../CostDetails";
+import type { TokenCost, TokenCostFile } from "../tokenCost";
 
 const file = (name: string, size = 10) => ({ name, size });
 
@@ -141,9 +142,12 @@ describe("CostDetails", () => {
     { filename: "register.pdf", requiresOcr: false, structure: { pages: 2, sheets: null, rows: null } },
     { filename: "scan.pdf", requiresOcr: true, structure: { pages: 9, sheets: null, rows: null } },
   ];
-  const tokenCost = {
+  const priced = (filename: string, tokens: number, effort: TokenCostFile["effort"], pages: number): TokenCostFile => ({
+    filename, tokens, effort, requiresOcr: effort === "high", pages, sheets: null, rows: null,
+  });
+  const tokenCost: TokenCost = {
     quoteId: "q", tokens: 900, balance: 2_000, balanceAfter: 1_100, sufficient: true, shortfall: 0, alreadyAuthorized: false,
-    files: [{ filename: "register.pdf", tokens: 300, effort: "standard" }, { filename: "scan.pdf", tokens: 600, effort: "high" }],
+    files: [priced("register.pdf", 300, "standard", 2), priced("scan.pdf", 600, "high", 9)],
     effortRules: [{ tier: "standard", label: "Standard", rule: "Digital documents up to 20 pages." }],
   };
 
