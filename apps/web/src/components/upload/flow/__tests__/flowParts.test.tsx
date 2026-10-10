@@ -182,4 +182,32 @@ describe("CostDetails", () => {
     expect(screen.getByTestId("esg-insufficient-tokens")).toHaveTextContent("400 tokens short.");
     expect(screen.getByTestId("esg-button-spend-tokens")).toBeDisabled();
   });
+
+  // jsdom does no layout, so this pins the layout contract a browser needs to
+  // keep a long filename inside the box: a fixed table layout, a price column
+  // of fixed width, and a name cell that clips and truncates. Under the
+  // automatic layout a 50-character name pushed the table past a phone-width
+  // box and the price column off-screen.
+  it.each(["", "esg-"] as const)("keeps a long filename inside the box (prefix %j)", (p) => {
+    const longName = "a-very-long-supporting-document-name-for-testing.pdf";
+    render(
+      <CostDetails
+        testIdPrefix={p}
+        files={[{ filename: longName, requiresOcr: false, structure: { pages: 2, sheets: null, rows: null } }]}
+        tokenCost={{ ...tokenCost, files: [priced(longName, 300, "standard", 2)] }}
+        charging
+        onRead={vi.fn()}
+        busy={false}
+      />,
+    );
+    const table = screen.getByTestId(`${p}cost-table`);
+    expect(table.className).toMatch(/\bw-full\b/);
+    expect(table.className).toMatch(/\btable-fixed\b/);
+    expect(screen.getByTestId(`${p}cost-price-column`).className).toMatch(/\bw-\[\d+(\.\d+)?rem\]/);
+    const name = within(table).getByTitle(longName);
+    expect(name.className).toMatch(/\btruncate\b/);
+    expect(name.closest("td")!.className).toMatch(/\boverflow-hidden\b/);
+    // The price stays in its own cell, never wrapped under the name.
+    expect(within(table).getByText("300 tokens").closest("td")!.className).toMatch(/\bwhitespace-nowrap\b/);
+  });
 });

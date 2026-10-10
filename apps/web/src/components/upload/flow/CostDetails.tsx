@@ -53,8 +53,19 @@ export function CostDetails({
 
   return (
     <div className="mt-3 border-t border-white/[0.07] pt-3" data-testid={`${p}payment-summary`} id={`${p}cost-details`}>
-      <table className="w-full border-collapse text-left text-[12.5px]">
+      {/*
+        Fixed layout with a fixed price column: under the browser's automatic
+        table layout a long filename widens the table past its box (truncate
+        does not limit an auto-sized cell), and on a phone the price column is
+        clipped or the page scrolls sideways. Here the name column takes what
+        is left and truncates.
+      */}
+      <table className="w-full table-fixed border-collapse text-left text-[12.5px]" data-testid={`${p}cost-table`}>
         <caption className="sr-only">Cost per document</caption>
+        <colgroup>
+          <col />
+          <col className="w-[7.5rem]" data-testid={`${p}cost-price-column`} />
+        </colgroup>
         <thead className="sr-only">
           <tr>
             <th scope="col">Document</th>
@@ -68,7 +79,7 @@ export function CostDetails({
             const notes = [units, file.requiresOcr ? "scanned" : "", priced ? PRICE_LABELS[priced.effort] ?? "" : ""].filter(Boolean);
             return (
               <tr key={file.filename} className="border-b border-white/[0.05] last:border-b-0">
-                <td className="min-w-0 py-2 pr-3 align-top">
+                <td className="overflow-hidden py-2 pr-3 align-top">
                   <span className="block truncate text-[color:var(--hi)]" title={file.filename}>{file.filename}</span>
                   {notes.length > 0 && <span className="block text-[11px] text-[color:var(--muted)]">{notes.join(" · ")}</span>}
                 </td>
