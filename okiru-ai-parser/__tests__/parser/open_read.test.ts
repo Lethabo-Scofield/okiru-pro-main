@@ -455,6 +455,17 @@ describe('B-BBEE: a document no listed type fits is read as an Other document', 
     expect(otherOf(result?.extractions ?? [], LEASE.filename)).toBeUndefined();
   });
 
+  it('the plain JSON route (no agent context) sees the rule-based types too', async () => {
+    const model = stubModel({
+      classify: { 'premises-lease.pdf': { element: 'OTHER', document_type: 'Covering letter', confidence: 0.7 } },
+      open: { 'premises-lease.pdf': LEASE_OPEN },
+    });
+    const result = await extractCaseEntities([LEASE], model, undefined, { deterministic: [ruleTyped('classified')] });
+    expect(model.calls.filter((c) => c.kind === 'extract').length).toBeGreaterThan(0);
+    expect(model.calls.filter((c) => c.kind === 'open')).toHaveLength(0);
+    expect(otherOf(result?.extractions ?? [], LEASE.filename)).toBeUndefined();
+  });
+
   it('a DOUBTED rule-based guess does not beat Pass A\'s OTHER: the document is read as an Other document', async () => {
     const model = stubModel({
       classify: { 'premises-lease.pdf': { element: 'OTHER', document_type: 'Lease agreement', confidence: 0.92 } },
@@ -617,6 +628,46 @@ describe('an Other document with too little read is a hard document for the agen
     // The uncited deposit was refused by the agent's own citation check.
     expect(other.open!.facts.some((f) => f.label === 'Deposit')).toBe(false);
     expect(Object.keys(result!.fields)).toEqual([]);
+  });
+
+  it('a hard document no listed read read, whose words clearly name a listed type, is read by the agent as THAT type, not as an Other document', async () => {
+    const CERT = doc('bee certificate.pdf', [
+      '## Page 1',
+      '',
+      'B-BBEE Verification Certificate',
+      'B-BBEE Status Level: Level 2',
+      'Procurement Recognition Level 125%',
+      'SANAS',
+      'Date of Issue: 1 March 2025',
+      'Expiry Date: 28 February 2026',
+    ].join('\n'));
+    const seenSystem: string[] = [];
+    let turn = 0;
+    const steps: AgentToolCall[][] = [
+      [toolCall('submit_values', { values: [{ field: 'bee_level', value: 'Level 2', page: 1, quote: 'B-BBEE Status Level: Level 2' }] })],
+      [toolCall('submit_values', { values: [] })],
+    ];
+    const base = stubModel({
+      // Pass A is unsure (not OTHER); the listed reads retrieval offers read nothing.
+      classify: { 'bee certificate.pdf': { element: 'ESD', document_type: 'Certificate', confidence: 0.3 } },
+      open: { 'bee certificate.pdf': { document_label: 'Certificate', facts: [] } },
+    });
+    const model: ExtractionModel = {
+      ...base,
+      async completeWithTools(messages: AgentMessage[]): Promise<AgentTurn> {
+        const system = messages.find((m) => m.role === 'system');
+        if (system && typeof system.content === 'string') seenSystem.push(system.content);
+        const calls = steps[Math.min(turn, steps.length - 1)];
+        turn += 1;
+        return { message: { role: 'assistant', content: null, tool_calls: calls.map((c) => ({ ...c, id: `${c.id}_c${turn}` })) } };
+      },
+    };
+    const result = await extractCaseEntities([CERT], model, undefined, { agent: { mode: 'hard' } });
+    expect(turn).toBeGreaterThan(0);
+    expect(seenSystem[0]).not.toContain('Document type: Other document');
+    expect(otherOf(result!.extractions, CERT.filename)).toBeUndefined();
+    const read = result!.extractions.find((e) => e.sourceFile === CERT.filename && e.values.some((v) => v.field === 'bee_level'));
+    expect(read?.agent?.target?.source).toBe('skill_signals');
   });
 
   it('an Other document with enough read is not sent to the agent in hard mode', async () => {

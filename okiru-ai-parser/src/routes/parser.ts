@@ -569,7 +569,9 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     // the CIPC record; NPAT in the AFS and the SED workpaper). It is additive:
     // with no model configured this is skipped and the deterministic result is
     // returned unchanged.
-    const entities = await extractCaseEntities(rawInputs);
+    // The rule-based types ride along for typing only (no agent pass here): a
+    // document they typed keeps its type, exactly as on the streaming route.
+    const entities = await extractCaseEntities(rawInputs, undefined, undefined, { deterministic: result.documents_detected });
 
     return res.status(result.status === 'failed' && !entities ? 422 : 200).json({
       ...result,

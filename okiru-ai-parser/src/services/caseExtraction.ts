@@ -42,7 +42,7 @@ import {
 } from './entityCalculatorMapping.js';
 import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
 import { reviewCase } from './caseReview.js';
-import { agentCasePass, agentPassForDocument, namesListedType, type AgentCaseContext } from './agentExtraction.js';
+import { agentCasePass, agentPassForDocument, namesListedType, type AgentCaseContext, type DeterministicDocument } from './agentExtraction.js';
 import {
   addOtherDocumentRead,
   agentOnOtherDocument,
@@ -268,6 +268,12 @@ export interface CaseExtractionOptions {
    * route passes it; the plain JSON route does not (it times out at the proxy).
    */
   agent?: AgentCaseContext;
+  /**
+   * The rule-based reader's documents (caseDocumentSummary), for typing only,
+   * when no agent context carries them: a document it typed keeps its type on
+   * every route, the plain JSON route as much as the streaming one.
+   */
+  deterministic?: DeterministicDocument[];
 }
 
 export async function extractCaseEntities(
@@ -310,7 +316,7 @@ export async function extractCaseEntities(
     // (Only with the open read on: with it off, every document is read as before.)
     // A confident rule-based typing beats Pass A's OTHER, which is the looser
     // call ("not scorecard evidence"): the document keeps its listed read.
-    const deterministic = options.agent?.deterministic?.find((d) => d.filename === input.filename);
+    const deterministic = (options.agent?.deterministic ?? options.deterministic)?.find((d) => d.filename === input.filename);
     const otherByClassifier = passAOther('bbbee', classification, { ruleTyped: confidentlyRuleTyped(deterministic) });
 
     // Matrix-spec extraction (single evidence records) AND, for a workbook sheet
@@ -404,7 +410,7 @@ export async function extractCaseEntities(
     // skill's target, and only when its open read read too little.
     if (agentPass) {
       results = otherDocument
-        ? await agentOnOtherDocument(model, input, results, agentPass, 'bbbee')
+        ? await agentOnOtherDocument(model, input, results, agentPass, 'bbbee', { byClassifier: otherByClassifier })
         : await agentPassForDocument(model, input, results, agentPass);
     }
     // Sub-progress: the resolve phase is the multi-minute, rate-limited part of

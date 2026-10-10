@@ -388,15 +388,15 @@ export async function extractEsgCaseEntities(
       results = open.results;
       otherDocument = open.other;
     }
-    if (agentPass && otherDocument) {
-      // An Other document: the open skill's target, only when it read too little.
-      results = await agentOnOtherDocument(model, input, results, agentPass, 'esg');
-    } else if (agentPass) {
-      const typing = esgAgentTyping(input.filename, classification);
-      results = await agentPassForDocument(model, input, results, {
-        ...agentPass,
-        context: { ...agentPass.context, deterministic: [typing] },
-      });
+    const typedPass = agentPass
+      ? { ...agentPass, context: { ...agentPass.context, deterministic: [esgAgentTyping(input.filename, classification)] } }
+      : null;
+    if (typedPass && otherDocument) {
+      // An Other document: the open skill's target, only when it read too little
+      // (or a listed type its words clearly name, when Pass A did not call it OTHER).
+      results = await agentOnOtherDocument(model, input, results, typedPass, 'esg', { byClassifier: otherByClassifier });
+    } else if (typedPass) {
+      results = await agentPassForDocument(model, input, results, typedPass);
     }
 
     // A workbook sheet's formula zeros are a template's, not readings.

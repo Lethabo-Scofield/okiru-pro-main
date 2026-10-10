@@ -36,7 +36,7 @@ import {
   type OpenMappingProposal,
   type OpenRead,
 } from './openFacts.js';
-import { agentPassForDocument, namesListedType, type AgentCasePass, type DeterministicDocument } from './agentExtraction.js';
+import { agentPassForDocument, chooseAgentTarget, namesListedType, type AgentCasePass, type DeterministicDocument } from './agentExtraction.js';
 import { isOtherClassification, type DocumentClassificationResult } from './documentClassification.js';
 import { openSkillPromptText } from './skills.js';
 import { decisionFingerprint, rememberDecision } from './semanticDecisionCache.js';
@@ -215,7 +215,22 @@ export async function agentOnOtherDocument(
   results: DocumentExtraction[],
   pass: AgentCasePass,
   domain: ExtractionDomain,
+  options: { byClassifier?: boolean } = {},
 ): Promise<DocumentExtraction[]> {
+  // An Other document only because no listed read read anything (a hard scan,
+  // say), whose own words clearly name a listed type: the agent reads it as
+  // that type first — that is what the agent exists for, and its values can
+  // then reach scoring. Only when that reads nothing does the open read stand.
+  // Pass A's own "none of the listed types" is respected as it is.
+  if (!options.byClassifier) {
+    const listed = results.filter((r) => !isOtherDocument(r));
+    const deterministic = pass.context.deterministic?.find((d) => d.filename === input.filename);
+    if (chooseAgentTarget(listed, deterministic, input, domain)?.source === 'skill_signals') {
+      const read = await agentPassForDocument(model, input, listed, pass);
+      if (read.some((r) => r.values.some((value) => value.field !== 'exceptions'))) return read;
+      return results;
+    }
+  }
   const target = openAgentTarget(domain);
   if (!target?.rows) return results;
   const open = results.find(isOtherDocument)?.open;
