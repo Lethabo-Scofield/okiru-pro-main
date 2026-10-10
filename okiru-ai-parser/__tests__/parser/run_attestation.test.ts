@@ -10,12 +10,15 @@ import {
   aiValuesForUpload,
   bbbeeRunRecords,
   esgRunRecords,
+  GATHERING_WORKBOOK_TYPE,
+  RULE_LAYER_UNSURE,
   RUN_ATTESTATION_TTL_MS,
   signParserRuns,
   signRunPayload,
   verifiedQuoteId,
   type ParserRunClaims,
 } from '../../src/services/runAttestation.js';
+import { parserBuild } from '../../src/services/parserBuild.js';
 import type { DocumentExtraction } from '../../src/services/aiExtraction.js';
 import type { UploadedFileLike } from '../../src/services/fileExtraction.js';
 
@@ -53,7 +56,7 @@ describe('signParserRuns', () => {
   });
 
   it('carries the record, its binding and its lifetime in the signed text', () => {
-    const [signed] = signParserRuns('bbbee', [record], { caseId: 'case-1', quoteId: 'q-1' }, { secret: 's', now: 1_000 })!;
+    const [signed] = signParserRuns('bbbee', [record], { caseId: 'case-1', quoteId: 'q-1' }, { secret: 's', now: 1_000, build: 'abc1234' })!;
     expect(signed.filename).toBe('cert.pdf');
     expect(signed.signature).toBe(signRunPayload(signed.payload, 's'));
     const claims = JSON.parse(signed.payload) as ParserRunClaims;
@@ -67,9 +70,33 @@ describe('signParserRuns', () => {
       quoteId: 'q-1',
       filename: 'cert.pdf',
       contentSha256: sha256('cert bytes'),
+      parserVersion: 'abc1234',
       reviewReasons: ['Confirm level'],
-      parserOutput: { status: 'passed', document_type: 'B-BBEE Certificate' },
+      parserOutput: { status: 'passed', document_type: 'B-BBEE Certificate', parser_build: 'abc1234' },
     });
+  });
+
+  it('names the build that read the file on every run, never null', () => {
+    const previous = process.env.PARSER_BUILD;
+    process.env.PARSER_BUILD = 'def5678';
+    try {
+      const [signed] = signParserRuns('bbbee', [record], {}, { secret: 's' })!;
+      const claims = JSON.parse(signed.payload) as ParserRunClaims;
+      expect(claims.parserVersion).toBe('def5678');
+      expect(claims.parserOutput.parser_build).toBe('def5678');
+    } finally {
+      if (previous === undefined) delete process.env.PARSER_BUILD;
+      else process.env.PARSER_BUILD = previous;
+    }
+  });
+});
+
+describe('parserBuild', () => {
+  it('is the image build, else the pod (whose ReplicaSet names the image), else says unknown', () => {
+    expect(parserBuild({ PARSER_BUILD: ' 027bc09 ', HOSTNAME: 'okiru-parser-5d8f-x' })).toBe('027bc09');
+    expect(parserBuild({ HOSTNAME: 'okiru-parser-5d8f9c7b6-abcde' })).toBe('pod:okiru-parser-5d8f9c7b6-abcde');
+    expect(parserBuild({})).toBe('unknown');
+    expect(parserBuild({ PARSER_BUILD: 'x'.repeat(500) })).toHaveLength(100);
   });
 });
 
@@ -206,6 +233,125 @@ describe('bbbeeRunRecords', () => {
     expect(afs.aiValues).toEqual([
       expect.objectContaining({ key: 'ai.afs.npat', field: 'npat', value: 310000, layer: 'agent', page: 4, quote: 'Net profit after tax 310 000', grounded: null }),
     ]);
+  });
+
+  describe('what the library shows for a run', () => {
+    const extraction = (over: Partial<DocumentExtraction>): DocumentExtraction => ({
+      documentId: 'sheet_table__esd',
+      documentName: 'Procurement sheet',
+      element: 'ESD',
+      sourceFile: 'Gathering.xlsx › Procurement',
+      values: [],
+      missingFields: [],
+      unexpectedFields: [],
+      exceptions: [],
+      ...over,
+    });
+    const sheet = (
+      name: string,
+      documentType: string,
+      status: 'passed' | 'review_required' | 'failed',
+      fields: Record<string, unknown>,
+      issues: { errors?: string[]; warnings?: string[]; missing?: string[] } = {},
+    ) => {
+      const doc = detected(`Gathering.xlsx › ${name}`) as any;
+      doc.status = status;
+      doc.document_type = documentType;
+      doc.overall_confidence = status === 'failed' ? 0.2 : 0.6;
+      doc.parser_output.status = status;
+      doc.parser_output.extracted_fields = fields;
+      doc.parser_output.validation = {
+        passed: status === 'passed', warnings: issues.warnings ?? [], errors: issues.errors ?? [], missing_fields: issues.missing ?? [],
+      };
+      return doc;
+    };
+    const empty = { raw_value: null, normalized_value: null, confidence: 0 };
+    const named = { raw_value: 'Acme Trading', normalized_value: 'Acme Trading', confidence: 0.9 };
+    const pack = () => ({
+      documents_detected: [
+        sheet('Instructions', 'Company profile', 'review_required', { trading_name: empty, entity_name: named }, { missing: ['trading_name'], errors: ['trading_name is required'] }),
+        sheet('Finance', 'Payroll / remuneration schedules for directors', 'review_required', { headcount_by_race: empty, mean_tcc_by_race: empty }, { missing: ['headcount_by_race', 'mean_tcc_by_race'], warnings: ['Top document-type candidates are too close (A vs B)'] }),
+        sheet('Procurement', 'SARS VAT declaration for imported goods', 'review_required', { total_imports_declared: empty }, { missing: ['total_imports_declared'], errors: ['Document confidence is too low', 'role_title not found'], warnings: ['Document classification confidence requires human review'] }),
+        sheet('Imports', 'B-BBEE certificate or affidavit for each ESD beneficiary', 'failed', {}, { errors: ['Best document-type confidence is below review threshold'] }),
+      ],
+      documents_needing_review: [
+        { filename: 'Gathering.xlsx › Finance', document_type: 'Payroll', status: 'review_required', reasons: ['headcount_by_race missing', 'mean_tcc_by_race missing', 'Read as Payroll with some doubt: the sheet lists employees'] },
+        { filename: 'Gathering.xlsx › Procurement', document_type: 'VAT', status: 'review_required', reasons: ['Supplier spend does not add up to the stated total'] },
+      ],
+    });
+    const extractions = [
+      extraction({
+        documentId: 'sheet_instructions', documentName: 'Instructions sheet', element: 'GENERAL', sourceFile: 'Gathering.xlsx › Instructions',
+        values: [{ field: 'industry_sector', value: 'Transport', sourceFile: 'Gathering.xlsx › Instructions', sourceDocumentId: 'sheet_instructions' }],
+      }),
+      extraction({
+        documentId: 'sheet_financials', documentName: 'Finance sheet', element: 'GENERAL', sourceFile: 'Gathering.xlsx › Finance',
+        values: [{ field: 'current_year_revenue', value: 12000000, sourceFile: 'Gathering.xlsx › Finance', sourceDocumentId: 'sheet_financials' }],
+      }),
+      extraction({
+        values: [{ field: 'supplier_rows', value: [{ supplier_name: 'Kestrel Freight', claimed_spend_ex_vat: 1000 }], sourceFile: 'Gathering.xlsx › Procurement', sourceDocumentId: 'sheet_table__esd' }],
+      }),
+    ];
+
+    it('names a gathering template as one, without the guessed evidence types’ missing fields', () => {
+      const [run] = bbbeeRunRecords(pack() as any, [upload('Gathering.xlsx', 'workbook')], { extractions });
+      const output = run.parserOutput as any;
+      expect(output.document_type).toBe(GATHERING_WORKBOOK_TYPE);
+      expect(output.validation.missing_fields).toEqual([]);
+      expect(Object.keys(output.extracted_fields)).toEqual(['entity_name']);
+      expect(output.validation.errors).toEqual([]);
+      expect(output.validation.warnings).toEqual([]);
+      expect(run.reviewReasons).toEqual(['Gathering.xlsx › Procurement: Supplier spend does not add up to the stated total']);
+    });
+
+    it('keeps a template’s real problems, and asks for a look because of them', () => {
+      const withProblem = pack();
+      withProblem.documents_detected[0].parser_output.validation.errors.push('Percentage must be between 0 and 100');
+      const [run] = bbbeeRunRecords(withProblem as any, [upload('Gathering.xlsx', 'workbook')], { extractions });
+      expect((run.parserOutput as any).validation.errors).toEqual(['Percentage must be between 0 and 100']);
+      expect((run.parserOutput as any).status).toBe('review_required');
+    });
+
+    it('does not fail a workbook for a sheet that gave nothing', () => {
+      const [run] = bbbeeRunRecords(pack() as any, [upload('Gathering.xlsx', 'workbook')], { extractions });
+      const output = run.parserOutput as any;
+      expect(output.status).toBe('passed');
+      expect(output.overall_confidence).toBe(0.6);
+      expect(output.sheets.find((s: any) => s.sheet === 'Imports')).toMatchObject({ status: 'failed', read: false });
+
+      // Not a recognised template: the sheets' own statuses still decide, but
+      // the empty Imports sheet still does not fail it.
+      const [plain] = bbbeeRunRecords(pack() as any, [upload('Gathering.xlsx', 'workbook')], { extractions: extractions.slice(1) });
+      expect((plain.parserOutput as any).status).toBe('review_required');
+      expect((plain.parserOutput as any).document_type).toBe('Workbook');
+    });
+
+    it('fails a workbook only when none of its sheets gave anything', () => {
+      const [run] = bbbeeRunRecords({
+        documents_detected: [sheet('Sheet1', 'Unknown', 'failed', {}), sheet('Sheet2', 'Unknown', 'failed', {})],
+        documents_needing_review: [],
+      } as any, [upload('Gathering.xlsx', 'workbook')], { extractions: [] });
+      expect((run.parserOutput as any).status).toBe('failed');
+    });
+
+    it('does not call a document failed when the model read values from it', () => {
+      const profile = detected('profile.pdf') as any;
+      profile.status = 'failed';
+      profile.parser_output.status = 'failed';
+      profile.parser_output.validation = { passed: false, warnings: [], errors: ['Document confidence is too low'], missing_fields: [] };
+      const read = extraction({
+        documentId: 'company_profile', documentName: 'Company profile', element: 'GENERAL', sourceFile: 'profile.pdf',
+        values: [{ field: 'registered_name', value: 'Acme Trading (Pty) Ltd', sourceFile: 'profile.pdf', sourceDocumentId: 'company_profile' }],
+      });
+
+      const [withValues] = bbbeeRunRecords({ documents_detected: [profile], documents_needing_review: [] }, [upload('profile.pdf', 'p')], { extractions: [read] });
+      expect((withValues.parserOutput as any).status).toBe('review_required');
+      expect((withValues.parserOutput as any).validation.warnings).toEqual([RULE_LAYER_UNSURE]);
+      expect((withValues.parserOutput as any).audit_trail.requires_human_review).toBe(true);
+
+      const [nothing] = bbbeeRunRecords({ documents_detected: [profile], documents_needing_review: [] }, [upload('profile.pdf', 'p')], { extractions: [] });
+      expect((nothing.parserOutput as any).status).toBe('failed');
+    });
   });
 
   it('carries no AI block when there was no model read', () => {

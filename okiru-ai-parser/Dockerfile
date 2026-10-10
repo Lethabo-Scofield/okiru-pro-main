@@ -21,6 +21,11 @@ RUN pnpm build
 FROM base AS runtime
 ENV NODE_ENV=production
 ENV PORT=3200
+# The commit this image was built from, stamped into every signed run so a
+# reading can be traced to its code: `--build-arg PARSER_BUILD=$(git rev-parse --short HEAD)`.
+# Unset, runs carry the pod name instead (see src/services/parserBuild.ts).
+ARG PARSER_BUILD=
+ENV PARSER_BUILD=$PARSER_BUILD
 # Ghostscript + GraphicsMagick rasterise scanned PDF pages to images so the
 # multimodal model can read them. Without these, documents whose pages are
 # images (share certificates, share registers, stamped statutory forms) yield
