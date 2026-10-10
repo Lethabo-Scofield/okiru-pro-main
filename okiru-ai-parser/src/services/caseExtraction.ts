@@ -43,6 +43,8 @@ import {
 import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
 import { reviewCase } from './caseReview.js';
 import { agentCasePass, agentPassForDocument, type AgentCaseContext } from './agentExtraction.js';
+import { extractionDomain } from './extractionDomain.js';
+import { tidyPrintedValues } from './printedValues.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -391,6 +393,11 @@ export async function extractCaseEntities(
       });
     }
   }
+
+  // Printed values made readable under their skill's field types (a weekday
+  // date as yyyy-mm-dd, an organisation's name without its trailing company
+  // number). After every read, so no prompt changes because of it.
+  tidyPrintedValues(extractions, (documentId) => extractionDomain('bbbee').skillFor(documentId));
 
   // The figures the skills forbid the model to compute (EMP201 totals and the
   // months filed, SED payments inside the period, a ledger's own total, the
