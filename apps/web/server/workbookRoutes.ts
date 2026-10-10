@@ -1124,8 +1124,11 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       economicInterestPercent: eiPct,
       // Pass the workbook's stated type through — the ownership calculator
       // detects ESOP/BBOS scheme rows from it (the scheme bonus must never be
-      // awarded without a scheme actually appearing in the register).
-      ownershipType: s((r as any).ownershipType) || "shareholder",
+      // awarded without a scheme actually appearing in the register). A row
+      // the register flags "Broad-based / ESOP? Yes" is a scheme row too.
+      ownershipType:
+        s((r as any).ownershipType)
+        || (coerceYesNo((r as any).schemeParticipation) ? "ESOP / Employee Share Scheme" : "shareholder"),
       // The holder's outstanding acquisition debt, ONLY when the register
       // states it. A blank cell is "not stated", not nil: ownership fulfilment
       // and net value must never read a missing figure as a paid-up stake.
