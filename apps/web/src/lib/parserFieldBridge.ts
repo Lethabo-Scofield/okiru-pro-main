@@ -108,6 +108,11 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   empowering_supplier_confirmed: { section: "procurement", column: "empoweringSupplier" },
   claimed_spend_ex_vat: { section: "procurement", column: "spend" },
   amount_ex_vat: { section: "procurement", column: "spend" },
+  // A supplier ledger's own total (the ledger skill's name for it). Unmapped,
+  // the model's read of a ledger arrived as a NAME with no figure, linked into
+  // the schedule row, and the ledger evidence never reached the spend it
+  // corroborates.
+  ap_subledger_total: { section: "procurement", column: "spend" },
   certificate_expiry_date: { section: "procurement", column: "certificateExpiryDate" },
   expiry_date: { section: "procurement", column: "certificateExpiryDate" },
   // The SUPPLIER's own black / black-woman ownership, from the schedule's "Black

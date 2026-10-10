@@ -1147,11 +1147,21 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // does (which leaves previous behaviour untouched).
       const rawDesigCell = s((r as any).designation);
       const rawOccCell = s((r as any).occupationalLevel);
-      const scoringCell = isScoringDesignation(rawDesigCell)
-        ? rawDesigCell
-        : isScoringDesignation(rawOccCell)
-          ? rawOccCell
-          : (rawDesigCell || rawOccCell);
+      // A designation the upload worked out from a JOB TITLE (marked on the row
+      // as derived) is a guess at the band; a stated occupational level is
+      // evidence. The guess never outranks the evidence: "Admin Manager" reads
+      // as middle management, but a register that states Senior Management is
+      // the one that scores.
+      const derived = ((r as any)._derivedFromFlag ?? {}) as Record<string, unknown>;
+      const designationGuessed = Boolean(derived.designation);
+      const levelStated = !derived.occupationalLevel && isScoringDesignation(rawOccCell);
+      const scoringCell = designationGuessed && levelStated
+        ? rawOccCell
+        : isScoringDesignation(rawDesigCell)
+          ? rawDesigCell
+          : isScoringDesignation(rawOccCell)
+            ? rawOccCell
+            : (rawDesigCell || rawOccCell);
       const designation = mapDesignation(scoringCell);
       const occupationalLevel = mapDesignation(rawOccCell || scoringCell);
       employees.push({
