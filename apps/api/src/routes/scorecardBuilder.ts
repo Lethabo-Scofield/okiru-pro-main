@@ -95,7 +95,7 @@ interface CalculateRequest {
  * Translate frontend pillarData/foundationData format into
  * the entity-level inputs the calculation engine expects.
  */
-function extractFromPillarData(body: CalculateRequest): {
+export function extractFromPillarData(body: CalculateRequest): {
   employees: EmployeeInput[];
   shareholders: ShareholderInput[];
   suppliers: SupplierInput[];
@@ -127,6 +127,12 @@ function extractFromPillarData(body: CalculateRequest): {
     yearsHeld: s.yearsHeld,
     isDesignatedGroup: !!s.isDesignatedGroup,
     blackNewEntrant: !!s.blackNewEntrant,
+    // The register row's own type: scheme rows (ESOP/BBOS/co-op) earn the
+    // Transport scheme bonus, and nothing else does.
+    ...(typeof s.ownershipType === 'string' ? { ownershipType: s.ownershipType } : {}),
+    // Stated acquisition debt only: absent stays absent, because ownership
+    // fulfilment needs a STATED nil, never a default 0.
+    ...(typeof s.outstandingDebt === 'number' && Number.isFinite(s.outstandingDebt) ? { outstandingDebt: s.outstandingDebt } : {}),
   }));
 
   const suppliers: SupplierInput[] = (pd.procurement?.suppliers || []).map((s: any) => ({
@@ -142,6 +148,9 @@ function extractFromPillarData(body: CalculateRequest): {
     isEME: !!s.isEME || s.enterpriseType === 'eme',
     isQSE: !!s.isQSE || s.enterpriseType === 'qse',
     isForeignSupplier: !!s.isForeignSupplier,
+    // A supplier the client states is NOT empowering earns no empowering
+    // recognition, whatever its level; unstated leaves the level to decide.
+    ...(typeof s.isEmpoweringSupplier === 'boolean' ? { isEmpoweringSupplier: s.isEmpoweringSupplier } : {}),
   }));
 
   const esdContribs = (pd.esd?.contributions || []).map((c: any) => ({
