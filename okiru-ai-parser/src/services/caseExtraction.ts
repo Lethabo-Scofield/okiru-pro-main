@@ -33,6 +33,8 @@ import {
   structuredInstructions,
 } from './sheetInstructionsExtraction.js';
 import { deriveForRecord, periodEndingOn, type MeasurementPeriod } from './skillDerivations.js';
+import { distinctLearners } from './learnerRegister.js';
+import { fixedAssetCapex } from './fixedAssetNote.js';
 import { elementFromHint } from './specRetrieval.js';
 import {
   fieldElementIndex,
@@ -298,6 +300,69 @@ export function markRegisteredLearnersEmployed(extractions: DocumentExtraction[]
   }
 }
 
+/**
+ * Each training register's learners once each (learnerRegister.ts), beside its
+ * learner-course rows: the people Skills Development counts, where the rows
+ * are one per course. Labelled derived, so never a calculator input; one
+ * learner written with two ID numbers is reported for the reviewer.
+ */
+export function addDistinctLearners(extractions: DocumentExtraction[]): void {
+  for (const extraction of extractions) {
+    if (extraction.error) continue;
+    if (extraction.values.some((value) => value.field === 'derived_learner_names')) continue;
+    const register = extraction.values.find((value) => value.field === 'learner_rows' && Array.isArray(value.value));
+    if (!register) continue;
+    const { names, entries, idVariants } = distinctLearners(register.value);
+    if (names.length === 0) continue;
+    extraction.values.push({
+      field: 'derived_learner_names',
+      value: names,
+      sourceFile: extraction.sourceFile,
+      sourceDocumentId: extraction.documentId,
+      source: {
+        method: 'derived',
+        quote: `derived: ${names.length} learner(s) on ${entries} learner-course entr${entries === 1 ? 'y' : 'ies'}, one person per ID number, or per name where an ID number is missing or mistyped`,
+      },
+    });
+    for (const variant of idVariants) {
+      extraction.exceptions.push(
+        `Learner "${variant.name}" is written with ${variant.ids.length} different ID numbers (${variant.ids.join(', ')}); read as one person. Check the register.`,
+      );
+    }
+  }
+}
+
+/**
+ * Capital expenditure for statements that asked for it and printed none, when
+ * their fixed-asset note shows nothing was bought (fixedAssetNote.ts). Placed
+ * under the field the statements' own type asked for, labelled derived; a cost
+ * that moved without a movement line is reported instead.
+ */
+export function addFixedAssetCapex(
+  extractions: DocumentExtraction[],
+  textOf: (file: string) => string | null | undefined,
+): void {
+  for (const extraction of extractions) {
+    if (extraction.error || isSheetName(extraction.sourceFile) || extraction.documentId.startsWith('sheet_')) continue;
+    if (!extraction.missingFields.includes('capital_expenditure')) continue;
+    if (extraction.values.some((value) => value.field === 'capital_expenditure')) continue;
+    const result = fixedAssetCapex(textOf(extraction.sourceFile));
+    if (!result) continue;
+    if (result.value === null) {
+      extraction.exceptions.push(`Derived figures: ${result.note}`);
+      continue;
+    }
+    extraction.values.push({
+      field: 'capital_expenditure',
+      value: result.value,
+      sourceFile: extraction.sourceFile,
+      sourceDocumentId: extraction.documentId,
+      source: { method: 'derived', quote: result.basis },
+    });
+    extraction.missingFields = extraction.missingFields.filter((field) => field !== 'capital_expenditure');
+  }
+}
+
 /** Cached so a case does not rebuild the client per file. */
 let cachedModel: ExtractionModel | null | undefined;
 
@@ -500,6 +565,10 @@ export async function extractCaseEntities(
   // Learners on the entity's own payroll are employed learners, whatever the
   // training register's blank "Employed?" column would otherwise say.
   markRegisteredLearnersEmployed(extractions);
+  // A register's learners once each, beside its one-row-per-course entries.
+  addDistinctLearners(extractions);
+  // Statements whose fixed-asset note shows nothing was bought: capex is nil.
+  addFixedAssetCapex(extractions, (file) => textByFile.get(file));
 
   // Surfaced as a values-free extraction: it cannot move a score, only explain
   // why one moved. Added before resolution so it travels with the case.
