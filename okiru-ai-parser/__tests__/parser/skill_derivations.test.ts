@@ -7,12 +7,16 @@ import { describe, expect, it } from 'vitest';
 import {
   amountOf,
   dateOf,
+  deriveCertificateScore,
   deriveEmp201,
   deriveEmployeeCount,
+  deriveForRecord,
   deriveLedger,
   deriveSedPayments,
+  deriveStatedBlackOwnership,
   taxPeriodOf,
 } from '../../src/services/skillDerivations.js';
+import { isReportedNotScored } from '../../src/services/entityCalculatorMapping.js';
 
 const FEB_YEAR = { start: '2024-03-01', end: '2025-02-28' };
 
@@ -160,5 +164,45 @@ describe('payroll: the headcount is counted in code', () => {
     const result = deriveEmployeeCount([{ employee_name: 'Mokoena Thabo' }, { employee_name: 'Dlamini Nomsa' }, { employee_name: '' }]);
     expect(result.values.derived_employee_count).toBe(2);
     expect(result.derived.derived_employee_count).toMatch(/^derived:/);
+  });
+});
+
+describe('B-BBEE certificate: the achieved total score', () => {
+  it('is the first figure of a printed total that carries its maximum', () => {
+    expect(deriveCertificateScore('98.40 / 109').values.derived_total_score).toBe(98.4);
+    expect(deriveCertificateScore('96.10 109.00').values.derived_total_score).toBe(96.1);
+    expect(deriveCertificateScore('87.5 out of 109 points').values.derived_total_score).toBe(87.5);
+    expect(deriveCertificateScore('91.30').values.derived_total_score).toBe(91.3);
+    expect(deriveCertificateScore('96.10 109.00').derived.derived_total_score).toMatch(/^derived: the first figure/);
+  });
+
+  it('is nothing when the printed total is not one or two bare figures', () => {
+    expect(deriveCertificateScore('Level 1').values.derived_total_score).toBeNull();
+    expect(deriveCertificateScore('').values.derived_total_score).toBeNull();
+    expect(deriveCertificateScore('see annexure A').values.derived_total_score).toBeNull();
+  });
+
+  it('is derived beside the printed total, which stays as printed', () => {
+    const result = deriveForRecord({ total_points: '96.10 109.00' }, null)!;
+    expect(result.values.derived_total_score).toBe(96.1);
+    expect(result.values.total_points).toBeUndefined();
+  });
+});
+
+describe('an unsworn ownership claim: the stated percentage, reported never scored', () => {
+  it('reads the percentage the statement gives', () => {
+    expect(deriveStatedBlackOwnership('we are 100% black owned').values.stated_black_ownership_percentage).toBe(100);
+    expect(deriveStatedBlackOwnership('a proudly 51% black-owned contractor').values.stated_black_ownership_percentage).toBe(51);
+    expect(deriveStatedBlackOwnership('with black ownership of 30.5%').values.stated_black_ownership_percentage).toBe(30.5);
+  });
+
+  it('is nothing when the statement gives no percentage', () => {
+    expect(deriveStatedBlackOwnership('a BEE company of previously disadvantaged individuals').values.stated_black_ownership_percentage).toBeNull();
+    expect(deriveStatedBlackOwnership('100% owned by the founder').values.stated_black_ownership_percentage).toBeNull();
+  });
+
+  it('is never offered to the calculator', () => {
+    expect(isReportedNotScored('stated_black_ownership_percentage')).toBe(true);
+    expect(isReportedNotScored('derived_total_score')).toBe(true);
   });
 });

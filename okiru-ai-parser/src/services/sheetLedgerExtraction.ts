@@ -106,11 +106,15 @@ const LIKELY_EXCLUSION_NAME = /\b(municipalit|metro|city of|local authority|esko
  */
 const LIKELY_EXCLUSION_DESCRIPTION = /\b(rates|municipal|electricity|water|refuse|sanitation|sewer|property tax|levies|licence|license)\b/i;
 
-/** One entry of a ledger, under the ledger skill's own row names. */
+/**
+ * One ledger line that was counted as spend, read off its own cells, under the
+ * ledger skill's own row names. A cell the line leaves empty is left out.
+ */
 export interface LedgerEntry {
   entry_date?: unknown;
   entry_reference?: unknown;
   entry_description?: unknown;
+  /** The amount in the spend column. */
   entry_amount: number;
 }
 
@@ -120,7 +124,7 @@ export interface LedgerReading {
   spend: number;
   /** How many invoice lines were summed. */
   lines: number;
-  /** The lines themselves, in sheet order: what the spend is the sum of. */
+  /** The summed lines themselves, in sheet order (totals never included). */
   entries: LedgerEntry[];
   /** Which column was treated as spend, for the log and the audit trail. */
   spendColumn: string;
@@ -156,7 +160,9 @@ export function readLedgerSheet(
 
   const balanceColumn = findHeader(headers, BALANCE_HEADER);
   const dateColumn = findHeader(headers, DATE_HEADER);
-  const descriptionColumn = findHeader(headers, DESCRIPTION_HEADER);
+  // A description column by its usual names, else any column that describes.
+  const descriptionColumn = findHeader(headers, DESCRIPTION_HEADER)
+    ?? headers.find((h) => /(description|detail|narrative)/i.test(h));
   const referenceColumn = findHeader(headers, REFERENCE_HEADER);
   const amounts: number[] = [];
   const entries: LedgerEntry[] = [];
@@ -235,6 +241,42 @@ export function readLedgerSheet(
   };
 }
 
+const MONTH_WORD = /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\b/i;
+
+/** One end of a printed period: a month name or a numeric date, with a year. */
+function looksLikePeriodEnd(text: string): boolean {
+  const hasYear = /(?:^|[^\d])(?:'\d{2}|\d{4})(?!\d)/.test(text) || /\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b/.test(text);
+  return hasYear && (MONTH_WORD.test(text) || /\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}/.test(text));
+}
+
+/** "'24" → "2024": an abbreviated year written in full (before 50 is this century). */
+function fullYears(text: string): string {
+  return text.replace(/'(\d{2})\b/g, (_, yy: string) => String(Number(yy) < 50 ? 2000 + Number(yy) : 1900 + Number(yy)));
+}
+
+/**
+ * The period a ledger says it covers, from its own title cell ("RECON: ACME
+ * FOR PERIOD 01 JULY '23 TO JUN '24", "Statement for the period 1 Jul 2023 -
+ * 30 Jun 2024"). Read off the sheet's text above its table, never computed
+ * from the entry dates: the stated period is what the client claims the
+ * ledger covers, and a reviewer compares it with the entries. Abbreviated
+ * years are written in full ("'24" is 2024); everything else is as printed.
+ * Null when the sheet states no period.
+ */
+export function statedLedgerPeriod(sheetText: string | undefined): string | null {
+  for (const raw of String(sheetText ?? '').split(/\r?\n/)) {
+    const line = raw.trim();
+    // Table rows are entries, not the ledger's caption.
+    if (!line || line.startsWith('|')) continue;
+    const match = line.match(/\bperiod\b\s*(?:from\b)?\s*:?\s*(.+?)\s+(to|until|till|[-–])\s+(.+?)\s*$/i);
+    if (!match) continue;
+    const [, start, connector, end] = match;
+    if (!looksLikePeriodEnd(start) || !looksLikePeriodEnd(end)) continue;
+    return `${fullYears(start.trim())} ${connector} ${fullYears(end.trim())}`;
+  }
+  return null;
+}
+
 /**
  * The period a ledger's title states ("RECON : ACME FOR PERIOD 01 MARCH '24 TO
  * FEB '25"), as printed, from the rows above its table. Null when no title
@@ -260,18 +302,30 @@ export function ledgerTitlePeriod(matrix: unknown[][] | undefined): string | nul
  *
  * Deliberately NOT one row per invoice line: a ledger evidences one supplier's
  * total, and emitting its lines as separate supplier rows would present a
- * single account as twenty suppliers. The lines travel beside it as
- * `ledger_entry_rows` (the ledger skill's own names), evidence a reviewer can
- * count and date, never placed as rows; the title's period as `ledger_period`.
+ * single account as twenty suppliers. The lines travel beside it instead, as
+ * the ledger's own evidence (`ledger_entry_rows`, read off the cells under the
+ * ledger skill's names), with the period its title states (`ledger_period`)
+ * and, when the spend is handed over, their count worked out here
+ * (`derived_entry_count`). None of the three is a calculator input.
  */
 export function extractLedgerTable(
   rows: Array<Record<string, unknown>>,
   filename: string,
-  matrix?: unknown[][],
+  /**
+   * The sheet's cells as a matrix (its title rows sit above the table), or its
+   * text (markdown or plain): where the period the ledger states is read.
+   */
+  sheet?: unknown[][] | string,
+  /** The sheet's text, when the matrix came first and names no period. */
+  sheetText?: string,
 ): DocumentExtraction | null {
   const reading = readLedgerSheet(rows, filename);
   if (!reading) return null;
-  const period = ledgerTitlePeriod(matrix);
+  // The title row of the matrix first, then the sheet's text; either way the
+  // period as printed, with an abbreviated year written in full ("'24" → 2024).
+  const titled = Array.isArray(sheet) ? ledgerTitlePeriod(sheet) : null;
+  const text = typeof sheet === 'string' ? sheet : sheetText;
+  const period = titled !== null ? fullYears(titled) : statedLedgerPeriod(text);
 
   logger.info('Read supplier ledger', {
     file: filename,
@@ -288,20 +342,29 @@ export function extractLedgerTable(
   // own judgement — the direction that gets a certificate revoked. The finding
   // still reaches the user, who can enter it deliberately if the agency rules
   // it includable.
-  const values: DocumentExtraction['values'] = reading.possibleTmpsExclusion
-    ? []
-    : [{
+  const own = { sourceFile: filename, sourceDocumentId: 'sheet_table__esd' };
+  const values: DocumentExtraction['values'] = [];
+  if (!reading.possibleTmpsExclusion) {
+    values.push({
       field: 'supplier_rows',
       value: [{
         supplier_name: reading.supplierName,
         claimed_spend_ex_vat: reading.spend,
       }],
-      sourceFile: filename,
-      sourceDocumentId: 'sheet_table__esd',
-    }];
+      ...own,
+    });
+  }
   // The evidence behind the figure, whether or not the figure is handed over.
-  values.push({ field: 'ledger_entry_rows', value: reading.entries, sourceFile: filename, sourceDocumentId: 'sheet_table__esd' });
-  if (period) values.push({ field: 'ledger_period', value: period, sourceFile: filename, sourceDocumentId: 'sheet_table__esd' });
+  values.push({ field: 'ledger_entry_rows', value: reading.entries, ...own });
+  if (!reading.possibleTmpsExclusion) {
+    values.push({
+      field: 'derived_entry_count',
+      value: reading.entries.length,
+      ...own,
+      source: { method: 'derived', quote: `derived: count of the ledger's ${reading.spendColumn} lines, totals left out` },
+    });
+  }
+  if (period) values.push({ field: 'ledger_period', value: period, ...own });
 
   return {
     documentId: 'sheet_table__esd',

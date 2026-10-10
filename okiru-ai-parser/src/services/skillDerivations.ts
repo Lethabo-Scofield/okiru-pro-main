@@ -372,6 +372,57 @@ export function deriveEmployeeCount(rows: unknown): Derivation {
   };
 }
 
+// ─── B-BBEE certificate ─────────────────────────────────────────────────────
+
+/**
+ * The achieved total score from a certificate's printed total. The skill asks
+ * for the total as printed, with its maximum when one is shown ("98.40 / 109",
+ * or a row's two cells "96.10 109.00" under "Actual" and "Target"): the
+ * first figure is the score achieved, the second the most available. Null
+ * when the printed total is not one or two bare figures.
+ */
+export function deriveCertificateScore(totalPoints: unknown): Derivation {
+  const values: Derivation['values'] = { derived_total_score: null };
+  const text = typeof totalPoints === 'number' ? String(totalPoints) : String(totalPoints ?? '').trim();
+  const m = text.match(/^(\d{1,3}(?:[.,]\d{1,2})?)\s*(?:(?:\/|of|out\s+of)?\s*(\d{1,3}(?:[.,]\d{1,2})?))?\s*(?:points?)?$/i);
+  if (!m) return { values, derived: {}, notes: [] };
+  values.derived_total_score = Number(m[1].replace(',', '.'));
+  return {
+    values,
+    derived: {
+      derived_total_score: m[2]
+        ? `derived: the first figure of the printed total "${text}" (the score achieved; the second is the maximum)`
+        : `derived: the printed total "${text}" as a number`,
+    },
+    notes: [],
+  };
+}
+
+// ─── Unsworn ownership claims ───────────────────────────────────────────────
+
+/**
+ * The black ownership percentage a letter's (or a profile's) own ownership
+ * statement gives ("we are 100% black owned", "black ownership of 51%"). It
+ * is a representation, not ownership evidence: named `stated_*` so it is
+ * reported beside the register's figure and never placed on the calculator
+ * (entityCalculatorMapping.isReportedNotScored).
+ */
+export function deriveStatedBlackOwnership(statement: unknown): Derivation {
+  const values: Derivation['values'] = { stated_black_ownership_percentage: null };
+  const text = String(statement ?? '');
+  const m = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%\s*black[\s-]*owned/i)
+    ?? text.match(/black[\s-]*ownership\s*(?:of|:|is|at)?\s*(\d{1,3}(?:[.,]\d+)?)\s*%/i);
+  if (!m) return { values, derived: {}, notes: [] };
+  const percent = Number(m[1].replace(',', '.'));
+  if (!(percent >= 0 && percent <= 100)) return { values, derived: {}, notes: [] };
+  values.stated_black_ownership_percentage = percent;
+  return {
+    values,
+    derived: { stated_black_ownership_percentage: 'derived: the percentage in the document\'s own ownership statement (a representation, not a shareholding record)' },
+    notes: [],
+  };
+}
+
 // ─── One document's derivations ─────────────────────────────────────────────
 
 /**
@@ -390,6 +441,8 @@ export function deriveForRecord(record: Row, period: MeasurementPeriod | null | 
   }
   if (Array.isArray(record.ledger_entry_rows)) parts.push(deriveLedger(record, period));
   if (Array.isArray(record.employee_rows)) parts.push(deriveEmployeeCount(record.employee_rows));
+  if (present(record.total_points)) parts.push(deriveCertificateScore(record.total_points));
+  if (present(record.ownership_statement)) parts.push(deriveStatedBlackOwnership(record.ownership_statement));
   if (parts.length === 0) return null;
   return {
     values: Object.assign({}, ...parts.map((part) => part.values)),

@@ -44,6 +44,10 @@ import {
 import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
 import { reviewCase } from './caseReview.js';
 import { agentCasePass, agentPassForDocument, type AgentCaseContext } from './agentExtraction.js';
+import { extractionDomain } from './extractionDomain.js';
+import { tidyPrintedValues } from './printedValues.js';
+import { applyTickBoxes } from './tickBoxes.js';
+import { applyCaptionedColumns, columnsFromMetadata } from './columnReadings.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -397,7 +401,7 @@ export async function extractCaseEntities(
         // things. Asking a model to "extract the supplier table" from one
         // yields nothing, which is what happened to every ledger until now.
         if (rows) {
-          const ledger = extractLedgerTable(rows, input.filename, structuredMatrix(input.tables));
+          const ledger = extractLedgerTable(rows, input.filename, structuredMatrix(input.tables), input.markdown || input.raw_text);
           if (ledger) return ledger;
         }
 
@@ -472,6 +476,22 @@ export async function extractCaseEntities(
       });
     }
   }
+
+  // Printed values made readable under their skill's field types (a weekday
+  // date as yyyy-mm-dd, an organisation's name without its trailing company
+  // number). After every read, so no prompt changes because of it.
+  const skillFor = (documentId: string) => extractionDomain('bbbee').skillFor(documentId);
+  tidyPrintedValues(extractions, skillFor);
+  // Yes/no questions answered with boxes are decided by the mark beside each
+  // option, never by the model's impression of a scan ("N/A" written in a box
+  // is not a tick).
+  const textByFile = new Map(inputs.map((input) => [input.filename, input.markdown || input.raw_text]));
+  applyTickBoxes(extractions, (file) => textByFile.get(file), skillFor);
+  // A field printed as its own captioned block beside another (a CIPC
+  // disclosure's registered office beside its postal address) keeps the
+  // block's lines when the read lost words at the seam.
+  const columnsByFile = new Map(inputs.map((input) => [input.filename, columnsFromMetadata(input.metadata)]));
+  applyCaptionedColumns(extractions, (file) => columnsByFile.get(file) ?? [], skillFor);
 
   // The figures the skills forbid the model to compute (EMP201 totals and the
   // months filed, SED payments inside the period, a ledger's own total, the

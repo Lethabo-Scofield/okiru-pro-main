@@ -23,6 +23,7 @@ import {
 } from './documentIntelligence.js';
 import { splitWorkbookIntoSheets, shouldSplitWorkbook } from './workbookSheetSplit.js';
 import { extractScannedPdfWithVision } from './visionExtraction.js';
+import { pdfCaptionedColumns, type CaptionedColumn } from './pdfColumns.js';
 
 /**
  * Below this many characters a PDF/DOCX is treated as a scan, not a document
@@ -410,6 +411,9 @@ export async function rawExtractionInputFromUpload(
   // additive so `raw_text` (what the regex extractor reads) never changes shape.
   let markdown = '';
   let tables: unknown[] = [];
+  // A digital PDF's side-by-side captioned blocks (pdfColumns.ts), kept beside
+  // the text for the readers that need a block's own lines.
+  let pdfColumns: CaptionedColumn[] = [];
   // Which scanned-document reader produced the text, when one did. Travels in
   // metadata so later stages (the agent-loop gate) know the text is OCR.
   let scannedBy: 'document_intelligence' | 'vision' | null = null;
@@ -422,9 +426,17 @@ export async function rawExtractionInputFromUpload(
 
   if (file.mimetype === 'application/pdf' || ext === '.pdf') {
     // One pdfjs pass serves both renderings (they read the same lines).
-    const readings = pdfReadings(await withTimeout(pdfPageItems(file.buffer), EXTRACTION_TIMEOUT_MS), file.originalname);
+    const pages = await withTimeout(pdfPageItems(file.buffer), EXTRACTION_TIMEOUT_MS);
+    const readings = pdfReadings(pages, file.originalname);
     rawText = readings.text;
     markdown = readings.markdown;
+    try {
+      pdfColumns = pdfCaptionedColumns(pages);
+    } catch (err) {
+      logger.warn('Could not read the PDF\'s captioned columns; the text is unaffected', {
+        filename: file.originalname, reason: (err as Error).message,
+      });
+    }
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     || ext === '.docx'
@@ -571,6 +583,7 @@ export async function rawExtractionInputFromUpload(
       file_size: file.size,
       mime_type: file.mimetype,
       ...(scannedBy ? { scanned: true, text_source: scannedBy } : {}),
+      ...(pdfColumns.length > 0 && !scannedBy ? { pdf_columns: pdfColumns } : {}),
     },
   };
 }

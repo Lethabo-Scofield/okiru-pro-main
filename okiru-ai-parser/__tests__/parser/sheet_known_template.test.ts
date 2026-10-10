@@ -203,7 +203,7 @@ describe('a supplier ledger', () => {
       { entry_date: '25/03/2024', entry_description: 'DEBIT ORDER', entry_amount: 1200.5 },
       { entry_date: '25/04/2024', entry_description: 'DEBIT ORDER', entry_amount: 1200.5 },
     ]);
-    expect(result.values.find((v) => v.field === 'ledger_period')?.value).toBe("01 MARCH '24 TO FEB '25");
+    expect(result.values.find((v) => v.field === 'ledger_period')?.value).toBe('01 MARCH 2024 TO FEB 2025');
   });
 
   it('a title that names no period gives none', () => {
