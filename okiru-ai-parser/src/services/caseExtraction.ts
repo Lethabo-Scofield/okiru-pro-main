@@ -46,6 +46,7 @@ import { agentCasePass, agentPassForDocument, type AgentCaseContext } from './ag
 import { extractionDomain } from './extractionDomain.js';
 import { tidyPrintedValues } from './printedValues.js';
 import { applyTickBoxes } from './tickBoxes.js';
+import { applyCaptionedColumns, columnsFromMetadata } from './columnReadings.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -405,6 +406,11 @@ export async function extractCaseEntities(
   // is not a tick).
   const textByFile = new Map(inputs.map((input) => [input.filename, input.markdown || input.raw_text]));
   applyTickBoxes(extractions, (file) => textByFile.get(file), skillFor);
+  // A field printed as its own captioned block beside another (a CIPC
+  // disclosure's registered office beside its postal address) keeps the
+  // block's lines when the read lost words at the seam.
+  const columnsByFile = new Map(inputs.map((input) => [input.filename, columnsFromMetadata(input.metadata)]));
+  applyCaptionedColumns(extractions, (file) => columnsByFile.get(file) ?? [], skillFor);
 
   // The figures the skills forbid the model to compute (EMP201 totals and the
   // months filed, SED payments inside the period, a ledger's own total, the
