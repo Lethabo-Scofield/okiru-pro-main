@@ -160,6 +160,11 @@ export interface InjectionValue {
   value: unknown;
   /** Where it came from, carried through so a cell can be traced to a file. */
   sourceFile?: string;
+  /**
+   * Set when this value was INFERRED rather than read (an occupational level
+   * worked out from a job title). Says what it was inferred from.
+   */
+  inferredFrom?: string;
 }
 
 export type RejectionReason =
@@ -185,6 +190,39 @@ export interface InjectionResult {
   accepted: Array<{ field: string; value: unknown; sourceFile?: string }>;
   /** What could not go in, and why. Never silently dropped. */
   rejected: InjectionRejection[];
+  /**
+   * Cells whose value was INFERRED, not stated — column → what it was read
+   * from (e.g. `job title "Admin Manager"`). A band read from a job title is a
+   * guess about the person's level and must never outrank a level a document
+   * states; callers mark these cells so linking and scoring can tell.
+   */
+  inferred?: Record<string, string>;
+  /**
+   * The Management Control sheet's own POSITION for this person, when the row
+   * states one: "Executive Management", "Other Executive Management",
+   * "Non-Executive Director" or "Other". It answers a different question from
+   * the EE occupational level (is this person in top management?), so it is
+   * kept apart from it instead of being folded into the level column.
+   */
+  statedPosition?: string;
+}
+
+/** The Management Control sheet's Position dropdown, by synonym key. */
+const MC_POSITION_BY_KEY: Record<string, { position: string; designation?: string }> = {
+  executivemanagement: { position: "Executive Management", designation: "Executive Director" },
+  otherexecutivemanagement: { position: "Other Executive Management", designation: "Other Executive Manager" },
+  otherexecutivemanager: { position: "Other Executive Management", designation: "Other Executive Manager" },
+  otherexecmgmt: { position: "Other Executive Management", designation: "Other Executive Manager" },
+  nonexecutivedirector: { position: "Non-Executive Director", designation: "Non-executive Director" },
+  nonexecutivedirectors: { position: "Non-Executive Director", designation: "Non-executive Director" },
+  // "Other" on the Management Control sheet is a statement too: this person
+  // holds none of the top-management positions above.
+  other: { position: "Other" },
+};
+
+/** The MC-sheet position a level cell states, if it states one. */
+export function mcPositionOf(value: unknown): { position: string; designation?: string } | null {
+  return MC_POSITION_BY_KEY[synonymKey(String(value ?? ""))] ?? null;
 }
 
 /** Loose text comparison for matching a value against dropdown options. */
@@ -423,6 +461,36 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
   const present = new Set(values.map((v) => v.field));
   const optionsOf = (key: string) => byKey.get(key)?.options ?? [];
 
+  // A Management Control sheet reads its POSITION column into the level slot
+  // ("Other Executive Management", "Other"). That is the sheet's answer to
+  // "is this person in top management?", not an EEA occupational level, so it
+  // leaves the level column: a top position becomes the row's STATED
+  // designation (it outranks a band guessed from the job title on the same
+  // row), and every position — "Other" included — travels as _mcPosition so
+  // linking can see two versions of the sheet disagree.
+  let positionDesignation: string | null = null;
+  if (hasDesignation && hasOccLevel) {
+    const levelEntry = values.find((v) => v.field === "occupationalLevel");
+    const position = levelEntry ? mcPositionOf(levelEntry.value) : null;
+    if (levelEntry && position) {
+      // "Other" is no occupational level at all — consumed here rather than
+      // rejected. A top position stays in the level column too ("Top
+      // Management" is what the EEA ladder calls it).
+      if (!position.designation) {
+        values = values.filter((v) => v !== levelEntry);
+        present.delete("occupationalLevel");
+      }
+      out.push({ field: "_mcPosition", value: position.position, sourceFile: levelEntry.sourceFile });
+      if (position.designation) {
+        positionDesignation = position.designation;
+        values = [
+          ...values.filter((v) => v.field !== "designation"),
+          { field: "designation", value: position.designation, sourceFile: levelEntry.sourceFile },
+        ];
+      }
+    }
+  }
+
   // The level the register STATES for this row, as the dropdown would hold it.
   // Stated evidence outranks anything inferred from a job title below.
   const statedLevelRaw = values.find((v) => v.field === "occupationalLevel")?.value;
@@ -433,6 +501,10 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
   for (const entry of values) {
     if (entry.field === "designation" && hasDesignation) {
       const text = String(entry.value ?? "").trim();
+      if (positionDesignation !== null && text === positionDesignation) {
+        out.push(entry);
+        continue;
+      }
       const direct = matchOption(normaliseForColumn("designation", text), optionsOf("designation"));
       const stated = DESIGNATION_MAP[synonymKey(text)] !== undefined || optionsOf("designation").includes(text);
       if (direct === null && text) {
@@ -443,7 +515,7 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
           // level keeps it, and the title must not surface as a rejection of
           // a band the dropdown never had for it.
           if (!present.has("occupationalLevel")) {
-            out.push({ field: "occupationalLevel", value: bands.occupationalLevel, sourceFile: entry.sourceFile });
+            out.push({ field: "occupationalLevel", value: bands.occupationalLevel, sourceFile: entry.sourceFile, inferredFrom: `job title "${text}"` });
             present.add("occupationalLevel");
           }
           continue;
@@ -462,9 +534,21 @@ function reconcilePersonValues(values: InjectionValue[], byKey: Map<string, Colu
       if (direct !== null || classifyJobTitle(text).designation) {
         const level = classifyJobTitle(text).occupationalLevel;
         if (level && hasOccLevel && !present.has("occupationalLevel")) {
-          out.push({ field: "occupationalLevel", value: level, sourceFile: entry.sourceFile });
+          out.push({
+            field: "occupationalLevel",
+            value: level,
+            sourceFile: entry.sourceFile,
+            // A level filled from the band the title names is only as good as
+            // the title: stated wording ("Senior Manager") states it, a title
+            // ("Admin Manager") only suggests it.
+            ...(stated ? {} : { inferredFrom: `job title "${text}"` }),
+          });
           present.add("occupationalLevel");
         }
+      }
+      if (text && !stated) {
+        out.push({ ...entry, inferredFrom: `job title "${text}"` });
+        continue;
       }
     }
     out.push(entry);
@@ -506,8 +590,14 @@ export function injectIntoSection(
   const cells: Record<string, unknown> = {};
   const accepted: InjectionResult["accepted"] = [];
   const rejected: InjectionRejection[] = [];
+  const inferred: Record<string, string> = {};
+  let statedPosition: string | undefined;
 
-  for (const { field, value, sourceFile } of reconcilePersonValues(values, byKey)) {
+  for (const { field, value, sourceFile, inferredFrom } of reconcilePersonValues(values, byKey)) {
+    if (field === "_mcPosition") {
+      statedPosition = String(value);
+      continue;
+    }
     const column = byKey.get(field);
     if (!column) {
       rejected.push({
@@ -535,9 +625,17 @@ export function injectIntoSection(
 
     cells[field] = coerced.value;
     accepted.push({ field, value: coerced.value, sourceFile });
+    if (inferredFrom) inferred[field] = inferredFrom;
+    else delete inferred[field];
   }
 
-  return { cells, accepted, rejected };
+  return {
+    cells,
+    accepted,
+    rejected,
+    ...(Object.keys(inferred).length > 0 ? { inferred } : {}),
+    ...(statedPosition ? { statedPosition } : {}),
+  };
 }
 
 /**

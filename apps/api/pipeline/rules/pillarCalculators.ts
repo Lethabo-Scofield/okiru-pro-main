@@ -60,6 +60,10 @@ export interface ShareholderInput {
   yearsHeld?: number;
   isDesignatedGroup?: boolean;
   blackNewEntrant?: boolean;
+  /** The register row's stated type ("ESOP / Employee Share Scheme", "BBOS" …) — scheme rows earn the ESOP bonus. */
+  ownershipType?: string;
+  /** Stated outstanding acquisition debt for this holder; absent = not stated (never nil by default). */
+  outstandingDebt?: number;
 }
 
 export interface SupplierInput {
@@ -77,6 +81,8 @@ export interface SupplierInput {
   isEME?: boolean;
   isQSE?: boolean;
   isForeignSupplier?: boolean;
+  /** Stated empowering-supplier status; absent = unstated (a valid level then counts). */
+  isEmpoweringSupplier?: boolean;
 }
 
 export interface ContributionInput {
@@ -175,18 +181,11 @@ export type TransportQseMeasuredElement =
   | 'socioEconomicDevelopment';
 
 /**
- * KNOWN GAP — this fixed quartet is a placeholder, not the rule.
- *
- * Where an entity has not elected its four elements, the verification agency
- * measures the four it scores HIGHEST on. This engine shapes the config before
- * any score exists, so it cannot rank them here; picking a fixed quartet instead
- * can measure an entity on its four worst elements. For certificate 13609 this
- * default (Own 25 + MC 27 + EE 0 + Skills 0) yields 52 against the certified 102.
- *
- * Callers that know the elected four MUST pass `transportQseMeasuredElements`.
- * The Toolkit scoring path (apps/web/Toolkit/src/lib/store.ts) already elects the
- * best four correctly; doing the same here needs a two-pass restructure of
- * calculateAllPillars (score all seven, then keep the best four).
+ * Not the rule — only a shape for applyTransportQseMeasuredElements when it is
+ * handed no valid election. calculateAllPillars never reaches it any more: with
+ * no elected four it scores all seven and keeps the best four
+ * (electTransportQseBestFour), which is what a verification agency does. This
+ * quartet once measured a certified Level 1 entity on its four worst elements.
  */
 const TRANSPORT_QSE_DEFAULT_MEASURED: TransportQseMeasuredElement[] = [
   'ownership',
@@ -272,13 +271,19 @@ function calcTransportQseManagement(employees: EmployeeInput[], cfg: SectorConfi
   const pct = (emps: EmployeeInput[], fn: (e: EmployeeInput[]) => number) =>
     emps.length > 0 ? fn(emps) / emps.length : 0;
 
-  const topMgmt = [
+  // "Top Management" is the board / executive / other-executive band. The
+  // Transport Codes keep Senior Management as its own category and fold it in
+  // only when the two cannot be told apart — so Senior counts here ONLY when
+  // the entity has no executive row at all. Pooling it unconditionally gave a
+  // black woman at Senior level the top-management black-women bonus. Mirrors
+  // Toolkit calculators/transport.ts calculateTransportQseManagement.
+  const executives = [
     ...(grouped['Board'] || []),
     ...(grouped['Executive'] || []),
     ...(grouped['Executive Director'] || []),
     ...(grouped['Other Executive Management'] || []),
-    ...(grouped['Senior'] || []),
   ];
+  const topMgmt = executives.length > 0 ? executives : [...(grouped['Senior'] || [])];
 
   const blackPct = pct(topMgmt, countB);
   const bwPct = pct(topMgmt, countBW);
@@ -600,8 +605,36 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
   // Annexe 100(E) graduates the NET VALUE target, not EI. (Audit item 12(b).)
   const eiBlack = clampScore(safeRatio(totalEI, ot.economicInterestTarget, ot.economicInterestMaxPts), ot.economicInterestMaxPts);
   const eiBWO = clampScore(safeRatio(totalEIBWO, ot.womenEITarget, ot.womenEIMaxPts), ot.womenEIMaxPts);
-  const dg = clampScore(safeRatio(totalDG, 0.10, 3), 3);
+  // The designated-group line is the sector's own (Transport QSE has none —
+  // its config says 0). The 10% / 3-point fallback stays for sectors whose
+  // config does not state the line.
+  const dgMax = ot.economicInterestDesignatedGroupMaxPts ?? 3;
+  const dgTarget = ot.economicInterestDesignatedGroupTarget ?? 0.10;
+  const dg = dgMax > 0 ? clampScore(safeRatio(totalDG, dgTarget, dgMax), dgMax) : 0;
   const ne = hasNewEntrant ? ot.newEntrantsMaxPts : 0;
+
+  // Ownership fulfilment (Transport Codes "Ownership fulfilment | Yes | 1"):
+  // every black holder's acquisition debt STATED and nil, and no entity-level
+  // acquisition debt recorded. Mirrors Toolkit ownership.ts ownershipFulfilled.
+  const fulfilmentMax = ot.ownershipFulfilmentMaxPts ?? 0;
+  const blackHolders = shareholders.filter((sh) => sh.blackOwnership > 0);
+  const fulfilled = blackHolders.length > 0
+    && !(outstandingDebt > 0)
+    && blackHolders.every((sh) => typeof sh.outstandingDebt === 'number' && Number.isFinite(sh.outstandingDebt) && sh.outstandingDebt === 0);
+  const fulfilment = fulfilmentMax > 0 && fulfilled ? fulfilmentMax : 0;
+
+  // ESOP / BBOS / co-op bonus: black economic interest held through scheme
+  // rows against the sector's target (Transport: 10%). Mirrors ownership.ts.
+  const esopMax = ot.esopBonusMaxPts ?? 0;
+  let schemeEI = 0;
+  if (esopMax > 0) {
+    for (const sh of shareholders) {
+      if (!/esop|bbos|employee share|broad.?based (ownership|scheme)|co-?operative/.test(`${sh.ownershipType ?? ''} ${sh.name ?? ''}`.toLowerCase())) continue;
+      const pct = hasShares ? sh.shares / totalShares : (shareholders.length > 0 ? 1 / shareholders.length : 0);
+      schemeEI += pct * sh.blackOwnership;
+    }
+  }
+  const esop = esopMax > 0 ? clampScore(safeRatio(schemeEI, ot.esopBonusTarget ?? 0.10, esopMax), esopMax) : 0;
 
   let nv: number;
   const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
@@ -632,7 +665,7 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
     nv = clampScore(safeRatio(totalEI, graduatedTarget, ot.netValueMaxPts), ot.netValueMaxPts);
   }
 
-  const total = clampScore(vrBlack + vrBWO + eiBlack + eiBWO + dg + ne + nv, maxTotal);
+  const total = clampScore(vrBlack + vrBWO + eiBlack + eiBWO + dg + ne + fulfilment + nv + esop, maxTotal);
   const netValueSubMinThreshold = ot.netValueMaxPts * (cfg.pillarConfigs.ownership.subMinimumPercent / 100);
   // Was `fullOwnership || nv >= threshold` — the deleted fast path also spared
   // the entity its one-level discount. The sub-minimum is now measured, only.
@@ -797,6 +830,33 @@ function mapCategory(cat?: string): string {
 // PROCUREMENT (ported from frontend procurement.ts)
 // ===========================================================================================
 
+/** B-BBEE procurement recognition levels (Statement 400) when a config carries none. */
+const STANDARD_PROCUREMENT_RECOGNITION: Readonly<Record<number, number>> = {
+  1: 1.35, 2: 1.25, 3: 1.10, 4: 1.00, 5: 0.80, 6: 0.60, 7: 0.50, 8: 0.10, 0: 0,
+};
+
+/**
+ * Lines the Codes exclude from measured procurement (salaries, pension and
+ * provident funds, taxes and statutory levies, loans, bank and finance
+ * charges, dividends) — never B-BBEE recognition. Same patterns as the
+ * Toolkit's isTmpsExclusion (calculators/procurement.ts).
+ */
+const TMPS_EXCLUSION_LINES: ReadonlyArray<RegExp> = [
+  /\b(provident|pension|retirement)\s+fund\b/i,
+  /\bbargaining\s+council\b/i,
+  /\b(paye|uif|sdl|vat)\b/i,
+  /\b(income\s+tax|sars)\b/i,
+  /\bbank\s+charges\b/i,
+  /\bfinance\s+charges\b/i,
+  /\bloan\b/i,
+  /\bdividend/i,
+  /\b(salaries|salary|wages|payroll|remuneration)\b/i,
+];
+function isTmpsExclusionLine(name: string | undefined): boolean {
+  const n = String(name ?? '').trim();
+  return n !== '' && TMPS_EXCLUSION_LINES.some((re) => re.test(n));
+}
+
 function calcProcurement(suppliers: SupplierInput[], tmps: number, cfg: SectorConfig): PillarScore {
   // A TMPS smaller than its own supplier schedule is a misplaced or mis-scaled
   // figure (Thandanani: a 23-row count landed here and every line clamped to
@@ -826,18 +886,32 @@ function calcProcurement(suppliers: SupplierInput[], tmps: number, cfg: SectorCo
   let empoweringSpend = 0, qseSpend = 0, emeSpend = 0;
   let bo51Spend = 0, bwo30Spend = 0, dgSpend = 0;
 
-  for (const sup of suppliers) {
-    if (sup.isForeignSupplier) continue;
+  // Every line scores RECOGNISED spend — spend x the supplier's B-BBEE
+  // procurement recognition level (Statement 400) — exactly as the Toolkit
+  // calculator does (calculators/procurement.ts). This copy summed RAW spend,
+  // counted Codes-excluded lines (loans, funds, levies) and ignored a supplier
+  // stated as NOT empowering; the two engines disagreed on the same inputs.
+  const multiplier = (level: number): number => {
+    const row = (cfg.recognitionTable ?? []).find((r) => r.beeLevel === level);
+    if (row) return row.multiplier;
+    return STANDARD_PROCUREMENT_RECOGNITION[level] ?? 0;
+  };
 
-    if (sup.beeLevel >= 1 && sup.beeLevel <= 8) empoweringSpend += sup.spend || 0;
-    if (sup.enterpriseType === 'qse') qseSpend += sup.spend || 0;
-    if (sup.enterpriseType === 'eme') emeSpend += sup.spend || 0;
-    if (sup.blackOwnership >= 0.51) bo51Spend += sup.spend || 0;
-    if (sup.blackWomenOwnership >= bwoThreshold) bwo30Spend += sup.spend || 0;
-    const isDG = sup.isDesignatedGroup || (
-      sup.blackOwnership >= 0.51 && ((sup.youthOwnership ?? 0) > 0 || (sup.disabledOwnership ?? 0) > 0)
+  for (const sup of suppliers) {
+    if (isTmpsExclusionLine(sup.name)) continue;
+    if (sup.isForeignSupplier) continue;
+    const spend = Number(sup.spend) || 0;
+    const recognised = spend * multiplier(sup.beeLevel);
+
+    if (sup.isEmpoweringSupplier ?? (sup.beeLevel >= 1 && sup.beeLevel <= 8)) empoweringSpend += recognised;
+    if (sup.enterpriseType === 'qse') qseSpend += recognised;
+    if (sup.enterpriseType === 'eme') emeSpend += recognised;
+    if (sup.blackOwnership >= 0.51) bo51Spend += recognised;
+    if (sup.blackWomenOwnership >= bwoThreshold) bwo30Spend += recognised;
+    const isDG = sup.blackOwnership >= 0.51 && (
+      Boolean(sup.isDesignatedGroup) || (sup.youthOwnership ?? 0) > 0 || (sup.disabledOwnership ?? 0) > 0
     );
-    if (isDG) dgSpend += sup.spend || 0;
+    if (isDG) dgSpend += recognised;
   }
 
   const empScore = clampScore(safeRatio(empoweringSpend, targetAll, pc.allSuppliersMaxPts), pc.allSuppliersMaxPts);
@@ -1284,6 +1358,18 @@ export function calculateAllPillars(
     transportQseMeasuredElements?: TransportQseMeasuredElement[];
   },
 ): AllPillarScores {
+  // Transport QSE with no elected four: the verification agency measures the
+  // four the entity scores HIGHEST on. Both api scoring routes call this
+  // without an election, so the fixed quartet below used to measure the entity
+  // on Ownership, MC, EE and Skills whatever it had evidenced — a certified
+  // 102 (Level 1) pack scored 84 here.
+  if (isTransportQseCfg(config) && inputs.transportQseMeasuredElements?.length !== 4) {
+    return calculateAllPillars(config, {
+      ...inputs,
+      transportQseMeasuredElements: electTransportQseBestFour(config, inputs),
+    });
+  }
+
   const { employees, shareholders, suppliers, contributions, trainingPrograms, financials } = inputs;
 
   const cfgEffective = isTransportQseCfg(config)
@@ -1382,6 +1468,34 @@ export function calculateAllPillars(
       unrecognisedContributionTypes: unrecognised.types,
     },
   };
+}
+
+/**
+ * The four Transport QSE elements this entity scores highest on, each scored
+ * against its full (bonus-inclusive) weighting. Ties keep the Codes' element
+ * order. Mirrors the Toolkit store's resolveChooseOneElectives for the
+ * `transport_qse_elective` group of four.
+ */
+export function electTransportQseBestFour(
+  config: SectorConfig,
+  inputs: Parameters<typeof calculateAllPillars>[1],
+): TransportQseMeasuredElement[] {
+  const { employees, shareholders, suppliers, contributions, trainingPrograms, financials } = inputs;
+  const npat = financials.npat > 0 ? financials.npat : resolveDeemedNpat(financials.revenue, config);
+  const scores: Array<[TransportQseMeasuredElement, number]> = [
+    ['ownership', calcOwnership(shareholders, financials, config).score],
+    ['managementControl', calcTransportQseManagement(employees, config).score],
+    ['employmentEquity', calcTransportQseEmploymentEquity(employees, config, inputs.province).score],
+    ['skillsDevelopment', calcSkills(trainingPrograms, financials.leviableAmount, financials.headcount || employees.length, config).score],
+    ['preferentialProcurement', calcProcurement(suppliers, financials.tmps, config).score],
+    ['enterpriseDevelopment', calcEsd(contributions, npat, !!inputs.graduationBonus, !!inputs.jobsCreatedBonus, config).ed.score],
+    ['socioEconomicDevelopment', calcSed(contributions, npat, config).score],
+  ];
+  return scores
+    .map(([element, score], order) => ({ element, score, order }))
+    .sort((a, b) => b.score - a.score || a.order - b.order)
+    .slice(0, 4)
+    .map((s) => s.element);
 }
 
 function findLevel(totalPoints: number, thresholds: Array<{ level: number; minPoints: number; recognition: number }>): { level: number; recognition: number } {

@@ -88,6 +88,20 @@ export interface OwnershipTargets {
   /** Transport Sector (Large): designated-group economic interest indicator row */
   economicInterestDesignatedGroupTarget?: number;
   economicInterestDesignatedGroupMaxPts?: number;
+  /**
+   * "Ownership fulfilment" (Transport Codes, Yes/No): awarded in full when the
+   * black participants' ownership is fulfilled — every black holder's
+   * acquisition debt is STATED and is nil. Unstated debt earns nothing: the
+   * point is evidence of a paid-up stake, never a default.
+   */
+  ownershipFulfilmentMaxPts?: number;
+  /**
+   * Bonus: economic interest of black participants in ESOPs, broad-based
+   * ownership schemes or co-operatives, against `esopBonusTarget` (Transport
+   * Codes: 10%). A scheme is recognised only from the register row itself.
+   */
+  esopBonusMaxPts?: number;
+  esopBonusTarget?: number;
 }
 
 export interface MCTargets {
@@ -1698,15 +1712,28 @@ export const TRANSPORT_QSE: SectorConfig = {
   },
   targets: {
     ownership: {
-      // voting 25%+1 vote = 6 pts; EI 25% = 9 pts; fulfilment = 1 pt (newEntrants);
+      // voting 25%+1 vote = 6 pts; EI 25% = 9 pts; ownership fulfilment (Yes) = 1 pt;
       // net value 60% = 9 pts; bonus black women 10% = 2 pts; bonus ESOP/BBOS/co-ops 10% = 1 pt
       // Total: 6+9+1+9+2+1 = 28 ✓
+      //
+      // Each line is now scored as the indicator the Codes name. Two were
+      // borrowed slots: ownership fulfilment sat in `newEntrantsMaxPts` and was
+      // scored as black-NEW-ENTRANT economic interest against 2% (the web) or
+      // awarded whenever any new entrant was flagged (this engine) — neither is
+      // what "Ownership fulfilment | Yes | 1" measures. The ESOP/BBOS/co-op
+      // bonus sat in `womenEIMaxPts` and was scored from black-WOMEN economic
+      // interest, so a black woman owner with no scheme earned it. There is no
+      // separate black-women economic-interest line on this scorecard, and no
+      // new-entrant or designated-group line.
       votingRightsTarget: 0.25, votingRightsMaxPts: 6,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,      // bonus: black women
       economicInterestTarget: 0.25, economicInterestMaxPts: 9,
-      womenEITarget: 0.10, womenEIMaxPts: 1,              // bonus: ESOP/BBOS/co-ops
+      womenEITarget: 0.10, womenEIMaxPts: 0,              // no such line on this scorecard
       netValueMaxPts: 9,                                   // net value 60%
-      newEntrantsMaxPts: 1,                                // ownership fulfilment
+      newEntrantsMaxPts: 0,                                // no such line on this scorecard
+      economicInterestDesignatedGroupMaxPts: 0,            // no such line on this scorecard
+      ownershipFulfilmentMaxPts: 1,                        // ownership fulfilment (Yes)
+      esopBonusMaxPts: 1, esopBonusTarget: 0.10,           // bonus: ESOP/BBOS/co-ops
     },
     managementControl: {
       // Top management black 50.1% = 25 pts; bonus black women 25% = 2 pts; Total: 27 ✓

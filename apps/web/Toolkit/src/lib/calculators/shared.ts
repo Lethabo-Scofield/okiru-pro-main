@@ -238,3 +238,41 @@ export function formatScore(score: number): string {
 export function supplierSumTmps(suppliers: { spend?: number }[]): number {
   return suppliers.reduce((acc, s) => acc + (s.spend || 0), 0);
 }
+
+/**
+ * Where the TMPS being scored came from.
+ *  - `manual`: the user pinned it on the Financials page.
+ *  - `stated`: a document states it (the gathering workbook's labelled
+ *    post-exclusion total) and the workbook sync persisted it.
+ *  - `held`: documents stated it but it could not be used (two stated totals
+ *    disagree, or the stated cell held #REF!); nothing is scored until the user
+ *    settles it.
+ *  - `supplier_spend_sum`: nobody stated one, so it is the schedule's sum —
+ *    labelled as computed, never shown as the client's figure.
+ */
+export type TmpsSource = 'manual' | 'stated' | 'held' | 'supplier_spend_sum';
+
+/**
+ * The TMPS to score, and where it came from.
+ *
+ * TMPS is the denominator of every Preferential Procurement line. The live
+ * store used to recompute it as the supplier-schedule sum on every load and
+ * every supplier edit unless the user had pinned it — so a TMPS the client's
+ * own workbook STATED (and the sync had persisted, labelled "stated") never
+ * reached the score. The schedule sum is the floor of TMPS, not TMPS: scored
+ * against it, every supplier the schedule lists becomes a larger share of a
+ * smaller total. A stated figure now wins; a held one scores nothing until it
+ * is settled; the sum is used only when nothing was stated, and says so.
+ */
+export function resolveTmps(input: {
+  persistedTmps: number;
+  manualOverride: boolean;
+  tmpsSource?: unknown;
+  tmpsHeld?: unknown;
+  suppliers: { spend?: number }[];
+}): { tmps: number; source: TmpsSource } {
+  if (input.manualOverride) return { tmps: input.persistedTmps || 0, source: 'manual' };
+  if (input.tmpsSource === 'stated' && input.persistedTmps > 0) return { tmps: input.persistedTmps, source: 'stated' };
+  if (input.tmpsHeld) return { tmps: 0, source: 'held' };
+  return { tmps: supplierSumTmps(input.suppliers), source: 'supplier_spend_sum' };
+}

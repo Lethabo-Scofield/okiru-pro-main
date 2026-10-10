@@ -15,9 +15,10 @@
  * DocumentUploadStart.handleCreate calls): the sector and year end the form
  * takes from the workbook (asserted against the key, never given), the merged
  * sections stamped with the form → reconcileEntity → projectWorkbookToClient →
- * the sector calculators, with TMPS as the Toolkit store scores it (the supplier
- * schedule's sum; the stated figure is reported beside it) → best four of
- * seven. Only Transport QSE is wired.
+ * claim-vs-evidence verification (CLAIMED scored, EVIDENCED reported) → the
+ * sector calculators, with TMPS as the Toolkit store scores it (resolveTmps: a
+ * stated figure, else the supplier schedule's sum, both reported) → best four
+ * of seven. Only Transport QSE is wired.
  *
  * - Writes e2e.json beside the case.
  * - First run (or UPDATE_BASELINE=1) records e2e-baseline.json beside the key.
@@ -31,10 +32,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { mapParserCaseToWorkbookSections, type ParserCaseLike } from "@/lib/parserWorkbookMap";
-import { assembleCreateSections, formAfterRead, injectCase } from "@/lib/createFlowAssembly";
+import { assembleCreateSections, caseExtractions, formAfterRead, injectCase } from "@/lib/createFlowAssembly";
 import { normalizeSectorDeterministic } from "@/lib/excelImport";
 import { reconcileEntity } from "@/lib/reconciliation/reconcileEntity";
-import { supplierSumTmps } from "@toolkit/lib/calculators/shared";
+import { resolveTmps, supplierSumTmps } from "@toolkit/lib/calculators/shared";
+import { applyOverlayToSections, periodFromYearEnd, scoreBothWays, verifyClaims } from "../../../../../api/pipeline/verification/index.js";
 import { projectWorkbookToClient, type WorkbookData } from "../../../../server/workbookRoutes";
 import { TRANSPORT_QSE_CALCULATOR_CONFIG as CFG } from "@toolkit/lib/sectors/transport-qse";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
@@ -118,35 +120,55 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
     }
     const reconciled = reconcileEntity(sections as never, { sectorCode: form.sector, scorecardType: size, entityAliases: [companyName, ...aliases] });
 
-    const wb: WorkbookData = {
-      companyId: "eval", ownerOrganizationId: null, ownerUserId: "eval",
-      sections: reconciled.sections as never, updatedAt: new Date().toISOString(),
-    };
-    const p = projectWorkbookToClient(wb);
-    const fin = (p.financials as Record<string, unknown> | undefined) ?? {};
-    const finMeta = (sections["financial-information"]?.meta ?? {}) as Record<string, unknown>;
-    const npat = Number(fin.npat ?? finMeta.npat ?? 0);
-    const statedTmps = Number(fin.tmps ?? finMeta.tmps ?? 0);
-    // TMPS as the Toolkit store scores it: on every load it is the sum of the
-    // supplier schedule's spend, unless someone pinned it — and the create flow
-    // never pins it. The stated figure is reported beside it, not scored.
-    const tmps = supplierSumTmps(p.suppliers as Array<{ spend?: number }>);
-    const leviable = Number(fin.payroll ?? finMeta.payroll ?? finMeta.leviable ?? 0);
+    // Claim-vs-evidence verification, as the create flow runs it: the
+    // rule-decided replacements go into the saved (CLAIMED) sections, and
+    // EVIDENCED drops what the documents do not prove. The measured year is the
+    // one the form stamped (financialYearEnd), as in the create flow.
+    const verification = verifyClaims({ sections: reconciled.sections as never, evidence: caseExtractions(parserCase) as never });
+    if (key.yearEnd) expect(verification.period, "the measured year the checks use").toEqual(periodFromYearEnd(key.yearEnd));
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const any = (v: unknown) => v as any;
-    const mgmtData = any({ id: "", clientId: "", employees: p.employees });
-    const elems = [
-      { name: "Ownership", score: calculateOwnershipScore(any({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }), CFG).total },
-      { name: "Management Control", score: calculateTransportQseManagement(mgmtData, CFG).score },
-      { name: "Employment Equity", score: calculateTransportQseEmploymentEquity(mgmtData, CFG, "Gauteng").score },
-      { name: "Skills Development", score: calculateSkillsScore(any({ id: "", clientId: "", leviableAmount: leviable, trainingPrograms: any(p).trainingPrograms ?? [] }), CFG, "Gauteng", 2025).total },
-      { name: "Preferential Procurement", score: calculateProcurementScore(any({ id: "", clientId: "", tmps, suppliers: p.suppliers }), CFG).total },
-      { name: "Enterprise Development", score: calculateEsdScore(any({ id: "", clientId: "", contributions: p.esdContributions }), npat, CFG).edTotal },
-      { name: "Socio-Economic Development", score: calculateSedScore(any({ id: "", clientId: "", contributions: p.sedContributions }), npat, CFG).total },
-    ];
-    const bestFour = new Set([...elems].sort((a, b) => b.score - a.score).slice(0, 4).map((e) => e.name));
-    const total = [...elems].filter((e) => bestFour.has(e.name)).reduce((s, e) => s + e.score, 0);
+    const scoreSections = (scored: Record<string, unknown>) => {
+      const wb: WorkbookData = {
+        companyId: "eval", ownerOrganizationId: null, ownerUserId: "eval",
+        sections: scored as never, updatedAt: new Date().toISOString(),
+      };
+      const p = projectWorkbookToClient(wb);
+      const fin = (p.financials as Record<string, unknown> | undefined) ?? {};
+      const finMeta = ((scored["financial-information"] as { meta?: Record<string, unknown> } | undefined)?.meta ?? {});
+      const npat = Number(fin.npat ?? finMeta.npat ?? 0);
+      const statedTmps = Number(fin.tmps ?? finMeta.tmps ?? 0);
+      // TMPS as the Toolkit store scores it (resolveTmps): a figure the
+      // documents state wins; the schedule's sum only when none is stated.
+      const resolved = resolveTmps({
+        persistedTmps: statedTmps,
+        manualOverride: false,
+        tmpsSource: fin.tmpsSource,
+        tmpsHeld: fin.tmpsHeld,
+        suppliers: p.suppliers as Array<{ spend?: number }>,
+      });
+      const tmps = resolved.tmps;
+      const leviable = Number(fin.payroll ?? finMeta.payroll ?? finMeta.leviable ?? 0);
+      const mgmtData = any({ id: "", clientId: "", employees: p.employees });
+      const elems = [
+        { name: "Ownership", score: calculateOwnershipScore(any({ shareholders: p.shareholders, companyValue: 1e8, outstandingDebt: 0, yearsHeld: 5 }), CFG).total },
+        { name: "Management Control", score: calculateTransportQseManagement(mgmtData, CFG).score },
+        { name: "Employment Equity", score: calculateTransportQseEmploymentEquity(mgmtData, CFG, "Gauteng").score },
+        { name: "Skills Development", score: calculateSkillsScore(any({ id: "", clientId: "", leviableAmount: leviable, trainingPrograms: any(p).trainingPrograms ?? [] }), CFG, "Gauteng", 2025).total },
+        { name: "Preferential Procurement", score: calculateProcurementScore(any({ id: "", clientId: "", tmps, suppliers: p.suppliers }), CFG).total },
+        { name: "Enterprise Development", score: calculateEsdScore(any({ id: "", clientId: "", contributions: p.esdContributions }), npat, CFG).edTotal },
+        { name: "Socio-Economic Development", score: calculateSedScore(any({ id: "", clientId: "", contributions: p.sedContributions }), npat, CFG).total },
+      ];
+      const bestFour = new Set([...elems].sort((a, b) => b.score - a.score).slice(0, 4).map((e) => e.name));
+      const total = [...elems].filter((e) => bestFour.has(e.name)).reduce((sum, e) => sum + e.score, 0);
+      return { p, npat, tmps, tmpsSource: resolved.source, statedTmps, leviable, elems, bestFour, total };
+    };
+
+    const claimedSections = applyOverlayToSections(reconciled.sections as never, verification, "claimed") as Record<string, unknown>;
+    const { p, npat, tmps, tmpsSource, statedTmps, leviable, elems, bestFour, total } = scoreSections(claimedSections);
+    const both = scoreBothWays(reconciled.sections as never, verification, (s) => scoreSections(s as Record<string, unknown>).total);
+    const evidencedElems = scoreSections(applyOverlayToSections(reconciled.sections as never, verification, "evidenced") as Record<string, unknown>).elems;
 
     const certified = key.certified?.elements ?? {};
     const comparison = elems.map((e) => {
@@ -161,13 +183,16 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
     });
     const within = comparison.filter((c) => c.within === true).length;
     const compared = comparison.filter((c) => c.within !== null).length;
-    const procurementAtStatedTmps = calculateProcurementScore(any({ id: "", clientId: "", tmps: statedTmps, suppliers: p.suppliers }), CFG).total;
+    const supplierSum = supplierSumTmps(p.suppliers as Array<{ spend?: number }>);
+    const procurementAtSupplierSum = calculateProcurementScore(any({ id: "", clientId: "", tmps: supplierSum, suppliers: p.suppliers }), CFG).total;
     const report = {
       form: { sector: form.sector, yearEnd: form.yearEnd, size, from: "workbook Instructions sheet" },
       tmps: {
         scored: tmps,
+        source: tmpsSource,
         stated: statedTmps,
-        procurementAtStatedTmps: Math.round(procurementAtStatedTmps * 100) / 100,
+        supplierSum,
+        procurementAtSupplierSum: Math.round(procurementAtSupplierSum * 100) / 100,
       },
       certified: { score: key.certified?.score ?? null, level: key.certified?.level ?? null },
       ours: { total: Math.round(total * 100) / 100, level: total >= 100 ? 1 : total >= 95 ? 2 : total >= 90 ? 3 : "below 3" },
@@ -175,6 +200,19 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
       within,
       compared,
       elements: comparison,
+      verification: {
+        claimed: Math.round(both.claimed * 100) / 100,
+        evidenced: Math.round(both.evidenced * 100) / 100,
+        evidencedElements: evidencedElems.map((e) => ({ element: e.name, ours: Math.round(e.score * 100) / 100 })),
+        counts: verification.counts,
+        byCheck: Object.fromEntries(
+          [...new Set(verification.checks.map((c) => c.kind))].map((kind) => [kind,
+            Object.fromEntries(Object.entries(verification.checks.filter((c) => c.kind === kind)
+              .reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {})))]),
+        ),
+        needsYou: both.needsYou.map((n) => ({ check: n.checkId.split(":")[0], changesScore: n.changesScore, choices: n.choices.map((c) => ({ held: c.held, total: Math.round(c.total * 100) / 100 })) })),
+        rulesApplied: verification.checks.filter((c) => c.ops.some((op) => op.basis === "both")).map((c) => ({ check: c.kind, rule: c.rule })),
+      },
       ingested: {
         shareholders: p.shareholders.length,
         employees: p.employees.length,

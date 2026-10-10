@@ -558,6 +558,8 @@ export function CompanyPicker({
       verdicts?: unknown;
       /** Reconciliation result (issues + entity summary) for the review page. */
       reconcile?: unknown;
+      /** Claim-vs-evidence verification report, for the score page. */
+      verification?: unknown;
       /** Library ids of the uploads behind this create — filed under the company. */
       documentIds?: string[];
     },
@@ -614,6 +616,15 @@ export function CompanyPicker({
         // The reconciliation issues + entity summary — the review page renders
         // these triaged by severity (what we fixed / what needs you / what's missing).
         sessionStorage.setItem(`okiru-reconcile-${clientId}`, JSON.stringify(opts.reconcile));
+      }
+      if (opts?.verification !== undefined) {
+        // The claim-vs-evidence report, for the score page. It is also kept on
+        // the workbook, which the page reads when this session has no copy.
+        try {
+          sessionStorage.setItem(`okiru-verification-${clientId}`, JSON.stringify(opts.verification));
+        } catch {
+          // Too large for session storage: the page reads the workbook copy.
+        }
       }
       const importRes = await fetch(
         `${API_BASE}/api/workbook/${encodeURIComponent(clientId)}/import`,
@@ -901,6 +912,7 @@ export function CompanyPicker({
                 landOn: "estimate",
                 verdicts: extras?.verdicts,
                 reconcile: extras?.reconcile,
+                verification: extras?.verification,
                 documentIds: extras?.documentIds,
               });
             }}
@@ -942,6 +954,7 @@ export function CompanyPicker({
                   await createFromSections(companyName, sections as WorkbookSectionsInput, {
                     landOn: "estimate",
                     verdicts: extras?.verdicts,
+                    verification: extras?.verification,
                     documentIds: extras?.documentIds,
                   });
                 }}

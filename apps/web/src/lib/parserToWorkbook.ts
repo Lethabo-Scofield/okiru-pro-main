@@ -47,6 +47,47 @@ export interface WorkbookRow extends Record<string, unknown> {
   _sourceFiles?: string[];
   /** See DERIVED_FROM_FLAG_KEY. */
   _derivedFromFlag?: Record<string, string>;
+  /**
+   * The READERS this row's values came from — one per extraction (a file read
+   * by one document reader). Linking-time bookkeeping only: stripped before the
+   * rows leave parserExtractionsToWorkbook. See readerId().
+   */
+  _readers?: string[];
+  /** Column → the reader whose value the cell holds. Linking-time only. */
+  _cellReaders?: Record<string, string>;
+  /** See CONFLICTS_KEY. */
+  _conflicts?: Record<string, RowConflictCandidate[]>;
+}
+
+/**
+ * Reserved row key: cells the documents DISAGREE on, where the choice moves
+ * the score. Column key → every value stated, each with the files that stated
+ * it. The cell holds the conservative value (the one that claims less) until
+ * the user answers; reconciliation raises a blocking item for each entry and
+ * the verification layer scores both choices. Persisted with the row.
+ */
+export const CONFLICTS_KEY = "_conflicts";
+
+export interface RowConflictCandidate {
+  value: unknown;
+  sources: string[];
+}
+
+/**
+ * One reader of one document: the file plus the extraction that read it. Two
+ * extractions of the SAME file (the model's read of a ledger and the
+ * deterministic sheet reader of that same ledger) are two readers of one
+ * document — the same facts read twice — while the rows ONE reader produced
+ * are that document's own line items. Numbered per extraction, so two reads
+ * that happen to share a document id are still two reads.
+ */
+const READER_SEPARATOR = "\u0000";
+let readCounter = 0;
+function readerId(extraction: { sourceFile: string; documentId: string }, read: number): string {
+  return `${extraction.sourceFile}${READER_SEPARATOR}${extraction.documentId}${READER_SEPARATOR}${read}`;
+}
+function fileOfReader(reader: string): string {
+  return reader.split(READER_SEPARATOR)[0];
 }
 
 /**
@@ -76,7 +117,7 @@ function setDerived(row: WorkbookRow, column: string, note: string | undefined):
 }
 
 /** Row keys that carry bookkeeping, never a cell's value. */
-const ROW_BOOKKEEPING = new Set(["_id", "_sourceFiles", DERIVED_FROM_FLAG_KEY]);
+const ROW_BOOKKEEPING = new Set(["_id", "_sourceFiles", DERIVED_FROM_FLAG_KEY, "_readers", "_cellReaders", CONFLICTS_KEY, "_mcPosition"]);
 
 /**
  * One field, already compared across every document by the parser's resolver.
@@ -195,6 +236,31 @@ function nextRowId(): string {
 }
 
 /**
+ * A new row from one reader's injected cells, carrying where every cell came
+ * from: the file, the reader, which cells were inferred rather than stated, and
+ * the Management Control position the row states.
+ */
+function readRow(
+  injected: { cells: Record<string, unknown>; inferred?: Record<string, string>; statedPosition?: string },
+  extraction: { sourceFile: string; documentId: string },
+  read: number,
+): WorkbookRow {
+  const reader = readerId(extraction, read);
+  const row: WorkbookRow = {
+    _id: nextRowId(),
+    ...injected.cells,
+    _sourceFiles: [extraction.sourceFile],
+    _readers: [reader],
+    _cellReaders: Object.fromEntries(Object.keys(injected.cells).map((column) => [column, reader])),
+  };
+  for (const [column, note] of Object.entries(injected.inferred ?? {})) {
+    if (!cellBlank(row[column])) setDerived(row, column, note);
+  }
+  if (injected.statedPosition) row._mcPosition = { [injected.statedPosition]: [extraction.sourceFile] };
+  return row;
+}
+
+/**
  * ── Cross-document row linking ─────────────────────────────────────────────
  *
  * One supplier's evidence arrives as THREE documents: the workbook schedule
@@ -246,7 +312,11 @@ const IDENTITY_COLUMNS: Partial<Record<WorkbookSectionKey, string[]>> = {
   procurement: ["bbbeeLevel", "empoweringSupplier", "currentSize", "registrationNumber", "vatNumber", "certificateExpiryDate", "currentBlackOwnership", "currentBlackFemaleOwnership"],
   sed: ["percentBenefitingBlack"],
   ownership: ["race", "gender", "idNumber"],
-  "management-control": ["race", "gender", "idNumber"],
+  // Foreign nationality is who the person IS: when the EE register flags
+  // "Mokoena, Thabo" as foreign, the Management Control sheet's "Thabo
+  // Mokoena" is the same foreign national, not a second, South African one
+  // counted into top management.
+  "management-control": ["race", "gender", "idNumber", "isForeign"],
   "skills-development": ["race", "gender", "idNumber"],
 };
 
@@ -334,40 +404,49 @@ function shareASourceFile(a: WorkbookRow, b: WorkbookRow): boolean {
   return left.some((file) => right.includes(file));
 }
 
+/** Rows that are a line of a table the document printed (a register, a schedule), not a lone reading. */
+const registerLines = new WeakSet<WorkbookRow>();
+
+/** Did ONE reader produce both rows — i.e. are they line items of one read? */
+function shareAReader(a: WorkbookRow, b: WorkbookRow): boolean {
+  const left = a._readers ?? [];
+  const right = b._readers ?? [];
+  return left.some((reader) => right.includes(reader));
+}
+
+/** Both rows know which readers they came from (rows built here always do). */
+function bothTrackReaders(a: WorkbookRow, b: WorkbookRow): boolean {
+  return (a._readers?.length ?? 0) > 0 && (b._readers?.length ?? 0) > 0;
+}
+
 /**
- * The READS each row came from — one per extraction, so a row merged from
- * three documents carries three.
+ * Are these two rows line items of the same read — never to be merged?
  *
  * "Two rows from the same document are two line items" is a rule about one
  * READ of a document: a register's lines. The parser reads many files more
  * than once — a supplier ledger as a ledger AND as a table, a workbook sheet by
  * the table reader AND by a certificate spec that picked one supplier off it.
- * Two reads of one file state the same facts twice. Judged by file name, the
- * second read was refused as "a second line of the same document" and became
- * its own row: a supplier three times on the grid, its spend counted twice.
- *
- * Kept beside the row, not on it — the row is what the workbook stores.
+ * Two reads of one file state the same facts twice; keyed by FILE, the second
+ * read was refused as "a second line of the same document" and became its own
+ * row — one supplier's ledger total scored twice. So by READER (one per
+ * extraction, see readerId) when both rows know theirs; by file for rows built
+ * elsewhere, which carry no reader.
  */
-const rowReads = new WeakMap<WorkbookRow, Set<number>>();
-let readCounter = 0;
+function sameRead(a: WorkbookRow, b: WorkbookRow): boolean {
+  return bothTrackReaders(a, b) ? shareAReader(a, b) : shareASourceFile(a, b);
+}
 
-/** Rows that are a line of a table the document printed (a register, a schedule), not a lone reading. */
-const registerLines = new WeakSet<WorkbookRow>();
-
-/** Are these two rows lines of ONE read? Falls back to the file for rows built elsewhere. */
-function fromTheSameRead(a: WorkbookRow, b: WorkbookRow): boolean {
-  const left = rowReads.get(a);
-  const right = rowReads.get(b);
-  if (left && right) return Array.from(left).some((read) => right.has(read));
-  return shareASourceFile(a, b);
+/** The file whose reader put this cell's value on the row, when known. */
+function fileOfCell(row: WorkbookRow, column: string): string | undefined {
+  const reader = row._cellReaders?.[column];
+  return reader ? fileOfReader(reader) : undefined;
 }
 
 /**
- * The files that STATED each cell's value, so precedence between two figures
- * follows the document each figure came from — not every document the row has
- * since absorbed. A schedule row that a ledger's name-only read had already
- * joined carried the ledger's file name, so the ledger's own spend arriving
- * next was weighed as ledger-against-ledger and lost to the schedule's figure.
+ * The files that STATED each cell's value — every one, so a value three
+ * documents state counts three — and precedence between two figures follows
+ * the documents each figure came from, not every document the row has since
+ * absorbed. Kept beside the row, not on it: the row is what the workbook stores.
  */
 const cellSourceMap = new WeakMap<WorkbookRow, Map<string, string[]>>();
 
@@ -389,18 +468,35 @@ export interface ReconciliationFinding {
   entity: string;
   column: string;
   message: string;
+  /** The row the finding is about, when it is about one row. */
+  rowId?: string;
 }
 
 interface MergeDecision {
   merge: boolean;
   finding?: string;
-  /** The column the finding is about. */
-  column?: string;
+  /** The column the finding is about (it used to be reported as "spend" whatever it was). */
+  findingColumn?: string;
 }
 
-/** Did this cell's value come from an accounting SOURCE document? */
-function fromAccountingRecord(row: WorkbookRow, column: string): boolean {
-  return cellSources(row, column).some((file) => /ledger|statement|accounts?\s*payable/i.test(file));
+const ACCOUNTING_RECORD = /ledger|statement|accounts?\s*payable/i;
+
+/**
+ * Does this row's evidence for `column` come from an accounting SOURCE
+ * document? Asked of the files that supplied the CELL when that is known: a
+ * schedule row that a name-only read of a ledger linked into still carries the
+ * schedule's figure, and treating it as ledger evidence because the ledger's
+ * file had joined its provenance kept the schedule figure over the ledger's.
+ */
+function fromAccountingRecord(row: WorkbookRow, column?: string): boolean {
+  const cellFile = column ? fileOfCell(row, column) : undefined;
+  if (cellFile) return ACCOUNTING_RECORD.test(cellFile);
+  return (column ? cellSources(row, column) : row._sourceFiles ?? []).some((file) => ACCOUNTING_RECORD.test(file));
+}
+
+/** The file to name for a cell's value in a finding. */
+function fileNamedFor(row: WorkbookRow, column: string, fallback: string): string {
+  return fileOfCell(row, column) ?? cellSources(row, column)[0] ?? fallback;
 }
 
 /**
@@ -446,7 +542,8 @@ function repeatedPersonLine(section: WorkbookSectionKey, a: WorkbookRow, b: Work
  * people. The level more documents state is kept (a register repeated in
  * three workbooks against one prior-year sheet); between equals, the LOWER
  * level, because a higher one claims more management-control credit and that
- * is not ours to grant on a guess. Either way the difference is reported.
+ * is not ours to grant on a guess. Either way the difference is reported, and
+ * both values are recorded for the user (CONFLICTS_KEY).
  */
 function keptOccupationalLevel(a: WorkbookRow, b: WorkbookRow, column: string): "a" | "b" {
   const aCount = cellSources(a, column).length;
@@ -466,7 +563,7 @@ function keptOccupationalLevel(a: WorkbookRow, b: WorkbookRow, column: string): 
  * - SAME read of a document: two line items, never merged. Thirteen monthly
  *   R500 donations to one beneficiary are thirteen contributions; collapsing
  *   equal figures deletes money. (A second READ of the same file is not a
- *   second line — see rowReads.)
+ *   second line — see sameRead.)
  * - DIFFERENT documents: the same fact stated twice — a supplier's ledger and
  *   the client's schedule both reporting that supplier's spend. Merged, so a
  *   ledger corroborates a schedule row instead of doubling it.
@@ -486,17 +583,35 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
 
   const instanceColumns = INSTANCE_COLUMNS[section];
   if (instanceColumns) {
-    if (fromTheSameRead(a, b)) return { merge: false };
+    if (sameRead(a, b)) return { merge: false };
     const differ = instanceColumns.some((column) =>
       !cellBlank(a[column]) && !cellBlank(b[column]) && !cellsAgree(a[column], b[column]));
     if (differ) return { merge: false };
   }
 
+  // Stated-vs-stated disagreements on a NON-numeric evidence column, settled
+  // after the loop once we know the rows do merge.
+  const textual: string[] = [];
+
   for (const column of EVIDENCE_COLUMNS[section] ?? []) {
     if (cellBlank(a[column]) || cellBlank(b[column])) continue;
-    if (fromTheSameRead(a, b) && !repeatedPersonLine(section, a, b)) return { merge: false };
+    if (sameRead(a, b) && !repeatedPersonLine(section, a, b)) return { merge: false };
     if (cellsAgree(a[column], b[column])) continue;
-    findingColumn = column;
+
+    // Two readers of ONE document that disagree on the same entity's figure
+    // are not two documents corroborating each other — one of them misread.
+    // Neither rule below (evidence class, lower figure) applies, and pairing
+    // them could fold two genuinely separate line items into one. Kept apart,
+    // and said so.
+    const fileA = fileOfCell(a, column);
+    const fileB = fileOfCell(b, column);
+    if (fileA && fileB && fileA === fileB) {
+      return {
+        merge: false,
+        findingColumn: column,
+        finding: `${entity}: two readings of ${fileA} disagree on ${column} (${String(a[column])} vs ${String(b[column])}). Both rows are kept; check the document and remove the misread one.`,
+      };
+    }
 
     const left = Number(String(a[column]).replace(/[R\s,]/g, ""));
     const right = Number(String(b[column]).replace(/[R\s,]/g, ""));
@@ -504,29 +619,72 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
       const aLedger = fromAccountingRecord(a, column);
       const bLedger = fromAccountingRecord(b, column);
       const useLedger = aLedger !== bLedger;
-      const keep = useLedger ? (aLedger ? left : right) : Math.min(left, right);
-      const keptRow = useLedger ? (aLedger ? a : b) : (left <= right ? a : b);
-      const otherRow = keptRow === a ? b : a;
-      const keptFile = cellSources(keptRow, column)[0] ?? "one document";
-      const otherFile = cellSources(otherRow, column)[0] ?? "another document";
-      const other = keep === left ? right : left;
+      const keepA = useLedger ? aLedger : left <= right;
+      const keep = keepA ? left : right;
+      const keptFile = fileNamedFor(keepA ? a : b, column, "one document");
+      const otherFile = fileNamedFor(keepA ? b : a, column, "another document");
+      const other = keepA ? right : left;
       finding = `${entity}: ${keptFile} states ${column} of ${keep.toLocaleString()} but ${otherFile} says ${other.toLocaleString()} — a difference of ${Math.abs(other - keep).toLocaleString()}. ${useLedger ? "The accounting record's figure is being used" : "The lower figure is being used"}; confirm which is in scope.`;
-      setCellSources(a, column, cellSources(keptRow, column));
+      findingColumn = column;
+      setCellSources(a, column, cellSources(keepA ? a : b, column));
       a[column] = keep;
-    } else if (section === "management-control" && column === "occupationalLevel") {
+      if (!keepA && b._cellReaders?.[column]) {
+        a._cellReaders = { ...(a._cellReaders ?? {}), [column]: b._cellReaders[column] };
+      }
+    } else {
+      textual.push(column);
+    }
+  }
+
+  for (const column of textual) {
+    // A value READ FROM A JOB TITLE (or other inference) never outranks one a
+    // document states: the stated value takes the cell, silently.
+    const aDerived = Boolean(derivedNote(a, column));
+    const bDerived = Boolean(derivedNote(b, column));
+    if (aDerived !== bDerived) {
+      if (aDerived) {
+        a[column] = b[column];
+        setDerived(a, column, undefined);
+        setCellSources(a, column, cellSources(b, column));
+        if (b._cellReaders?.[column]) a._cellReaders = { ...(a._cellReaders ?? {}), [column]: b._cellReaders[column] };
+      }
+      continue;
+    }
+    // Two documents STATE different values. Record both, with every document
+    // that states each: arrival order is not evidence. Which one the cell holds
+    // until the user answers is the section's call (settleManagementBands) —
+    // never silently the first.
+    for (const file of cellSources(a, column).length ? cellSources(a, column) : [fileNamedFor(a, column, "")]) recordConflict(a, column, a[column], file);
+    for (const file of cellSources(b, column).length ? cellSources(b, column) : [fileNamedFor(b, column, "")]) recordConflict(a, column, b[column], file);
+    findingColumn = column;
+    if (section === "management-control" && column === "occupationalLevel") {
       const kept = keptOccupationalLevel(a, b, column) === "a" ? a : b;
       const other = kept === a ? b : a;
       finding = `${entity}: ${cellSources(kept, column).join(", ") || "one document"} ${cellSources(kept, column).length === 1 ? "puts" : "put"} this person at ${String(kept[column])}, but ${cellSources(other, column).join(", ") || "another document"} says ${String(other[column])}. One person is one row: ${String(kept[column])} is being used — confirm their level.`;
       if (kept === b) {
         a[column] = b[column];
         setCellSources(a, column, cellSources(b, column));
+        if (b._cellReaders?.[column]) a._cellReaders = { ...(a._cellReaders ?? {}), [column]: b._cellReaders[column] };
       }
-    } else {
-      finding = `${entity}: documents disagree on ${column} (${String(a[column])} vs ${String(b[column])}).`;
+      continue;
     }
+    finding = `${entity}: documents disagree on ${column} (${String(a[column])} vs ${String(b[column])}).`;
   }
 
-  return { merge: true, finding, column: findingColumn };
+  return { merge: true, finding, findingColumn };
+}
+
+/** Add one stated value (and the file that stated it) to a row's conflict on a column. */
+function recordConflict(row: WorkbookRow, column: string, value: unknown, sourceFile: string): void {
+  if (cellBlank(value)) return;
+  const conflicts = (row._conflicts ??= {});
+  const list = (conflicts[column] ??= []);
+  const same = list.find((c) => cellsAgree(c.value, value));
+  if (same) {
+    if (sourceFile && !same.sources.includes(sourceFile)) same.sources.push(sourceFile);
+    return;
+  }
+  list.push({ value, sources: sourceFile ? [sourceFile] : [] });
 }
 
 /**
@@ -535,6 +693,10 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
  * STATES replaces (a certificate's 75% beats a schedule's "51% or more: Yes").
  */
 function mergeInto(into: WorkbookRow, from: WorkbookRow, options: { only?: ReadonlySet<string> } = {}): void {
+  const takeReader = (column: string) => {
+    const reader = from._cellReaders?.[column];
+    if (reader) into._cellReaders = { ...(into._cellReaders ?? {}), [column]: reader };
+  };
   for (const [column, value] of Object.entries(from)) {
     if (ROW_BOOKKEEPING.has(column) || cellBlank(value)) continue;
     if (options.only && !options.only.has(column)) continue;
@@ -542,19 +704,37 @@ function mergeInto(into: WorkbookRow, from: WorkbookRow, options: { only?: Reado
       into[column] = value;
       setDerived(into, column, derivedNote(from, column));
       setCellSources(into, column, cellSources(from, column));
+      takeReader(column);
     } else if (derivedNote(into, column) && !derivedNote(from, column)) {
       into[column] = value;
       setDerived(into, column, undefined);
       setCellSources(into, column, cellSources(from, column));
+      takeReader(column);
     } else if (cellsAgree(into[column], value)) {
-      // The same value stated by another document: corroboration, kept with the cell.
+      // The same value stated by another document: corroboration, kept with the
+      // cell — and with the value's side of any disagreement already recorded.
       setCellSources(into, column, [...cellSources(into, column), ...cellSources(from, column)]);
+      if (into._conflicts?.[column]) for (const file of cellSources(from, column)) recordConflict(into, column, value, file);
     }
   }
   const sources = new Set([...(into._sourceFiles ?? []), ...(from._sourceFiles ?? [])]);
   if (sources.size > 0) into._sourceFiles = Array.from(sources);
-  const reads = new Set([...Array.from(rowReads.get(into) ?? []), ...Array.from(rowReads.get(from) ?? [])]);
-  if (reads.size > 0) rowReads.set(into, reads);
+  const readers = new Set([...(into._readers ?? []), ...(from._readers ?? [])]);
+  if (readers.size > 0) into._readers = Array.from(readers);
+  if (from._mcPosition && typeof from._mcPosition === "object") {
+    const mine = (into._mcPosition && typeof into._mcPosition === "object" ? into._mcPosition : {}) as Record<string, string[]>;
+    for (const [position, files] of Object.entries(from._mcPosition as Record<string, string[]>)) {
+      mine[position] = Array.from(new Set([...(mine[position] ?? []), ...files]));
+    }
+    into._mcPosition = mine;
+  }
+  if (from._conflicts) {
+    for (const [column, candidates] of Object.entries(from._conflicts)) {
+      for (const candidate of candidates) {
+        for (const source of candidate.sources.length ? candidate.sources : [""]) recordConflict(into, column, candidate.value, source);
+      }
+    }
+  }
 }
 
 /** What a supplier's certificate certifies — compared before a group certificate is linked. */
@@ -655,10 +835,10 @@ export function linkWorkbookRows(
       let merged = false;
       for (const candidate of candidates) {
         const decision = mergeDecision(section, candidate, row, display);
-        if (!decision.merge) continue;
         if (decision.finding) {
-          reconciliation.push({ section, entity: display, column: decision.column ?? "spend", message: decision.finding });
+          reconciliation.push({ section, entity: display, column: decision.findingColumn ?? "spend", message: decision.finding, rowId: candidate._id });
         }
+        if (!decision.merge) continue;
         mergeInto(candidate, row);
         merged = true;
         break;
@@ -722,6 +902,162 @@ export function linkWorkbookRows(
   }
 
   return { rows: linked, reconciliation };
+}
+
+/** Designation bands, most senior first — "lower" means claims less. */
+const DESIGNATION_RANK: Record<string, number> = {
+  "Executive Director": 7,
+  "Non-executive Director": 7,
+  "Other Executive Manager": 6,
+  "Senior Manager": 4,
+  "Middle Manager": 3,
+  "Junior Manager": 2,
+  "Semi-skilled": 1,
+  "Unskilled": 0,
+};
+const TOP_DESIGNATIONS = new Set(["Executive Director", "Non-executive Director", "Other Executive Manager"]);
+
+/** The Management Control sheet's top positions → the designation each states. */
+const TOP_POSITION_DESIGNATION: Record<string, string> = {
+  "Executive Management": "Executive Director",
+  "Other Executive Management": "Other Executive Manager",
+  "Non-Executive Director": "Non-executive Director",
+};
+
+/** An EEA occupational level → the designation band that names the same level. */
+const LEVEL_DESIGNATION: Record<string, string> = {
+  "Senior Management": "Senior Manager",
+  "Middle Management": "Middle Manager",
+  "Junior Management": "Junior Manager",
+  "Semi-Skilled": "Semi-skilled",
+  "Unskilled": "Unskilled",
+};
+const LEVEL_RANK: Record<string, number> = {
+  "Top Management": 6, "Senior Management": 4, "Middle Management": 3, "Junior Management": 2, "Skilled": 2, "Semi-Skilled": 1, "Unskilled": 0,
+};
+
+/**
+ * Settle each person's management band from what the documents STATE, in
+ * order of authority, and put every genuine disagreement to the user.
+ *
+ *  1. A band read from a JOB TITLE never outranks a level a document states.
+ *     "Admin Manager" reads as middle management; the EE register states
+ *     Senior Management — the register is the evidence.
+ *  2. The Management Control sheet's POSITION answers "is this person in top
+ *     management?" and outranks the EE occupational level on that question.
+ *  3. When two versions of the Management Control sheet disagree (one says
+ *     Other Executive Management, a newer one says Other), nothing here knows
+ *     which version the client stands behind, and the answer moves the score.
+ *     The cell holds the LOWER band until the user answers — never the more
+ *     generous one — and both are recorded under _conflicts.
+ *  4. Documents stating different EEA levels: the level more of them state,
+ *     and between equals the lower (keptOccupationalLevel); both recorded.
+ */
+function settleManagementBands(rows: WorkbookRow[]): ReconciliationFinding[] {
+  const findings: ReconciliationFinding[] = [];
+  for (const row of rows) {
+    const name = [row.name, row.surname].map((v) => String(v ?? "").trim()).filter(Boolean).join(" ") || "A person";
+
+    const positions = (row._mcPosition && typeof row._mcPosition === "object" ? row._mcPosition : {}) as Record<string, string[]>;
+    const positionFiles = new Set(Object.values(positions).flat());
+    let levelConflict = row._conflicts?.occupationalLevel;
+    if (levelConflict && positionFiles.size > 0) {
+      // A Management Control position also lands "Top Management" in the level
+      // column. Against the EE register's level that is not a second opinion on
+      // the person's EEA level — it is the position, settled below on its own
+      // terms (rule 2/3) — so it leaves the level conflict.
+      const echoes = (c: RowConflictCandidate) =>
+        String(c.value) === "Top Management" && c.sources.length > 0 && c.sources.every((s) => positionFiles.has(s));
+      const remaining = levelConflict.filter((c) => !echoes(c));
+      if (remaining.length !== levelConflict.length) {
+        if (remaining.length > 0) row.occupationalLevel = remaining[0].value;
+        if (remaining.length < 2) delete row._conflicts!.occupationalLevel;
+        else row._conflicts!.occupationalLevel = remaining;
+        levelConflict = remaining;
+      }
+    }
+    if (levelConflict && levelConflict.length > 1) {
+      // The level more documents state (a register repeated in three
+      // workbooks against one prior-year sheet); between equals, the lower.
+      const rank = (c: RowConflictCandidate) => LEVEL_RANK[String(c.value)] ?? occupationalRank(c.value) ?? 99;
+      const kept = [...levelConflict].sort((x, y) => (y.sources.length - x.sources.length) || (rank(x) - rank(y)))[0];
+      row.occupationalLevel = kept.value;
+      setDerived(row, "occupationalLevel", undefined);
+    }
+    const levelStated = !cellBlank(row.occupationalLevel) && !derivedNote(row, "occupationalLevel");
+    const levelBand = levelStated ? LEVEL_DESIGNATION[String(row.occupationalLevel)] : undefined;
+
+    // (1) a title never outranks a stated level.
+    if (derivedNote(row, "designation") && levelBand && row.designation !== levelBand) {
+      row.designation = levelBand;
+      setDerived(row, "designation", undefined);
+    }
+
+    const top = Object.keys(positions).filter((p) => TOP_POSITION_DESIGNATION[p]);
+    const statesOther = Boolean(positions.Other);
+    const currentNotTop = cellBlank(row.designation) || !TOP_DESIGNATIONS.has(String(row.designation))
+      ? (cellBlank(row.designation) ? undefined : String(row.designation))
+      : undefined;
+    const belowTop = levelBand ?? currentNotTop;
+
+    if (top.length > 0 && (statesOther || top.length > 1)) {
+      // (3) versions of the Management Control sheet disagree.
+      const candidates: RowConflictCandidate[] = top.map((p) => ({ value: TOP_POSITION_DESIGNATION[p], sources: [...positions[p]] }));
+      if (statesOther) candidates.push({ value: belowTop ?? "", sources: [...positions.Other] });
+      const lowest = [...candidates].sort((x, y) => (DESIGNATION_RANK[String(x.value)] ?? -1) - (DESIGNATION_RANK[String(y.value)] ?? -1))[0];
+      if (cellBlank(lowest.value)) delete row.designation;
+      else row.designation = lowest.value;
+      setDerived(row, "designation", undefined);
+      (row._conflicts ??= {}).designation = candidates.filter((c) => !cellBlank(c.value));
+      const said = candidates
+        .map((c) => `${c.sources.join(", ") || "a document"} ${c.value ? `places them as ${String(c.value)}` : "places them outside top management"}`)
+        .join("; ");
+      findings.push({
+        section: "management-control",
+        entity: name,
+        column: "designation",
+        message: `${name}: the documents disagree on this person's management position — ${said}. `
+          + `Scored as ${String(lowest.value) || "outside top management"}, the lower of the two, until you choose which document is right.`,
+      });
+      continue;
+    }
+
+    if (top.length === 1) {
+      // (2) one stated top position — it settles top management.
+      const designation = TOP_POSITION_DESIGNATION[top[0]];
+      if (row.designation !== designation) {
+        row.designation = designation;
+        setDerived(row, "designation", undefined);
+      }
+      continue;
+    }
+
+    if (statesOther && TOP_DESIGNATIONS.has(String(row.designation)) && derivedNote(row, "designation")) {
+      // The sheet says "not top management"; a title said otherwise.
+      if (belowTop && !TOP_DESIGNATIONS.has(belowTop)) row.designation = belowTop;
+      else delete row.designation;
+      setDerived(row, "designation", undefined);
+    }
+  }
+  return findings;
+}
+
+/** Linking bookkeeping that must not leave this module on the rows. */
+function stripLinkBookkeeping(rows: Partial<Record<WorkbookSectionKey, WorkbookRow[]>>): void {
+  for (const sectionRows of Object.values(rows)) {
+    for (const row of sectionRows ?? []) {
+      delete row._readers;
+      delete row._cellReaders;
+      delete row._mcPosition;
+      if (row._conflicts) {
+        // Only a real choice is a conflict: two or more distinct values.
+        for (const [column, candidates] of Object.entries(row._conflicts)) {
+          if (candidates.length < 2) delete row._conflicts[column];
+        }
+        if (Object.keys(row._conflicts).length === 0) delete row._conflicts;
+      }
+    }
+  }
 }
 
 /**
@@ -860,10 +1196,9 @@ export function parserExtractionsToWorkbook(
   /** Entity-level figures settled by rule rather than by the user — each one explained. */
   const metaResolutions: ReconciliationFinding[] = [];
 
-  /** The read (extraction) rows are being added for — see rowReads. */
+  /** The read (extraction) rows are being added for — see readerId. */
   let currentRead = 0;
   const addRow = (section: WorkbookSectionKey, row: WorkbookRow) => {
-    rowReads.set(row, new Set([currentRead]));
     for (const column of Object.keys(row)) {
       if (!ROW_BOOKKEEPING.has(column)) setCellSources(row, column, row._sourceFiles ?? []);
     }
@@ -1134,7 +1469,7 @@ export function parserExtractionsToWorkbook(
         rejected.push({ ...rejection, sourceFile: extraction.sourceFile, section });
       }
       if (Object.keys(injected.cells).length > 0) {
-        addRow(section, { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] });
+        addRow(section, readRow(injected, extraction, currentRead));
       }
     }
 
@@ -1164,7 +1499,7 @@ export function parserExtractionsToWorkbook(
           rejected.push({ ...rejection, sourceFile: extraction.sourceFile, section: table.section });
         }
         if (Object.keys(injected.cells).length > 0) {
-          const row: WorkbookRow = { _id: nextRowId(), ...injected.cells, _sourceFiles: [extraction.sourceFile] };
+          const row: WorkbookRow = readRow(injected, extraction, currentRead);
           for (const [field, flag] of Object.entries(derived)) {
             const column = targetForField(field, extraction.element)?.column;
             if (column && !cellBlank(row[column])) setDerived(row, column, flag);
@@ -1176,15 +1511,27 @@ export function parserExtractionsToWorkbook(
     }
   }
 
-  // A sheet that repeats one line (a drag-filled template: 500 copies of the
-  // same manager) is collapsed BEFORE linking too. Otherwise the first copy
-  // links to the person's register row and the second, being the same read,
-  // may not — and stays as the same person a second time.
-  const repeatFindings = dedupeExactDuplicateRows(rows);
+  // A people register filled down a template (500 copies of the same manager)
+  // is collapsed BEFORE linking too. Otherwise the copies the cross-document
+  // merge cannot absorb (one reader's rows never merge with each other) survive
+  // as the same person a second time. People only: two reads of one ledger are
+  // one fact, which linking settles (and says so), not a repeat to collapse.
+  const people: Partial<Record<WorkbookSectionKey, WorkbookRow[]>> = { "management-control": rows["management-control"] };
+  const repeatFindings = rows["management-control"] ? dedupeExactDuplicateRows(people) : [];
+  // dedupeExactDuplicateRows replaces the section array on the object it is given.
+  if (rows["management-control"]) rows["management-control"] = people["management-control"];
 
   // Link before coverage: a certificate row enriched with its schedule row's
   // spend is complete; counted separately both halves would report gaps.
   const linked = linkWorkbookRows(rows);
+  const bandFindings = settleManagementBands(linked.rows["management-control"] ?? []);
+  // A level "disagreement" that settling showed to be a Management Control
+  // position (not a second opinion on the EEA level) is no longer one.
+  const stillContested = new Set(
+    (linked.rows["management-control"] ?? []).filter((r) => (r._conflicts?.occupationalLevel?.length ?? 0) > 1).map((r) => r._id),
+  );
+  linked.reconciliation = linked.reconciliation.filter((f) =>
+    !(f.section === "management-control" && f.column === "occupationalLevel" && f.rowId && !stillContested.has(f.rowId)));
 
   // Completion pass: derive required fields from values ALREADY in the row and
   // drop identity-less fragments. The 64-file Thandanani pack produced 339
@@ -1234,6 +1581,7 @@ export function parserExtractionsToWorkbook(
   const metaWithdrawn = withdrawnTmps(extractions, meta, metaConflicts);
 
   const coverage = huntRequiredFields(linked.rows, Array.from(unmapped), options);
+  stripLinkBookkeeping(linked.rows);
   return {
     rows: linked.rows,
     meta,
@@ -1242,6 +1590,7 @@ export function parserExtractionsToWorkbook(
     reconciliation: [
       ...repeatFindings,
       ...linked.reconciliation,
+      ...bandFindings,
       ...completionFindings,
       ...initialsFindings,
       ...duplicateFindings,
@@ -1347,25 +1696,30 @@ function derivedFromFlagFindings(
   const findings: ReconciliationFinding[] = [];
   for (const [sectionKey, sectionRows] of Object.entries(rows)) {
     const section = sectionKey as WorkbookSectionKey;
-    const byColumn = new Map<string, { flag: string; value: unknown; names: string[] }>();
+    const byColumn = new Map<string, { column: string; flag: string; value: unknown; names: string[]; fromTitle: boolean }>();
     for (const row of sectionRows ?? []) {
       for (const [column, flag] of Object.entries(row._derivedFromFlag ?? {})) {
-        const entry = byColumn.get(column) ?? { flag, value: row[column], names: [] };
+        const fromTitle = flag.startsWith("job title");
+        const groupKey = `${column}|${fromTitle ? "title" : "flag"}`;
+        const entry = byColumn.get(groupKey) ?? { column, flag, value: row[column], names: [], fromTitle };
         const nameColumns = LINK_KEY_COLUMNS[section] ?? [];
         entry.names.push(nameColumns.map((c) => String(row[c] ?? "").trim()).filter(Boolean).join(" ") || "a row with no name");
-        byColumn.set(column, entry);
+        byColumn.set(groupKey, entry);
       }
     }
-    for (const [column, { flag, value, names }] of Array.from(byColumn.entries())) {
+    for (const { column, flag, value, names, fromTitle } of Array.from(byColumn.values())) {
       const label = getSection(section)?.columns?.find((c) => c.key === column)?.label ?? column;
       const shown = names.length > 10 ? `${names.slice(0, 10).join(", ")} and ${names.length - 10} more` : names.join(", ");
       findings.push({
         section,
         entity: names.length === 1 ? names[0] : `${names.length} rows`,
         column,
-        message:
-          `${shown}: ${label} shows ${String(value)}, the floor the schedule's ${flag} vouches for — `
-          + "not a percentage the supplier stated. It scores at exactly that floor; enter the supplier's actual percentage if you have it.",
+        message: fromTitle
+          ? `${shown}: ${label} was worked out from the job title, not stated by any document`
+            + `${names.length === 1 ? ` (${flag} reads as ${String(value)})` : ""}. `
+            + "A level a document states always replaces it; confirm the level if none of your documents gives one."
+          : `${shown}: ${label} shows ${String(value)}, the floor the schedule's ${flag} vouches for — `
+            + "not a percentage the supplier stated. It scores at exactly that floor; enter the supplier's actual percentage if you have it.",
       });
     }
   }
@@ -1507,7 +1861,7 @@ function dedupeExactDuplicateRows(
     }
     if (kept.length === sectionRows.length) continue;
     rows[section] = kept;
-    for (const { row, dropped } of seen.values()) {
+    for (const { row, dropped } of Array.from(seen.values())) {
       if (!dropped) continue;
       const nameColumn = (LINK_KEY_COLUMNS[section] ?? [])[0];
       const entity = String((nameColumn && row[nameColumn]) ?? "").trim() || "unnamed row";
@@ -1795,7 +2149,7 @@ function linkInitialsToPeople(rows: Partial<Record<WorkbookSectionKey, WorkbookR
       && !initialsOnly(full)
       && surnameKey(full) === surnameKey(short)
       && initialsOf(full) === initialsOf(short)
-      && !fromTheSameRead(full, short));
+      && !sameRead(full, short));
     if (fits.length !== 1) continue;
     const person = fits[0];
     const contradicts = Array.from(PERSON_IDENTITY).some((column) =>

@@ -15,6 +15,7 @@ const logger = createLogger("ScorecardBuilder");
 import { calculateScorecard } from '../../pipeline/rules/calculationEngine.js';
 import type { EntityValue, EmployeeInput, ShareholderInput, SupplierInput, ContributionInput } from '../../pipeline/rules/calculationEngine.js';
 import { mapToUCSPayload } from '../../pipeline/extraction/aiEntityMapper.js';
+import { applyOverlayToPillars, type VerificationReport } from '../../pipeline/verification/index.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
@@ -89,13 +90,18 @@ interface CalculateRequest {
   totalEmployees?: number;
   pillarData?: any;
   foundationData?: any;
+  /**
+   * The workbook's claim-vs-evidence report. With pillarData, the response
+   * also carries the EVIDENCED total, scored by this same engine.
+   */
+  verification?: VerificationReport;
 }
 
 /**
  * Translate frontend pillarData/foundationData format into
  * the entity-level inputs the calculation engine expects.
  */
-function extractFromPillarData(body: CalculateRequest): {
+export function extractFromPillarData(body: CalculateRequest): {
   employees: EmployeeInput[];
   shareholders: ShareholderInput[];
   suppliers: SupplierInput[];
@@ -127,6 +133,12 @@ function extractFromPillarData(body: CalculateRequest): {
     yearsHeld: s.yearsHeld,
     isDesignatedGroup: !!s.isDesignatedGroup,
     blackNewEntrant: !!s.blackNewEntrant,
+    // The register row's own type: scheme rows (ESOP/BBOS/co-op) earn the
+    // Transport scheme bonus, and nothing else does.
+    ...(typeof s.ownershipType === 'string' ? { ownershipType: s.ownershipType } : {}),
+    // Stated acquisition debt only: absent stays absent, because ownership
+    // fulfilment needs a STATED nil, never a default 0.
+    ...(typeof s.outstandingDebt === 'number' && Number.isFinite(s.outstandingDebt) ? { outstandingDebt: s.outstandingDebt } : {}),
   }));
 
   const suppliers: SupplierInput[] = (pd.procurement?.suppliers || []).map((s: any) => ({
@@ -142,6 +154,9 @@ function extractFromPillarData(body: CalculateRequest): {
     isEME: !!s.isEME || s.enterpriseType === 'eme',
     isQSE: !!s.isQSE || s.enterpriseType === 'qse',
     isForeignSupplier: !!s.isForeignSupplier,
+    // A supplier the client states is NOT empowering earns no empowering
+    // recognition, whatever its level; unstated leaves the level to decide.
+    ...(typeof s.isEmpoweringSupplier === 'boolean' ? { isEmpoweringSupplier: s.isEmpoweringSupplier } : {}),
   }));
 
   const esdContribs = (pd.esd?.contributions || []).map((c: any) => ({
@@ -281,9 +296,32 @@ router.post('/calculate', requireAuth, async (req, res) => {
     });
 
 
+    // CLAIMED is the result above (the pillarData the workbook saved already
+    // carries the rule-decided replacements). EVIDENCED drops what the
+    // documents do not prove, by the same overlay the Toolkit store applies.
+    let verification: { claimed: number; evidenced: number } | undefined;
+    const report = body.verification;
+    if (hasPillarData && report?.version === 1 && Array.isArray(report.checks)) {
+      const ev = extractFromPillarData({ ...body, pillarData: applyOverlayToPillars(body.pillarData, report, 'evidenced') });
+      const evidenced = await calculateScorecard({
+        assessmentId: `${assessmentId}-evidenced`,
+        sectorCode,
+        scorecardType,
+        entityValues: ev.entityValues,
+        crossPillarValues: ev.crossPillarValues,
+        employees: ev.employees,
+        shareholders: ev.shareholders,
+        suppliers: ev.suppliers,
+        contributions: ev.contributions,
+        trainingPrograms: body.trainingPrograms,
+        financials: ev.financials,
+      });
+      verification = { claimed: result.totalPoints, evidenced: evidenced.totalPoints };
+    }
+
     logger.info('Scorecard calculated', { sessionId: assessmentId, sector: sectorCode, durationMs: Date.now() - start });
 
-    res.json({ success: true, scorecard: result });
+    res.json({ success: true, scorecard: result, ...(verification ? { verification } : {}) });
   } catch (err) {
     logger.error('Calculation error', err);
     res.status(500).json({ 

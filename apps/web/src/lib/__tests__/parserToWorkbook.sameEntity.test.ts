@@ -250,6 +250,27 @@ describe("one person, one row", () => {
     expect(result.reconciliation.some((f) => f.section === "management-control" && /Top Management/.test(f.message))).toBe(true);
   });
 
+  it("keeps the level more documents state even when it is the higher one, and records both for the user", () => {
+    // Merge of two rules: the level more documents state is kept (one person,
+    // one row) and every stated disagreement is recorded as a conflict the user
+    // answers. Settling the band afterwards must not fall back to "the lower".
+    const register = (file: string) => employeeTable(file, [
+      { employee_name: "Mokoena, Lerato", race: "African", gender: "Female", occupational_level: "Senior Management" },
+    ]);
+    const result = parserExtractionsToWorkbook([
+      register("Current.xlsx › Employment Equity"),
+      register("Spend.xlsm › Employment Equity"),
+      employeeTable("Prior.xlsm › Employment Equity", [
+        { employee_name: "Lerato Mokoena", race: "African", gender: "Female", occupational_level: "Middle Management" },
+      ]),
+    ]);
+    const people = result.rows["management-control"] ?? [];
+    expect(people).toHaveLength(1);
+    expect(people[0].occupationalLevel).toBe("Senior Management");
+    const conflict = (people[0]._conflicts as Record<string, Array<{ value: unknown; sources: string[] }>> | undefined)?.occupationalLevel ?? [];
+    expect(conflict.map((c) => [c.value, c.sources.length]).sort()).toEqual([["Middle Management", 1], ["Senior Management", 2]]);
+  });
+
   it("folds an ID document read on its own into the person with that ID", () => {
     const result = parserExtractionsToWorkbook([
       employeeTable("Pack.xlsx › Employment Equity", [

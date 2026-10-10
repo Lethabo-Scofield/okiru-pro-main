@@ -242,6 +242,10 @@ function sectorConfigToCalculatorConfig(sc: any) {
       newEntrantsMax: own.newEntrantsMaxPts,
       designatedGroupsMax: own.economicInterestDesignatedGroupMaxPts ?? 3,
       designatedGroupsTarget: own.economicInterestDesignatedGroupTarget ?? 0.03,
+      // Transport lines the Codes name on their own (see sectorConfig): the
+      // Toolkit scores nothing on them unless the config carries them.
+      ...(own.ownershipFulfilmentMaxPts ? { ownershipFulfilmentMax: own.ownershipFulfilmentMaxPts } : {}),
+      ...(own.esopBonusMaxPts ? { esopBonusMaxPts: own.esopBonusMaxPts, esopBonusTarget: own.esopBonusTarget ?? 0.10 } : {}),
     },
     management: {
       boardBlackTarget: mc.boardBlackTarget,

@@ -889,6 +889,13 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     width: 200,
     aliases: ["Ownership Type", "Type of Ownership", "Shareholder Type"],
   },
+  // A register that says only "Broad-based / ESOP? Yes" names a scheme row as
+  // plainly as an Ownership Type of "ESOP": the projection reads either, so the
+  // Transport scheme bonus sees the scheme the register states.
+  yesNoColumn("schemeParticipation", "ESOP / Broad-Based Scheme?", {
+    width: 150,
+    aliases: ["Broad-based / ESOP", "Broad-based / ESOP?", "ESOP / BBOS", "ESOP?", "Broad-Based Scheme"],
+  }),
   yesNoColumn("soaBuyer", "Sale of Assets (SOA) Buyer", {
     width: 150,
     aliases: ["SOA Buyer", "Sale of Assets Buyer"],
@@ -909,7 +916,16 @@ export const OWNERSHIP_COLUMNS: ColumnDef[] = [
     type: "number",
     width: 160,
     validate: numericValidator,
-    aliases: ["Outstaning Debt", "Outstanding Debt", "Outstanding Acquisition Debt"],
+    // The register's acquisition debt per holder: what ownership fulfilment
+    // and net value turn on. Templates head it either way.
+    aliases: [
+      "Outstaning Debt",
+      "Outstanding Debt",
+      "Outstanding Acquisition Debt",
+      "Acquisition Debt",
+      "Acquisition Debt (R)",
+      "Outstanding Debt by Black Participants",
+    ],
   },
   {
     key: "loanDate",

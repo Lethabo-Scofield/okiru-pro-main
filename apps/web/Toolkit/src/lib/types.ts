@@ -112,6 +112,13 @@ export interface Shareholder {
   // Shares and value
   shares: number;
   shareValue: number;
+  /**
+   * This holder's outstanding acquisition debt, when a document STATES it
+   * (the register's "Outstanding Debt by Black Participants" column). Absent =
+   * not stated, which is not the same as nil: ownership fulfilment needs a
+   * stated nil.
+   */
+  outstandingDebt?: number;
 }
 
 export interface OwnershipData {
@@ -362,6 +369,12 @@ export interface ProcurementData {
   clientId: string;
   tmps: number;
   tmpsManualOverride?: boolean;
+  /**
+   * Where `tmps` came from: pinned by the user, stated by a document, held open
+   * (stated but unusable — nothing scored until settled), or the supplier
+   * sum. See resolveTmps in calculators/shared.
+   */
+  tmpsSource?: 'manual' | 'stated' | 'held' | 'supplier_spend_sum';
   suppliers: Supplier[];
   // Note: graduation/jobs bonuses removed - these are ED only (Issue 3)
 }

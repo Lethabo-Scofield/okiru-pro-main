@@ -998,6 +998,16 @@ function pctToFraction(v: unknown): number {
   return Math.max(0, n / 100);
 }
 
+/** A number the cell STATES, or null when it states none (blank, or no digits at all). */
+function statedNumber(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  const text = String(v).trim();
+  if (!text || !/\d/.test(text)) return null;
+  const n = parseLooseNumber(text);
+  return Number.isFinite(n) ? n : null;
+}
+
 // Lake Trading Fix Plan â”¬Âº1 Bug 3: beeLevel must be a number 1Î“Ã‡Ã´8 (0 = non-compliant)
 function parseBeeLevel(raw: unknown): number {
   const n = Number(raw);
@@ -1114,8 +1124,17 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       economicInterestPercent: eiPct,
       // Pass the workbook's stated type through — the ownership calculator
       // detects ESOP/BBOS scheme rows from it (the scheme bonus must never be
-      // awarded without a scheme actually appearing in the register).
-      ownershipType: s((r as any).ownershipType) || "shareholder",
+      // awarded without a scheme actually appearing in the register). A row
+      // the register flags "Broad-based / ESOP? Yes" is a scheme row too.
+      ownershipType:
+        s((r as any).ownershipType)
+        || (coerceYesNo((r as any).schemeParticipation) ? "ESOP / Employee Share Scheme" : "shareholder"),
+      // The holder's outstanding acquisition debt, ONLY when the register
+      // states it. A blank cell is "not stated", not nil: ownership fulfilment
+      // and net value must never read a missing figure as a paid-up stake.
+      ...(statedNumber((r as any).rowOutstandingDebt) !== null
+        ? { outstandingDebt: statedNumber((r as any).rowOutstandingDebt) as number }
+        : {}),
     };
   }).filter((sh) => {
     // Drop summary / total / note rows the grid parser ingests below the shareholder
@@ -1147,11 +1166,21 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       // does (which leaves previous behaviour untouched).
       const rawDesigCell = s((r as any).designation);
       const rawOccCell = s((r as any).occupationalLevel);
-      const scoringCell = isScoringDesignation(rawDesigCell)
-        ? rawDesigCell
-        : isScoringDesignation(rawOccCell)
-          ? rawOccCell
-          : (rawDesigCell || rawOccCell);
+      // A designation the upload worked out from a JOB TITLE (marked on the row
+      // as derived) is a guess at the band; a stated occupational level is
+      // evidence. The guess never outranks the evidence: "Admin Manager" reads
+      // as middle management, but a register that states Senior Management is
+      // the one that scores.
+      const derived = ((r as any)._derivedFromFlag ?? {}) as Record<string, unknown>;
+      const designationGuessed = Boolean(derived.designation);
+      const levelStated = !derived.occupationalLevel && isScoringDesignation(rawOccCell);
+      const scoringCell = designationGuessed && levelStated
+        ? rawOccCell
+        : isScoringDesignation(rawDesigCell)
+          ? rawDesigCell
+          : isScoringDesignation(rawOccCell)
+            ? rawOccCell
+            : (rawDesigCell || rawOccCell);
       const designation = mapDesignation(scoringCell);
       const occupationalLevel = mapDesignation(rawOccCell || scoringCell);
       employees.push({
@@ -1413,9 +1442,17 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     (financials as any).headcount = employees.length;
   }
 
+  // Acquisition debt for net value: the entity-level figure when one is
+  // stated, else what the register's own rows state, holder by holder.
+  const statedRowDebts = shareholders
+    .map((sh) => (sh as { outstandingDebt?: number }).outstandingDebt)
+    .filter((d): d is number => typeof d === "number");
+  const entityDebtStated = statedNumber(finMeta.outstandingDebt) !== null;
   const ownershipMeta = {
     companyValue: financials.companyValue ?? 0,
-    outstandingDebt: financials.outstandingDebt ?? 0,
+    outstandingDebt: entityDebtStated || statedRowDebts.length === 0
+      ? financials.outstandingDebt ?? 0
+      : statedRowDebts.reduce((a, d) => a + d, 0),
     yearsHeld: Math.max(
       0,
       ...shareholders.map((sh) => num((sh as any).yearsHeld)),

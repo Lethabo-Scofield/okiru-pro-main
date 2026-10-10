@@ -532,6 +532,40 @@ function knownTemplateTable(
   return mapping ? { shape, mapping } : null;
 }
 
+/**
+ * Register columns the B-BBEE gathering template LABELS in its own words, read
+ * by their header after the model's mapping. The mapping is asked only for the
+ * shape's target fields; a labelled template column outside that list was
+ * never read — so the ownership register's "Outstanding Debt by Black
+ * Participants" (which decides ownership fulfilment and net value) arrived at
+ * scoring as if nobody had stated it. Header-exact and additive: it never
+ * overrides a column the model mapped and never claims a field twice.
+ */
+const LABELLED_TEMPLATE_COLUMNS: Record<string, Array<{ field: string; header: RegExp }>> = {
+  shareholder_rows: [
+    { field: 'black_participant_outstanding_debt', header: /^\s*outstanding\s+(acquisition\s+)?debt(\s+(by|of|owed\s+by)\s+black\s+participants?)?\s*(\(r\))?\s*$/i },
+  ],
+};
+
+export function withLabelledTemplateColumns(
+  mapping: Record<string, string>,
+  shapeField: string,
+  rows: Array<Record<string, unknown>>,
+): Record<string, string> {
+  const labelled = LABELLED_TEMPLATE_COLUMNS[shapeField];
+  if (!labelled) return mapping;
+  const out = { ...mapping };
+  const claimed = new Set(Object.values(out));
+  for (const header of collectHeaders(rows)) {
+    if (out[header]) continue;
+    const match = labelled.find((l) => l.header.test(header) && !claimed.has(l.field));
+    if (!match) continue;
+    out[header] = match.field;
+    claimed.add(match.field);
+  }
+  return out;
+}
+
 export async function extractSheetTable(
   model: ExtractionModel,
   element: VerificationElement,
@@ -559,7 +593,11 @@ export async function extractSheetTable(
   let placementFailure: string | null = null;
 
   if (input.rows && input.rows.length > 0) {
-    const mapping = known?.mapping ?? await mapSheetColumns(model, shape, input.filename, input.rows);
+    // A known template's own headings first; the model only where they do not
+    // settle the table. Either way, the columns the template labels in its own
+    // words are read by header (withLabelledTemplateColumns).
+    const baseMapping = known?.mapping ?? await mapSheetColumns(model, shape, input.filename, input.rows);
+    const mapping = baseMapping ? withLabelledTemplateColumns(baseMapping, shape.field, input.rows) : null;
     if (mapping && Object.values(mapping).includes(shape.columns[0])) {
       const table = applyColumnMapping(input.rows, mapping, shape);
       if (table.rows.length > 0) {

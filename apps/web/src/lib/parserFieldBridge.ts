@@ -57,6 +57,10 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   total_economic_interest_received: { section: "ownership", column: "economicInterest" },
   black_ownership_percentage: { section: "ownership", column: "blackOwnership" },
   black_women_ownership_percentage: { section: "ownership", column: "blackWomenOwnership" },
+  // The register's "Outstanding Debt by Black Participants" column, per holder.
+  // Ownership fulfilment and net value turn on it; never read, a stated nil
+  // debt could not earn the fulfilment point.
+  black_participant_outstanding_debt: { section: "ownership", column: "rowOutstandingDebt" },
 
   // ── Management control / employment equity (one row per person) ──
   // race / gender / id_number are NOT here: they exist under the same column key
@@ -108,6 +112,11 @@ const FIELD_TARGETS: Record<string, FieldTarget> = {
   empowering_supplier_confirmed: { section: "procurement", column: "empoweringSupplier" },
   claimed_spend_ex_vat: { section: "procurement", column: "spend" },
   amount_ex_vat: { section: "procurement", column: "spend" },
+  // A supplier ledger's own total (the ledger skill's name for it). Unmapped,
+  // the model's read of a ledger arrived as a NAME with no figure, linked into
+  // the schedule row, and the ledger evidence never reached the spend it
+  // corroborates.
+  ap_subledger_total: { section: "procurement", column: "spend" },
   certificate_expiry_date: { section: "procurement", column: "certificateExpiryDate" },
   expiry_date: { section: "procurement", column: "certificateExpiryDate" },
   // The SUPPLIER's own black / black-woman ownership, from the schedule's "Black

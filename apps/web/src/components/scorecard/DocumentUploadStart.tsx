@@ -39,6 +39,14 @@ import {
 } from "@/lib/parserWorkbookMap";
 import { toWorkbookSections, mergeWorkbookSections } from "@/lib/parserToWorkbook";
 import { SECTOR_TO_WORKBOOK, assembleCreateSections, injectCase } from "@/lib/createFlowAssembly";
+import {
+  applyOverlayToSections,
+  compactReport,
+  verifyClaims,
+  VERIFICATION_META_KEY,
+  type EvidenceRead,
+  type VerificationReport,
+} from "../../../../api/pipeline/verification/index.js";
 import { vocabularyDecisionKey, type VocabularyDecisions } from "@/lib/workbookInjection";
 import { getSection, parseWorkbookDate } from "@/components/workbook/sections";
 import PillarDocumentBatches, { batchLabel, type UploadOrigin } from "./PillarDocumentBatches";
@@ -378,6 +386,8 @@ export interface DocumentUploadStartProps {
     extras?: {
       verdicts?: VerdictReport;
       reconcile?: ReconcileResult;
+      /** Claim-vs-evidence checks; the sections passed are already CLAIMED. */
+      verification?: VerificationReport;
       /**
        * Library ids of every document this run persisted. The host files them
        * under the created company, so the document library is organised per
@@ -1911,7 +1921,25 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       // display name differs.
       entityAliases: [companyName.trim(), ...(parserCase ? collectEntityAliases(parserCase) : [])].filter(Boolean),
     });
-    const finalSections = reconciled.sections as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>;
+    // VERIFY every claim against the documents the parser read. The sections
+    // saved are CLAIMED: only the replacements the rules decide (a statutory
+    // record or a certificate contradicting a schedule) are applied. What the
+    // documents do not prove is reported and scored apart, as EVIDENCED, on
+    // the score page. The report is kept on the workbook.
+    const evidence: EvidenceRead[] = ((parserCase as {
+      ai_entities?: { extractions?: Array<{ documentId?: string; sourceFile?: string; element?: string; values?: Array<{ field: string; value: unknown }> }> };
+    } | null)?.ai_entities?.extractions ?? []).map((e) => ({
+      documentId: String(e.documentId ?? ""),
+      sourceFile: String(e.sourceFile ?? ""),
+      element: e.element,
+      values: e.values ?? [],
+    }));
+    const verification = verifyClaims({ sections: reconciled.sections as never, evidence });
+    const finalSections = applyOverlayToSections(reconciled.sections as never, verification, "claimed") as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>;
+    finalSections["company-information"] = {
+      ...(finalSections["company-information"] ?? {}),
+      meta: { ...(finalSections["company-information"]?.meta ?? {}), [VERIFICATION_META_KEY]: compactReport(verification) },
+    };
 
     // Verdicts assessed against the RECONCILED sections so the ledger reflects
     // the cleaned entity, not the raw extraction.
@@ -1923,6 +1951,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       await onCreate(companyName.trim(), finalSections, {
         verdicts,
         reconcile: reconciled,
+        verification,
         // Everything this run put in the document library, restored ids
         // included — so the host can file the uploads under the company.
         documentIds: allDocumentIds(),

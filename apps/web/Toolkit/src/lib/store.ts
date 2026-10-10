@@ -89,7 +89,25 @@ import {
   normalizeRace,
   normalizeDesignationForScoring,
   supplierSumTmps,
+  resolveTmps,
 } from './calculators/shared';
+import {
+  applyOverlayToPillars,
+  type NeedsYouChoice,
+  type OverlayBasis,
+  type VerificationReport,
+} from '../../../../api/pipeline/verification/index.js';
+
+/**
+ * TMPS after a supplier is added, changed or removed: a pinned, stated or held
+ * TMPS stays exactly as it is — only a TMPS that IS the supplier sum follows
+ * the schedule.
+ */
+export function tmpsAfterSupplierEdit(procurement: ProcurementData, suppliers: ProcurementData['suppliers']): number {
+  if (procurement.tmpsManualOverride) return procurement.tmps;
+  if (procurement.tmpsSource === 'stated' || procurement.tmpsSource === 'held') return procurement.tmps;
+  return supplierSumTmps(suppliers);
+}
 
 export interface ScenarioSnapshot {
   id: string;
@@ -1115,6 +1133,23 @@ function calculateScorecard(
   };
 }
 
+/**
+ * The scorecard this data scores with a verification report applied — by the
+ * SAME calculator as the live score, so CLAIMED and EVIDENCED differ only by
+ * what the documents prove. `answers` scores a needs-you item answered one
+ * way. Null when no sector config is loaded. Never writes to the store.
+ */
+export function scoreWithVerification(
+  state: PillarState & { calculatorConfig?: CalculatorConfig | null; ignoreSubMinimum?: boolean; pipelineOverrides?: PipelineOverrides | null },
+  report: VerificationReport,
+  basis: OverlayBasis,
+  answers: NeedsYouChoice[] = [],
+): ScorecardResult | null {
+  if (!state.calculatorConfig) return null;
+  const overlaid = applyOverlayToPillars(state, report, basis, answers, { normalizeBand: normalizeDesignationForScoring });
+  return calculateScorecard(overlaid, state.pipelineOverrides ?? null);
+}
+
 function mapLegacyCategoryForStore(cat: string): TrainingCategoryCode {
   switch (cat) {
     case 'bursary': return 'A';
@@ -1352,6 +1387,9 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
             normalizeFraction(sh.votingRightsPercent ?? sh.blackOwnership ?? 0),
           economicInterestPercent:
             normalizeFraction(sh.economicInterestPercent ?? sh.blackOwnership ?? 0),
+          // Stated acquisition debt only — absent stays absent (ownership
+          // fulfilment needs a STATED nil, never a default 0).
+          ...(typeof sh.outstandingDebt === 'number' && Number.isFinite(sh.outstandingDebt) ? { outstandingDebt: sh.outstandingDebt } : {}),
         };
         }),
         companyValue:
@@ -1510,9 +1548,19 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
        * deliberate zero.
        */
       procurementState.tmpsManualOverride = data.procurement?.tmpsManualOverride === true;
-      if (!procurementState.tmpsManualOverride) {
-        procurementState.tmps = supplierSumTmps(procurementState.suppliers);
-      }
+      // A TMPS a document STATED (persisted by the workbook sync, labelled
+      // "stated") is the denominator; the schedule sum is only its floor. And a
+      // stated TMPS held open (contested / #REF!) scores nothing until settled
+      // — the sum here would score exactly what the upload said it would not.
+      const resolvedTmps = resolveTmps({
+        persistedTmps: procurementState.tmps,
+        manualOverride: procurementState.tmpsManualOverride,
+        tmpsSource: finExtras.tmpsSource,
+        tmpsHeld: finExtras.tmpsHeld,
+        suppliers: procurementState.suppliers,
+      });
+      procurementState.tmps = resolvedTmps.tmps;
+      procurementState.tmpsSource = resolvedTmps.source;
 
       const esdState: ESDData = {
         id: '',
@@ -2002,9 +2050,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   addSupplier: (supplier) => {
     set((state) => {
       const suppliers = [...state.procurement.suppliers, supplier];
-      const tmps = state.procurement.tmpsManualOverride
-        ? state.procurement.tmps
-        : supplierSumTmps(suppliers);
+      const tmps = tmpsAfterSupplierEdit(state.procurement, suppliers);
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();
@@ -2021,9 +2067,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   updateSupplier: (id, data) => {
     set((state) => {
       const suppliers = state.procurement.suppliers.map(s => s.id === id ? { ...s, ...data } : s);
-      const tmps = state.procurement.tmpsManualOverride
-        ? state.procurement.tmps
-        : supplierSumTmps(suppliers);
+      const tmps = tmpsAfterSupplierEdit(state.procurement, suppliers);
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();
@@ -2032,9 +2076,7 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   removeSupplier: (id) => {
     set((state) => {
       const suppliers = state.procurement.suppliers.filter(s => s.id !== id);
-      const tmps = state.procurement.tmpsManualOverride
-        ? state.procurement.tmps
-        : supplierSumTmps(suppliers);
+      const tmps = tmpsAfterSupplierEdit(state.procurement, suppliers);
       return { procurement: { ...state.procurement, suppliers, tmps } };
     });
     get()._recalculateAll();
@@ -2134,7 +2176,14 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   updateTMPS: (tmps, manualOverride = true) => {
     // manualOverride=true pins TMPS to the entered value; false (calculated mode)
     // clears the pin so supplier mutations keep TMPS in sync (see addSupplier).
-    set((state) => ({ procurement: { ...state.procurement, tmps, tmpsManualOverride: manualOverride } }));
+    set((state) => ({
+      procurement: {
+        ...state.procurement,
+        tmps,
+        tmpsManualOverride: manualOverride,
+        tmpsSource: manualOverride ? 'manual' : 'supplier_spend_sum',
+      },
+    }));
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
