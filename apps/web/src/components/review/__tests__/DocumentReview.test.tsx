@@ -155,3 +155,40 @@ describe("a value waiting for an answer", () => {
     expect(onAnswer).toHaveBeenCalledWith("CPT JULY 2025.pdf", question, null);
   });
 });
+
+describe("DocumentReview — a workbook read sheet by sheet", () => {
+  const workbook: ReviewDocument = {
+    filename: "Acme Gathering.xlsx",
+    documentType: "B-BBEE information-gathering workbook",
+    state: "read",
+    summary: "2 suppliers",
+    values: [
+      {
+        label: "Revenue",
+        value: "12,000,000",
+        sheet: "Finance",
+        file: "Acme Gathering.xlsx › Finance",
+        edit: { kind: "entity", extraction: 1, index: 0 },
+      },
+    ],
+    unplaced: [],
+    problems: [],
+    notFound: [],
+    sheets: [
+      { sheet: "Finance", file: "Acme Gathering.xlsx › Finance", state: "read", summary: "Financial statements / summary" },
+      { sheet: "Imports", file: "Acme Gathering.xlsx › Imports", state: "not-read", summary: "" },
+    ],
+  };
+
+  it("lists the workbook once, with its sheets, and saves a correction on the sheet it came from", () => {
+    const onEditValue = vi.fn();
+    render(<DocumentReview documents={[workbook]} fileFor={() => null} documentIdFor={() => null} onEditValue={onEditValue} />);
+    expect(screen.getByTestId("review-doc-Acme Gathering.xlsx")).toBeInTheDocument();
+    expect(screen.getByTestId("review-sheet-Imports")).toHaveTextContent(/nothing used/i);
+    expect(screen.getByTestId("review-values")).toHaveTextContent("Finance");
+    fireEvent.click(screen.getByTestId("review-value-0-edit"));
+    fireEvent.change(screen.getByTestId("review-value-0-input"), { target: { value: "12500000" } });
+    fireEvent.click(screen.getByTestId("review-value-0-save"));
+    expect(onEditValue).toHaveBeenCalledWith("Acme Gathering.xlsx › Finance", { kind: "entity", extraction: 1, index: 0 }, "12500000");
+  });
+});

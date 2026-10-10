@@ -313,7 +313,7 @@ import { mergeParserCases } from "@/lib/parserCaseMerge";
 // The review that replaced the list under the Build button: each document,
 // side by side with what we took from it and why anything was not read.
 import { DocumentReview } from "@/components/review/DocumentReview";
-import { applyReviewEdit, buildDocumentReview } from "@/lib/documentReview";
+import { applyReviewEdit, buildDocumentReview, reviewListsFile } from "@/lib/documentReview";
 
 /** workbook company-information meta value for each parser sector code. */
 
@@ -3322,7 +3322,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
                 belong to no single document, so they are not in the review. */}
             {(() => {
               const crossDocument = reconciliationFlags.filter(
-                (f) => !reviewDocuments.some((d) => d.filename === f.sourceFile),
+                (f) => !reviewListsFile(reviewDocuments, f.sourceFile),
               );
               return crossDocument.length > 0 ? (
                 <ReviewSection

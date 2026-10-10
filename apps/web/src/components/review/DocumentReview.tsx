@@ -258,6 +258,23 @@ export function DocumentReview({
                   </div>
                 ))}
 
+                {doc.sheets && doc.sheets.length > 0 && (
+                  <div className="mb-3" data-testid="review-sheets">
+                    <p className="mb-1.5 text-[12px] font-semibold text-white">
+                      Read sheet by sheet · {doc.sheets.length} sheet{doc.sheets.length === 1 ? "" : "s"}
+                    </p>
+                    <ul className="divide-y divide-white/[0.05] rounded-xl border border-white/[0.06]">
+                      {doc.sheets.map((s) => (
+                        <li key={s.file} className="flex items-center gap-2 px-3 py-1.5 text-[11.5px]" data-testid={`review-sheet-${s.sheet}`}>
+                          <StateIcon state={s.state === "not-read" ? "read" : s.state} className={`h-3 w-3 shrink-0 ${s.state === "not-read" ? "opacity-30" : ""}`} />
+                          <span className="shrink-0 text-[#e5e5ea]">{s.sheet}</span>
+                          <span className="min-w-0 truncate text-[color:var(--muted)]">{s.state === "not-read" ? "nothing used from this sheet" : s.summary}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {doc.values.length > 0 && (
                   <div className="mt-1" data-testid="review-values">
                     <p className="mb-1.5 flex items-baseline justify-between gap-2 text-[12px] font-semibold text-white">
@@ -267,13 +284,16 @@ export function DocumentReview({
                     <dl className="divide-y divide-white/[0.05] rounded-xl border border-white/[0.06]">
                       {doc.values.map((v, i) => (
                         <div key={i} className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)] gap-3 px-3 py-1.5">
-                          <dt className="truncate text-[11.5px] text-[color:var(--muted)]" title={v.label}>{v.label}</dt>
+                          <dt className="min-w-0 text-[11.5px] text-[color:var(--muted)]" title={v.label}>
+                            <span className="block truncate">{v.label}</span>
+                            {v.sheet && <span className="block truncate text-[10px] text-[color:var(--muted)]/70">{v.sheet}</span>}
+                          </dt>
                           <dd className="min-w-0 text-[11.5px] text-[#e5e5ea]">
                             {onEditValue && v.edit ? (
                               <EditableValue
                                 value={v.value}
                                 label={v.label}
-                                onSave={(next) => onEditValue(doc.filename, v.edit!, next)}
+                                onSave={(next) => onEditValue(v.file ?? doc.filename, v.edit!, next)}
                                 testId={`review-value-${i}`}
                               />
                             ) : (
@@ -306,7 +326,7 @@ export function DocumentReview({
                         <QuestionRow
                           key={v.ask?.id ?? i}
                           value={v}
-                          onAnswer={onAnswer ? (answer) => onAnswer(doc.filename, v.ask!, answer) : undefined}
+                          onAnswer={onAnswer ? (answer) => onAnswer(v.file ?? doc.filename, v.ask!, answer) : undefined}
                         />
                       ))}
                     </ul>
@@ -352,13 +372,13 @@ export function DocumentReview({
                       <p className="mb-1.5 text-[11px] leading-5 text-[color:var(--body)]">If the document does show one, add it — it goes into the scorecard you build.</p>
                       <ul className="divide-y divide-white/[0.05] rounded-xl border border-amber-400/15">
                         {doc.missing.map((m) => (
-                          <li key={m.field} className="flex items-center justify-between gap-3 px-3 py-1.5 text-[11.5px]">
+                          <li key={`${m.file ?? ""}|${m.field}`} className="flex items-center justify-between gap-3 px-3 py-1.5 text-[11.5px]">
                             <span className="truncate text-[color:var(--body)]" title={m.label}>{m.label}</span>
                             <span className="min-w-0 text-[#e5e5ea]">
                               <EditableValue
                                 value={null}
                                 label={m.label}
-                                onSave={(next) => onEditValue(doc.filename, { kind: "field", field: m.field }, next)}
+                                onSave={(next) => onEditValue(m.file ?? doc.filename, { kind: "field", field: m.field }, next)}
                                 testId={`review-missing-${m.field}`}
                               />
                             </span>
