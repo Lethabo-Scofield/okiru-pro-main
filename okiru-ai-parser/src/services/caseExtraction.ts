@@ -45,6 +45,7 @@ import { reviewCase } from './caseReview.js';
 import { agentCasePass, agentPassForDocument, type AgentCaseContext } from './agentExtraction.js';
 import { extractionDomain } from './extractionDomain.js';
 import { tidyPrintedValues } from './printedValues.js';
+import { applyTickBoxes } from './tickBoxes.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -397,7 +398,13 @@ export async function extractCaseEntities(
   // Printed values made readable under their skill's field types (a weekday
   // date as yyyy-mm-dd, an organisation's name without its trailing company
   // number). After every read, so no prompt changes because of it.
-  tidyPrintedValues(extractions, (documentId) => extractionDomain('bbbee').skillFor(documentId));
+  const skillFor = (documentId: string) => extractionDomain('bbbee').skillFor(documentId);
+  tidyPrintedValues(extractions, skillFor);
+  // Yes/no questions answered with boxes are decided by the mark beside each
+  // option, never by the model's impression of a scan ("N/A" written in a box
+  // is not a tick).
+  const textByFile = new Map(inputs.map((input) => [input.filename, input.markdown || input.raw_text]));
+  applyTickBoxes(extractions, (file) => textByFile.get(file), skillFor);
 
   // The figures the skills forbid the model to compute (EMP201 totals and the
   // months filed, SED payments inside the period, a ledger's own total, the

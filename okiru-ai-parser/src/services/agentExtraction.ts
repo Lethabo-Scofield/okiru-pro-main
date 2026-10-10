@@ -73,6 +73,7 @@ import type { AgentContentPart, AgentMessage, AgentTool, AgentToolCall } from '.
 import { extractionDomain, type DomainDocument, type ExtractionDomain } from './extractionDomain.js';
 import { skillPromptSections, type GlobalSkill, type Skill, type SkillFieldType } from './skills.js';
 import { renderPdfPageBase64 } from './visionExtraction.js';
+import { boxHoldsNotApplicable } from './tickBoxes.js';
 
 const logger = createLogger('AgentExtraction');
 
@@ -656,7 +657,11 @@ function answerAfterLabel(segment: string): boolean | undefined {
   if (!first) return undefined;
   const word = first[1] ?? first[2];
   if (word) return ANSWER_WORDS[word.toLowerCase()];
-  return /[✓✔☑☒✅]/.test(first[0]);
+  const ticked = /[✓✔☑☒✅]/.test(first[0]);
+  // A box someone wrote "N/A" in reads as marked on a scan; it says the
+  // question does not apply, never yes (tickBoxes.ts).
+  if (ticked && boxHoldsNotApplicable(segment.slice((first.index ?? 0) + first[0].length))) return false;
+  return ticked;
 }
 
 /**
