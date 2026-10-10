@@ -2749,6 +2749,8 @@ export interface DeterministicDocument {
    * `overall_confidence` its confidence.
    */
   typed_by?: 'classifier';
+  /** The rule-based reader's full output (caseDocumentSummary.parser_output), when the route passes it. */
+  parser_output?: { audit_trail?: { classification_status?: string } };
 }
 
 export interface HardSignals {

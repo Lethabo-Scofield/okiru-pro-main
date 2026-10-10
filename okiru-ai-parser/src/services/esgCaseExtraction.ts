@@ -41,7 +41,6 @@ import { billAsMonthlyRows } from './esgBillFacts.js';
 import {
   CONFIDENCE_FLOOR,
   classifyDocument,
-  isOtherClassification,
   routingElement,
   specForSkill,
   type DocumentClassificationResult,
@@ -59,8 +58,7 @@ import {
   type DeterministicDocument,
 } from './agentExtraction.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
-import { addOtherDocumentRead, agentOnOtherDocument, proposeOpenMappings } from './openRead.js';
-import { activeOpenSkill } from './openFacts.js';
+import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAOther, proposeOpenMappings } from './openRead.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
 import { extractEsgMonthlyTables } from './esgMonthlyTables.js';
@@ -280,15 +278,17 @@ export async function extractEsgCaseEntities(
       : null;
     // A confident classification says what the document IS; below that, the
     // element the person filed it under beats a keyword guess (C1).
-    const elementOverride =
-      routingElement(classification) ?? focusForInput(input.filename, options.focusByFile) ?? undefined;
+    const filedUnder = focusForInput(input.filename, options.focusByFile) ?? null;
+    const elementOverride = routingElement(classification) ?? filedUnder ?? undefined;
     // Pass A named the document's type from the ESG skills menu: read it with
     // that type's spec, not with whatever keyword retrieval ranks first.
     const skillSpecIds = esgSkillSpecIds(classification, input);
     // Pass A says the document is NONE of the listed ESG types: it is read for
     // what it is (the open read below), never under the spec retrieval ranks
-    // first. Only with the open read on; with it off, nothing changes.
-    const otherByClassifier = activeOpenSkill('esg') !== null && isOtherClassification(classification);
+    // first. Only with the open read on; with it off, nothing changes. The
+    // element the person filed the document under beats Pass A's OTHER (C1):
+    // the document is read under that element, as it was before.
+    const otherByClassifier = passAOther('esg', classification, { filedUnder });
 
     // A dashboard sheet — sites down the side, months across — is read by the
     // code, figure by figure. When it is, the flat spec pass is skipped for that

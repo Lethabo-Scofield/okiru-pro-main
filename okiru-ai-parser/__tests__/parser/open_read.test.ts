@@ -27,12 +27,16 @@ import {
   OPEN_READ_ID,
   absorbOpenAgentValues,
   openAgentTarget,
+  openReadFromReplies,
   openReadMode,
   openReadTooLittle,
   otherDetailsFrom,
+  otherExtraction,
+  sensitiveFact,
   validateFacts,
   type OpenRead,
 } from '../../src/services/openFacts.js';
+import { addOtherDocumentRead, confidentlyRuleTyped } from '../../src/services/openRead.js';
 import { agentCasePass } from '../../src/services/agentExtraction.js';
 import type { AgentMessage, AgentToolCall, AgentTurn } from '../../src/services/agentModel.js';
 import { aiValuesForUpload, asOtherDocumentOutput, uploadNameResolver } from '../../src/services/runAttestation.js';
@@ -206,10 +210,21 @@ describe('the open skill (_open.md) loads in the loader\'s format', () => {
     expect(() => buildSkillRegistry('bbbee', [{ file: '_open.md', content: bad }])).toThrow(SkillLoadError);
   });
 
-  it('PARSER_OPEN_READ: on by default; other = Other documents only; off = nothing', () => {
-    expect(openReadMode({})).toBe('on');
+  it('PARSER_OPEN_READ: other (Other documents only) by default; on adds other details; off = nothing', () => {
+    // Listed reads keep byte-identical prompts by default, so their free
+    // cassette replays stay valid until a paid gate run measures `on`.
+    expect(openReadMode({})).toBe('other');
     expect(openReadMode({ PARSER_OPEN_READ: 'other' })).toBe('other');
+    expect(openReadMode({ PARSER_OPEN_READ: 'on' })).toBe('on');
     expect(openReadMode({ PARSER_OPEN_READ: 'off' })).toBe('off');
+  });
+
+  it('neither open skill asks for an account number as a reference', () => {
+    for (const domain of ['bbbee', 'esg'] as const) {
+      const refs = loadSkills(domain, { root }).open!.fields.find((f) => f.name === 'reference_numbers')!;
+      expect(refs.labels.map((l) => l.toLowerCase())).not.toContain('account number');
+      expect(refs.description).not.toMatch(/\baccount or\b|, account\b/i);
+    }
   });
 });
 
@@ -357,6 +372,7 @@ describe('B-BBEE: a document no listed type fits is read as an Other document', 
       : { not_this_document: true });
     const classify = { 'forklift-training.pdf': { element: 'SKILLS_DEVELOPMENT', document_type: 'Training attendance register', confidence: 0.82 } };
 
+    process.env.PARSER_OPEN_READ = 'on';
     const on = stubModel({ classify, extract });
     const withDetails = await extractCaseEntities([ATTENDANCE], on);
     const listed = withDetails!.extractions.find((e) => e.documentId === ATTENDANCE_SPEC)!;
@@ -406,6 +422,66 @@ describe('B-BBEE: a document no listed type fits is read as an Other document', 
       agent: { mode: 'off', deterministic: [{ filename: LEASE.filename, document_type: 'Financing / loan agreement for third-party-funded BEE acquisition', status: 'failed' }] },
     });
     expect(model.calls.filter((c) => c.kind === 'open')).toHaveLength(0);
+  });
+
+  it('by default (mode other) a listed read\'s prompt carries no OTHER DETAILS block', async () => {
+    const model = stubModel({
+      classify: { 'forklift-training.pdf': { element: 'SKILLS_DEVELOPMENT', document_type: 'Training attendance register', confidence: 0.82 } },
+      extract: () => ({ event_name: 'Forklift refresher' }),
+    });
+    await extractCaseEntities([ATTENDANCE], model);
+    const prompts = model.calls.filter((c) => c.kind === 'extract');
+    expect(prompts.length).toBeGreaterThan(0);
+    expect(prompts.every((c) => !c.user.includes('OTHER DETAILS'))).toBe(true);
+  });
+
+  const ruleTyped = (status: string) => ({
+    filename: LEASE.filename,
+    document_type: 'Financing / loan agreement for third-party-funded BEE acquisition',
+    status: 'review_required',
+    parser_output: { audit_trail: { classification_status: status } },
+  });
+
+  it('a confident rule-based typing beats Pass A\'s OTHER: the document is read under its listed type, never as an Other document', async () => {
+    const model = stubModel({
+      classify: { 'premises-lease.pdf': { element: 'OTHER', document_type: 'Covering letter', confidence: 0.7 } },
+      open: { 'premises-lease.pdf': LEASE_OPEN },
+    });
+    const result = await extractCaseEntities([LEASE], model, undefined, {
+      agent: { mode: 'off', deterministic: [ruleTyped('classified')] },
+    });
+    expect(model.calls.filter((c) => c.kind === 'extract').length).toBeGreaterThan(0);
+    expect(model.calls.filter((c) => c.kind === 'open')).toHaveLength(0);
+    expect(otherOf(result?.extractions ?? [], LEASE.filename)).toBeUndefined();
+  });
+
+  it('a DOUBTED rule-based guess does not beat Pass A\'s OTHER: the document is read as an Other document', async () => {
+    const model = stubModel({
+      classify: { 'premises-lease.pdf': { element: 'OTHER', document_type: 'Lease agreement', confidence: 0.92 } },
+      open: { 'premises-lease.pdf': LEASE_OPEN },
+    });
+    const result = await extractCaseEntities([LEASE], model, undefined, {
+      agent: { mode: 'off', deterministic: [ruleTyped('ambiguous')] },
+    });
+    expect(model.calls.filter((c) => c.kind === 'extract')).toHaveLength(0);
+    expect(otherOf(result!.extractions, LEASE.filename)?.documentName).toBe('Other document — Lease agreement');
+  });
+
+  it('a listed read that ERRORED is not hidden as an Other document', async () => {
+    const model = stubModel({ open: { 'premises-lease.pdf': LEASE_OPEN } });
+    const failed: DocumentExtraction = { documentId: 'x', documentName: 'X', sourceFile: LEASE.filename, values: [], missingFields: [], unexpectedFields: [], exceptions: [], error: '429 Too Many Requests' };
+    const out = await addOtherDocumentRead(model, LEASE, [failed], { domain: 'bbbee', byClassifier: false, typed: false });
+    expect(out.other).toBe(false);
+    expect(out.results).toEqual([failed]);
+    expect(model.calls.filter((c) => c.kind === 'open')).toHaveLength(0);
+  });
+
+  it('confidentlyRuleTyped: a classified, listed rule type only', () => {
+    expect(confidentlyRuleTyped(ruleTyped('classified'))).toBe(true);
+    expect(confidentlyRuleTyped(ruleTyped('ambiguous'))).toBe(false);
+    expect(confidentlyRuleTyped({ ...ruleTyped('classified'), document_type: 'Other document' })).toBe(false);
+    expect(confidentlyRuleTyped({ filename: 'x.pdf', document_type: 'Share Certificate' })).toBe(false);
+    expect(confidentlyRuleTyped(undefined)).toBe(false);
   });
 });
 
@@ -473,6 +549,17 @@ describe('ESG: a document no listed type fits is read as an Other document', () 
     expect(other.documentName).toBe('Other document — Municipal rates letter');
     expect(other.open?.facts.map((f) => f.label)).toEqual(['Municipal valuation', 'Annual rates levied', 'Rate in the rand']);
     expect(Object.keys(result!.calculator.payload)).toEqual([]);
+  });
+
+  it('the element the person filed a document under beats Pass A\'s OTHER (C1): it is read under that element', async () => {
+    const model = stubModel({
+      classify: { 'policy-schedule.pdf': { element: 'OTHER', document_type: 'Insurance schedule', confidence: 0.9 } },
+      extract: () => ({ not_this_document: true }),
+      open: { 'policy-schedule.pdf': { document_label: 'Insurance schedule', facts: [] } },
+    });
+    await extractEsgCaseEntities([INSURANCE], model, undefined, { focusByFile: { 'policy-schedule.pdf': 'GHG_ENERGY' } });
+    // The listed read ran under the filed element (it was skipped before this fix).
+    expect(model.calls.filter((c) => c.kind === 'extract').length).toBeGreaterThan(0);
   });
 });
 
@@ -587,6 +674,15 @@ describe('the rule-based classifier stops forcing a type the reader says does no
     expect(verdict).toMatchObject({ none: true, documentType: '', confidence: 0.9 });
   });
 
+  it('a NONE below the stricter floor is no answer: the keyword guess is not discarded on a hunch', async () => {
+    resetAdjudicationCacheForTest();
+    const model: ExtractionModel = { name: 'stub', complete: async () => '{"document_type":"NONE","confidence":0.7,"reason":"not sure"}' };
+    const verdict = await adjudicateDocumentType(model, { filename: 'seta-cert.pdf', raw_text: LEASE.raw_text }, [
+      { name: 'SARS VAT declaration for imported goods', pillar: 'ESD', lexicalConfidence: 0.4, description: 'x', expectedFields: [] },
+    ]);
+    expect(verdict).toBeNull();
+  });
+
   it('a lease the keyword scorer guessed as a listed type is reported as an Other document, with nothing read under the guess', async () => {
     const repo = new InMemoryOntologyRepository();
     let asked = 0;
@@ -660,5 +756,101 @@ describe('the library shows Other documents and their facts', () => {
     // A type the rule layer read confidently stands.
     const typed = { document_type: 'Share Certificate', status: 'passed' };
     expect(asOtherDocumentOutput(typed, other)).toBe(typed);
+  });
+});
+
+// ── What is never kept ──────────────────────────────────────────────────────
+
+/** An invented digit string completed with a Luhn check digit (no real number appears in this file). */
+function withCheckDigit(body: string): string {
+  for (let d = 0; d <= 9; d += 1) {
+    const digits = `${body}${d}`;
+    let sum = 0;
+    for (let i = 0; i < digits.length; i += 1) {
+      let n = Number(digits[digits.length - 1 - i]);
+      if (i % 2 === 1) { n *= 2; if (n > 9) n -= 9; }
+      sum += n;
+    }
+    if (sum % 10 === 0) return digits;
+  }
+  throw new Error('unreachable');
+}
+
+describe('bank or card accounts and ID numbers are never kept, whatever the reader returns', () => {
+  const idShaped = withCheckDigit('123456789012');
+  const cardShaped = withCheckDigit('400000000000000');
+  const LETTER = doc('bank-letter-2.pdf', [
+    'MARULA COMMERCIAL BANK',
+    'BANK CONFIRMATION LETTER',
+    'Account holder: BAOBAB ENGINEERING (PTY) LTD',
+    'Account no: 6200 1122 33',
+    'Closing balance: R 1 204 330.15',
+    'Our ref: MCB/CONF/88123',
+    `Learner reference ${idShaped}`,
+    `Card ${cardShaped}`,
+  ].join('\n'));
+
+  it('drops facts labelled or quoted as an account or ID number, and ID- or card-shaped values', () => {
+    const { facts, withheld } = validateFacts([
+      { label: 'Account number', value: '6200 1122 33', quote: 'Account no: 6200 1122 33' },
+      { label: 'Account', value: '6200 1122 33', quote: 'Account no: 6200 1122 33' },
+      { label: 'Learner reference', value: idShaped, quote: `Learner reference ${idShaped}` },
+      { label: 'Card', value: cardShaped, quote: `Card ${cardShaped}` },
+      { label: 'ID no', value: 'L. Mahlangu', quote: '| L. Mahlangu | 900101 5009 087 | signed |' },
+      { label: 'Account holder', value: 'BAOBAB ENGINEERING (PTY) LTD', quote: 'Account holder: BAOBAB ENGINEERING (PTY) LTD' },
+      { label: 'Closing balance', value: 'R 1 204 330.15', quote: 'Closing balance: R 1 204 330.15' },
+    ], LETTER);
+    expect(facts.map((f) => f.label)).toEqual(['Account holder', 'Closing balance']);
+    expect(withheld).toBe(5);
+    expect(sensitiveFact({ label: 'Passport', value: 'A1', quote: 'Passport A1' })).toBe(true);
+    expect(sensitiveFact({ label: 'Policy no', value: 'PM-55120', quote: 'Policy no: PM-55120' })).toBe(false);
+  });
+
+  it('drops a reference printed on an account line, keeps the document\'s own reference, and says what it withheld', () => {
+    const open = openReadFromReplies([{
+      document_label: 'Bank confirmation letter',
+      reference_numbers: ['6200 1122 33', 'MCB/CONF/88123', idShaped],
+      facts: [{ label: 'Account no', value: '6200 1122 33', quote: 'Account no: 6200 1122 33' }],
+    }], LETTER, 'bbbee');
+    expect(open.identity.referenceNumbers).toEqual(['MCB/CONF/88123']);
+    expect(open.facts).toEqual([]);
+    expect(open.withheld).toBe(3);
+    expect(otherExtraction(LETTER.filename, open).exceptions.join(' ')).toMatch(/never stored/);
+  });
+
+  it('a listed read\'s other details drop an ID-number column too', () => {
+    const read = otherDetailsFrom([
+      { label: 'ID no', value: '900101 5009 087', quote: '| L. Mahlangu | 900101 5009 087 | signed |' },
+      { label: 'Venue', value: 'Depot 4 training room', quote: 'Venue: Depot 4 training room' },
+    ], ATTENDANCE, []);
+    expect(read?.facts.map((f) => f.label)).toEqual(['Venue']);
+    expect(read?.withheld).toBe(1);
+  });
+
+  it('the agent\'s cited reads are filtered the same way', () => {
+    const open: OpenRead = { other: true, label: null, couldEvidence: [], identity: { title: null, issuedBy: null, aboutEntity: null, documentDate: null, period: null, referenceNumbers: [] }, facts: [], dropped: 0 };
+    const [folded] = absorbOpenAgentValues([{
+      documentId: OPEN_READ_ID, documentName: 'Other document', sourceFile: LETTER.filename,
+      values: [
+        { field: 'reference_numbers', value: '6200 1122 33; MCB/CONF/88123', sourceFile: LETTER.filename, sourceDocumentId: OPEN_READ_ID, source: { method: 'agent', quote: 'Account no: 6200 1122 33' } },
+        { field: 'facts', value: [{ label: 'Account no', value: '6200 1122 33' }, { label: 'Closing balance', value: 'R 1 204 330.15' }], sourceFile: LETTER.filename, sourceDocumentId: OPEN_READ_ID, source: { method: 'agent', quote: 'x', rows: [{ quote: 'Account no: 6200 1122 33' }, { quote: 'Closing balance: R 1 204 330.15' }] } },
+      ],
+      missingFields: [], unexpectedFields: [], exceptions: [], open,
+    }]);
+    expect(folded.open?.identity.referenceNumbers).toEqual(['MCB/CONF/88123']);
+    expect(folded.open?.facts.map((f) => f.label)).toEqual(['Closing balance']);
+    expect(folded.open?.withheld).toBe(2);
+  });
+});
+
+describe('the rule-based output says how confident its type decision was', () => {
+  it('audit_trail.classification_status carries the decision\'s status', async () => {
+    const repo = new InMemoryOntologyRepository();
+    const none = await new ParserService(repo, {
+      adjudicator: async () => ({ documentType: '', none: true, confidence: 0.9, reason: 'a lease' }),
+    }).resolve(LEASE);
+    expect(none.audit_trail.classification_status).toBe('unsupported');
+    const plain = await new ParserService(repo).resolve(LEASE);
+    expect(plain.audit_trail.classification_status).toEqual(expect.any(String));
   });
 });

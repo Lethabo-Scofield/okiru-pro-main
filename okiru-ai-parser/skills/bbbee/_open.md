@@ -1,6 +1,6 @@
 ---
 id: _open
-version: 1
+version: 2
 rowsField: facts
 fields:
   - name: document_label
@@ -29,8 +29,8 @@ fields:
     description: "The period the document covers or is valid for, as printed ('1 March 2025 to 28 February 2026')."
   - name: reference_numbers
     type: text
-    labels: ["reference", "ref", "account number", "policy number", "registration number", "contract number"]
-    description: "Reference, contract, policy or registration numbers printed on the document, as printed, separated by '; '."
+    labels: ["reference", "ref", "policy number", "registration number", "contract number"]
+    description: "Reference, contract, policy or registration numbers printed on the document, as printed, separated by '; '. Never a bank or card account number, an ID number or a passport number."
   - name: could_evidence
     type: text
     description: "The scorecard elements this document could support, as a list of element keys (OWNERSHIP, MANAGEMENT_CONTROL, SKILLS_DEVELOPMENT, ESD, SED, FINANCIALS), or an empty list when it supports none."
@@ -78,7 +78,7 @@ person decide later whether any fact belongs in the workbook.
 
 - Identity sits at the top and the foot: the letterhead (issuer), the title,
   the addressee block ("To:", "The Insured:", "Tenant:"), the date line, the
-  reference line ("Our ref", "Policy no", "Account no"), and the signature
+  reference line ("Our ref", "Policy no", "Contract no"), and the signature
   block (who signed, in which capacity).
 - Key facts sit in schedules, tables and clauses: amounts with their labels
   ("Monthly rental: R 18 500.00"), dates ("Commencement date"), terms
@@ -102,9 +102,12 @@ person decide later whether any fact belongs in the workbook.
   would note over a hundred lines of contract wording.
 - The issuer is not the entity the document is about: a bank's letter about
   a client names the bank as issuer and the client as about_entity.
-- Never return bank account numbers, card numbers, passwords or medical
-  details as facts; a reference number that identifies the document (a
-  policy, contract or letter reference) is fine.
+- Never return bank or card account numbers, ID or passport numbers,
+  passwords or medical details, as facts or as reference numbers; on a bank
+  letter the account number is left out (the bank, the account holder and
+  the balance are enough). A reference number that identifies the document
+  (a policy, contract or letter reference) is fine. The parser drops any
+  that slip through, so returning one only wastes the read.
 - document_label is your own short description of the kind of document. It
   is never a company name and never a listed type's name unless the document
   truly is that type.

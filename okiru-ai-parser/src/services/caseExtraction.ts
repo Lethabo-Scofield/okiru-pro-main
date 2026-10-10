@@ -20,7 +20,7 @@ import {
 } from './aiExtraction.js';
 import { resolveCaseEntities, type CaseEntities } from './entityResolution.js';
 import { extractEntityNameFallback } from './entityNameExtraction.js';
-import { classifyDocument, isOtherClassification, routingElement, specForSkill } from './documentClassification.js';
+import { classifyDocument, routingElement, specForSkill } from './documentClassification.js';
 import { validateCase, type CaseValidation } from './auditorValidation.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { extractSheetTable } from './sheetTableExtraction.js';
@@ -43,8 +43,13 @@ import {
 import { excerptAround, explainImplausibleFigure, payloadInvariantFindings } from './payloadPlausibility.js';
 import { reviewCase } from './caseReview.js';
 import { agentCasePass, agentPassForDocument, namesListedType, type AgentCaseContext } from './agentExtraction.js';
-import { addOtherDocumentRead, agentOnOtherDocument, proposeOpenMappings } from './openRead.js';
-import { activeOpenSkill } from './openFacts.js';
+import {
+  addOtherDocumentRead,
+  agentOnOtherDocument,
+  confidentlyRuleTyped,
+  otherByClassifier as passAOther,
+  proposeOpenMappings,
+} from './openRead.js';
 
 const logger = createLogger('CaseExtraction');
 
@@ -303,7 +308,10 @@ export async function extractCaseEntities(
     // under whatever spec retrieval ranks first (that is a forced type); it is
     // read for what it is, by the open read below.
     // (Only with the open read on: with it off, every document is read as before.)
-    const otherByClassifier = activeOpenSkill('bbbee') !== null && isOtherClassification(classification);
+    // A confident rule-based typing beats Pass A's OTHER, which is the looser
+    // call ("not scorecard evidence"): the document keeps its listed read.
+    const deterministic = options.agent?.deterministic?.find((d) => d.filename === input.filename);
+    const otherByClassifier = passAOther('bbbee', classification, { ruleTyped: confidentlyRuleTyped(deterministic) });
 
     // Matrix-spec extraction (single evidence records) AND, for a workbook sheet
     // whose element is clear from its name, TABLE extraction (every row). The
@@ -385,8 +393,7 @@ export async function extractCaseEntities(
         byClassifier: otherByClassifier,
         // A listed type a classifier named (Pass A's skill, or the rule-based
         // type the route passes in) keeps the document that type.
-        typed: Boolean(skillSpec)
-          || namesListedType(options.agent?.deterministic?.find((d) => d.filename === input.filename)?.document_type),
+        typed: Boolean(skillSpec) || namesListedType(deterministic?.document_type),
       });
       results = open.results;
       otherDocument = open.other;

@@ -5,7 +5,7 @@
  * Every name and figure here is invented.
  */
 import { describe, expect, it } from "vitest";
-import { buildDocumentReview, otherDetailsOf } from "../documentReview";
+import { buildDocumentReview, otherDetailsOf, ruleLeftTypeOpen } from "../documentReview";
 import { buildEsgDocumentReview } from "@/components/esg/esgDocumentReview";
 import type { ParserCaseLike } from "../parserWorkbookMap";
 import type { EsgInjectionResult, EsgParserCaseLike } from "@/components/esg/esgParserInjection";
@@ -97,6 +97,33 @@ describe("Other documents in the B-BBEE review", () => {
     expect(training.otherDocument).toBeUndefined();
     expect(training.values.map((v) => v.label)).toEqual(["Event name"]);
     expect(training.otherDetails).toEqual([{ label: "Venue", value: "Depot 4 training room", source: "Venue: Depot 4 training room" }]);
+  });
+
+  it("a type the rule layer read stays that type when the AI read it as an Other document; its details sit beside it", () => {
+    const typedCase = {
+      documents_detected: [{ filename: "letter.pdf", document_type: "Share Certificate", status: "review_required" }],
+      ai_entities: {
+        extractions: [{
+          documentId: "open_read",
+          documentName: "Other document — Covering letter",
+          sourceFile: "letter.pdf",
+          values: [],
+          open: { other: true, identity: { title: "COVERING LETTER" }, facts: [] },
+        }],
+      },
+    } as unknown as ParserCaseLike;
+    const [letter] = buildDocumentReview({ parserCase: typedCase });
+    expect(letter.documentType).toBe("Share Certificate");
+    expect(letter.otherDocument).toBeUndefined();
+    expect(letter.otherDetails?.map((d) => [d.label, d.value])).toEqual([["Title", "COVERING LETTER"]]);
+  });
+
+  it("ruleLeftTypeOpen: failed, empty or an open type only", () => {
+    expect(ruleLeftTypeOpen("failed", "Share Certificate")).toBe(true);
+    expect(ruleLeftTypeOpen("review_required", "Unknown")).toBe(true);
+    expect(ruleLeftTypeOpen("failed", "Other document — Lease agreement")).toBe(true);
+    expect(ruleLeftTypeOpen("passed", "")).toBe(true);
+    expect(ruleLeftTypeOpen("passed", "Share Certificate")).toBe(false);
   });
 
   it("an Other document with nothing read is still explained as unread", () => {

@@ -36,7 +36,8 @@ import {
   type OpenMappingProposal,
   type OpenRead,
 } from './openFacts.js';
-import { agentPassForDocument, type AgentCasePass } from './agentExtraction.js';
+import { agentPassForDocument, namesListedType, type AgentCasePass, type DeterministicDocument } from './agentExtraction.js';
+import { isOtherClassification, type DocumentClassificationResult } from './documentClassification.js';
 import { openSkillPromptText } from './skills.js';
 import { decisionFingerprint, rememberDecision } from './semanticDecisionCache.js';
 
@@ -128,6 +129,35 @@ export async function readOpenDocument(
 // ─── The case extractors' step ──────────────────────────────────────────────
 
 /**
+ * The rule-based reader CONFIDENTLY typed the document as a listed type: its
+ * type decision was 'classified' (a pick backed by the document's content, or
+ * a confident reader's pick) and it names a listed type. Such a document is
+ * that type even when Pass A calls it OTHER: Pass A's OTHER is the looser call
+ * ("not scorecard evidence"), and the deterministic path lets a confident
+ * keyword pick stand over the adjudicator's "none of these" too.
+ */
+export function confidentlyRuleTyped(deterministic: DeterministicDocument | undefined): boolean {
+  if (!deterministic || !namesListedType(deterministic.document_type)) return false;
+  return deterministic.parser_output?.audit_trail?.classification_status === 'classified';
+}
+
+/**
+ * Pass A's verdict that the document is none of the listed types, as the case
+ * extractors act on it: only with the open read on, and never over a stronger
+ * signal — a confident rule-based typing (B-BBEE), or the element the person
+ * filed the document under (ESG, C1: the element the person filed it under
+ * beats a guess).
+ */
+export function otherByClassifier(
+  domain: ExtractionDomain,
+  classification: DocumentClassificationResult | null,
+  stronger: { ruleTyped?: boolean; filedUnder?: string | null } = {},
+): boolean {
+  if (activeOpenSkill(domain) === null || !isOtherClassification(classification)) return false;
+  return !stronger.ruleTyped && !stronger.filedUnder;
+}
+
+/**
  * The case extractors' (B-BBEE and ESG) Other-document step for ONE standalone
  * document, after its listed reads ran (or were skipped because Pass A said it
  * is none of the listed types):
@@ -157,6 +187,9 @@ export async function addOtherDocumentRead(
   const readSomething = results.some((r) => r.values.some((value) => value.field !== 'exceptions'));
   if (!activeOpenSkill(options.domain) || readSomething) return { results, other: false };
   if (!options.byClassifier && options.typed) return { results, other: false };
+  // A listed read that FAILED (a rate limit, a timeout) read nothing because it
+  // never ran: that is a failure to show, not an Other document to hide it.
+  if (!options.byClassifier && results.some((r) => r.error)) return { results, other: false };
   try {
     const outcome = await readOpenDocument(model, input, { domain: options.domain, fallbackLabel: options.classifierLabel ?? null });
     if (!outcome) return { results, other: false };

@@ -246,6 +246,7 @@ export class ParserService {
         requires_human_review: true,
         classification_candidates: classification.candidates ?? [],
         classification_reason: classification.reason,
+        classification_status: classification.status,
       },
     });
   }
@@ -387,6 +388,7 @@ export class ParserService {
         requires_human_review: requiresReview,
         classification_candidates: classification.candidates ?? [],
         classification_reason: classification.reason,
+        classification_status: classification.status,
         rejected_calculator_keys: mapping.rejected,
       },
     });

@@ -156,6 +156,12 @@ export function otherDetailsOf(
   return { otherDocument, details };
 }
 
+/** Does the rule layer's reading leave the document's type open (failed, or no listed type)? */
+export function ruleLeftTypeOpen(status: string | undefined, documentType: string | undefined): boolean {
+  const type = String(documentType ?? "").trim();
+  return status === "failed" || !type || /^(unknown|unsupported|unrecognised document|other document(\s+—.*)?)$/i.test(type);
+}
+
 export interface ReviewInputs {
   parserCase: ParserCaseLike;
   /** The merged workbook patch (rows carry `_sourceFiles` provenance). */
@@ -342,7 +348,13 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
     const problems: ReviewProblem[] = [];
     // None of the listed types fits it (a lease, a bank letter): it was read
     // for what it is. Nothing from it is scored, which is not a failure to read.
-    const other = otherDetailsOf(extractionsOf(parserCase), (source) => source === v.filename);
+    const read = otherDetailsOf(extractionsOf(parserCase), (source) => source === v.filename);
+    // Only when the rule layer left the type open (failed, or no listed type):
+    // a type it read stays that type, with the AI's details beside it — the
+    // same rule the parser's signed run uses (runAttestation ruleLeftTypeOpen).
+    const other = ruleLeftTypeOpen(detected?.status, detected?.document_type ?? v.documentType)
+      ? read
+      : { ...read, otherDocument: null };
     if (other.otherDocument && state === "not-read" && other.details.length > 0) state = "read";
     if (state === "not-read") {
       problems.push(whyNotRead(parserTexts, v.documentType, failedFiles.includes(v.filename), productNoun));

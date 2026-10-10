@@ -50,6 +50,14 @@ const ADJUDICATE_CHARS = 8000;
  */
 export const ADJUDICATION_FLOOR = 0.6;
 
+/**
+ * "None of these" discards the keyword scorer's guess (the document becomes an
+ * Other document), and NONE only means none of the shortlisted candidates —
+ * keyword picks scored low were RIGHT for SETA certificates, EEA1 declarations
+ * and affidavits. So it needs more certainty than a pick does.
+ */
+export const NONE_FLOOR = 0.85;
+
 const SYSTEM_PROMPT = [
   'You are a B-BBEE verification analyst deciding WHAT ONE uploaded document is.',
   'A keyword scorer could not decide between the candidate document types listed',
@@ -198,7 +206,7 @@ export async function adjudicateDocumentType(
   // A confident "none of these" is an answer, not a shrug: the caller stops
   // forcing the document into the keyword scorer's guess (an Other document).
   // (PARSER_OPEN_READ=off keeps the old reading: NONE is no answer.)
-  if (openReadMode() !== 'off' && parsed && picked.toUpperCase() === 'NONE' && confidence >= ADJUDICATION_FLOOR) {
+  if (openReadMode() !== 'off' && parsed && picked.toUpperCase() === 'NONE' && confidence >= NONE_FLOOR) {
     const none: TypeAdjudication = { documentType: '', none: true, confidence, reason };
     cache.set(key, none);
     logger.info('Document is none of the candidate types', { file: input.filename, confidence, reason });

@@ -1,6 +1,6 @@
 ---
 id: _open
-version: 1
+version: 2
 rowsField: facts
 fields:
   - name: document_label
@@ -29,8 +29,8 @@ fields:
     description: "The period the document covers or is valid for, as printed."
   - name: reference_numbers
     type: text
-    labels: ["reference", "ref", "account number", "policy number", "erf number", "contract number"]
-    description: "Reference, contract, policy, account or property numbers printed on the document, as printed, separated by '; '."
+    labels: ["reference", "ref", "policy number", "erf number", "contract number"]
+    description: "Reference, contract, policy or property numbers printed on the document, as printed, separated by '; '. Never a bank or card account number, an ID number or a passport number."
   - name: could_evidence
     type: text
     description: "The ESG data elements this document could support, as a list of element keys (GHG_ENERGY, FLEET, WASTE, WATER, ISO_ENVIRONMENTAL, EMPLOYMENT_EQUITY, HEALTH_SAFETY, TRAINING, COMMUNITY_CSI, SUPPLIER_ESG, BOARD_GOVERNANCE, ETHICS_COMPLIANCE, RISK_ASSURANCE, FINANCIAL), or an empty list when it supports none."
@@ -77,7 +77,7 @@ and a person decide later whether any fact belongs in the workbook.
 ## Where values sit
 
 - Identity sits at the top and the foot: the letterhead (issuer), the title,
-  the addressee block, the date line, the reference line ("Account no",
+  the addressee block, the date line, the reference line ("Our ref",
   "Policy no", "Erf"), and the signature block.
 - Key facts sit in schedules, tables and clauses: amounts with their labels,
   quantities WITH their units ("Consumption: 4 210 kWh"), dates, terms,
@@ -99,8 +99,9 @@ and a person decide later whether any fact belongs in the workbook.
 - Do not repeat boilerplate as facts: clause text that states no figure,
   date, party or reference is not a fact.
 - The issuer is not the entity the document is about.
-- Never return bank account numbers, card numbers, passwords or medical
-  details as facts.
+- Never return bank or card account numbers, ID or passport numbers,
+  passwords or medical details, as facts or as reference numbers. The parser
+  drops any that slip through, so returning one only wastes the read.
 - document_label is your own short description of the kind of document,
   never a company name and never a listed type's name unless the document
   truly is that type. could_evidence is often an empty list.

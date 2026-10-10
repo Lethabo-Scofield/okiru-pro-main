@@ -34,9 +34,10 @@
  *    Identity values must be found in the document's text.
  *  - Values are copied as printed; the open skill forbids computing anything.
  *
- * MODE (PARSER_OPEN_READ): `on` (default) reads Other documents AND captures
- * other details on listed ones; `other` reads Other documents only (every
- * listed type's prompt is byte-identical to before); `off` turns both off
+ * MODE (PARSER_OPEN_READ): `other` (default) reads Other documents only (every
+ * listed type's prompt is byte-identical to before); `on` also captures other
+ * details on listed ones (it changes every listed prompt, so it waits on a
+ * paid answer-key gate run); `off` turns both off
  * (every prompt and every result is exactly as before). The open read also
  * needs the skills (PARSER_SKILLS=off turns it off with them).
  */
@@ -61,11 +62,15 @@ export const OTHER_DOCUMENT = OTHER_DOCUMENT_TYPE;
 
 export type OpenReadMode = 'on' | 'other' | 'off';
 
+/**
+ * `other` by default: listed reads keep byte-identical prompts (their free
+ * cassette replays stay valid) until a paid answer-key gate run measures `on`.
+ */
 export function openReadMode(env: NodeJS.ProcessEnv = process.env): OpenReadMode {
   const flag = String(env.PARSER_OPEN_READ ?? '').trim().toLowerCase();
   if (flag === 'off' || flag === 'false' || flag === '0') return 'off';
-  if (flag === 'other') return 'other';
-  return 'on';
+  if (flag === 'on' || flag === 'true' || flag === '1') return 'on';
+  return 'other';
 }
 
 /** The open skill for a domain, or null when the open read is off (or the skills are). */
@@ -144,6 +149,8 @@ export interface OpenRead {
   facts: OpenFact[];
   /** Facts or identity values refused by the citation check. */
   dropped: number;
+  /** Facts or references never kept because they are a bank or card account or an ID number. */
+  withheld?: number;
   proposals?: OpenMappingProposal[];
 }
 
@@ -186,6 +193,77 @@ function pageOf(quote: string, pages: string[], cited: unknown): number | null |
   return pages.length > 1 ? found + 1 : null;
 }
 
+// ─── What is never kept ─────────────────────────────────────────────────────
+
+/**
+ * Labels that name a bank or card account, or a person's ID or passport
+ * number. A bare "account number" is included: from the label alone a bank
+ * account cannot be told from any other, and an open fact is only ever a
+ * reviewer's note, so withholding it costs nothing that scores.
+ */
+const SENSITIVE_LABEL = new RegExp([
+  String.raw`\bbank\s*acc(?:ount|t)?\b`,
+  String.raw`\bacc(?:ount|t)?\.?\s*(?:no|nr|num|number|#)(?![a-z])`,
+  String.raw`\b(?:iban|bic)\b`,
+  String.raw`\bswift\s*code\b`,
+  String.raw`\b(?:credit|debit|cheque)\s*card\b`,
+  String.raw`\bcard\s*(?:no|nr|num|number|#)(?![a-z])`,
+  String.raw`\bcvv\b`,
+  String.raw`\bid\.?\s*(?:no|nr|num|number|#)(?![a-z])`,
+  String.raw`\bidentity\s*(?:no|nr|num|number|document)\b`,
+  String.raw`\bpassport\b`,
+].join('|'), 'i');
+
+/** Passes the Luhn check (SA ID numbers and card numbers do). */
+function luhn(digits: string): boolean {
+  let sum = 0;
+  for (let i = 0; i < digits.length; i += 1) {
+    let d = Number(digits[digits.length - 1 - i]);
+    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9; }
+    sum += d;
+  }
+  return sum % 10 === 0;
+}
+
+/** A value that is only an identifier: digits with spaces, dashes or slashes, at least six digits. */
+function identifierShaped(value: string): boolean {
+  return /^[\d\s\-/]+$/.test(value) && value.replace(/\D/g, '').length >= 6;
+}
+
+/** A 13-digit ID number or a 15–16 digit card number, by shape and check digit. */
+function looksLikeIdOrCard(value: string): boolean {
+  if (!/^[\d\s-]+$/.test(value)) return false;
+  const digits = value.replace(/\D/g, '');
+  return (digits.length === 13 || digits.length === 15 || digits.length === 16) && luhn(digits);
+}
+
+/**
+ * A fact the parser never keeps: a bank or card account, or an ID or passport
+ * number. By its label; by its quote when the value is a bare identifier on a
+ * line that names one ("Account no: 1234567890"); or by its shape (a 13-digit
+ * ID number or a card number that passes the check digit).
+ */
+export function sensitiveFact(fact: { label: string; value: string; quote: string }): boolean {
+  if (SENSITIVE_LABEL.test(fact.label)) return true;
+  if (looksLikeIdOrCard(fact.value)) return true;
+  return identifierShaped(fact.value) && SENSITIVE_LABEL.test(fact.quote);
+}
+
+/**
+ * A printed reference the parser never keeps: one shaped like an ID or card
+ * number, or one printed on a line that names a bank or card account or an ID
+ * number.
+ */
+export function sensitiveReference(reference: string, lines: string[]): boolean {
+  if (looksLikeIdOrCard(reference)) return true;
+  return lines.some((line) => quoteOccursIn(reference, line) && SENSITIVE_LABEL.test(line));
+}
+
+/** The document's lines, for finding the line a reference is printed on. */
+function documentLines(whole: string): string[] {
+  return whole.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+}
+
 /**
  * Check and keep the facts a reply returned. A fact is kept only when its
  * label, value and quote are there, its quote occurs in the document (on its
@@ -196,13 +274,14 @@ export function validateFacts(
   raw: unknown,
   source: Pick<RawExtractionInput, 'markdown' | 'raw_text'>,
   options: { limit?: number; method?: OpenFact['method']; exclude?: (fact: OpenFact) => boolean } = {},
-): { facts: OpenFact[]; dropped: number } {
+): { facts: OpenFact[]; dropped: number; withheld: number } {
   const list = Array.isArray(raw) ? raw : [];
   const pages = documentPages(source);
   const whole = pages.join('\n');
   const facts: OpenFact[] = [];
   const seen = new Set<string>();
   let dropped = 0;
+  let withheld = 0;
   for (const item of list) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) { dropped += 1; continue; }
     const record = item as Record<string, unknown>;
@@ -210,6 +289,8 @@ export function validateFacts(
     const value = text(record.value);
     const quote = text(record.quote);
     if (!label || !value || !quote || quote.length > MAX_QUOTE) { dropped += 1; continue; }
+    // Never kept, whatever the reader returned: a bank or card account, an ID number.
+    if (sensitiveFact({ label, value, quote })) { withheld += 1; continue; }
     if (!quoteOccursIn(quote, whole) || !valueInQuote(value, quote)) { dropped += 1; continue; }
     const page = pageOf(quote, pages, record.page);
     if (page === undefined) { dropped += 1; continue; }
@@ -231,7 +312,7 @@ export function validateFacts(
     facts.push(fact);
   }
   const limit = options.limit ?? MAX_OPEN_FACTS;
-  return { facts: facts.slice(0, limit), dropped: dropped + Math.max(0, facts.length - limit) };
+  return { facts: facts.slice(0, limit), dropped: dropped + Math.max(0, facts.length - limit), withheld };
 }
 
 /** An identity value is kept only when the document's text holds it. */
@@ -242,17 +323,21 @@ function groundedText(value: unknown, whole: string, type?: 'date'): string | nu
 }
 
 /** "a; b", ["a", "b"] → ["a", "b"], each kept only when printed in the document. */
-function groundedList(value: unknown, whole: string): { kept: string[]; dropped: number } {
+function groundedList(value: unknown, whole: string): { kept: string[]; dropped: number; withheld: number } {
   const items = Array.isArray(value)
     ? value.map(text)
     : (text(value) ?? '').split(/\s*;\s*/).map(text);
   const kept: string[] = [];
+  const lines = documentLines(whole);
   let dropped = 0;
+  let withheld = 0;
   for (const item of items) {
     if (!item) continue;
-    if (quoteOccursIn(item, whole)) { if (!kept.includes(item)) kept.push(item.slice(0, 120)); } else dropped += 1;
+    if (!quoteOccursIn(item, whole)) { dropped += 1; continue; }
+    if (sensitiveReference(item, lines)) { withheld += 1; continue; }
+    if (!kept.includes(item)) kept.push(item.slice(0, 120));
   }
-  return { kept: kept.slice(0, 10), dropped };
+  return { kept: kept.slice(0, 10), dropped, withheld };
 }
 
 /** Element keys of this domain, in the reply's list or comma-separated text. */
@@ -307,6 +392,7 @@ export function openReadFromReplies(
     referenceNumbers: references.kept,
   };
   const facts = validateFacts(replies.flatMap((reply) => (Array.isArray(reply.facts) ? reply.facts : [])), source);
+  const withheld = references.withheld + facts.withheld;
   return {
     other: true,
     label: cleanLabel(first('document_label')) ?? cleanLabel(fallbackLabel),
@@ -314,6 +400,7 @@ export function openReadFromReplies(
     identity,
     facts: facts.facts,
     dropped: dropped + facts.dropped,
+    ...(withheld > 0 ? { withheld } : {}),
   };
 }
 
@@ -335,6 +422,9 @@ export function otherExtraction(sourceFile: string, open: OpenRead, exceptions: 
       ...exceptions,
       ...(open.dropped > 0
         ? [`${open.dropped} detail(s) the open read returned were left out: their quote or value was not found in the document.`]
+        : []),
+      ...(open.withheld
+        ? [`${open.withheld} detail(s) were not kept: a bank or card account or an ID number is never stored.`]
         : []),
     ],
     open,
@@ -428,8 +518,12 @@ export function absorbOpenAgentValues(extractions: DocumentExtraction[], rowsFie
     for (const value of extraction.values) {
       const key = IDENTITY_FIELDS[value.field];
       if (key === 'referenceNumbers') {
-        const ref = text(value.value);
-        if (ref && !open.identity.referenceNumbers.includes(ref)) open.identity.referenceNumbers.push(ref);
+        const line = text(value.source?.quote) ?? '';
+        for (const ref of (text(value.value) ?? '').split(/\s*;\s*/).map(text)) {
+          if (!ref) continue;
+          if (sensitiveReference(ref, line ? [line] : [])) { open.withheld = (open.withheld ?? 0) + 1; continue; }
+          if (!open.identity.referenceNumbers.includes(ref)) open.identity.referenceNumbers.push(ref);
+        }
         continue;
       }
       if (key) {
@@ -445,6 +539,7 @@ export function absorbOpenAgentValues(extractions: DocumentExtraction[], rowsFie
         const printed = text(cells.value);
         const cite = citations[index];
         if (!label || !printed || !cite?.quote) return;
+        if (sensitiveFact({ label, value: printed, quote: cite.quote })) { open.withheld = (open.withheld ?? 0) + 1; return; }
         if (open.facts.some((fact) => fact.label.toLowerCase() === label.toLowerCase() && fact.value.toLowerCase() === printed.toLowerCase())) return;
         if (open.facts.length >= MAX_OPEN_FACTS) return;
         open.facts.push({
@@ -476,6 +571,7 @@ export function otherDetailsPromptLines(): string {
   return [
     `\nOTHER DETAILS: also return "${OTHER_DETAILS_KEY}": an array (at most ${MAX_OTHER_DETAILS}) of anything clearly important this document states`,
     'that the keys above do not ask for: a figure, date, reference number, party, person or condition a reviewer would note.',
+    'Never a bank account, card, ID or passport number.',
     'Each item is {"label": the document\'s own wording, "value": as printed, "unit": as printed or null, "page": or null,',
     '"quote": the printed line it is in, word for word}. Never repeat a value already returned under a key above, never',
     'compute, and return [] when there is nothing more.',
@@ -493,12 +589,12 @@ export function otherDetailsFrom(
 ): OpenRead | null {
   if (raw.length === 0) return null;
   const already = new Set(returned.flatMap(leafTexts).map((v) => v.toLowerCase()));
-  const { facts, dropped } = validateFacts(raw, source, {
+  const { facts, dropped, withheld } = validateFacts(raw, source, {
     limit: MAX_OTHER_DETAILS,
     exclude: (fact) => already.has(fact.value.toLowerCase()),
   });
-  if (facts.length === 0 && dropped === 0) return null;
-  return { other: false, label: null, couldEvidence: [], identity: emptyIdentity(), facts, dropped };
+  if (facts.length === 0 && dropped === 0 && withheld === 0) return null;
+  return { other: false, label: null, couldEvidence: [], identity: emptyIdentity(), facts, dropped, ...(withheld > 0 ? { withheld } : {}) };
 }
 
 function leafTexts(value: unknown): string[] {
