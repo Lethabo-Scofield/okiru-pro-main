@@ -174,7 +174,7 @@ export function applyOverlayToPillars<T extends Record<string, any>>(
     if (mapped[1] === undefined) delete item[mapped[0]];
     else item[mapped[0]] = mapped[1];
   }
-  for (const key of excluded) {
+  for (const key of Array.from(excluded)) {
     const [pillar, list, rowId] = key.split('\u0000');
     const items = listOf(pillar, list);
     if (items) out[pillar][list] = items.filter((x) => String(x.id ?? '') !== rowId);

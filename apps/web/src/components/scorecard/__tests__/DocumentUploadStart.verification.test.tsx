@@ -32,7 +32,7 @@ describe("DocumentUploadStart — claim-vs-evidence verification", () => {
       fileNames: ["Gathering.xlsx"],
       filedBatchByFile: {},
       documentIds: [],
-      parserCase: {
+      parserCase: ({
         ai_entities: {
           extractions: [{
             documentId: "sheet_table__sed",
@@ -43,7 +43,7 @@ describe("DocumentUploadStart — claim-vs-evidence verification", () => {
             ] }],
           }],
         },
-      },
+      }) as never,
     });
     const onCreate = vi.fn(async () => undefined);
     render(<DocumentUploadStart onCreate={onCreate} creating={false} />);

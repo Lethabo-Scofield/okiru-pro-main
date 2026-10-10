@@ -1634,7 +1634,7 @@ function dedupeExactDuplicateRows(
     }
     if (kept.length === sectionRows.length) continue;
     rows[section] = kept;
-    for (const { row, dropped } of seen.values()) {
+    for (const { row, dropped } of Array.from(seen.values())) {
       if (!dropped) continue;
       const nameColumn = (LINK_KEY_COLUMNS[section] ?? [])[0];
       const entity = String((nameColumn && row[nameColumn]) ?? "").trim() || "unnamed row";
