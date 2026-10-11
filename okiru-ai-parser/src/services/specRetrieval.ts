@@ -279,13 +279,41 @@ const COMBINED_UTILITY_SIGNALS: Array<{ specId: string; pattern: RegExp }> = [
   },
 ];
 
+/**
+ * A table's column headings, read from its pipe-table header rows (a row
+ * followed by a `| --- |` separator). Landlord and utility-manager
+ * reconciliations print no "kWh" or "kL" at all: their utilities are COLUMNS
+ * ("Electricity Tenants Usage", "Water Recovery Usage", "Water Value").
+ */
+function tableHeadings(text: string): string[] {
+  const lines = text.split(/\r?\n/);
+  const headings: string[] = [];
+  for (let i = 0; i + 1 < lines.length; i++) {
+    if (!/^\s*\|/.test(lines[i]) || !/^\s*\|\s*:?-{3,}/.test(lines[i + 1])) continue;
+    headings.push(...lines[i].split('|').map((cell) => cell.trim()).filter(Boolean));
+  }
+  return headings;
+}
+
+/** A column of quantities for one utility: its name with a usage word, or its unit. */
+const UTILITY_QUANTITY_COLUMN: Array<{ specId: string; pattern: RegExp }> = [
+  { specId: 'ghg_energy__municipal_electricity_bill', pattern: /\bkwh\b|\belectric\w*\b.*\b(?:usage|consumption|consumed|units|reading)\b/i },
+  { specId: 'water__municipal_water_bill', pattern: /\bkl\b|kilolit|\bwater\b.*\b(?:usage|consumption|consumed|units|reading)\b/i },
+];
+
 /** Spec ids that must appear in the candidate set whatever the ranking says. */
 export function pinnedSpecIds(domain: ExtractionDomain, haystack: string): string[] {
   if (domain !== 'esg') return [];
   const matched = COMBINED_UTILITY_SIGNALS.filter((s) => s.pattern.test(haystack));
   // One utility is an ordinary bill and needs no help. Two on one document is
   // the combined account.
-  return matched.length >= 2 ? matched.map((s) => s.specId) : [];
+  if (matched.length >= 2) return matched.map((s) => s.specId);
+  // A table with a quantity column for each utility is one too, whatever its
+  // words elsewhere: a recovery statement re-billing a tenant's electricity
+  // and water side by side.
+  const headings = tableHeadings(haystack);
+  const columns = UTILITY_QUANTITY_COLUMN.filter((s) => headings.some((heading) => s.pattern.test(heading)));
+  return columns.length >= 2 ? columns.map((s) => s.specId) : [];
 }
 
 /**

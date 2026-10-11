@@ -339,6 +339,29 @@ describe('ESG case extraction: skill routing and the agent pass', () => {
     expect(esgSkillSpecIds(null, both)).toBeNull();
   });
 
+  it('reads both bills on a recovery statement whose utilities are only its columns', () => {
+    // A landlord's reconciliation prints no "kWh" and no "kL": its electricity
+    // and its water are columns of one table. Invented figures.
+    const recovery = {
+      filename: 'Depot A reconciliation.pdf',
+      markdown: [
+        'RECONCILIATION ADVICE',
+        'From 02/03/26 to 31/03/26',
+        '| Date | Days | Electricity Tenants Usage | Electricity Value | Water Tenants Usage | Water Value | Total Recovery Value |',
+        '| --- | --- | --- | --- | --- | --- | --- |',
+        '| 31/03/26 | 29 | 12345 | 45678.90 | 210 | 9876.54 | 55555.44 |',
+      ].join('\n'),
+      raw_text: '',
+    };
+    expect(esgSkillSpecIds(cls('municipal_electricity_bill'), recovery)).toEqual([ELECTRICITY, WATER]);
+    // One utility's columns are an ordinary statement; words outside a table's
+    // headings ("water usage" in a policy's prose) pin nothing.
+    const electricityOnly = { ...recovery, markdown: recovery.markdown.replace(/Water Tenants Usage \| Water Value \| /, '').replace(/210 \| 9876.54 \| /, '') };
+    expect(esgSkillSpecIds(cls('municipal_electricity_bill'), electricityOnly)).toEqual([ELECTRICITY]);
+    const prose = { filename: 'Policy.pdf', markdown: 'We monitor electricity usage and water usage at every depot.', raw_text: '' };
+    expect(esgSkillSpecIds(cls('municipal_electricity_bill'), prose)).toEqual([ELECTRICITY]);
+  });
+
   it('reads both EE specs when one file prints the workforce analysis AND the EE plan forms', () => {
     const report = 'employment_equity__eea2_eea4_report';
     const plan = 'employment_equity__ee_plan_and_forum_minutes';
