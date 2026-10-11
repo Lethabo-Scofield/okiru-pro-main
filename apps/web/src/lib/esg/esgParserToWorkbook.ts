@@ -440,7 +440,19 @@ export function mapEsgCalculatorToWorkbook(
   // pass: in a one-row grid two documents' different sites add up, which they
   // could not do if each reader settled its own figures.
   const monthlyFacts: MonthlyFact[] = [];
-  for (const [gridField, gridRows] of rowsByGrid) {
+  // Waste rows whose mass has no unit the register can hold, by source file.
+  let heldWaste: Map<string, { rows: number; stated: Set<string> }> = new Map();
+  for (const [gridField, initialRows] of rowsByGrid) {
+    let gridRows = initialRows;
+    if (gridField === WASTE_ROWS_FIELD) {
+      const units = wasteRowsWithUnits(gridRows, entries);
+      gridRows = units.kept;
+      heldWaste = units.held;
+      if (gridRows.length === 0) {
+        record(gridField, { status: "unplaced", cells: [], rejection: "unit_unresolved", reason: wasteUnitReason(units.held) });
+        continue;
+      }
+    }
     if (gridField === ESG_MONTHLY_FACTS_FIELD) {
       monthlyFacts.push(...monthlyFactsFromRows(gridRows));
       continue;
@@ -593,9 +605,9 @@ export function mapEsgCalculatorToWorkbook(
   }
 
   const patches: EsgSectionPatchMap = {};
-  const addCell = (sectionId: string, cellRef: string, value: EsgCellValue): boolean => {
+  const addCell = (sectionId: string, cellRef: string, value: EsgCellValue, sectionCells?: Record<string, unknown>): boolean => {
     // THE GATE. Every cell — table, grid or axis — passes here.
-    if (isEsgDerivedCell(sectionId, cellRef)) return false;
+    if (isEsgDerivedCell(sectionId, cellRef, sectionCells)) return false;
     const section = patches[sectionId] ?? (patches[sectionId] = { cells: {} });
     section.cells[cellRef] = value;
     return true;
@@ -632,14 +644,108 @@ export function mapEsgCalculatorToWorkbook(
         section.cells[cellRef] = value;
         continue;
       }
-      addCell(sectionId, cellRef, value);
+      // A register's own cells are judged against the register: a long waste
+      // register's row 16 is a stream, and its depot is not the summary B16.
+      addCell(sectionId, cellRef, value, cells);
     }
   }
 
   const contestedCells = new Set(conflicts.filter((c) => c.sectionId === "e-data").map((c) => c.cellRef));
   const sourceOutcomes = monthlyFactOutcomes(monthlyFacts, monthlyFates, contestedCells, patches);
+  // A document whose waste rows were held answers for itself, even where
+  // another document's rows reached the register.
+  for (const [source, held] of heldWaste) {
+    if (!source) continue;
+    const bySource = sourceOutcomes[WASTE_ROWS_FIELD] ?? (sourceOutcomes[WASTE_ROWS_FIELD] = {});
+    bySource[source] = {
+      status: "unplaced",
+      cells: [],
+      rejection: "unit_unresolved",
+      reason: wasteUnitReason(new Map([[source, held]])),
+    };
+  }
 
   return { patches, outcomes, sourceOutcomes, conflicts };
+}
+
+/* ------------------------------------------------------------------ *
+ * Waste rows need a unit
+ * ------------------------------------------------------------------ */
+
+const WASTE_ROWS_FIELD = "waste_stream_rows";
+const WASTE_QUANTITY_KEYS = ["waste.total_kg", "waste.recycled_kg", "waste.landfill_kg"] as const;
+const WASTE_UNIT_KEYS = ["waste.mass_unit", "waste.unit"] as const;
+
+/** A stated mass unit → kilograms per unit; null when it is no mass unit the register can hold. */
+function kilogramsPer(unit: string): number | null {
+  const u = unit.trim().toLowerCase().replace(/\.$/, "");
+  if (/^(kg|kgs|kilo(gram)?s?)$/.test(u)) return 1;
+  if (/^(t|ton|tons|tonne|tonnes|metric tons?)$/.test(u)) return 1000;
+  return null;
+}
+
+/**
+ * Waste rows whose quantities carry a unit, in kilograms; the rest held.
+ *
+ * The parser's row columns are NAMED in kilograms (`waste_total_kg`) but hold
+ * the figure "in the unit printed" — the waste skill says so, and reports the
+ * unit separately. A row with no stated unit (a dashboard's monthly series
+ * whose figures are a few kilograms a month for five warehouses, or "UNITS")
+ * is not kilograms by assumption: added to a contractor's 13,910 kg it made a
+ * register no total or diversion rate could be read from. Such a row is held
+ * and said so — never written, never scored. A unit is the row's own, or the
+ * one its document states when that document is the row's only source.
+ * Tonnes are converted to kilograms, the register's unit.
+ */
+function wasteRowsWithUnits(
+  rows: EsgCalculatorRowLike[],
+  entries: readonly EsgCalculatorEntryLike[],
+): { kept: EsgCalculatorRowLike[]; held: Map<string, { rows: number; stated: Set<string> }> } {
+  const documentUnit = new Map<string, string>();
+  for (const entry of entries) {
+    if (!(WASTE_UNIT_KEYS as readonly string[]).includes(entry.key)) continue;
+    const files = (entry.sourceFiles ?? []).filter(Boolean);
+    if (files.length === 1 && typeof entry.value === "string") documentUnit.set(files[0], entry.value);
+  }
+  const kept: EsgCalculatorRowLike[] = [];
+  const held = new Map<string, { rows: number; stated: Set<string> }>();
+  for (const row of rows) {
+    const files = (row.sourceFiles ?? []).filter(Boolean);
+    const own = WASTE_UNIT_KEYS.map((key) => row.cells[key]).find((v) => typeof v === "string" && v.trim() !== "");
+    const unit = typeof own === "string" ? own : files.length === 1 ? documentUnit.get(files[0]) : undefined;
+    const factor = unit ? kilogramsPer(unit) : null;
+    if (factor === null) {
+      const source = files[0] ?? "";
+      const entry = held.get(source) ?? { rows: 0, stated: new Set<string>() };
+      entry.rows += 1;
+      if (unit) entry.stated.add(unit);
+      held.set(source, entry);
+      continue;
+    }
+    if (factor === 1) {
+      kept.push(row);
+      continue;
+    }
+    const cells = { ...row.cells };
+    for (const key of WASTE_QUANTITY_KEYS) {
+      const n = typeof cells[key] === "number" ? (cells[key] as number) : Number(cells[key]);
+      if (cells[key] !== undefined && cells[key] !== null && cells[key] !== "" && Number.isFinite(n)) cells[key] = n * factor;
+    }
+    kept.push({ ...row, cells });
+  }
+  return { kept, held };
+}
+
+function wasteUnitReason(held: Map<string, { rows: number; stated: Set<string> }>): string {
+  const rows = Array.from(held.values()).reduce((a, h) => a + h.rows, 0);
+  const stated = Array.from(new Set(Array.from(held.values()).flatMap((h) => Array.from(h.stated))));
+  const unit = stated.length > 0
+    ? `in "${stated.join('", "')}", which is not a mass the waste register records`
+    : "with no unit stated";
+  return (
+    `${rows} waste row(s) give their quantities ${unit}, so they were held back and not scored. ` +
+    "The register records kilograms: confirm the unit (kilograms or tonnes) and add the rows, or enter the contractor's totals."
+  );
 }
 
 /* ------------------------------------------------------------------ *

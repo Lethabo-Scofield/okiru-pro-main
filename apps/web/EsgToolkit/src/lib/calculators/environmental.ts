@@ -13,6 +13,7 @@ import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
  * them.
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { readEsgWasteSummary } from "@/lib/esg/esgWasteSummary";
 import {
   PILLAR_MAX_ENVIRONMENTAL,
   stanceFloorFromWorkbook,
@@ -248,12 +249,21 @@ export function scoreEnvironmental(
 
   /* ------------------------------- Waste ---------------------------- */
 
+  /*
+   * The waste summary is read wherever this workbook keeps it: at B16:B18 on
+   * the reference sheet, under private keys once the register itself runs
+   * through those rows (`esgWasteSummary.ts`). Unknown reads as 0 here — the
+   * score of a rate nobody measured — and as "—" everywhere it is shown.
+   */
+  const wasteDiversion = readEsgWasteSummary(workbook, "diversion");
+  const wasteRecycledMonthly = readEsgWasteSummary(workbook, "recycledMonthly") ?? 0;
+  const wasteLandfillTco2e = readEsgWasteSummary(workbook, "landfillTco2e") ?? 0;
   // C19 = =IFERROR(IF(B16>=B48,5,IF(B16>=B48*B9,5*B16/B48,0)),0)
-  const d19 = prT(num(workbook, "B16", "waste"), thrWaste, 5);
+  const d19 = prT(wasteDiversion ?? 0, thrWaste, 5);
   // C20 = =IF(Waste_Register!$B$17>0,4,0)
-  const d20 = num(workbook, "B17", "waste") > 0 ? 4 : 0;
+  const d20 = wasteRecycledMonthly > 0 ? 4 : 0;
   // C21 = =IF(Waste_Register!$B$18>0,3,0)
-  const d21 = num(workbook, "B18", "waste") > 0 ? 3 : 0;
+  const d21 = wasteLandfillTco2e > 0 ? 3 : 0;
 
   /* ------------------------------- Water ---------------------------- */
 
@@ -458,23 +468,23 @@ export function scoreEnvironmental(
     });
     record({
       key: "d19",
-      measured: { value: num(workbook, "B16", "waste"), unit: "ratio", label: "Waste diversion rate" },
+      measured: wasteDiversion == null ? null : { value: wasteDiversion, unit: "ratio", label: "Waste diversion rate" },
       target: traceTarget("B48", thrWaste, "ratio"),
-      inputs: [traceCell("Waste_Register", "B16", "Waste diverted from landfill (share)", num(workbook, "B16", "waste"))],
+      inputs: [traceCell("Waste_Register", "B16", "Waste diverted from landfill (share)", wasteDiversion)],
       rule: bandedRule(5, floor, "the waste diversion rate"),
     });
     record({
       key: "d20",
-      measured: { value: num(workbook, "B17", "waste"), unit: "ratio", label: "Monthly share recycled" },
+      measured: { value: wasteRecycledMonthly, unit: "ratio", label: "Monthly share recycled" },
       target: null,
-      inputs: [traceCell("Waste_Register", "B17", "Recycled share, from the waste contractor's report", num(workbook, "B17", "waste"))],
+      inputs: [traceCell("Waste_Register", "B17", "Recycled share, from the waste contractor's report", wasteRecycledMonthly)],
       rule: presentRule(4, "a recycled share"),
     });
     record({
       key: "d21",
-      measured: { value: num(workbook, "B18", "waste"), unit: "kg", label: "Waste to landfill" },
+      measured: { value: wasteLandfillTco2e, unit: "kg", label: "Waste to landfill" },
       target: null,
-      inputs: [traceCell("Waste_Register", "B18", "Landfill waste (kg)", num(workbook, "B18", "waste"))],
+      inputs: [traceCell("Waste_Register", "B18", "Landfill waste (kg)", wasteLandfillTco2e)],
       rule: presentRule(3, "landfill waste"),
     });
     record({

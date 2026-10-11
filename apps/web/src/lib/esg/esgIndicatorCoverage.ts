@@ -17,6 +17,7 @@
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { readEsgCell } from "@/lib/esgWorkbookStorage";
 import { deriveEsgSummaryCells } from "./esgDeriveSummary";
+import { readEsgWasteSummary, type EsgWasteSummaryItem } from "./esgWasteSummary";
 import { readEsgGridRows } from "./esgGridRows";
 import { SCORECARD_INDICATORS, esgIndicatorLabel, type EsgScorecardPillar } from "./esgScorecardDefinitions";
 import { ESG_TOOLKIT_PILLAR_NAV } from "./esgToolkitNav";
@@ -83,6 +84,8 @@ type Ctx = {
   text: (section: string, cell: string) => string;
   grid: (prefix: string) => boolean;
   rows: (section: Parameters<typeof readEsgGridRows>[1]) => Array<Record<string, unknown>>;
+  /** A waste summary figure, wherever this workbook keeps it. */
+  waste: (item: EsgWasteSummaryItem) => number | null;
   hasInventory: boolean;
 };
 
@@ -163,15 +166,15 @@ const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
     },
     d19: {
       meaning: `Waste diverted from landfill as a share of all waste, against the diversion target. ${PRO_RATA}`,
-      needs: [need("The waste diversion rate (waste register or contractor report)", (c) => c.num("waste", "B16") !== null)],
+      needs: [need("The waste diversion rate (recycled or landfill kilograms in the waste register, or the contractor's rate)", (c) => c.waste("diversion") !== null)],
     },
     d20: {
       meaning: "Awarded when monthly recycling (the % recycled in the waste contractor's report) is tracked.",
-      needs: [need("Monthly % recycled (waste contractor's report)", positive("waste", "B17"))],
+      needs: [need("Monthly % recycled (waste contractor's report)", (c) => (c.waste("recycledMonthly") ?? 0) > 0)],
     },
     d21: {
       meaning: "Awarded when landfill waste is measured, so its emissions can be stated.",
-      needs: [need("Landfill waste (kg) in the waste register", positive("waste", "B18"))],
+      needs: [need("Landfill waste (kg) in the waste register", (c) => (c.waste("landfillTco2e") ?? 0) > 0)],
     },
     d23: {
       meaning: "Awarded when water consumption is recorded.",
@@ -410,6 +413,7 @@ export function computeEsgIndicatorCoverage(rawWorkbook: EsgWorkbookData): EsgCo
       return Object.entries(eData).some(([ref, v]) => re.test(ref) && Number(v) > 0);
     },
     rows: (section) => readEsgGridRows(workbook.sections?.[section]?.cells as Record<string, unknown> | undefined, section),
+    waste: (item) => readEsgWasteSummary(workbook, item),
     hasInventory: computeGhgInventory(workbook).hasData,
   };
 

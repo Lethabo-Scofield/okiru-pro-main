@@ -308,7 +308,8 @@ describe("registers — one array field, N rows", () => {
         {
           grid: "waste_stream_rows",
           index: 0,
-          cells: { "waste.stream_type": "Paper K4", "waste.total_kg": 22_470, "waste.recycled_kg": 20_470 },
+          // A waste row states its unit; one that does not is held (see the waste-unit tests).
+          cells: { "waste.stream_type": "Paper K4", "waste.total_kg": 22_470, "waste.recycled_kg": 20_470, "waste.mass_unit": "kg" },
         },
         {
           grid: "risk_register_rows",

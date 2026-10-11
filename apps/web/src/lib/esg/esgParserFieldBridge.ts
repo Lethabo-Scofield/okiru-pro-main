@@ -37,6 +37,7 @@
 import { ESG_FALLBACK_REPORTING_AXES, type EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
 import type { EsgCellKind } from "./esgWorkbookInjection";
 import type { EsgGridSectionId } from "./esgGridSections";
+import { isWasteSummaryCell } from "./esgWasteSummary";
 
 /** One workbook cell an allowlist key writes to. */
 export interface EsgScalarTarget {
@@ -633,7 +634,16 @@ export const ESG_HS_QUARTERLY_ROWS: Readonly<Record<string, { row: number; kind:
  * Sources: `esgDeriveSummary.ts` (`fill`/`force` targets), the `Score /5`
  * columns the ISO and IFRS sheets compute, and `esgGridRows.syncDerivedFields`.
  */
-export function isEsgDerivedCell(sectionId: string, cell: string): boolean {
+export function isEsgDerivedCell(
+  sectionId: string,
+  cell: string,
+  /**
+   * The section's cells being written, where known. The waste summary cells
+   * sit inside the register's row range; once the register itself reaches
+   * rows 16–18, `B16:B18` are its streams' depot cells, not the summary.
+   */
+  sectionCells?: Record<string, unknown>,
+): boolean {
   const ref = cell.trim();
   switch (sectionId) {
     case "assumptions":
@@ -675,8 +685,9 @@ export function isEsgDerivedCell(sectionId: string, cell: string): boolean {
       // The fleet-summary totals (B28 vehicles, H28 EVs).
       return ref === "B28" || ref === "H28";
     case "waste":
-      // The diversion rate, the Cority monthly mean and landfill tCO₂e.
-      return ref === "B16" || ref === "B17" || ref === "B18";
+      // The diversion rate, the Cority monthly mean and landfill tCO₂e — at
+      // their sheet address only while the register stops short of it.
+      return sectionCells ? isWasteSummaryCell(sectionCells, ref) : ref === "B16" || ref === "B17" || ref === "B18";
     case "king5":
       // E21 raw total (forced), F21 weighted total, E22 ratio.
       return ref === "E21" || ref === "F21" || ref === "E22";

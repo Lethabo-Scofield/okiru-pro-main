@@ -11,6 +11,7 @@ import { computeCarbonTax } from "./carbonTax";
 import { computeGhgInventory } from "./ghgInventory";
 import { computeNetZeroRoadmap } from "./netZero";
 import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
+import { readEsgWasteSummary } from "@/lib/esg/esgWasteSummary";
 import { scoreEnvironmental } from "./environmental";
 import { scoreGovernance } from "./governance";
 import { scoreSocial } from "./social";
@@ -146,7 +147,8 @@ export function computeEsgDashboard(rawWorkbook: EsgWorkbookData): EsgDashboardK
   const scope1 = ghg.hasData ? ghg.scope1 : undefined;
   const scope2 = ghg.hasData ? ghg.scope2 : undefined;
   const water = readNum(workbook, "e-data", "L63") ?? undefined;
-  const wasteDiv = readNum(workbook, "waste", "B16") ?? undefined;
+  // Wherever this workbook keeps it (a long register owns B16): unknown stays "—".
+  const wasteDiv = readEsgWasteSummary(workbook, "diversion") ?? undefined;
   // G35 as the derive layer forces it: lost-time injuries per 1,000,000 hours.
   const ltifr = readNum(workbook, "s-data", "G35") ?? undefined;
   const netZero = computeNetZeroRoadmap(workbook);
