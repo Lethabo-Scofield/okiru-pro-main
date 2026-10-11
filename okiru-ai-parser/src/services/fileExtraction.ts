@@ -212,6 +212,77 @@ export async function extractDocxMarkdown(buffer: Buffer): Promise<string> {
   return htmlToMarkdown(result.value);
 }
 
+const XML_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+function decodeXmlText(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
+    if (code.startsWith('#x') || code.startsWith('#X')) return String.fromCodePoint(parseInt(code.slice(2), 16));
+    if (code.startsWith('#')) return String.fromCodePoint(Number(code.slice(1)));
+    return XML_ENTITIES[code.toLowerCase()] ?? whole;
+  });
+}
+
+/** One header or footer part's lines: a paragraph per line, a table row as "a | b". */
+function wordPartLines(xml: string): string[] {
+  const lines: string[] = [];
+  // A tab or a line break inside a paragraph separates words: a run of one space.
+  const paragraphText = (p: string) => decodeXmlText(
+    (p.replace(/<w:(?:tab|br|cr)(?:\s[^>]*)?\/>/g, '<w:t> </w:t>')
+      .match(/<w:t(?:\s[^>]*)?>[^<]*<\/w:t>/g) ?? [])
+      .map((run) => run.replace(/<[^>]+>/g, '')).join(''),
+  ).replace(/\s+/g, ' ').trim();
+  // Tables first, row by row, then the paragraphs outside them.
+  const body = xml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (table) => {
+    for (const row of table.match(/<w:tr[ >][\s\S]*?<\/w:tr>/g) ?? []) {
+      const cells = (row.match(/<w:tc>[\s\S]*?<\/w:tc>/g) ?? [])
+        .map((cell) => (cell.match(/<w:p[ >][\s\S]*?<\/w:p>/g) ?? []).map(paragraphText).filter(Boolean).join(' '))
+        .filter(Boolean);
+      if (cells.length > 0) lines.push(cells.join(' | '));
+    }
+    return '';
+  });
+  for (const p of body.match(/<w:p[ >][\s\S]*?<\/w:p>|<w:p\/>/g) ?? []) {
+    const text = paragraphText(p);
+    if (text) lines.push(text);
+  }
+  return lines;
+}
+
+/**
+ * A Word document's page headers and footers, which mammoth leaves out: the
+ * document number and revision date of a controlled form, a letter's company
+ * registration number, its directors and secretary. Each distinct part once
+ * (the first-page, even and default headers often repeat one another), under
+ * "## Header" and "## Footer". Empty when there are none or the file is not a
+ * readable package; never throws.
+ */
+export async function extractDocxHeadersAndFooters(buffer: Buffer): Promise<string> {
+  try {
+    const { default: JSZip } = await import('jszip');
+    const zip = await JSZip.loadAsync(buffer);
+    const sections: string[] = [];
+    for (const [kind, heading] of [['header', '## Header'], ['footer', '## Footer']] as const) {
+      const names = Object.keys(zip.files)
+        .filter((name) => new RegExp(`^word/${kind}\\d*\\.xml$`).test(name))
+        .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+      const seen = new Set<string>();
+      const lines: string[] = [];
+      for (const name of names) {
+        const partLines = wordPartLines(await zip.files[name].async('string'));
+        const key = partLines.join('\n');
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        lines.push(...partLines);
+      }
+      if (lines.length > 0) sections.push(`${heading}\n\n${lines.join('\n')}`);
+    }
+    return sections.join('\n\n');
+  } catch (err) {
+    logger.warn('Could not read the Word document\'s headers and footers; the body is unaffected', { reason: (err as Error).message });
+    return '';
+  }
+}
+
 /**
  * `sheet_to_json(sheet, { defval: '' })` with the number format preserved:
  * first row as headers, one object per data row, percentage cells carrying
@@ -443,6 +514,14 @@ export async function rawExtractionInputFromUpload(
   ) {
     rawText = await withTimeout(extractDocxText(file.buffer), EXTRACTION_TIMEOUT_MS);
     markdown = await withTimeout(extractDocxMarkdown(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => '');
+    // Page headers and footers are part of what the document states (a form's
+    // number and revision date, a letter's registration number and directors);
+    // the body readers above leave them out.
+    const margins = await withTimeout(extractDocxHeadersAndFooters(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => '');
+    if (margins) {
+      rawText = [rawText.trimEnd(), margins].filter(Boolean).join('\n\n');
+      if (markdown) markdown = `${markdown.trimEnd()}\n\n${margins}`;
+    }
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     || file.mimetype === 'application/vnd.ms-excel'
