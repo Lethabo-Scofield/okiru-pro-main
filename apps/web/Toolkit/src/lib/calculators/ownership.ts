@@ -15,13 +15,13 @@ const DEFAULT_WOMEN_VOTING_TARGET = 0.10;
 const DEFAULT_WOMEN_EI_TARGET = 0.10;
 const DEFAULT_DG_TARGET = 0.03;
 const DEFAULT_NEW_ENTRANTS_TARGET = 0.02;
-/** Transport Codes: "Bonus: ESOP, BBOS, co-ops" — 10% (Road Freight QSE and Large). */
-const DEFAULT_ESOP_TARGET = 0.10;
 const SCHEME_ROW = /esop|bbos|employee share|broad.?based (ownership|scheme)|co-?operative/;
+/** The scheme rows the live any-scheme bonus has always recognised (no co-ops). */
+const LIVE_SCHEME_ROW = /esop|bbos|employee share|broad.?based (ownership|scheme)/;
 
 /** Is this register row an employee / broad-based ownership scheme or co-op? Read from the row itself, never assumed. */
-function isSchemeRow(sh: { name?: string; ownershipType?: unknown }): boolean {
-  return SCHEME_ROW.test(`${String(sh.ownershipType ?? '')} ${String(sh.name ?? '')}`.toLowerCase());
+function isSchemeRow(sh: { name?: string; ownershipType?: unknown }, re: RegExp = SCHEME_ROW): boolean {
+  return re.test(`${String(sh.ownershipType ?? '')} ${String(sh.name ?? '')}`.toLowerCase());
 }
 
 /**
@@ -125,7 +125,10 @@ function resolveOwnershipTargets(config: CalculatorConfig) {
     designatedGroupsTarget: oc?.designatedGroupsTarget ?? DEFAULT_DG_TARGET,
     subMinNetValue: oc?.subMinNetValue ?? 3.2,
     esopBonusMaxPts: oc?.esopBonusMaxPts ?? 0,
-    esopBonusTarget: oc?.esopBonusTarget ?? DEFAULT_ESOP_TARGET,
+    // Set only by a sector that scores the bonus as the Transport Codes word it
+    // (scheme economic interest against a target). Unset keeps the live rule:
+    // full points once a scheme row appears in the register.
+    esopBonusTarget: typeof oc?.esopBonusTarget === 'number' && oc.esopBonusTarget > 0 ? oc.esopBonusTarget : null,
     ownershipFulfilmentMaxPts: oc?.ownershipFulfilmentMax ?? 0,
     // Sector-declared bonus indicators. Default false: under the generic Codes
     // black-women voting rights and black-women economic interest are BASE
@@ -265,21 +268,26 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
     );
   }
 
-  // ESOP/BBOS/co-op scheme bonus (Transport): scored on the BLACK ECONOMIC
-  // INTEREST held through scheme rows against the Codes' 10% target —
-  // detected from the row's own ownershipType/name, never assumed. It was
-  // conflated into the women lines once (any 10% black-women holding earned
-  // it), then awarded in FULL the moment any scheme row appeared, however
-  // small its stake.
-  let schemeBlackEI = 0;
-  for (const sh of shareholders) {
-    if (!isSchemeRow(sh as { name?: string; ownershipType?: unknown })) continue;
-    const pct = hasShares ? sh.shares / totalSharesRaw : shareholders.length > 0 ? 1 / shareholders.length : 0;
-    schemeBlackEI += pct * sh.blackOwnership;
+  // ESOP/BBOS scheme bonus (Transport), detected from the row's own
+  // ownershipType/name, never assumed. Two rules:
+  //   - live (no esopBonusTarget): full points once a scheme row appears —
+  //     what every Transport Large client is scored on today;
+  //   - the Codes' wording (esopBonusTarget set — held back, see
+  //     TRANSPORT_QSE_CODES_OWNERSHIP_LINES): the BLACK ECONOMIC INTEREST held
+  //     through scheme or co-op rows against the target.
+  let esopBonus = 0;
+  if (ot.esopBonusMaxPts > 0 && ot.esopBonusTarget === null) {
+    const esopEvidence = shareholders.some((sh) => isSchemeRow(sh as { name?: string; ownershipType?: unknown }, LIVE_SCHEME_ROW));
+    esopBonus = esopEvidence ? ot.esopBonusMaxPts : 0;
+  } else if (ot.esopBonusMaxPts > 0 && ot.esopBonusTarget !== null) {
+    let schemeBlackEI = 0;
+    for (const sh of shareholders) {
+      if (!isSchemeRow(sh as { name?: string; ownershipType?: unknown })) continue;
+      const pct = hasShares ? sh.shares / totalSharesRaw : shareholders.length > 0 ? 1 / shareholders.length : 0;
+      schemeBlackEI += pct * sh.blackOwnership;
+    }
+    esopBonus = clampScore(safeRatio(schemeBlackEI, ot.esopBonusTarget, ot.esopBonusMaxPts), ot.esopBonusMaxPts);
   }
-  const esopBonus = ot.esopBonusMaxPts > 0
-    ? clampScore(safeRatio(schemeBlackEI, ot.esopBonusTarget, ot.esopBonusMaxPts), ot.esopBonusMaxPts)
-    : 0;
 
   // Ownership fulfilment (Transport Codes "Ownership fulfilment | Yes | 1").
   const fulfilment = ot.ownershipFulfilmentMaxPts > 0
@@ -323,7 +331,10 @@ export function calculateOwnershipScore(data: OwnershipData, config: CalculatorC
       ? [{ name: 'Ownership fulfilment', target: 'Yes — black participants\' acquisition debt stated and nil', weighting: ot.ownershipFulfilmentMaxPts, score: fulfilment }]
       : []),
     { name: 'Net value', target: `≥ ${ot.subMinNetValue} pts`, weighting: ot.netValueMaxPts, score: netValuePoints },
-    ...(ot.esopBonusMaxPts > 0
+    ...(ot.esopBonusMaxPts > 0 && ot.esopBonusTarget === null
+      ? [{ name: 'ESOP / broad-based scheme participation (bonus)', target: 'scheme in share register', weighting: ot.esopBonusMaxPts, score: esopBonus, isBonus: true }]
+      : []),
+    ...(ot.esopBonusMaxPts > 0 && ot.esopBonusTarget !== null
       ? [{ name: 'ESOP / broad-based scheme / co-op participation (bonus)', target: `${(ot.esopBonusTarget * 100).toFixed(0)}% economic interest through schemes`, weighting: ot.esopBonusMaxPts, score: esopBonus, isBonus: true }]
       : []),
   ];

@@ -245,7 +245,9 @@ function sectorConfigToCalculatorConfig(sc: any) {
       // Transport lines the Codes name on their own (see sectorConfig): the
       // Toolkit scores nothing on them unless the config carries them.
       ...(own.ownershipFulfilmentMaxPts ? { ownershipFulfilmentMax: own.ownershipFulfilmentMaxPts } : {}),
-      ...(own.esopBonusMaxPts ? { esopBonusMaxPts: own.esopBonusMaxPts, esopBonusTarget: own.esopBonusTarget ?? 0.10 } : {}),
+      // The target only when the config states one: without it the Toolkit
+      // keeps the live any-scheme rule.
+      ...(own.esopBonusMaxPts ? { esopBonusMaxPts: own.esopBonusMaxPts, ...(own.esopBonusTarget ? { esopBonusTarget: own.esopBonusTarget } : {}) } : {}),
     },
     management: {
       boardBlackTarget: mc.boardBlackTarget,

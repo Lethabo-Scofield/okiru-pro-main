@@ -8,12 +8,12 @@
  * instead of the best four. (Invented company.)
  */
 import { describe, expect, it } from "vitest";
-import { TRANSPORT_QSE_CALCULATOR_CONFIG as CFG } from "@toolkit/lib/sectors/transport-qse";
+import { TRANSPORT_QSE_CALCULATOR_CONFIG as CFG, TRANSPORT_QSE_CODES_LINES_CALCULATOR_CONFIG as HELD_CFG } from "@toolkit/lib/sectors/transport-qse";
 import { calculateOwnershipScore } from "@toolkit/lib/calculators/ownership";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { calculateTransportQseManagement } from "@toolkit/lib/calculators/transport";
 import { calculateSedScore } from "@toolkit/lib/calculators/esd-sed";
-import { TRANSPORT_QSE } from "../../../api/pipeline/sectorConfig";
+import { TRANSPORT_QSE, withTransportQseCodesOwnershipLines } from "../../../api/pipeline/sectorConfig";
 import { calculateAllPillars, electTransportQseBestFour } from "../../../api/pipeline/rules/pillarCalculators";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,10 +54,27 @@ describe("Transport QSE — web Toolkit and api pipeline agree", () => {
     transportQseMeasuredElements: ["ownership", "managementControl", "preferentialProcurement", "socioEconomicDevelopment"],
   }));
 
-  it("ownership: fulfilment from a stated nil debt, ESOP bonus from scheme economic interest", () => {
-    const web = calculateOwnershipScore(any({ shareholders, companyValue: 0, outstandingDebt: 0, yearsHeld: 0 }), CFG);
+  it("ownership (held-back Codes lines): fulfilment from a stated nil debt, ESOP bonus from scheme economic interest", () => {
+    const web = calculateOwnershipScore(any({ shareholders, companyValue: 0, outstandingDebt: 0, yearsHeld: 0 }), HELD_CFG);
     expect(web.ownershipFulfilment).toBe(1);
-    expect(api.ownership.score).toBeCloseTo(web.total, 2);
+    const held = calculateAllPillars(withTransportQseCodesOwnershipLines(TRANSPORT_QSE), any({
+      ...apiInputs,
+      transportQseMeasuredElements: ["ownership", "managementControl", "preferentialProcurement", "socioEconomicDevelopment"],
+    }));
+    expect(held.ownership.score).toBeCloseTo(web.total, 2);
+  });
+
+  it("ownership (live config): the two copies agree on the borrowed slots", () => {
+    const flagged = shareholders.map((s, i) => (i === 0 ? { ...s, blackNewEntrant: true } : s));
+    const web = calculateOwnershipScore(any({ shareholders: flagged, companyValue: 0, outstandingDebt: 0, yearsHeld: 0 }), CFG);
+    const live = calculateAllPillars(TRANSPORT_QSE, any({
+      ...apiInputs,
+      shareholders: flagged.map((s) => ({ ...s, yearsHeld: 0 })),
+      transportQseMeasuredElements: ["ownership", "managementControl", "preferentialProcurement", "socioEconomicDevelopment"],
+    }));
+    expect(web.ownershipFulfilment).toBe(0);
+    expect(web.newEntrants).toBe(1);
+    expect(live.ownership.score).toBeCloseTo(web.total, 2);
   });
 
   it("management control: a black woman at Senior is not top management when an executive exists", () => {

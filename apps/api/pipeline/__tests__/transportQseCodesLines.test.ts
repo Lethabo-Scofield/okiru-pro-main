@@ -10,7 +10,7 @@
  * (Invented company.)
  */
 import { describe, expect, it } from 'vitest';
-import { TRANSPORT_QSE } from '../sectorConfig';
+import { TRANSPORT_QSE, withTransportQseCodesOwnershipLines } from '../sectorConfig';
 import { calculateAllPillars, electTransportQseBestFour } from '../rules/pillarCalculators';
 import { extractFromPillarData } from '../../src/routes/scorecardBuilder';
 
@@ -30,23 +30,46 @@ const base = {
   transportQseMeasuredElements: ['ownership', 'managementControl', 'preferentialProcurement', 'socioEconomicDevelopment'],
 };
 const score = (over: Record<string, unknown>) => calculateAllPillars(TRANSPORT_QSE, any({ ...base, ...over }));
+// HELD BACK until the sector expert accepts the movement: the Codes lines.
+const HELD = withTransportQseCodesOwnershipLines(TRANSPORT_QSE);
+const scoreHeld = (over: Record<string, unknown>) => calculateAllPillars(HELD, any({ ...base, ...over }));
 
-describe('Transport QSE ownership lines (api copy)', () => {
+describe('Transport QSE live ownership is unchanged while the Codes lines are held back (api copy)', () => {
+  it('a flagged black new entrant with no stated debt keeps the fulfilment point: 25', () => {
+    expect(score({ shareholders: [owner({ blackNewEntrant: true })] }).ownership.score).toBe(25);
+  });
+
+  it('a black woman owner keeps the black-women economic interest point: 27', () => {
+    expect(score({ shareholders: [owner({ blackWomenOwnership: 1 })] }).ownership.score).toBe(27);
+  });
+
+  it('a scheme bonus with no stated target is full points once a scheme row appears', () => {
+    const cfg = { ...TRANSPORT_QSE, targets: { ...TRANSPORT_QSE.targets, ownership: { ...TRANSPORT_QSE.targets.ownership, esopBonusMaxPts: 1 } } };
+    const r = calculateAllPillars(cfg, any({ ...base, shareholders: [
+      owner({ shares: 95 }),
+      owner({ name: 'Staff Trust', ownershipType: 'ESOP / Employee Share Scheme', shares: 5 }),
+    ] }));
+    // 24 base without the new-entrant flag, + the full scheme point
+    expect(r.ownership.score).toBe(25);
+  });
+});
+
+describe('Transport QSE ownership lines, held back (api copy)', () => {
   it('a 100% black owner whose acquisition debt is stated nil earns ownership fulfilment: 25', () => {
-    expect(score({ shareholders: [owner({ outstandingDebt: 0 })] }).ownership.score).toBe(25);
+    expect(scoreHeld({ shareholders: [owner({ outstandingDebt: 0 })] }).ownership.score).toBe(25);
   });
 
   it('unstated debt is not nil, and a new-entrant flag is not fulfilment: 24', () => {
-    expect(score({ shareholders: [owner()] }).ownership.score).toBe(24);
-    expect(score({ shareholders: [owner({ blackNewEntrant: true })] }).ownership.score).toBe(24);
+    expect(scoreHeld({ shareholders: [owner()] }).ownership.score).toBe(24);
+    expect(scoreHeld({ shareholders: [owner({ blackNewEntrant: true })] }).ownership.score).toBe(24);
   });
 
   it('a black woman owner with no scheme earns the black-women bonus but not the ESOP bonus: 27', () => {
-    expect(score({ shareholders: [owner({ blackWomenOwnership: 1, outstandingDebt: 0 })] }).ownership.score).toBe(27);
+    expect(scoreHeld({ shareholders: [owner({ blackWomenOwnership: 1, outstandingDebt: 0 })] }).ownership.score).toBe(27);
   });
 
   it('the ESOP bonus is scheme economic interest against 10%', () => {
-    const r = score({ shareholders: [
+    const r = scoreHeld({ shareholders: [
       owner({ shares: 95, outstandingDebt: 0 }),
       owner({ name: 'Staff Trust', ownershipType: 'ESOP / Employee Share Scheme', shares: 5, outstandingDebt: 0 }),
     ] });

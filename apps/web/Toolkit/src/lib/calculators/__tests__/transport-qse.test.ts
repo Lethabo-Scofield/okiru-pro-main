@@ -45,12 +45,9 @@ describe('Transport QSE scoring', () => {
     }, cfg);
     // 27 not 28 since audit item 12a: the shortcut no longer gifts the one
     // point this fixture never evidences (no DG / new-entrant participation).
-    // 26 since the Road Freight QSE lines are scored as the Codes name them:
-    // the ESOP/BBOS bonus point came from this owner's black-women economic
-    // interest (no scheme exists), and ownership fulfilment needs the
-    // acquisition debt STATED nil — this fixture states none.
-    // 6 voting + 2 black-women bonus + 9 EI + 9 net value = 26.
-    expect(own.total).toBe(26);
+    // (Scoring these lines as the Codes name them would make it 26; that
+    // change is held back — TRANSPORT_QSE_CODES_OWNERSHIP_LINES.)
+    expect(own.total).toBe(27);
   });
 
   it('MC breakdown reconciles to the score and Senior black women do NOT earn the Top-Management bonus', () => {

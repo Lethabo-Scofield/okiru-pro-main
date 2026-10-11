@@ -1712,28 +1712,25 @@ export const TRANSPORT_QSE: SectorConfig = {
   },
   targets: {
     ownership: {
-      // voting 25%+1 vote = 6 pts; EI 25% = 9 pts; ownership fulfilment (Yes) = 1 pt;
+      // voting 25%+1 vote = 6 pts; EI 25% = 9 pts; fulfilment = 1 pt (newEntrants);
       // net value 60% = 9 pts; bonus black women 10% = 2 pts; bonus ESOP/BBOS/co-ops 10% = 1 pt
       // Total: 6+9+1+9+2+1 = 28 ✓
       //
-      // Each line is now scored as the indicator the Codes name. Two were
-      // borrowed slots: ownership fulfilment sat in `newEntrantsMaxPts` and was
-      // scored as black-NEW-ENTRANT economic interest against 2% (the web) or
-      // awarded whenever any new entrant was flagged (this engine) — neither is
-      // what "Ownership fulfilment | Yes | 1" measures. The ESOP/BBOS/co-op
-      // bonus sat in `womenEIMaxPts` and was scored from black-WOMEN economic
-      // interest, so a black woman owner with no scheme earned it. There is no
-      // separate black-women economic-interest line on this scorecard, and no
-      // new-entrant or designated-group line.
+      // LIVE SCORING, HELD AS IT IS. Two lines still sit in borrowed slots:
+      // ownership fulfilment in `newEntrantsMaxPts` and the ESOP/BBOS/co-op
+      // bonus in `womenEIMaxPts`. Scoring them as the Codes name them is
+      // TRANSPORT_QSE_CODES_OWNERSHIP_LINES below. It is not switched on here,
+      // because the Toolkit recalculates on load: live Transport QSE clients
+      // with a flagged new entrant and no stated acquisition debt would drop
+      // the fulfilment point the day the web ships. That needs the sector
+      // expert's explicit acceptance first.
       votingRightsTarget: 0.25, votingRightsMaxPts: 6,
       womenVotingTarget: 0.10, womenVotingMaxPts: 2,      // bonus: black women
       economicInterestTarget: 0.25, economicInterestMaxPts: 9,
-      womenEITarget: 0.10, womenEIMaxPts: 0,              // no such line on this scorecard
+      womenEITarget: 0.10, womenEIMaxPts: 1,              // bonus: ESOP/BBOS/co-ops (borrowed slot)
       netValueMaxPts: 9,                                   // net value 60%
-      newEntrantsMaxPts: 0,                                // no such line on this scorecard
+      newEntrantsMaxPts: 1,                                // ownership fulfilment (borrowed slot)
       economicInterestDesignatedGroupMaxPts: 0,            // no such line on this scorecard
-      ownershipFulfilmentMaxPts: 1,                        // ownership fulfilment (Yes)
-      esopBonusMaxPts: 1, esopBonusTarget: 0.10,           // bonus: ESOP/BBOS/co-ops
     },
     managementControl: {
       // Top management black 50.1% = 25 pts; bonus black women 25% = 2 pts; Total: 27 ✓
@@ -1792,6 +1789,36 @@ export const TRANSPORT_QSE: SectorConfig = {
   categoryWeightings: STANDARD_CATEGORY_WEIGHTINGS,
   industryNorms: STANDARD_INDUSTRY_NORMS,
 };
+
+/**
+ * HELD BACK until the sector expert accepts the score movement. These are the
+ * Road Freight QSE ownership lines as the Codes name them, in place of the two
+ * borrowed slots TRANSPORT_QSE still scores:
+ *   - "Ownership fulfilment | Yes | 1": every black holder's acquisition debt
+ *     STATED and nil (unstated earns nothing), not black-new-entrant
+ *     participation;
+ *   - "Bonus: ESOP, BBOS or co-ops | 10% | 1": black economic interest held
+ *     through scheme rows against 10%, not black-women economic interest.
+ * No live client states its holders' debt today, so switching this on moves
+ * live Transport QSE scores (a flagged new entrant loses the fulfilment point)
+ * and the Toolkit fitness harness. To switch it on, spread these into
+ * TRANSPORT_QSE.targets.ownership in the same release as the expert's sign-off
+ * and the accepted harness baseline.
+ */
+export const TRANSPORT_QSE_CODES_OWNERSHIP_LINES: Readonly<Partial<OwnershipTargets>> = {
+  womenEIMaxPts: 0,                                    // no black-women EI line on this scorecard
+  newEntrantsMaxPts: 0,                                // no new-entrant line on this scorecard
+  ownershipFulfilmentMaxPts: 1,                        // ownership fulfilment (Yes)
+  esopBonusMaxPts: 1, esopBonusTarget: 0.10,           // bonus: ESOP/BBOS/co-ops
+};
+
+/** TRANSPORT_QSE with the held-back ownership lines applied — for tests and the expert's review only. */
+export function withTransportQseCodesOwnershipLines(sc: SectorConfig = TRANSPORT_QSE): SectorConfig {
+  return {
+    ...sc,
+    targets: { ...sc.targets, ownership: { ...sc.targets.ownership, ...TRANSPORT_QSE_CODES_OWNERSHIP_LINES } },
+  };
+}
 // Verified against docs/Transport Codes.xlsx "Road Freight QSE":
 // Compulsory: Ownership 28 + MC 27 + EE 27 = 82
 // Elective (choose ONE of 4): Skills Dev 25 / PP 25 / Enterprise Dev 25 / SED 25

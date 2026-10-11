@@ -9,7 +9,9 @@ import * as XLSX from "xlsx";
 import { normalizeExcelBuffer } from "../../src/lib/workbookExcelNormalizer";
 import { projectWorkbookToClient, type WorkbookData } from "../workbookRoutes";
 import { calculateOwnershipScore } from "../../Toolkit/src/lib/calculators/ownership";
-import { TRANSPORT_QSE_CALCULATOR_CONFIG } from "../../Toolkit/src/lib/sectors/transport-qse";
+// The held-back Codes lines (ownership fulfilment, scheme economic interest):
+// the live Transport QSE config does not score them yet.
+import { TRANSPORT_QSE_CODES_LINES_CALCULATOR_CONFIG as TRANSPORT_QSE_CALCULATOR_CONFIG } from "../../Toolkit/src/lib/sectors/transport-qse";
 
 function register(): ArrayBuffer {
   const wb = XLSX.utils.book_new();

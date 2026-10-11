@@ -8,7 +8,9 @@ import type { WorkbookData } from "../workbookRoutes";
 import { projectWorkbookToClient } from "../workbookRoutes";
 import { parserExtractionsToWorkbook, toWorkbookSections } from "../../src/lib/parserToWorkbook";
 import { calculateOwnershipScore } from "../../Toolkit/src/lib/calculators/ownership";
-import { TRANSPORT_QSE_CALCULATOR_CONFIG } from "../../Toolkit/src/lib/sectors/transport-qse";
+// The held-back Codes line (ownership fulfilment): the live Transport QSE
+// config does not score it yet.
+import { TRANSPORT_QSE_CODES_LINES_CALCULATOR_CONFIG as TRANSPORT_QSE_CALCULATOR_CONFIG } from "../../Toolkit/src/lib/sectors/transport-qse";
 
 function project(debtCell: unknown): ReturnType<typeof projectWorkbookToClient> {
   const read = parserExtractionsToWorkbook([{

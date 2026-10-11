@@ -9,7 +9,9 @@
  */
 import { describe, expect, it } from 'vitest';
 import { calculateOwnershipScore } from '../ownership';
-import { TRANSPORT_QSE_CALCULATOR_CONFIG as CFG } from '../../sectors/transport-qse';
+// HELD BACK: the live TRANSPORT_QSE config still scores the borrowed slots
+// (transportOwnershipLiveHeld.test.ts); these lines are what the expert reviews.
+import { TRANSPORT_QSE_CODES_LINES_CALCULATOR_CONFIG as CFG } from '../../sectors/transport-qse';
 import type { OwnershipData, Shareholder } from '../../types';
 
 function holder(over: Partial<Shareholder>): Shareholder {
