@@ -486,6 +486,10 @@ export function mapEsgCalculatorToWorkbook(
 
   applySaqRow(byKey, gridCells, record);
 
+  /* ---------------- ISO certification and the environmental policy ---------------- */
+
+  const answered = applyIsoEvidence(byKey, gridCells, builder, record);
+
   /* ---------------- Scalars ---------------- */
 
   const saqKeys = new Set(Object.keys(ESG_SAQ_ROW_TARGET.columns));
@@ -494,6 +498,7 @@ export function mapEsgCalculatorToWorkbook(
     const key = entry.key;
     const field = entry.sourceField || key;
     if (saqKeys.has(key)) continue; // already handled as the SAQ row
+    if (answered.has(key)) continue; // already placed as the row it answers
 
     const derived = ESG_DERIVED_KEY_HOMES[key];
     if (derived) {
@@ -2002,4 +2007,100 @@ function applySaqRow(
   const existing = gridCells.get("saq");
   gridCells.set("saq", existing ? { ...existing, ...cells } : cells);
   void failures;
+}
+
+/* ------------------------------------------------------------------ *
+ * ISO 14001 status and the environmental policy's board approval
+ * ------------------------------------------------------------------ */
+
+/**
+ * Where an ISO 14001 process stands, from what an audit report or a
+ * certificate says. ISO 14001 has three real states: certified, genuinely in
+ * progress (a stage 1 or stage 2 audit under way or passed, a recommendation
+ * to certify), and neither. The tracker's own vocabulary already says them:
+ * Fully Compliant, Partially Compliant, Gap. Anything this cannot read is not
+ * guessed — the status stays evidence.
+ */
+export function iso14001TrackerStatus(raw: unknown): "Fully Compliant" | "Partially Compliant" | null {
+  const text = String(raw ?? "").toLowerCase();
+  if (!text.trim()) return null;
+  if (/\b(suspended|withdrawn|expired|revoked|not recommended|not certified|uncertified|failed)\b/.test(text)) return null;
+  if (/\bstage\s*(1|2|one|two|i{1,2})\b|\bin progress\b|\bproceed to\b|\brecommended for certification\b|\bgap analysis\b/.test(text)) {
+    return "Partially Compliant";
+  }
+  if (/\b(certified|certificate (issued|granted|valid)|certification (granted|awarded|confirmed))\b/.test(text)) return "Fully Compliant";
+  return null;
+}
+
+/** The ISO tracker row the certification indicator reads (`esgDeriveSummary` matches "certification"). */
+const ISO_CERTIFICATION_REQUIREMENT = "ISO 14001 certification";
+
+/**
+ * Two document facts that answer a workbook row, rather than a cell of their own:
+ *
+ *   - `iso.iso14001_status` → the ISO tracker's certification row: certified,
+ *     or in progress. E d26 stays gated exactly as before — a certification
+ *     row earns nothing until EMS clauses besides it are assessed.
+ *   - `iso.environmental_policy_approval_date` → `G_Data!B27`, "Environmental
+ *     policy approved by the board": a minuted approval date is the evidence
+ *     the row asks for. Partial where the same policy states no net-zero
+ *     commitment, as the row's own guidance says. E d28 still takes the
+ *     stricter of this and the ISO clause-5.2 assessment.
+ *
+ * Returns the keys it answered, so the scalar pass does not report them again.
+ */
+function applyIsoEvidence(
+  byKey: Map<string, EsgCalculatorEntryLike>,
+  gridCells: Map<string, Record<string, EsgCellValue>>,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): Set<string> {
+  const answered = new Set<string>();
+
+  const status = byKey.get("iso.iso14001_status");
+  const trackerStatus = status ? iso14001TrackerStatus(status.value) : null;
+  if (status && trackerStatus) {
+    const scope = byKey.get("iso.iso14001_scope");
+    const evidence = [String(status.value ?? "").trim(), scope ? `Scope: ${String(scope.value ?? "").trim()}` : ""]
+      .filter(Boolean)
+      .join(" ");
+    const cells = writeEsgGridCells("iso-tracker", [
+      { _id: "esg_parser_iso_certification", requirement: ISO_CERTIFICATION_REQUIREMENT, status: trackerStatus, evidence },
+    ]) as Record<string, EsgCellValue>;
+    const existing = gridCells.get("iso-tracker");
+    gridCells.set("iso-tracker", existing ? { ...existing, ...cells } : cells);
+    record(status.sourceField || status.key, {
+      status: "placed",
+      cells: [{ sectionId: "iso-tracker", cellRef: String(ESG_GRID_SECTIONS["iso-tracker"].startRow), value: trackerStatus }],
+      reason:
+        trackerStatus === "Partially Compliant"
+          ? "Recorded on the ISO tracker as certification in progress. It scores once the EMS clauses behind it are assessed."
+          : "Recorded on the ISO tracker as certified. It scores once the EMS clauses behind it are assessed.",
+    });
+    answered.add(status.key);
+  }
+
+  const approval = byKey.get("iso.environmental_policy_approval_date");
+  if (approval && String(approval.value ?? "").trim()) {
+    const netZero = byKey.get("iso.net_zero_commitment_present");
+    const value = netZero?.value === false ? "Partial" : "Yes";
+    builder.propose({
+      sectionId: "g-data",
+      cellRef: "B27",
+      value,
+      label: cellLabel("g-data", "B27", approval.key),
+      field: approval.sourceField || approval.key,
+      sources: approval.sourceFiles ?? [],
+    });
+    record(approval.sourceField || approval.key, {
+      status: "placed",
+      cells: [],
+      reason:
+        value === "Partial"
+          ? `The policy records a board approval date (${String(approval.value)}) but no net-zero commitment, so the board-approved environmental policy row reads Partial.`
+          : `The policy records a board approval date (${String(approval.value)}).`,
+    });
+    answered.add(approval.key);
+  }
+  return answered;
 }
