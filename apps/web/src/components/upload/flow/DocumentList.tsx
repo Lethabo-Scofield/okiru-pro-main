@@ -9,7 +9,7 @@
  *   Ready to read · Reading · Read · Needs a look · Couldn't read
  *
  * A file that could not be read says so on its own row, with the way on
- * (Replace / Remove) next to it — not as a red line somewhere below the fold.
+ * (Choose another file / Remove) next to it — not as a red line somewhere below the fold.
  * Where a row has more to say (the checklist group it was filed under, its
  * pages, that it is a scan) it sits behind the row's own "details".
  */
@@ -43,7 +43,11 @@ export interface DocumentListProps {
   testIdPrefix: "" | "esg-";
   rows: DocumentListRow[];
   onRemove: (name: string) => void;
-  /** Open the picker for a replacement. */
+  /**
+   * Open the file picker so a better copy can be added. It does not take the
+   * failed file off (Remove does), so the button says "Choose another file",
+   * not "Replace".
+   */
   onReplace?: () => void;
   /** Nothing can change while a read is running. */
   locked?: boolean;
@@ -76,7 +80,17 @@ function StatusWord({ status }: { status: DocumentStatus }) {
 
 export function DocumentList({ testIdPrefix: p, rows, onRemove, onReplace, locked = false, className = "" }: DocumentListProps) {
   if (rows.length === 0) return null;
+  const failedCount = rows.filter((row) => row.error).length;
   return (
+    <>
+    {/* One polite announcement for the batch, not one assertive alert per
+        failed row: several failures in one read used to interrupt several times.
+        Only there when something failed, so a running read keeps one status line. */}
+    {failedCount > 0 && (
+      <p className="sr-only" role="status" aria-live="polite" data-testid={`${p}document-list-status`}>
+        {`${failedCount} ${failedCount === 1 ? "document" : "documents"} couldn't be read.`}
+      </p>
+    )}
     <ul
       className={`divide-y divide-white/[0.05] overflow-hidden rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] ${className}`}
       aria-label="Your documents"
@@ -101,7 +115,7 @@ export function DocumentList({ testIdPrefix: p, rows, onRemove, onReplace, locke
                     <summary className="flex cursor-pointer list-none items-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
                       {name}
                     </summary>
-                    <p className="mt-0.5 pl-6 text-[11px] text-[color:var(--muted)]">{row.details!.join(" · ")}</p>
+                    <p className="mt-0.5 pl-6 text-[11px] text-[color:var(--body)]">{row.details!.join(" · ")}</p>
                   </details>
                 ) : (
                   name
@@ -130,12 +144,11 @@ export function DocumentList({ testIdPrefix: p, rows, onRemove, onReplace, locke
               <div
                 className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 pl-6 text-[11.5px] leading-5 text-red-200"
                 data-testid={`${p}document-error-${row.name}`}
-                role="alert"
               >
                 <span className="min-w-0">{row.error}</span>
                 {onReplace && (
                   <button type="button" disabled={locked} onClick={onReplace} className={textButton("sm")}>
-                    Replace
+                    Choose another file
                   </button>
                 )}
                 {row.removable && (
@@ -158,6 +171,7 @@ export function DocumentList({ testIdPrefix: p, rows, onRemove, onReplace, locke
         );
       })}
     </ul>
+    </>
   );
 }
 

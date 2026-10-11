@@ -42,9 +42,9 @@ describe("ConfirmUploadDialog — the 'What to check' disclosure on a light dial
 });
 
 describe("Disclosure — tone", () => {
-  it("keeps the dark app colours by default", () => {
+  it("keeps the dark app colours by default, with the meta at body contrast", () => {
     render(
-      <Disclosure summary="More" testId="d">
+      <Disclosure summary="More" meta="optional now" testId="d">
         <p>body</p>
       </Disclosure>,
     );
@@ -52,6 +52,11 @@ describe("Disclosure — tone", () => {
     expect(summary).toMatch(/text-\[color:var\(--body\)\]/);
     expect(summary).toMatch(/hover:text-white/);
     expect(chevron).toMatch(/text-\[color:var\(--muted\)\]/);
+    // The meta is something a person reads to decide (a count, "optional now"):
+    // --muted is about 2.8:1 on the panels, --body passes AA.
+    const meta = screen.getByText("optional now");
+    expect(meta.className).toMatch(/text-\[color:var\(--body\)\]/);
+    expect(meta.className).not.toMatch(/var\(--muted\)/);
   });
 
   it("gives the meta the dialog's muted colour in the dialog tone", () => {

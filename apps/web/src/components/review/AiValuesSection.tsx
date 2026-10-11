@@ -63,7 +63,7 @@ export function confidenceWord(confidence: number | null | undefined): string {
 export function HowWeRead({ testId, children }: { testId?: string; children: ReactNode }) {
   return (
     <details className="group mt-1.5" data-testid={testId}>
-      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded text-[11px] text-[color:var(--muted)] transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
+      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded text-[11px] text-[color:var(--body)] transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
         <ChevronRight className="h-3 w-3 transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
         How we read this
       </summary>

@@ -14,7 +14,7 @@ import { ChevronRight } from "lucide-react";
 
 export interface DisclosureProps {
   summary: ReactNode;
-  /** Right-aligned, muted — usually a count. */
+  /** Right-aligned, quieter than the summary — usually a count. */
   meta?: ReactNode;
   children: ReactNode;
   defaultOpen?: boolean;
@@ -40,11 +40,14 @@ const TONES = {
     summary:
       "text-[color:var(--body)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30",
     muted: "text-[color:var(--muted)]",
+    /** A count or a short note a person reads to decide: --body, not --muted (about 2.8:1 on the panels). */
+    meta: "text-[color:var(--body)]",
   },
   dialog: {
     summary:
       "text-foreground/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
     muted: "text-muted-foreground",
+    meta: "text-muted-foreground",
   },
 } as const;
 
@@ -78,7 +81,7 @@ export function Disclosure({
         />
         <span className="min-w-0 flex-1">{summary}</span>
         {meta != null && meta !== "" && (
-          <span className={`ml-auto shrink-0 text-[11.5px] font-normal tabular-nums ${colours.muted}`}>{meta}</span>
+          <span className={`ml-auto shrink-0 text-[11.5px] font-normal tabular-nums ${colours.meta}`}>{meta}</span>
         )}
       </summary>
       <div className="mt-2">{children}</div>

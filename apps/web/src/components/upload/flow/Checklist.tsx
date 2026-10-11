@@ -200,7 +200,7 @@ export function Checklist({
                   <span className="min-w-0">
                     <span className="block text-[13px] font-medium text-white">{group.label}</span>
                     {group.blurb && <span className="block text-[11.5px] leading-5 text-[color:var(--body)]">{group.blurb}</span>}
-                    <span className="block text-[11px] text-[color:var(--muted)]">
+                    <span className="block text-[11px] text-[color:var(--body)]" data-testid={`${p}batch-count-${group.id}`}>
                       {groupCountText(group, anyRead)}
                       {filed > 0 && ` · ${filed} file${filed === 1 ? "" : "s"} added`}
                     </span>
@@ -248,7 +248,7 @@ export function Checklist({
                           <span className="block text-[12.5px] leading-5 text-[color:var(--hi)]">
                             {item.name}
                             {/* Never colour alone — the state is spelled out. */}
-                            <span className="ml-2 text-[10.5px] text-[color:var(--muted)]">{have ? "found" : "not yet"}</span>
+                            <span className="ml-2 text-[10.5px] text-[color:var(--body)]">{have ? "found" : "not yet"}</span>
                           </span>
                           {item.hint && <span className="block text-[11.5px] leading-[1.45] text-[color:var(--body)]">{item.hint}</span>}
                         </span>

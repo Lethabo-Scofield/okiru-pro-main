@@ -96,13 +96,45 @@ describe("DocumentList", () => {
     expect(bad).toHaveTextContent("Couldn't read");
     const error = within(bad).getByTestId("document-error-bad.pdf");
     expect(error).toHaveTextContent("We couldn't read this file.");
-    fireEvent.click(within(error).getByRole("button", { name: "Replace" }));
+    // It opens the picker for a better copy; it does not take the file off, so it does not say "Replace".
+    expect(within(error).queryByRole("button", { name: "Replace" })).not.toBeInTheDocument();
+    fireEvent.click(within(error).getByRole("button", { name: "Choose another file" }));
     expect(onReplace).toHaveBeenCalledTimes(1);
     fireEvent.click(within(error).getByRole("button", { name: "Remove" }));
     expect(onRemove).toHaveBeenCalledWith("bad.pdf");
     // The row's extra detail is behind its own closed details.
     expect(bad.querySelector("details")).not.toHaveAttribute("open");
     expect(bad).toHaveTextContent("3 pages · scanned");
+  });
+
+  it("announces failures once, politely, for the batch, not with an alert per row", () => {
+    render(
+      <DocumentList
+        testIdPrefix="esg-"
+        rows={[
+          { name: "a.pdf", status: "failed", removable: true, error: "We couldn't read this file." },
+          { name: "b.pdf", status: "failed", removable: true, error: "We couldn't read this file." },
+          { name: "c.pdf", status: "read", removable: false },
+        ]}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.queryAllByRole("alert")).toHaveLength(0);
+    const status = screen.getByTestId("esg-document-list-status");
+    expect(status).toHaveAttribute("role", "status");
+    expect(status).toHaveAttribute("aria-live", "polite");
+    expect(status).toHaveTextContent("2 documents couldn't be read.");
+  });
+
+  it("adds no status region when nothing failed, so a running read keeps one status line", () => {
+    render(
+      <DocumentList
+        testIdPrefix=""
+        rows={[{ name: "a.pdf", status: "reading", removable: false }]}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 });
 
