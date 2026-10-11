@@ -1834,12 +1834,23 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       element: e.element,
       values: e.values ?? [],
     }));
-    const verification = verifyClaims({ sections: reconciled.sections as never, evidence });
-    const finalSections = applyOverlayToSections(reconciled.sections as never, verification, "claimed") as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>;
-    finalSections["company-information"] = {
-      ...(finalSections["company-information"] ?? {}),
-      meta: { ...(finalSections["company-information"]?.meta ?? {}), [VERIFICATION_META_KEY]: compactReport(verification) },
-    };
+    // The checks are a report, never a gate: if they throw on some shape of
+    // read nobody foresaw, Build still saves the reconciled sections, just
+    // without a report (the score page then shows no verification panel).
+    let verification: VerificationReport | undefined;
+    let finalSections = reconciled.sections as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>;
+    try {
+      const report = verifyClaims({ sections: reconciled.sections as never, evidence });
+      const overlaid = applyOverlayToSections(reconciled.sections as never, report, "claimed") as Record<string, { rows?: unknown[]; meta?: Record<string, unknown> }>;
+      overlaid["company-information"] = {
+        ...(overlaid["company-information"] ?? {}),
+        meta: { ...(overlaid["company-information"]?.meta ?? {}), [VERIFICATION_META_KEY]: compactReport(report) },
+      };
+      finalSections = overlaid;
+      verification = report;
+    } catch (err) {
+      console.warn("[create] claim verification failed; saving without a report", err);
+    }
 
     // Verdicts assessed against the RECONCILED sections so the ledger reflects
     // the cleaned entity, not the raw extraction.
