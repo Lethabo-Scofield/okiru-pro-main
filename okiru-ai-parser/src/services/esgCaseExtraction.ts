@@ -61,7 +61,7 @@ import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAOther, proposeOpenMappings } from './openRead.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
-import { extractEsgMonthlyTables } from './esgMonthlyTables.js';
+import { extractEsgMonthlyTables, readsMonthlyMeasures } from './esgMonthlyTables.js';
 import { extractEsgPeriodSummary, fillsOfVehicle, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
 import {
   ESG_REGISTER_FIELDS,
@@ -296,12 +296,17 @@ export async function extractEsgCaseEntities(
     // forty-five, and those single answers were what turned a dashboard into a
     // wall of false "your documents disagree" conflicts.
     const matrix = sheetMatrixOf(input.tables);
-    const monthly = await extractEsgMonthlyTables(model, {
+    const monthlyTables = await extractEsgMonthlyTables(model, {
       filename: input.filename,
       sheetName,
       matrix,
       hidden: input.metadata?.sheet_hidden === true,
     });
+    // Only a table of the measures the workbook keeps reads the sheet. One
+    // whose lines are all money, tonnage or dates is reported as printed, and
+    // the sheet's other readers still read it exactly as they did before.
+    const monthly = readsMonthlyMeasures(monthlyTables) ? monthlyTables : null;
+    const reportedOnly = monthly ? null : monthlyTables;
     // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
     // in the tab's name and title, and never on its rows.
     const loggedVehicle = vehicleOfSheet(sheetName, matrix);
@@ -368,6 +373,7 @@ export async function extractEsgCaseEntities(
 
     let results = [...specResults];
     if (readByCode) results.push(readByCode);
+    if (reportedOnly) results.push(reportedOnly);
     if (sheetTable) results.push(sheetTable);
     // Agent loop (off by default): a cited second read of a hard document —
     // a scan, a skill's hard type, a low-confidence type, or one whose first

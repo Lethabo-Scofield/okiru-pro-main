@@ -72,6 +72,8 @@ export interface EsgMonthlyFact {
   period_end: string;
   value: number;
   unit: string;
+  /** The line's second label as printed (a landlord, an account, the unit column's word), when it has one. */
+  qualifier?: string;
 }
 
 /* ------------------------------------------------------------------ *
@@ -165,6 +167,18 @@ export interface MonthLine {
   /** Per month in the run: the figure, or null where the cell is empty. */
   values: Array<number | null>;
   isTotal: boolean;
+  /** The unit the line states in its own cell right of the months ("kWh", "litre"), when the table has a unit column. */
+  unit?: string;
+  /** The figure the line prints in a "Total" column right of the months. Never used as a reading: checked against the months. */
+  statedTotal?: number | null;
+  /** The second figure printed beside each month ("JUL | AMOUNT"), per month, when every month has one. */
+  companion?: Array<number | null>;
+  /**
+   * A LONG table — one line per site AND measure ("Northgate | Electricity | kWh",
+   * "Northgate | Trucks | litre") — names the line by its site; what it measures
+   * is in the qualifier.
+   */
+  long?: boolean;
 }
 
 export interface MonthTable {
@@ -184,6 +198,14 @@ export interface MonthTable {
    * one table laid out twice, and is read as one.
    */
   continues?: boolean;
+  /** The label of the second figure beside every month ("AMOUNT"), when the table has one. */
+  companionLabel?: string;
+  /** The header of the column that states each line's total, when the table has one. */
+  totalHeader?: string;
+  /** One line per site and measure (see MonthLine.long). */
+  long?: boolean;
+  /** The rows the table occupies in the sheet (0-based, inclusive): its header to its last line. */
+  span?: { top: number; bottom: number };
 }
 
 /** Same lines in the same order — the mark of a table continued below itself. */
@@ -251,6 +273,8 @@ function tablesAcross(matrix: unknown[][]): MonthTable[] {
     const labelColumns = Array.from({ length: firstCol }, (_, c) => c).filter((c) => textCount(c) > 0);
     const labelCol = labelColumns.find((c) => textCount(c) * 2 >= body.length) ?? labelColumns[0] ?? -1;
     const qualifierCol = labelColumns.find((c) => c > labelCol) ?? -1;
+    const header = matrix[r] ?? [];
+    const sides = sideColumns(header, monthUnits.length > 0 ? under : [], run);
     const lines: MonthLine[] = body.map((row) => {
       const label = labelCol >= 0 ? asText(row[labelCol]) : '';
       return {
@@ -258,8 +282,12 @@ function tablesAcross(matrix: unknown[][]): MonthTable[] {
         qualifier: qualifierCol >= 0 ? asText(row[qualifierCol]) : '',
         values: run.at.map((c) => asNumber(row[c])),
         isTotal: !label || TOTAL_LABEL.test(label),
+        ...(sides.unitCol >= 0 ? { unit: asText(row[sides.unitCol]) } : {}),
+        ...(sides.totalCol >= 0 ? { statedTotal: asNumber(row[sides.totalCol]) } : {}),
+        ...(sides.companionLabel ? { companion: run.at.map((c) => asNumber(row[c + 1])) } : {}),
       };
     });
+    const long = nameLongLines(lines, body, { labelCol, firstCol });
     const title = titleAbove(matrix, r);
     const previous = tables[tables.length - 1];
     tables.push({
@@ -271,10 +299,94 @@ function tablesAcross(matrix: unknown[][]): MonthTable[] {
       years: run.years,
       lines,
       continues: title.length === 0 && previous !== undefined && sameLines(previous, { lines }),
+      span: { top: r, bottom: last },
+      ...(sides.companionLabel ? { companionLabel: sides.companionLabel } : {}),
+      ...(sides.totalCol >= 0 ? { totalHeader: asText(header[sides.totalCol]) } : {}),
+      ...(long ? { long: true } : {}),
     });
     r = last;
   }
   return tables;
+}
+
+/** A header that names a line's own total, or its year to date. */
+const TOTAL_HEADER = /^(grand\s+)?totals?$|^ytd(\s+total)?$|^year\s+to\s+date$/i;
+/** A header that names the column of units. */
+const UNIT_HEADER = /^(units?|uom|unit\s+of\s+measure(ment)?)$/i;
+
+/**
+ * The columns a months-across table keeps BESIDE its months:
+ *  - a second figure after every month ("JUL | AMOUNT | AUG | AMOUNT"), when
+ *    every month has one under the same label — on the month row itself, or on
+ *    the row of units under it ("LPG - kg | AMOUNT");
+ *  - right of the last month, the line's printed total ("Total", "YTD") and the
+ *    unit each line states ("Units": kWh, litre, tonne).
+ * Read by their headers' own words, never guessed from the figures.
+ */
+function sideColumns(
+  header: unknown[],
+  unitsRow: unknown[],
+  run: MonthRun,
+): { companionLabel: string; totalCol: number; unitCol: number } {
+  const labels = run.at.map((c, i) => {
+    const next = run.at[i + 1] ?? Number.POSITIVE_INFINITY;
+    if (c + 1 >= next) return '';
+    return asText(header[c + 1]) || asText(unitsRow[c + 1]);
+  });
+  const first = labels[0];
+  const companionLabel = first && labels.every((label) => label.toLowerCase() === first.toLowerCase())
+    && readMonthLabel(first, false) === null
+    ? first
+    : '';
+  const lastMonth = run.at[run.at.length - 1] + (companionLabel ? 1 : 0);
+  let totalCol = -1;
+  let unitCol = -1;
+  for (let c = lastMonth + 1; c < header.length; c += 1) {
+    const text = asText(header[c]);
+    if (totalCol < 0 && TOTAL_HEADER.test(text)) totalCol = c;
+    else if (unitCol < 0 && UNIT_HEADER.test(text)) unitCol = c;
+  }
+  return { companionLabel, totalCol, unitCol };
+}
+
+/**
+ * A LONG table states one site's several measures on several lines — "Northgate |
+ * Electricity | Grid | kWh", "Northgate | Trucks | HGV | km", "Northgate | Trucks |
+ * HGV | litre" — so its site column and the next one alone name eight lines
+ * alike, and the one answer given for that shared name made every line diesel.
+ * When names repeat, each line is named by every text cell left of the months
+ * and the unit it states: the label stays the site, the qualifier says what the
+ * line measures. Lines still alike after that are numbered, so no two lines
+ * ever share an answer. True when the table is long.
+ */
+function nameLongLines(
+  lines: MonthLine[],
+  body: unknown[][],
+  layout: { labelCol: number; firstCol: number },
+): boolean {
+  const keys = lines.filter((line) => !line.isTotal).map(lineKey);
+  if (new Set(keys).size === keys.length) return false;
+  lines.forEach((line, i) => {
+    if (line.isTotal) return;
+    const row = body[i] ?? [];
+    const words: string[] = [];
+    for (let c = 0; c < layout.firstCol; c += 1) {
+      const text = c === layout.labelCol ? '' : asText(row[c]);
+      if (text && !words.includes(text)) words.push(text);
+    }
+    if (line.unit && !words.includes(line.unit)) words.push(line.unit);
+    line.qualifier = words.join(' · ');
+    line.long = true;
+  });
+  const seen = new Map<string, number>();
+  for (const line of lines) {
+    if (line.isTotal) continue;
+    const key = lineKey(line);
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    if (n > 1) line.qualifier = `${line.qualifier} (${n})`;
+  }
+  return true;
 }
 
 /** Tables whose months run DOWN a column (a summary sheet: a row per month, a column per measure). */
@@ -307,6 +419,7 @@ function tablesDown(matrix: unknown[][]): MonthTable[] {
       months: run.months,
       years: run.years,
       lines,
+      span: { top: Math.max(0, group), bottom: run.at[run.at.length - 1] },
     }];
   }
   return [];
@@ -375,6 +488,15 @@ function measureCatalogue(): string {
     .join('\n');
 }
 
+/**
+ * How many lines one question names. Every line is asked about: a line left
+ * out of the question has no answer, and a line with no answer is silently
+ * not read. A table with more lines than this is asked about in parts, each
+ * part on its own (cached) question; a table of up to sixteen lines asks
+ * exactly the question it always has.
+ */
+const LINES_PER_QUESTION = 40;
+
 async function readTable(
   model: ExtractionModel,
   table: MonthTable,
@@ -382,7 +504,23 @@ async function readTable(
 ): Promise<TableReading | null> {
   const lines = table.lines.filter((line) => !line.isTotal);
   if (lines.length === 0) return null;
-  const sample = lines.slice(0, 16).map((line) => ({
+  const parts: TableReading[] = [];
+  for (let at = 0; at < lines.length; at += LINES_PER_QUESTION) {
+    const part = await readTableLines(model, table, lines.slice(at, at + LINES_PER_QUESTION), context);
+    if (part) parts.push(part);
+  }
+  if (parts.length === 0) return null;
+  // The first part says what the lines are and which year; every part answers its own lines.
+  return { ...parts[0], lines: Object.assign({}, ...parts.map((part) => part.lines)) };
+}
+
+async function readTableLines(
+  model: ExtractionModel,
+  table: MonthTable,
+  lines: MonthLine[],
+  context: { filename: string; sheetName?: string },
+): Promise<TableReading | null> {
+  const sample = lines.map((line) => ({
     key: lineKey(line),
     label: line.label,
     qualifier: line.qualifier || undefined,
@@ -395,6 +533,9 @@ async function readTable(
     `CORNER CELL: ${table.corner || '(none)'}`,
     `MONTHS: ${table.months.map((m) => MONTH_NAMES[m - 1]).join(', ')}${table.years[0] ? ` (first stated as ${table.years[0]})` : ''}`,
     table.monthUnits.length ? `UNITS UNDER THE MONTHS: ${Array.from(new Set(table.monthUnits)).join(', ')}` : '',
+    table.long
+      ? 'LAYOUT: one line per site AND measure. Each line\'s label is its site; its qualifier says what the line measures, ending with the unit the line states. Answer lines_are "sites" and give each line its own measure and unit.'
+      : '',
     `LINES: ${JSON.stringify(sample)}`,
     'MEASURES:',
     measureCatalogue(),
@@ -471,40 +612,179 @@ export function yearsOf(table: Pick<MonthTable, 'months' | 'years'>, firstMonthY
   return out;
 }
 
-export function tableFacts(table: MonthTable, reading: TableReading): { facts: EsgMonthlyFact[]; notes: string[] } {
+/**
+ * What a figure IS, by the words the table prints beside it — a currency or
+ * "COST"/"AMOUNT", a mass ("TONNE", "kg"), a count ("CASES"), a date — never
+ * by the figure itself. These figures are not monthly measures the workbook
+ * keeps; they are reported as printed, in the unit printed, never converted.
+ */
+export type ReportedKind = 'money' | 'mass' | 'count' | 'date' | 'stated_total' | 'title' | 'other';
+
+export interface EsgReportedFact {
+  kind: ReportedKind;
+  /** The table's own words for the figure: its title, line label and qualifier. */
+  label: string;
+  site: string | null;
+  /** Last day of the month (or of the run, for a line's printed total); null for a title. */
+  period_end: string | null;
+  value: number | string;
+  /** As printed ("R", "AMOUNT", "TONNE"); empty when the table prints none. */
+  unit: string;
+  /** A printed total: the measure its lines are, when they all are one. */
+  of_measure?: string;
+}
+
+const KIND_WORDS: Array<[Exclude<ReportedKind, 'stated_total' | 'title' | 'other'>, RegExp, RegExp]> = [
+  // [kind, the whole cell is a unit, a word in the cell names it]
+  ['money', /^(r|zar|rands?)$/i, /\b(costs?|amounts?|values?|rands?|zar|spend|price)\b/i],
+  ['mass', /^(t|tons?|tonnes?|kgs?)$/i, /\b(tonnes?|tons?|tonnage|kgs?|kilograms?|weight)\b/i],
+  ['count', /^(cases|qty)$/i, /\b(cases|count|quantity|qty)\b/i],
+  ['date', /^dates?$/i, /\bdates?\b/i],
+];
+
+/** The kind of figure the first of `words` that names one says it is, and the unit as printed. */
+export function statedKind(...words: Array<string | undefined>): { kind: ReportedKind; unit: string } {
+  for (const word of words) {
+    const text = (word ?? '').replace(/\s+/g, ' ').trim();
+    if (!text) continue;
+    for (const [kind, whole, inside] of KIND_WORDS) {
+      if (whole.test(text)) return { kind, unit: text };
+      const m = inside.exec(text);
+      if (m) return { kind, unit: text.length <= 16 ? text : m[0] };
+    }
+  }
+  return { kind: 'other', unit: '' };
+}
+
+/** An Excel day number in a date line is the date it shows. */
+function asDateValue(value: number): string | number {
+  if (!Number.isInteger(value) || value < 36526 || value > 73051) return value;
+  return new Date(Math.round((value - 25569) * 86400 * 1000)).toISOString().slice(0, 10);
+}
+
+/** Every figure of a line is blank or zero: a template's line, not a reading. */
+const nothingStated = (values: Array<number | null> | undefined) => !values || values.every((v) => v === null || v === 0);
+
+export function tableFacts(
+  table: MonthTable,
+  reading: TableReading,
+): { facts: EsgMonthlyFact[]; notes: string[]; reported: EsgReportedFact[] } {
   const facts: EsgMonthlyFact[] = [];
   const notes: string[] = [];
+  const reported: EsgReportedFact[] = [];
   // Lines that are vehicles or people are not this reader's to read.
-  if (reading.linesAre === 'other') return { facts, notes };
+  if (reading.linesAre === 'other') return { facts, notes, reported };
   const years = yearsOf(table, reading.firstMonthYear);
   if (years.some((y) => y === null)) {
     notes.push(`The year of the months in "${table.title.join(' / ') || 'a monthly table'}" could not be told, so its figures were not used.`);
-    return { facts, notes };
+    return { facts, notes, reported };
   }
-
-  for (const line of table.lines) {
-    if (line.isTotal) continue;
-    const read = reading.lines[lineKey(line)];
-    if (!read || read.measure === 'none') continue;
-    const stored = ESG_MONTHLY_MEASURES[read.measure].unit;
-    const factor = UNIT_FACTORS[stored]?.[read.unit];
-    if (factor === undefined) {
-      notes.push(`"${line.label}" is stated in ${read.unit}, which cannot be converted to ${stored}; it was not used.`);
-      continue;
-    }
-    const site = reading.linesAre === 'sites' ? (line.label || null) : reading.site;
-    line.values.forEach((value, i) => {
+  const periodEnds = table.months.map((month, i) => monthEnd(years[i] as number, month));
+  const lastEnd = periodEnds[periodEnds.length - 1];
+  const siteOf = (line: MonthLine) => (line.long || reading.linesAre === 'sites' ? (line.label || null) : reading.site);
+  const words = (line: MonthLine) => [table.title[0], line.label, line.qualifier].filter(Boolean).join(' › ');
+  const report = (
+    line: MonthLine,
+    values: Array<number | null>,
+    stated: { kind: ReportedKind; unit: string },
+    label: string,
+    extra: { of_measure?: string } = {},
+  ) => {
+    values.forEach((value, i) => {
       if (value === null) return;
-      facts.push({
-        measure: read.measure as EsgMonthlyMeasure,
-        site,
-        period_end: monthEnd(years[i] as number, table.months[i]),
-        value: Math.round(value * factor * 1e6) / 1e6,
-        unit: stored,
+      reported.push({
+        kind: stated.kind,
+        label,
+        site: siteOf(line),
+        period_end: periodEnds[i],
+        // A formula's binary noise (1234.5600000000002) is no printed figure.
+        value: stated.kind === 'date' ? asDateValue(value) : Math.round(value * 1e6) / 1e6,
+        unit: stated.unit,
+        ...extra,
       });
     });
+  };
+
+  // The measure (and unit as read) every read line of the table shares, if one.
+  const readLines = table.lines.filter((line) => !line.isTotal)
+    .map((line) => ({ line, read: reading.lines[lineKey(line)] }))
+    .filter((entry): entry is { line: MonthLine; read: LineReading } => Boolean(entry.read) && entry.read.measure !== 'none');
+  const shared = readLines.length > 0
+    && readLines.every((entry) => entry.read.measure === readLines[0].read.measure && entry.read.unit === readLines[0].read.unit)
+    ? readLines[0].read
+    : null;
+
+  for (const line of table.lines) {
+    const read = line.isTotal ? undefined : reading.lines[lineKey(line)];
+
+    if (line.isTotal) {
+      // A printed total is the place a spreadsheet goes wrong, so it is never a
+      // reading: it is reported, and checked against the lines it adds up.
+      if (!nothingStated(line.values)) {
+        const stated = shared ? { kind: 'stated_total' as const, unit: shared.unit } : { ...statedKind(line.qualifier, line.label, ...table.monthUnits, ...table.title), kind: 'stated_total' as const };
+        report(line, line.values, stated, words(line) || [table.title[0], 'Total'].filter(Boolean).join(' › '), shared ? { of_measure: shared.measure } : {});
+        if (shared) {
+          const off = line.values.flatMap((total, i) => {
+            if (total === null) return [];
+            const sum = readLines.reduce((s, entry) => s + (entry.line.values[i] ?? 0), 0);
+            return Math.abs(sum - total) > Math.max(0.5, Math.abs(total) * 0.005) ? [`${MONTH_NAMES[table.months[i] - 1]} (total ${total}, lines ${Math.round(sum * 100) / 100})`] : [];
+          });
+          if (off.length > 0) {
+            notes.push(`The printed total of "${table.title.join(' / ') || 'a monthly table'}" does not equal its lines in ${off.join(', ')}. The lines were used; check the total.`);
+          }
+        }
+      }
+      if (line.companion && !nothingStated(line.companion)) {
+        report(line, line.companion, { kind: 'stated_total', unit: table.companionLabel ?? '' }, `${words(line) || 'Total'} › ${table.companionLabel}`);
+      }
+      continue;
+    }
+
+    if (read && read.measure !== 'none') {
+      const stored = ESG_MONTHLY_MEASURES[read.measure].unit;
+      const factor = UNIT_FACTORS[stored]?.[read.unit];
+      if (factor === undefined) {
+        notes.push(`"${line.label}" is stated in ${read.unit}, which cannot be converted to ${stored}; it was not used.`);
+      } else {
+        if (factor !== 1 && !nothingStated(line.values)) {
+          notes.push(`"${words(line)}" is stated in ${read.unit} and was stored in ${stored} (x ${factor}).`);
+        }
+        line.values.forEach((value, i) => {
+          if (value === null) return;
+          facts.push({
+            measure: read.measure as EsgMonthlyMeasure,
+            site: siteOf(line),
+            period_end: periodEnds[i],
+            value: Math.round(value * factor * 1e6) / 1e6,
+            unit: stored,
+            ...(line.qualifier ? { qualifier: line.qualifier } : {}),
+          });
+        });
+      }
+    } else if (!nothingStated(line.values)) {
+      // Not a measure the workbook keeps (money, tonnage, cases, a date): the
+      // figures the table prints are reported as printed, never dropped.
+      report(line, line.values, statedKind(line.unit, line.qualifier, line.label, ...table.monthUnits, ...table.title), words(line));
+    }
+
+    if (line.companion && !nothingStated(line.companion)) {
+      report(line, line.companion, statedKind(table.companionLabel), `${words(line)} › ${table.companionLabel}`);
+    }
+    if (typeof line.statedTotal === 'number') {
+      const measure = read && read.measure !== 'none' ? read.measure : undefined;
+      report(line, [line.statedTotal], {
+        kind: 'stated_total',
+        unit: measure ? read!.unit : statedKind(line.unit, line.qualifier, line.label).unit,
+      }, `${words(line)} › ${table.totalHeader ?? 'Total'}`, measure ? { of_measure: measure } : {});
+      // The figure stands for the whole run: its period is the run's last month.
+      reported[reported.length - 1].period_end = lastEnd;
+      const sum = line.values.reduce<number>((s, v) => s + (v ?? 0), 0);
+      if (measure && Math.abs(sum - line.statedTotal) > Math.max(0.5, Math.abs(line.statedTotal) * 0.005)) {
+        notes.push(`"${words(line)}" prints a total of ${line.statedTotal}, but its months add to ${Math.round(sum * 100) / 100}. The months were used.`);
+      }
+    }
   }
-  return { facts, notes };
+  return { facts, notes, reported };
 }
 
 export interface EsgMonthlySheetInput {
@@ -530,6 +810,7 @@ export async function extractEsgMonthlyTables(
   if (tables.length === 0) return null;
 
   const facts: EsgMonthlyFact[] = [];
+  const reported: EsgReportedFact[] = [];
   const exceptions: string[] = [];
   let previous: { table: MonthTable; reading: TableReading } | null = null;
   for (const table of tables) {
@@ -552,9 +833,17 @@ export async function extractEsgMonthlyTables(
     previous = { table, reading };
     const read = tableFacts(table, reading);
     facts.push(...read.facts);
+    reported.push(...read.reported);
     exceptions.push(...read.notes);
+    // A table's title is what the figures under it are; reported once.
+    for (const line of table.continues ? [] : table.title) {
+      if (!reported.some((r) => r.kind === 'title' && r.value === line)) {
+        reported.push({ kind: 'title', label: 'Title', site: null, period_end: null, value: line, unit: '' });
+      }
+    }
   }
-  if (facts.length === 0) return null;
+  // Titles alone are no reading of the sheet.
+  if (facts.length === 0 && reported.every((r) => r.kind === 'title')) return null;
   if (input.hidden) {
     exceptions.push(
       `These monthly figures were read from a HIDDEN sheet ("${input.sheetName}"). Hidden sheets are often left out of a company's own totals — confirm they belong in this report.`,
@@ -565,14 +854,13 @@ export async function extractEsgMonthlyTables(
     file: input.filename,
     tables: tables.length,
     facts: facts.length,
+    reported: reported.length,
     hidden: Boolean(input.hidden),
   });
 
-  return {
-    documentId: 'esg_monthly_tables',
-    documentName: `${input.sheetName ?? input.filename} monthly figures`,
-    sourceFile: input.filename,
-    values: [{
+  const values: DocumentExtraction['values'] = [];
+  if (facts.length > 0) {
+    values.push({
       field: 'esg_monthly_rows',
       value: facts.map((fact) => ({
         monthly_measure: fact.measure,
@@ -580,12 +868,48 @@ export async function extractEsgMonthlyTables(
         monthly_period_end: fact.period_end,
         monthly_value: fact.value,
         monthly_unit: fact.unit,
+        ...(fact.qualifier ? { monthly_qualifier: fact.qualifier } : {}),
       })),
       sourceFile: input.filename,
       sourceDocumentId: 'esg_monthly_tables',
-    }],
+    });
+  }
+  if (reported.length > 0) {
+    values.push({
+      field: ESG_REPORTED_MONTHLY_FIELD,
+      value: reported.map((fact) => ({
+        reported_kind: fact.kind,
+        reported_label: fact.label,
+        reported_site: fact.site,
+        reported_period_end: fact.period_end,
+        reported_value: fact.value,
+        reported_unit: fact.unit,
+        ...(fact.of_measure ? { reported_of_measure: fact.of_measure } : {}),
+      })),
+      sourceFile: input.filename,
+      sourceDocumentId: 'esg_monthly_tables',
+    });
+  }
+
+  return {
+    documentId: 'esg_monthly_tables',
+    documentName: `${input.sheetName ?? input.filename} monthly figures`,
+    sourceFile: input.filename,
+    values,
     missingFields: [],
     unexpectedFields: [],
     exceptions,
   };
+}
+
+/**
+ * The rows field of what a monthly table prints that the workbook does not
+ * keep as a monthly measure — money, tonnage, cases, dates, printed totals, the
+ * table's title — reported as printed and never placed in a grid.
+ */
+export const ESG_REPORTED_MONTHLY_FIELD = 'esg_reported_monthly_rows';
+
+/** Whether a monthly-table read holds any figure the workbook keeps (not only reported ones). */
+export function readsMonthlyMeasures(extraction: DocumentExtraction | null): boolean {
+  return Boolean(extraction?.values.some((value) => value.field === 'esg_monthly_rows' && Array.isArray(value.value) && value.value.length > 0));
 }

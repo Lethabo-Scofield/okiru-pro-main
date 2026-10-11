@@ -82,6 +82,15 @@ export const ESG_CALCULATOR_KEY_ALLOWLIST: readonly EsgCalculatorKeySpec[] = [
   // it its site and month, so the workbook accounts for each of them.
   { key: 'monthly.field', type: 'string', description: 'The extracted field the figure was read as (electricity_kwh, water_kl, …)' },
   { key: 'monthly.context', type: 'string', description: 'Comma-separated fields that gave the figure its site and month' },
+  // What a monthly table prints that is no monthly measure (money, tonnage,
+  // dates, printed totals, its title): reported as printed, never placed.
+  { key: 'reported.kind', type: 'string', description: 'money | mass | count | date | stated_total | title | other' },
+  { key: 'reported.label', type: 'string', description: "The table's own words for the figure" },
+  { key: 'reported.site', type: 'string', description: 'The site as the document names it' },
+  { key: 'reported.period_end', type: 'iso_date', description: 'Last day of the month (or run) the figure covers' },
+  { key: 'reported.value', type: 'string', description: 'The figure as printed' },
+  { key: 'reported.unit', type: 'string', description: 'The unit as printed (R, AMOUNT, TONNE), never converted' },
+  { key: 'reported.of_measure', type: 'string', description: 'A printed total: the monthly measure its lines are' },
 
   // ── Emissions and carbon tax (E_Data rows 73-90, Carbon_Tax) ──
   { key: 'emissions.scope1_fleet_tco2e', type: 'number', description: 'Scope 1A fleet diesel emissions, tCO2e' },

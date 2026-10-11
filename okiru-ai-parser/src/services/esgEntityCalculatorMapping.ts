@@ -118,6 +118,16 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
   // A bill turned into a row (esgBillFacts.ts) names the field it was read as.
   { field: 'monthly_field', calculatorKey: 'monthly.field', elements: ['GHG_ENERGY'], coerce: 'text' },
   { field: 'monthly_context', calculatorKey: 'monthly.context', elements: ['GHG_ENERGY'], coerce: 'text' },
+  // What a monthly table prints that is no monthly measure — money, tonnage,
+  // dates, printed totals, its title (esgMonthlyTables.ts). Reported as
+  // printed; the workbook has no grid for them, so they are never placed.
+  { field: 'reported_kind', calculatorKey: 'reported.kind', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'reported_label', calculatorKey: 'reported.label', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'reported_site', calculatorKey: 'reported.site', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'reported_period_end', calculatorKey: 'reported.period_end', elements: ['GHG_ENERGY'], coerce: 'iso_date' },
+  { field: 'reported_value', calculatorKey: 'reported.value', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'reported_unit', calculatorKey: 'reported.unit', elements: ['GHG_ENERGY'], coerce: 'text' },
+  { field: 'reported_of_measure', calculatorKey: 'reported.of_measure', elements: ['GHG_ENERGY'], coerce: 'text' },
 
   // ── Emissions and carbon tax ───────────────────────────────────────────
   { field: 'carbon_tax_licence_number', calculatorKey: 'emissions.carbon_tax_licence_number', elements: ['GHG_ENERGY'], coerce: 'text' },
@@ -505,6 +515,8 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
 const GRID_ELEMENTS: Record<string, EsgElement> = {
   // Site × month figures read from dashboard tables (esgMonthlyTables.ts).
   esg_monthly_rows: 'GHG_ENERGY',
+  // What those tables print that is no monthly measure: reported, never placed.
+  esg_reported_monthly_rows: 'GHG_ENERGY',
   energy_site_rows: 'GHG_ENERGY',
   fleet_fuel_transaction_rows: 'FLEET',
   fleet_vehicle_rows: 'FLEET',
@@ -695,9 +707,19 @@ export interface EsgCalculatorMappingResult {
 }
 
 
+/**
+ * A column of the reported-figures register (esg_reported_monthly_rows): what a
+ * monthly table prints that the workbook keeps no grid for. Never a scalar
+ * input, so never offered to the semantic pass and never "unfilled".
+ */
+function isReportedRowKey(key: string): boolean {
+  return key.startsWith('reported.');
+}
+
 /** Every allowlisted ESG key, as candidates for the semantic pass. */
 function esgMappableKeys(): MappableKey[] {
-  return ESG_CALCULATOR_KEY_ALLOWLIST.map((spec) => ({ key: spec.key, description: spec.description }));
+  return ESG_CALCULATOR_KEY_ALLOWLIST.filter((spec) => !isReportedRowKey(spec.key))
+    .map((spec) => ({ key: spec.key, description: spec.description }));
 }
 
 let keyHomes: Map<string, Set<EsgElement> | null> | null = null;
@@ -1061,7 +1083,7 @@ export function unfilledEsgCalculatorKeys(payload: Record<string, unknown>): str
 }
 
 const ESG_CALCULATOR_KEYS = Array.from(new Set(FIELD_MAPPINGS.map((mapping) => mapping.calculatorKey)))
-  .filter((key) => esgCalculatorKeySpec(key) !== undefined);
+  .filter((key) => esgCalculatorKeySpec(key) !== undefined && !isReportedRowKey(key));
 
 /** Exposed for the coverage test: every declared mapping. */
 export const ESG_FIELD_MAPPINGS: readonly EsgFieldMapping[] = FIELD_MAPPINGS;
