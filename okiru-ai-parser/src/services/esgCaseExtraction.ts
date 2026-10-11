@@ -228,6 +228,22 @@ export function unprintedValuesAsExceptions(extraction: DocumentExtraction): Doc
   return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
 }
 
+/**
+ * The extraction as the case resolution sees it: without the facts its skill
+ * marks `scope: document` (a statement date, a document number, a revision, an
+ * author, a filing label, a printed twelve-month total). Those describe their
+ * own document. Resolved across the case, every bill's statement date would
+ * be a rival answer to every other's, and the semantic mapping would be
+ * offered a twelve-month total as if it were the year's figure. They stay on
+ * the extraction the user reads per document.
+ */
+export function withoutDocumentFacts(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const documentOnly = new Set((skill?.fields ?? []).filter((field) => field.scope === 'document' && !field.rowLevel).map((field) => field.name));
+  if (documentOnly.size === 0 || !extraction.values.some((value) => documentOnly.has(value.field))) return extraction;
+  return { ...extraction, values: extraction.values.filter((value) => !documentOnly.has(value.field)) };
+}
+
 /** How many zero quantities, and nothing else, make a sheet an unfilled template. */
 const TEMPLATE_ZERO_QUANTITIES = 3;
 
@@ -566,7 +582,7 @@ export async function extractEsgCaseEntities(
   // Each bill is its own site × month figure, never a rival answer to every
   // other bill. Only the resolution sees the rows; the extractions handed back
   // keep the bill's own fields, which is what the user reads per document.
-  const forResolution = extractions.map(billAsMonthlyRows);
+  const forResolution = extractions.map(withoutDocumentFacts).map(billAsMonthlyRows);
   const resolved = resolveCaseEntities(forResolution, {
     allFiles: inputs.map((input) => input.filename),
     // Registers from different sheets are halves of one record, not rival answers.

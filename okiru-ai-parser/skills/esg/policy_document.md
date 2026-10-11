@@ -15,6 +15,7 @@ classify:
     - "a spend record, plan or report with actual figures (CSI spend records, an EE plan, an EEA2 report)"
   filenameHints: ["csi policy", "sed policy", "employment equity policy", "diversity policy", "human rights policy", "procurement policy"]
   contentSignals: ["Policy", "Purpose", "Scope", "Definitions", "Revision", "Date issued", "Approved by", "Author", "Policy owner", "Review", "Disclosure"]
+rowsField: policy_rule_rows
 fields:
   - name: policy_title
     type: text
@@ -39,6 +40,7 @@ fields:
     description: "The date the policy takes effect, when printed separately."
   - name: policy_author
     type: text
+    scope: document
     labels: ["Author", "Prepared by", "Compiled by"]
     description: "Who wrote the policy, as printed."
   - name: policy_approved_by
@@ -51,10 +53,12 @@ fields:
     description: "The person who SIGNED the policy, from a signature block only. An author or owner is not a signatory."
   - name: policy_scope
     type: text
+    scope: document
     labels: ["Scope", "Application", "Applies to"]
     description: "Who or what the policy applies to, quoted briefly as printed (the group, its subsidiaries, employees)."
   - name: policy_owners
     type: text
+    scope: document
     labels: ["Policy owner", "Responsible", "Custodian"]
     description: "The roles or people the policy names as owning or reviewing it, as printed, separated by semicolons."
   - name: review_frequency
@@ -63,9 +67,30 @@ fields:
     description: "How often the policy says it is reviewed, as written."
   - name: policy_disclosure
     type: text
+    scope: document
     labels: ["Disclosure", "Classification", "Confidentiality"]
     description: "The document's disclosure class as printed (Public, Internal, Confidential)."
-newFields: [policy_issue_date, policy_author, policy_approved_by, policy_scope, policy_owners, policy_disclosure]
+  - name: policy_approach
+    type: text
+    scope: document
+    labels: ["Approach", "Pillars", "Focus areas", "Programmes"]
+    description: "The programmes, pillars or approaches the policy says it works through, each as printed, separated by '; '."
+  - name: rule_subject
+    type: text
+    rowLevel: true
+    labels: []
+    description: "What the policy's rule is about, in its own words ('SED budget', 'CSI contributions', 'black beneficiaries')."
+  - name: rule_figure
+    type: text
+    rowLevel: true
+    labels: []
+    description: "The rule's figure exactly as printed, with its sign or unit ('1%', 'at least 75%', 'R50 000')."
+  - name: rule_basis
+    type: text
+    rowLevel: true
+    labels: []
+    description: "What the figure is measured against or bounded by, as printed ('of net profit after tax', 'maximum', 'per year'), or null."
+newFields: [policy_issue_date, policy_author, policy_approved_by, policy_scope, policy_owners, policy_disclosure, policy_approach, policy_rule_rows, rule_subject, rule_figure, rule_basis]
 ---
 ## What it is / is not
 
@@ -86,14 +111,23 @@ a supplier code of conduct, or a record, plan or report with actual figures.
 - Opening sections: purpose, scope, definitions.
 - Closing section: responsibilities, policy owners, review clause, signature
   block (often absent from group policies).
+- The policy's own quantified rules (a budget as a share of profit, a cap, a
+  minimum share of beneficiaries) go in `policy_rule_rows`, one row per rule,
+  figure as printed; the programmes or pillars it works through go in
+  `policy_approach`.
+- A document-control table's label and value cells can reach you interleaved
+  on one line, the value split around its label ("Example Holdings Water /
+  Policy Title Revision 4 / Stewardship Policy"). Rebuild
+  the title from the value cells around "Policy Title"; a running page heading
+  or a cover slogan is not the title.
 
 ## Traps
 
 - A rule is not a result. "The group will spend up to a share of profit on
   CSI", "beneficiaries must be at least a stated share black" and "the plan
   sets numerical targets" are policy rules and definitions. They are never
-  spend, never a beneficiary percentage and never an EE target; this skill has
-  no field for them. Quote them in exceptions when they matter.
+  spend, never a beneficiary percentage and never an EE target: they go in
+  `policy_rule_rows` only, as the policy prints them.
 - No universal targets: never supply a target, budget or percentage the
   client has not stated as its own measured result.
 - Approved by is not signed by. Many group policies are approved by a
@@ -114,6 +148,8 @@ EXAMPLE HOLDINGS - SOCIO-ECONOMIC DEVELOPMENT POLICY
 Revision 3 | Date issued 01/04/2021 | Date revised 15/03/2025 | Author: Group Transformation Manager
 Reviewed and approved by: Social and Ethics Committee | Disclosure: Public
 Scope: all subsidiaries of the group.  Review: at least every two years.
+4. BUDGET  The group sets aside 2% of net profit after tax for SED, of which at most 0.5% may go to CSI.
+5. PROGRAMMES  Bursaries; Enterprise hubs; Staff volunteering.
 ```
 
 ```json
@@ -121,5 +157,10 @@ Scope: all subsidiaries of the group.  Review: at least every two years.
  "board_approval_date": "15/03/2025", "policy_effective_date": null, "policy_author": "Group Transformation Manager",
  "policy_approved_by": "Social and Ethics Committee", "signatory_name": null, "policy_scope": "all subsidiaries of the group",
  "policy_owners": null, "review_frequency": "at least every two years", "policy_disclosure": "Public",
+ "policy_approach": "Bursaries; Enterprise hubs; Staff volunteering",
+ "policy_rule_rows": [
+   {"rule_subject": "SED budget", "rule_figure": "2%", "rule_basis": "of net profit after tax"},
+   {"rule_subject": "CSI share of the budget", "rule_figure": "0.5%", "rule_basis": "at most"}
+ ],
  "exceptions": ["No signature block.", "The policy sets a spending rule; it is a rule, not spend."]}
 ```

@@ -60,7 +60,12 @@ fields:
   - name: whistleblower_hotline_number
     type: text
     labels: ["Hotline number", "Toll-free number", "Call"]
-    description: "The hotline's telephone number as printed (other channels such as SMS or e-mail go in exceptions)."
+    description: "The hotline's telephone number as printed (other channels such as SMS or e-mail go in whistleblower_hotline_channels)."
+  - name: whistleblower_hotline_channels
+    type: text
+    scope: document
+    labels: ["SMS", "E-mail", "Website", "Free post"]
+    description: "The hotline's other reporting channels, each as printed with its kind, separated by '; ' ('SMS 12345; e-mail tips@example.test')."
   - name: hotline_is_anonymous
     type: bool
     labels: []
@@ -97,7 +102,27 @@ fields:
     type: date
     labels: ["Period to"]
     description: "For an incident register or report: last day of its period, as printed."
-newFields: [policy_issue_date, policy_approved_by]
+  - name: policy_author
+    type: text
+    scope: document
+    labels: ["Author", "Prepared by", "Compiled by"]
+    description: "Who wrote the code, as printed."
+  - name: policy_scope
+    type: text
+    scope: document
+    labels: ["Scope", "Application", "Applies to"]
+    description: "Who or what the code applies to, quoted briefly as printed."
+  - name: policy_disclosure
+    type: text
+    scope: document
+    labels: ["Disclosure", "Classification", "Confidentiality"]
+    description: "The document's disclosure class as printed (Public, Internal, Confidential)."
+  - name: issuer_registration_number
+    type: regno
+    scope: document
+    labels: ["Registration number", "Reg No", "Company registration"]
+    description: "The issuing company's registration number as printed (often in the footer or the company details), spaces and slashes kept."
+newFields: [policy_issue_date, policy_approved_by, whistleblower_hotline_channels, policy_author, policy_scope, policy_disclosure, issuer_registration_number]
 ---
 ## What it is / is not
 
@@ -130,7 +155,10 @@ or a training attendance record.
   that prints them; an example in the text ("for example, five reports") is
   not data.
 - Copy the hotline number exactly as printed, spaces kept; other channels
-  (SMS, e-mail, web) go in exceptions.
+  (SMS, e-mail, web) go in `whistleblower_hotline_channels`.
+- The document-control table (author, disclosure class, scope) and the
+  company details in a footer (its registration number) belong to the code's
+  own header fields, kept with this document.
 - A rule is not a practice. "Employees must declare conflicts" does not mean a
   register is kept; only a statement that the register exists makes it true.
 - Section numbers move between revisions; quote the heading, not just the
@@ -142,9 +170,11 @@ Invented, a code's cover and reporting section:
 
 ```
 EXAMPLE GROUP CODE OF BUSINESS CONDUCT   Revision 3   Date revised 01/06/2025   Approved by: Executive Committee
+Author: Head of Group Compliance   Disclosure: Public
 ...
 Report concerns to the Example Ethics Line, 0800 000 111 (toll-free), operated independently.
-You may remain anonymous.
+SMS 31313 or e-mail report@ethicsline.example. You may remain anonymous.
+Example Group (Pty) Ltd  Reg No 1999/000111/06
 ```
 
 ```json
@@ -156,5 +186,7 @@ You may remain anonymous.
  "ethics_incidents_investigated_count": null, "ethics_incidents_resolved_count": null,
  "conflict_of_interest_register_maintained": null, "gift_register_maintained": null,
  "reporting_period_start": null, "reporting_period_end": null,
+ "whistleblower_hotline_channels": "SMS 31313; e-mail report@ethicsline.example", "policy_author": "Head of Group Compliance",
+ "policy_scope": null, "policy_disclosure": "Public", "issuer_registration_number": "1999/000111/06",
  "exceptions": ["No signature block.", "A code of conduct: no incident counts."]}
 ```
