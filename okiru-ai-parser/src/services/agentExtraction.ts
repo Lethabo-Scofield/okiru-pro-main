@@ -2557,6 +2557,12 @@ export function sameReading(a: unknown, b: unknown): boolean {
   return ta.replace(/[^a-z0-9]/g, '') === tb.replace(/[^a-z0-9]/g, '');
 }
 
+/** A Rand amount of nothing: 0, "0.00", "R 0,00". */
+function isZeroAmount(value: unknown): boolean {
+  if (typeof value === 'number') return value === 0;
+  return typeof value === 'string' && /^\s*(?:R\s*)?-?\s*0+(?:[.,]0+)?\s*-?\s*$/i.test(value);
+}
+
 function citation(value: AgentValue): string {
   const where = [value.page ? `page ${value.page}` : '', value.cellRef ?? ''].filter(Boolean).join(', ');
   return `${where}: "${value.quote}"`;
@@ -2648,6 +2654,7 @@ export function mergeAgentValues(
 
   const filled: string[] = [];
   const conflicts: string[] = [];
+  const moneyFields = new Set(target.fields.filter((f) => f.type === 'money').map((f) => f.name));
   for (const value of run.values) {
     const existing = firstPass.get(value.field);
     if (existing === undefined) {
@@ -2685,6 +2692,26 @@ export function mergeAgentValues(
     }
     if (typeof existing === 'object' || sameReading(existing, value.value)) continue;
     conflicts.push(value.field);
+    // A Rand amount the first pass read as zero is usually the wrong line of
+    // the section (a consumption line charging 0.00 beside a fixed basic
+    // charge). The agent's cited non-zero amount for the same field replaces
+    // it; both readings still reach the reviewer.
+    if (moneyFields.has(value.field) && isZeroAmount(existing) && !isZeroAmount(value.value) && !isEmpty(value.value)) {
+      for (const copy of copies) {
+        copy.values = copy.values.map((v) => (v.field === value.field && sameReading(v.value, existing)
+          ? {
+            ...v,
+            value: value.value,
+            source: { method: 'agent', ...(value.page ? { page: value.page } : {}), ...(value.cellRef ? { cellRef: value.cellRef } : {}), quote: value.quote },
+          }
+          : v));
+      }
+      home.exceptions.push(
+        `Second read disagrees on ${value.field}: the first pass read "${String(existing)}"; the agent read "${String(value.value)}" (${citation(value)}). `
+        + 'A zero charge is usually another line of the section, so the cited amount was kept; check the document.',
+      );
+      continue;
+    }
     home.exceptions.push(
       `Second read disagrees on ${value.field}: the agent read "${String(value.value)}" (${citation(value)}); `
       + `the first pass read "${String(existing)}". The first-pass value was kept; check the document.`,
