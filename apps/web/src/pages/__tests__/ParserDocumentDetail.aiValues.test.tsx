@@ -38,6 +38,9 @@ const AI_VALUES = [
 ];
 
 let run: Record<string, any>;
+let latestRun: Record<string, any> | null | undefined;
+let runsList: Array<Record<string, any>> = [];
+let documentRow: Record<string, any> = DOCUMENT;
 let rereadGate: (() => void) | null = null;
 
 const json = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body, blob: async () => new Blob(["%PDF"]) });
@@ -55,6 +58,9 @@ function freshRun(withAi = true) {
 beforeEach(() => {
   patches.length = 0;
   run = freshRun();
+  latestRun = undefined;
+  runsList = [];
+  documentRow = DOCUMENT;
   rereadGate = null;
   URL.createObjectURL = vi.fn(() => "blob:x");
   URL.revokeObjectURL = vi.fn();
@@ -80,10 +86,12 @@ beforeEach(() => {
         return json({ document: DOCUMENT, run: { runId: "run-2" } }, 201);
       }
       if (url.includes("/settle-outcome")) return json({ state: "settled", refundedTokens: 0 });
-      if (url.endsWith("/runs")) return json({ runs: [] });
+      if (url.endsWith("/runs")) return json({ runs: runsList });
+      const oneRun = /\/runs\/([^/]+)$/.exec(url);
+      if (oneRun) return json({ run: runsList.find((item) => item.runId === decodeURIComponent(oneRun[1])) });
       if (url.endsWith("/download")) return json({});
       if (url.includes("/api/clients")) return json([]);
-      return json({ document: DOCUMENT, latestRun: run });
+      return json({ document: documentRow, latestRun: latestRun === undefined ? run : latestRun });
     }) as unknown as typeof fetch,
   );
 });
@@ -213,5 +221,69 @@ describe("ParserDocumentDetail — Needs attention says each doubt once", () => 
     expect(within(warnings).getAllByText(/Check Sector\./)).toHaveLength(1);
     expect(warnings).not.toHaveTextContent(/Upplier|Kills Spend|Check Ector/);
     expect(warnings).not.toHaveTextContent("has low confidence");
+  });
+});
+
+describe("ParserDocumentDetail — a document with nothing usable read", () => {
+  it("opens More actions when the read failed, so Read again and Replace are on screen", async () => {
+    run = { ...freshRun(false), status: "failed", parserOutput: { extracted_fields: {} } };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const more = await screen.findByTestId("document-more-actions");
+    expect(more).toHaveAttribute("open");
+    expect(within(more).getByTestId("document-reparse")).toBeInTheDocument();
+    expect(within(more).getByTestId("document-replace")).toBeInTheDocument();
+  });
+
+  it("says 'Not read yet', not 'could not tell', for a document that has no reading, and opens More actions", async () => {
+    latestRun = null;
+    documentRow = { ...DOCUMENT, documentType: "", status: "uploaded", latestRunId: null };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const heading = await screen.findByTestId("document-type");
+    expect(heading).toHaveTextContent("Not read yet");
+    expect(heading).not.toHaveTextContent("could not tell");
+    expect(screen.getByTestId("document-more-actions")).toHaveAttribute("open");
+  });
+
+  it("still says 'We could not tell what this document is' when a reading found no type", async () => {
+    documentRow = { ...DOCUMENT, documentType: "" };
+    run = { ...freshRun(), documentType: "" };
+    render(<ParserDocumentDetail id="doc-1" />);
+    expect(await screen.findByTestId("document-type")).toHaveTextContent("We could not tell what this document is");
+  });
+
+  it("keeps More actions closed for a document that read", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+    expect(screen.getByTestId("document-more-actions")).not.toHaveAttribute("open");
+    // What to do next is read at body contrast, not the 2.8:1 muted grey.
+    expect(screen.getByTestId("document-review-state").className).toMatch(/text-\[color:var\(--body\)\]/);
+  });
+});
+
+describe("ParserDocumentDetail — an earlier reading is said in the header", () => {
+  it("shows 'Reading N of M, not the latest' while an older reading is on screen, and goes back to the latest", async () => {
+    const newest = { ...freshRun(), runId: "run-2", createdAt: "2026-10-09T10:00:00Z" };
+    const older = { ...freshRun(), runId: "run-1", createdAt: "2026-10-08T10:00:00Z" };
+    runsList = [newest, older];
+    latestRun = newest;
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+    expect(screen.queryByTestId("document-older-reading")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("document-run-select"), { target: { value: "run-1" } });
+    const banner = await screen.findByTestId("document-older-reading");
+    expect(banner).toHaveTextContent("Reading 1 of 2, not the latest.");
+
+    fireEvent.click(screen.getByTestId("document-show-latest-reading"));
+    await waitFor(() => expect(screen.queryByTestId("document-older-reading")).not.toBeInTheDocument());
+  });
+});
+
+describe("ParserDocumentDetail — Download is offered once", () => {
+  it("keeps the header's Download and leaves it out of the preview's title bar", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+    await screen.findByTestId("document-preview");
+    expect(screen.getAllByRole("link", { name: /Download/ })).toHaveLength(1);
   });
 });

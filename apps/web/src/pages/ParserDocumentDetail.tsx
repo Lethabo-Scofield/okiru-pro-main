@@ -399,6 +399,11 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   const needsAttention = rowsWithIssues.length > 0 || warnings.length > 0 || rejectedKeys.length > 0;
   const valueCount = readableKeys.length + aiValues.length;
   const checkedCount = Array.from(corrections.keys()).length;
+  /** Nothing usable was read: Read again, Replace and Change the type are the way on, so they start open. */
+  const recoveryFirst = !run || run.status === "failed";
+  /** Which reading is on screen, when it is not the newest (runs are newest first). */
+  const runIndex = run ? runs.findIndex((item) => item.runId === run.runId) : -1;
+  const olderReading = runs.length > 1 && runIndex > 0 ? { n: runs.length - runIndex, of: runs.length } : null;
 
   const candidatesSection = candidates.length > 0 ? (
     <section data-testid="classification-candidates">
@@ -448,7 +453,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       <header className="mb-4 flex flex-col gap-4 border-b border-[color:var(--rule)] pb-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="min-w-0">
           <h1 className="max-w-4xl text-[24px] font-semibold leading-tight text-white" data-testid="document-type">
-            {currentType || "We could not tell what this document is"}
+            {currentType || (run ? "We could not tell what this document is" : "Not read yet")}
           </h1>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[color:var(--body)]">
             <span className="truncate">{document.filename} · uploaded {new Date(document.uploadedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</span>
@@ -456,6 +461,19 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
               <span className={`inline-flex items-center gap-1.5 ${statusWord.tone}`} data-testid="document-status">
                 {statusWord.icon}
                 {statusWord.label}
+              </span>
+            )}
+            {olderReading && (
+              <span className="inline-flex items-center gap-2 text-amber-200" data-testid="document-older-reading">
+                Reading {olderReading.n} of {olderReading.of}, not the latest.
+                <button
+                  type="button"
+                  onClick={() => void loadRun(runs[0].runId)}
+                  className="rounded text-white underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                  data-testid="document-show-latest-reading"
+                >
+                  Show the latest
+                </button>
               </span>
             )}
           </p>
@@ -489,7 +507,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
             </button>
           </div>
           {/* The team handoff, said as the button's helper text. */}
-          <p className="text-[11.5px] text-[color:var(--muted)] lg:text-right" data-testid="document-review-state">
+          <p className="text-[11.5px] text-[color:var(--body)] lg:text-right" data-testid="document-review-state">
             {document.reviewedAt
               ? `Reviewed ${new Date(document.reviewedAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} by your team.`
               : document.status === "review_required" || document.status === "failed"
@@ -500,11 +518,15 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       </header>
 
       {/* Everything else a person can do here, folded into one place. */}
-      <details className="group mb-4 rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] px-4 py-2.5" data-testid="document-more-actions">
+      <details
+        className="group mb-4 rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] px-4 py-2.5"
+        open={recoveryFirst || undefined}
+        data-testid="document-more-actions"
+      >
         <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded text-[12.5px] font-medium text-[color:var(--body)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
           <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
           More actions
-          <span className="ml-auto text-[11.5px] font-normal text-[color:var(--muted)]">File under a company · Change the type · Read again</span>
+          <span className="ml-auto text-[11.5px] font-normal text-[color:var(--body)]">File under a company · Change the type · Read again</span>
         </summary>
         <div className="mt-3 grid gap-4 pb-1 lg:grid-cols-3">
           <div>
@@ -651,7 +673,8 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
       )}
 
       {/* The document, directly under the header, beside what we read from it. */}
-      <ExtractionReviewPane file={previewFile} title={document.filename} className="min-h-[720px]" focus={focus}>
+      {/* Download is in the header already; the preview does not offer it twice. */}
+      <ExtractionReviewPane file={previewFile} title={document.filename} className="min-h-[720px]" focus={focus} showDownload={false}>
         <div className="h-full overflow-y-auto bg-[color:var(--ink-2)] p-5 sm:p-6">
           {!run ? <div className="py-16 text-center text-sm text-[color:var(--body)]">This file is saved, but it has not been read yet. Use Read again, under More actions, to have it read now.</div> : <div className="space-y-8">
             {/* 1. The type, when it is in question. */}
