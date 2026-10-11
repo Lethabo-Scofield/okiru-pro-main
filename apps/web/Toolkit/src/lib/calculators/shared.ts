@@ -272,7 +272,16 @@ export function resolveTmps(input: {
   suppliers: { spend?: number }[];
 }): { tmps: number; source: TmpsSource } {
   if (input.manualOverride) return { tmps: input.persistedTmps || 0, source: 'manual' };
-  if (input.tmpsSource === 'stated' && input.persistedTmps > 0) return { tmps: input.persistedTmps, source: 'stated' };
+  // The schedule sum is TMPS's floor: a stated total BELOW the suppliers the
+  // same company lists cannot be its TMPS (a subtotal, an R'000 figure, one
+  // month). Scored, it tripped the misplacement guard and Preferential
+  // Procurement fell to 0, so it is not used; the claim-vs-evidence TMPS
+  // check reports the disagreement.
+  if (input.tmpsSource === 'stated' && input.persistedTmps > 0) {
+    const floor = supplierSumTmps(input.suppliers);
+    if (input.persistedTmps >= floor) return { tmps: input.persistedTmps, source: 'stated' };
+    return { tmps: floor, source: 'supplier_spend_sum' };
+  }
   if (input.tmpsHeld) return { tmps: 0, source: 'held' };
   return { tmps: supplierSumTmps(input.suppliers), source: 'supplier_spend_sum' };
 }

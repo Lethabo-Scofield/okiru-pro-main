@@ -21,6 +21,16 @@ describe('resolveTmps', () => {
       .toEqual({ tmps: 2_000_000, source: 'stated' });
   });
 
+  it('never scores a stated TMPS below the suppliers the company lists (the sum is its floor)', () => {
+    // A stated total a tenth of the schedule tripped the misplacement guard
+    // and scored Preferential Procurement 0. (Invented figures.)
+    const schedule = [{ spend: 1_000_000 }, { spend: 2_000_000 }];
+    expect(resolveTmps({ persistedTmps: 300_000, manualOverride: false, tmpsSource: 'stated', suppliers: schedule }))
+      .toEqual({ tmps: 3_000_000, source: 'supplier_spend_sum' });
+    expect(resolveTmps({ persistedTmps: 3_000_000, manualOverride: false, tmpsSource: 'stated', suppliers: schedule }))
+      .toEqual({ tmps: 3_000_000, source: 'stated' });
+  });
+
   it('scores nothing from a TMPS held open (contested or #REF!)', () => {
     expect(resolveTmps({ persistedTmps: 0, manualOverride: false, tmpsHeld: 'contested', suppliers }))
       .toEqual({ tmps: 0, source: 'held' });
