@@ -271,7 +271,7 @@ describe('a field whose name carries a unit', () => {
         { field: 'water_rand_excl_vat', value: '1 234.56', page: 1, quote: 'Fixed Basic Charge R 1 234.56' },
         { field: 'water_kl', value: '12', page: 1, quote: 'Meter 12' },
       ],
-      turns: 2, tokens: 0, toolCalls: 2, stopReason: 'submitted',
+      rejected: [], turns: 2, tokens: 0, toolCalls: 2, stopReason: 'submitted',
     });
     const bill = merged.extractions.find((e) => e.documentId === WATER)!;
     const charge = bill.values.find((v) => v.field === 'water_rand_excl_vat')!;

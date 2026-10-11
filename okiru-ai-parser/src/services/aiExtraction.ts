@@ -120,6 +120,14 @@ export interface DocumentExtraction {
    * never dropped — a grounding miss is evidence for a reviewer, not proof.
    */
   ungroundedFields?: string[];
+  /**
+   * Fields the first answer left empty and the sweep (a second, narrower ask)
+   * filled. The first answer's notes ("<field> set to null") speak for the
+   * first answer only, never against these.
+   */
+  sweptFields?: string[];
+  /** How many parts a long document was read in, when more than one: each part's notes speak for that part. */
+  readInParts?: number;
   /** Exceptions the expert's prompt asked the model to raise. */
   exceptions: string[];
   error?: string;
@@ -858,6 +866,7 @@ export async function extractWithSpec(
   // remaining fields are not in the document (the prompt forbids inventing
   // them), so looping further would only spend money re-proving absence. A
   // round that DID recover something earns one more look at what remains.
+  const sweptFields: string[] = [];
   if (foundSomething && sweepEnabled()) {
     const maxRounds = Math.max(1, Number(process.env.PARSER_SWEEP_ROUNDS) || 2);
     for (let round = 0; round < maxRounds; round++) {
@@ -870,6 +879,7 @@ export async function extractWithSpec(
         // pass found — a second opinion must not silently replace a first answer.
         if (isEmptyValue(parsed[field]) && !isEmptyValue(value)) {
           parsed[field] = value;
+          sweptFields.push(field);
           recovered += 1;
         }
       }
@@ -964,6 +974,8 @@ export async function extractWithSpec(
     missingFields,
     unexpectedFields,
     ungroundedFields,
+    ...(sweptFields.length > 0 ? { sweptFields } : {}),
+    ...(chunks.length > 1 ? { readInParts: chunks.length } : {}),
     exceptions: [
       ...toExceptions(parsed.exceptions),
       ...wrapperExceptions,

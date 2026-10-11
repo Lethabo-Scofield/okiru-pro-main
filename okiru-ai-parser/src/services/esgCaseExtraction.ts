@@ -198,10 +198,15 @@ export function unprintedValuesAsExceptions(extraction: DocumentExtraction): Doc
     .flatMap((note) => note.split(/;\s+|\.\s+/))
     .filter((clause) => !PART_NOTE.test(clause));
   const refused: string[] = [];
+  // The first answer's notes speak for the first answer: a field the sweep
+  // filled afterwards, or any field of a document read in parts (each part's
+  // notes speak for that part), is not judged by them.
+  const swept = new Set(extraction.sweptFields ?? []);
+  const notesApply = (extraction.readInParts ?? 1) <= 1;
   const values = extraction.values.filter((value) => {
     if (value.source?.method === 'agent' || Array.isArray(value.value) || value.value === null || typeof value.value === 'object') return true;
     const shown = String(value.value).trim();
-    if (notes.some((note) => noteSaysAbsent(note, value.field))) {
+    if (notesApply && !swept.has(value.field) && notes.some((note) => noteSaysAbsent(note, value.field))) {
       refused.push(`${value.field}: "${shown}" was not kept: the read's own note says the document does not print it.`);
       return false;
     }

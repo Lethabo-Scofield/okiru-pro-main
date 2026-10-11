@@ -10,8 +10,9 @@
  * notes the code writes itself never refuse a value. Every value is invented.
  */
 import { describe, expect, it } from 'vitest';
-import type { DocumentExtraction, ExtractedValue } from '../../src/services/aiExtraction.js';
+import { extractWithSpec, type DocumentExtraction, type ExtractedValue, type ExtractionModel } from '../../src/services/aiExtraction.js';
 import { unprintedValuesAsExceptions } from '../../src/services/esgCaseExtraction.js';
+import { ESG_DOCUMENT_MATRIX } from '../../schemas/esg_document_matrix.js';
 
 function extraction(values: Array<[string, unknown] | ExtractedValue>, exceptions: string[] = []): DocumentExtraction {
   return {
@@ -69,6 +70,39 @@ describe('a value the read itself says is not printed', () => {
       ['Values not found in the source document (possible extraction error): policy_version', 'Second read disagrees on policy_version: the agent read "2".'],
     ));
     expect(fields(out)).toEqual({ policy_version: 'Revision 2' });
+  });
+
+  it('a field the sweep filled after the first answer left it null is kept', () => {
+    const swept = { ...extraction([['hotline_is_independent', true]], ['Hotline independence is not stated; hotline_is_independent set to null.']), sweptFields: ['hotline_is_independent'] };
+    expect(fields(unprintedValuesAsExceptions(swept))).toEqual({ hotline_is_independent: true });
+    // The same note on a value the first answer itself returned refuses it.
+    const contradicted = extraction([['hotline_is_independent', true]], ['hotline_is_independent set to null.']);
+    expect(fields(unprintedValuesAsExceptions(contradicted))).toEqual({});
+  });
+
+  it('a document read in parts is not judged by one part\'s notes', () => {
+    const parts = { ...extraction([['meter_number', 'M-0001']], ['meter_number not printed.']), readInParts: 2 };
+    expect(fields(unprintedValuesAsExceptions(parts))).toEqual({ meter_number: 'M-0001' });
+  });
+
+  it('the read records which fields its sweep filled', async () => {
+    const saved = process.env.AI_EXTRACTION_SWEEP;
+    process.env.AI_EXTRACTION_SWEEP = 'true';
+    try {
+      const spec = ESG_DOCUMENT_MATRIX.find((d) => d.id === 'ethics_compliance__ethics_whistleblower_policy_and_register')!;
+      const model: ExtractionModel = {
+        name: 'stub',
+        complete: async () => JSON.stringify({ policy_title: 'Example Code', hotline_is_independent: null, exceptions: ['hotline_is_independent set to null.'] }),
+        completeHard: async () => JSON.stringify({ hotline_is_independent: 'Yes' }),
+      };
+      const text = 'EXAMPLE CODE\nHotline run by an external provider, independent of management.';
+      const read = await extractWithSpec(model, spec, { filename: 'code.pdf', raw_text: text, markdown: text }, { domain: 'esg' });
+      expect(read.sweptFields).toContain('hotline_is_independent');
+      expect(fields(unprintedValuesAsExceptions(read)).hotline_is_independent).toBe('Yes');
+    } finally {
+      if (saved === undefined) delete process.env.AI_EXTRACTION_SWEEP;
+      else process.env.AI_EXTRACTION_SWEEP = saved;
+    }
   });
 
   it("the agent's cited fill is kept whatever the first pass's notes say", () => {
