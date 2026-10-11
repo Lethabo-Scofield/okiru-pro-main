@@ -301,7 +301,9 @@ router.post('/calculate', requireAuth, async (req, res) => {
     // documents do not prove, by the same overlay the Toolkit store applies.
     let verification: { claimed: number; evidenced: number } | undefined;
     const report = body.verification;
-    if (hasPillarData && report?.version === 1 && Array.isArray(report.checks)) {
+    // A report is client-supplied: a malformed one costs the EVIDENCED total,
+    // never the claimed score this call exists to return.
+    if (hasPillarData && report?.version === 1 && Array.isArray(report.checks)) try {
       const ev = extractFromPillarData({ ...body, pillarData: applyOverlayToPillars(body.pillarData, report, 'evidenced') });
       const evidenced = await calculateScorecard({
         assessmentId: `${assessmentId}-evidenced`,
@@ -317,6 +319,8 @@ router.post('/calculate', requireAuth, async (req, res) => {
         financials: ev.financials,
       });
       verification = { claimed: result.totalPoints, evidenced: evidenced.totalPoints };
+    } catch (err) {
+      logger.warn('Verification report could not be applied; claimed score returned alone', { error: err instanceof Error ? err.message : String(err) });
     }
 
     logger.info('Scorecard calculated', { sessionId: assessmentId, sector: sectorCode, durationMs: Date.now() - start });

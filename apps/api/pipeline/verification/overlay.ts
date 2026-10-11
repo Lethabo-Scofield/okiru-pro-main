@@ -15,7 +15,7 @@ import type { NeedsYouChoice, OverlayOp, VerificationReport, VerificationSection
 export type OverlayBasis = 'claimed' | 'evidenced';
 
 function opsFor(report: VerificationReport, basis: OverlayBasis, extra: OverlayOp[] = []): OverlayOp[] {
-  const ops = report.checks.flatMap((c) => c.ops).filter((op) => op.basis === 'both' || (basis === 'evidenced' && op.basis === 'evidenced'));
+  const ops = report.checks.flatMap((c) => (c && Array.isArray(c.ops) ? c.ops : [])).filter((op) => op && (op.basis === 'both' || (basis === 'evidenced' && op.basis === 'evidenced')));
   return [...ops, ...extra.map((op) => ({ ...op, basis: 'both' as const }))];
 }
 
@@ -30,7 +30,7 @@ export function applyOverlayToSections(
   for (const [key, section] of Object.entries(sections)) {
     out[key] = { ...section, meta: section.meta ? { ...section.meta } : section.meta, rows: section.rows?.map((r) => ({ ...r })) };
   }
-  const ops = opsFor(report, basis, answers.flatMap((a) => a.ops));
+  const ops = opsFor(report, basis, answers.flatMap((a) => (a && Array.isArray(a.ops) ? a.ops : [])));
   const excluded = new Set<string>();
   for (const op of ops) {
     const section = out[op.section];
@@ -146,7 +146,7 @@ export function applyOverlayToPillars<T extends Record<string, any>>(
     return out[pillar][list];
   };
   const excluded = new Set<string>();
-  for (const op of opsFor(report, basis, answers.flatMap((a) => a.ops))) {
+  for (const op of opsFor(report, basis, answers.flatMap((a) => (a && Array.isArray(a.ops) ? a.ops : [])))) {
     if (op.metaKey) {
       const target = PILLAR_META[`${op.section}.${op.metaKey}`];
       if (target && out[target.pillar]) out[target.pillar] = { ...out[target.pillar], [target.field]: Number(op.value ?? 0) };
