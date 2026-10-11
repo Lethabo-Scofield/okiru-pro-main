@@ -16,6 +16,7 @@ import {
   isClassificationNote,
   isInternalArtifact,
   isInternalJargon,
+  sectionRowsByFile,
   type SectionPatchLike,
 } from "./documentVerdicts";
 import type { ParserCaseLike } from "./parserWorkbookMap";
@@ -248,6 +249,7 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
   const { parserCase, sections, rejected = [], flags = [], failedFiles = [] } = inputs;
   const { verdicts } = assessDocuments(parserCase, sections);
   const byName = new Map(verdicts.map((v) => [v.filename, v]));
+  const rowsByFile = sectionRowsByFile(sections);
   // A file the parser could not even open never reaches the case — it still
   // gets a row, or it would silently vanish from the review.
   for (const name of failedFiles) {
@@ -293,6 +295,23 @@ export function buildDocumentReview(inputs: ReviewInputs, productNoun = "your sc
         });
       }
       if (problems.length > 0 && state === "read") state = "needs-look";
+      // A green check never stands for "contributed nothing": a document we
+      // could not name, whose every figure was turned away by the workbook and
+      // which filled no rows, asks for a look instead.
+      const turnedAway = new Set(rejected.filter((r) => r.sourceFile === v.filename).map((r) => humanize(r.field)));
+      const nothingPlaced =
+        generalDocument &&
+        (rowsByFile.get(v.filename)?.size ?? 0) === 0 &&
+        turnedAway.size > 0 &&
+        values.every((value) => turnedAway.has(value.label));
+      if (nothingPlaced) {
+        problems.push({
+          headline: `We read figures from this document, but none of them went into ${productNoun}.`,
+          fix: "Check the figures below and place any you need by hand.",
+          replace: false,
+        });
+        if (state === "read") state = "needs-look";
+      }
     }
 
     // Gaps are the missing fields; anything that is a sentence of trouble was
