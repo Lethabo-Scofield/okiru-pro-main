@@ -1219,7 +1219,7 @@ export interface ValueCheck {
 
 // ─── ESG checks: units, meters and accounts, periods ────────────────────────
 
-type UnitFamily = 'energy' | 'demand' | 'volume' | 'mass' | 'distance' | 'time' | 'emissions';
+export type UnitFamily = 'energy' | 'demand' | 'volume' | 'mass' | 'distance' | 'time' | 'emissions';
 
 /** The units an ESG document prints, by what they measure (lower case, spaces removed). */
 const UNIT_FAMILIES: Record<UnitFamily, string[]> = {
@@ -1255,6 +1255,25 @@ export function unitFamilyOfField(name: string): UnitFamily | null {
 /** A unit as printed, normalised for lookup ("kWh" → "kwh", "m³" → "m3", "Litres" → "litres"). */
 function unitKey(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, '').replace(/³/g, '3').replace(/\.$/, '');
+}
+
+/**
+ * What a unit field's value measures, when it is a unit at all: "kWh" is
+ * energy, "Kilolitres (kl)" a volume, "kg" a mass. Null for anything that is
+ * not a unit from the vocabulary ("UNITS" is energy: an electricity account's
+ * units are kWh), or that mixes units of two kinds. The words of one value
+ * are each looked up, so a unit printed twice ("Kilolitres (kl)") is one unit.
+ */
+export function unitFamilyOfUnit(raw: unknown): UnitFamily | null {
+  if (typeof raw !== 'string') return null;
+  const words = raw.normalize('NFKC').split(/[\s()[\]/,;]+/).map(unitKey).filter(Boolean);
+  if (words.length === 0) return null;
+  const families = new Set(words.map((word) => UNIT_FAMILY_OF.get(word) ?? null));
+  if (families.size !== 1 || families.has(null)) {
+    const joined = UNIT_FAMILY_OF.get(unitKey(raw.normalize('NFKC')));
+    return joined ?? null;
+  }
+  return [...families][0];
 }
 
 /**

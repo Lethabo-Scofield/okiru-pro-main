@@ -52,6 +52,8 @@ import {
   agentCasePass,
   agentPassForDocument,
   unitAgainstFieldName,
+  unitFamilyOfField,
+  unitFamilyOfUnit,
   unitsNamedByField,
   type AgentCaseContext,
   type AgentCasePass,
@@ -141,6 +143,80 @@ export function namedUnitFiguresAsExceptions(extraction: DocumentExtraction): Do
     refused.push(`${value.field}: "${value.value.trim()}" is printed in ${unit}, and ${value.field} holds ${named[0]} only. `
       + 'It was not stored: never convert it; the reviewer decides where it goes.');
     return false;
+  });
+  if (refused.length === 0) return extraction;
+  return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
+}
+
+/** Notes the code writes itself; only the reader's own notes speak for the reader. */
+const CODE_NOTE = /^(?:Values not found in the source document|Second read|Analyst (?:review|note)|Read as an Other document|Every quantity this sheet prints)|failed its checksum/i;
+
+/** A note about one part of a chunked document: another part may print the value. */
+const PART_NOTE = /\b(?:this|that|other|another) part\b|\bpart \d+ of \d+\b|\bchunk\b/i;
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The reader's own note says the field is not printed: a clause that OPENS
+ * with the field ("<field> not present on the pages provided"), or "no
+ * <field>". A clause that only mentions the field ("VAT treatment of <field>
+ * is not stated") is about something else and never refuses it.
+ */
+function noteSaysAbsent(note: string, field: string): boolean {
+  const name = escapeRegExp(field);
+  const absent = new RegExp(
+    `^[\\s"'“‘(-]*${name}\\b["'”’)]?\\s*(?:\\(|:|-|–|—|is|was|are|were)?\\s*`
+      + '(?:not\\s+(?:present|printed|stated|shown|given|provided|available|visible|legible|on\\s+(?:this|the)\\s+(?:page|pages|document))|absent|missing|(?:left\\s+|returned\\s+as\\s+|set\\s+to\\s+)null)\\b'
+      + `|\\bno\\s+${name}\\b`,
+    'i',
+  );
+  return absent.test(note);
+}
+
+/** Months, for a filing label ("Depot A July 2025") read as an issuer. */
+const MONTH_AND_YEAR = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|maart|mei|junie|julie|oktober|desember)\b[\s'’.-]*(?:19|20)?\d{2}\b/i;
+
+/** Fields that name who issued a document: never a filing label. */
+const ISSUER_FIELD = /(?:^|_)(?:supplier|issuer|issued_by|contractor|municipality|certification_body|provider|landlord)(?:_name)?$/;
+
+/**
+ * The first pass fills a field its own notes say the document does not print
+ * ("municipality_or_supplier_name not present on provided pages", yet a name
+ * was returned), fills a unit field with a word that is no unit ("UNITS" from a
+ * column heading, as a mass unit), or takes a filing label ("Depot A July
+ * 2025", handwritten on a scan) as the issuer. Each such value is the read
+ * contradicting itself or the vocabulary: it goes to the reviewer as an
+ * exception, never as a value. The agent's cited fills are not judged here:
+ * their citations were checked against the page. Notes about one part of a
+ * long document, and notes the code wrote, are not the read's own word.
+ */
+export function unprintedValuesAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const notes = extraction.exceptions
+    .map((note) => String(note ?? '').trim())
+    .filter((note) => note && !CODE_NOTE.test(note))
+    .flatMap((note) => note.split(/;\s+|\.\s+/))
+    .filter((clause) => !PART_NOTE.test(clause));
+  const refused: string[] = [];
+  const values = extraction.values.filter((value) => {
+    if (value.source?.method === 'agent' || Array.isArray(value.value) || value.value === null || typeof value.value === 'object') return true;
+    const shown = String(value.value).trim();
+    if (notes.some((note) => noteSaysAbsent(note, value.field))) {
+      refused.push(`${value.field}: "${shown}" was not kept: the read's own note says the document does not print it.`);
+      return false;
+    }
+    if (/_unit$/.test(value.field)) {
+      const family = unitFamilyOfUnit(value.value);
+      const expected = unitFamilyOfField(value.field.replace(/_unit$/, ''));
+      if (!family || (expected && family !== expected)) {
+        refused.push(`${value.field}: "${shown}" was not kept: it is not a unit${expected ? ` of ${expected}` : ''} (kg, t, L, kL, kWh...).`);
+        return false;
+      }
+    }
+    if (ISSUER_FIELD.test(value.field) && typeof value.value === 'string' && MONTH_AND_YEAR.test(value.value)) {
+      refused.push(`${value.field}: "${shown}" was not kept: a place with a month and year is a filing label, not who issued the document.`);
+      return false;
+    }
+    return true;
   });
   if (refused.length === 0) return extraction;
   return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
@@ -410,7 +486,7 @@ export async function extractEsgCaseEntities(
   const extractions: DocumentExtraction[] = [];
   for (const result of settled) {
     if (result.status === 'fulfilled' && result.value) {
-      extractions.push(...result.value.map(notesAsExceptions).map(namedUnitFiguresAsExceptions));
+      extractions.push(...result.value.map(notesAsExceptions).map(namedUnitFiguresAsExceptions).map(unprintedValuesAsExceptions));
     } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they
       // have already paid to extract.
