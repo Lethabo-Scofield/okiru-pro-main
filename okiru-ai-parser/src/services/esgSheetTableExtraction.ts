@@ -291,6 +291,17 @@ function whatOneRowIs(documentId: string, grid: DocumentGrid): string {
 }
 
 /**
+ * The column that keys a register's rows: the first of the register's
+ * identity fields (its first row field when it names none) that the column
+ * mapping found. Null when the mapping found none of them.
+ */
+export function rowIdentityField(grid: DocumentGrid, mapping: Record<string, string>): string | null {
+  const mapped = new Set(Object.values(mapping));
+  const identities = grid.identityFields ?? [grid.rowFields[0]];
+  return identities.find((field) => mapped.has(field)) ?? null;
+}
+
+/**
  * Read a workbook sheet as an ESG register.
  *
  * Returns null — never a partial guess — when the sheet is not a register, has
@@ -318,11 +329,15 @@ export async function extractEsgSheetTable(
   // What the model read a column AS, checked against what the column holds.
   const checked = mapped ? checkEsgColumnMeaning(rows, mapped) : null;
   const mapping = checked?.mapping ?? null;
-  // The FIRST column is the row's identity (vehicle_registration, driver_name).
-  // Without it every row is anonymous and `applyColumnMapping` drops them all,
-  // so an unmapped key field means "not this register" rather than "no rows" —
-  // hand it back to the spec pass instead of reporting an empty table.
-  if (!mapping || !Object.values(mapping).includes(shape.columns[0])) {
+  // A row needs an identity (vehicle_registration, learner_name). Without one
+  // every row is anonymous and `applyColumnMapping` drops them all, so a
+  // mapping that names no identity column means "not this register" rather
+  // than "no rows" — hand it back to the spec pass instead of reporting an
+  // empty table. Which columns identify a row is the register's own
+  // statement (`identityFields`): a training register that prints no OFO code
+  // is still a training register, keyed by its learners.
+  const identity = mapping ? rowIdentityField(grid, mapping) : null;
+  if (!mapping || !identity) {
     logger.info('ESG sheet columns did not map to the chosen register', {
       sheet: sheetName,
       documentId,
@@ -332,8 +347,11 @@ export async function extractEsgSheetTable(
   }
 
   // The B-BBEE echo-row skip stays off here: ESG registers keep the reading
-  // they were checked against the ESG answer key with.
-  const table = applyColumnMapping(rows, mapping, shape, { skipEchoRows: false });
+  // they were checked against the ESG answer key with. The mapping question
+  // above keeps the register's own column order; the rows are keyed by the
+  // identity column the mapping found.
+  const keyedShape: TableShape = { ...shape, columns: [identity, ...shape.columns.filter((c) => c !== identity)] };
+  const table = applyColumnMapping(rows, mapping, keyedShape, { skipEchoRows: false });
   if (table.rows.length === 0) return null;
   for (const field of checked?.perLitreFields ?? []) {
     for (const row of table.rows) {
