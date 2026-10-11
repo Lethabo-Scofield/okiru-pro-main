@@ -42,35 +42,68 @@ describe('aiEntityMapper — TMPS provenance', () => {
     expect(p.financials.tmps).not.toBeCloseTo(1_234_567.89, 2);
   });
 
-  it('a TMPS the structured financials table states beats the supplier sum', async () => {
+  // Decided 11 Oct 2026: the supplier sum by default; the stated figure is
+  // reported beside it and used only on the client's explicit choice.
+  it('scores the supplier sum by default and reports the TMPS the financials table states', async () => {
     const p = await payloadFor({ tables: { suppliers, financials: [{ tmps: 750_000 }] } });
-    expect(p.financials.tmps).toBe(750_000);
-    expect(p.tmpsSource).toBe('stated');
+    expect(p.financials.tmps).toBe(500_000);
+    expect(p.tmpsSource).toBe('supplier_spend_sum');
+    expect(p.tmpsStated).toBe(750_000);
+    expect(p.dataQuality.warnings.join(' ')).toMatch(/state 750000; the supplier schedule sums to 500000/);
   });
 
-  it('leaves a stated TMPS that held #REF! blank instead of summing the suppliers', async () => {
+  it('uses the stated TMPS only when the client explicitly chose it', async () => {
+    const p = await mapToUCSPayload({ entities: [], tables: { suppliers, financials: [{ tmps: 750_000 }] } } as ExtractionOutput, { tmpsChoice: 'stated' });
+    expect(p.financials.tmps).toBe(750_000);
+    expect(p.tmpsSource).toBe('stated');
+    // Any other value is no choice.
+    const label = await mapToUCSPayload({ entities: [], tables: { suppliers, financials: [{ tmps: 750_000 }] } } as ExtractionOutput, { tmpsChoice: 'Stated' });
+    expect(label.financials.tmps).toBe(500_000);
+  });
+
+  it('never scores a chosen stated TMPS below the suppliers listed', async () => {
+    const p = await mapToUCSPayload({ entities: [], tables: { suppliers, financials: [{ tmps: 30_000 }] } } as ExtractionOutput, { tmpsChoice: 'stated' });
+    expect(p.financials.tmps).toBe(500_000);
+    expect(p.tmpsSource).toBe('supplier_spend_sum');
+    expect(p.tmpsStated).toBe(30_000);
+  });
+
+  it('a stated TMPS that held #REF! is reported; the score stays on the supplier sum', async () => {
     const p = await payloadFor({
       entities: [entity('Total Measured Procurement Spend', '#REF!')],
       tables: { suppliers },
     });
-    expect(p.financials.tmps).toBe(0);
-    expect(p.tmpsSource).toBeNull();
+    expect(p.financials.tmps).toBe(500_000);
+    expect(p.tmpsSource).toBe('supplier_spend_sum');
     expect(p.tmpsHeld).toBe('withdrawn');
-    expect(p.dataQuality.missingCritical.join(' ')).toMatch(/TMPS/);
-    expect(p.dataQuality.derivedValues.join(' ')).not.toMatch(/TMPS/);
+    expect(p.tmpsStated).toBeNull();
+    expect(p.dataQuality.warnings.join(' ')).toMatch(/spreadsheet error/);
   });
 
-  it('sums the suppliers only when no TMPS was stated, and says so', async () => {
+  it('a #REF! TMPS with no supplier listed stays blank, not computed', async () => {
+    const p = await payloadFor({ entities: [entity('Total Measured Procurement Spend', '#REF!')] });
+    expect(p.financials.tmps).toBe(0);
+    expect(p.tmpsHeld).toBe('withdrawn');
+    expect(p.dataQuality.missingCritical.join(' ')).toMatch(/spreadsheet error/);
+  });
+
+  it('sums the suppliers when no TMPS was stated, and says so', async () => {
     const p = await payloadFor({ tables: { suppliers } });
     expect(p.financials.tmps).toBe(500_000);
     expect(p.tmpsSource).toBe('supplier_spend_sum');
+    expect(p.tmpsStated).toBeNull();
     expect(p.dataQuality.derivedValues).toContain('TMPS (derived from total supplier spend)');
   });
 
-  it('marks an entity-stated TMPS as stated', async () => {
+  it('an entity-stated TMPS is reported beside the supplier sum', async () => {
     const p = await payloadFor({ entities: [entity('TMPS', 'R 1 234 567.89')], tables: { suppliers } });
+    expect(p.financials.tmps).toBe(500_000);
+    expect(p.tmpsStated).toBeCloseTo(1_234_567.89, 2);
+  });
+
+  it('with no supplier listed, a stated TMPS stands (there is no sum)', async () => {
+    const p = await payloadFor({ entities: [entity('TMPS', 'R 1 234 567.89')] });
     expect(p.financials.tmps).toBeCloseTo(1_234_567.89, 2);
     expect(p.tmpsSource).toBe('stated');
-    expect(p.dataQuality.derivedValues.join(' ')).not.toMatch(/TMPS/);
   });
 });

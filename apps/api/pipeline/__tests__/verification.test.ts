@@ -147,8 +147,24 @@ describe('verifyClaims', () => {
     expect(byId(report, 'procurement.supplierSpend:duplicate:p2,p3')?.status).toBe('flag');
   });
 
-  it('11. TMPS between the schedule sum and the AFS cost base passes', () => {
-    expect(byId(report, 'procurement.tmps:tmps')?.status).toBe('pass');
+  it('11. a stated TMPS that is not the supplier sum is a flagged difference; the score stays on the sum', () => {
+    // Decided 11 Oct 2026: the supplier sum by default; the stated figure is
+    // shown beside it, never applied by this check.
+    const c = byId(report, 'procurement.tmps:tmps');
+    expect(c).toMatchObject({ status: 'flag', rule: 'flag-only', ops: [] });
+    expect(c?.statement).toContain('scored against the supplier sum');
+  });
+
+  it('11. a stated TMPS equal to the supplier sum passes; one below it says it cannot be the TMPS', () => {
+    const at = (tmps: number) => byId(verifyClaims({
+      sections: { ...company(), 'financial-information': { meta: { ...company()['financial-information'].meta, tmps } } },
+      evidence,
+    }), 'procurement.tmps:tmps');
+    expect(at(2_200_000)?.status).toBe('pass');
+    expect(at(2_200_000.5)?.status).toBe('pass');
+    const below = at(300_000);
+    expect(below).toMatchObject({ status: 'flag', ops: [] });
+    expect(below?.statement).toContain('cannot be the TMPS');
   });
 
   it('12. NPAT is replaced by the financial statements; revenue agrees', () => {
