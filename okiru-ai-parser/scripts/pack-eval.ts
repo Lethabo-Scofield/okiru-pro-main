@@ -89,6 +89,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   '.csv': 'text/csv',
   '.txt': 'text/plain',
+  '.eml': 'message/rfc822',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',

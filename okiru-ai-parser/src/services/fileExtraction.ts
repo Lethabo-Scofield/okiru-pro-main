@@ -24,6 +24,7 @@ import {
 import { splitWorkbookIntoSheets, shouldSplitWorkbook } from './workbookSheetSplit.js';
 import { extractScannedPdfWithVision } from './visionExtraction.js';
 import { pdfCaptionedColumns, type CaptionedColumn } from './pdfColumns.js';
+import { extractEmailText } from './emailExtraction.js';
 
 /**
  * Below this many characters a PDF/DOCX is treated as a scan, not a document
@@ -51,6 +52,8 @@ export const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
   'application/vnd.ms-powerpoint',
   'text/csv',
   'text/plain',
+  // A saved e-mail (.eml): a client's request or reply thread is evidence too.
+  'message/rfc822',
   'image/png',
   'image/jpeg',
   'image/jpg',
@@ -455,7 +458,7 @@ async function extractImageText(buffer: Buffer): Promise<string> {
  */
 export const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   '.pdf', '.docx', '.doc', '.xlsx', '.xlsm', '.xls', '.pptx', '.ppt',
-  '.csv', '.txt', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp',
+  '.csv', '.txt', '.eml', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp',
 ]);
 
 /** Accept when EITHER the declared type or the extension is one we support. */
@@ -545,6 +548,10 @@ export async function rawExtractionInputFromUpload(
   } else if (file.mimetype === 'text/plain' || ext === '.txt') {
     rawText = file.buffer.toString('utf8');
     markdown = rawText;
+  } else if (file.mimetype === 'message/rfc822' || ext === '.eml') {
+    const extracted = await withTimeout(extractEmailText(file.buffer), EXTRACTION_TIMEOUT_MS);
+    rawText = extracted.text;
+    markdown = extracted.markdown;
   } else if (file.mimetype.startsWith('image/')) {
     if (file.size > MAX_IMAGE_BYTES) {
       throw new Error(`Image exceeds maximum size of ${MAX_IMAGE_BYTES} bytes`);
