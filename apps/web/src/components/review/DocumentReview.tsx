@@ -315,6 +315,28 @@ export function DocumentReview({
                   </div>
                 )}
 
+                {doc.otherDetails && doc.otherDetails.length > 0 && (
+                  <details className="mt-3" open={doc.otherDocument} data-testid="review-other-details">
+                    <summary className="cursor-pointer list-none text-[12px] font-semibold text-white">
+                      Other details · {doc.otherDetails.length}
+                      <span className="ml-1.5 text-[11px] font-normal text-[color:var(--muted)]">not scored unless you enter them</span>
+                    </summary>
+                    <ul className="mt-1.5 space-y-1">
+                      {doc.otherDetails.map((v, i) => (
+                        <li key={i} className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-[11.5px] leading-5">
+                          <span className="text-[color:var(--muted)]">{v.label}:</span> <span className="text-[#e5e5ea]">{v.value}</span>
+                          {v.source && <span className="block truncate text-[10.5px] italic text-[color:var(--muted)]" title={v.source}>“{v.source}”</span>}
+                          {v.suggested && (
+                            <span className="block text-[10.5px] text-violet-200/80" data-testid={`review-other-suggested-${i}`}>
+                              Suggested for {v.suggested} — enter it in the workbook if it is right
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
                 {asks.length > 0 && (
                   <div className="mt-3" data-testid="review-decisions">
                     <p className="text-[12px] font-semibold text-white">Tell us where these go</p>
@@ -392,7 +414,7 @@ export function DocumentReview({
                     </p>
                   ))}
 
-                {doc.state !== "not-read" && doc.values.length === 0 && doc.unplaced.length === 0 && (
+                {doc.state !== "not-read" && doc.values.length === 0 && doc.unplaced.length === 0 && !doc.otherDocument && (
                   <p className="text-[11.5px] text-[color:var(--body)]">This document fed rows into the workbook; open the workbook to see them.</p>
                 )}
               </div>

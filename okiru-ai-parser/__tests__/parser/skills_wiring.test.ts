@@ -156,9 +156,18 @@ describe('a spec with a skill is extracted with it', () => {
 
   it('a spec without a skill sends the old prompt, byte for byte', async () => {
     process.env.AI_EXTRACTION_SWEEP = 'false';
+    // The skill wiring alone: the open read's "other details" block, asked of
+    // listed reads when PARSER_OPEN_READ is on, is pinned in open_read.test.ts.
+    const savedOpen = process.env.PARSER_OPEN_READ;
+    process.env.PARSER_OPEN_READ = 'other';
     const { model, calls } = recordingModel(() => ({}));
     const text = 'MEMORANDUM OF INCORPORATION\nAcme Trading (Pty) Ltd';
-    await extractWithSpec(model, MOI_SPEC, doc(text));
+    try {
+      await extractWithSpec(model, MOI_SPEC, doc(text));
+    } finally {
+      if (savedOpen === undefined) delete process.env.PARSER_OPEN_READ;
+      else process.env.PARSER_OPEN_READ = savedOpen;
+    }
     const expected = [
       `ANALYST INSTRUCTION:\n${MOI_SPEC.extractionPrompt}`,
       `\nEXPECTED JSON KEYS: ${MOI_SPEC.expectedFields.join(', ')}`,

@@ -30,6 +30,7 @@ import { getRequiredDocumentGroups, SECTOR_OPTIONS } from '../../parser/sector_d
 import { ParserService } from '../../parser/parser_service.js';
 import { documentsByElement } from '../../schemas/verification_document_matrix.js';
 import { extractCaseEntities } from '../services/caseExtraction.js';
+import { isOtherDocument } from '../services/openFacts.js';
 import { pageImageProviderFor } from '../services/agentExtraction.js';
 // The reader behind the lexical classifier: settles low-confidence / too-close
 // document types by purpose and layout. Undefined without a model, in which
@@ -40,6 +41,7 @@ import { persistCaseFiles } from '../services/caseDocumentStorage.js';
 import { extractEsgCaseEntities } from '../services/esgCaseExtraction.js';
 import {
   aiValuesForUpload,
+  asOtherDocumentOutput,
   bbbeeRunRecords,
   contentSha256,
   esgRunRecords,
@@ -314,10 +316,11 @@ async function readOneFileFully(
   // Nothing was detected as this upload (every input unreadable by the rules):
   // still a record of the read, carrying whatever the model found.
   const uploadOf = uploadNameResolver(new Set([file.originalname]), inputs);
+  const other = (entities?.extractions ?? []).find((e) => isOtherDocument(e) && e.sourceFile === file.originalname);
   return {
     filename: file.originalname,
     contentSha256: contentSha256(file.buffer),
-    parserOutput: {
+    parserOutput: asOtherDocumentOutput({
       filename: file.originalname,
       document_type: 'Unknown',
       pillar: '',
@@ -335,7 +338,7 @@ async function readOneFileFully(
         classification_candidates: [],
         rejected_calculator_keys: [],
       },
-    },
+    }, other),
     reviewReasons: [],
     aiValues: aiValuesForUpload(entities?.extractions ?? null, file.originalname, uploadOf),
   };
@@ -568,7 +571,9 @@ router.post('/resolve-case-files', upload.array('files', 100), async (req: Reque
     // the CIPC record; NPAT in the AFS and the SED workpaper). It is additive:
     // with no model configured this is skipped and the deterministic result is
     // returned unchanged.
-    const entities = await extractCaseEntities(rawInputs);
+    // The rule-based types ride along for typing only (no agent pass here): a
+    // document they typed keeps its type, exactly as on the streaming route.
+    const entities = await extractCaseEntities(rawInputs, undefined, undefined, { deterministic: result.documents_detected });
 
     return res.status(result.status === 'failed' && !entities ? 422 : 200).json({
       ...result,

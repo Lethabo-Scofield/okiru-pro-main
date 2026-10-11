@@ -15,6 +15,7 @@
 import {
   display,
   humanize,
+  otherDetailsOf,
   whyNotRead,
   type ReviewDocument,
   type ReviewProblem,
@@ -33,6 +34,8 @@ import {
 } from "./esgParserInjection";
 
 const PRODUCT = "your ESG workbook";
+/** The parser's own notes on reading an Other document (okiru-ai-parser openRead.ts / openFacts.ts). */
+const OPEN_READ_NOTE = /^Read as an Other document|detail\(s\) the open read returned were left out/;
 const MAX_VALUES = 60;
 
 export interface EsgReviewInputs {
@@ -163,7 +166,8 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
     for (const e of own) {
       for (const note of e.exceptions ?? []) {
         const text = String(note ?? "").trim();
-        if (!text || problems.some((p) => p.detail === text)) continue;
+        // The open read's notes on how an Other document was read are no trouble.
+        if (!text || problems.some((p) => p.detail === text) || OPEN_READ_NOTE.test(text)) continue;
         problems.push({
           headline: "Something here needs a human look.",
           detail: text,
@@ -174,8 +178,13 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
     }
 
     const unreadableReason = unreadable.find((u) => String(u.file_name ?? "") === name)?.reason;
+    // None of the listed ESG types fits it (an insurance schedule, a rates
+    // letter): read for what it is; nothing from it is placed or scored.
+    const other = otherDetailsOf(own as Array<{ documentName?: unknown; sourceFile?: unknown; open?: unknown }>, () => true);
     let state: ReviewDocument["state"];
-    if (values.length === 0) {
+    if (values.length === 0 && other.otherDocument && other.details.length > 0) {
+      state = problems.length > 0 ? "needs-look" : "read";
+    } else if (values.length === 0) {
       state = "not-read";
       problems.unshift(
         whyNotRead(unreadableReason ? [String(unreadableReason)] : [], "", failedFiles.includes(name), PRODUCT),
@@ -195,11 +204,13 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
     }
 
     const notFound = Array.from(new Set(own.flatMap((e) => (e.missingFields ?? []).map((f) => humanize(String(f)))))).slice(0, 12);
-    const documentType = own.map((e) => e.documentName).find(Boolean) ?? "";
+    const documentType = other.otherDocument ?? own.map((e) => e.documentName).find(Boolean) ?? "";
     const kept = unplaced.filter((v) => v.evidence).length;
     const summary =
       values.length === 0
-        ? ""
+        ? other.otherDocument && other.details.length > 0
+          ? `${other.details.length} detail${other.details.length === 1 ? "" : "s"} read · none scored`
+          : ""
         : [
           `${placed.length} placed`,
           `${values.length} read`,
@@ -208,7 +219,18 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
           own.length > 1 ? `${own.length} sheets` : "",
         ].filter(Boolean).join(" · ");
 
-    docs.push({ filename: name, documentType: String(documentType), state, summary, values, unplaced, problems, notFound });
+    docs.push({
+      filename: name,
+      documentType: String(documentType),
+      state,
+      summary,
+      values,
+      unplaced,
+      problems,
+      notFound: other.otherDocument ? [] : notFound,
+      ...(other.details.length > 0 ? { otherDetails: other.details } : {}),
+      ...(other.otherDocument ? { otherDocument: true } : {}),
+    });
   }
 
   const rank = { "not-read": 0, "needs-look": 1, read: 2 } as const;

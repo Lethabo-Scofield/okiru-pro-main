@@ -78,6 +78,12 @@ export const parserOutputSchema = z.object({
       reasons: z.array(z.string()),
     })).default([]),
     classification_reason: z.string().optional(),
+    /**
+     * The type decision's own status ('classified' = a confident pick, by
+     * keyword content or by a confident reader). Lets the AI path tell a
+     * confident rule typing from a doubted keyword guess.
+     */
+    classification_status: z.enum(['classified', 'ambiguous', 'low_confidence', 'unsupported', 'compendium']).optional(),
     rejected_calculator_keys: z.array(z.object({
       key: z.string(),
       reason: z.string(),

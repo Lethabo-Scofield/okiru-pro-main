@@ -28,6 +28,20 @@
  * without `keys` scores recall only: correct when the value appears anywhere in
  * that document's output. Precision is counted over keyed fields only, and the
  * report says how many fields that is, so the base of the figure is visible.
+ *
+ * OPEN FACTS are a separate layer, outside all four above (openFacts.ts): what
+ * an Other document states (a lease, a bank letter) and the other details a
+ * listed read noted beyond its field list. They sit on an extraction's `open`
+ * block, never in its `values`, so det/ai/agent/union never see them: an open
+ * fact is never counted correct, wrong or invented there, and never fills a
+ * recall-only field. Reading more of a document must not look like inventing.
+ * The one exception is a fact PROPOSED for a calculator input whose bridge
+ * field (the parser field name the calculator mapping speaks) is one a keyed
+ * field names: that is a claim about a keyed field, so it is scored in
+ * `totals.open` — correct, wrong, or invented (absentOk) — and reported there
+ * only. It is not gated and not in the union: proposals are suggestions a
+ * person confirms, not values the pipeline delivers. An unmapped fact, or one
+ * mapped to a field no key names, is counted (`facts`) and never scored.
  */
 import { dirname, join } from 'node:path';
 import { valuesAgree } from '../../src/services/entityResolution.js';
@@ -104,7 +118,27 @@ interface DetDocument {
   parser_output?: { supplier_rows?: Array<Record<string, unknown>>; measured_procurement_spend?: number | null };
 }
 interface AiValue { field: string; value: unknown; source?: { method?: string } }
-interface AiExtraction { documentId: string; documentName?: string; sourceFile: string; values?: AiValue[] }
+/** An extraction's open read (openFacts.ts OpenRead): facts and the calculator inputs proposed for some. */
+interface AiOpenRead {
+  other?: boolean;
+  facts?: unknown[];
+  proposals?: Array<{ field?: string | null; value?: unknown }>;
+}
+interface AiExtraction { documentId: string; documentName?: string; sourceFile: string; values?: AiValue[]; open?: AiOpenRead }
+
+/** The open-facts layer (see the header): counted, and scored only where a proposal names a keyed field. */
+export interface OpenLayerScore {
+  /** Key documents our run read as Other documents (no listed type fits). */
+  otherDocuments: number;
+  /** Open facts on key documents (Other documents' facts and listed reads' other details). Never scored. */
+  facts: number;
+  /** Keyed fields at least one proposal maps a fact onto. */
+  proposedKeyedFields: number;
+  correct: number;
+  wrong: number;
+  /** A proposal onto an absentOk field. */
+  invented: number;
+}
 
 export interface PackCase {
   /** 'esg' for scripts/pack-eval.ts --domain esg; anything else scores as B-BBEE. */
@@ -176,6 +210,8 @@ export interface PackScore {
     ai: LayerCounts;
     agent: LayerCounts;
     union: LayerCounts;
+    /** Open facts: outside the four layers, never gated (see the header). */
+    open: OpenLayerScore;
   };
 }
 
@@ -483,6 +519,34 @@ function agentBag(caseResult: PackCase, file: string): LayerBag {
     for (const value of filled) add(bag, value.field, value.value);
   }
   return { bag, types };
+}
+
+/**
+ * The open-facts layer for one key document: its facts (counted), and the
+ * proposals that name a bridge field, as field → printed values (scored only
+ * against keyed fields, by openStatus).
+ */
+function openBag(caseResult: PackCase, file: string): { bag: FieldBag; facts: number; other: boolean } {
+  const bag: FieldBag = new Map();
+  let facts = 0;
+  let other = false;
+  for (const extraction of caseResult.ai_entities?.extractions ?? []) {
+    if (!belongsTo(extraction.sourceFile, file) || !extraction.open) continue;
+    if (extraction.open.other) other = true;
+    facts += extraction.open.facts?.length ?? 0;
+    for (const proposal of extraction.open.proposals ?? []) {
+      if (proposal.field) add(bag, proposal.field, proposal.value);
+    }
+  }
+  return { bag, facts, other };
+}
+
+/** A keyed field's open-layer status: only when some proposal names one of its fields. */
+function openStatus(field: KeyField, bag: FieldBag, options: ScoreOptions): FieldStatus | null {
+  if (field.keys.length === 0) return null;
+  const names = keyNames(field, options);
+  if (!names.some((name) => bag.has(name))) return null;
+  return keyedStatus(field, bag, options).status;
 }
 
 /** The values under one key: a plain field name, or `rows.column` across rows. */
@@ -816,11 +880,15 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
   let typeOk = 0;
   let aiTypeOk = 0;
   let typed = 0;
+  const open: OpenLayerScore = { otherDocuments: 0, facts: 0, proposedKeyedFields: 0, correct: 0, wrong: 0, invented: 0 };
 
   for (const doc of key.documents) {
     const det = detBag(caseResult, doc.file);
     const ai = aiBag(caseResult, doc.file);
     const agent = agentBag(caseResult, doc.file);
+    const opened = openBag(caseResult, doc.file);
+    if (opened.other) open.otherDocuments += 1;
+    open.facts += opened.facts;
     const counts = layerCounts();
 
     for (const field of doc.fields) {
@@ -832,6 +900,13 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
       tally(counts.ai, field, a.status);
       tally(counts.agent, field, g.status);
       tally(counts.union, field, u);
+      const o = openStatus(field, opened.bag, options);
+      if (o) {
+        open.proposedKeyedFields += 1;
+        if (o === 'correct') open.correct += 1;
+        else if (o === 'wrong') open.wrong += 1;
+        else if (o === 'invented') open.invented += 1;
+      }
       perField.push({
         file: doc.file,
         label: field.label,
@@ -889,6 +964,7 @@ export function scorePack(caseResult: PackCase, key: AnswerKey, options: ScoreOp
       ai: finish(totals.ai),
       agent: finish(totals.agent),
       union: finish(totals.union),
+      open,
     },
   };
 }
@@ -1104,6 +1180,8 @@ export function scoreMarkdown(score: PackScore, summary: RunSummary | null = nul
     '',
     `Documents ${t.documents}; fields ${t.fields} (keyed ${t.keyedFields}, recall-only ${t.unkeyedFields}, absentOk ${t.absentOkFields}).`,
     `Precision is counted over the ${t.keyedFields} keyed fields only.`,
+    `Open facts (outside every layer, never gated): ${t.open.facts} on key documents, ${t.open.otherDocuments} read as Other documents; `
+      + `proposals onto keyed fields ${t.open.proposedKeyedFields} (correct ${t.open.correct}, wrong ${t.open.wrong}, invented ${t.open.invented}).`,
     `Type correct: deterministic ${t.type_ok}/${t.typed_documents}, AI spec ${t.ai_type_ok}/${t.typed_documents}. Unreadable: ${t.unreadable}.`,
     summary
       ? `Run mode ${summary.mode ?? '?'}, cassette misses ${summary.cassette?.misses ?? '?'}, `

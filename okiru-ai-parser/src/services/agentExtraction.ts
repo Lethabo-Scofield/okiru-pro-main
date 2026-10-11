@@ -994,7 +994,8 @@ export function typeTargetAliases(): Record<string, string[]> {
   return structuredClone(TYPE_TARGET_ALIASES);
 }
 
-export type AgentTargetSource = 'classifier' | 'classifier_alias' | 'skill_signals' | 'first_pass';
+/** 'open': an Other document, read as the open skill's target (openFacts.ts). */
+export type AgentTargetSource = 'classifier' | 'classifier_alias' | 'skill_signals' | 'first_pass' | 'open';
 
 export interface AgentTargetChoice {
   target: AgentTarget;
@@ -1085,8 +1086,17 @@ function aliasTarget(type: string, source: SignalSource | null, direct: AgentTar
   return best[0].score >= 2 && best[0].score > best[1].score ? best[0].target : candidates[0];
 }
 
-/** What the classifier reports for a document it could not type (classify_document 'Unsupported'). */
-const UNTYPED = /^(unsupported|unknown|unclassified|other|none)$/i;
+/**
+ * What the classifier reports for a document it could not type (classify_document
+ * 'Unsupported'), or one it read as none of the listed types ("Other document").
+ */
+const UNTYPED = /^(unsupported|unknown|unclassified|other|none|other document(?:\s+—.*)?)$/i;
+
+/** Does a classifier's type name a document type at all (not Unknown / Unsupported / Other document)? */
+export function namesListedType(type: string | null | undefined): boolean {
+  const name = String(type ?? '').trim();
+  return name.length > 0 && !UNTYPED.test(name);
+}
 
 /** Below this, or this close to the runner-up, the signals choose nothing. */
 const SIGNAL_MIN_SCORE = 4;
@@ -2744,6 +2754,8 @@ export interface DeterministicDocument {
    * `overall_confidence` its confidence.
    */
   typed_by?: 'classifier';
+  /** The rule-based reader's full output (caseDocumentSummary.parser_output), when the route passes it. */
+  parser_output?: { audit_trail?: { classification_status?: string } };
 }
 
 export interface HardSignals {
@@ -2755,6 +2767,8 @@ export interface HardSignals {
   skillHard: boolean;
   /** A workbook sheet or CSV: never run in hard mode (see agentGateDecision). */
   spreadsheet?: boolean;
+  /** Reasons the caller knows that make the document hard (an Other document with too little read). */
+  extra?: string[];
 }
 
 /** Below this the classifier itself asks for review (classify_document REVIEW threshold). */
@@ -2779,6 +2793,7 @@ export function agentGateDecision(mode: AgentMode, signals: HardSignals): { run:
   if (signals.requiredMissingRatio >= MISSING_RATIO) reasons.push(`${Math.round(signals.requiredMissingRatio * 100)}% of required fields missing`);
   if (signals.checksumFailed) reasons.push('checksum failure');
   if (signals.skillHard) reasons.push('skill marks this type hard');
+  reasons.push(...(signals.extra ?? []));
   return { run: reasons.length > 0, reasons };
 }
 
@@ -2905,18 +2920,37 @@ export function agentCasePass(model: ExtractionModel, context: AgentCaseContext 
  * and never changes a first-pass value: on any failure the first-pass
  * extractions come back as they went in.
  */
+export interface AgentDocumentOptions {
+  /**
+   * Read the document as THIS target instead of choosing one: an Other
+   * document is read as the open skill's target (openFacts.openAgentTarget).
+   */
+  target?: AgentTarget;
+  /** Reasons the caller knows that make this document hard (see HardSignals.extra). */
+  hardReasons?: string[];
+}
+
 export async function agentPassForDocument(
   model: ExtractionModel,
   input: RawExtractionInput,
   results: DocumentExtraction[],
   pass: AgentCasePass,
+  options: AgentDocumentOptions = {},
 ): Promise<DocumentExtraction[]> {
   try {
     const deterministic = pass.context.deterministic?.find((d) => d.filename === input.filename);
-    const choice = chooseAgentTarget(results, deterministic, input, pass.context.domain ?? 'bbbee');
+    const choice: AgentTargetChoice | null = options.target
+      ? { target: options.target, source: 'open' }
+      : chooseAgentTarget(results, deterministic, input, pass.context.domain ?? 'bbbee');
     if (!choice) return results;
     const chosen = choice.target;
-    const decision = agentGateDecision(pass.mode, hardSignals(input, results, chosen, deterministic));
+    // An explicit target (an Other document) is hard only for the caller's
+    // reasons: its rule-based reader failing, or its scan, says nothing about
+    // whether the open read already read enough of it.
+    const signals: HardSignals = options.target
+      ? { scanned: false, requiredMissingRatio: 0, checksumFailed: false, skillHard: false, spreadsheet: isSpreadsheetInput(input), extra: options.hardReasons }
+      : { ...hardSignals(input, results, chosen, deterministic), extra: options.hardReasons };
+    const decision = agentGateDecision(pass.mode, signals);
     if (!decision.run) return results;
 
     const signal = pass.context.signal;

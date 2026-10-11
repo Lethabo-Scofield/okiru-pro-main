@@ -503,6 +503,31 @@ export async function mapEntitiesToCalculatorWithSemantics(
   return { ...base, payload, entries, unmapped };
 }
 
+/**
+ * The keys an open fact may be PROPOSED for (openRead.ts proposeOpenMappings),
+ * described in the allowlist's own words — the same slots the semantic pass
+ * offers, nothing else.
+ */
+export function openFactSlots(): MappableKey[] {
+  return mappableKeys();
+}
+
+/**
+ * What an open fact would be as this calculator input: the same coercion a
+ * declared mapping for the key uses (or the key's own type), then the
+ * allowlist. `field` is the parser field name the declared table maps onto
+ * the key — the bridge vocabulary — so a proposal can be compared with the
+ * values a listed read returns. Null when the value cannot be that input.
+ * Used for proposals only: it places nothing in a payload.
+ */
+export function openFactSlot(key: string, value: unknown): { coerced: unknown; field: string | null } | null {
+  if (!calculatorKeySpec(key)) return null;
+  const declared = FIELD_MAPPINGS.find((mapping) => mapping.calculatorKey === key);
+  const coerced = coerce(declared ?? { field: key, calculatorKey: key, coerce: coercionForKey(key) }, value);
+  if (coerced === null || !admitCalculatorEntry(key, coerced).accepted) return null;
+  return { coerced, field: declared?.field ?? null };
+}
+
 /** Build the field → elements index from the per-document extractions. */
 export function fieldElementIndex(
   extractions: Array<{ documentId: string; values: Array<{ field: string }> }>,

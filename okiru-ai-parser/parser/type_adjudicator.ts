@@ -39,6 +39,9 @@ export const ADJUDICATION_MENU = 10;
  */
 export const MIN_READABLE_CHARS = 20;
 
+/** The type a document the reader is sure is none of the candidates is reported as. */
+export const OTHER_DOCUMENT_TYPE = 'Other document';
+
 export interface AdjudicationCandidate {
   /** The ontology document-type name, verbatim. */
   name: string;
@@ -58,15 +61,24 @@ export interface AdjudicationInput {
 }
 
 export interface TypeAdjudication {
-  /** One of the candidate names, verbatim. */
+  /** One of the candidate names, verbatim ('' when `none`). */
   documentType: string;
+  /**
+   * The reader is sure the document is NONE of the candidates (a lease, an
+   * insurance schedule): it is not forced into the lexical guess. Absent on a
+   * pick.
+   */
+  none?: boolean;
   /** 0..1, the model's own calibrated confidence. */
   confidence: number;
   /** One sentence naming the deciding feature, shown in the audit trail. */
   reason: string;
 }
 
-/** Returns null when it cannot say (no model, call failed, "none of these", not confident). */
+/**
+ * Returns null when it cannot say (no model, call failed, not confident), and
+ * `{ none: true }` when it is confident the document is none of these.
+ */
 export type DocumentTypeAdjudicator = (
   input: AdjudicationInput,
   candidates: AdjudicationCandidate[],

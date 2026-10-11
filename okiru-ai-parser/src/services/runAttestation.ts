@@ -34,6 +34,7 @@ import type { DocumentExtraction } from './aiExtraction.js';
 import type { UploadedFileLike } from './fileExtraction.js';
 import { SHEET_INSTRUCTIONS_DOCUMENT_ID } from './sheetInstructionsExtraction.js';
 import { parserBuild } from './parserBuild.js';
+import { isOtherDocument, type OpenRead } from './openFacts.js';
 
 const logger = createLogger('RunAttestation');
 
@@ -333,8 +334,110 @@ export function aiValuesForUpload(
       bytes += size;
       out.push(entry);
     }
+    // The open read's identity and facts (an Other document's, or a listed
+    // document's other details), after its values. Same layers the library
+    // already accepts ('ai', or 'agent' for the agent's cited read); the
+    // document name says what they are: "Other document — Lease agreement",
+    // or "Other details — <type>".
+    for (const entry of openEntries(extraction, filename, limits)) {
+      if (out.length >= limits.maxValues) return out;
+      let key = entry.key;
+      for (let n = 2; keys.has(key); n += 1) key = `${entry.key}.${n}`;
+      keys.add(key);
+      const sized = { ...entry, key };
+      const size = Buffer.byteLength(JSON.stringify(sized)) + 1;
+      if (bytes + size > limits.maxBytes) return out;
+      bytes += size;
+      out.push(sized);
+    }
   }
   return out;
+}
+
+/** The identity fields of an open read, as the library shows them. */
+const IDENTITY_LABELS: Array<[keyof OpenRead['identity'], string]> = [
+  ['title', 'Document title'],
+  ['issuedBy', 'Issued by'],
+  ['aboutEntity', 'About'],
+  ['documentDate', 'Document date'],
+  ['period', 'Period'],
+];
+
+/** One extraction's open read as library values (empty when it has none). */
+function openEntries(extraction: DocumentExtraction, filename: string, limits: AiValueLimits): RunAiValue[] {
+  const open = extraction.open;
+  if (!open) return [];
+  const documentName = open.other ? extraction.documentName : `Other details — ${extraction.documentName}`;
+  const base = {
+    confidence: null,
+    documentId: extraction.documentId,
+    documentName,
+    element: extraction.element ?? open.couldEvidence[0] ?? null,
+    sourceFile: String(extraction.sourceFile || filename),
+  };
+  const prefix = `open.${keyPart(extraction.documentId)}`;
+  const entries: RunAiValue[] = [];
+  if (open.other) {
+    for (const [key, label] of IDENTITY_LABELS) {
+      const value = open.identity[key];
+      if (typeof value !== 'string' || !value) continue;
+      entries.push({ ...base, key: `${prefix}.${keyPart(label)}`, field: label, value: clipText(value, limits), layer: 'ai', page: null, cell: null, quote: null, grounded: true });
+    }
+    for (const reference of open.identity.referenceNumbers) {
+      entries.push({ ...base, key: `${prefix}.Reference`, field: 'Reference', value: reference, layer: 'ai', page: null, cell: null, quote: null, grounded: true });
+    }
+  }
+  for (const fact of open.facts) {
+    const unit = fact.unit && !fact.value.toLowerCase().includes(fact.unit.toLowerCase()) ? ` (${fact.unit})` : '';
+    entries.push({
+      ...base,
+      key: `${prefix}.${keyPart(fact.label)}`,
+      field: `${fact.label}${unit}`.slice(0, 200),
+      value: clipText(fact.value, limits),
+      layer: fact.method === 'agent' ? 'agent' : 'ai',
+      page: fact.page,
+      cell: fact.cell,
+      quote: clipText(fact.quote, limits),
+      // The quote was found in the document and the value in the quote.
+      grounded: true,
+    });
+  }
+  return entries;
+}
+
+/** Does the rule layer's reading leave the document's type open (failed, or no type)? */
+function ruleLeftTypeOpen(output: Record<string, unknown>): boolean {
+  const type = String(output.document_type ?? '').trim();
+  return output.status === 'failed' || !type || /^(unknown|unsupported|unrecognised document|other document)$/i.test(type);
+}
+
+/**
+ * The run of an upload the AI read as an Other document, when the rule layer
+ * left its type open: named "Other document — <label>", and (when its facts
+ * were read) "needs review" rather than "failed" — the document was read, it
+ * just carries nothing a listed type scores. The rule layer's own reading is
+ * kept beside it (`rule_document_type`, its errors as warnings).
+ */
+export function asOtherDocumentOutput(output: Record<string, unknown>, other: DocumentExtraction | undefined): Record<string, unknown> {
+  if (!other?.open || !ruleLeftTypeOpen(output)) return output;
+  const read = other.open.facts.length > 0;
+  const validation = (output.validation ?? {}) as { warnings?: unknown[]; errors?: unknown[]; passed?: boolean; missing_fields?: unknown[] };
+  return {
+    ...output,
+    document_type: other.documentName,
+    rule_document_type: output.document_type ?? null,
+    ...(read && output.status === 'failed'
+      ? {
+          status: 'review_required',
+          validation: {
+            ...validation,
+            passed: false,
+            warnings: [...(validation.errors ?? []), ...(validation.warnings ?? [])],
+            errors: [],
+          },
+        }
+      : {}),
+  };
 }
 
 type DetectedDocument = ParserCaseOutput['documents_detected'][number];
@@ -542,8 +645,11 @@ export function bbbeeRunRecords(
     // The upload read as itself, when it was; otherwise it is a workbook read
     // sheet by sheet.
     const own = documents.find((doc) => doc.filename === filename);
+    // An upload the AI read as an Other document is named for what it is when
+    // the rule layer could not type it (asOtherDocumentOutput).
+    const other = (ai.extractions ?? []).find((e) => isOtherDocument(e) && e.sourceFile === filename);
     const parserOutput = own
-      ? (own.parser_output as unknown as Record<string, unknown>)
+      ? asOtherDocumentOutput(own.parser_output as unknown as Record<string, unknown>, other)
       : workbookOutput(filename, documents, { aiSheets, template });
     const reasons = Array.from(new Set((result.documents_needing_review ?? [])
       .filter((row) => uploadOf(row.filename) === filename)
@@ -591,7 +697,8 @@ export function esgRunRecords(input: {
   return Array.from(uploads.entries()).map(([filename, file]) => {
     const mine = (input.extractions ?? []).filter((e) => uploadOf(e.sourceFile) === filename);
     const readError = input.readErrors.get(filename) ?? null;
-    const readSomething = mine.some((e) => (e.values?.length ?? 0) > 0);
+    // An Other document's facts are a read too, though none of them is a value.
+    const readSomething = mine.some((e) => (e.values?.length ?? 0) > 0 || (e.open?.facts.length ?? 0) > 0);
     const exceptions = Array.from(new Set(mine.flatMap((e) => (e.exceptions ?? []).map(String))));
     const extractionErrors = mine.flatMap((e) => (e.error ? [String(e.error)] : []));
     const missingFields = Array.from(new Set(mine.flatMap((e) => e.missingFields ?? [])));
@@ -606,7 +713,7 @@ export function esgRunRecords(input: {
     const status = failure ? 'failed' : warnings.length > 0 ? 'review_required' : 'passed';
     // The duplicate-workbook note rides on the first file with no values; the
     // document's type is the one its values were read under.
-    const primary = mine.find((e) => (e.values?.length ?? 0) > 0) ?? mine[0];
+    const primary = mine.find((e) => (e.values?.length ?? 0) > 0) ?? mine.find(isOtherDocument) ?? mine[0];
 
     return {
       filename,

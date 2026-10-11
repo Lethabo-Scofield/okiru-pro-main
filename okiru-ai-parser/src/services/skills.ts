@@ -34,7 +34,10 @@
  *   ## Worked example
  *
  * Files starting with `_` are domain-wide (`_global.md`): traps that apply to
- * every document, with no front-matter `appliesTo` or fields.
+ * every document, with no front-matter `appliesTo` or fields. `_open.md` is the
+ * one exception: the OPEN skill, for a document that is none of the listed
+ * types (id `_open`, a `fields` list of identity fields plus the facts' row
+ * columns under `rowsField`, and the four sections; no appliesTo, no classify).
  *
  * DOMAINS. `skills/bbbee` names B-BBEE matrix ids or the canonical B-BBEE types
  * in `appliesTo`. `skills/esg` names ESG matrix ids
@@ -173,11 +176,37 @@ export interface GlobalSkill {
   file: string;
 }
 
+/**
+ * The OPEN skill (`_open.md`): how to read a document that is none of the
+ * listed types — a lease, a bank confirmation, an insurance schedule. It has
+ * no `appliesTo` and no `classify` (it is what is left when nothing else
+ * fits), a fixed identity field list, and its facts as rows (label, value,
+ * unit, page, quote), every one copied as printed and cited. See openRead.ts.
+ */
+export interface OpenSkill {
+  id: '_open';
+  domain: ExtractionDomain;
+  version: number;
+  /** Document-level identity fields (the document's own label, title, issuer, dates, references). */
+  fields: SkillField[];
+  /** The facts array the row-level fields are returned under. */
+  rowsField: string;
+  rowFields: SkillField[];
+  sections: SkillSections;
+  hash: string;
+  file: string;
+}
+
 export interface SkillRegistry {
   domain: ExtractionDomain;
   dir: string;
   skills: Skill[];
   global: GlobalSkill | null;
+  /**
+   * The open skill, when the domain ships one. Deliberately NOT part of `hash`:
+   * editing it must not invalidate what the listed types' prompts produced.
+   */
+  open: OpenSkill | null;
   /** sha256 over every file hash, in file order — one salt for the whole set. */
   hash: string;
   /** Every newType a skill declares, for registration as a document type (Step 2.8). */
@@ -566,6 +595,64 @@ function parseGlobalFile(domain: ExtractionDomain, file: string, content: string
   };
 }
 
+/** The open skill's file name: the one `_` file that is not the global rules. */
+export const OPEN_SKILL_FILE = '_open.md';
+
+function parseOpenFile(domain: ExtractionDomain, file: string, content: string): OpenSkill {
+  let meta: Mapping;
+  let body: string;
+  try {
+    const split = splitFrontMatter(content, file);
+    body = split.body;
+    meta = parseFrontMatterYaml(split.header, file);
+  } catch (err) {
+    if (err instanceof FrontMatterError) throw new SkillLoadError(err.message);
+    throw err;
+  }
+  rejectUnknownKeys(meta, new Set(['id', 'version', 'rowsField', 'fields']), 'open front-matter', file);
+  const id = stringOf(meta.id, 'id', file);
+  if (id !== '_open') throw new SkillLoadError(`id "${id}" must be "_open"`, file);
+  const version = meta.version;
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) {
+    throw new SkillLoadError('version must be a positive integer', file);
+  }
+  if (!Array.isArray(meta.fields) || meta.fields.length === 0) throw new SkillLoadError('fields must be a non-empty list', file);
+  const fields = meta.fields.map((raw, i) => parseField(raw, i, file));
+  const names = new Set<string>();
+  for (const field of fields) {
+    const slot = `${field.rowLevel ? 'row' : 'document'}:${field.name}`;
+    if (names.has(slot)) throw new SkillLoadError(`field "${field.name}" is declared twice`, file);
+    names.add(slot);
+  }
+  const rowsField = stringOf(meta.rowsField, 'rowsField', file);
+  if (!FIELD_NAME.test(rowsField)) throw new SkillLoadError(`rowsField "${rowsField}" must be snake_case`, file);
+  const rowFields = fields.filter((field) => field.rowLevel);
+  if (rowFields.length === 0) throw new SkillLoadError('the open skill needs rowLevel fields for its facts', file);
+  for (const required of ['label', 'value', 'quote']) {
+    if (!rowFields.some((field) => field.name === required)) {
+      throw new SkillLoadError(`the open skill's facts need a "${required}" column`, file);
+    }
+  }
+  const parsedSections = bodySections(body);
+  const sections = {} as SkillSections;
+  for (const { key, heading } of REQUIRED_SECTIONS) {
+    const text = parsedSections.get(heading);
+    if (!text) throw new SkillLoadError(`missing or empty section "## ${heading}"`, file);
+    sections[key] = text;
+  }
+  return {
+    id: '_open',
+    domain,
+    version,
+    fields: fields.filter((field) => !field.rowLevel),
+    rowsField,
+    rowFields,
+    sections,
+    hash: sha256(content),
+    file,
+  };
+}
+
 // ─── Loading ────────────────────────────────────────────────────────────────
 
 /**
@@ -594,8 +681,13 @@ export function buildSkillRegistry(
   const ordered = [...files].sort((a, b) => path.basename(a.file).localeCompare(path.basename(b.file)));
   const skills: Skill[] = [];
   let global: GlobalSkill | null = null;
+  let open: OpenSkill | null = null;
 
   for (const { file, content } of ordered) {
+    if (path.basename(file) === OPEN_SKILL_FILE) {
+      open = parseOpenFile(domain, file, content);
+      continue;
+    }
     if (path.basename(file).startsWith('_')) {
       if (global) throw new SkillLoadError(`only one global skill per domain (already have ${global.file})`, file);
       global = parseGlobalFile(domain, file, content);
@@ -676,6 +768,7 @@ export function buildSkillRegistry(
     dir,
     skills,
     global,
+    open,
     hash,
     newTypes,
     skillFor,
@@ -850,6 +943,31 @@ export function skillPromptSections(skill: Skill, global: GlobalSkill | null = n
     },
     text,
   };
+}
+
+/**
+ * The open skill as prompt text (openRead.ts): what it is, where values sit
+ * (with the domain's global reading rules), its traps and the field list. The
+ * global TRAPS are deliberately left out: they are written for a listed type
+ * ("if the document is not the type this skill describes, return null"),
+ * which is the opposite of what an open read is for. Pure.
+ */
+export function openSkillPromptText(open: OpenSkill, global: GlobalSkill | null = null): { text: string; keys: string[] } {
+  const where = global?.where ? `${open.sections.where}\n\nIn every document:\n${global.where}` : open.sections.where;
+  const fieldLines = [
+    ...open.fields.map(fieldLine),
+    `- ${open.rowsField}: an array with ONE object per fact, each with these keys:`,
+    ...open.rowFields.map((field) => `  ${fieldLine(field)}`),
+  ].join('\n');
+  const text = [
+    `SKILL: ${open.id} v${open.version}`,
+    `\nWHAT THIS READ IS:\n${open.sections.whatItIs}`,
+    `\nWHERE THE VALUES SIT:\n${where}`,
+    `\nTRAPS:\n${open.sections.traps}`,
+    `\nFIELDS TO RETURN (JSON keys; null when the document does not state it):\n${fieldLines}`,
+    `\nWORKED EXAMPLE (invented values, for shape only — never copy them):\n${open.sections.example}`,
+  ].join('\n');
+  return { text, keys: [...open.fields.map((field) => field.name), open.rowsField, 'exceptions'] };
 }
 
 /**

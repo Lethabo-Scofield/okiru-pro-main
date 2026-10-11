@@ -192,3 +192,34 @@ describe("DocumentReview — a workbook read sheet by sheet", () => {
     expect(onEditValue).toHaveBeenCalledWith("Acme Gathering.xlsx › Finance", { kind: "entity", extraction: 1, index: 0 }, "12500000");
   });
 });
+
+describe("an Other document", () => {
+  const lease: ReviewDocument = {
+    filename: "premises-lease.pdf",
+    documentType: "Other document — Lease agreement",
+    state: "read",
+    summary: "2 details read · none scored",
+    values: [],
+    unplaced: [],
+    problems: [],
+    notFound: [],
+    otherDocument: true,
+    otherDetails: [
+      { label: "Monthly rental", value: "R 18 500.00", source: "Monthly rental: R 18 500.00 excluding VAT (page 1)" },
+      { label: "Lessee", value: "BAOBAB ENGINEERING (PTY) LTD", suggested: "Ownership entity name" },
+    ],
+  };
+
+  it("is named for what it is, lists its details open, and labels a suggestion as one", () => {
+    render(<DocumentReview documents={[lease]} fileFor={() => null} documentIdFor={() => null} />);
+    const detail = screen.getByTestId("review-detail");
+    expect(detail).toHaveTextContent("Other document — Lease agreement");
+    const details = screen.getByTestId("review-other-details");
+    expect(details).toHaveAttribute("open");
+    expect(details).toHaveTextContent("Other details · 2");
+    expect(details).toHaveTextContent("Monthly rental: R 18 500.00");
+    expect(screen.getByTestId("review-other-suggested-1")).toHaveTextContent("Suggested for Ownership entity name — enter it in the workbook if it is right");
+    // Not the "fed rows into the workbook" note: an Other document fed nothing.
+    expect(detail).not.toHaveTextContent("fed rows into the workbook");
+  });
+});

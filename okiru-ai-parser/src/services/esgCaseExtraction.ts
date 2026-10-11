@@ -58,6 +58,7 @@ import {
   type DeterministicDocument,
 } from './agentExtraction.js';
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
+import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAOther, proposeOpenMappings } from './openRead.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
 import { extractEsgMonthlyTables } from './esgMonthlyTables.js';
@@ -277,11 +278,17 @@ export async function extractEsgCaseEntities(
       : null;
     // A confident classification says what the document IS; below that, the
     // element the person filed it under beats a keyword guess (C1).
-    const elementOverride =
-      routingElement(classification) ?? focusForInput(input.filename, options.focusByFile) ?? undefined;
+    const filedUnder = focusForInput(input.filename, options.focusByFile) ?? null;
+    const elementOverride = routingElement(classification) ?? filedUnder ?? undefined;
     // Pass A named the document's type from the ESG skills menu: read it with
     // that type's spec, not with whatever keyword retrieval ranks first.
     const skillSpecIds = esgSkillSpecIds(classification, input);
+    // Pass A says the document is NONE of the listed ESG types: it is read for
+    // what it is (the open read below), never under the spec retrieval ranks
+    // first. Only with the open read on; with it off, nothing changes. The
+    // element the person filed the document under beats Pass A's OTHER (C1):
+    // the document is read under that element, as it was before.
+    const otherByClassifier = passAOther('esg', classification, { filedUnder });
 
     // A dashboard sheet — sites down the side, months across — is read by the
     // code, figure by figure. When it is, the flat spec pass is skipped for that
@@ -350,7 +357,7 @@ export async function extractEsgCaseEntities(
     // A sheet the code read in full is not read again by the model: the flat
     // pass could only return a truncated copy of the same rows (Super Group's
     // 132-vehicle fleet master came back as 15) at the price of a paid call.
-    const specResults = flatRead && !sheetTable
+    const specResults = flatRead && !sheetTable && !otherByClassifier
       ? await extractDocument(model, {
         filename: input.filename,
         markdown: input.markdown,
@@ -367,12 +374,29 @@ export async function extractEsgCaseEntities(
     // read missed a third of its required fields. It only fills gaps;
     // disagreements become exceptions; a failure returns the first read
     // untouched. Hard mode never sends a workbook sheet.
-    if (agentPass) {
-      const typing = esgAgentTyping(input.filename, classification);
-      results = await agentPassForDocument(model, input, results, {
-        ...agentPass,
-        context: { ...agentPass.context, deterministic: [typing] },
+    // A standalone document no listed reader read anything from is an Other
+    // document, read for its identity and facts (openRead.ts). Never a sheet.
+    let otherDocument = false;
+    if (!sheetName) {
+      const open = await addOtherDocumentRead(model, input, results, {
+        domain: 'esg',
+        classifierLabel: classification?.documentType ?? null,
+        byClassifier: otherByClassifier,
+        // Pass A named a listed ESG type: it stays that type (the agent reads it).
+        typed: Boolean(skillSpecIds),
       });
+      results = open.results;
+      otherDocument = open.other;
+    }
+    const typedPass = agentPass
+      ? { ...agentPass, context: { ...agentPass.context, deterministic: [esgAgentTyping(input.filename, classification)] } }
+      : null;
+    if (typedPass && otherDocument) {
+      // An Other document: the open skill's target, only when it read too little
+      // (or a listed type its words clearly name, when Pass A did not call it OTHER).
+      results = await agentOnOtherDocument(model, input, results, typedPass, 'esg', { byClassifier: otherByClassifier });
+    } else if (typedPass) {
+      results = await agentPassForDocument(model, input, results, typedPass);
     }
 
     // A workbook sheet's formula zeros are a template's, not readings.
@@ -445,6 +469,10 @@ export async function extractEsgCaseEntities(
     unfilledKeys: unfilledEsgCalculatorKeys(calculator.payload),
     files: inputs.map((input) => input.filename),
   }, { domain: 'esg' });
+  // Open facts that mean an ESG calculator input are PROPOSED on their
+  // document as suggestions; never into the payload above.
+  await proposeOpenMappings(model, extractions, 'esg');
+
   for (const finding of reviewFindings) {
     extractions[0]?.exceptions.push(
       `${finding.severity === 'error' ? 'Analyst review' : 'Analyst note'}: ${finding.finding}`
