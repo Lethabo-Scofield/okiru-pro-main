@@ -138,6 +138,29 @@ export function percentOf(v: unknown): number | null {
   return Math.abs(n) <= 1 ? n * 100 : n;
 }
 
+/**
+ * Every percentage a value could mean. A bare number of 1 or less is either a
+ * fraction (0.25 = 25%) or a small holding written without its sign (1 = 1%),
+ * so it has two readings; a value with a % sign, or a bare number above 1,
+ * has one. A check may PASS on any reading, but replaces a claim only with a
+ * value that has a single reading.
+ */
+export function percentReadings(v: unknown): number[] {
+  const primary = percentOf(v);
+  if (primary === null) return [];
+  const raw = str(v);
+  const n = amountOf(raw);
+  if (/%$/.test(raw) || n === null || n === 0 || Math.abs(n) > 1) return [primary];
+  return [primary, n];
+}
+
+/** Whether two percentage values agree within `tolerance` points on any reading. */
+export function percentsAgree(a: unknown, b: unknown, tolerance = 0.5): boolean {
+  const x = percentReadings(a);
+  const y = percentReadings(b);
+  return x.some((p) => y.some((q) => Math.abs(p - q) <= tolerance));
+}
+
 const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
 };

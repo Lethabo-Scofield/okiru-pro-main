@@ -55,7 +55,7 @@ const evidence: EvidenceRead[] = [
   }),
   read('ownership__cipc_registration_documents_c', 'CIPC.pdf', { registration_number: '2010/123456/07', entity_name: 'Kestrel Haulage (Pty) Ltd', incorporation_date: '2010-03-01', director_rows: [] }),
   read('esd__audited_financial_statements_or_sig', 'AFS 2025.pdf', {
-    registration_number: '2010/654321/07', current_year_npat: 950_000, current_year_revenue: 20_000_000, total_pre_exclusions_tmps: 6_000_000,
+    registration_number: '2010/654321/07', financial_year_end: '2025-02-28', current_year_npat: 950_000, current_year_revenue: 20_000_000, total_pre_exclusions_tmps: 6_000_000,
   }),
   read('skills_development__sars_emp201_submissi', 'EMP201.pdf', {
     emp201_rows: Array.from({ length: 12 }, (_, i) => { const m = ((i + 2) % 12) + 1; return { tax_period: `${m <= 2 ? 2025 : 2024}${String(m).padStart(2, "0")}`, sdl_amount: 1_500 }; }),
@@ -164,6 +164,79 @@ describe('verifyClaims', () => {
 
   it('14. two registration numbers across the documents are flagged', () => {
     expect(byId(report, 'entity.identity:registration_number')?.status).toBe('flag');
+  });
+});
+
+describe('financial statements for another year (12)', () => {
+  const AFS = 'esd__audited_financial_statements_or_sig';
+  const withAfs = (...afs: EvidenceRead[]) => [...evidence.filter((e) => e.documentId !== AFS), ...afs];
+  const meta = (r: ReturnType<typeof verifyClaims>, basis: 'claimed' | 'evidenced') =>
+    applyOverlayToSections(company(), r, basis)['financial-information'].meta;
+
+  it("a prior year's AFS never replaces NPAT or revenue in either total", () => {
+    const prior = read(AFS, 'AFS 2022.pdf', { financial_year_end: '2022-02-28', current_year_npat: 150_000, current_year_revenue: 4_000_000 });
+    const r = verifyClaims({ sections: company(), evidence: withAfs(prior) });
+    for (const key of ['npat', 'revenue']) {
+      const c = byId(r, `financials.npatRevenue:${key}`);
+      expect(c).toMatchObject({ status: 'out-of-period', rule: 'flag-only', ops: [] });
+    }
+    expect(meta(r, 'claimed')).toMatchObject({ npat: 900_000, revenue: 20_000_000 });
+    expect(meta(r, 'evidenced')).toMatchObject({ npat: 900_000, revenue: 20_000_000 });
+  });
+
+  it("the measured year's AFS replaces, whatever other years sit beside it", () => {
+    const prior = read(AFS, 'AFS 2024.pdf', { financial_year_end: '2024-02-29', current_year_npat: 150_000 });
+    const current = read(AFS, 'AFS 2025.pdf', { financial_year_end: '28 February 2025', current_year_npat: 950_000 });
+    const r = verifyClaims({ sections: company(), evidence: withAfs(prior, current) });
+    expect(byId(r, 'financials.npatRevenue:npat')?.ops).toEqual([{ kind: 'set', basis: 'both', section: 'financial-information', metaKey: 'npat', value: 950_000 }]);
+  });
+
+  it('an AFS that does not say which year it covers is reported, not used', () => {
+    const undated = read(AFS, 'AFS.pdf', { current_year_npat: 150_000 });
+    const c = byId(verifyClaims({ sections: company(), evidence: withAfs(undated) }), 'financials.npatRevenue:npat');
+    expect(c).toMatchObject({ status: 'flag', rule: 'flag-only', ops: [] });
+  });
+
+  it('two AFS for the measured year that disagree are a question; the workbook figure is scored until it is answered', () => {
+    const draft = read(AFS, 'AFS draft.pdf', { financial_year_end: '2025-02-28', current_year_npat: 800_000 });
+    const signed = read(AFS, 'AFS signed.pdf', { financial_year_end: '2025-02-28', current_year_npat: 950_000 });
+    const r = verifyClaims({ sections: company(), evidence: withAfs(draft, signed) });
+    const c = byId(r, 'financials.npatRevenue:npat');
+    expect(c).toMatchObject({ status: 'needs-you', ops: [] });
+    expect(c?.choices?.map((x) => [x.value, x.held])).toEqual([[900_000, true], [800_000, false], [950_000, false]]);
+    expect(meta(r, 'claimed')).toMatchObject({ npat: 900_000 });
+  });
+});
+
+describe('loans from shareholders (3)', () => {
+  it("are the company's liabilities, never a black holder's acquisition debt", () => {
+    const afs = read('esd__audited_financial_statements_or_sig', 'AFS 2025.pdf', { financial_year_end: '2025-02-28', shareholder_loans: 2_500_000, loans_from_shareholders: 2_500_000 });
+    const r = verifyClaims({ sections: company(), evidence: [...evidence.filter((e) => e.sourceFile !== 'AFS 2025.pdf'), afs] });
+    const c = byId(r, 'ownership.acquisitionDebt:o1');
+    expect(c?.ops.some((op) => op.basis === 'both' || op.value === 2_500_000)).toBe(false);
+    expect(applyOverlayToSections(company(), r, 'claimed').ownership.rows![0].rowOutstandingDebt).toBe(0);
+  });
+});
+
+describe('a holding stated as a bare number (1)', () => {
+  const register = (percentage: unknown) => evidence.map((e) => (e.sourceFile === 'Share Register.pdf'
+    ? read(e.documentId, e.sourceFile, { registration_number: '2010/123456/07', holdings_table: [{ shareholder_name: 'Sipho Ndlovu', id_number: MALE_CITIZEN, number_of_shares: 100, percentage }] })
+    : e));
+  const withHolding = (shareholding: unknown) => ({ ...company(), ownership: { rows: [{ ...company().ownership.rows![0], shareholding }] } });
+
+  it('a 1% holder written as 1 agrees with a claimed 1%', () => {
+    expect(byId(verifyClaims({ sections: withHolding('1%'), evidence: register(1) }), 'ownership.holding:o1')?.status).toBe('pass');
+  });
+
+  it('never replaces a claim: 1 could be 100% or 1%', () => {
+    const c = byId(verifyClaims({ sections: withHolding(40), evidence: register(1) }), 'ownership.holding:o1');
+    expect(c).toMatchObject({ status: 'flag', rule: 'flag-only', ops: [] });
+  });
+
+  it('a value with its % sign still replaces', () => {
+    const c = byId(verifyClaims({ sections: withHolding(40), evidence: register('100%') }), 'ownership.holding:o1');
+    expect(c?.rule).toBe('replaced-statutory');
+    expect(c?.ops).toEqual([{ kind: 'set', basis: 'both', section: 'ownership', rowId: 'o1', column: 'shareholding', value: 100 }]);
   });
 });
 

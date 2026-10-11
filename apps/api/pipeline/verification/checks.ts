@@ -6,7 +6,7 @@
  */
 import {
   amountOf, bandRank, blank, cite, dateOf, daysApart, docKind, genderOf, inPeriod, isBlack,
-  percentOf, rankOf, rowsOf, saId, sameIdNumber, sameName, str, valueOf, yes,
+  percentOf, percentReadings, percentsAgree, rankOf, rowsOf, saId, sameIdNumber, sameName, str, valueOf, yes,
   type DocKind,
 } from './evidence.js';
 import type {
@@ -84,30 +84,32 @@ function findPerson<T extends Record<string, unknown>>(
 // ── 1. Holdings vs share register / certificates / CIPC / BI register ──────
 export function checkHoldings(ctx: CheckContext): VerificationCheck[] {
   const out: VerificationCheck[] = [];
-  type Source = { read: EvidenceRead; field: string; name: string; id?: unknown; pct: number | null; shares: number | null };
+  // rawPct keeps the value as written: a bare 1 may be 100% or 1%, and only a
+  // value with one reading may replace a claim (percentReadings).
+  type Source = { read: EvidenceRead; field: string; name: string; id?: unknown; pct: number | null; rawPct?: unknown; shares: number | null };
   const sources: Source[] = [];
   for (const read of reads(ctx, 'shareRegister')) {
     for (const r of rowsOf(read, 'holdings_table')) {
-      sources.push({ read, field: 'holdings_table', name: str(r.shareholder_name), id: r.id_number, pct: percentOf(r.percentage), shares: amountOf(r.number_of_shares) });
+      sources.push({ read, field: 'holdings_table', name: str(r.shareholder_name), id: r.id_number, pct: percentOf(r.percentage), rawPct: r.percentage, shares: amountOf(r.number_of_shares) });
     }
   }
   for (const read of reads(ctx, 'shareCertificate')) {
-    sources.push({ read, field: 'percentage', name: str(valueOf(read, 'holder_name')), id: valueOf(read, 'id_number'), pct: percentOf(valueOf(read, 'percentage')), shares: amountOf(valueOf(read, 'number_of_shares')) });
+    sources.push({ read, field: 'percentage', name: str(valueOf(read, 'holder_name')), id: valueOf(read, 'id_number'), pct: percentOf(valueOf(read, 'percentage')), rawPct: valueOf(read, 'percentage'), shares: amountOf(valueOf(read, 'number_of_shares')) });
   }
   for (const read of reads(ctx, 'cipc')) {
     for (const r of rowsOf(read, 'director_rows')) {
       const pct = percentOf(r.member_interest_percentage);
-      if (pct !== null) sources.push({ read, field: 'director_rows.member_interest_percentage', name: str(r.full_name), id: r.id_number, pct, shares: null });
+      if (pct !== null) sources.push({ read, field: 'director_rows.member_interest_percentage', name: str(r.full_name), id: r.id_number, pct, rawPct: r.member_interest_percentage, shares: null });
     }
   }
   for (const read of reads(ctx, 'biRegister')) {
     for (const r of rowsOf(read, 'beneficial_owner_rows')) {
-      sources.push({ read, field: 'beneficial_owner_rows.beneficial_interest_percentage', name: str(r.beneficial_owner_name), id: r.id_number, pct: percentOf(r.beneficial_interest_percentage), shares: null });
+      sources.push({ read, field: 'beneficial_owner_rows.beneficial_interest_percentage', name: str(r.beneficial_owner_name), id: r.id_number, pct: percentOf(r.beneficial_interest_percentage), rawPct: r.beneficial_interest_percentage, shares: null });
     }
   }
   for (const read of reads(ctx, 'representationLetter')) {
     for (const r of rowsOf(read, 'stated_owner_rows')) {
-      sources.push({ read, field: 'stated_owner_rows.stated_percentage', name: str(r.stated_owner_name), id: r.id_number, pct: percentOf(r.stated_percentage), shares: null });
+      sources.push({ read, field: 'stated_owner_rows.stated_percentage', name: str(r.stated_owner_name), id: r.id_number, pct: percentOf(r.stated_percentage), rawPct: r.stated_percentage, shares: null });
     }
   }
 
@@ -129,7 +131,8 @@ export function checkHoldings(ctx: CheckContext): VerificationCheck[] {
       }));
       continue;
     }
-    const disagreeing = mine.filter((s) => claimed !== null && s.pct !== null && Math.abs(s.pct - claimed) > 0.5);
+    // Agreement on ANY reading passes (a register's bare 1 against a claimed 1%).
+    const disagreeing = mine.filter((s) => claimed !== null && s.pct !== null && !percentsAgree(s.rawPct ?? s.pct, row[column!], 0.5));
     const sharesClaimed = amountOf(row.numberOfShares);
     const sharesWrong = mine.filter((s) => sharesClaimed !== null && s.shares !== null && s.shares !== sharesClaimed);
     if (disagreeing.length === 0 && sharesWrong.length === 0) {
@@ -146,13 +149,19 @@ export function checkHoldings(ctx: CheckContext): VerificationCheck[] {
     let rule: CheckRule = 'flag-only';
     if (topRank >= 3) {
       rule = topRank === 4 ? 'replaced-statutory' : 'replaced-certificate';
-      if (column && top.pct !== null && disagreeing.includes(top)) ops.push(setCell('both', 'ownership', rowId, column, top.pct));
+      // A bare number of 1 or less is a fraction OR a small holding written
+      // without its sign; it never replaces a claim (1 would become 100%).
+      if (column && top.pct !== null && disagreeing.includes(top) && percentReadings(top.rawPct ?? top.pct).length === 1) ops.push(setCell('both', 'ownership', rowId, column, top.pct));
       if (top.shares !== null && sharesWrong.includes(top)) ops.push(setCell('both', 'ownership', rowId, 'numberOfShares', top.shares));
+      if (ops.length === 0) rule = 'flag-only';
     }
+    const ambiguous = topRank >= 3 && rule === 'flag-only';
     out.push(check('ownership.holding', rowId, {
       section: 'ownership', rowId, subject, status: 'flag', rule, tolerance: '0.5 percentage point; share counts exact',
       claim: { column, value: claimed, documents: docsOf(row) }, evidence,
-      statement: rule === 'flag-only'
+      statement: ambiguous
+        ? `${subject}'s holding (${claimed ?? '?'}%) disagrees with the ${docKind(top.read) === 'shareCertificate' ? 'share certificate' : 'statutory record'}, which states ${str(top.rawPct)} without a % sign (a fraction or a percentage). The claim is kept; check the record.`
+        : rule === 'flag-only'
         ? `${subject}'s holding (${claimed ?? '?'}%) disagrees with a signed declaration (${top.pct ?? top.shares}). Check it against the share register.`
         : `${subject}'s holding was ${claimed ?? '?'}%${sharesClaimed !== null ? ` (${sharesClaimed} shares)` : ''}; the ${docKind(top.read) === 'shareCertificate' ? 'share certificate' : 'statutory record'} states ${top.pct ?? '?'}%${top.shares !== null ? ` (${top.shares} shares)` : ''}. Its figure is used.`,
       ops,
@@ -228,7 +237,10 @@ export function checkDemographics(ctx: CheckContext): VerificationCheck[] {
 }
 
 // ── 3. Outstanding acquisition debt vs the AFS ─────────────────────────────
-const AFS_LOAN_FIELDS = ['shareholder_loans', 'loans_from_shareholders', 'acquisition_debt', 'black_participant_acquisition_debt', 'vendor_finance'];
+// Loans FROM shareholders are the company's liabilities to its owners, not
+// what black participants still owe for their shares; reading them as
+// acquisition debt wrote the whole entity's loan account onto every holder.
+const AFS_LOAN_FIELDS = ['acquisition_debt', 'black_participant_acquisition_debt', 'vendor_finance'];
 export function checkAcquisitionDebt(ctx: CheckContext): VerificationCheck[] {
   const out: VerificationCheck[] = [];
   const afs = reads(ctx, 'afs');
@@ -676,15 +688,29 @@ export function checkTmps(ctx: CheckContext): VerificationCheck[] {
 }
 
 // ── 12. NPAT and revenue vs the AFS ────────────────────────────────────────
+/**
+ * Whether an AFS is for the measured year: its stated year end falls in the
+ * period's closing month (or within a week of it, for 52-week years). Null
+ * when either side is unknown — an AFS that does not say which year it is
+ * cannot replace anything.
+ */
+function afsForPeriod(read: EvidenceRead, period: MeasurementPeriod | null): boolean | null {
+  const yearEnd = dateOf(valueOf(read, 'financial_year_end'));
+  if (!yearEnd || !period) return null;
+  return yearEnd.slice(0, 7) === period.end.slice(0, 7) || daysApart(yearEnd, period.end) <= 7;
+}
+
 export function checkFinancials(ctx: CheckContext): VerificationCheck[] {
   const out: VerificationCheck[] = [];
   const meta = ctx.sections['financial-information']?.meta ?? {};
   const afs = reads(ctx, 'afs');
   for (const [key, field, label] of [['npat', 'current_year_npat', 'NPAT'], ['revenue', 'current_year_revenue', 'Revenue']] as const) {
     const claimed = amountOf(meta[key]);
-    const stated = afs.map((read) => ({ read, value: amountOf(valueOf(read, field)) })).find((x) => x.value !== null);
-    if (claimed === null && !stated) continue;
-    if (!stated) {
+    const statedAll = afs
+      .map((read) => ({ read, value: amountOf(valueOf(read, field)), forPeriod: afsForPeriod(read, ctx.period) }))
+      .filter((x) => x.value !== null);
+    if (claimed === null && statedAll.length === 0) continue;
+    if (statedAll.length === 0) {
       out.push(check('financials.npatRevenue', key, {
         section: 'financial-information', subject: label, status: 'unproven', rule: 'flag-only', tolerance: 'within R1',
         claim: { column: key, value: claimed },
@@ -692,6 +718,56 @@ export function checkFinancials(ctx: CheckContext): VerificationCheck[] {
       }));
       continue;
     }
+    // Only financial statements FOR the measured year may replace the claim.
+    // A prior year's AFS in the pack states a different year's NPAT and
+    // revenue; replacing with it rewrote the ESD/SED targets and the revenue
+    // band in CLAIMED. Every other dated check is period-aware; so is this.
+    const inYear = statedAll.filter((x) => x.forPeriod === true);
+    if (inYear.length === 0) {
+      const otherYear = statedAll.filter((x) => x.forPeriod === false);
+      const shown = otherYear[0] ?? statedAll[0];
+      const yearEnd = dateOf(valueOf(shown.read, 'financial_year_end'));
+      const agrees = claimed !== null && Math.abs(claimed - shown.value!) <= 1;
+      out.push(check('financials.npatRevenue', key, {
+        section: 'financial-information', subject: label,
+        status: otherYear.length ? 'out-of-period' : agrees ? 'pass' : 'flag', rule: agrees && !otherYear.length ? 'none' : 'flag-only',
+        tolerance: 'within R1; financial statements for the measured year',
+        claim: { column: key, value: claimed },
+        evidence: [cite(shown.read, field, shown.value), ...(yearEnd ? [cite(shown.read, 'financial_year_end', yearEnd)] : [])],
+        statement: otherYear.length
+          ? `The financial statements we read are for the year ending ${yearEnd}, not the measured year${ctx.period ? ` ending ${ctx.period.end}` : ''}; they state ${label} of ${money(shown.value!)}. The workbook figure is kept.`
+          : agrees
+            ? `${label} agrees with the financial statements (which do not say which year they cover).`
+            : `${label} is ${claimed === null ? 'blank' : money(claimed)}; financial statements that do not say which year they cover state ${money(shown.value!)}. The workbook figure is kept until the year is confirmed.`,
+      }));
+      continue;
+    }
+    const distinct = inYear.filter((x, i) => inYear.findIndex((y) => Math.abs(y.value! - x.value!) <= 1) === i);
+    if (distinct.length > 1) {
+      // Two sets of statements for the same year disagree (a draft and a
+      // signed AFS, say): CLAIMED keeps the workbook's figure until you choose.
+      const choices: NeedsYouChoice[] = distinct.map((x) => ({
+        value: x.value,
+        sources: [x.read.sourceFile],
+        held: claimed !== null && Math.abs(claimed - x.value!) <= 1,
+        ops: [setMeta('alternative', 'financial-information', key, x.value)],
+      }));
+      if (claimed !== null && !choices.some((c) => c.held)) {
+        choices.unshift({ value: claimed, sources: ['workbook'], held: true, ops: [setMeta('alternative', 'financial-information', key, claimed)] });
+      }
+      out.push(check('financials.npatRevenue', key, {
+        // No figure here is 'the one that claims less' (a higher NPAT raises the
+        // ESD and SED targets; a higher revenue can change the scorecard), so
+        // nothing is replaced: the workbook figure is scored until you choose.
+        section: 'financial-information', subject: label, status: 'needs-you', rule: 'flag-only', tolerance: 'within R1',
+        claim: { column: key, value: claimed },
+        evidence: distinct.map((x) => cite(x.read, field, x.value)),
+        statement: `Two sets of financial statements for the measured year state different ${label} (${distinct.map((x) => money(x.value!)).join(' / ')}). The workbook figure is kept until you choose.`,
+        choices,
+      }));
+      continue;
+    }
+    const stated = inYear[0];
     const agrees = claimed !== null && Math.abs(claimed - stated.value!) <= 1;
     out.push(check('financials.npatRevenue', key, {
       section: 'financial-information', subject: label, status: agrees ? 'pass' : 'flag', rule: agrees ? 'none' : 'replaced-statutory', tolerance: 'within R1',
