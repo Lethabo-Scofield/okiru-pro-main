@@ -85,7 +85,7 @@ describe('upload policy', () => {
     // Order matters: multer aborts at the offending part, so a bad first file
     // used to destroy the batch before a single good one was parsed.
     const { status, body } = await postFiles([
-      ['thread.eml', 'message/rfc822'],
+      ['bundle.zip', 'application/zip'],
       ['DASHBOARD.xlsx', XLSX],
     ]);
 
