@@ -41,6 +41,10 @@ const verification = {
   ],
 };
 
+// The first call imports the whole scoring router; under a full-suite run
+// that alone can pass vitest's 5s default.
+vi.setConfig({ testTimeout: 30_000 });
+
 describe('POST /api/calculate with a verification report', () => {
   it('returns the claimed and the evidenced total from the same engine', async () => {
     const server = await app();
@@ -57,5 +61,20 @@ describe('POST /api/calculate with a verification report', () => {
     const res = await request(server).post('/api/calculate').send({ sectorCode: 'TRANSPORT', scorecardType: 'QSE', pillarData, foundationData });
     expect(res.status).toBe(200);
     expect(res.body.verification).toBeUndefined();
+  });
+});
+
+describe('POST /api/calculate with a malformed verification report', () => {
+  it('a check without ops, or a report the overlay cannot read, never costs the claimed score', async () => {
+    const server = await app();
+    const noOps = { ...verification, checks: [{ ...verification.checks[0], ops: undefined }] };
+    const res = await request(server).post('/api/calculate').send({ sectorCode: 'TRANSPORT', scorecardType: 'QSE', pillarData, foundationData, verification: noOps });
+    expect(res.status).toBe(200);
+    expect(res.body.scorecard.totalPoints).toBeGreaterThan(0);
+
+    const unreadable = { ...verification, checks: [null] };
+    const res2 = await request(server).post('/api/calculate').send({ sectorCode: 'TRANSPORT', scorecardType: 'QSE', pillarData, foundationData, verification: unreadable });
+    expect(res2.status).toBe(200);
+    expect(res2.body.scorecard.totalPoints).toBeGreaterThan(0);
   });
 });
