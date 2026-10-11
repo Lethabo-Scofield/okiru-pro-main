@@ -46,6 +46,7 @@ import {
   type DocumentClassificationResult,
 } from './documentClassification.js';
 import { focusForInput } from './esgFocus.js';
+import { extractionDomain } from './extractionDomain.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { combinedFormSpecIds, elementFromHint, pinnedSpecIds } from './specRetrieval.js';
 import {
@@ -287,6 +288,37 @@ export function esgSkillSpecIds(
   return [spec.id];
 }
 
+/** The generic policy reader (skills/esg/policy_document.md): a policy's header and control facts. */
+export const POLICY_HEADER_SPEC_ID = 'policy_document';
+
+/** A policy, a code or a charter, by what Pass A called it, its file name, or its own header table. */
+const POLICY_WORDS = /\b(?:polic(?:y|ies)|code of (?:conduct|ethics|business)|charter)\b/i;
+
+/**
+ * Is this standalone document a policy, a code or a charter that NONE of its
+ * reads read as one? A group's employment-equity policy is typed by Pass A
+ * as employment-equity evidence (an EE plan), whose reader rightly finds no
+ * plan in it; a policy read by the policy, ethics, supplier-code or
+ * environmental-policy readers is already read as a policy. When true, the
+ * document is also read with the generic policy reader, so its title,
+ * revision, dates, author, approver, scope and owners are never lost to the
+ * element it was filed under.
+ */
+export function needsPolicyHeaderRead(
+  input: { filename: string; markdown?: string; raw_text?: string },
+  classification: DocumentClassificationResult | null,
+  results: DocumentExtraction[],
+): boolean {
+  const opening = (input.markdown?.trim() || input.raw_text || '').slice(0, 2000);
+  const named = POLICY_WORDS.test(classification?.documentType ?? '')
+    || POLICY_WORDS.test(input.filename)
+    || /\bpolicy\s+title\b/i.test(opening);
+  if (!named) return false;
+  const definition = extractionDomain('esg');
+  return !results.some((result) => result.values.some((value) => value.field !== 'exceptions')
+    && (definition.skillFor(result.documentId)?.fields ?? []).some((field) => field.name === 'policy_title'));
+}
+
 /**
  * What the agent gate knows about an ESG document's type. ESG has no
  * rule-based reader: the type is the skill Pass A named (only when it was
@@ -443,6 +475,15 @@ export async function extractEsgCaseEntities(
       : ([] as DocumentExtraction[]);
 
     let results = [...specResults];
+    // A policy typed under another element (an EE policy as an EE plan) that
+    // no read took as a policy is read for its policy header as well.
+    if (flatRead && !sheetName && !otherByClassifier && needsPolicyHeaderRead(input, classification, specResults)) {
+      results.push(...await extractDocument(model, {
+        filename: input.filename,
+        markdown: input.markdown,
+        raw_text: input.raw_text,
+      }, { specIds: [POLICY_HEADER_SPEC_ID], domain: 'esg' }));
+    }
     if (readByCode) results.push(readByCode);
     if (sheetTable) results.push(sheetTable);
     // Agent loop (off by default): a cited second read of a hard document —
