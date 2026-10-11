@@ -1086,6 +1086,11 @@ export function projectWorkbookToClient(wb: WorkbookData) {
           : 0;
 
     return {
+      // The workbook row's _id, carried as the entity id the way suppliers,
+      // ESD and SED already carry it. A verification report names rows by
+      // this id; without it the claim-vs-evidence overlay matched no
+      // shareholder, employee or learner, so EVIDENCED never moved for people.
+      id: (r as any)._id ?? undefined,
       name: s((r as any).shareholderName ?? (r as any).name),
       idNumber: s((r as any).idNumber),
       race,
@@ -1184,6 +1189,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
       const designation = mapDesignation(scoringCell);
       const occupationalLevel = mapDesignation(rawOccCell || scoringCell);
       employees.push({
+        id: id ?? undefined,
         name: s((r as any).name),
         surname: s((r as any).surname),
         fullName: joinName(r as any),
@@ -1225,6 +1231,7 @@ export function projectWorkbookToClient(wb: WorkbookData) {
     const rawEmpStatus = s((r as any).employmentStatus);
     const employmentStatus = rawEmpStatus || (employed ? "Permanent" : "Unemployed");
     return {
+      id: (r as any)._id ?? undefined,
       programName: s((r as any).programName),
       // Alias `name` for consumers keyed on it.
       name: s((r as any).programName),
