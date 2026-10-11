@@ -163,15 +163,53 @@ describe("what is outstanding", () => {
       unplaced({ field: "tariff", value: "Business 2", rejection: "no_workbook_home" }),
     ];
     render(<EsgExtractionSummary injection={injection({ unplaced: values, valuesRead: 5 })} parserCase={null} compact />);
-    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("1 to review");
+    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("1 needs a look");
     expect(screen.getByTestId("esg-unplaced-kinds")).toHaveTextContent(
-      "1 figure needs you to say where it goes · 2 values are kept as evidence — no cell in the workbook needs them",
+      "1 figure needs you to say where it goes · 2 values kept with their documents (not needed in the workbook)",
     );
   });
 
   it("has nothing outstanding when all that is left is evidence", () => {
     const values = [unplaced({ field: "utility_account_number", value: "231342442", rejection: "no_workbook_home" })];
     render(<EsgExtractionSummary injection={injection({ unplaced: values, valuesRead: 1 })} parserCase={null} compact />);
-    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("Nothing outstanding");
+    expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("nothing needs a look");
+  });
+});
+
+describe("the compact summary on the results step", () => {
+  it("counts placed figures toward the element they came from, and keeps the main button on the line", () => {
+    const parserCase = {
+      ai_entities: {
+        extractions: [
+          { documentId: "doc-1", sourceFile: "bill.pdf", element: "GHG_ENERGY", values: [{ field: "electricity_kwh", value: 1 }] },
+          { documentId: "doc-2", sourceFile: "meter.pdf", element: "WATER", values: [{ field: "water_kl", value: 2 }] },
+        ],
+      },
+    } as unknown as Parameters<typeof EsgExtractionSummary>[0]["parserCase"];
+    const placed = [
+      { sectionId: "e-data", cellRef: "C10", field: "electricity_kwh", value: 1, sourceFile: "bill.pdf", documentId: "doc-1" },
+      { sectionId: "e-data", cellRef: "C11", field: "electricity_kwh", value: 1, sourceFile: "bill.pdf", documentId: "doc-1" },
+      { sectionId: "e-data", cellRef: "D10", field: "water_kl", value: 2, sourceFile: "meter.pdf", documentId: "doc-2" },
+    ];
+    render(
+      <EsgExtractionSummary
+        injection={injection({ placed, valuesRead: 3 })}
+        parserCase={parserCase}
+        compact
+        action={<button type="button">Continue</button>}
+      />,
+    );
+    const summary = screen.getByTestId("esg-extraction-summary");
+    expect(summary).toHaveTextContent("3 figures ready for your workbook · nothing needs a look");
+    expect(within(summary).getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    // Placed figures count: compact mode used to count only unplaced ones.
+    const covered = screen.getByTestId("esg-element-coverage");
+    expect(covered).toHaveTextContent("Covered:");
+    expect(covered).toHaveTextContent("Energy & emissions 2");
+    expect(covered).toHaveTextContent("Water 1");
+    // The zero-extraction box shows only when nothing was read.
+    expect(screen.queryByTestId("esg-zero-extraction")).not.toBeInTheDocument();
+    // The details are closed by default.
+    expect(screen.getByTestId("esg-summary-details")).not.toHaveAttribute("open");
   });
 });

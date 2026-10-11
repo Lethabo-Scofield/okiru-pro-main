@@ -59,6 +59,7 @@ export function DocumentPreview({
   file,
   documentId,
   focus,
+  showDownload = true,
 }: {
   name: string;
   /** The upload from this session, when we still have it. */
@@ -67,6 +68,8 @@ export function DocumentPreview({
   documentId?: string | null;
   /** Show this page or sheet — a value's citation. */
   focus?: PreviewFocus | null;
+  /** Off where the page already offers the download (the library page header). */
+  showDownload?: boolean;
 }) {
   const kind = previewKind(name);
   const [blob, setBlob] = useState<Blob | null>(file);
@@ -157,7 +160,7 @@ export function DocumentPreview({
       <div className="flex shrink-0 items-center gap-2 border-b border-[color:var(--rule)] px-4 py-2.5">
         <Icon className="h-4 w-4 shrink-0 text-[color:var(--muted)]" />
         <span className="min-w-0 truncate text-[13px] font-medium text-white">{name}</span>
-        {downloadHref && (
+        {showDownload && downloadHref && (
           <a
             href={downloadHref}
             download={name}

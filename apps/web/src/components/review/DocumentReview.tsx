@@ -9,7 +9,7 @@
  * Reviewing is never required. Building stays one click away outside this
  * panel; whatever is left here stays with the company's documents.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, CircleSlash, Plus, Upload } from "lucide-react";
 import { DocumentPreview } from "./DocumentPreview";
 import { EditableValue } from "./EditableValue";
@@ -57,6 +57,11 @@ export interface DocumentReviewProps {
    * a placement back with `null`. Absent where nothing can be placed from here.
    */
   onAnswer?: (filename: string, question: ReviewQuestion, answer: Record<string, string> | null) => void;
+  /**
+   * Bring one document into view and select it ("show me the one that failed").
+   * A new `key` asks again for the same document.
+   */
+  focus?: { filename: string; key: number } | null;
 }
 
 /**
@@ -75,7 +80,7 @@ function QuestionRow({
   const complete = question.fields.every((field) => answer[field.key]);
   return (
     <li className="rounded-lg border border-amber-400/20 bg-amber-500/[0.04] px-3 py-2 text-[11.5px] leading-5" data-testid="review-question">
-      <span className="text-[color:var(--muted)]">{value.label}:</span> <span className="font-medium text-[#e5e5ea]">{value.value}</span>
+      <span className="text-[color:var(--muted)]">{value.label}:</span> <span className="font-medium text-[color:var(--hi)]">{value.value}</span>
       {value.answered ? (
         <div className="mt-1 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1 text-emerald-300">
@@ -114,7 +119,7 @@ function QuestionRow({
                 type="button"
                 disabled={!complete}
                 onClick={() => onAnswer(answer)}
-                className="rounded-full bg-white px-3 py-1 text-[11.5px] font-semibold text-[#0e0e10] hover:bg-[#f2f2f7] disabled:opacity-40"
+                className="rounded-full bg-white px-3 py-1 text-[11.5px] font-semibold text-black hover:bg-white/90 disabled:opacity-40"
               >
                 Put it here
               </button>
@@ -135,8 +140,15 @@ export function DocumentReview({
   needsDetail = [],
   onEditValue,
   onAnswer,
+  focus = null,
 }: DocumentReviewProps) {
   const [selected, setSelected] = useState<string | null>(documents[0]?.filename ?? null);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    setSelected(focus.filename);
+    sectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [focus?.filename, focus?.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => reviewCounts(documents), [documents]);
   const groups = useMemo(
     () => GROUP_ORDER.map((state) => ({ state, docs: documents.filter((d) => d.state === state) })).filter((g) => g.docs.length > 0),
@@ -153,20 +165,22 @@ export function DocumentReview({
   const unplacedOther = doc?.unplaced.filter((v) => !v.ask && !v.evidence) ?? [];
 
   return (
-    <section className="mt-4" data-testid="document-review" aria-label="Review your documents">
+    <section ref={sectionRef} className="mt-4 scroll-mt-4" data-testid="document-review" aria-label="Check each document">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <h4 className="text-[15px] font-semibold text-white">Review your documents</h4>
-          <span className="rounded-full border border-white/[0.12] px-2 py-0.5 text-[10.5px] font-medium text-[color:var(--body)]">Optional</span>
-          <span className="hidden text-[12px] text-[color:var(--muted)] sm:inline" data-testid="review-counts">
-            {counts.read} read · {counts["needs-look"]} need{counts["needs-look"] === 1 ? "s" : ""} a look · {counts["not-read"]} not read
-          </span>
+        <div className="min-w-0">
+          <h4 className="text-[15px] font-semibold text-white">Check each document</h4>
+          <p className="text-[12px] text-[color:var(--muted)]">
+            <span data-testid="review-counts">
+              {counts.read} read · {counts["needs-look"]} need{counts["needs-look"] === 1 ? "s" : ""} a look · {counts["not-read"]} not read
+            </span>
+            {" · optional"}
+          </p>
         </div>
         {onAddDocuments && (
           <button
             type="button"
             onClick={onAddDocuments}
-            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-medium text-[color:var(--body)] hover:bg-white/[0.05]"
+            className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-medium text-[color:var(--body)] transition-colors duration-200 hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
             data-testid="review-add-documents"
           >
             <Plus className="h-3.5 w-3.5" /> Add documents
@@ -207,7 +221,7 @@ export function DocumentReview({
                         }`}
                         data-testid={`review-doc-${d.filename}`}
                       >
-                        <span className="block truncate text-[12.5px] text-[#e5e5ea]">{d.filename}</span>
+                        <span className="block truncate text-[12.5px] text-[color:var(--hi)]">{d.filename}</span>
                         {d.summary && <span className="block truncate text-[11px] text-[color:var(--muted)]">{d.summary}</span>}
                       </button>
                     </li>
@@ -248,7 +262,7 @@ export function DocumentReview({
                         <button
                           type="button"
                           onClick={onAddDocuments}
-                          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 py-1 text-[12px] font-semibold text-[#0e0e10] hover:bg-[#f2f2f7]"
+                          className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/[0.16] px-3 py-1 text-[12px] font-semibold text-white transition-colors duration-200 hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                           data-testid="review-upload-replacement"
                         >
                           <Upload className="h-3.5 w-3.5" /> Upload a replacement
@@ -286,9 +300,10 @@ export function DocumentReview({
                         <div key={i} className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)] gap-3 px-3 py-1.5">
                           <dt className="min-w-0 text-[11.5px] text-[color:var(--muted)]" title={v.label}>
                             <span className="block truncate">{v.label}</span>
-                            {v.sheet && <span className="block truncate text-[10px] text-[color:var(--muted)]/70">{v.sheet}</span>}
+                            {v.sheet && <span className="block truncate text-[10px] text-[color:var(--body)]">{v.sheet}</span>}
                           </dt>
-                          <dd className="min-w-0 text-[11.5px] text-[#e5e5ea]">
+                          <dd className="min-w-0 text-[11.5px] text-[color:var(--hi)]">
+
                             {onEditValue && v.edit ? (
                               <EditableValue
                                 value={v.value}
@@ -362,7 +377,7 @@ export function DocumentReview({
                     <ul className="space-y-1">
                       {unplacedOther.map((v, i) => (
                         <li key={i} className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-[11.5px] leading-5">
-                          <span className="text-[color:var(--muted)]">{v.label}:</span> <span className="text-[#e5e5ea]">{v.value}</span>
+                          <span className="text-[color:var(--muted)]">{v.label}:</span> <span className="text-[color:var(--hi)]">{v.value}</span>
                           {v.source && <span className="block text-[11px] text-amber-200/75">{v.source}</span>}
                         </li>
                       ))}
@@ -373,13 +388,13 @@ export function DocumentReview({
                 {evidence.length > 0 && (
                   <details className="mt-3" data-testid="review-evidence">
                     <summary className="cursor-pointer list-none text-[12px] font-semibold text-white">
-                      Kept as evidence · {evidence.length}
-                      <span className="ml-1.5 text-[11px] font-normal text-[color:var(--muted)]">no cell in the workbook needs these</span>
+                      Kept with the document · {evidence.length}
+                      <span className="ml-1.5 text-[11px] font-normal text-[color:var(--muted)]">not needed in the workbook</span>
                     </summary>
                     <ul className="mt-1.5 space-y-1">
                       {evidence.map((v, i) => (
                         <li key={i} className="rounded-lg border border-white/[0.06] px-3 py-1.5 text-[11.5px] leading-5">
-                          <span className="text-[color:var(--muted)]">{v.label}:</span> <span className="text-[#e5e5ea]">{v.value}</span>
+                          <span className="text-[color:var(--muted)]">{v.label}:</span> <span className="text-[color:var(--hi)]">{v.value}</span>
                           {v.source && <span className="block text-[11px] text-[color:var(--muted)]">{v.source}</span>}
                         </li>
                       ))}
@@ -396,7 +411,7 @@ export function DocumentReview({
                         {doc.missing.map((m) => (
                           <li key={`${m.file ?? ""}|${m.field}`} className="flex items-center justify-between gap-3 px-3 py-1.5 text-[11.5px]">
                             <span className="truncate text-[color:var(--body)]" title={m.label}>{m.label}</span>
-                            <span className="min-w-0 text-[#e5e5ea]">
+                            <span className="min-w-0 text-[color:var(--hi)]">
                               <EditableValue
                                 value={null}
                                 label={m.label}

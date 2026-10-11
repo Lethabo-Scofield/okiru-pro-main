@@ -8,6 +8,8 @@ export interface ExtractionReviewPaneProps {
   className?: string;
   /** The page or sheet to show — the citation of the value being checked. */
   focus?: PreviewFocus | null;
+  /** Off where the page already has a Download of its own, so it is not offered twice. */
+  showDownload?: boolean;
   children: React.ReactNode;
 }
 
@@ -18,12 +20,12 @@ export interface ExtractionReviewPaneProps {
  * spreadsheets as tables, images inline. It replaced an iframe of the blob,
  * which the production CSP blocked (a blank grey box) and phones cannot show.
  */
-export function ExtractionReviewPane({ file, title = 'Source document', className, focus, children }: ExtractionReviewPaneProps) {
+export function ExtractionReviewPane({ file, title = 'Source document', className, focus, showDownload = true, children }: ExtractionReviewPaneProps) {
   return (
     <div className={cn('flex flex-col lg:flex-row flex-1 min-h-0 gap-0 rounded-2xl overflow-hidden', className)} style={{ border: '1px solid var(--rule)' }}>
       <div className="flex flex-col min-h-[320px] lg:min-h-[420px] lg:w-1/2 shrink-0 bg-[#0d0d0d]" style={{ borderBottom: '1px solid var(--rule)' }}>
         {file ? (
-          <DocumentPreview name={file.name || title} file={file} focus={focus} />
+          <DocumentPreview name={file.name || title} file={file} focus={focus} showDownload={showDownload} />
         ) : (
           <div className="flex-1 flex items-center justify-center p-6 text-center text-sm text-[color:var(--body)]">
             No file attached.

@@ -325,7 +325,7 @@ const SECTION_NOUN: Record<string, [string, string]> = {
 };
 
 /** filename → section → row count, read from each row's own `_sourceFiles` provenance. */
-function sectionRowsByFile(
+export function sectionRowsByFile(
   sections?: Record<string, SectionPatchLike>,
 ): Map<string, Map<string, number>> {
   const byFile = new Map<string, Map<string, number>>();

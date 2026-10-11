@@ -14,7 +14,7 @@
  * reading.
  */
 import { useEffect, useRef } from "react";
-import { AlertTriangle, FileText, FolderOpen } from "lucide-react";
+import { FileText, FolderOpen } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Disclosure } from "@/components/upload/flow/Disclosure";
 
 export interface PendingUpload {
   files: File[];
@@ -55,7 +56,7 @@ export function ConfirmUploadDialog({
 }) {
   // The dialog animates out, so it is still on screen for a moment after
   // `pending` clears. Rendering the live value there would flash "Add 0
-  // documents to this section?" on the way out; the last real payload is what
+  // files to this section?" on the way out; the last real payload is what
   // should fade.
   const lastPending = useRef<PendingUpload | null>(null);
   useEffect(() => {
@@ -71,12 +72,12 @@ export function ConfirmUploadDialog({
       <AlertDialogContent className="max-w-lg" data-testid="confirm-upload-dialog">
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
-            {shown?.fromFolder ? <FolderOpen className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
-            Add {files.length} {files.length === 1 ? "document" : "documents"} to {target}?
+            {shown?.fromFolder ? <FolderOpen className="h-4 w-4" aria-hidden /> : <FileText className="h-4 w-4" aria-hidden />}
+            Add {files.length} {files.length === 1 ? "file" : "files"} to {target}?
           </AlertDialogTitle>
-          <AlertDialogDescription>
-            Take a second to check these are the right files. Catching it now is free — catching it after we
-            have read them is not.
+          {/* Advice, not alarm: one quiet line, the full checks one click away. */}
+          <AlertDialogDescription data-testid="confirm-upload-quick-check">
+            Quick check: right company, right year, final signed copies, readable scans.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -84,7 +85,7 @@ export function ConfirmUploadDialog({
           <ul className="space-y-0.5">
             {files.map((file) => (
               <li key={`${file.name}:${file.size}`} className="flex items-center gap-2 px-1.5 py-1 text-[12.5px]">
-                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
                 <span className="min-w-0 flex-1 truncate">{file.name}</span>
                 <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
                   {file.size >= 1024 * 1024
@@ -96,24 +97,18 @@ export function ConfirmUploadDialog({
           </ul>
         </div>
 
-        <ul className="space-y-1.5">
-          {CHECKS.map((check) => (
-            <li key={check} className="flex items-start gap-2 text-[12.5px] leading-5 text-muted-foreground">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-60" aria-hidden />
-              {check}
-            </li>
-          ))}
-        </ul>
-
-        <p className="text-[11.5px] leading-5 text-muted-foreground">
-          Nothing is read or charged yet. We size the batch first and show you the token cost before any
-          processing starts.
-        </p>
+        <Disclosure summary="What to check" testId="confirm-upload-checks" summaryClassName="text-[12px]" tone="dialog">
+          <ul className="list-disc space-y-1 pl-5 text-[12.5px] leading-5 text-muted-foreground">
+            {CHECKS.map((check) => (
+              <li key={check}>{check}</li>
+            ))}
+          </ul>
+        </Disclosure>
 
         <AlertDialogFooter>
           <AlertDialogCancel data-testid="confirm-upload-cancel">Go back</AlertDialogCancel>
           <AlertDialogAction onClick={onConfirm} data-testid="confirm-upload-accept">
-            Yes, add {files.length === 1 ? "it" : "them"}
+            Add files
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -101,6 +101,45 @@ describe("buildDocumentReview", () => {
   });
 });
 
+describe("buildDocumentReview — a document we could not name", () => {
+  it("shows what was read from it as a general document, instead of calling it unread", () => {
+    const unnamed = {
+      documents_detected: [
+        { filename: "memo.pdf", document_type: "Unknown", status: "failed", validation: { errors: ["Best document-type confidence is below review threshold"], warnings: [], missing_fields: [] } },
+      ],
+      ai_entities: {
+        extractions: [{ sourceFile: "memo.pdf", element: "", values: [{ field: "total_spend", value: 1200 }] }],
+      },
+    } as unknown as ParserCaseLike;
+    const [memo] = buildDocumentReview({ parserCase: unnamed, sections: {}, rejected: [], failedFiles: [] });
+    expect(memo.state).toBe("read");
+    expect(memo.documentType).toBe("Read as a general document");
+    expect(memo.problems.map((p) => p.headline)).not.toContain(
+      "We couldn't tell what kind of document this is, so we didn't know what to look for in it.",
+    );
+    expect(memo.values.map((v) => v.label)).toEqual(["Total spend"]);
+  });
+
+  it("asks for a look, not a green check, when every figure it gave was turned away and it filled no rows", () => {
+    const unnamed = {
+      documents_detected: [{ filename: "memo.pdf", document_type: "Unknown", validation: { errors: [], warnings: [], missing_fields: [] } }],
+      ai_entities: { extractions: [{ sourceFile: "memo.pdf", element: "", values: [{ field: "total_spend", value: 1200 }] }] },
+    } as unknown as ParserCaseLike;
+    const rejected = [{ field: "total_spend", value: 1200, detail: "No cell takes this value.", sourceFile: "memo.pdf" }];
+    const [memo] = buildDocumentReview({ parserCase: unnamed, sections: {}, rejected, failedFiles: [] });
+    expect(memo.state).toBe("needs-look");
+    expect(memo.documentType).toBe("Read as a general document");
+    expect(memo.problems.map((p) => p.headline)).toContain(
+      "We read figures from this document, but none of them went into your scorecard.",
+    );
+
+    // One row in the workbook from it is a contribution: the check stays green.
+    const sections = { procurement: { rows: [{ _sourceFiles: ["memo.pdf"] }] } } as never;
+    const [placed] = buildDocumentReview({ parserCase: unnamed, sections, rejected, failedFiles: [] });
+    expect(placed.state).toBe("read");
+  });
+});
+
 describe("applyReviewEdit — a correction made in the review is what gets built", () => {
   it("corrects a read value, keeps the parser's reading, and keeps its type", () => {
     const edited = applyReviewEdit(CASE, "certificate.pdf", { kind: "field", field: "bee_level" }, "1");

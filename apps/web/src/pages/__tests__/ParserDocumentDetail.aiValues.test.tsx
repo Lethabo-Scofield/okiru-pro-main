@@ -38,6 +38,9 @@ const AI_VALUES = [
 ];
 
 let run: Record<string, any>;
+let latestRun: Record<string, any> | null | undefined;
+let runsList: Array<Record<string, any>> = [];
+let documentRow: Record<string, any> = DOCUMENT;
 let rereadGate: (() => void) | null = null;
 
 const json = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body, blob: async () => new Blob(["%PDF"]) });
@@ -55,6 +58,9 @@ function freshRun(withAi = true) {
 beforeEach(() => {
   patches.length = 0;
   run = freshRun();
+  latestRun = undefined;
+  runsList = [];
+  documentRow = DOCUMENT;
   rereadGate = null;
   URL.createObjectURL = vi.fn(() => "blob:x");
   URL.revokeObjectURL = vi.fn();
@@ -80,10 +86,12 @@ beforeEach(() => {
         return json({ document: DOCUMENT, run: { runId: "run-2" } }, 201);
       }
       if (url.includes("/settle-outcome")) return json({ state: "settled", refundedTokens: 0 });
-      if (url.endsWith("/runs")) return json({ runs: [] });
+      if (url.endsWith("/runs")) return json({ runs: runsList });
+      const oneRun = /\/runs\/([^/]+)$/.exec(url);
+      if (oneRun) return json({ run: runsList.find((item) => item.runId === decodeURIComponent(oneRun[1])) });
       if (url.endsWith("/download")) return json({});
       if (url.includes("/api/clients")) return json([]);
-      return json({ document: DOCUMENT, latestRun: run });
+      return json({ document: documentRow, latestRun: latestRun === undefined ? run : latestRun });
     }) as unknown as typeof fetch,
   );
 });
@@ -91,8 +99,17 @@ beforeEach(() => {
 describe("ParserDocumentDetail — what the AI and the agent read", () => {
   it("lists every AI and agent value with its reader, citation and the words it was read from", async () => {
     render(<ParserDocumentDetail id="doc-1" />);
-    const section = await screen.findByTestId("ai-values");
-    expect(section).toHaveTextContent("3 read · 1 by the agent");
+    await screen.findByTestId("ai-values");
+    // ONE list: the rule field and the three AI values together, under one heading.
+    const list = screen.getByTestId("read-values");
+    expect(list).toHaveTextContent("What we read from it");
+    expect(list).toHaveTextContent("4 values");
+    expect(list).toContainElement(screen.getByTestId("extracted-fields"));
+    expect(list).toContainElement(screen.getByTestId("ai-values"));
+    // Who read it is behind the row's own "How we read this", closed.
+    expect(screen.getByTestId("ai-value-ai.afs.npat-how")).not.toHaveAttribute("open");
+    // The document's own name is not repeated on every row.
+    expect(list).not.toHaveTextContent("Annual financial statements");
 
     const npat = screen.getByTestId("ai-value-row-ai.afs.npat");
     expect(within(npat).getByTestId("layer-agent")).toHaveTextContent("Agent");
@@ -119,10 +136,10 @@ describe("ParserDocumentDetail — what the AI and the agent read", () => {
     fireEvent.change(screen.getByTestId("field-ai.afs.npat-input"), { target: { value: "1250" } });
     fireEvent.click(screen.getByTestId("field-ai.afs.npat-save"));
 
-    await waitFor(() => expect(screen.getByTestId("field-ai.afs.npat-corrected")).toHaveTextContent("the agent read “1200”"));
+    await waitFor(() => expect(screen.getByTestId("field-ai.afs.npat-corrected")).toHaveTextContent("Corrected by your team. Originally read as “1200”"));
     expect(patches).toEqual([{ fields: { "ai.afs.npat": "1250" } }]);
     expect(screen.getByTestId("field-ai.afs.npat-edit")).toHaveTextContent("1250");
-    expect(screen.getByTestId("ai-values")).toHaveTextContent("1 checked by your team");
+    expect(screen.getByTestId("read-values")).toHaveTextContent("1 checked by your team");
     // It is the AI value's correction, not a new rule-layer field.
     expect(screen.queryByTestId("field-row-ai.afs.npat")).not.toBeInTheDocument();
     expect(screen.getByTestId("document-notice")).toHaveTextContent("Saved Npat.");
@@ -141,7 +158,8 @@ describe("ParserDocumentDetail — what the AI and the agent read", () => {
     fireEvent.click(await screen.findByTestId("document-fresh-read-confirm"));
 
     const progress = await screen.findByTestId("document-reading-progress");
-    expect(progress).toHaveTextContent("rules, AI and agent");
+    expect(progress).toHaveTextContent("Reading afs.pdf…");
+    expect(progress).not.toHaveTextContent("rules, AI and agent");
     expect(progress).toHaveTextContent(/0:0\d/);
     expect(screen.queryByTestId("document-fresh-read-price")).not.toBeInTheDocument();
 
@@ -149,5 +167,123 @@ describe("ParserDocumentDetail — what the AI and the agent read", () => {
     rereadGate!();
     await waitFor(() => expect(screen.queryByTestId("document-reading-progress")).not.toBeInTheDocument());
     expect(screen.getByTestId("document-notice")).toHaveTextContent("Read again from scratch.");
+  });
+});
+
+describe("ParserDocumentDetail — one header, the rest behind details", () => {
+  it("has one heading, one status word and one main button; the actions and the audit are closed", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    expect(screen.getByTestId("document-type")).toHaveTextContent("AFS");
+    expect(screen.getByTestId("document-status")).toHaveTextContent("Needs a look");
+    expect(screen.getByTestId("document-mark-reviewed")).toHaveTextContent("Mark as reviewed");
+    expect(screen.queryByText(/Classification confidence/)).not.toBeInTheDocument();
+
+    // File under a company, change the type, read again: one closed "More actions".
+    const more = screen.getByTestId("document-more-actions");
+    expect(more.tagName).toBe("DETAILS");
+    expect(more).not.toHaveAttribute("open");
+    for (const id of ["document-company-select", "document-type-input", "document-reparse", "document-read-fresh", "document-replace"]) {
+      expect(within(more).getByTestId(id)).toBeInTheDocument();
+    }
+
+    // The audit is a closed "Technical record".
+    const record = screen.getByTestId("technical-record");
+    expect(record).not.toHaveAttribute("open");
+    expect(record).toHaveTextContent("How sure we are of the type");
+  });
+});
+
+describe("ParserDocumentDetail — Needs attention says each doubt once", () => {
+  it("words the parser's '<key> has low confidence' warning by the field's label, and lists it once", async () => {
+    run = { ...freshRun(), lowConfidenceFields: ["bee_level"], warnings: ["bee_level has low confidence", "The stamp date is unclear."] };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const warnings = await screen.findByTestId("document-warnings");
+    expect(warnings).toHaveTextContent("Check Bee Level. We were not sure we read it correctly.");
+    expect(warnings).not.toHaveTextContent("bee_level");
+    expect(within(warnings).getAllByText(/Check Bee Level/)).toHaveLength(1);
+    // Anything else the parser said stays as it was.
+    expect(warnings).toHaveTextContent("The stamp date is unclear.");
+  });
+
+  it("keeps a key's leading s or S (the pattern's escapes matter under the i flag)", async () => {
+    run = {
+      ...freshRun(),
+      lowConfidenceFields: ["supplier_name", "skills_spend", "Sector"],
+      warnings: ["supplier_name has low confidence", "  skills_spend has low confidence.  ", "Sector has low confidence"],
+    };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const warnings = await screen.findByTestId("document-warnings");
+    expect(within(warnings).getAllByText(/Check Supplier Name\./)).toHaveLength(1);
+    expect(within(warnings).getAllByText(/Check Skills Spend\./)).toHaveLength(1);
+    expect(within(warnings).getAllByText(/Check Sector\./)).toHaveLength(1);
+    expect(warnings).not.toHaveTextContent(/Upplier|Kills Spend|Check Ector/);
+    expect(warnings).not.toHaveTextContent("has low confidence");
+  });
+});
+
+describe("ParserDocumentDetail — a document with nothing usable read", () => {
+  it("opens More actions when the read failed, so Read again and Replace are on screen", async () => {
+    run = { ...freshRun(false), status: "failed", parserOutput: { extracted_fields: {} } };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const more = await screen.findByTestId("document-more-actions");
+    expect(more).toHaveAttribute("open");
+    expect(within(more).getByTestId("document-reparse")).toBeInTheDocument();
+    expect(within(more).getByTestId("document-replace")).toBeInTheDocument();
+  });
+
+  it("says 'Not read yet', not 'could not tell', for a document that has no reading, and opens More actions", async () => {
+    latestRun = null;
+    documentRow = { ...DOCUMENT, documentType: "", status: "uploaded", latestRunId: null };
+    render(<ParserDocumentDetail id="doc-1" />);
+    const heading = await screen.findByTestId("document-type");
+    expect(heading).toHaveTextContent("Not read yet");
+    expect(heading).not.toHaveTextContent("could not tell");
+    expect(screen.getByTestId("document-more-actions")).toHaveAttribute("open");
+  });
+
+  it("still says 'We could not tell what this document is' when a reading found no type", async () => {
+    documentRow = { ...DOCUMENT, documentType: "" };
+    run = { ...freshRun(), documentType: "" };
+    render(<ParserDocumentDetail id="doc-1" />);
+    expect(await screen.findByTestId("document-type")).toHaveTextContent("We could not tell what this document is");
+  });
+
+  it("keeps More actions closed for a document that read", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+    expect(screen.getByTestId("document-more-actions")).not.toHaveAttribute("open");
+    // What to do next is read at body contrast, not the 2.8:1 muted grey.
+    expect(screen.getByTestId("document-review-state").className).toMatch(/text-\[color:var\(--body\)\]/);
+  });
+});
+
+describe("ParserDocumentDetail — an earlier reading is said in the header", () => {
+  it("shows 'Reading N of M, not the latest' while an older reading is on screen, and goes back to the latest", async () => {
+    const newest = { ...freshRun(), runId: "run-2", createdAt: "2026-10-09T10:00:00Z" };
+    const older = { ...freshRun(), runId: "run-1", createdAt: "2026-10-08T10:00:00Z" };
+    runsList = [newest, older];
+    latestRun = newest;
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+    expect(screen.queryByTestId("document-older-reading")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByTestId("document-run-select"), { target: { value: "run-1" } });
+    const banner = await screen.findByTestId("document-older-reading");
+    expect(banner).toHaveTextContent("Reading 1 of 2, not the latest.");
+
+    fireEvent.click(screen.getByTestId("document-show-latest-reading"));
+    await waitFor(() => expect(screen.queryByTestId("document-older-reading")).not.toBeInTheDocument());
+  });
+});
+
+describe("ParserDocumentDetail — Download is offered once", () => {
+  it("keeps the header's Download and leaves it out of the preview's title bar", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    await screen.findByTestId("read-values");
+    await screen.findByTestId("document-preview");
+    expect(screen.getAllByRole("link", { name: /Download/ })).toHaveLength(1);
   });
 });

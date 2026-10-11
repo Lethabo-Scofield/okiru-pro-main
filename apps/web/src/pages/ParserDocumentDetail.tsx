@@ -26,12 +26,26 @@
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { AlertTriangle, Building2, Check, Download, FileWarning, Loader2, RefreshCw, Upload } from "lucide-react";
+import type { ReactNode } from "react";
+import { AlertTriangle, Building2, Check, ChevronRight, CircleSlash, Download, FileWarning, Loader2, MapPin, RefreshCw, Upload } from "lucide-react";
 import { ExtractionReviewPane } from "@/components/upload/ExtractionReviewPane";
 import { EditableValue } from "@/components/review/EditableValue";
 import type { PreviewFocus } from "@/components/review/DocumentPreview";
-import { AiValuesSection, LayerBadge } from "@/components/review/AiValuesSection";
-import { PARSER_STATUS_PRESENTATION, fieldLabel, formatParserValue, sheetOfSource, type ParserDocumentSummary, type ParserRunDetail } from "@/lib/parserDocuments";
+import { AiValuesSection, HowWeRead, LayerBadge, READER_WORDS, confidenceWord } from "@/components/review/AiValuesSection";
+import { fieldLabel, formatParserValue, sheetOfSource, type ParserDocumentSummary, type ParserRunDetail, type ParserStatus } from "@/lib/parserDocuments";
+
+/** One status word per document — the same five words the upload flow uses. */
+const STATUS_WORD: Record<ParserStatus, { label: string; tone: string; icon: ReactNode }> = {
+  passed: { label: "Read", tone: "text-emerald-300", icon: <Check className="h-3.5 w-3.5" aria-hidden /> },
+  review_required: { label: "Needs a look", tone: "text-amber-300", icon: <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> },
+  failed: { label: "Couldn't read", tone: "text-red-300", icon: <CircleSlash className="h-3.5 w-3.5" aria-hidden /> },
+};
+
+/** A refusal reason as a sentence: "no_matching_option" → "No matching option". */
+function plainReason(reason: string | undefined): string {
+  const text = String(reason ?? "").replace(/[_]+/g, " ").trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : "No reason was recorded";
+}
 
 interface ClientRow { clientId: string; name: string }
 
@@ -48,6 +62,21 @@ interface ClassificationCandidate {
 function formatElapsed(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+/** One sentence for a value the reader was unsure of, by its label, not its key. */
+function lowConfidenceSentence(key: string): string {
+  return `Check ${fieldLabel(key)}. We were not sure we read it correctly.`;
+}
+
+/**
+ * The parser words a doubtful value as "<raw_key> has low confidence". Say it
+ * the way the low-confidence list says it, so the same doubt is listed once,
+ * in plain words, rather than twice with the key showing.
+ */
+function plainWarning(message: string): string {
+  const doubt = /^\s*([A-Za-z0-9_.]+) has low confidence\.?\s*$/i.exec(message);
+  return doubt ? lowConfidenceSentence(doubt[1]) : message;
 }
 
 export default function ParserDocumentDetail({ id }: { id: string }) {
@@ -147,7 +176,6 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     ...Object.entries(fields).filter(([key, field]) => !missingKeys.has(key) && field?.normalized_value != null).map(([key]) => key),
     ...Array.from(corrections.keys()).filter((key) => !key.startsWith("ai.")),
   ]));
-  const ruleCorrectionCount = Array.from(corrections.keys()).filter((key) => !key.startsWith("ai.")).length;
   const missingKeyList = Array.from(missingKeys).filter((key) => !corrections.has(key));
 
   /** Save one value a person read off the document. Throws so the editor can say why. */
@@ -164,7 +192,6 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     const aiField = aiValues.find((value) => value.key === key)?.field;
     setNotice(`Saved ${fieldLabel(aiField ?? key)}.`);
   };
-  const presentation = run ? PARSER_STATUS_PRESENTATION[run.status] : null;
 
   const candidates: ClassificationCandidate[] = Array.isArray(audit.classification_candidates) ? audit.classification_candidates : [];
   const rejectedKeys: Array<{ key?: string; reason?: string }> = Array.isArray(audit.rejected_calculator_keys) ? audit.rejected_calculator_keys : [];
@@ -357,57 +384,252 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
 
   const currentType = document.documentType || run?.documentType || "";
   const linkedClient = clients.find((c) => c.clientId === document.entityId);
+  /** The one status word for this document. */
+  const statusWord = run ? STATUS_WORD[run.status] : null;
+  /** The type is in question: offer the other likely types up front. */
+  const typeInQuestion = Boolean(run) && (run!.status !== "passed" || !currentType || run!.overallConfidence < 0.6);
+  const warnings = run
+    ? Array.from(
+        new Set([
+          ...run.lowConfidenceFields.map(lowConfidenceSentence),
+          ...[...run.warnings, ...run.errors, ...run.reviewReasons].map(plainWarning),
+        ]),
+      )
+    : [];
+  const needsAttention = rowsWithIssues.length > 0 || warnings.length > 0 || rejectedKeys.length > 0;
+  const valueCount = readableKeys.length + aiValues.length;
+  const checkedCount = Array.from(corrections.keys()).length;
+  /** Nothing usable was read: Read again, Replace and Change the type are the way on, so they start open. */
+  const recoveryFirst = !run || run.status === "failed";
+  /** Which reading is on screen, when it is not the newest (runs are newest first). */
+  const runIndex = run ? runs.findIndex((item) => item.runId === run.runId) : -1;
+  const olderReading = runs.length > 1 && runIndex > 0 ? { n: runs.length - runIndex, of: runs.length } : null;
+
+  const candidatesSection = candidates.length > 0 ? (
+    <section data-testid="classification-candidates">
+      <h2 className="mb-1 text-[14px] font-semibold text-white">Is this the right type?</h2>
+      <p className="mb-3 text-[11.5px] text-[color:var(--body)]">
+        We read it as {currentType || "an unknown type"}. Other likely types:
+      </p>
+      <div className="space-y-2">
+        {candidates.map((c, i) => {
+          const type = String(c.document_type ?? "Unknown");
+          const chosen = type === currentType;
+          const evidence = [...(c.reasons ?? []), ...(c.matched_evidence ?? [])].slice(0, 4);
+          return (
+            <div key={`${type}-${i}`} className={`rounded-xl border px-3.5 py-2.5 ${chosen ? "border-emerald-400/25 bg-emerald-400/[0.04]" : "border-white/[0.07] bg-[color:var(--ink-3)]"}`}>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[12.5px] text-white">{type}</span>
+                {chosen ? (
+                  <span className="text-[11px] text-emerald-300">current</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void patch({ documentType: type, note: "Chosen from the classifier's own candidates." }, "type", `Recorded as “${type}”.`)}
+                    className="shrink-0 rounded-lg border border-white/[0.14] px-2.5 py-1 text-[11px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
+                    data-testid={`classification-pick-${type}`}
+                  >
+                    Use this
+                  </button>
+                )}
+              </div>
+              <HowWeRead>
+                <p>How sure we are: {confidenceWord(Number(c.confidence ?? 0))} ({Math.round(Number(c.confidence ?? 0) * 100)}%)</p>
+                {c.pillar ? <p>Scorecard area: {c.pillar}</p> : null}
+                {evidence.length > 0 ? <p>Why: {evidence.join(" · ")}</p> : null}
+              </HowWeRead>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  ) : null;
 
   return <div className="min-h-screen bg-[color:var(--ink)] text-[color:var(--hi)]">
-    {/* The shell carries the trail back to the library and the account menu.
-        The file's name and its download are this page's own. */}
-    <div className="flex items-center justify-between gap-4 px-4 sm:px-6 pt-6 pb-2">
-      <h1 className="truncate text-[17px] font-semibold tracking-[-0.01em] text-white">{document.filename}</h1>
-      <a
-        href={`/api/parser-documents/${encodeURIComponent(id)}/download`}
-        title="Download original"
-        className="inline-flex items-center gap-1.5 shrink-0 rounded-md bg-white/[0.08] px-2.5 py-1.5 text-[12px] font-medium text-[color:var(--hi)] hover:bg-white/[0.14] transition-colors"
-      >
-        <Download className="h-3.5 w-3.5" />
-        Download
-      </a>
-    </div>
     <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
-      <div className="mb-6 flex flex-col gap-4 border-b border-[color:var(--rule)] pb-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          {/* The type leads, always — including when nothing classified it.
-              "Not parsed" as the only answer is what made a misread document a
-              dead end. */}
-          <p className="text-[11px] uppercase tracking-wide text-[color:var(--muted)]">Document type</p>
-          <h1 className="mt-1 max-w-4xl text-[24px] font-semibold text-white" data-testid="document-type">
-            {currentType || "Not yet classified"}
+      {/* ONE header: what the document is, which file it is, how the read went,
+          and the one thing this page is for — signing it off. */}
+      <header className="mb-4 flex flex-col gap-4 border-b border-[color:var(--rule)] pb-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <h1 className="max-w-4xl text-[24px] font-semibold leading-tight text-white" data-testid="document-type">
+            {currentType || (run ? "We could not tell what this document is" : "Not read yet")}
           </h1>
-          <p className="mt-2 text-[12px] text-[color:var(--body)]">{document.filename} · uploaded {new Date(document.uploadedAt).toLocaleString("en-ZA")}</p>
+          <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[color:var(--body)]">
+            <span className="truncate">{document.filename} · uploaded {new Date(document.uploadedAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</span>
+            {statusWord && (
+              <span className={`inline-flex items-center gap-1.5 ${statusWord.tone}`} data-testid="document-status">
+                {statusWord.icon}
+                {statusWord.label}
+              </span>
+            )}
+            {olderReading && (
+              <span className="inline-flex items-center gap-2 text-amber-200" data-testid="document-older-reading">
+                Reading {olderReading.n} of {olderReading.of}, not the latest.
+                <button
+                  type="button"
+                  onClick={() => void loadRun(runs[0].runId)}
+                  className="rounded text-white underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                  data-testid="document-show-latest-reading"
+                >
+                  Show the latest
+                </button>
+              </span>
+            )}
+          </p>
         </div>
-        <div className="flex flex-wrap items-center gap-5 text-[12px]">{presentation && <span className={`inline-flex items-center gap-2 ${presentation.tone}`}><span className={`h-2 w-2 rounded-full ${presentation.dot}`} />{presentation.description}</span>}<span className="text-[color:var(--body)]">Classification confidence <strong className="ml-1 text-white">{run ? `${Math.round(run.overallConfidence * 100)}%` : "Missing"}</strong></span>{runs.length > 1 && <select value={run?.runId} onChange={(event) => void loadRun(event.target.value)} className="h-9 border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-white">{runs.map((item, index) => <option key={item.runId} value={item.runId}>Run {runs.length - index} - {new Date(item.createdAt).toLocaleDateString("en-ZA")}</option>)}</select>}</div>
-      </div>
-
-      {notice && <div className="mb-4 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-2.5 text-[12.5px] text-[color:var(--body)]" data-testid="document-notice">{notice}</div>}
-
-      {/* The paid read itself, under way. It is the whole read now — rules,
-          the AI model and the agent — so it can take minutes; say so, and count. */}
-      {readingSince != null && (
-        <div className="mb-4 flex items-center gap-3 rounded-xl border border-violet-300/25 bg-[#17151d] px-4 py-3" role="status" data-testid="document-reading-progress">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-200" />
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-white">
-              Reading {paidRead?.file ? paidRead.file.name : "the document"} — rules, AI and agent · {formatElapsed(now - readingSince)}
-            </p>
-            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
-              A full read can take a few minutes on a scanned or long document. Keep this page open; the earlier reading stays on record.
-            </p>
+        <div className="flex flex-col items-start gap-1.5 lg:items-end">
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`/api/parser-documents/${encodeURIComponent(id)}/download`}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.12] px-3 text-[12px] font-medium text-[color:var(--body)] transition-colors duration-200 hover:bg-white/[0.06] hover:text-white"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden />
+              Download
+            </a>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() =>
+                void patch(
+                  { reviewed: !document.reviewedAt },
+                  "review",
+                  document.reviewedAt ? "Reopened — it's back in the company's Needs review." : "Signed off — it has left the company's Needs review.",
+                )
+              }
+              className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-[12.5px] font-semibold transition-colors duration-200 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-white/20 disabled:opacity-40 ${
+                document.reviewedAt ? "border border-white/[0.12] text-[color:var(--body)] hover:bg-white/[0.06]" : "bg-white text-black hover:bg-white/90"
+              }`}
+              data-testid="document-mark-reviewed"
+            >
+              {busy === "review" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Check className="h-3.5 w-3.5" aria-hidden />}
+              {document.reviewedAt ? "Reopen" : "Mark as reviewed"}
+            </button>
           </div>
+          {/* The team handoff, said as the button's helper text. */}
+          <p className="text-[11.5px] text-[color:var(--body)] lg:text-right" data-testid="document-review-state">
+            {document.reviewedAt
+              ? `Reviewed ${new Date(document.reviewedAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} by your team.`
+              : document.status === "review_required" || document.status === "failed"
+                ? "Check what was read against the document, fix anything wrong, then sign it off."
+                : "Optional for a document that read cleanly."}
+          </p>
+        </div>
+      </header>
+
+      {/* Everything else a person can do here, folded into one place. */}
+      <details
+        className="group mb-4 rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] px-4 py-2.5"
+        open={recoveryFirst || undefined}
+        data-testid="document-more-actions"
+      >
+        <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded text-[12.5px] font-medium text-[color:var(--body)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
+          More actions
+          <span className="ml-auto text-[11.5px] font-normal text-[color:var(--body)]">File under a company · Change the type · Read again</span>
+        </summary>
+        <div className="mt-3 grid gap-4 pb-1 lg:grid-cols-3">
+          <div>
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--hi)]"><Building2 className="h-3.5 w-3.5" aria-hidden /> File under a company</p>
+            <p className="mt-0.5 text-[11.5px] text-[color:var(--body)]">
+              {linkedClient ? `Filed under ${linkedClient.name}.` : "Not filed — it will not appear in any client's evidence."}
+            </p>
+            <select
+              value={document.entityId ?? ""}
+              disabled={busy !== null}
+              onChange={(e) => void patch({ entityId: e.target.value || null }, "company", e.target.value ? "Filed against the company." : "Unlinked from the company.")}
+              className="mt-2 h-9 w-full rounded-lg border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2 text-[12px] text-white disabled:opacity-40"
+              aria-label="Company"
+              data-testid="document-company-select"
+            >
+              <option value="">Not filed</option>
+              {clients.map((c) => <option key={c.clientId} value={c.clientId}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <p className="text-[12px] font-medium text-[color:var(--hi)]">Change the type</p>
+            <p className="mt-0.5 text-[11.5px] text-[color:var(--body)]">Kept beside the original reading, not over it.</p>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={typeDraft}
+                onChange={(e) => setTypeDraft(e.target.value)}
+                placeholder={currentType || "e.g. B-BBEE Certificate"}
+                aria-label="Document type"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2 text-[12px] text-white"
+                data-testid="document-type-input"
+              />
+              <button
+                type="button"
+                disabled={!typeDraft.trim() || busy !== null}
+                onClick={() => void patch({ documentType: typeDraft.trim() }, "type", `Recorded as “${typeDraft.trim()}”.`)}
+                className="h-9 rounded-lg border border-white/[0.14] px-3 text-[12px] font-semibold text-white hover:bg-white/[0.06] disabled:opacity-40"
+                data-testid="document-type-save"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+          <div>
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--hi)]"><RefreshCw className="h-3.5 w-3.5" aria-hidden /> Read again</p>
+            <p className="mt-0.5 text-[11.5px] text-[color:var(--body)]">
+              The saved reading is free. Reading from scratch, or a replacement file, is priced first — the earlier reading is kept.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void reparse()}
+                className="h-9 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
+                data-testid="document-reparse"
+              >
+                {busy === "reparse" ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" aria-hidden /> : "Use saved reading"}
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void priceFreshRead()}
+                className="h-9 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
+                data-testid="document-read-fresh"
+              >
+                Read from scratch
+              </button>
+              <input
+                ref={replaceRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void priceFreshRead(f); }}
+                data-testid="document-replace-input"
+              />
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => replaceRef.current?.click()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
+                data-testid="document-replace"
+              >
+                <Upload className="h-3.5 w-3.5" aria-hidden /> Replace file
+              </button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      {notice && <div className="mb-4 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-2.5 text-[12.5px] text-[color:var(--body)]" role="status" data-testid="document-notice">{notice}</div>}
+
+      {/* The paid read itself, under way: it can take minutes, so say so, and count. */}
+      {readingSince != null && (
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-3" role="status" data-testid="document-reading-progress">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[color:var(--body)] motion-reduce:animate-none" aria-hidden />
+          <p className="min-w-0 text-[13px] text-white">
+            Reading {paidRead?.file ? paidRead.file.name : document.filename}… {formatElapsed(now - readingSince)}.{" "}
+            <span className="text-[color:var(--body)]">A long or scanned document can take a few minutes; the earlier reading stays on record.</span>
+          </p>
         </div>
       )}
 
       {/* A fresh read, priced — nothing is charged until this is confirmed. */}
       {paidRead && readingSince == null && (
-        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-violet-300/25 bg-[#17151d] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-fresh-read-price">
+        <div className="mb-4 flex flex-col gap-3 rounded-xl border border-white/[0.10] bg-[color:var(--ink-3)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-fresh-read-price">
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-white">
               Reading {paidRead.file ? paidRead.file.name : "this document"} {paidRead.file ? "" : "again from scratch "}costs{" "}
@@ -431,16 +653,16 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                 type="button"
                 disabled={busy !== null}
                 onClick={() => void confirmFreshRead()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-white px-3 text-[12px] font-semibold text-black disabled:opacity-40"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.16] px-3 text-[12px] font-semibold text-white hover:bg-white/[0.08] disabled:opacity-40"
                 data-testid="document-fresh-read-confirm"
               >
-                {busy === "reparse" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                {busy === "reparse" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
                 Read it — {paidRead.tokens.toLocaleString("en-ZA")} tokens
               </button>
             ) : (
               <a
                 href="/settings/billing"
-                className="inline-flex h-9 items-center rounded-lg bg-white px-3 text-[12px] font-semibold text-black"
+                className="inline-flex h-9 items-center rounded-lg border border-white/[0.16] px-3 text-[12px] font-semibold text-white"
                 data-testid="document-fresh-read-topup"
               >
                 Add tokens — {paidRead.shortfall.toLocaleString("en-ZA")} short
@@ -450,227 +672,96 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
         </div>
       )}
 
-      {/* The team handoff: whoever uploaded may leave the checking to someone
-          else. Signing it off takes it out of the company's "Needs review". */}
-      <div className="mb-4 flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between" data-testid="document-review-state">
-        <p className="text-[12.5px] text-[color:var(--body)]">
-          {document.reviewedAt
-            ? `Reviewed ${new Date(document.reviewedAt).toLocaleString("en-ZA", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })} — checked against the document by your team.`
-            : document.status === "review_required" || document.status === "failed"
-              ? "Waiting for a review — check what was read against the document, fix anything wrong, then sign it off."
-              : "Not reviewed yet. Signing off is optional for a document that read cleanly."}
-        </p>
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={() =>
-            void patch(
-              { reviewed: !document.reviewedAt },
-              "review",
-              document.reviewedAt ? "Reopened — it's back in the company's Needs review." : "Signed off — it has left the company's Needs review.",
-            )
-          }
-          className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold disabled:opacity-40 ${
-            document.reviewedAt ? "border border-white/[0.12] text-[color:var(--body)] hover:bg-white/[0.06]" : "bg-white text-black"
-          }`}
-          data-testid="document-mark-reviewed"
-        >
-          {busy === "review" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-          {document.reviewedAt ? "Reopen" : "Mark as reviewed"}
-        </button>
-      </div>
-
-      {/* The three things a person can do here. */}
-      <div className="mb-6 grid gap-3 lg:grid-cols-3">
-        {/* 1. File it against a company. */}
-        <div className="rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] p-4">
-          <div className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--body)]"><Building2 className="h-3.5 w-3.5" /> Company</div>
-          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">
-            {linkedClient ? `Filed under ${linkedClient.name}.` : "Not filed against a company — it will not appear in any client's evidence."}
-          </p>
-          <select
-            value={document.entityId ?? ""}
-            disabled={busy !== null}
-            onChange={(e) => void patch({ entityId: e.target.value || null }, "company", e.target.value ? "Filed against the company." : "Unlinked from the company.")}
-            className="mt-2.5 h-9 w-full rounded-lg border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2 text-[12px] text-white disabled:opacity-40"
-            data-testid="document-company-select"
-          >
-            <option value="">Not filed</option>
-            {clients.map((c) => <option key={c.clientId} value={c.clientId}>{c.name}</option>)}
-          </select>
-        </div>
-
-        {/* 2. Correct the type by hand. */}
-        <div className="rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] p-4">
-          <div className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--body)]"><Check className="h-3.5 w-3.5" /> Correct the type</div>
-          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">Recorded against the run, not over it.</p>
-          <div className="mt-2.5 flex gap-2">
-            <input
-              value={typeDraft}
-              onChange={(e) => setTypeDraft(e.target.value)}
-              placeholder={currentType || "e.g. B-BBEE Certificate"}
-              className="h-9 min-w-0 flex-1 rounded-lg border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-2 text-[12px] text-white"
-              data-testid="document-type-input"
-            />
-            <button
-              type="button"
-              disabled={!typeDraft.trim() || busy !== null}
-              onClick={() => void patch({ documentType: typeDraft.trim() }, "type", `Recorded as “${typeDraft.trim()}”.`)}
-              className="h-9 rounded-lg bg-white px-3 text-[12px] font-semibold text-black disabled:opacity-40"
-              data-testid="document-type-save"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-
-        {/* 3. Try again, with the same file or a better one. */}
-        <div className="rounded-xl border border-white/[0.07] bg-[color:var(--ink-2)] p-4">
-          <div className="flex items-center gap-1.5 text-[12px] font-medium text-[color:var(--body)]"><RefreshCw className="h-3.5 w-3.5" /> Read it again</div>
-          <p className="mt-1 text-[11.5px] text-[color:var(--body)]">
-            The stored reading is free. Reading from scratch or a replacement is priced first — the previous reading is kept.
-          </p>
-          <div className="mt-2.5 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => void reparse()}
-              className="h-9 flex-1 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
-              data-testid="document-reparse"
-            >
-              {busy === "reparse" ? <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" /> : "Re-read"}
-            </button>
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => void priceFreshRead()}
-              className="h-9 flex-1 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
-              data-testid="document-read-fresh"
-            >
-              Read from scratch
-            </button>
-            <input
-              ref={replaceRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) void priceFreshRead(f); }}
-              data-testid="document-replace-input"
-            />
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={() => replaceRef.current?.click()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.12] px-3 text-[12px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40"
-              data-testid="document-replace"
-            >
-              <Upload className="h-3.5 w-3.5" /> Replace file
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <ExtractionReviewPane file={previewFile} title={document.filename} className="min-h-[720px]" focus={focus}>
+      {/* The document, directly under the header, beside what we read from it. */}
+      {/* Download is in the header already; the preview does not offer it twice. */}
+      <ExtractionReviewPane file={previewFile} title={document.filename} className="min-h-[720px]" focus={focus} showDownload={false}>
         <div className="h-full overflow-y-auto bg-[color:var(--ink-2)] p-5 sm:p-6">
-          {!run ? <div className="py-16 text-center text-sm text-[color:var(--body)]">This file is saved, but no parser run has been recorded yet. Use “Re-read” above to have it read now.</div> : <div className="space-y-8">
-            {/* What else it could have been. The single most useful thing for
-                resolving a misclassification, and it was invisible. */}
-            {candidates.length > 0 && <section data-testid="classification-candidates">
-              <h2 className="mb-1 text-[14px] font-semibold text-white">What else this could be</h2>
-              <p className="mb-3 text-[11.5px] text-[color:var(--body)]">The classifier weighed these and chose {currentType || "none"}. Pick one to correct it.</p>
-              <div className="space-y-2">
-                {candidates.map((c, i) => {
-                  const type = String(c.document_type ?? "Unknown");
-                  const chosen = type === currentType;
-                  return <div key={`${type}-${i}`} className={`rounded-xl border px-3.5 py-3 ${chosen ? "border-emerald-400/25 bg-[#0f1512]" : "border-white/[0.07] bg-[color:var(--ink-3)]"}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-[12.5px] text-white">{type}{c.pillar ? <span className="ml-2 text-[11px] text-[color:var(--muted)]">{c.pillar}</span> : null}</span>
-                      <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-[11.5px] tabular-nums text-[color:var(--body)]">{Math.round(Number(c.confidence ?? 0) * 100)}%</span>
-                        {chosen
-                          ? <span className="text-[11px] text-emerald-300">chosen</span>
-                          : <button type="button" disabled={busy !== null} onClick={() => void patch({ documentType: type, note: "Chosen from the classifier's own candidates." }, "type", `Recorded as “${type}”.`)} className="rounded-lg border border-white/[0.14] px-2.5 py-1 text-[11px] text-[color:var(--body)] hover:bg-white/[0.06] disabled:opacity-40" data-testid={`classification-pick-${type}`}>Use this</button>}
-                      </div>
-                    </div>
-                    {(c.reasons?.length || c.matched_evidence?.length) ? <p className="mt-1.5 text-[11px] leading-4 text-[color:var(--body)]">{[...(c.reasons ?? []), ...(c.matched_evidence ?? [])].slice(0, 4).join(" · ")}</p> : null}
-                  </div>;
-                })}
-              </div>
-            </section>}
+          {!run ? <div className="py-16 text-center text-sm text-[color:var(--body)]">This file is saved, but it has not been read yet. Use Read again, under More actions, to have it read now.</div> : <div className="space-y-8">
+            {/* 1. The type, when it is in question. */}
+            {typeInQuestion && candidatesSection}
 
-            {/* Fact-checking and fixing are one gesture: look at the document on
-                the left, click the value, type. A correction is kept beside the
-                parser's reading — both stay on record. */}
-            <section data-testid="extracted-fields">
-              <div className="mb-1 flex items-center justify-between">
-                <h2 className="text-[14px] font-semibold text-white">Extracted fields</h2>
+            {/* 2. ONE list of what was read — whichever reader read it. Fact-
+                checking and fixing are one gesture: look at the document, click
+                the value, type. A correction is kept beside the reading. */}
+            <section data-testid="read-values">
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <h2 className="text-[14px] font-semibold text-white">What we read from it</h2>
                 <span className="text-[11px] text-[color:var(--muted)]">
-                  {readableKeys.length} read by the rules{ruleCorrectionCount > 0 ? ` · ${ruleCorrectionCount} checked by your team` : ""}
+                  {valueCount} value{valueCount === 1 ? "" : "s"}{checkedCount > 0 ? ` · ${checkedCount} checked by your team` : ""}
                 </span>
               </div>
-              <p className="mb-3 text-[11.5px] text-[color:var(--body)]">Check each value against the document. Click one to correct it.</p>
-              <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">
-                {readableKeys.map((key) => {
-                  const field = (fields[key] ?? {}) as Record<string, any>;
-                  const fix = corrections.get(key);
-                  const shown = formatParserValue(fix ? fix.value : field.normalized_value);
-                  return (
-                    <div key={key} className="grid gap-2 py-4 sm:grid-cols-[180px_1fr_80px]" data-testid={`field-row-${key}`}>
-                      <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}<div className="mt-1"><LayerBadge layer="rule" /></div></div>
-                      <div className="min-w-0">
-                        <div className="text-[13px] text-white">
-                          <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+              <p className="mb-2 text-[11.5px] text-[color:var(--body)]">Check each value against the document. Click one to correct it.</p>
+              <div className="border-y border-[color:var(--rule)]">
+                <div data-testid="extracted-fields" role="group" aria-label="Values found in the text">
+                  {readableKeys.map((key) => {
+                    const field = (fields[key] ?? {}) as Record<string, any>;
+                    const fix = corrections.get(key);
+                    const shown = formatParserValue(fix ? fix.value : field.normalized_value);
+                    const page = field.source?.page;
+                    return (
+                      <div key={key} className="grid gap-1 border-b border-[color:var(--rule)] py-3.5 sm:grid-cols-[180px_1fr] sm:gap-3" data-testid={`field-row-${key}`}>
+                        <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div>
+                        <div className="min-w-0">
+                          <div className="text-[13px] text-white">
+                            <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+                          </div>
+                          {fix && (
+                            <p className="mt-1 text-[11px] text-violet-200/80" data-testid={`field-${key}-corrected`}>
+                              {fix.original != null
+                                ? `Corrected by your team. Originally read as “${formatParserValue(fix.original)}”`
+                                : "Added by your team. It wasn't found in the document."}
+                            </p>
+                          )}
+                          {page != null && (
+                            <button
+                              type="button"
+                              onClick={() => setFocus({ page: Number(page), sheet: null, nonce: Date.now() })}
+                              className="mt-1 inline-flex items-center gap-1 rounded px-0.5 text-[11px] text-violet-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                              data-testid={`field-${key}-show`}
+                            >
+                              <MapPin className="h-3 w-3" aria-hidden /> Show in document
+                            </button>
+                          )}
+                          <HowWeRead testId={`field-${key}-how`}>
+                            <p className="flex flex-wrap items-center gap-1.5">{READER_WORDS.rule} <LayerBadge layer="rule" /></p>
+                            {/* null: a reader that does not score confidence (ESG) — not a 0% score. */}
+                            <p>How sure we are: {fix ? "Checked by your team" : confidenceWord(field.confidence)}</p>
+                            {/* The raw text behind the number: without it a normalisation bug — "R1,200,000" read as 1200 — is invisible. */}
+                            {field.raw_value != null && String(field.raw_value) !== String(field.normalized_value) && (
+                              <p>Read as “{String(field.raw_value)}”{field.data_type ? ` (${String(field.data_type)})` : ""}</p>
+                            )}
+                            {field.source?.text_snippet && <p className="italic">“{field.source.text_snippet}”</p>}
+                            <p>{page != null ? `Page ${page}` : "Page unavailable"}{field.source?.table ? `, ${field.source.table}` : ""}</p>
+                          </HowWeRead>
                         </div>
-                        {fix ? (
-                          <p className="mt-1 text-[11px] text-violet-200/80" data-testid={`field-${key}-corrected`}>
-                            {fix.original != null ? `Corrected by your team — the parser read “${formatParserValue(fix.original)}”` : "Added by your team — the parser did not find this"}
-                          </p>
-                        ) : (
-                          // The raw text behind the number. Without it a normalisation bug — "R1,200,000" read as 1200 — is invisible and unarguable.
-                          field.raw_value != null && String(field.raw_value) !== String(field.normalized_value) && (
-                            <p className="mt-1 text-[11px] text-[color:var(--muted)]">read as “{String(field.raw_value)}”{field.data_type ? ` · ${field.data_type}` : ""}</p>
-                          )
-                        )}
-                        {field.source?.text_snippet && (
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-[11px] text-[color:var(--muted)]">View source</summary>
-                            <p className="mt-2 border-l border-[color:var(--rule-strong)] pl-3 text-[11px] leading-5 text-[color:var(--body)]">{field.source.text_snippet}</p>
-                            <p className="mt-1 text-[10px] text-[color:var(--muted)]">{field.source.page != null ? `Page ${field.source.page}` : "Page unavailable"}{field.source.table ? `, ${field.source.table}` : ""}</p>
-                          </details>
-                        )}
                       </div>
-                      {/* null: a reader that does not score confidence (ESG) — not a 0% score. */}
-                      <div className={`text-right text-[12px] tabular-nums ${fix ? "text-violet-200" : field.confidence === null ? "text-[color:var(--muted)]" : Number(field.confidence) >= 0.85 ? "text-emerald-300" : "text-amber-300"}`}>
-                        {fix ? "Checked" : field.confidence === null ? "—" : `${Math.round(Number(field.confidence || 0) * 100)}%`}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                {aiValues.length > 0 && (
+                  <AiValuesSection
+                    values={aiValues}
+                    corrections={corrections}
+                    onSave={saveField}
+                    onShow={(value) => setFocus({ page: value.page, sheet: sheetOfSource(value.sourceFile), nonce: Date.now() })}
+                  />
+                )}
+                {valueCount === 0 && <p className="py-4 text-[12px] text-[color:var(--body)]">Nothing was read from this document yet.</p>}
               </div>
             </section>
 
-            {/* Everything the AI model and the agent read from this file, each with
-                where it was read, and editable the same way. The rules above are a
-                small part of a read; this is the rest of it. */}
-            {aiValues.length > 0 && (
-              <AiValuesSection
-                values={aiValues}
-                corrections={corrections}
-                onSave={saveField}
-                onShow={(value) => setFocus({ page: value.page, sheet: sheetOfSource(value.sourceFile), nonce: Date.now() })}
-              />
-            )}
-
+            {/* 3. What was expected and not found — add it if the document shows it. */}
             <section data-testid="missing-fields">
               <div className="mb-1 flex items-center justify-between">
                 <h2 className="text-[14px] font-semibold text-white">Not found in this document</h2>
                 <span className="text-[11px] text-[color:var(--muted)]">{missingKeyList.length} expected</span>
               </div>
               {missingKeyList.length === 0 ? (
-                <p className="border-y border-[color:var(--rule)] py-4 text-[12px] text-[color:var(--body)]">No expected fields are missing.</p>
+                <p className="border-y border-[color:var(--rule)] py-4 text-[12px] text-[color:var(--body)]">Nothing expected is missing.</p>
               ) : (
                 <>
-                  <p className="mb-3 text-[11.5px] text-[color:var(--body)]">If the document does show one of these, add it — you know where to look better than the parser did.</p>
-                  <div className="divide-y divide-[#3a2f20] border-y border-[#3a2f20]">
+                  <p className="mb-3 text-[11.5px] text-[color:var(--body)]">If the document does show one of these, add it — you know where to look better than we did.</p>
+                  <div className="divide-y divide-[color:var(--rule)] border-y border-amber-400/20">
                     {missingKeyList.map((key) => (
                       <div key={key} className="flex items-center justify-between gap-4 py-3" data-testid={`missing-row-${key}`}>
                         <span className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</span>
@@ -684,23 +775,87 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
               )}
             </section>
 
-            {/* Read, then refused. Being told a value was found and thrown away
-                is a different problem from it never being found, and the fix is
-                different too — this was never shown at all. */}
-            {rejectedKeys.length > 0 && <section data-testid="rejected-keys">
-              <h2 className="mb-1 text-[14px] font-semibold text-white">Read, but not used</h2>
-              <p className="mb-3 text-[11.5px] text-[color:var(--body)]">These values were found and then refused, so nothing was scored from them.</p>
-              <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">{rejectedKeys.map((r, i) => <div key={`${r.key}-${i}`} className="flex items-start justify-between gap-4 py-3"><span className="text-[12px] text-[color:var(--body)]">{fieldLabel(String(r.key ?? "unknown"))}</span><span className="text-right text-[11px] text-[color:var(--body)]">{r.reason ?? "no reason recorded"}</span></div>)}</div>
-            </section>}
+            {/* 4. Needs attention — only when there is something. */}
+            {needsAttention && (
+              <section data-testid="needs-attention">
+                <h2 className="mb-3 text-[14px] font-semibold text-white">Needs attention</h2>
+                <div className="space-y-4">
+                  {rowsWithIssues.length > 0 && (
+                    <div data-testid="supplier-row-issues">
+                      <h3 className="mb-1.5 text-[12.5px] font-medium text-[color:var(--hi)]">Supplier rows</h3>
+                      <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">
+                        {rowsWithIssues.map((r, i) => (
+                          <div key={i} className="py-2.5">
+                            <p className="text-[12.5px] text-white">{String(r.supplier_name ?? "Unnamed supplier")}</p>
+                            <p className="mt-0.5 text-[11px] text-amber-300">{(r.issues as string[]).join(" · ")}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {warnings.length > 0 && (
+                    <div className="space-y-1.5" data-testid="document-warnings">
+                      {warnings.map((message) => (
+                        <p key={message} className="flex gap-2.5 border-l border-amber-500/50 py-1 pl-3 text-[12px] leading-5 text-[color:var(--body)]">
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden />
+                          {message}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {/* Read, then refused: a different problem from never being found. */}
+                  {rejectedKeys.length > 0 && (
+                    <div data-testid="rejected-keys">
+                      <h3 className="mb-1 text-[12.5px] font-medium text-[color:var(--hi)]">Read, but left out of the score</h3>
+                      <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">
+                        {rejectedKeys.map((r, i) => (
+                          <div key={`${r.key}-${i}`} className="flex items-start justify-between gap-4 py-2.5">
+                            <span className="text-[12px] text-[color:var(--body)]">{fieldLabel(String(r.key ?? "unknown"))}</span>
+                            <span className="text-right text-[11px] text-[color:var(--body)]">{plainReason(r.reason)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
-            {rowsWithIssues.length > 0 && <section data-testid="supplier-row-issues">
-              <h2 className="mb-3 text-[14px] font-semibold text-white">Supplier rows needing attention</h2>
-              <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">{rowsWithIssues.map((r, i) => <div key={i} className="py-3"><p className="text-[12.5px] text-white">{String(r.supplier_name ?? "Unnamed supplier")}</p><p className="mt-0.5 text-[11px] text-amber-300">{(r.issues as string[]).join(" · ")}</p></div>)}</div>
-            </section>}
-
-            {(run.lowConfidenceFields?.length > 0 || run.warnings?.length > 0 || run.errors?.length > 0 || run.reviewReasons?.length > 0) && <section><h2 className="mb-3 text-[14px] font-semibold text-white">Warnings and problems</h2><div className="space-y-2">{Array.from(new Set([...run.lowConfidenceFields.map((key) => `${fieldLabel(key)} has low confidence`), ...run.warnings, ...run.errors, ...run.reviewReasons])).map((message) => <div key={message} className="flex gap-3 border-l border-amber-500/50 py-2 pl-3 text-[12px] leading-5 text-[color:var(--body)]"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />{message}</div>)}</div></section>}
-
-            {run.parserOutput?.audit_trail && <section><h2 className="mb-3 text-[14px] font-semibold text-white">Parser audit</h2><dl className="grid gap-3 border-y border-[color:var(--rule)] py-4 text-[12px] sm:grid-cols-2"><div><dt className="text-[color:var(--muted)]">Graph version</dt><dd className="mt-1 text-[color:var(--body)]">{run.graphVersion || "Not recorded"}</dd></div><div><dt className="text-[color:var(--muted)]">Pillar</dt><dd className="mt-1 text-[color:var(--body)]">{String(run.parserOutput.pillar || "Not attributed")}</dd></div><div><dt className="text-[color:var(--muted)]">Classification</dt><dd className="mt-1 text-[color:var(--body)]">{audit.classification_reason || "No reason recorded"}</dd></div><div><dt className="text-[color:var(--muted)]">Needs a human</dt><dd className="mt-1 text-[color:var(--body)]">{run.requiresHumanReview ? "Yes" : "No"}</dd></div><div className="sm:col-span-2"><dt className="text-[color:var(--muted)]">Matched evidence</dt><dd className="mt-1 text-[color:var(--body)]">{audit.matched_patterns?.join(", ") || "No pattern evidence recorded"}</dd></div>{rulesApplied.length > 0 && <div className="sm:col-span-2"><dt className="text-[color:var(--muted)]">Rules applied</dt><dd className="mt-1 text-[color:var(--body)]">{rulesApplied.join(", ")}</dd></div>}</dl></section>}
+            {/* 5. The record of the read itself, for an expert — closed. */}
+            <details className="group" data-testid="technical-record">
+              <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded text-[13px] font-medium text-[color:var(--body)] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 [&::-webkit-details-marker]:hidden">
+                <ChevronRight className="h-3.5 w-3.5 transition-transform duration-200 group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
+                Technical record
+              </summary>
+              <div className="mt-3 space-y-4">
+                {!typeInQuestion && candidatesSection}
+                <dl className="grid gap-3 border-y border-[color:var(--rule)] py-4 text-[12px] sm:grid-cols-2">
+                  <div><dt className="text-[color:var(--muted)]">How sure we are of the type</dt><dd className="mt-1 text-[color:var(--body)]">{confidenceWord(run.overallConfidence)} ({Math.round(run.overallConfidence * 100)}%)</dd></div>
+                  <div><dt className="text-[color:var(--muted)]">Needs a person</dt><dd className="mt-1 text-[color:var(--body)]">{run.requiresHumanReview ? "Yes" : "No"}</dd></div>
+                  <div><dt className="text-[color:var(--muted)]">Why this type</dt><dd className="mt-1 text-[color:var(--body)]">{audit.classification_reason || "No reason recorded"}</dd></div>
+                  <div><dt className="text-[color:var(--muted)]">Scorecard area</dt><dd className="mt-1 text-[color:var(--body)]">{String(run.parserOutput?.pillar || "Not attributed")}</dd></div>
+                  <div className="sm:col-span-2"><dt className="text-[color:var(--muted)]">Evidence matched</dt><dd className="mt-1 text-[color:var(--body)]">{audit.matched_patterns?.join(", ") || "None recorded"}</dd></div>
+                  {rulesApplied.length > 0 && <div className="sm:col-span-2"><dt className="text-[color:var(--muted)]">Rules applied</dt><dd className="mt-1 text-[color:var(--body)]">{rulesApplied.join(", ")}</dd></div>}
+                  <div><dt className="text-[color:var(--muted)]">Reader version</dt><dd className="mt-1 text-[color:var(--body)]">{run.graphVersion || "Not recorded"}</dd></div>
+                  {runs.length > 1 && (
+                    <div>
+                      <dt className="text-[color:var(--muted)]">Earlier readings</dt>
+                      <dd className="mt-1">
+                        <select
+                          value={run.runId}
+                          onChange={(event) => void loadRun(event.target.value)}
+                          aria-label="Earlier readings"
+                          className="h-9 rounded-lg border border-[color:var(--rule)] bg-[color:var(--ink-3)] px-3 text-white"
+                          data-testid="document-run-select"
+                        >
+                          {runs.map((item, index) => <option key={item.runId} value={item.runId}>Reading {runs.length - index} · {new Date(item.createdAt).toLocaleDateString("en-ZA")}</option>)}
+                        </select>
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            </details>
           </div>}
         </div>
       </ExtractionReviewPane>

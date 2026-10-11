@@ -62,9 +62,9 @@ describe("DocumentUploadStart — pressing Done when pricing failed", () => {
     await waitFor(() => expect(done).not.toBeDisabled());
     await user.click(done);
 
-    // The staging bar is gone — that is the behaviour that created the dead end.
-    expect(screen.queryByTestId("button-done-staging")).not.toBeInTheDocument();
-    // ...so something must stand in its place.
+    // "Cost details" is a disclosure now, not a screen swap: it stays, open...
+    expect(screen.getByTestId("button-done-staging")).toHaveAttribute("aria-expanded", "true");
+    // ...and what it opens names the failure, with both ways on.
     const panel = await screen.findByTestId("quote-unavailable");
     expect(panel).toBeInTheDocument();
     expect(screen.getByTestId("button-retry-quote")).toBeInTheDocument();
@@ -80,7 +80,20 @@ describe("DocumentUploadStart — pressing Done when pricing failed", () => {
 
     await user.click(await screen.findByTestId("button-back-to-staging"));
 
-    expect(await screen.findByTestId("button-done-staging")).toBeInTheDocument();
+    expect(await screen.findByTestId("button-done-staging")).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("quote-unavailable")).not.toBeInTheDocument();
+  });
+
+  it("says so in the read bar itself, with Try again as the one main button", async () => {
+    await stageAFile();
+
+    const bar = await screen.findByTestId("read-bar");
+    await waitFor(() => expect(screen.getByTestId("read-bar-price")).toHaveTextContent("couldn't work out the cost"));
+    expect(bar).toHaveTextContent("Nothing was read or charged");
+    expect(screen.getByTestId("button-retry-quote-inline")).toBeInTheDocument();
+    // No read button while there is no price to read at.
+    expect(screen.queryByTestId("button-read-now")).not.toBeInTheDocument();
+    // The failure is said once, in the bar — not again as a loose red line.
+    expect(screen.queryByTestId("parse-error")).not.toBeInTheDocument();
   });
 });

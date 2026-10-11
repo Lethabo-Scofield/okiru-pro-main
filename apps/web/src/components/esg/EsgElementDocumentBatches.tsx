@@ -25,26 +25,10 @@
  * unsure, never over a confident classification. It also tells the user where
  * their work went, shown alongside — never instead of — what we actually read.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import {
-  Check,
-  ChevronDown,
-  FileQuestion,
-  FilePlus2,
-  FolderOpen,
-  Info,
-  Layers,
-  Leaf,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Checklist, type ChecklistOrigin } from "@/components/upload/flow/Checklist";
 
-export interface EsgUploadOrigin {
-  batchId: string;
-  batchLabel: string;
-  documentTypeId?: string;
-  documentTypeName?: string;
-  fromFolder?: boolean;
-}
+export type EsgUploadOrigin = ChecklistOrigin;
 
 /**
  * The fourteen ESG evidence elements, in reporting order (E, then S, then G,
@@ -148,7 +132,7 @@ function unknownElementLabel(element: string): string {
  */
 const HOLISTIC_BATCH = {
   id: "HOLISTIC",
-  label: "Packs & whole folders",
+  label: "Whole packs and workbooks",
   blurb: "Whole files that cover several elements at once. Drop them here and we sort out what goes where.",
   items: [
     {
@@ -179,15 +163,12 @@ const HOLISTIC_BATCH = {
   ],
 };
 
-const READABLE_ACCEPT =
-  ".pdf,.txt,.csv,.doc,.docx,.xlsx,.xlsm,.xls,.pptx,.png,.jpg,.jpeg,.tiff,.tif,.webp";
-
 /**
  * The element each file was filed under, for the reader (C1).
  *
  * The batch used to be presentation only. It now travels with the upload as a
  * hint the parser uses where its own classifier is unsure. Only real element
- * batches count: "Packs & whole folders" says the opposite of a single element.
+ * batches count: "Whole packs and workbooks" says the opposite of a single element.
  */
 export function esgFocusElements(
   fileNames: readonly string[],
@@ -304,15 +285,6 @@ export function EsgElementDocumentBatches({
 }: EsgElementDocumentBatchesProps) {
   const [elements, setElements] = useState<NormalisedElement[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openBatch, setOpenBatch] = useState<string | null>(null);
-  const [dragBatch, setDragBatch] = useState<string | null>(null);
-
-  // One pair of inputs for the whole component; the pending origin says which
-  // batch (and optionally which document type) the pick belongs to. Rendering a
-  // hidden input per document would be the obvious alternative and a bad one.
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const folderInputRef = useRef<HTMLInputElement | null>(null);
-  const pendingOrigin = useRef<EsgUploadOrigin | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -334,44 +306,14 @@ export function EsgElementDocumentBatches({
   }, []);
 
   const satisfied = useMemo(() => new Set(satisfiedDocumentIds), [satisfiedDocumentIds]);
-
-  const filedCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const batchId of Object.values(filedBatchByFile)) {
-      counts[batchId] = (counts[batchId] ?? 0) + 1;
-    }
-    return counts;
-  }, [filedBatchByFile]);
-
   const unfiledCount = stagedFileNames.filter((name) => !filedBatchByFile[name]).length;
 
-  const openPicker = (origin: EsgUploadOrigin, kind: "files" | "folder") => {
-    if (disabled) return;
-    pendingOrigin.current = { ...origin, fromFolder: kind === "folder" };
-    (kind === "folder" ? folderInputRef : fileInputRef).current?.click();
-  };
-
-  const handlePicked = (list: FileList | null) => {
-    const origin = pendingOrigin.current;
-    pendingOrigin.current = null;
-    if (!origin || !list?.length) return;
-    onPick(Array.from(list), origin);
-  };
-
-  const handleDrop = (event: React.DragEvent, origin: EsgUploadOrigin) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setDragBatch(null);
-    if (disabled || !event.dataTransfer.files?.length) return;
-    onPick(Array.from(event.dataTransfer.files), origin);
-  };
-
   /**
-   * Batch cards.
+   * Groups.
    *
-   * Every element the catalogue knows about gets a card, ordered by
+   * Every element the catalogue knows about gets a group, ordered by
    * ELEMENT_ORDER and with anything unrecognised appended rather than dropped.
-   * Before the catalogue loads (or if it fails) the element cards still render
+   * Before the catalogue loads (or if it fails) the element groups still render
    * from ELEMENT_ORDER with no document list — an upload surface that depends
    * on a catalogue request is an upload surface that breaks when it fails.
    */
@@ -412,234 +354,30 @@ export function EsgElementDocumentBatches({
     ];
   }, [elements, satisfied]);
 
-  const totalTypes = batches.reduce(
-    (sum, batch) => sum + (batch.holistic ? 0 : batch.documentCount),
-    0,
-  );
-  const totalCovered = batches.reduce((sum, batch) => sum + batch.covered, 0);
-
   return (
-    <div
-      className="rounded-[22px] border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-input-bg,#0e0e10)] p-5"
-      data-testid="esg-upload-batches"
-    >
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        accept={READABLE_ACCEPT}
-        onChange={(e) => {
-          handlePicked(e.target.files);
-          e.currentTarget.value = "";
-        }}
-        data-testid="esg-batch-file-input"
-      />
-      <input
-        ref={folderInputRef}
-        type="file"
-        multiple
-        className="hidden"
-        {...{ webkitdirectory: "", directory: "" }}
-        onChange={(e) => {
-          handlePicked(e.target.files);
-          e.currentTarget.value = "";
-        }}
-        data-testid="esg-batch-folder-input"
-      />
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-[12px] font-medium uppercase tracking-[0.14em] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-            Upload by element
+    <Checklist
+      testIdPrefix="esg-"
+      testId="esg-upload-batches"
+      groups={batches}
+      satisfied={satisfied}
+      anyRead={satisfiedDocumentIds.length > 0}
+      filedBatchByFile={filedBatchByFile}
+      unfiledCount={unfiledCount}
+      onPick={onPick}
+      disabled={disabled}
+      catalogueLoaded={elements !== null}
+      emptyGroupText={(loaded) =>
+        !loaded && !error ? "Loading the document list…" : "No document list for this element — you can still add files to it."
+      }
+      // Guidance, not a gate: a failed catalogue must never block uploading.
+      notice={
+        error ? (
+          <p className="mt-1 text-[12px] text-[color:var(--muted)]" data-testid="esg-batches-catalog-error">
+            {error}. You can still upload — we will tell you what is missing after reading your documents.
           </p>
-          <h4
-            className="mt-2 text-[22px] font-semibold leading-none text-[var(--esg-text,#fff)]"
-          >
-            {satisfiedDocumentIds.length > 0 && totalTypes > 0
-              ? `${totalCovered} of ${totalTypes} document types covered`
-              : `${batches.length} batches, one at a time`}
-          </h4>
-          <p className="mt-2 max-w-lg text-[13px] leading-5 text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-            Send what you have for each element — files or a whole folder. You do not need all
-            {totalTypes > 0 ? ` ${totalTypes}` : ""} document types, and it does not matter if
-            something lands in the wrong batch: we read every document and file it where it
-            actually belongs.
-          </p>
-          {/* Guidance, not a gate: a failed catalogue must never block uploading. */}
-          {error && (
-            <p className="mt-2 text-[12px] text-[var(--esg-text3,rgba(255,255,255,0.32))]" data-testid="esg-batches-catalog-error">
-              {error}. You can still upload — we will tell you what is missing after reading your
-              documents.
-            </p>
-          )}
-        </div>
-        {unfiledCount > 0 && (
-          <p className="rounded-xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[var(--esg-section-bg,#141416)] px-3 py-2 text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-            {unfiledCount} file{unfiledCount === 1 ? "" : "s"} added outside a batch
-          </p>
-        )}
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {batches.map((batch) => {
-          const isOpen = openBatch === batch.id;
-          const filed = filedCounts[batch.id] ?? 0;
-          const isDragTarget = dragBatch === batch.id;
-          const origin: EsgUploadOrigin = { batchId: batch.id, batchLabel: batch.label };
-
-          return (
-            <div
-              key={batch.id}
-              className={`overflow-hidden rounded-2xl border transition-colors ${
-                isDragTarget
-                  ? "border-white/[0.35] bg-white/[0.04]"
-                  : "border-[var(--esg-glass-border,rgba(255,255,255,0.07))]"
-              }`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (!disabled) setDragBatch(batch.id);
-              }}
-              onDragLeave={() => setDragBatch((current) => (current === batch.id ? null : current))}
-              onDrop={(e) => handleDrop(e, origin)}
-              data-testid={`esg-batch-${batch.id}`}
-            >
-              <div className="flex flex-col gap-3 bg-white/[0.035] px-4 py-3 sm:flex-row sm:items-center sm:gap-4">
-                <button
-                  type="button"
-                  onClick={() => setOpenBatch(isOpen ? null : batch.id)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                  aria-expanded={isOpen}
-                  data-testid={`esg-batch-toggle-${batch.id}`}
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
-                    {batch.holistic ? (
-                      <Layers className="h-4 w-4 text-[var(--esg-text2,rgba(255,255,255,0.56))]" />
-                    ) : (
-                      <Leaf className="h-4 w-4 text-[var(--esg-acc-e,#1de9a0)]" />
-                    )}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2 text-[14px] font-medium text-[var(--esg-text,#fff)]">
-                      <span className="truncate">{batch.label}</span>
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 shrink-0 text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-transform ${
-                          isOpen ? "rotate-180" : ""
-                        }`}
-                      />
-                    </span>
-                    {batch.blurb && (
-                      <span className="mt-0.5 block truncate text-[11.5px] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-                        {batch.blurb}
-                      </span>
-                    )}
-                    <span className="mt-1 block text-[11px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                      {batch.holistic
-                        ? `${batch.documentCount} kinds of upload`
-                        : batch.documentCount === 0
-                          ? "Document list unavailable — uploads still work"
-                          : satisfiedDocumentIds.length > 0
-                            ? `${batch.covered} of ${batch.documentCount} document types covered`
-                            : `${batch.documentCount} document types`}
-                      {filed > 0 && ` · ${filed} file${filed === 1 ? "" : "s"} added`}
-                    </span>
-                  </span>
-                </button>
-
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => openPicker(origin, "files")}
-                    className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-[12px] font-semibold text-[#0e0e10] transition-colors hover:bg-[#f2f2f7] disabled:opacity-40"
-                    data-testid={`esg-batch-upload-files-${batch.id}`}
-                  >
-                    <FilePlus2 className="h-3.5 w-3.5" />
-                    Files
-                  </button>
-                  <button
-                    type="button"
-                    disabled={disabled}
-                    onClick={() => openPicker(origin, "folder")}
-                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.12] px-3 py-1.5 text-[12px] font-semibold text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:bg-white/[0.06] disabled:opacity-40"
-                    data-testid={`esg-batch-upload-folder-${batch.id}`}
-                  >
-                    <FolderOpen className="h-3.5 w-3.5" />
-                    Folder
-                  </button>
-                </div>
-              </div>
-
-              <AnimatePresence initial={false}>
-                {isOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                  >
-                    <ul className="divide-y divide-white/[0.05]">
-                      {batch.items.map((item) => {
-                        const have = satisfied.has(item.id);
-                        return (
-                          <li key={item.id} className="flex items-start gap-3 px-4 py-3">
-                            <span className="mt-0.5 shrink-0" aria-hidden>
-                              {have ? (
-                                <Check className="h-3.5 w-3.5 text-[#30d158]" />
-                              ) : (
-                                <FileQuestion className="h-3.5 w-3.5 text-[var(--esg-text3,rgba(255,255,255,0.32))]" />
-                              )}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-[13px] leading-5 text-[color:var(--body)]">
-                                {item.name}
-                                {/* Never colour alone — state is spelled out. */}
-                                <span className="ml-2 text-[10px] uppercase tracking-wide text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                                  {have ? "supplied" : "not yet"}
-                                </span>
-                              </span>
-                              {item.hint && (
-                                <span className="mt-1 block text-[11.5px] leading-[1.45] text-[var(--esg-text2,rgba(255,255,255,0.56))]">
-                                  <Info className="mr-1 inline h-3 w-3 align-[-1px] text-[var(--esg-text3,rgba(255,255,255,0.32))]" />
-                                  {item.hint}
-                                </span>
-                              )}
-                            </span>
-                            <button
-                              type="button"
-                              disabled={disabled}
-                              onClick={() =>
-                                openPicker(
-                                  { ...origin, documentTypeId: item.id, documentTypeName: item.name },
-                                  "files",
-                                )
-                              }
-                              className="mt-0.5 inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/[0.10] px-2.5 py-1 text-[11px] font-medium text-[var(--esg-text2,rgba(255,255,255,0.56))] transition-colors hover:bg-white/[0.06] hover:text-[#e5e5ea] disabled:opacity-40"
-                              aria-label={`Upload ${item.name}`}
-                              data-testid={`esg-upload-doc-${item.id}`}
-                            >
-                              <FilePlus2 className="h-3 w-3" />
-                              Upload
-                            </button>
-                          </li>
-                        );
-                      })}
-                      {batch.items.length === 0 && (
-                        <li className="px-4 py-3 text-[12px] text-[var(--esg-text3,rgba(255,255,255,0.32))]">
-                          {elements === null && !error
-                            ? "Loading the document list…"
-                            : "No document list for this element — you can still upload to it."}
-                        </li>
-                      )}
-                    </ul>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+        ) : null
+      }
+    />
   );
 }
 
