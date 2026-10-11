@@ -12,9 +12,9 @@ export const GLOBAL_CSS = `
 
   .okiru-root *, .okiru-root *::before, .okiru-root *::after { box-sizing: border-box; margin: 0; padding: 0; }
   .okiru-root {
-    --paper:        #cdd2da; /* page tone, sampled from hero-background.webp */
-    --paper-raised: #e4e7ec; /* cards, modals, inputs: lighter, never pure white */
-    --paper-hover:  #d9dde4;
+    --paper:        #ffffff;
+    --paper-raised: #f4f4f5;
+    --paper-hover:  #e4e4e7;
     --ink:    #0b0f1a;
     --ink2:   #0d1220;
     --rule:   rgba(255,255,255,0.07);
@@ -56,30 +56,26 @@ export const GLOBAL_CSS = `
   html.light .okiru-root {
     --ink:    var(--paper);
     --ink2:   var(--paper-raised);
-    --rule:   rgba(24,24,27,0.10);
-    --muted:  #5a5a63;
+    --rule:   #e4e4e7;
+    --muted:  #71717a;
     --body:   #52525b;
     --hi:     #18181b;
     --accent: rgba(24,24,27,0.55);
     --accent-line: rgba(24,24,27,0.12);
     --card-hover: rgba(24,24,27,0.035);
-    background:
-      radial-gradient(ellipse 70% 45% at 12% 8%, rgba(147,51,234,0.065), transparent 60%),
-      radial-gradient(ellipse 60% 45% at 92% 42%, rgba(6,182,212,0.06), transparent 58%),
-      radial-gradient(ellipse 55% 40% at 50% 100%, rgba(232,68,26,0.045), transparent 62%),
-      var(--paper);
+    background: #ffffff;
     color: var(--body);
   }
 
   html.light .okiru-root .okiru-grain { display: none; }
   html.light .okiru-root .ok-nav {
-    border-color: rgba(24,24,27,0.10);
-    background: rgba(255,255,255,0.78);
-    box-shadow: 0 12px 34px rgba(24,24,27,0.10);
+    border-color: #e4e4e7;
+    background: rgba(255,255,255,0.94);
+    box-shadow: 0 12px 34px rgba(24,24,27,0.08);
   }
   html.light .okiru-root .ok-nav.ok-nav-scrolled {
     background: rgba(255,255,255,0.94);
-    box-shadow: 0 12px 38px rgba(24,24,27,0.14), 0 0 0 1px rgba(24,24,27,0.02);
+    box-shadow: 0 12px 38px rgba(24,24,27,0.10), 0 0 0 1px rgba(24,24,27,0.02);
   }
   html.light .okiru-root .ok-wordmark,
   html.light .okiru-root .ok-nav-link:hover,

@@ -158,8 +158,8 @@ process.on("SIGINT", () => { logger.info("Received SIGINT — shutting down"); p
           return getCertBlobServiceClient();
         },
         loadProcessor: async () => {
-          const { processAllCertificates } = await import("./src/services/certificateExtractor.js");
-          return processAllCertificates;
+          const { processAllCertificatePipelines } = await import("./src/services/certificatePipeline.js");
+          return processAllCertificatePipelines;
         },
       });
     });

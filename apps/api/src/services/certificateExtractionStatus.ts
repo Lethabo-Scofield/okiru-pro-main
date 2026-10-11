@@ -3,6 +3,11 @@ export type CertificateExtractionStatus = 'pending' | 'completed' | 'text_too_sh
 export type CertificateExtractionMode = 'azure_document_intelligence' | 'pdf_text' | 'ppocr' | 'ocr' | 'filename_only' | 'none' | 'failed';
 
 export const MIN_USEFUL_EXTRACTED_TEXT_LENGTH = 50;
+export const MAX_STORED_CERTIFICATE_TEXT_LENGTH = 100_000;
+
+export function storedCertificateText(text: string): string {
+  return text.slice(0, MAX_STORED_CERTIFICATE_TEXT_LENGTH);
+}
 
 export type CertificateExtractedTextState = {
   extractionStatus?: CertificateExtractionStatus | string | null;

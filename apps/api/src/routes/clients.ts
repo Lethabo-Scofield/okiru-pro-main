@@ -140,6 +140,11 @@ router.post('/', requireAuth, requirePermission(PERMISSIONS.CLIENT_WRITE), async
     if (rejected.length) {
       logger.warn('Rejected protected fields on client create', { rejected, userId, orgId });
     }
+    if (typeof safe.financialYear !== 'string' || !safe.financialYear.trim()) {
+      safe.financialYear = String(new Date().getFullYear());
+    } else {
+      safe.financialYear = safe.financialYear.trim();
+    }
     const errors = validateClientPayload(safe, { requireName: true });
     if (errors.length) {
       return res.status(400).json({ message: 'Invalid client payload', errors });

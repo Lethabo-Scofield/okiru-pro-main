@@ -219,13 +219,16 @@ export function ProductWorkspace({ product }: { product: Product }) {
         : `/bbbee/${encodeURIComponent(id)}/documents`,
     );
 
-  const rowAction =
-    'ok-btn';
+  const rowAction = 'workspace-action-secondary';
 
   return (
     // The shell draws the rail, the breadcrumbs and the account menu; this page
     // draws what is underneath them.
-    <div className="font-sans" data-testid={`workspace-${product}`}>
+    <div
+      className="font-sans okiru-product-workspace"
+      style={{ '--workspace-accent': hue } as React.CSSProperties}
+      data-testid={`workspace-${product}`}
+    >
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-7">
         <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
           <div>
@@ -253,7 +256,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
             <button
               type="button"
               onClick={() => navigate('/access')}
-              className="inline-flex items-center gap-1.5 ok-btn"
+              className="workspace-action-secondary"
               data-testid="workspace-team"
             >
               <Users className="h-3.5 w-3.5" />
@@ -262,7 +265,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
             <button
               type="button"
               onClick={() => navigate('/documents')}
-              className="inline-flex items-center gap-1.5 ok-btn"
+              className="workspace-action-secondary"
               data-testid="workspace-documents"
             >
               <FolderOpen className="h-3.5 w-3.5" />
@@ -290,15 +293,15 @@ export function ProductWorkspace({ product }: { product: Product }) {
                 key={r.id}
                 type="button"
                 onClick={() => navigate(`${createHref}?start=${r.id}`)}
-                className="group flex flex-col items-start gap-1 ok-panel ok-panel-action px-4 py-3.5 text-left"
+                className="group workspace-start-card ok-panel ok-panel-action px-4 py-3.5 text-left"
                 data-testid={`start-${r.id}`}
               >
-                <span className="flex items-center gap-2 text-white">
+                <span className="flex items-center gap-2 text-[color:var(--hi)]">
                   <r.icon className="h-4 w-4 text-[color:var(--body)]" />
                   <span className="text-[13px] font-medium">{r.title}</span>
                 </span>
                 <span className="text-[12px] text-[color:var(--body)]">{r.description}</span>
-                <span className="ok-eyebrow mt-2">
+                <span className="workspace-cost-pill mt-2">
                   {r.cost}
                 </span>
               </button>
@@ -339,7 +342,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
 
         <div className="ok-panel-flush">
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-[color:var(--rule)]">
-            <span className="text-[12px] font-semibold text-white">Companies</span>
+            <span className="text-[12px] font-semibold text-[color:var(--hi)]">Companies</span>
             <span className="ok-eyebrow" data-testid="results-count">
               {loading ? '' : `${visible.length} shown`}
             </span>
@@ -355,7 +358,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
               <p className="ok-subtitle">Could not load your companies.</p>
               <button
                 onClick={() => void fetchClients()}
-                className="text-[13px] text-white underline underline-offset-4"
+                className="text-[13px] text-[color:var(--hi)] underline underline-offset-4"
               >
                 Try again
               </button>
@@ -382,7 +385,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
                       <td >
                         <button
                           onClick={() => openSummary(c.id)}
-                          className="font-medium text-white hover:underline underline-offset-4 text-left"
+                          className="text-left font-medium text-[color:var(--hi)] hover:underline underline-offset-4"
                         >
                           {c.name}
                         </button>
@@ -413,7 +416,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
                           </button>
                           <button
                             onClick={() => openToolkit(c.id)}
-                            className="ok-btn-primary"
+                            className="workspace-action-primary"
                             data-testid={`button-scorecard-${c.id}`}
                           >
                             {isEsg ? 'Open toolkit' : 'Scorecard'}
@@ -439,7 +442,7 @@ export function ProductWorkspace({ product }: { product: Product }) {
                           {companies.length === 0 && (
                             <button
                               onClick={() => navigate(createHref)}
-                              className="text-[13px] text-white underline underline-offset-4"
+                              className="text-[13px] text-[color:var(--hi)] underline underline-offset-4"
                             >
                               Create the first one
                             </button>

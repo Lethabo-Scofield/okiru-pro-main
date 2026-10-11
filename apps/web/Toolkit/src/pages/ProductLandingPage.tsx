@@ -14,7 +14,7 @@ import { SiteNav, SiteFooter, ArrowRight } from "./siteChrome";
 const PRODUCT_CSS = `
   /* ── SHARED STRUCTURE (theme-agnostic, uses themed tokens) ── */
   .okiru-product .ok-nav-link { position: relative; }
-  .okiru-product .ok-nav-active { color: #fff; background: rgba(255,255,255,0.06); }
+  .okiru-product .ok-nav-active { color: #18181b; background: #f4f4f5; }
   .okiru-product .ok-nav-active::after {
     content: ''; position: absolute; left: 12px; right: 12px; bottom: 3px; height: 2px;
     border-radius: 2px; background: var(--grad-h);
@@ -23,15 +23,10 @@ const PRODUCT_CSS = `
   .okiru-product .ok-hero { min-height: 0; display: block; padding: 132px 0 52px; align-items: initial; }
   .okiru-product .ok-hero-bg {
     overflow: hidden;
-    background:
-      var(--paper, #cdd2da);
+    background: #ffffff;
   }
   .okiru-product .ok-hero-waves {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    opacity: 1;
-    pointer-events: none;
+    display: none;
   }
   .okiru-product .ok-hero-wave {
     position: absolute;
@@ -55,8 +50,8 @@ const PRODUCT_CSS = `
   .okiru-product .ok-feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 44px; }
   .okiru-product .ok-feat-card {
     position: relative; display: flex; flex-direction: column; gap: 13px;
-    padding: 28px 26px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.022);
+    padding: 28px 26px; border-radius: 16px; border: 1px solid #e4e4e7;
+    background: #ffffff;
     transition: transform .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease;
   }
   .okiru-product .ok-feat-icon { display: inline-flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0; }
@@ -75,7 +70,8 @@ const PRODUCT_CSS = `
 
   .okiru-product #product-cta { border-bottom: none; }
   .okiru-product #product-cta .ok-w > div {
-    max-width: 860px; padding: 48px 44px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.09);
+    max-width: 860px; padding: 48px 44px; border-radius: 20px; border: 1px solid #e4e4e7;
+    background: #f4f4f5;
   }
 
   @media (max-width: 900px) { .okiru-product .ok-feat-grid { grid-template-columns: 1fr 1fr; } }

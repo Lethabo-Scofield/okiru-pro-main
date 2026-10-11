@@ -46,7 +46,7 @@
 }
 
 :root {
-  --background: 260 10% 96%;
+  --background: 0 0% 100%;
   --foreground: 260 10% 10%;
 
   --card: 0 0% 100%;
@@ -103,48 +103,48 @@
  * Okiru's colours rather than a generic violet.
  */
 .dark {
-  --background: 220 11% 4%;
-  --foreground: 0 0% 96%;
+  --background: 0 0% 100%;
+  --foreground: 260 10% 10%;
 
-  --card: 222 10% 7%;
-  --card-foreground: 0 0% 96%;
+  --card: 0 0% 100%;
+  --card-foreground: 260 10% 10%;
 
-  --popover: 222 10% 7%;
-  --popover-foreground: 0 0% 96%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 260 10% 10%;
 
-  --primary: 271 81% 56%;
+  --primary: 265 84% 58%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 220 9% 11%;
-  --secondary-foreground: 0 0% 84%;
+  --secondary: 260 8% 93%;
+  --secondary-foreground: 260 10% 20%;
 
-  --muted: 220 9% 11%;
-  --muted-foreground: 0 0% 58%;
+  --muted: 260 8% 93%;
+  --muted-foreground: 260 5% 42%;
 
-  --accent: 222 9% 14%;
-  --accent-foreground: 0 0% 96%;
+  --accent: 260 8% 91%;
+  --accent-foreground: 260 10% 12%;
 
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 220 8% 17%;
-  --input: 220 8% 17%;
-  --ring: 188 94% 43%;
+  --border: 260 6% 89%;
+  --input: 260 6% 86%;
+  --ring: 265 84% 58%;
 
-  --chart-1: 265 90% 66%;
-  --chart-2: 158 64% 52%;
-  --chart-3: 36 80% 58%;
-  --chart-4: 200 80% 58%;
-  --chart-5: 340 65% 58%;
+  --chart-1: 265 84% 58%;
+  --chart-2: 158 64% 44%;
+  --chart-3: 36 80% 50%;
+  --chart-4: 200 80% 50%;
+  --chart-5: 340 65% 50%;
 
-  --sidebar: 220 12% 3%;
-  --sidebar-foreground: 0 0% 58%;
-  --sidebar-primary: 271 81% 56%;
+  --sidebar: 260 8% 94%;
+  --sidebar-foreground: 260 5% 25%;
+  --sidebar-primary: 265 84% 58%;
   --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 220 9% 11%;
-  --sidebar-accent-foreground: 0 0% 86%;
-  --sidebar-border: 220 8% 15%;
-  --sidebar-ring: 188 94% 43%;
+  --sidebar-accent: 260 8% 88%;
+  --sidebar-accent-foreground: 260 10% 9%;
+  --sidebar-border: 260 6% 87%;
+  --sidebar-ring: 265 84% 58%;
 }
 
 @layer base {

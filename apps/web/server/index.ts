@@ -105,6 +105,65 @@ app.get('/toolkit/auth', (_req: Request, res: Response) => {
   res.redirect(302, '/auth?redirect=/toolkit');
 });
 
+function decodeBridgeTarget(req: Request): string {
+  const encoded = typeof req.query.u === 'string' ? req.query.u : '';
+  if (!encoded) return typeof req.query.url === 'string' ? req.query.url : '';
+  try {
+    const base64 = encoded.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(encoded.length / 4) * 4, '=');
+    return Buffer.from(base64, 'base64').toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+app.get(['/__json_proxy', '/__okiru_data'], async (req: Request, res: Response) => {
+  const callback = typeof req.query.callback === 'string' ? req.query.callback : '';
+  const event = typeof req.query.event === 'string' ? req.query.event : '';
+  const dataset = req.query.dataset === '1';
+  const target = decodeBridgeTarget(req);
+  const usesCallback = /^[A-Za-z_$][0-9A-Za-z_$]*$/.test(callback);
+  const usesEvent = /^[A-Za-z0-9_-]{1,96}$/.test(event);
+  const scriptFor = (payload: unknown, status: number) => {
+    const json = JSON.stringify(payload);
+    if (dataset) {
+      return `document.currentScript.dataset.status=${JSON.stringify(String(status))};document.currentScript.dataset.payload=${JSON.stringify(json)};`;
+    }
+    return usesEvent
+      ? `window.dispatchEvent(new CustomEvent(${JSON.stringify(event)},{detail:{payload:${json},status:${status}}}));`
+      : `${callback}(${json},${status});`;
+  };
+  if (!usesCallback && !usesEvent && !dataset) {
+    return res.status(400).type('application/javascript').send('throw new Error("Invalid JSON proxy callback");');
+  }
+  if (!/^\/(internal\/records|api\/certificates)(?=\/|\?|$)/.test(target)) {
+    return res.status(400).type('application/javascript').send(scriptFor({ message: 'Unsupported JSON proxy target' }, 400));
+  }
+  try {
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const upstream = new URL(target, origin);
+    const upstreamRes = await fetch(upstream, {
+      headers: {
+        cookie: req.headers.cookie || '',
+        accept: 'application/json',
+      },
+    });
+    const text = await upstreamRes.text();
+    let payload: unknown;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = { message: 'JSON proxy target did not return JSON' };
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    logger.info("JSON bridge served", { target, status: upstreamRes.status, bytes: text.length });
+    return res.type('application/javascript').send(scriptFor(payload, upstreamRes.status));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'JSON proxy failed';
+    logger.warn("JSON bridge failed", { target, message });
+    return res.status(502).type('application/javascript').send(scriptFor({ message }, 502));
+  }
+});
+
 const requestLogger = createLogger("HttpRequest");
 
 app.use((req, res, next) => {

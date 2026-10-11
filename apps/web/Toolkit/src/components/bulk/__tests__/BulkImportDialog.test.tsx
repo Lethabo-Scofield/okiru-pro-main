@@ -258,7 +258,7 @@ describe("BulkImportDialog — certificate registry", () => {
     openProcurement();
     await chooseProcurement(procurementSheet());
 
-    await waitFor(() => expect(calls.some((u) => u.includes("/api/certificates/match"))).toBe(true));
+    await waitFor(() => expect(calls.some((u) => u.includes("/internal/records/match"))).toBe(true));
     vi.unstubAllGlobals();
   });
 

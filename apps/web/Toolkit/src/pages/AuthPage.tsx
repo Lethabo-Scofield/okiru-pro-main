@@ -439,15 +439,15 @@ export default function AuthPage({ defaultMode = 'login' }: { defaultMode?: 'log
 
   return (
     <div
-      className="min-h-screen flex flex-col bg-[#cdd2da] text-zinc-950 dark:bg-[#08090b] dark:text-zinc-50"
+      className="min-h-screen flex flex-col bg-white text-zinc-950"
       style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}
     >
       <header
-        className="sticky top-0 z-20 shrink-0 border-b border-zinc-300/90 bg-[#cdd2da]/90 backdrop-blur-md dark:border-white/10 dark:bg-[#08090b]/90"
+        className="sticky top-0 z-20 shrink-0 border-b border-zinc-200 bg-white/90 backdrop-blur-md"
       >
         <div className="w-full px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <AppNavBack href="/" label="Home" variant="light" size="compact" data-testid="btn-back-to-home" />
-          <span className="hidden sm:inline text-[12px] text-[#636366] tracking-wide uppercase dark:text-zinc-400">{headerEyebrow}</span>
+          <span className="hidden sm:inline text-[12px] text-zinc-500 tracking-wide uppercase">{headerEyebrow}</span>
           <div className="w-12 shrink-0" aria-hidden />
         </div>
       </header>

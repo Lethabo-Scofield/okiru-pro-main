@@ -46,10 +46,10 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
     variant === "dashboard" ? (
       <button
         type="button"
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[color:var(--ink-3)] text-[12px] text-[color:var(--body)] hover:bg-[rgba(255,255,255,0.06)] smooth press-sm"
+        className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-[12px] text-zinc-700 shadow-sm hover:bg-zinc-50 smooth press-sm"
         data-testid="user-menu"
       >
-        <span className="inline-flex h-5 w-5 rounded-full bg-white/[0.12] items-center justify-center text-white font-semibold text-[9px]">
+        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-[9px] font-semibold text-white">
           {initial}
         </span>
         <span className="font-medium max-w-[160px] truncate">{display}</span>
@@ -58,10 +58,10 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
     ) : variant === "certificate" ? (
       <button
         type="button"
-        className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[12px] text-[color:var(--body)] bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.1] transition-colors"
+        className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[12px] text-zinc-700 transition-colors hover:bg-zinc-50"
         data-testid="user-account-menu-trigger"
       >
-        <span className="h-5 w-5 rounded-full bg-white/[0.12] text-[10px] font-semibold flex items-center justify-center">
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-[10px] font-semibold text-white">
           {initial}
         </span>
         <span className="font-medium max-w-[140px] truncate">{display}</span>
@@ -71,12 +71,12 @@ export function UserAccountMenu({ variant = "hub", className, trigger, showToken
       <button
         type="button"
         className={cn(
-          "inline-flex items-center gap-2 px-2 py-1 rounded-full bg-white/[0.03] border border-white/[0.05]",
-          "hover:bg-white/[0.06] smooth press-sm text-[color:var(--body)]",
+          "inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-2 py-1",
+          "text-zinc-700 shadow-sm hover:bg-zinc-50 smooth press-sm",
         )}
         data-testid="user-chip"
       >
-        <span className="h-6 w-6 rounded-full bg-white/[0.10] text-white text-[11px] font-semibold flex items-center justify-center">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-900 text-[11px] font-semibold text-white">
           {initial}
         </span>
         <span className="text-[12px] font-medium pr-0.5 max-w-[120px] truncate">{display}</span>

@@ -569,6 +569,7 @@ const certificateMetadataSchema = new Schema({
   status: { type: String, enum: ['valid', 'expiring', 'expired', 'unknown'], default: 'unknown' },
   extractedText: { type: String, default: null },
   extractionStatus: { type: String, enum: ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'], default: 'pending' },
+  textExtractionStatus: { type: String, enum: ['pending', 'completed', 'text_too_short', 'failed', 'missing_blob', 'unsupported', 'skipped'], default: 'pending', index: true },
   extractionMode: { type: String, enum: ['azure_document_intelligence', 'pdf_text', 'ppocr', 'ocr', 'filename_only', 'none', 'failed'], default: 'none' },
   extractedTextLength: { type: Number, default: 0 },
   extractionError: { type: String, default: null },
@@ -581,11 +582,19 @@ const certificateMetadataSchema = new Schema({
     default: 'pending',
     index: true,
   },
+  metadataStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'complete', 'needs_review', 'pending_text_recovery', 'failed'],
+    default: 'pending',
+    index: true,
+  },
   lastEnrichedAt: { type: Date, default: null },
   enrichmentVersion: { type: String, default: null },
   fieldConfidence: { type: Schema.Types.Mixed, default: {} },
   reviewFields: { type: [String], default: [] },
   reviewCandidates: { type: Schema.Types.Mixed, default: {} },
+  // Values a person rejected, per field, so enrichment never proposes them again.
+  rejectedCandidates: { type: Schema.Types.Mixed, default: {} },
   auditLog: {
     type: [Schema.Types.Mixed],
     default: [],
