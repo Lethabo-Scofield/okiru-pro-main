@@ -83,13 +83,23 @@ describe("AS-WAS — workbook parity fixture (audit reference, NOT the live calc
 describe("LIVE — corrected baseline (the regression gate)", () => {
   const result = computeEsgScorecard(buildSgConsumerGoldenWorkbook())!;
 
-  it("E pillar is unchanged at 36/108 — no E indicator moved on this dataset", () => {
-    expect(result.environmental.score).toBeCloseTo(36, 6);
+  it("E pillar drops 36/108 → 31/103 (Scope 3 tracking is not earned by water alone)", () => {
+    // E d8 "Scope 3 tracking initiated" was earned by water alone. The expert
+    // assesses Scope 3 against a materiality screen (Q11), which the workbook
+    // cannot record, so the indicator leaves the total: 5 points out of the
+    // numerator and the denominator alike. The coverage rows (d5, d11, d23)
+    // stay full here: all five depots report every month.
+    expect(result.environmental.score).toBeCloseTo(31, 6);
     expect(result.environmental.max).toBe(108);
+    expect(result.excluded.environmental.map((x) => x.key)).toContain("d8");
   });
 
-  it("S pillar drops 33 → 20 of 90 (fatalities attestation required; initiatives have no target)", () => {
-    expect(result.social.score).toBeCloseTo(20, 6);
+  it("S pillar drops 33 → 15 of 90 (fatalities attestation required; initiatives have no target; routes are not a fatigue programme)", () => {
+    expect(result.social.score).toBeCloseTo(15, 6);
+    // S d19: the driver debrief (routes, stops, customer hits) earned "Driver
+    // fatigue programme active". It names no fatigue programme and records no
+    // fatigue incidents, so it no longer does.
+    expect(result.socialRows.d19).toBe(0);
     expect(result.socialRows.d18).toBe(0);
     // Community initiatives were banded against the template's 6, which is
     // nobody's target: B-BBEE measures community investment as spend, so
@@ -102,7 +112,7 @@ describe("LIVE — corrected baseline (the regression gate)", () => {
     expect(result.governanceRows.d25).toBe(0);
   });
 
-  it("overall moves 0.4461764706 → 0.3846949891", () => {
+  it("overall moves 0.4461764706 → 0.3553889841", () => {
     /*
      * 0.4461764706 is the workbook's own figure; 0.4028431373 was the corrected
      * figure before mandatory grant recovery left the Social denominator, and
@@ -124,25 +134,29 @@ describe("LIVE — corrected baseline (the regression gate)", () => {
      *
      * 3. Community initiatives (d23) leave the Social total too: the 6 they
      *    were banded against is the template's, not a target the company set
-     *    nor a B-BBEE figure (D5). Social is 20/90.
+     *    nor a B-BBEE figure (D5).
      *
-     *     (36/108 + 20/90 + 59.8529411765/100) / 3 = 0.3846949891
+     * 4. Scope 3 tracking (E d8) leaves the Environmental total — water alone
+     *    does not show it — and a route register no longer earns the driver
+     *    fatigue programme (S d19). Environmental is 31/103, Social 15/90.
+     *
+     *     (31/103 + 15/90 + 59.8529411765/100) / 3 = 0.3553889841
      *
      * The company did not get worse. The denominator stopped being wrong.
      */
-    expect(result.overallPercent).toBeCloseTo(0.3846949891, 8);
+    expect(result.overallPercent).toBeCloseTo(0.3553889841, 8);
     expect(result.social.scoringDenominator).toBe(90);
-    expect(result.environmental.scoringDenominator).toBe(108);
+    expect(result.environmental.scoringDenominator).toBe(103);
   });
 
   it("asserts every indicator individually", () => {
     expect(result.environmentalRows).toEqual({
-      d5: 5, d6: 0, d7: 0, d8: 5, d9: 5, d11: 5, d12: 0, d13: 0, d15: 0, d16: 0,
+      d5: 5, d6: 0, d7: 0, d8: 0, d9: 5, d11: 5, d12: 0, d13: 0, d15: 0, d16: 0,
       d17: 0, d19: 5, d20: 4, d21: 3, d23: 4, d24: 0, d26: 0, d27: 0, d28: 0, d29: 0,
     });
     expect(result.socialRows).toEqual({
       d5: 0, d6: 0, d7: 5, d8: 0, d9: 3, d10: 3, d12: 0, d13: 0, d14: 0, d15: 0,
-      d17: 0, d18: 0, d19: 5, d20: 4, d22: 0, d23: 0, d24: 0, d26: 0, d27: 0,
+      d17: 0, d18: 0, d19: 0, d20: 4, d22: 0, d23: 0, d24: 0, d26: 0, d27: 0,
     });
     expect(result.governanceRows.d5).toBeCloseTo(KING5_D5, 9);
     expect({ ...result.governanceRows, d5: 0 }).toEqual({
@@ -151,7 +165,7 @@ describe("LIVE — corrected baseline (the regression gate)", () => {
     });
   });
 
-  it("the corrected calculation differs from parity on exactly three indicators here", () => {
+  it("the corrected calculation differs from parity on exactly five indicators here", () => {
     const workbook = deriveEsgSummaryCells(buildSgConsumerGoldenWorkbook());
     const parity = {
       e: scoreEnvironmental(workbook, { mode: "workbook-parity" }).rows,
@@ -169,6 +183,6 @@ describe("LIVE — corrected baseline (the regression gate)", () => {
         if (Math.abs(rows[key] - before[key]) > 1e-9) moved.push(`${pillar} ${key}`);
       }
     }
-    expect(moved.sort()).toEqual(["G d25", "S d18", "S d23"]);
+    expect(moved.sort()).toEqual(["E d8", "G d25", "S d18", "S d19", "S d23"]);
   });
 });

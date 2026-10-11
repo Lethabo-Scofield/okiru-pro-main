@@ -19,6 +19,7 @@ import {
   stanceFloorFromWorkbook,
 } from "../esgConfig/consumer-goods";
 import { computeGhgInventory } from "./ghgInventory";
+import { esgGridCoverage, type EsgGridCoverage } from "./esgCoverage";
 import { esgSectorConfigForWorkbook } from "../esgConfig";
 import { minCap, pr, scoringMode, yesPartialNo, type EsgScoringOptions } from "./shared";
 import {
@@ -136,10 +137,26 @@ export function scoreEnvironmental(
   const b90 = num(workbook, "B90");
   const f90 = num(workbook, "F90");
 
+  /*
+   * COVERAGE, NOT PRESENCE (corrected mode). Rows worded "tracked monthly at
+   * every site" or "established & tracked" are `IF(total>0)` in the workbook,
+   * so one depot's one month earned them in full while three depots were
+   * blank. Corrected mode pays them in proportion to the share of the
+   * workbook's sites × reported months that hold a figure (`esgCoverage.ts`).
+   * A total with no monthly grid behind it keeps the presence rule: there is
+   * nothing to measure its coverage on. Parity keeps the workbook's rule.
+   */
+  const coverageOf = (prefix: string) => (mode === "workbook-parity" ? null : esgGridCoverage(workbook, prefix));
+  const fleetDieselCoverage = coverageOf("s1a");
+  const electricityCoverage = coverageOf("s2");
+  const waterCoverage = coverageOf("water");
+  const byCoverage = (max: number, total: number, coverage: EsgGridCoverage | null) =>
+    coverage ? max * coverage.share : total > 0 ? max : 0;
+
   /* ------------------------------- GHG ------------------------------ */
 
   // C5 = =IF(E_Data!L19>0,5,0)
-  const d5 = l19 > 0 ? 5 : 0;
+  const d5 = byCoverage(5, l19, fleetDieselCoverage);
 
   // C6 = =IFERROR(IF(B90=0,0,IF((B90-F90)/B90>=B43,10,
   //        IF((B90-F90)/B90>=B43*B9,10*((B90-F90)/B90)/B43,0))),0)
@@ -172,8 +189,26 @@ export function scoreEnvironmental(
     mode === "workbook-parity" ? -num(workbook, "M81") : num(workbook, "L81");
   const d7 = s2Gross > 0 ? prT(s2Offset / s2Gross, thrRenew, 8) : 0;
 
-  // C8 = =IF(E_Data!$L$63>0,5,0)
-  const d8 = l63 > 0 ? 5 : 0;
+  /*
+   * C8 = =IF(E_Data!$L$63>0,5,0) — "Scope 3 tracking initiated", earned by
+   * water alone.
+   *
+   * CORRECTED: water is not Scope 3 tracking. The expert's ruling (Q11): Scope
+   * 3 is whatever a materiality screen shows is relevant, and "cherry-picking
+   * easy categories reads as incomplete". The workbook records no screen and no
+   * Scope 3 category besides water, so the indicator cannot be assessed. It
+   * leaves the total, with the reason, rather than paying for water or charging
+   * the company for a question the workbook cannot yet ask.
+   */
+  const d8 = mode === "workbook-parity" ? (l63 > 0 ? 5 : 0) : 0;
+  if (mode !== "workbook-parity") {
+    const x = exclude(
+      "environmental",
+      "d8",
+      "Scope 3 tracking is assessed against a materiality screen of the Scope 3 categories, and this workbook records none — only water, which on its own does not show Scope 3 tracking.",
+    );
+    if (x) targetExclusions.push(x);
+  }
 
   /*
    * C9 = =IF(AND(B107>=2030,B107<=2060),5,IF(B107>0,2.5,0))
@@ -189,8 +224,8 @@ export function scoreEnvironmental(
 
   /* ------------------------------ Energy ---------------------------- */
 
-  // C11 = =IF(E_Data!L46>0,5,0)
-  const d11 = l46 > 0 ? 5 : 0;
+  // C11 = =IF(E_Data!L46>0,5,0) — "tracked monthly at every site": coverage in corrected mode.
+  const d11 = byCoverage(5, l46, electricityCoverage);
 
   /*
    * C12 — MANUAL_ZERO in the workbook (literal 0, no formula) because energy
@@ -230,8 +265,20 @@ export function scoreEnvironmental(
   const vehicleCount = num(workbook, "_vehicle_count", "fleet");
   const l100WithinNorm = num(workbook, "_l100_within_norm", "fleet");
   const l100Positive = num(workbook, "_l100_positive", "fleet");
+  /*
+   * CORRECTED: over the FLEET, not over the vehicles that happen to have a
+   * measured rate. The workbook divides by `COUNTIF(K,">0")`, so three of four
+   * rated vehicles out of a fleet of 148 read as 75 % of the fleet within its
+   * norm. A vehicle with no measured rate is not shown to run within its norm,
+   * so corrected mode pro-rates by coverage: within-norm vehicles ÷ vehicles
+   * listed. Parity keeps the workbook's division.
+   */
   const d15 =
-    vehicleCount > 0 ? minCap((8 * l100WithinNorm) / Math.max(1, l100Positive), 8) : 0;
+    vehicleCount <= 0
+      ? 0
+      : mode === "workbook-parity"
+        ? minCap((8 * l100WithinNorm) / Math.max(1, l100Positive), 8)
+        : minCap((8 * l100WithinNorm) / vehicleCount, 8);
 
   // C16 = =IF(SUMPRODUCT((F4:F19>0)*(I4:I19>0))>0,5,0) — carry kg AND monthly km.
   const d16 = num(workbook, "_tonne_km_rows", "fleet") > 0 ? 5 : 0;
@@ -267,8 +314,8 @@ export function scoreEnvironmental(
 
   /* ------------------------------- Water ---------------------------- */
 
-  // C23 = =IF(E_Data!L63>0,4,0)
-  const d23 = l63 > 0 ? 4 : 0;
+  // C23 = =IF(E_Data!L63>0,4,0) — "at every site": coverage in corrected mode.
+  const d23 = byCoverage(4, l63, waterCoverage);
 
   /*
    * C24 — MANUAL_ZERO in the workbook. `E_Data!B94` ("Water efficiency
@@ -374,12 +421,25 @@ export function scoreEnvironmental(
     };
     const record = trace.record.bind(trace);
 
+    const coverageInput = (coverage: EsgGridCoverage | null, what: string) =>
+      coverage
+        ? [{
+            ref: "Coverage",
+            label: `Sites × months with ${what}: ${coverage.filled} of ${coverage.sites * coverage.months}` +
+              (coverage.missingSites.length ? ` (no figures for ${coverage.missingSites.join(", ")})` : ""),
+            value: Math.round(coverage.share * 1000) / 1000,
+          }]
+        : [];
+    const coverageRule = (max: number, what: string, coverage: EsgGridCoverage | null) =>
+      coverage
+        ? `${max} points × the share of the workbook's sites × reported months holding ${what}; a blank site or month is a gap.`
+        : presentRule(max, what);
     record({
       key: "d5",
       measured: { value: l19, unit: "litres", label: "Fleet diesel this period (Scope 1A)" },
       target: null,
-      inputs: [traceCell(E, "L19", "Fleet diesel, Scope 1A — litres, period total", l19)],
-      rule: presentRule(5, "fleet diesel"),
+      inputs: [traceCell(E, "L19", "Fleet diesel, Scope 1A — litres, period total", l19), ...coverageInput(fleetDieselCoverage, "fleet diesel")],
+      rule: coverageRule(5, "fleet diesel", fleetDieselCoverage),
     });
     record({
       key: "d6",
@@ -411,7 +471,9 @@ export function scoreEnvironmental(
       measured: { value: l63, unit: "kL", label: "Water this period" },
       target: null,
       inputs: [traceCell(E, "L63", "Water — kilolitres, period total", l63)],
-      rule: presentRule(5, "water use"),
+      rule: parity
+        ? presentRule(5, "water use")
+        : "Left out of the score: Scope 3 tracking needs a materiality screen of the Scope 3 categories, and water alone does not show it.",
     });
     record({
       key: "d9",
@@ -424,8 +486,8 @@ export function scoreEnvironmental(
       key: "d11",
       measured: { value: l46, unit: "kWh", label: "Grid electricity this period" },
       target: null,
-      inputs: [traceCell(E, "L46", "Grid electricity — kWh, period total", l46)],
-      rule: presentRule(5, "grid electricity"),
+      inputs: [traceCell(E, "L46", "Grid electricity — kWh, period total", l46), ...coverageInput(electricityCoverage, "electricity")],
+      rule: coverageRule(5, "grid electricity", electricityCoverage),
     });
     record({
       key: "d12",
@@ -450,7 +512,9 @@ export function scoreEnvironmental(
         traceCell("Fleet_Register", "K:K", "Vehicles with a measured L/100 km", l100Positive),
         traceCell("Fleet_Register", "K:L", "…of which within their norm (with the B45 tolerance)", l100WithinNorm),
       ],
-      rule: "8 points × the share of vehicles with a measured L/100 km that run within their own norm; nothing without a fleet register.",
+      rule: parity
+        ? "8 points × the share of vehicles with a measured L/100 km that run within their own norm; nothing without a fleet register."
+        : "8 points × the share of the fleet shown to run within its own L/100 km norm; a vehicle with no measured rate is not shown to, so the score is pro-rated by how much of the fleet is measured.",
     });
     record({
       key: "d16",
@@ -491,8 +555,8 @@ export function scoreEnvironmental(
       key: "d23",
       measured: { value: l63, unit: "kL", label: "Water this period" },
       target: null,
-      inputs: [traceCell(E, "L63", "Water — kilolitres, period total", l63)],
-      rule: presentRule(4, "water use"),
+      inputs: [traceCell(E, "L63", "Water — kilolitres, period total", l63), ...coverageInput(waterCoverage, "water")],
+      rule: coverageRule(4, "water use", waterCoverage),
     });
     record({
       key: "d24",

@@ -73,6 +73,21 @@ On this fixture, as the regression gate scores it, Social is now **20 / 90**
 target-based E rows from both sides — on this fixture undeclared, E reads
 31 / 67 instead of 36 / 108.
 
+**Amendment, 11 October 2026 — points follow data completeness (corrected
+mode only; parity is unchanged).**
+
+| id | Indicator | Before | After | Why |
+|---|---|---|---|---|
+| **E d5, d11, d23** | Scope 1 baseline tracked; electricity / water tracked at every site | `IF(total>0)` — full marks for one site's one month | points × the share of the workbook's sites × reported months holding a figure (`esgCoverage.ts`); a total with no monthly grid keeps the presence rule | The wording is coverage; three blank depots of five earned them in full. |
+| **E d8** | Scope 3 tracking initiated | 5 for water | **left out of the score**, with the reason | The expert assesses Scope 3 against a materiality screen (Q11) and calls cherry-picked categories incomplete. The workbook records no screen and no category besides water. |
+| **E d15** | Fleet L/100 km within norm | 8 × within ÷ vehicles WITH a measured rate | 8 × within ÷ vehicles listed | Three of four rated vehicles in a fleet of 148 read as 75 % of the fleet. A vehicle with no measured rate is not shown to be within its norm. |
+| **S d19** | Driver fatigue programme active | any driver-debrief row, or the first OFO row | learners on a programme the OFO register names as fatigue training, or driver-fatigue incidents recorded (`S_Data!C34:F34`) | A route summary is not a fatigue programme. |
+| **E d19-d21** | Waste diversion, monthly recycling, landfill | `B16` = 0 % from stream totals; `B17` read from a register row | no rate without a disposal route; the summary lives under its own keys once the register reaches rows 13-18 (`esgWasteSummary.ts`) | 0 % was published as measured; a cardboard line earned 4 points as a recycling rate. |
+
+On this fixture: E **31 / 103** (`d8` out), S **15 / 90** (`d19`), overall
+**0.3553889841** = (31/103 + 15/90 + 59.8529411765/100) / 3. The coverage rows
+stay full here: all five depots report every month.
+
 ---
 
 ## 2. Every indicator that changed
