@@ -2765,7 +2765,7 @@ export async function registerRoutes(
         "logo",
         // Scoring inputs the Toolkit edits via PATCH /api/clients/:id
         "revenue", "npat", "leviableAmount", "industryNorm", "eapProvince", "eapYear",
-        "tmps", "companyValue", "outstandingDebt",
+        "tmps", "tmpsChoice", "companyValue", "outstandingDebt",
         // FSC + ESD + SED scalar fields that live on ClientModel
         "fscSubSector", "fscReinsurer", "combineExcoSenior", "farmWorkersIncluded",
         "constructionSubSector",
@@ -2778,6 +2778,13 @@ export async function registerRoutes(
       const updates: any = { updatedAt: new Date() };
       for (const key of Object.keys(req.body || {})) {
         if (allowed.has(key)) updates[key] = req.body[key];
+      }
+      // The TMPS choice is one of two words; anything else is no choice.
+      if ("tmpsChoice" in updates) {
+        const choice = updates.tmpsChoice;
+        if (choice !== "stated" && choice !== "supplier_sum" && choice !== null) {
+          return res.status(400).json({ error: "tmpsChoice must be 'stated' or 'supplier_sum'" });
+        }
       }
 
       if (isMongoConnected()) {
@@ -2924,6 +2931,8 @@ export async function registerRoutes(
           // AFS — matching "all the financial info in the workbook wasn't in the
           // toolkit". Surface them (the harness path already had this data).
           financials: c.financials ?? null,
+          // The user's explicit TMPS choice; null scores the supplier sum.
+          tmpsChoice: c.tmpsChoice ?? null,
           fscSubSector: c.fscSubSector ?? null,
           fscReinsurer: c.fscReinsurer ?? null,
           combineExcoSenior: c.combineExcoSenior ?? false,

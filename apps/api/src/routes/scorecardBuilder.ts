@@ -353,7 +353,9 @@ router.post('/calculate-from-extraction', requireAuth, async (req, res) => {
 
     logger.info('Mapping extraction to UCS format');
 
-    const payload = await mapToUCSPayload({ entities: entities || [], tables: tables || {} });
+    // TMPS is the supplier schedule's sum unless the caller passes the client's
+    // explicit choice of the stated figure (tmpsChoice: 'stated').
+    const payload = await mapToUCSPayload({ entities: entities || [], tables: tables || {} }, { tmpsChoice: body.tmpsChoice });
 
     logger.info('Extraction data quality', { dataQuality: payload.dataQuality });
     logger.info('Extraction arrays', {
@@ -387,9 +389,9 @@ router.post('/calculate-from-extraction', requireAuth, async (req, res) => {
       success: true,
       scorecard: result,
       dataQuality: payload.dataQuality,
-      // Where pillarData.financials.tmps came from — a supplier-sum stand-in
-      // is never to be shown as the client's stated TMPS.
-      tmpsProvenance: { source: payload.tmpsSource, held: payload.tmpsHeld },
+      // Where pillarData.financials.tmps came from — the supplier sum by
+      // default — and the TMPS the documents state, shown beside it.
+      tmpsProvenance: { source: payload.tmpsSource, held: payload.tmpsHeld, stated: payload.tmpsStated },
       pillarData: {
         employees: payload.employees,
         shareholders: payload.shareholders,

@@ -242,46 +242,83 @@ export function supplierSumTmps(suppliers: { spend?: number }[]): number {
 /**
  * Where the TMPS being scored came from.
  *  - `manual`: the user pinned it on the Financials page.
- *  - `stated`: a document states it (the gathering workbook's labelled
- *    post-exclusion total) and the workbook sync persisted it.
- *  - `held`: documents stated it but it could not be used (two stated totals
- *    disagree, or the stated cell held #REF!); nothing is scored until the user
- *    settles it.
- *  - `supplier_spend_sum`: nobody stated one, so it is the schedule's sum —
- *    labelled as computed, never shown as the client's figure.
+ *  - `stated`: the figure the documents state (the gathering workbook's
+ *    labelled post-exclusion total), scored because the user switched this
+ *    client to it. Never without that choice.
+ *  - `held`: kept for records written before the supplier-sum rule; the
+ *    resolver no longer returns it (a held figure scores the supplier sum).
+ *  - `supplier_spend_sum`: the supplier schedule's sum — the default.
  */
 export type TmpsSource = 'manual' | 'stated' | 'held' | 'supplier_spend_sum';
 
 /**
- * The TMPS to score, and where it came from.
+ * Which TMPS the user chose for a client. Only an explicit choice, persisted
+ * on the client (`tmpsChoice`), ever makes it 'stated'; anything else — no
+ * choice, a label the workbook sync wrote — is the supplier sum.
+ */
+export type TmpsChoice = 'supplier_sum' | 'stated';
+
+/** The persisted value as a choice: only the exact string 'stated' is one. */
+export function tmpsChoiceOf(value: unknown): TmpsChoice {
+  return value === 'stated' ? 'stated' : 'supplier_sum';
+}
+
+export interface ResolvedTmps {
+  /** The TMPS that is scored. */
+  tmps: number;
+  source: TmpsSource;
+  /** The TMPS the documents state, when they state one — shown beside the sum. */
+  stated: number | null;
+  /** Why the documents' TMPS could not be read (two figures disagree, #REF!), or null. */
+  held: string | null;
+  /** The supplier schedule's sum. */
+  supplierSum: number;
+  /** The stated figure and the supplier sum differ by more than R1: a flagged difference. */
+  differs: boolean;
+  /**
+   * Whether the stated figure may be chosen: it is stated, and it is not
+   * below the suppliers the same company lists (the sum is TMPS's floor).
+   */
+  canUseStated: boolean;
+}
+
+/**
+ * The TMPS to score, and where it came from. Decided 11 Oct 2026: the supplier
+ * sum by default.
  *
  * TMPS is the denominator of every Preferential Procurement line. The live
- * store used to recompute it as the supplier-schedule sum on every load and
- * every supplier edit unless the user had pinned it — so a TMPS the client's
- * own workbook STATED (and the sync had persisted, labelled "stated") never
- * reached the score. The schedule sum is the floor of TMPS, not TMPS: scored
- * against it, every supplier the schedule lists becomes a larger share of a
- * smaller total. A stated figure now wins; a held one scores nothing until it
- * is settled; the sum is used only when nothing was stated, and says so.
+ * score has always used the supplier schedule's sum, and that stays the
+ * default: a TMPS the documents state is shown beside it as a flagged
+ * difference, and it is scored ONLY when the user explicitly switches that
+ * client to it (`tmpsChoice: 'stated'`, persisted on the client). The
+ * workbook sync's own label ("stated") is provenance, not a choice — a client
+ * whose workbook states a TMPS keeps exactly the score it had.
+ *
+ * A stated figure below the schedule sum is never scored, even when chosen:
+ * the sum is TMPS's floor, and a stated total below it (a subtotal, an R'000
+ * figure, one month) tripped the misplacement guard and scored Preferential
+ * Procurement 0. A stated figure held open (contested or #REF!) is reported;
+ * the score stays on the supplier sum.
  */
 export function resolveTmps(input: {
   persistedTmps: number;
   manualOverride: boolean;
+  /** The workbook sync's provenance label: 'stated' means persistedTmps is the documents' figure. */
   tmpsSource?: unknown;
   tmpsHeld?: unknown;
+  /** The user's explicit, persisted choice (`tmpsChoice` on the client). */
+  tmpsChoice?: unknown;
   suppliers: { spend?: number }[];
-}): { tmps: number; source: TmpsSource } {
-  if (input.manualOverride) return { tmps: input.persistedTmps || 0, source: 'manual' };
-  // The schedule sum is TMPS's floor: a stated total BELOW the suppliers the
-  // same company lists cannot be its TMPS (a subtotal, an R'000 figure, one
-  // month). Scored, it tripped the misplacement guard and Preferential
-  // Procurement fell to 0, so it is not used; the claim-vs-evidence TMPS
-  // check reports the disagreement.
-  if (input.tmpsSource === 'stated' && input.persistedTmps > 0) {
-    const floor = supplierSumTmps(input.suppliers);
-    if (input.persistedTmps >= floor) return { tmps: input.persistedTmps, source: 'stated' };
-    return { tmps: floor, source: 'supplier_spend_sum' };
+}): ResolvedTmps {
+  const supplierSum = supplierSumTmps(input.suppliers);
+  const stated = input.tmpsSource === 'stated' && input.persistedTmps > 0 ? input.persistedTmps : null;
+  const held = !stated && typeof input.tmpsHeld === 'string' && input.tmpsHeld ? input.tmpsHeld : null;
+  const differs = stated !== null && Math.abs(stated - supplierSum) > 1;
+  const canUseStated = stated !== null && stated >= supplierSum;
+  const facts = { stated, held, supplierSum, differs, canUseStated };
+  if (input.manualOverride) return { tmps: input.persistedTmps || 0, source: 'manual', ...facts };
+  if (tmpsChoiceOf(input.tmpsChoice) === 'stated' && canUseStated) {
+    return { tmps: stated!, source: 'stated', ...facts };
   }
-  if (input.tmpsHeld) return { tmps: 0, source: 'held' };
-  return { tmps: supplierSumTmps(input.suppliers), source: 'supplier_spend_sum' };
+  return { tmps: supplierSum, source: 'supplier_spend_sum', ...facts };
 }

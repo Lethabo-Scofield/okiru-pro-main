@@ -47,13 +47,19 @@ export interface UCSReadyPayload {
   crossPillarValues: Map<string, number>;
   dataQuality: DataQualityReport;
   /**
-   * Where financials.tmps came from: stated by a document, or the supplier
-   * schedule total standing in because none was. Null when there is none.
+   * Where financials.tmps came from: the supplier schedule's sum (the
+   * default), or the figure the documents state — when the caller passed the
+   * client's explicit choice of it, or no supplier is listed. Null when there is none.
    */
   tmpsSource: TmpsSource | null;
-  /** Why TMPS is blank on purpose (a stated cell held #REF!), or null. */
+  /** The stated TMPS cell could not be read (#REF!), or null. */
   tmpsHeld: TmpsHold | null;
+  /** The TMPS the documents state, shown beside the sum; null when none is stated. */
+  tmpsStated: number | null;
 }
+
+/** The client's explicit choice of TMPS denominator; anything else is the supplier sum. */
+export type TmpsChoice = 'supplier_sum' | 'stated';
 
 export interface DataQualityReport {
   overall: 'good' | 'partial' | 'poor';
@@ -315,8 +321,9 @@ export type TmpsHold = 'withdrawn';
 
 function extractFinancialsFromEntities(
   entities: ExtractionOutput['entities'],
-  tables: ExtractionOutput['tables']
-): { financials: FinancialsInput; tmpsSource: TmpsSource | null; tmpsHeld: TmpsHold | null } {
+  tables: ExtractionOutput['tables'],
+  tmpsChoice: TmpsChoice = 'supplier_sum',
+): { financials: FinancialsInput; tmpsSource: TmpsSource | null; tmpsHeld: TmpsHold | null; tmpsStated: number | null } {
   /** A TMPS was stated but its cell held a spreadsheet error. */
   let tmpsWithdrawn = false;
   const financials: FinancialsInput = {
@@ -407,29 +414,27 @@ function extractFinancialsFromEntities(
     }
   }
 
-  // TMPS from supplier spend — LAST, after every stated source has had its
-  // say (it used to run before the financials table was read, so a TMPS the
-  // table stated lost to the computed sum), and only when no TMPS was stated
-  // at all. A stated cell that held #REF! is a hole for the client to fill:
-  // summing the suppliers there would present a computed figure as if it
-  // were the one the workbook states. Either way the source is reported.
-  let tmpsSource: TmpsSource | null = financials.tmps > 0 ? 'stated' : null;
-  let tmpsHeld: TmpsHold | null = null;
-  if (financials.tmps === 0) {
-    if (tmpsWithdrawn) {
-      tmpsHeld = 'withdrawn';
-    } else if (tables.suppliers?.length) {
-      const totalSupplierSpend = tables.suppliers.reduce(
-        (sum: number, s: any) => sum + normalizeNumber(s.spend || s.amount || 0), 0
-      );
-      if (totalSupplierSpend > 0) {
-        financials.tmps = totalSupplierSpend;
-        tmpsSource = 'supplier_spend_sum';
-      }
-    }
+  // TMPS — LAST, after every stated source has had its say. Decided 11 Oct
+  // 2026: the supplier schedule's sum by default (the same rule as the
+  // Toolkit store's resolveTmps). A TMPS the documents state is reported
+  // beside it (tmpsStated) and scored only when the caller passes the
+  // client's explicit choice of it — and never when it is below the
+  // suppliers listed (the sum is TMPS's floor). A stated cell that held
+  // #REF! is reported (tmpsHeld); the score stays on the sum. With no
+  // supplier listed there is no sum: a stated figure stands.
+  const tmpsStated = financials.tmps > 0 ? financials.tmps : null;
+  const tmpsHeld: TmpsHold | null = tmpsWithdrawn && tmpsStated === null ? 'withdrawn' : null;
+  const supplierSum = (tables.suppliers ?? []).reduce(
+    (sum: number, s: any) => sum + normalizeNumber(s.spend || s.amount || 0), 0
+  );
+  let tmpsSource: TmpsSource | null = tmpsStated !== null ? 'stated' : null;
+  const statedChosen = tmpsChoice === 'stated' && tmpsStated !== null && tmpsStated >= supplierSum;
+  if (supplierSum > 0 && !statedChosen) {
+    financials.tmps = supplierSum;
+    tmpsSource = 'supplier_spend_sum';
   }
 
-  return { financials, tmpsSource, tmpsHeld };
+  return { financials, tmpsSource, tmpsHeld, tmpsStated };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -735,7 +740,8 @@ async function aiRepairEmployeeDesignations(employees: EmployeeInput[]): Promise
  * - Generates a data quality report
  */
 export async function mapToUCSPayload(
-  extraction: ExtractionOutput
+  extraction: ExtractionOutput,
+  options: { tmpsChoice?: unknown } = {},
 ): Promise<UCSReadyPayload> {
   const { entities, tables } = extraction;
 
@@ -785,7 +791,11 @@ export async function mapToUCSPayload(
   employees = await aiRepairEmployeeDesignations(employees);
 
   // Extract and derive financials
-  const { financials, tmpsSource, tmpsHeld } = extractFinancialsFromEntities(entities, tables);
+  const { financials, tmpsSource, tmpsHeld, tmpsStated } = extractFinancialsFromEntities(
+    entities,
+    tables,
+    options.tmpsChoice === 'stated' ? 'stated' : 'supplier_sum',
+  );
 
   // Build entity values map from individual entities
   const entityValues: Record<string, { entityId: string; value: any; source: string; confidence: number }> = {};
@@ -837,7 +847,7 @@ export async function mapToUCSPayload(
   if ((financials as any).yearsHeld) crossPillarValues.set('yearsHeld', (financials as any).yearsHeld);
 
   // Build data quality report
-  const dataQuality = buildQualityReport(employees, shareholders, suppliers, contributions, trainingPrograms, financials, tmpsSource, tmpsHeld);
+  const dataQuality = buildQualityReport(employees, shareholders, suppliers, contributions, trainingPrograms, financials, tmpsSource, tmpsHeld, tmpsStated);
 
   return {
     entityValues,
@@ -851,6 +861,7 @@ export async function mapToUCSPayload(
     dataQuality,
     tmpsSource,
     tmpsHeld,
+    tmpsStated,
   };
 }
 
@@ -867,6 +878,7 @@ function buildQualityReport(
   financials: FinancialsInput,
   tmpsSource: TmpsSource | null = financials.tmps > 0 ? 'stated' : null,
   tmpsHeld: TmpsHold | null = null,
+  tmpsStated: number | null = null,
 ): DataQualityReport {
   const pillarsWithData: string[] = [];
   const pillarsWithoutData: string[] = [];
@@ -909,6 +921,14 @@ function buildQualityReport(
   }
   if (tmpsSource === 'supplier_spend_sum') {
     derivedValues.push('TMPS (derived from total supplier spend)');
+    if (tmpsStated !== null && Math.abs(tmpsStated - financials.tmps) > 1) {
+      warnings.push(
+        `TMPS: the documents state ${Math.round(tmpsStated)}; the supplier schedule sums to ${Math.round(financials.tmps)}. The score uses the supplier sum unless the client is switched to the stated figure.`,
+      );
+    }
+    if (tmpsHeld === 'withdrawn') {
+      warnings.push('TMPS: the stated cell holds a spreadsheet error; the score uses the supplier sum.');
+    }
   } else if (!financials.tmps) {
     missingCritical.push(
       tmpsHeld === 'withdrawn'

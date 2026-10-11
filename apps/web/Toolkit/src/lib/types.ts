@@ -370,11 +370,20 @@ export interface ProcurementData {
   tmps: number;
   tmpsManualOverride?: boolean;
   /**
-   * Where `tmps` came from: pinned by the user, stated by a document, held open
-   * (stated but unusable — nothing scored until settled), or the supplier
-   * sum. See resolveTmps in calculators/shared.
+   * Where `tmps` came from: pinned by the user, the documents' figure the user
+   * switched this client to, or the supplier sum (the default). See
+   * resolveTmps in calculators/shared.
    */
   tmpsSource?: 'manual' | 'stated' | 'held' | 'supplier_spend_sum';
+  /**
+   * The user's explicit choice of denominator, persisted on the client.
+   * Absent means the supplier sum.
+   */
+  tmpsChoice?: 'supplier_sum' | 'stated';
+  /** The TMPS the documents state, when they state one: shown beside the sum. */
+  statedTmps?: number | null;
+  /** Why the documents' TMPS could not be read (contested / withdrawn), or null. */
+  statedTmpsHeld?: string | null;
   suppliers: Supplier[];
   // Note: graduation/jobs bonuses removed - these are ED only (Issue 3)
 }

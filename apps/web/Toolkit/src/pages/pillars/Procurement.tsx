@@ -5,6 +5,7 @@ import { PillarDuplicateNotice } from "@toolkit/components/bulk/PillarDuplicateN
 import { BULK_IMPORT_SPECS } from "@toolkit/components/bulk/bulkImportSpecs";
 import { useFieldErrors } from "@toolkit/hooks/useFieldErrors";
 import { CalculatorConfigGate } from "@toolkit/components/layout/CalculatorConfigGate";
+import { TmpsChoiceNote } from "@toolkit/components/scorecard/TmpsChoiceNote";
 import { calculateProcurementScore } from "@toolkit/lib/calculators/procurement";
 import { round2, supplierSumTmps } from "@toolkit/lib/calculators/shared";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@toolkit/components/ui/card";
@@ -109,7 +110,7 @@ function certificateToSupplierForm(
 // - Designated Group: 2 pts at 2%
 
 export default function Procurement() {
-  const { procurement, client, addSupplier, updateSupplier, removeSupplier, updateTMPS, calculatorConfig } = useBbeeStore();
+  const { procurement, client, addSupplier, updateSupplier, removeSupplier, updateTMPS, setTmpsChoice, calculatorConfig } = useBbeeStore();
   const { tmps, suppliers } = procurement;
   const { toast } = useToast();
 
@@ -599,15 +600,11 @@ export default function Procurement() {
                 <div className="text-3xl font-bold font-heading">
                   {formatRand(tmps)}
                 </div>
-                {/* Where the denominator came from — a computed sum is never
-                    shown as if it were the client's own figure. */}
-                <div className="text-[11px] text-muted-foreground" data-testid="text-tmps-source">
-                  {procurement.tmpsSource === 'stated'
-                    ? `As stated in your documents. The supplier schedule sums to ${formatRand(calculatedTmps)}.`
-                    : procurement.tmpsSource === 'held'
-                      ? 'Your documents state TMPS but it could not be used (two figures disagree, or the cell holds an error). Nothing is scored until you enter it.'
-                      : 'Sum of supplier spend — no document states TMPS.'}
-                </div>
+                {/* Where the denominator came from: the supplier sum by
+                    default; a TMPS the documents state beside it, used only
+                    when the user switches this client to it. */}
+                <TmpsChoiceNote procurement={procurement} onChoose={setTmpsChoice} />
+
               </div>
             )}
             <div className="flex justify-between items-center mt-4 text-sm border-t pt-2">

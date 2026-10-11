@@ -90,6 +90,8 @@ import {
   normalizeDesignationForScoring,
   supplierSumTmps,
   resolveTmps,
+  tmpsChoiceOf,
+  type TmpsChoice,
 } from './calculators/shared';
 import {
   applyOverlayToPillars,
@@ -99,14 +101,29 @@ import {
 } from '../../../../api/pipeline/verification/index.js';
 
 /**
- * TMPS after a supplier is added, changed or removed: a pinned, stated or held
- * TMPS stays exactly as it is — only a TMPS that IS the supplier sum follows
- * the schedule.
+ * The TMPS this procurement state scores, from what it holds: a pinned value
+ * stays exactly as entered; otherwise the supplier sum, unless the user
+ * switched the client to the stated figure (resolveTmps).
+ */
+export function resolveProcurementTmps(procurement: ProcurementData, suppliers: ProcurementData['suppliers'] = procurement.suppliers) {
+  return resolveTmps({
+    persistedTmps: procurement.tmpsManualOverride ? procurement.tmps : (procurement.statedTmps ?? 0),
+    manualOverride: procurement.tmpsManualOverride === true,
+    tmpsSource: procurement.statedTmps ? 'stated' : null,
+    tmpsHeld: procurement.statedTmpsHeld ?? null,
+    tmpsChoice: procurement.tmpsChoice,
+    suppliers,
+  });
+}
+
+/**
+ * TMPS after a supplier is added, changed or removed: a pinned TMPS stays
+ * exactly as it is; the supplier sum follows the schedule; a stated figure the
+ * user chose stays, unless the schedule now lists more than it (the floor).
  */
 export function tmpsAfterSupplierEdit(procurement: ProcurementData, suppliers: ProcurementData['suppliers']): number {
   if (procurement.tmpsManualOverride) return procurement.tmps;
-  if (procurement.tmpsSource === 'stated' || procurement.tmpsSource === 'held') return procurement.tmps;
-  return supplierSumTmps(suppliers);
+  return resolveProcurementTmps(procurement, suppliers).tmps;
 }
 
 export interface ScenarioSnapshot {
@@ -422,6 +439,8 @@ export interface BbeeState extends PillarState {
   
   updateFinancials: (revenue: number, npat: number, leviableAmount: number, industryNorm?: number) => Promise<void>;
   updateTMPS: (tmps: number, manualOverride?: boolean) => void;
+  /** Switch the client between the supplier sum (default) and the TMPS its documents state. Persisted. */
+  setTmpsChoice: (choice: TmpsChoice) => void;
   updateSettings: (eapProvince: string, industrySector: string, measurementPeriodStart?: string, measurementPeriodEnd?: string) => Promise<void>;
   /** Update the industry VERTICAL (Manufacturing, Retail, etc.) used for industry-norm lookup. Distinct from sectorCode/industrySector which drive the scorecard. */
   updateIndustry: (industry: string) => Promise<void>;
@@ -1548,17 +1567,27 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
        * deliberate zero.
        */
       procurementState.tmpsManualOverride = data.procurement?.tmpsManualOverride === true;
-      // A TMPS a document STATED (persisted by the workbook sync, labelled
-      // "stated") is the denominator; the schedule sum is only its floor. And a
-      // stated TMPS held open (contested / #REF!) scores nothing until settled
-      // — the sum here would score exactly what the upload said it would not.
+      // The supplier schedule's sum, by default (decided 11 Oct 2026) — the
+      // score every live client already had. A TMPS a document STATED
+      // (persisted by the workbook sync, labelled "stated") is kept beside it
+      // as a flagged difference, and is scored only when the user switched
+      // this client to it (`tmpsChoice: 'stated'` on the client record). The
+      // sync's label alone never changes the score.
+      // The stated figure itself: the sync keeps it apart (financials.statedTmps)
+      // from the procurement record's TMPS, which a TMPS edit overwrites.
+      // Records synced before that fall back to the persisted TMPS.
+      const statedFromSync = Number(finExtras.statedTmps) > 0 ? Number(finExtras.statedTmps) : null;
       const resolvedTmps = resolveTmps({
-        persistedTmps: procurementState.tmps,
+        persistedTmps: procurementState.tmpsManualOverride ? procurementState.tmps : (statedFromSync ?? procurementState.tmps),
         manualOverride: procurementState.tmpsManualOverride,
-        tmpsSource: finExtras.tmpsSource,
+        tmpsSource: statedFromSync ? 'stated' : finExtras.tmpsSource,
         tmpsHeld: finExtras.tmpsHeld,
+        tmpsChoice: (data.client as { tmpsChoice?: unknown }).tmpsChoice,
         suppliers: procurementState.suppliers,
       });
+      procurementState.statedTmps = resolvedTmps.stated;
+      procurementState.statedTmpsHeld = resolvedTmps.held;
+      procurementState.tmpsChoice = tmpsChoiceOf((data.client as { tmpsChoice?: unknown }).tmpsChoice);
       procurementState.tmps = resolvedTmps.tmps;
       procurementState.tmpsSource = resolvedTmps.source;
 
@@ -2176,18 +2205,36 @@ export const useBbeeStore = create<BbeeState>((set, get) => ({
   updateTMPS: (tmps, manualOverride = true) => {
     // manualOverride=true pins TMPS to the entered value; false (calculated mode)
     // clears the pin so supplier mutations keep TMPS in sync (see addSupplier).
-    set((state) => ({
-      procurement: {
-        ...state.procurement,
-        tmps,
-        tmpsManualOverride: manualOverride,
-        tmpsSource: manualOverride ? 'manual' : 'supplier_spend_sum',
-      },
-    }));
+    set((state) => {
+      if (manualOverride) {
+        return { procurement: { ...state.procurement, tmps, tmpsManualOverride: true, tmpsSource: 'manual' as const } };
+      }
+      // Calculated mode: the supplier sum, or the stated figure the user chose.
+      const resolved = resolveProcurementTmps({ ...state.procurement, tmpsManualOverride: false });
+      return { procurement: { ...state.procurement, tmps: resolved.tmps, tmpsManualOverride: false, tmpsSource: resolved.source } };
+    });
     get()._recalculateAll();
     const state = get();
     if (state.activeClientId) {
-      get()._persistSave(() => api.updateProcurement(state.activeClientId!, tmps));
+      const saved = state.procurement.tmps;
+      get()._persistSave(() => api.updateProcurement(state.activeClientId!, saved));
+    }
+  },
+
+  setTmpsChoice: (choice) => {
+    // The user's explicit switch between the supplier sum and the TMPS the
+    // documents state. Persisted on the client, so it survives a reload and a
+    // workbook re-sync; nothing else ever sets it.
+    set((state) => {
+      const procurement = { ...state.procurement, tmpsChoice: choice };
+      if (procurement.tmpsManualOverride) return { procurement };
+      const resolved = resolveProcurementTmps(procurement);
+      return { procurement: { ...procurement, tmps: resolved.tmps, tmpsSource: resolved.source } };
+    });
+    get()._recalculateAll();
+    const state = get();
+    if (state.activeClientId) {
+      get()._persistSave(() => api.updateClient(state.activeClientId!, { tmpsChoice: choice }));
     }
   },
   

@@ -654,7 +654,13 @@ export function checkSupplierSpend(ctx: CheckContext): VerificationCheck[] {
   return out;
 }
 
-// ── 11. TMPS between the schedule sum and the AFS cost base ────────────────
+// ── 11. TMPS: the stated figure beside the supplier sum the score uses ─────
+/**
+ * Decided 11 Oct 2026: Preferential Procurement is scored against the supplier
+ * schedule's sum by default. A TMPS the documents state is reported here as a
+ * flagged difference when it is not the sum; it is scored only when the user
+ * switches the client to it. Flag-only: no total changes because of this check.
+ */
 export function checkTmps(ctx: CheckContext): VerificationCheck[] {
   const meta = ctx.sections['financial-information']?.meta ?? {};
   const tmps = amountOf(meta.tmps);
@@ -674,15 +680,20 @@ export function checkTmps(ctx: CheckContext): VerificationCheck[] {
     }
   }
   const belowFloor = floor > 0 && tmps < floor - 1;
+  const differs = floor > 0 && Math.abs(tmps - floor) > 1;
   const aboveCeiling = ceiling !== null && tmps > ceiling + 1;
+  const ceilingNote = aboveCeiling ? ` It is also more than the financial statements' cost base (${money(ceiling!)}).` : '';
   const statement = belowFloor
-    ? `TMPS (${money(tmps)}) is smaller than the suppliers listed (${money(floor)}); one of them is wrong.`
-    : aboveCeiling
-      ? `TMPS (${money(tmps)}) is more than the financial statements' cost base (${money(ceiling!)}).`
-      : `TMPS (${money(tmps)}) sits between the supplier schedule (${money(floor)})${ceiling !== null ? ` and the financial statements' cost base (${money(ceiling)})` : ''}.`;
+    ? `The documents state TMPS of ${money(tmps)}, less than the suppliers listed (${money(floor)}), so it cannot be the TMPS. Preferential Procurement is scored against the supplier sum, ${money(floor)}.`
+    : differs
+      ? `The documents state TMPS of ${money(tmps)}; the supplier schedule sums to ${money(floor)}. Preferential Procurement is scored against the supplier sum unless you switch this client to the stated figure.${ceilingNote}`
+      : aboveCeiling
+        ? `TMPS (${money(tmps)}) is more than the financial statements' cost base (${money(ceiling!)}).`
+        : `TMPS (${money(tmps)}) agrees with the supplier schedule${ceiling !== null ? ` and is within the financial statements' cost base (${money(ceiling)})` : ''}.`;
+  const flagged = differs || aboveCeiling;
   return [check('procurement.tmps', 'tmps', {
-    section: 'financial-information', subject: 'TMPS', status: belowFloor || aboveCeiling ? 'flag' : 'pass', rule: belowFloor || aboveCeiling ? 'flag-only' : 'none',
-    tolerance: 'schedule sum <= TMPS <= AFS cost base less exclusions',
+    section: 'financial-information', subject: 'TMPS', status: flagged ? 'flag' : 'pass', rule: flagged ? 'flag-only' : 'none',
+    tolerance: 'stated TMPS = supplier schedule sum (within R1) <= AFS cost base less exclusions',
     claim: { column: 'tmps', value: tmps }, evidence, statement,
   })];
 }

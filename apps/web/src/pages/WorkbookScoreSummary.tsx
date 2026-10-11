@@ -6,6 +6,7 @@ import { API_BASE } from "@toolkit/lib/config";
 import { ScorecardPillarList } from "@/components/scorecard/ScorecardPillarSummary";
 import { ReconciliationReview } from "@/components/scorecard/ReconciliationReview";
 import { VerificationPanel } from "@/components/scorecard/VerificationPanel";
+import { TmpsChoiceNote } from "@toolkit/components/scorecard/TmpsChoiceNote";
 import { verificationTotals } from "@/lib/verification/verificationTotals";
 import type { VerificationReport } from "../../../api/pipeline/verification/index.js";
 import type { ReconcileResult } from "@/lib/reconciliation/types";
@@ -110,7 +111,7 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
       cancelled = true;
     };
   }, [provisional, companyId]);
-  const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId } = useBbeeStore();
+  const { scorecard, client, calculatorConfig, isLoaded, loadClientData, activeClientId, procurement } = useBbeeStore();
   const [refreshing, setRefreshing] = useState(true);
 
   useEffect(() => {
@@ -349,6 +350,13 @@ export function WorkbookScoreSummary({ companyId, companyName, provisional = fal
               <p className="text-[11px] font-semibold text-[color:var(--muted)] uppercase tracking-widest">Pillar scores</p>
             </div>
             <ScorecardPillarList pillars={pillarRows} />
+            {/* A TMPS the documents state that differs from the supplier sum
+                the score uses: flagged here, switched on the Procurement page. */}
+            <TmpsChoiceNote
+              procurement={procurement}
+              onlyWhenFlagged
+              className="px-5 pb-4 pt-1 text-[12px]"
+            />
           </div>
 
           {/* Reconciliation review — what we did with the documents, triaged by

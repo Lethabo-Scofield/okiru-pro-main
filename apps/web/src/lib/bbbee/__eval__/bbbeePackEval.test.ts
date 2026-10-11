@@ -16,8 +16,9 @@
  * takes from the workbook (asserted against the key, never given), the merged
  * sections stamped with the form → reconcileEntity → projectWorkbookToClient →
  * claim-vs-evidence verification (CLAIMED scored, EVIDENCED reported) → the
- * sector calculators, with TMPS as the Toolkit store scores it (resolveTmps: a
- * stated figure, else the supplier schedule's sum, both reported) → best four
+ * sector calculators, with TMPS as the Toolkit store scores it (resolveTmps: the
+ * supplier schedule's sum, the stated figure reported beside it; a new case
+ * has no explicit choice of the stated figure) → best four
  * of seven. Only Transport QSE is wired.
  *
  * - Writes e2e.json beside the case.
@@ -139,8 +140,9 @@ describe.skipIf(!CASE || !KEY)("B-BBEE pack end-to-end gate", () => {
       const finMeta = ((scored["financial-information"] as { meta?: Record<string, unknown> } | undefined)?.meta ?? {});
       const npat = Number(fin.npat ?? finMeta.npat ?? 0);
       const statedTmps = Number(fin.tmps ?? finMeta.tmps ?? 0);
-      // TMPS as the Toolkit store scores it (resolveTmps): a figure the
-      // documents state wins; the schedule's sum only when none is stated.
+      // TMPS as the Toolkit store scores it (resolveTmps): the supplier sum by
+      // default (decided 11 Oct 2026); the stated figure only on the client's
+      // explicit choice, which a new case does not have.
       const resolved = resolveTmps({
         persistedTmps: statedTmps,
         manualOverride: false,

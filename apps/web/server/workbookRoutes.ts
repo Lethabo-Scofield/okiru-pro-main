@@ -1829,6 +1829,10 @@ export function registerWorkbookRoutes(app: Express): void {
           // stated TMPS that replaced it.
           skillsExtra.tmpsSource = f.tmpsSource ?? null;
           skillsExtra.tmpsHeld = f.tmpsHeld ?? null;
+          // The TMPS the documents state, kept apart from client.tmps (which a
+          // TMPS edit in the Toolkit overwrites): the score page shows it
+          // beside the supplier sum, and scores it only when the user chose it.
+          skillsExtra.statedTmps = f.tmpsSource === "stated" && f.tmps > 0 ? f.tmps : null;
           if (f.deemedNpatUsed != null) skillsExtra.deemedNpatUsed = f.deemedNpatUsed;
           if (f.deemedNpat != null) skillsExtra.deemedNpat = f.deemedNpat;
           if (f.effectiveNpat != null) skillsExtra.effectiveNpat = f.effectiveNpat;

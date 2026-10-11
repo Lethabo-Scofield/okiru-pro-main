@@ -665,6 +665,13 @@ const clientSchema = new Schema({
   npat: { type: Number, default: 0 },
   leviableAmount: { type: Number, default: 0 },
   tmps: { type: Number, default: 0 },
+  /**
+   * The user's explicit choice of TMPS denominator: 'stated' (the figure the
+   * documents state) or 'supplier_sum'. Null — every client until someone
+   * switches — scores the supplier schedule's sum. Only the Toolkit's switch
+   * writes it; the workbook sync never does.
+   */
+  tmpsChoice: { type: String, default: null },
   companyValue: { type: Number, default: 0 },
   outstandingDebt: { type: Number, default: 0 },
   organizationId: { type: String, default: null, index: true },
