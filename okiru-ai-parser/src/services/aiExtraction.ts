@@ -322,10 +322,10 @@ export function wrongTypeStatement(
       .flatMap(typeWords)
       .filter((word) => !TYPE_QUALIFIERS.has(word)),
   );
-  // The first word that names a kind of document: "a spreadsheet report of
-  // fuel" is named by "fuel", never by a word any document type could carry.
-  const firstTypeWord = (text: string | undefined) =>
-    text ? typeWords(text).find((word) => !TYPE_QUALIFIERS.has(word) && !GENERIC_DOCUMENT_WORDS.has(word)) : undefined;
+  // The words that name a kind of document: "a spreadsheet report of fuel" is
+  // named by "fuel", never by a word any document type could carry.
+  const typeNamingWords = (text: string | undefined) =>
+    text ? typeWords(text).filter((word) => !TYPE_QUALIFIERS.has(word) && !GENERIC_DOCUMENT_WORDS.has(word) && !/^\d/.test(word)) : [];
   for (const exception of exceptions) {
     const named = exception.trim().match(WRONG_TYPE_STATEMENT)?.[1];
     const first = named ? typeWords(named)[0] : undefined;
@@ -333,10 +333,12 @@ export function wrongTypeStatement(
     // What the document IS, when it says so: "Document is a code of conduct
     // (not an incident register)" names a part of a spec that covers the code,
     // the policy AND the register. A document that is this type, lacking one
-    // part of it, keeps its values.
+    // part of it, keeps its values. Any naming word counts, not only the
+    // first: "a Stage 1 audit report, not a certificate" is named by "audit",
+    // which the skill reading it covers (an ISO skill for an audit OR a
+    // certificate), whatever qualifies it ("Stage 1").
     const is = /\b(?:is|appears to be|looks like)\s+(?:a|an|the)?\s*(.*?)\s*[,(;:–-]*\s*\bnot\s+(?:a|an|the)\b/i.exec(exception)?.[1];
-    const isFirst = firstTypeWord(is);
-    if (isFirst && identity.has(isFirst)) continue;
+    if (typeNamingWords(is).some((word) => identity.has(word))) continue;
     return exception.trim();
   }
   return null;
