@@ -248,6 +248,8 @@ export function EsgDocumentUploadStart({
   const [files, setFiles] = useState<File[]>([]);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  /** "Show it": the review scrolls to and selects the first document that could not be read. */
+  const [reviewFocus, setReviewFocus] = useState<{ filename: string; key: number } | null>(null);
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   /** What the server refunded for the run that just ended, in its own words. */
   const [refundNotice, setRefundNotice] = useState<string | null>(null);
@@ -1227,12 +1229,11 @@ export function EsgDocumentUploadStart({
       if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f);
     }
     if (next.length > MAX_UPLOAD_FILES) {
-      quoteRequestRef.current += 1;
+      // Nothing was added, so the staged batch and its price stand: the read
+      // bar must not blame pricing for what is the file limit.
       setParseError(
         `You can upload up to ${MAX_UPLOAD_FILES} documents at once. Remove ${next.length - MAX_UPLOAD_FILES} and try again.`,
       );
-      setQuote(null);
-      setQuoting(false);
       return;
     }
     setFiles(next);
@@ -1706,8 +1707,15 @@ export function EsgDocumentUploadStart({
                 <p className="text-[12px] leading-5 text-red-200" role="alert" data-testid="esg-failed-documents">
                   {failedDocuments.length} document{failedDocuments.length === 1 ? "" : "s"} couldn&apos;t be read (
                   {failedDocuments.slice(0, 3).join(", ")}
-                  {failedDocuments.length > 3 ? ` +${failedDocuments.length - 3} more` : ""}). See{" "}
-                  {failedDocuments.length === 1 ? "it" : "them"} under Not read below.
+                  {failedDocuments.length > 3 ? ` +${failedDocuments.length - 3} more` : ""}).{" "}
+                  <button
+                    type="button"
+                    onClick={() => setReviewFocus((prior) => ({ filename: failedDocuments[0], key: (prior?.key ?? 0) + 1 }))}
+                    className="rounded font-medium text-white underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                    data-testid="esg-show-failed-document"
+                  >
+                    {failedDocuments.length === 1 ? "Show it" : "Show the first one"}
+                  </button>
                 </p>
               ) : null
             }
@@ -1731,7 +1739,7 @@ export function EsgDocumentUploadStart({
                   {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <ArrowRight className="h-4 w-4" aria-hidden />}
                   Continue
                 </button>
-                <p className="text-[11px] leading-5 text-[color:var(--muted)] sm:text-right">
+                <p className="text-[11px] leading-5 text-[color:var(--body)] sm:text-right" data-testid="esg-continue-helper">
                   {willFill ? "Opens a pre-filled workbook" : "Nothing was filled in. You'll complete the workbook yourself"}
                 </p>
               </div>
@@ -1751,6 +1759,7 @@ export function EsgDocumentUploadStart({
             documentIdFor={documentIdFor}
             onAddDocuments={() => inputRef.current?.click()}
             onAnswer={(_filename, question, answer) => answerPlacement(question.id, answer)}
+            focus={reviewFocus}
           />
         </div>
       )}

@@ -9,7 +9,7 @@
  * Reviewing is never required. Building stays one click away outside this
  * panel; whatever is left here stays with the company's documents.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, Check, CircleSlash, Plus, Upload } from "lucide-react";
 import { DocumentPreview } from "./DocumentPreview";
 import { EditableValue } from "./EditableValue";
@@ -57,6 +57,11 @@ export interface DocumentReviewProps {
    * a placement back with `null`. Absent where nothing can be placed from here.
    */
   onAnswer?: (filename: string, question: ReviewQuestion, answer: Record<string, string> | null) => void;
+  /**
+   * Bring one document into view and select it ("show me the one that failed").
+   * A new `key` asks again for the same document.
+   */
+  focus?: { filename: string; key: number } | null;
 }
 
 /**
@@ -135,8 +140,15 @@ export function DocumentReview({
   needsDetail = [],
   onEditValue,
   onAnswer,
+  focus = null,
 }: DocumentReviewProps) {
   const [selected, setSelected] = useState<string | null>(documents[0]?.filename ?? null);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!focus) return;
+    setSelected(focus.filename);
+    sectionRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+  }, [focus?.filename, focus?.key]); // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => reviewCounts(documents), [documents]);
   const groups = useMemo(
     () => GROUP_ORDER.map((state) => ({ state, docs: documents.filter((d) => d.state === state) })).filter((g) => g.docs.length > 0),
@@ -153,7 +165,7 @@ export function DocumentReview({
   const unplacedOther = doc?.unplaced.filter((v) => !v.ask && !v.evidence) ?? [];
 
   return (
-    <section className="mt-4" data-testid="document-review" aria-label="Check each document">
+    <section ref={sectionRef} className="mt-4 scroll-mt-4" data-testid="document-review" aria-label="Check each document">
       <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="min-w-0">
           <h4 className="text-[15px] font-semibold text-white">Check each document</h4>

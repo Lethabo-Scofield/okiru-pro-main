@@ -1603,10 +1603,10 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
       if (!next.some((x) => x.name === f.name && x.size === f.size)) next.push(f);
     }
     if (next.length > MAX_UPLOAD_FILES) {
-      quoteRequestRef.current += 1;
+      // Nothing was added, so the staged batch and its price stand. Wiping the
+      // quote here made the read bar say "we couldn't work out the cost" when
+      // the real reason was the file limit, said only in a second line.
       setParseError(`You can upload up to ${MAX_UPLOAD_FILES} documents at once. Remove ${next.length - MAX_UPLOAD_FILES} and try again.`);
-      setQuote(null);
-      setQuoting(false);
       return;
     }
     setFiles(next);

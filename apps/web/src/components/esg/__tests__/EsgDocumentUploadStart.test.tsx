@@ -476,6 +476,9 @@ describe("EsgDocumentUploadStart — the money-and-trust path", () => {
     expect(screen.getByTestId("esg-extraction-summary")).toHaveTextContent("0 figures ready for your workbook · nothing could be read");
     // The failed file is said once on the summary, and listed in the review's Not read group.
     expect(screen.getByTestId("esg-extraction-summary")).toContainElement(screen.getByTestId("esg-failed-documents"));
+    // "Show it" takes the user to that document in the review, selected.
+    await user.click(screen.getByTestId("esg-show-failed-document"));
+    expect(screen.getByTestId("review-doc-city-power-oct.pdf")).toHaveAttribute("aria-selected", "true");
     // The paid read still leaves an archive: a failure that is not recorded is
     // a failure the user cannot show anyone.
     expect(calls).toContain("POST /api/parser-documents/doc-1/runs");

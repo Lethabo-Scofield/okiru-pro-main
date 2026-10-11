@@ -155,3 +155,23 @@ describe("a value waiting for an answer", () => {
     expect(onAnswer).toHaveBeenCalledWith("CPT JULY 2025.pdf", question, null);
   });
 });
+
+describe("DocumentReview — focus", () => {
+  it("selects the asked-for document and brings the review into view, again on a new key", () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const props = { documents: DOCS, fileFor: () => null, documentIdFor: () => null };
+    const { rerender } = render(<DocumentReview {...props} />);
+    expect(screen.getByTestId("review-doc-blurry-id.jpg")).toHaveAttribute("aria-selected", "true");
+    expect(scroll).not.toHaveBeenCalled();
+
+    rerender(<DocumentReview {...props} focus={{ filename: "register.xlsx", key: 1 }} />);
+    expect(screen.getByTestId("review-doc-register.xlsx")).toHaveAttribute("aria-selected", "true");
+    expect(scroll).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByTestId("review-doc-blurry-id.jpg"));
+    rerender(<DocumentReview {...props} focus={{ filename: "register.xlsx", key: 2 }} />);
+    expect(screen.getByTestId("review-doc-register.xlsx")).toHaveAttribute("aria-selected", "true");
+    expect(scroll).toHaveBeenCalledTimes(2);
+  });
+});

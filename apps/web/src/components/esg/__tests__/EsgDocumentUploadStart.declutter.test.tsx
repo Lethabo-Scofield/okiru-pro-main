@@ -62,6 +62,22 @@ describe("EsgDocumentUploadStart — decluttered", () => {
     expect(within(root).getAllByText("water-bill.pdf")).toHaveLength(1);
   });
 
+  it("names the document limit without blaming pricing for it", async () => {
+    const user = userEvent.setup();
+    render(<EsgDocumentUploadStart companyId="company-1" onComplete={vi.fn(async () => {})} />);
+    const input = screen.getByTestId("esg-docs-file-input");
+    await user.upload(input, [new File(["%PDF"], "water-bill.pdf", { type: "application/pdf" })]);
+    await screen.findByTestId("esg-read-bar");
+    const tooMany = Array.from({ length: 100 }, (_, i) => new File([`%PDF ${i}`], `extra-${i}.pdf`, { type: "application/pdf" }));
+    await user.upload(input, tooMany);
+
+    expect(await screen.findByTestId("esg-parse-error")).toHaveTextContent("You can upload up to 100 documents at once. Remove 1 and try again.");
+    // The staged bill's pricing is left alone (still working it out here), not turned into a failure.
+    expect(screen.getByTestId("esg-read-bar-price")).not.toHaveTextContent("couldn't work out the cost");
+    expect(screen.getAllByText("water-bill.pdf")).toHaveLength(1);
+    expect(screen.queryByText("extra-0.pdf")).not.toBeInTheDocument();
+  });
+
   it("names a file it cannot open instead of the picker refusing it", async () => {
     const user = userEvent.setup({ applyAccept: false });
     render(<EsgDocumentUploadStart companyId="company-1" onComplete={vi.fn(async () => {})} />);
