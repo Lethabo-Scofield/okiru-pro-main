@@ -623,18 +623,26 @@ function calcOwnership(shareholders: ShareholderInput[], financials: FinancialsI
     && blackHolders.every((sh) => typeof sh.outstandingDebt === 'number' && Number.isFinite(sh.outstandingDebt) && sh.outstandingDebt === 0);
   const fulfilment = fulfilmentMax > 0 && fulfilled ? fulfilmentMax : 0;
 
-  // ESOP / BBOS / co-op bonus: black economic interest held through scheme
-  // rows against the sector's target (Transport: 10%). Mirrors ownership.ts.
+  // ESOP / BBOS bonus, mirroring Toolkit ownership.ts: with an esopBonusTarget
+  // (the held-back TRANSPORT_QSE_CODES_OWNERSHIP_LINES) it is the black economic
+  // interest held through scheme or co-op rows against that target; without
+  // one, full points once a scheme row appears. No live sector config in this
+  // engine sets the bonus at all.
   const esopMax = ot.esopBonusMaxPts ?? 0;
-  let schemeEI = 0;
-  if (esopMax > 0) {
+  const esopTarget = typeof ot.esopBonusTarget === 'number' && ot.esopBonusTarget > 0 ? ot.esopBonusTarget : null;
+  const rowText = (sh: ShareholderInput) => `${sh.ownershipType ?? ''} ${sh.name ?? ''}`.toLowerCase();
+  let esop = 0;
+  if (esopMax > 0 && esopTarget === null) {
+    esop = shareholders.some((sh) => /esop|bbos|employee share|broad.?based (ownership|scheme)/.test(rowText(sh))) ? esopMax : 0;
+  } else if (esopMax > 0 && esopTarget !== null) {
+    let schemeEI = 0;
     for (const sh of shareholders) {
-      if (!/esop|bbos|employee share|broad.?based (ownership|scheme)|co-?operative/.test(`${sh.ownershipType ?? ''} ${sh.name ?? ''}`.toLowerCase())) continue;
+      if (!/esop|bbos|employee share|broad.?based (ownership|scheme)|co-?operative/.test(rowText(sh))) continue;
       const pct = hasShares ? sh.shares / totalShares : (shareholders.length > 0 ? 1 / shareholders.length : 0);
       schemeEI += pct * sh.blackOwnership;
     }
+    esop = clampScore(safeRatio(schemeEI, esopTarget, esopMax), esopMax);
   }
-  const esop = esopMax > 0 ? clampScore(safeRatio(schemeEI, ot.esopBonusTarget ?? 0.10, esopMax), esopMax) : 0;
 
   let nv: number;
   const hasNetValue = companyValue > 0 && shareholders.some(s => s.shareValue > 0);
