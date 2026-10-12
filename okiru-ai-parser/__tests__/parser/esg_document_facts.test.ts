@@ -77,6 +77,10 @@ describe('a skill field scope', () => {
     expect(scoped('risk_assurance__risk_register_including_climate')).toContain('register_prepared_by');
     expect(scoped('waste__contractor_report_safe_disposal_certificate')).toEqual(expect.arrayContaining(['contractor_vat_number', 'contractor_registration_number']));
     // A POPIA document, a consent letter included, has a skill, with its letterhead's facts.
+    // A code's document-control table: the title is rebuilt from its cells, never the running heading.
+    for (const spec of ['supplier_esg__code_of_conduct_acknowledgement', 'ethics_compliance__ethics_whistleblower_policy_and_register']) {
+      expect(skill(spec)?.sections.where, spec).toMatch(/running page\s+heading is never the title/);
+    }
     expect(scoped('ethics_compliance__popia_information_officer_and_pia')).toEqual(expect.arrayContaining([
       'document_date', 'act_cited', 'issuing_entity', 'issuer_registration_number', 'issuer_directors',
       'issuer_company_secretary', 'issuer_executives',

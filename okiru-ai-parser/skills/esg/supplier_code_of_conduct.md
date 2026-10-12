@@ -125,6 +125,12 @@ questionnaire or evaluation, a B-BBEE certificate, or a contract.
 
 - Cover or document-control table: title, revision, issue and revision
   dates, author, approver, disclosure class.
+- A document-control table's cells can reach you interleaved: a title that
+  wraps over two lines is split around its "Policy Title" label, and the
+  page's running heading sits just above the table. Rebuild the title from
+  the value cells around the label. The same table is often printed again
+  whole in a later page's footer: prefer that complete copy. A running page
+  heading is never the title.
 - A reporting section: the hotline number suppliers may call.
 - The code's own requirements, kept with this document: what it asks of
   suppliers on B-BBEE, and the environmental areas it lists.
