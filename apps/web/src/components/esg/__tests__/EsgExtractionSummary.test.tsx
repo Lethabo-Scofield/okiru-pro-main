@@ -63,7 +63,8 @@ describe("EsgExtractionSummary", () => {
 
     // A closed group opens on click rather than being lost.
     await userEvent.click(within(panel).getByRole("button", { name: /Energy & emissions/ }));
-    expect(within(panel).getByText("35332")).toBeInTheDocument();
+    // Written by the one ESG number rule: a space between thousands.
+    expect(within(panel).getByText("35 332")).toBeInTheDocument();
   });
 
   it("never renders a placeholder where a value belongs", async () => {
@@ -125,8 +126,8 @@ describe("EsgExtractionSummary", () => {
     );
 
     const panel = screen.getByTestId("esg-value-conflicts");
-    expect(within(panel).getByText("1240")).toBeInTheDocument();
-    expect(within(panel).getByText("1310")).toBeInTheDocument();
+    expect(within(panel).getByText("1 240")).toBeInTheDocument();
+    expect(within(panel).getByText("1 310")).toBeInTheDocument();
     // The old rendering joined candidates into one "a vs b" string.
     expect(panel).not.toHaveTextContent("vs");
   });

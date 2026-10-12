@@ -35,14 +35,14 @@
  * provide and the parser did not extract. Unknown renders as unknown.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, ChevronLeft, Loader2 } from "lucide-react";
+import { AlertTriangle, ArrowRight, ChevronLeft, CircleSlash, Loader2, RotateCcw } from "lucide-react";
 import { UploadSurface } from "@/components/upload/flow/UploadSurface";
 import { ReadBar, type ReadBarState } from "@/components/upload/flow/ReadBar";
 import { CostDetails } from "@/components/upload/flow/CostDetails";
 import { DocumentList, type DocumentListRow, type DocumentStatus } from "@/components/upload/flow/DocumentList";
 import { StatusLine } from "@/components/upload/flow/StatusLine";
 import { Disclosure } from "@/components/upload/flow/Disclosure";
-import { primaryButton } from "@/components/upload/flow/buttonStyles";
+import { outlineButton, primaryButton, textButton } from "@/components/upload/flow/buttonStyles";
 import { sortPickedFiles, temporarySentence, unreadableSentence } from "@/components/upload/flow/readableFiles";
 import { fileUnits, type TokenCost } from "@/components/upload/flow/tokenCost";
 import ConfirmUploadDialog, { type PendingUpload } from "@/components/scorecard/ConfirmUploadDialog";
@@ -200,11 +200,26 @@ export interface EsgDocumentUploadStartProps {
     parserCase: EsgParserCaseLike | null;
     /** Library ids of every persisted upload, for filing under the company. */
     documentIds?: string[];
+    /** The same ids by upload name — what lets a later step preview each document. */
+    documentIdsByName?: Record<string, string>;
   }) => Promise<void>;
   /** True while the host is writing to the workbook. */
   busy?: boolean;
   /** Back to the "how would you like to begin" choice. */
   onBack?: () => void;
+  /**
+   * What the way back says before anything is read ("Back to Environmental
+   * data", "Back to the workbook"). Once a paid read has landed, leaving would
+   * throw it away, so the way back asks first — and in the create flow it
+   * reads "Start again", which is what it does.
+   */
+  backLabel?: string;
+  /**
+   * A read this flow already holds (the create flow's step 3, gone Back from).
+   * Shown again as it was — summary, review and Continue — instead of an empty
+   * drop zone that made a paid read look lost, one click from discarding it.
+   */
+  resume?: { parserCase: EsgParserCaseLike; documentIdsByName?: Record<string, string> } | null;
   /**
    * Files to stage on mount.
    *
@@ -241,11 +256,21 @@ export function EsgDocumentUploadStart({
   onComplete,
   busy = false,
   onBack,
+  backLabel = "Choose a different way to start",
+  resume = null,
   initialFiles,
   workbookAxes = null,
   focus = null,
 }: EsgDocumentUploadStartProps) {
   const [files, setFiles] = useState<File[]>([]);
+  /** The way back, once something is read: asks before throwing a paid read away. */
+  const [confirmingBack, setConfirmingBack] = useState(false);
+  /**
+   * Every file the stream reported it could not read, across every round. The
+   * round's own progress resets when the next round starts, and with it the
+   * notice — though the file was still unread.
+   */
+  const [failedFiles, setFailedFiles] = useState<string[]>([]);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   /** "Show it": the review scrolls to and selects the first document that could not be read. */
@@ -346,6 +371,7 @@ export function EsgDocumentUploadStart({
         injection: result,
         parserCase: caseResult,
         documentIds: allDocumentIds(),
+        documentIdsByName: allDocumentIdsByName(),
         excel: null,
       },
     });
@@ -429,6 +455,16 @@ export function EsgDocumentUploadStart({
       file,
       documentId: persistedDocumentsRef.current.get(filePersistenceKey(file)) ?? idsByName[file.name] ?? null,
     }));
+
+  /** The library id of each upload, by its name — so a later step can still preview it. */
+  const allDocumentIdsByName = (): Record<string, string> => {
+    const out: Record<string, string> = { ...collectedIdsByNameRef.current };
+    for (const file of files) {
+      const id = persistedDocumentsRef.current.get(filePersistenceKey(file));
+      if (id) out[file.name] = id;
+    }
+    return out;
+  };
 
   /** Every library id this flow owns: this mount's uploads, and any a collected read covered. */
   const allDocumentIds = () =>
@@ -945,11 +981,16 @@ export function EsgDocumentUploadStart({
             if (payload?.fileName) setDocProgress((p) => ({ ...p, [payload.fileName]: "parsing" }));
             break;
           case "doc-done":
-            if (payload?.fileName) setDocProgress((p) => ({ ...p, [payload.fileName]: "done" }));
+            if (payload?.fileName) {
+              setDocProgress((p) => ({ ...p, [payload.fileName]: "done" }));
+              // A replacement read fine: it is no longer a file we could not read.
+              setFailedFiles((prior) => prior.filter((name) => name !== payload.fileName));
+            }
             break;
           case "doc-error":
             if (payload?.fileName) {
               setDocProgress((p) => ({ ...p, [payload.fileName]: "error" }));
+              setFailedFiles((prior) => (prior.includes(payload.fileName) ? prior : [...prior, String(payload.fileName)]));
               docErrors.set(
                 String(payload.fileName),
                 String(payload.message ?? "The parser could not read this document"),
@@ -1256,6 +1297,16 @@ export function EsgDocumentUploadStart({
    * quote that re-fired on every render would bill the user for a batch they
    * only chose once. `initialFiles` is a handover, not a controlled prop.
    */
+  /** Show a read this flow already holds, once, on mount (see `resume`). */
+  useEffect(() => {
+    if (!resume?.parserCase) return;
+    parserCaseRef.current = resume.parserCase;
+    setParserCase(resume.parserCase);
+    collectedIdsByNameRef.current = { ...(resume.documentIdsByName ?? {}), ...collectedIdsByNameRef.current };
+    setCollectedWithoutFiles(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const stagedInitial = useRef(false);
   useEffect(() => {
     if (stagedInitial.current) return;
@@ -1320,7 +1371,8 @@ export function EsgDocumentUploadStart({
   };
 
   const readCount = Object.values(docProgress).filter((s) => s === "done").length;
-  const failedDocuments = Object.entries(docProgress)
+  /** This round's failures — the reading status line counts these. */
+  const failedThisRound = Object.entries(docProgress)
     .filter(([, status]) => status === "error")
     .map(([name]) => name);
 
@@ -1336,13 +1388,19 @@ export function EsgDocumentUploadStart({
             parserCase,
             injection,
             uploadNames: files.map((f) => f.name),
-            failedFiles: failedDocuments,
+            failedFiles,
           })
         : [],
-    // failedDocuments is derived from docProgress on every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parserCase, injection, files, docProgress],
+    [parserCase, injection, files, failedFiles],
   );
+  /**
+   * The documents that could not be read, as the review lists them — every
+   * round's, not only the last one's. The notice and the review's "Not read"
+   * group are the same list, so one can never lose a file the other shows.
+   */
+  const failedDocuments = reviewDocuments.filter((d) => d.state === "not-read").map((d) => d.filename);
+  /** Documents the review marks "Needs a look": the summary counts the same thing. */
+  const documentsToCheck = reviewDocuments.filter((d) => d.state === "needs-look").length;
   const documentIdFor = (name: string): string | null => {
     const file = files.find((f) => f.name === name);
     return file
@@ -1393,6 +1451,10 @@ export function EsgDocumentUploadStart({
   // The same steps as the B-BBEE flow, built from the same parts: Upload files
   // (empty), Read N documents (staged), one status line (reading), and the
   // summary with Continue ABOVE the review once read.
+  /** A paid read is on screen: leaving would throw it away (the create flow keeps a copy, but its Back clears it). */
+  const paidReadOnScreen = Boolean(parserCase);
+  /** New documents wait to be read after an earlier read: the earlier summary folds to one line. */
+  const roundStaged = Boolean(parserCase) && unreadFiles.length > 0;
   const readBarState: ReadBarState = quoting ? "pricing" : quote ? "priced" : "failed";
   const showReadBar = unreadFiles.length > 0 && !parsing;
   /** A pricing failure is said in the read bar, so it is not said again below. */
@@ -1518,13 +1580,59 @@ export function EsgDocumentUploadStart({
         {onBack && (
           <button
             type="button"
-            onClick={onBack}
-            className="mb-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium text-[color:var(--body)] transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            // Before a read, leaving costs nothing. After one, it throws away
+            // what the tokens bought — so it asks first, never in one click.
+            onClick={() => (paidReadOnScreen ? setConfirmingBack(true) : onBack())}
+            aria-expanded={paidReadOnScreen ? confirmingBack : undefined}
+            className="mb-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium text-[color:var(--body)] transition-colors duration-200 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 disabled:opacity-50"
             data-testid="esg-upload-back"
           >
-            <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-            Choose a different way to start
+            {paidReadOnScreen && !companyId ? (
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+            )}
+            {paidReadOnScreen && !companyId ? "Start again" : backLabel}
           </button>
+        )}
+        {onBack && confirmingBack && paidReadOnScreen && (
+          <div
+            role="alertdialog"
+            aria-labelledby="esg-upload-back-confirm-title"
+            className="mb-4 rounded-xl border border-amber-300/25 bg-amber-500/[0.06] px-4 py-3"
+            data-testid="esg-upload-back-confirm"
+          >
+            <p id="esg-upload-back-confirm-title" className="text-[13px] font-semibold text-white">
+              {companyId ? "Leave without adding these figures?" : "Start again and discard what was read?"}
+            </p>
+            <p className="mt-0.5 text-[12px] leading-5 text-[color:var(--body)]">
+              {companyId
+                ? "Nothing has been written to the workbook yet. The documents stay in your library, but reading them again costs tokens."
+                : "Nothing has been created yet. The documents stay in your library, but reading them again costs tokens."}
+            </p>
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmingBack(false);
+                  onBack();
+                }}
+                className={outlineButton("sm")}
+                data-testid="esg-upload-back-confirm-yes"
+              >
+                {companyId ? "Leave" : "Discard and start again"}
+              </button>
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmingBack(false)}
+                className={textButton("sm")}
+                data-testid="esg-upload-back-cancel"
+              >
+                Keep working
+              </button>
+            </div>
+          </div>
         )}
         {/* Document scale, left aligned, matching the B-BBEE step exactly. The
             evidence types are listed once, in the drop zone, not here too. */}
@@ -1587,7 +1695,7 @@ export function EsgDocumentUploadStart({
           containerRef={extractionPhaseRef}
           total={unreadFiles.length}
           done={readCount}
-          failed={failedDocuments.length}
+          failed={failedThisRound.length}
           checking={resolving}
           checkProgress={resolveProgress}
           notice={resumeNotice}
@@ -1702,9 +1810,12 @@ export function EsgDocumentUploadStart({
             injection={injection}
             parserCase={parserCase}
             compact
+            documentsToCheck={documentsToCheck}
+            folded={roundStaged}
             notice={
               failedDocuments.length > 0 ? (
-                <p className="text-[12px] leading-5 text-red-200" role="alert" data-testid="esg-failed-documents">
+                <p className="text-[12px] leading-5 text-[color:var(--body)]" role="status" data-testid="esg-failed-documents">
+                  <CircleSlash className="mr-1.5 inline h-3.5 w-3.5 align-[-2px] text-red-300" aria-hidden />
                   {failedDocuments.length} document{failedDocuments.length === 1 ? "" : "s"} couldn&apos;t be read (
                   {failedDocuments.slice(0, 3).join(", ")}
                   {failedDocuments.length > 3 ? ` +${failedDocuments.length - 3} more` : ""}).{" "}
@@ -1728,19 +1839,26 @@ export function EsgDocumentUploadStart({
                       injection,
                       parserCase,
                       documentIds: allDocumentIds(),
+                      documentIdsByName: allDocumentIdsByName(),
                     })
                   }
                   // A document added after the read but never read would arrive
                   // with nothing taken from it — read it or remove it first.
                   disabled={busy || unreadFiles.length > 0}
-                  className={primaryButton("esg")}
+                  // While new documents wait, "Read N documents" is the one
+                  // main button: Continue stays, visibly not the next step.
+                  className={roundStaged ? outlineButton() : primaryButton("esg")}
                   data-testid="esg-button-continue-to-workbook"
                 >
                   {busy ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden /> : <ArrowRight className="h-4 w-4" aria-hidden />}
                   Continue
                 </button>
                 <p className="text-[11px] leading-5 text-[color:var(--body)] sm:text-right" data-testid="esg-continue-helper">
-                  {willFill ? "Opens a pre-filled workbook" : "Nothing was filled in. You'll complete the workbook yourself"}
+                  {roundStaged
+                    ? "Read the new documents first"
+                    : willFill
+                      ? "Opens a pre-filled workbook"
+                      : "Nothing was filled in. You'll complete the workbook yourself"}
                 </p>
               </div>
             }

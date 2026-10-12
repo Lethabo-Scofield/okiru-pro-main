@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useParams } from "wouter";
+import { useLocation, useParams } from "wouter";
 import {
   Building2,
   ChevronRight,
   Download,
-  Leaf,
+  FileSpreadsheet,
   Loader2,
   Save,
   Upload,
 } from "lucide-react";
+import { setShellCompanyName } from "@/components/shell/shellCompanyName";
+import { EsgWorkbookMoreMenu, ESG_MORE_ITEM } from "@/components/esg-workbook/EsgWorkbookMoreMenu";
+import { EsgDocumentWriteConfirm, esgWriteCounts } from "@/components/esg-workbook/EsgDocumentWriteConfirm";
+import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
+import { isEsgGridSection } from "@/lib/esgGridSections";
 import { EsgSectionMissingPanel } from "@/components/esg-workbook/EsgSectionMissingPanel";
 import { EsgValidationPanel } from "@/components/esg-workbook/EsgValidationPanel";
 import { EsgAssistantChat } from "@/components/esg-workbook/EsgAssistantChat";
@@ -100,6 +105,15 @@ export default function EsgInformationRequest() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<EsgWorkbookSectionEditorHandle>(null);
   const [sectionBusy, setSectionBusy] = useState(false);
+  /**
+   * Where the document reader was opened from. From the three ways in it is
+   * step 2 of starting the workbook; from inside a filled workbook (the
+   * toolbar, or a section) it is adding to it — no stepper, and the way back
+   * says where it goes.
+   */
+  const [uploadFrom, setUploadFrom] = useState<"choose" | "workbook">("choose");
+  /** A read from inside a filled workbook, waiting for "add these figures?" before it writes. */
+  const [pendingWrite, setPendingWrite] = useState<EsgInjectionResult | null>(null);
 
   /**
    * `/esg/create/:companyId/start` always asks; the bare route only asks when
@@ -160,6 +174,12 @@ export default function EsgInformationRequest() {
       cancelled = true;
     };
   }, [companyId, load, navigate, setCompanyName]);
+
+  // The bar's trail names the company, not its id — so this page needs no trail of its own.
+  useEffect(() => {
+    if (companyId && companyName) setShellCompanyName(companyId, companyName);
+  }, [companyId, companyName]);
+  useEffect(() => () => setShellCompanyName("", null), []);
 
   /**
    * The sites and reporting months this workbook places figures on. Its own
@@ -256,6 +276,24 @@ export default function EsgInformationRequest() {
     }
     setHandover(null);
     setUploadFocus(esgUploadFocus(activeSection.id, activeSection.title));
+    setUploadFrom("workbook");
+    setStage("upload");
+  };
+
+  /** "Add documents" in the toolbar: straight to the reader, as `/start?with=documents` does — not the three ways in again. */
+  const addDocumentsToWorkbook = async () => {
+    const ok = (await editorRef.current?.flush()) ?? true;
+    if (!ok) {
+      toast({
+        title: "Save failed",
+        description: "Could not save this section before adding documents.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setHandover(null);
+    setUploadFocus(null);
+    setUploadFrom("workbook");
     setStage("upload");
   };
 
@@ -306,6 +344,7 @@ export default function EsgInformationRequest() {
         toast({ title: "That is not the Okiru template", description: handoverNote });
         setHandover([file]);
         setUploadFocus(null);
+        setUploadFrom(stage === "workbook" ? "workbook" : "choose");
         setStage("upload");
         return;
       }
@@ -363,6 +402,22 @@ export default function EsgInformationRequest() {
    * pretending the upload achieved nothing.
    */
   const handleParsedDocuments = async ({ injection }: { injection: EsgInjectionResult }) => {
+    // Into a workbook that already holds figures: say what this adds and what
+    // it replaces, and write only on a yes. An empty workbook has nothing to lose.
+    if (totalCapturedCells > 0 && esgPatchCellCount(injection.patches) > 0) {
+      const counts = esgWriteCounts(
+        analyseEsgImport({ sections: injection.patches, warnings: [], unmatchedSheets: [] }, workbook ?? null),
+      );
+      // Nothing to add and nothing to replace: no question worth asking.
+      if (counts.adds + counts.replaces + counts.rows > 0) {
+        setPendingWrite(injection);
+        return;
+      }
+    }
+    await writeParsedDocuments(injection);
+  };
+
+  const writeParsedDocuments = async (injection: EsgInjectionResult) => {
     setInjecting(true);
     try {
       const cells = esgPatchCellCount(injection.patches);
@@ -377,7 +432,7 @@ export default function EsgInformationRequest() {
           : "";
       if (cells > 0) {
         // The placements travel too, so each cell keeps the document it came from (E4).
-        await persistEsgSectionPatches(companyId, injection.patches, injection.placed);
+        await persistEsgSectionPatches(companyId, injection.patches, injection.placed, injection);
         await load(companyId, companyName, { force: true });
         toast({
           title: uploadFocus ? `Values added to ${uploadFocus.title}` : "Values added to your workbook",
@@ -392,6 +447,7 @@ export default function EsgInformationRequest() {
         });
       }
       setUploadFocus(null);
+      setPendingWrite(null);
       goToWorkbook();
     } catch (err) {
       toast({
@@ -474,29 +530,13 @@ export default function EsgInformationRequest() {
     <div className="esg-theme flex flex-col text-white">
 
       <main
-        className="flex-1 max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-6 has-[[data-wide-review]]:max-w-[1760px]"
+        // A monthly grid (12 months a row) or the three-pane review takes the
+        // width; a form keeps the reading column.
+        className="flex-1 max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-6 has-[[data-wide-review]]:max-w-[1760px] has-[[data-wide-grid]]:max-w-[1760px]"
         data-testid="esg-information-request"
       >
-        <nav
-          className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--esg-text3)] mb-4"
-          aria-label="Breadcrumb"
-          data-testid="esg-breadcrumb"
-        >
-          <Link href="/hub" className="hover:text-[var(--esg-text2)]">
-            Hub
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <Link href="/esg/clients" className="hover:text-[var(--esg-text2)]">
-            ESG
-          </Link>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-[var(--esg-text2)] truncate max-w-[140px]">
-            {companyName || companyId}
-          </span>
-          <ChevronRight className="h-3 w-3" />
-          <span className="text-[var(--esg-text)] font-medium">Inputs</span>
-        </nav>
-
+        {/* One trail: the bar above names the company (the shell takes its
+            name from this page), so the page draws no second one. */}
         <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
           <div className="flex items-center gap-3 min-w-0">
             <Building2 className="h-4 w-4 text-[var(--esg-text3)] shrink-0" />
@@ -504,7 +544,6 @@ export default function EsgInformationRequest() {
               <h1 className="text-[20px] font-semibold text-[var(--esg-text)] truncate">
                 {loading && !companyName ? "Loading…" : companyName || "Company"}
               </h1>
-              <p className="text-[12px] text-[var(--esg-text3)] font-mono truncate">{companyId}</p>
             </div>
           </div>
           {stage === "workbook" ? (
@@ -514,13 +553,11 @@ export default function EsgInformationRequest() {
             </span>
             {/* The document route, reachable from inside the workbook too — a
                 user who started manually and then received the client's
-                evidence pack should not have to leave and come back. */}
+                evidence pack should not have to leave and come back. Straight
+                to the reader: the three ways in are for an empty workbook. */}
             <button
               type="button"
-              onClick={() => {
-                setUploadFocus(null);
-                setStage("choose");
-              }}
+              onClick={() => void addDocumentsToWorkbook()}
               disabled={Boolean(submittedAt) || loading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
               data-testid="button-esg-add-documents"
@@ -547,26 +584,29 @@ export default function EsgInformationRequest() {
                 e.target.value = "";
               }}
             />
-            <EsgTemplateMenu
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
-              testId="button-esg-download-template"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={Boolean(submittedAt) || loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
-              data-testid="button-esg-import-xlsx"
-            >
-              Import / bulk upload
-            </button>
-            <a
-              href={`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/export`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]"
-              data-testid="button-esg-export"
-            >
-              <Download className="h-3.5 w-3.5" /> Export workbook
-            </a>
+            {/* Once-a-cycle actions, folded: template, import, export. */}
+            <EsgWorkbookMoreMenu className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--esg-glass-border)] text-[12px] text-[var(--esg-text2)] hover:text-[var(--esg-text)]">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={Boolean(submittedAt) || loading}
+                className={ESG_MORE_ITEM}
+                data-closes-menu=""
+                data-testid="button-esg-import-xlsx"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden /> Import / bulk upload
+              </button>
+              <a
+                href={`${API_BASE}/api/esg/workbook/${encodeURIComponent(companyId)}/export`}
+                className={ESG_MORE_ITEM}
+                data-testid="button-esg-export"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden /> Export workbook
+              </a>
+              <div className="mt-1 border-t border-white/[0.06] pt-1">
+                <EsgTemplateMenu className={ESG_MORE_ITEM} testId="button-esg-download-template" />
+              </div>
+            </EsgWorkbookMoreMenu>
             <button
               type="button"
               onClick={() => void handleContinueToSummary()}
@@ -611,6 +651,7 @@ export default function EsgInformationRequest() {
             importing={importing}
             onChooseUpload={() => {
               setUploadFocus(null);
+              setUploadFrom("choose");
               setStage("upload");
             }}
             onChooseExcel={(file) => void handleImportFile(file)}
@@ -618,15 +659,23 @@ export default function EsgInformationRequest() {
           />
         ) : stage === "upload" ? (
           <div className="mx-auto w-full max-w-2xl has-[[data-wide-review]]:max-w-none">
-            <EsgFlowSteps current={2} className="mb-6" />
+            {/* The steps belong to starting a workbook; adding to one is not step 2 of anything. */}
+            {uploadFrom === "choose" ? <EsgFlowSteps current={2} className="mb-6" /> : null}
             <EsgDocumentUploadStart
               companyId={companyId}
               companyName={companyName}
               busy={injecting}
+              backLabel={
+                uploadFrom === "choose"
+                  ? undefined
+                  : uploadFocus
+                    ? `Back to ${uploadFocus.title}`
+                    : "Back to the workbook"
+              }
               onBack={() => {
                 setHandover(null);
-                // From inside a section, Back is that section — not the three ways in.
-                setStage(uploadFocus ? "workbook" : "choose");
+                // From inside the workbook, Back is the workbook (or the section) — not the three ways in.
+                setStage(uploadFrom === "workbook" || uploadFocus ? "workbook" : "choose");
                 setUploadFocus(null);
               }}
               onComplete={handleParsedDocuments}
@@ -634,14 +683,19 @@ export default function EsgInformationRequest() {
               initialFiles={handover ?? undefined}
               focus={uploadFocus}
             />
+            <EsgDocumentWriteConfirm
+              open={pendingWrite !== null}
+              patches={pendingWrite?.patches ?? null}
+              workbook={workbook ?? null}
+              sectionLabels={Object.fromEntries(ESG_INPUT_SECTIONS.map((section) => [section.id, section.title]))}
+              target={uploadFocus ? uploadFocus.title : "your workbook"}
+              confirming={injecting}
+              onCancel={() => setPendingWrite(null)}
+              onConfirm={() => pendingWrite && void writeParsedDocuments(pendingWrite)}
+            />
           </div>
         ) : (
         <>
-        <p className="text-[13px] text-[var(--esg-text2)] mb-6 -mt-2">
-          Complete each section — scores update as you save. Once the required fields pass validation, continue to
-          Summary and open the toolkit from there.
-        </p>
-
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           <div className="lg:hidden w-full space-y-3">
             <EsgSectionMissingPanel
@@ -682,22 +736,7 @@ export default function EsgInformationRequest() {
             </div>
           </div>
 
-          <aside className="hidden lg:block w-full lg:w-64 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto space-y-3">
-            <EsgSectionMissingPanel
-              workbook={workbook}
-              touched={touched}
-              sectionId={activeSectionId}
-              sectionTitle={activeSection?.title}
-            />
-            {/* The validation box — the same rules the import analysis diffs
-                against, live on the page. Built long ago, mounted nowhere;
-                a validator nobody can see is a validator that ignores
-                everything. Clicking an issue jumps to its section. */}
-            <EsgValidationPanel
-              workbook={workbook}
-              activeSectionId={activeSectionId}
-              onSelectSection={(sectionId) => void changeSection(sectionId)}
-            />
+          <aside className="hidden lg:block w-full lg:w-60 shrink-0 lg:sticky lg:top-20 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto space-y-3">
             <div
               className="rounded-xl border border-[var(--esg-glass-border)] bg-white/[0.02] p-2"
               data-testid="esg-workbook-tabs"
@@ -743,6 +782,21 @@ export default function EsgInformationRequest() {
                 );
               })}
             </div>
+            {/* What the open section still needs, then the rule list folded
+                behind its count: the sections are what a person navigates by. */}
+            <EsgSectionMissingPanel
+              workbook={workbook}
+              touched={touched}
+              sectionId={activeSectionId}
+              sectionTitle={activeSection?.title}
+            />
+            {/* The validation box — the same rules the import analysis diffs
+                against, live on the page. Clicking an issue jumps to its section. */}
+            <EsgValidationPanel
+              workbook={workbook}
+              activeSectionId={activeSectionId}
+              onSelectSection={(sectionId) => void changeSection(sectionId)}
+            />
           </aside>
 
           <section
@@ -760,13 +814,17 @@ export default function EsgInformationRequest() {
                     <EsgReportScopePanel />
                   </div>
                 ) : null}
-                {activeSection.note ? (
+                {/* A section's note is printed once: under its title by the form
+                    editors, here only for the registers, whose header says
+                    something else. */}
+                {activeSection.note && isEsgGridSection(activeSection.id) ? (
                   <p className="text-[12px] text-[var(--esg-text3)] mb-4">{activeSection.note}</p>
                 ) : null}
                 {!submittedAt ? (
                   // Documents for this part of the workbook (C1): the reader is told which
                   // pillar to look for, and only this section's pillar is written.
-                  <div className="mb-4 flex justify-end">
+                  // On the section title's row, not a row of its own above it.
+                  <div className="relative z-10 -mb-[2.625rem] flex justify-end pr-6">
                     <button
                       type="button"
                       onClick={() => void addDocumentsToSection()}
