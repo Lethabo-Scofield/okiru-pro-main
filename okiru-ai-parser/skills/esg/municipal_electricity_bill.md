@@ -86,6 +86,66 @@ fields:
     type: number
     labels: ["Generation offset", "Export", "Units exported", "SSEG credit"]
     description: "kWh the site EXPORTED to the grid and was credited for (a generation offset or SSEG credit line), as printed. Never put it in a generated or consumed field: the account does not show how much the panels produced."
+  - name: generation_offset_credits
+    type: text
+    scope: document
+    labels: []
+    description: "The Rand credited for exported electricity, each credit line's amount as printed with its sign, separated by '; ' ('12.50-; 3.10-')."
+  - name: statement_date
+    type: date
+    scope: document
+    labels: ["Account details as at", "Statement date", "Date of account", "Invoice date"]
+    description: "The date the account or statement was issued (its 'as at' date), as printed. Never a reading or period date."
+  - name: document_title
+    type: text
+    scope: document
+    labels: ["Tax invoice", "Statement of account", "Recovery statement"]
+    description: "The document's own title or heading, as printed (with a printed qualifier such as 'FOR RECORD PURPOSES ONLY')."
+  - name: tariff_name
+    type: text
+    scope: document
+    labels: ["Tariff", "Tariff type", "Tariff category"]
+    description: "The electricity tariff's name as printed beside the consumption charge ('Business Low Voltage (Large)'). Not a rate."
+  - name: daily_average_kwh
+    type: number
+    scope: document
+    labels: ["Daily average", "Average per day", "kWh/day"]
+    description: "The daily average consumption the account prints, as printed. Never consumption, and never worked out."
+  - name: property_rates_rand
+    type: money
+    scope: document
+    labels: ["Property rates", "Rates"]
+    description: "The property rates charged on the same account, as printed. Not electricity."
+  - name: improvement_district_rand
+    type: money
+    scope: document
+    labels: ["Improvement district", "City improvement district", "CID levy", "Special rating area"]
+    description: "An improvement-district or special-rating-area levy on the same account, as printed. Not electricity."
+  - name: history_total_kwh
+    type: number
+    scope: document
+    labels: []
+    description: "The kWh in the Total row a consumption history table PRINTS, as printed. Never added up, and never this period's consumption."
+  - name: history_total_rand
+    type: money
+    scope: document
+    labels: []
+    description: "The electricity Rand in the Total row a consumption history table prints, as printed."
+  - name: account_total_rand
+    type: money
+    scope: document
+    labels: ["Total due", "Total recovery value", "Total for the period", "Amount due"]
+    description: "The statement's own total for THIS period across every service it charges (the current row's total recovery, or the account's total due), as printed."
+  - name: history_account_total_rand
+    type: money
+    scope: document
+    labels: []
+    description: "The all-services total in the Total row a history table prints, as printed."
+  - name: filing_label
+    type: text
+    scope: document
+    labels: []
+    description: "A handwritten or typed note naming the place and month the client filed the account under ('Depot A June 2025'), as written. It is never a date, the period, the site or the issuer."
   - name: line_site
     type: text
     rowLevel: true
@@ -122,7 +182,7 @@ fields:
     rowLevel: true
     labels: []
     description: "Actual or estimated for this line, when printed."
-newFields: [electricity_unit, electricity_period_rows, line_site, line_meter_number, line_period_start, line_period_end, line_electricity_kwh, line_electricity_rand, line_reading_type]
+newFields: [electricity_unit, electricity_period_rows, line_site, line_meter_number, line_period_start, line_period_end, line_electricity_kwh, line_electricity_rand, line_reading_type, generation_offset_credits, statement_date, document_title, tariff_name, daily_average_kwh, property_rates_rand, improvement_district_rand, history_total_kwh, history_total_rand, account_total_rand, history_account_total_rand, filing_label]
 ---
 ## What it is / is not
 
@@ -165,16 +225,25 @@ monthly data workbook, or a fuel invoice.
   copy each line's own date.
 - Scans are often rotated or cut: page 2 of 3 without the letterhead page is
   common. Read what is on the pages you have.
+- The account's own facts are kept with this document only: its title, its
+  statement ("as at") date, the tariff name and the daily average printed
+  beside the consumption, other charges on the same account (property rates,
+  an improvement-district levy), the generation-offset credits, the
+  statement's total for this period, and the Total row a history table
+  prints (copied from that row, never added up).
 
 ## Traps
 
 - The billing period is not the month on the file. Accounts are read on
   cycles of 27 to 40 days; a bill a person filed as "July" may cover late May
   to late June. Copy the printed period. A handwritten note ("Depot A June")
-  is the client's filing label: put it in exceptions, never in a date field.
+  is the client's filing label: copy it to `filing_label`, never to a date,
+  site or issuer field.
 - The issuer must be printed on THIS document. When the letterhead page is
   missing, `municipality_or_supplier_name` is null, even when the city in the
-  address or the account-number format suggests a municipality.
+  address or the account-number format suggests a municipality, and even when
+  a footer or a handwritten note names a place: a place with a month is a
+  filing label.
 - A generation offset, export credit or SSEG line is electricity the site SENT
   to the grid. It goes in `solar_kwh_exported_to_grid` only. It is never
   consumption, and never "solar generated".
@@ -200,13 +269,15 @@ Invented, a recovery statement for one warehouse with a short history (the
 current period is the newest line):
 
 ```
+Depot A Feb '26                                              (handwritten)
 TENANT UTILITY RECOVERY - FOR RECORD PURPOSES ONLY        Example Estates Services
 Tenant: Acme Logistics (Pty) Ltd   Premises: Unit 4, Depot A   Tenant No: 00412
-Period 01/02/2026 - 28/02/2026
-Electricity  Units 18 420.5  Amount R 66 912.40      Municipal 0.00
+Period 01/02/2026 - 28/02/2026          Statement date 03/03/2026
+Electricity  Units 18 420.5  Amount R 66 912.40      Municipal 0.00   Total recovery R 70 001.10
 History   Date        kWh        Amount
           28/02/2026  18 420.5   66 912.40
           31/01/2026  19 004.0   68 990.15
+Total                 37 424.5   135 902.55
 ```
 
 ```json
@@ -215,7 +286,11 @@ History   Date        kWh        Amount
  "electricity_kwh": "18 420.5", "electricity_unit": null, "electricity_rand_excl_vat": "R 66 912.40",
  "electricity_tariff_rand_per_kwh": null, "meter_number": null, "meter_reading_previous": null,
  "meter_reading_current": null, "reading_type": null, "max_demand_kva": null, "is_landlord_recovery": true,
- "solar_kwh_exported_to_grid": null,
+ "solar_kwh_exported_to_grid": null, "generation_offset_credits": null, "statement_date": "03/03/2026",
+ "document_title": "TENANT UTILITY RECOVERY - FOR RECORD PURPOSES ONLY", "tariff_name": null, "daily_average_kwh": null,
+ "property_rates_rand": null, "improvement_district_rand": null, "history_total_kwh": "37 424.5",
+ "history_total_rand": "135 902.55", "account_total_rand": "R 70 001.10", "history_account_total_rand": null,
+ "filing_label": "Depot A Feb '26",
  "electricity_period_rows": [
    {"line_site": "Unit 4, Depot A", "line_meter_number": null, "line_period_start": null, "line_period_end": "28/02/2026", "line_electricity_kwh": "18 420.5", "line_electricity_rand": "66 912.40", "line_reading_type": null},
    {"line_site": "Unit 4, Depot A", "line_meter_number": null, "line_period_start": null, "line_period_end": "31/01/2026", "line_electricity_kwh": "19 004.0", "line_electricity_rand": "68 990.15", "line_reading_type": null}

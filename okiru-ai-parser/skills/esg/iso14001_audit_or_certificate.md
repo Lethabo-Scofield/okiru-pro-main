@@ -18,11 +18,11 @@ fields:
     type: text
     required: true
     labels: ["Certification status", "Audit recommendation", "Recommendation"]
-    description: "The status the document states, as printed: certified, suspended, withdrawn, or for an audit report its recommendation (\"stage 2 recommended\", \"recommended for certification\"). An audit report never makes the status certified."
+    description: "The status the document states, as printed: certified, suspended, withdrawn, or for an audit report its overall result line when it prints one, else its recommendation (\"stage 2 recommended\", \"recommended for certification\"). An audit report never makes the status certified."
   - name: iso14001_certification_body
     type: text
     labels: ["Certification body", "Issued by", "Registrar"]
-    description: "The certification body that issued the certificate or ran the audit, as printed."
+    description: "The certification body that issued the certificate or ran the audit, as printed: in the letterhead, the logo text, or the report's own footer or confidentiality line (\"this report remains the property of ...\")."
   - name: iso14001_standard_version
     type: text
     labels: ["Standard", "Audit criteria"]
@@ -83,7 +83,52 @@ fields:
     type: count
     labels: ["Minor nonconformities", "Minor NCs"]
     description: "A printed count of minor nonconformities only. An empty column is null, not zero."
-newFields: [audit_type, audit_start_date, audit_end_date, audit_report_date, lead_auditor_name, major_nonconformities_count, minor_nonconformities_count]
+  - name: audit_client_name
+    type: text
+    scope: document
+    labels: ["Client", "Client/Address", "Organisation"]
+    description: "The audited organisation as the report names it, without its address."
+  - name: audit_client_reference
+    type: text
+    scope: document
+    labels: ["Client ID", "Client number", "Customer ID"]
+    description: "The certification body's own reference for the client, as printed. Never a certificate number."
+  - name: management_review_date
+    type: date
+    scope: document
+    labels: ["Management review", "Management review meeting"]
+    description: "The date of the client's last management review the report cites, as printed."
+  - name: compliance_evaluation_date
+    type: date
+    scope: document
+    labels: ["Legal compliance audit", "Compliance evaluation", "Legal register review"]
+    description: "The date of the client's last evaluation of legal compliance the report cites, as printed."
+  - name: audited_headcount
+    type: count
+    scope: document
+    labels: ["Headcount", "Number of employees", "Effective personnel"]
+    description: "The audited scope's headcount as the report finally states it (a corrected figure when the report corrects one). Not the company's employee count."
+  - name: audited_headcount_previous
+    type: count
+    scope: document
+    labels: ["Previous headcount", "Headcount declared"]
+    description: "The headcount first declared, when the report says it was corrected from it, as printed."
+  - name: significant_aspects
+    type: text
+    scope: document
+    labels: ["Significant aspects", "Significant environmental aspects"]
+    description: "The significant environmental aspects the report names, each as printed, separated by '; '."
+  - name: referenced_documents
+    type: text
+    scope: document
+    labels: ["Document reference", "Doc ref", "Ref no"]
+    description: "The client's document numbers the report cites (manuals, registers, work instructions), each as printed, separated by '; '."
+  - name: client_representative_name
+    type: text
+    scope: document
+    labels: ["Client representative", "Management representative"]
+    description: "The client's representative named in the report, as printed."
+newFields: [audit_type, audit_start_date, audit_end_date, audit_report_date, lead_auditor_name, major_nonconformities_count, minor_nonconformities_count, audit_client_name, audit_client_reference, management_review_date, compliance_evaluation_date, audited_headcount, audited_headcount_previous, significant_aspects, referenced_documents, client_representative_name]
 ---
 ## What it is / is not
 
@@ -122,10 +167,14 @@ management review, or a policy or register.
 - Text that contradicts a tick box ("Opportunities for improvement: No",
   followed by a list of improvement points) is copied as printed and both are
   noted in exceptions.
-- A headcount on an audit cover is the audited scope's headcount; it is not
-  the company's employee count and has no field here.
-- Referenced document numbers in the findings name the client's documents;
-  they are not certificates.
+- A headcount on an audit cover is the audited scope's headcount
+  (`audited_headcount`); it is not the company's employee count. When the
+  report corrects it, the corrected figure is `audited_headcount` and the
+  first one `audited_headcount_previous`.
+- Referenced document numbers in the findings name the client's documents
+  (`referenced_documents`); they are not certificates.
+- The certification body is often named only in the logo and in every
+  page's footer or confidentiality line; that is still the body.
 
 ## Worked example
 
@@ -133,9 +182,11 @@ Invented, a stage 1 audit report cover:
 
 ```
 EXAMPLE CERTIFICATION SERVICES - AUDIT REPORT
-Client: Example Logistics, Depot E   Standard: ISO 14001:2015   Audit type: Stage 1
-Audit dates: 03-04 March 2026   Report issued: 10-Mar-2026   Lead auditor: R. Pillay
+Client: Example Logistics, Depot E   Client ID: EX-000123   Standard: ISO 14001:2015   Audit type: Stage 1
+Audit dates: 03-04 March 2026   Report issued: 10-Mar-2026   Lead auditor: R. Pillay   Headcount: 210
 Major NCs: -  Minor NCs: -   Recommendation: Stage 2 recommended   Accreditation mark: Not applicable
+Management review held 01/03/2026. Significant aspects: diesel use; waste oil. See manual EX-PR-001.
+Client representative: T. Example
 ```
 
 ```json
@@ -145,5 +196,8 @@ Major NCs: -  Minor NCs: -   Recommendation: Stage 2 recommended   Accreditation
  "iso14001_last_surveillance_audit_date": null, "accreditation_mark": "Not applicable", "audit_type": "Stage 1",
  "audit_start_date": "03 March 2026", "audit_end_date": "04 March 2026", "audit_report_date": "10-Mar-2026",
  "lead_auditor_name": "R. Pillay", "major_nonconformities_count": null, "minor_nonconformities_count": null,
+ "audit_client_name": "Example Logistics", "audit_client_reference": "EX-000123", "management_review_date": "01/03/2026",
+ "compliance_evaluation_date": null, "audited_headcount": 210, "audited_headcount_previous": null,
+ "significant_aspects": "diesel use; waste oil", "referenced_documents": "EX-PR-001", "client_representative_name": "T. Example",
  "exceptions": ["A stage 1 audit report, not a certificate: certification is in progress."]}
 ```

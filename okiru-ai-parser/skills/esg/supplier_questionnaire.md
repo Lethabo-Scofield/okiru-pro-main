@@ -14,6 +14,7 @@ classify:
     - "a procurement spend schedule"
   filenameHints: ["supplier questionnaire", "supplier approval", "supplier evaluation", "service provider evaluation", "vendor assessment", "saq"]
   contentSignals: ["Supplier name", "Questionnaire", "Evaluation", "Criteria", "Score", "Rating", "Yes", "No", "ISO 9001", "ISO 14001", "Completed by", "Approved supplier"]
+rowsField: form_item_rows
 fields:
   - name: saq_reference
     type: text
@@ -96,7 +97,28 @@ fields:
     type: text
     labels: []
     description: "The answered questions, briefly, as \"question: answer\" pairs separated by semicolons. Null on a blank form."
-newFields: [form_revision_date]
+  - name: form_item
+    type: text
+    required: true
+    rowLevel: true
+    labels: []
+    description: "One thing the FORM itself asks or defines, copied as printed: a question (\"Do you recycle packaging?\"), an evaluation criterion (\"Response time\"), a certification it asks about (\"ISO 9001:2015\"), a rating band (\"above 85%\") or a score meaning. Never an answer."
+  - name: form_item_kind
+    type: text
+    rowLevel: true
+    labels: []
+    description: "question, criterion, certification, rating band or score meaning."
+  - name: form_section
+    type: text
+    rowLevel: true
+    labels: []
+    description: "The section heading the item is printed under (\"SECTION C - ENVIRONMENT\"), as printed, or null."
+  - name: form_item_band
+    type: text
+    rowLevel: true
+    labels: []
+    description: "For a rating band or score meaning: its letter, number or name as printed (\"A\", \"5\", \"Approved\"); otherwise null."
+newFields: [form_revision_date, form_item_rows, form_item, form_item_kind, form_section, form_item_band]
 ---
 ## What it is / is not
 
@@ -116,13 +138,18 @@ about itself, a supplier's B-BBEE certificate or a spend schedule.
 - Answer spaces: supplier name, registration, contact, completed by, date.
 - Question rows with Yes / No boxes or a score column; a legend of score
   meanings and rating bands; a total or band at the foot.
+- What the form asks is evidence of how the business vets suppliers, filled
+  in or blank: copy every question, criterion, certification asked about and
+  rating band into `form_item_rows`, one row each, with the section heading
+  it sits under. Word page headers arrive under "## Header".
 
 ## Traps
 
 - A blank template holds no answers. When the answer spaces are empty, the
   boxes unticked and the scores unfilled, every supplier and answer field is
   null. The questions, the criteria list, the score legend and the rating
-  bands are the form, not answers; say "blank template" in exceptions.
+  bands are the form, not answers: they go in `form_item_rows` only. Say
+  "blank template" in exceptions.
 - The form's own document number and revision date are not a completion date
   or a supplier reference. Copy them to `saq_reference` and
   `form_revision_date` only.
@@ -151,5 +178,14 @@ Bands: A 21-25 approved; B 15-20 conditional; C below 15 not approved
  "supplier_invoicing_score": null, "supplier_backup_support_score": null, "supplier_overall_rating": null,
  "supplier_environmental_policy_in_place": null, "supplier_iso14001_certified": null, "supplier_iso45001_certified": null,
  "supplier_bbbee_level": null, "saq_responses": null,
+ "form_item_rows": [
+   {"form_item": "Delivery", "form_item_kind": "criterion", "form_section": "Criteria (score 1-5)", "form_item_band": null},
+   {"form_item": "Quality", "form_item_kind": "criterion", "form_section": "Criteria (score 1-5)", "form_item_band": null},
+   {"form_item": "Health and safety", "form_item_kind": "criterion", "form_section": "Criteria (score 1-5)", "form_item_band": null},
+   {"form_item": "Environmental", "form_item_kind": "criterion", "form_section": "Criteria (score 1-5)", "form_item_band": null},
+   {"form_item": "21-25 approved", "form_item_kind": "rating band", "form_section": "Bands", "form_item_band": "A"},
+   {"form_item": "15-20 conditional", "form_item_kind": "rating band", "form_section": "Bands", "form_item_band": "B"},
+   {"form_item": "below 15 not approved", "form_item_kind": "rating band", "form_section": "Bands", "form_item_band": "C"}
+ ],
  "exceptions": ["Blank template: no supplier, scores or answers are filled in."]}
 ```

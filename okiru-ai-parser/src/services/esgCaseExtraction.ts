@@ -46,12 +46,15 @@ import {
   type DocumentClassificationResult,
 } from './documentClassification.js';
 import { focusForInput } from './esgFocus.js';
+import { extractionDomain } from './extractionDomain.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { combinedFormSpecIds, elementFromHint, pinnedSpecIds } from './specRetrieval.js';
 import {
   agentCasePass,
   agentPassForDocument,
   unitAgainstFieldName,
+  unitFamilyOfField,
+  unitFamilyOfUnit,
   unitsNamedByField,
   type AgentCaseContext,
   type AgentCasePass,
@@ -155,6 +158,101 @@ export function namedUnitFiguresAsExceptions(extraction: DocumentExtraction): Do
   return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
 }
 
+/** Notes the code writes itself; only the reader's own notes speak for the reader. */
+const CODE_NOTE = /^(?:Values not found in the source document|Second read|Analyst (?:review|note)|Read as an Other document|Every quantity this sheet prints)|failed its checksum/i;
+
+/** A note about one part of a chunked document: another part may print the value. */
+const PART_NOTE = /\b(?:this|that|other|another) part\b|\bpart \d+ of \d+\b|\bchunk\b/i;
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The reader's own note says the field is not printed: a clause that OPENS
+ * with the field ("<field> not present on the pages provided"), or "no
+ * <field>". A clause that only mentions the field ("VAT treatment of <field>
+ * is not stated") is about something else and never refuses it.
+ */
+function noteSaysAbsent(note: string, field: string): boolean {
+  const name = escapeRegExp(field);
+  const absent = new RegExp(
+    `^[\\s"'“‘(-]*${name}\\b["'”’)]?\\s*(?:\\(|:|-|–|—|is|was|are|were)?\\s*`
+      + '(?:not\\s+(?:present|printed|stated|shown|given|provided|available|visible|legible|on\\s+(?:this|the)\\s+(?:page|pages|document))|absent|missing|(?:left\\s+|returned\\s+as\\s+|set\\s+to\\s+)null)\\b'
+      + `|\\bno\\s+${name}\\b`,
+    'i',
+  );
+  return absent.test(note);
+}
+
+/** Months, for a filing label ("Depot A July 2025") read as an issuer. */
+const MONTH_AND_YEAR = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|maart|mei|junie|julie|oktober|desember)\b[\s'’.-]*(?:19|20)?\d{2}\b/i;
+
+/** Fields that name who issued a document: never a filing label. */
+const ISSUER_FIELD = /(?:^|_)(?:supplier|issuer|issued_by|contractor|municipality|certification_body|provider|landlord)(?:_name)?$/;
+
+/**
+ * The first pass fills a field its own notes say the document does not print
+ * ("municipality_or_supplier_name not present on provided pages", yet a name
+ * was returned), fills a unit field with a word that is no unit ("UNITS" from a
+ * column heading, as a mass unit), or takes a filing label ("Depot A July
+ * 2025", handwritten on a scan) as the issuer. Each such value is the read
+ * contradicting itself or the vocabulary: it goes to the reviewer as an
+ * exception, never as a value. The agent's cited fills are not judged here:
+ * their citations were checked against the page. Notes about one part of a
+ * long document, and notes the code wrote, are not the read's own word.
+ */
+export function unprintedValuesAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const notes = extraction.exceptions
+    .map((note) => String(note ?? '').trim())
+    .filter((note) => note && !CODE_NOTE.test(note))
+    .flatMap((note) => note.split(/;\s+|\.\s+/))
+    .filter((clause) => !PART_NOTE.test(clause));
+  const refused: string[] = [];
+  // The first answer's notes speak for the first answer: a field the sweep
+  // filled afterwards, or any field of a document read in parts (each part's
+  // notes speak for that part), is not judged by them.
+  const swept = new Set(extraction.sweptFields ?? []);
+  const notesApply = (extraction.readInParts ?? 1) <= 1;
+  const values = extraction.values.filter((value) => {
+    if (value.source?.method === 'agent' || Array.isArray(value.value) || value.value === null || typeof value.value === 'object') return true;
+    const shown = String(value.value).trim();
+    if (notesApply && !swept.has(value.field) && notes.some((note) => noteSaysAbsent(note, value.field))) {
+      refused.push(`${value.field}: "${shown}" was not kept: the read's own note says the document does not print it.`);
+      return false;
+    }
+    if (/_unit$/.test(value.field)) {
+      const family = unitFamilyOfUnit(value.value);
+      const expected = unitFamilyOfField(value.field.replace(/_unit$/, ''));
+      if (!family || (expected && family !== expected)) {
+        refused.push(`${value.field}: "${shown}" was not kept: it is not a unit${expected ? ` of ${expected}` : ''} (kg, t, L, kL, kWh...).`);
+        return false;
+      }
+    }
+    if (ISSUER_FIELD.test(value.field) && typeof value.value === 'string' && MONTH_AND_YEAR.test(value.value)) {
+      refused.push(`${value.field}: "${shown}" was not kept: a place with a month and year is a filing label, not who issued the document.`);
+      return false;
+    }
+    return true;
+  });
+  if (refused.length === 0) return extraction;
+  return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
+}
+
+/**
+ * The extraction as the case resolution sees it: without the facts its skill
+ * marks `scope: document` (a statement date, a document number, a revision, an
+ * author, a filing label, a printed twelve-month total). Those describe their
+ * own document. Resolved across the case, every bill's statement date would
+ * be a rival answer to every other's, and the semantic mapping would be
+ * offered a twelve-month total as if it were the year's figure. They stay on
+ * the extraction the user reads per document.
+ */
+export function withoutDocumentFacts(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const documentOnly = new Set((skill?.fields ?? []).filter((field) => field.scope === 'document' && !field.rowLevel).map((field) => field.name));
+  if (documentOnly.size === 0 || !extraction.values.some((value) => documentOnly.has(value.field))) return extraction;
+  return { ...extraction, values: extraction.values.filter((value) => !documentOnly.has(value.field)) };
+}
+
 /** How many zero quantities, and nothing else, make a sheet an unfilled template. */
 const TEMPLATE_ZERO_QUANTITIES = 3;
 
@@ -218,6 +316,37 @@ export function esgSkillSpecIds(
     if (pins.includes(spec.id)) return [spec.id, ...pins.filter((id) => id !== spec.id)];
   }
   return [spec.id];
+}
+
+/** The generic policy reader (skills/esg/policy_document.md): a policy's header and control facts. */
+export const POLICY_HEADER_SPEC_ID = 'policy_document';
+
+/** A policy, a code or a charter, by what Pass A called it, its file name, or its own header table. */
+const POLICY_WORDS = /\b(?:polic(?:y|ies)|code of (?:conduct|ethics|business)|charter)\b/i;
+
+/**
+ * Is this standalone document a policy, a code or a charter that NONE of its
+ * reads read as one? A group's employment-equity policy is typed by Pass A
+ * as employment-equity evidence (an EE plan), whose reader rightly finds no
+ * plan in it; a policy read by the policy, ethics, supplier-code or
+ * environmental-policy readers is already read as a policy. When true, the
+ * document is also read with the generic policy reader, so its title,
+ * revision, dates, author, approver, scope and owners are never lost to the
+ * element it was filed under.
+ */
+export function needsPolicyHeaderRead(
+  input: { filename: string; markdown?: string; raw_text?: string },
+  classification: DocumentClassificationResult | null,
+  results: DocumentExtraction[],
+): boolean {
+  const opening = (input.markdown?.trim() || input.raw_text || '').slice(0, 2000);
+  const named = POLICY_WORDS.test(classification?.documentType ?? '')
+    || POLICY_WORDS.test(input.filename)
+    || /\bpolicy\s+title\b/i.test(opening);
+  if (!named) return false;
+  const definition = extractionDomain('esg');
+  return !results.some((result) => result.values.some((value) => value.field !== 'exceptions')
+    && (definition.skillFor(result.documentId)?.fields ?? []).some((field) => field.name === 'policy_title'));
 }
 
 /**
@@ -399,6 +528,15 @@ export async function extractEsgCaseEntities(
       : ([] as DocumentExtraction[]);
 
     let results = [...specResults];
+    // A policy typed under another element (an EE policy as an EE plan) that
+    // no read took as a policy is read for its policy header as well.
+    if (flatRead && !sheetName && !otherByClassifier && needsPolicyHeaderRead(input, classification, specResults)) {
+      results.push(...await extractDocument(model, {
+        filename: input.filename,
+        markdown: input.markdown,
+        raw_text: input.raw_text,
+      }, { specIds: [POLICY_HEADER_SPEC_ID], domain: 'esg' }));
+    }
     if (readByCode) results.push(readByCode);
     if (reportedOnly) results.push(reportedOnly);
     if (sheetTable) results.push(sheetTable);
@@ -473,7 +611,7 @@ export async function extractEsgCaseEntities(
   const extractions: DocumentExtraction[] = [];
   for (const result of settled) {
     if (result.status === 'fulfilled' && result.value) {
-      extractions.push(...result.value.map(notesAsExceptions).map(namedUnitFiguresAsExceptions));
+      extractions.push(...result.value.map(notesAsExceptions).map(namedUnitFiguresAsExceptions).map(unprintedValuesAsExceptions));
     } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they
       // have already paid to extract.
@@ -507,7 +645,7 @@ export async function extractEsgCaseEntities(
   // Each bill is its own site × month figure, never a rival answer to every
   // other bill. Only the resolution sees the rows; the extractions handed back
   // keep the bill's own fields, which is what the user reads per document.
-  const forResolution = extractions.map(billAsMonthlyRows);
+  const forResolution = extractions.map(withoutDocumentFacts).map(billAsMonthlyRows);
   const resolved = resolveCaseEntities(forResolution, {
     allFiles: inputs.map((input) => input.filename),
     // Registers from different sheets are halves of one record, not rival answers.

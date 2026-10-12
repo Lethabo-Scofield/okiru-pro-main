@@ -24,6 +24,7 @@ import {
 import { splitWorkbookIntoSheets, shouldSplitWorkbook } from './workbookSheetSplit.js';
 import { extractScannedPdfWithVision } from './visionExtraction.js';
 import { pdfCaptionedColumns, type CaptionedColumn } from './pdfColumns.js';
+import { extractEmailText } from './emailExtraction.js';
 
 /**
  * Below this many characters a PDF/DOCX is treated as a scan, not a document
@@ -51,6 +52,8 @@ export const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
   'application/vnd.ms-powerpoint',
   'text/csv',
   'text/plain',
+  // A saved e-mail (.eml): a client's request or reply thread is evidence too.
+  'message/rfc822',
   'image/png',
   'image/jpeg',
   'image/jpg',
@@ -142,6 +145,55 @@ async function pdfPageItems(buffer: Buffer): Promise<PdfTextItem[][]> {
   return pages;
 }
 
+/** How many leading pages are looked at for pictures: letterheads and logos sit on the first pages. */
+const PICTURE_SCAN_PAGES = 3;
+/** Smaller than this (in image pixels, either side) is a rule, a bullet or a spacer, not a picture with words. */
+const MIN_PICTURE_SIDE = 24;
+
+/**
+ * The pages (1-based, among the first {@link PICTURE_SCAN_PAGES}) of a digital
+ * PDF that paint a raster picture: a letterhead, a logo, a stamp. Words inside
+ * a picture are not in the text layer, so a contractor's name, VAT number or
+ * registration number printed in its letterhead image never reached the
+ * reader. Knowing which pages carry one lets the agent look at just those
+ * page images. Empty when there are none or the PDF cannot be read; never
+ * throws.
+ */
+export async function pdfPicturePages(buffer: Buffer, maxPages = PICTURE_SCAN_PAGES): Promise<number[]> {
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+    const pdf = await loadingTask.promise;
+    const paints = new Set<number>([
+      pdfjs.OPS.paintImageXObject,
+      pdfjs.OPS.paintInlineImageXObject,
+      pdfjs.OPS.paintImageXObjectRepeat,
+      pdfjs.OPS.paintInlineImageXObjectGroup,
+    ]);
+    const pages: number[] = [];
+    for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, maxPages); pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const ops = await page.getOperatorList();
+      const hasPicture = ops.fnArray.some((fn: number, i: number) => {
+        if (!paints.has(fn)) return false;
+        const args = ops.argsArray[i] as unknown[] | undefined;
+        // paintImageXObject: [id, width, height]; an inline image: [{ width, height, ... }].
+        const inline = args?.[0] && typeof args[0] === 'object' ? (args[0] as { width?: number; height?: number }) : null;
+        const width = Number(inline ? inline.width : args?.[1]);
+        const height = Number(inline ? inline.height : args?.[2]);
+        if (!Number.isFinite(width) || !Number.isFinite(height)) return true;
+        return width >= MIN_PICTURE_SIDE && height >= MIN_PICTURE_SIDE;
+      });
+      if (hasPicture) pages.push(pageNumber);
+    }
+    await loadingTask.destroy().catch(() => undefined);
+    return pages;
+  } catch (err) {
+    logger.warn('Could not look for pictures in the PDF; the text is unaffected', { reason: (err as Error).message });
+    return [];
+  }
+}
+
 /**
  * Both readings of a PDF from ONE pdfjs pass: the plain text and the markdown,
  * built from each page's reading-order LINES (pdfjs items grouped by vertical
@@ -210,6 +262,77 @@ export async function extractDocxText(buffer: Buffer): Promise<string> {
 export async function extractDocxMarkdown(buffer: Buffer): Promise<string> {
   const result = await mammoth.convertToHtml({ buffer });
   return htmlToMarkdown(result.value);
+}
+
+const XML_ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+
+function decodeXmlText(text: string): string {
+  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
+    if (code.startsWith('#x') || code.startsWith('#X')) return String.fromCodePoint(parseInt(code.slice(2), 16));
+    if (code.startsWith('#')) return String.fromCodePoint(Number(code.slice(1)));
+    return XML_ENTITIES[code.toLowerCase()] ?? whole;
+  });
+}
+
+/** One header or footer part's lines: a paragraph per line, a table row as "a | b". */
+function wordPartLines(xml: string): string[] {
+  const lines: string[] = [];
+  // A tab or a line break inside a paragraph separates words: a run of one space.
+  const paragraphText = (p: string) => decodeXmlText(
+    (p.replace(/<w:(?:tab|br|cr)(?:\s[^>]*)?\/>/g, '<w:t> </w:t>')
+      .match(/<w:t(?:\s[^>]*)?>[^<]*<\/w:t>/g) ?? [])
+      .map((run) => run.replace(/<[^>]+>/g, '')).join(''),
+  ).replace(/\s+/g, ' ').trim();
+  // Tables first, row by row, then the paragraphs outside them.
+  const body = xml.replace(/<w:tbl>[\s\S]*?<\/w:tbl>/g, (table) => {
+    for (const row of table.match(/<w:tr[ >][\s\S]*?<\/w:tr>/g) ?? []) {
+      const cells = (row.match(/<w:tc>[\s\S]*?<\/w:tc>/g) ?? [])
+        .map((cell) => (cell.match(/<w:p[ >][\s\S]*?<\/w:p>/g) ?? []).map(paragraphText).filter(Boolean).join(' '))
+        .filter(Boolean);
+      if (cells.length > 0) lines.push(cells.join(' | '));
+    }
+    return '';
+  });
+  for (const p of body.match(/<w:p[ >][\s\S]*?<\/w:p>|<w:p\/>/g) ?? []) {
+    const text = paragraphText(p);
+    if (text) lines.push(text);
+  }
+  return lines;
+}
+
+/**
+ * A Word document's page headers and footers, which mammoth leaves out: the
+ * document number and revision date of a controlled form, a letter's company
+ * registration number, its directors and secretary. Each distinct part once
+ * (the first-page, even and default headers often repeat one another), under
+ * "## Header" and "## Footer". Empty when there are none or the file is not a
+ * readable package; never throws.
+ */
+export async function extractDocxHeadersAndFooters(buffer: Buffer): Promise<string> {
+  try {
+    const { default: JSZip } = await import('jszip');
+    const zip = await JSZip.loadAsync(buffer);
+    const sections: string[] = [];
+    for (const [kind, heading] of [['header', '## Header'], ['footer', '## Footer']] as const) {
+      const names = Object.keys(zip.files)
+        .filter((name) => new RegExp(`^word/${kind}\\d*\\.xml$`).test(name))
+        .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+      const seen = new Set<string>();
+      const lines: string[] = [];
+      for (const name of names) {
+        const partLines = wordPartLines(await zip.files[name].async('string'));
+        const key = partLines.join('\n');
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        lines.push(...partLines);
+      }
+      if (lines.length > 0) sections.push(`${heading}\n\n${lines.join('\n')}`);
+    }
+    return sections.join('\n\n');
+  } catch (err) {
+    logger.warn('Could not read the Word document\'s headers and footers; the body is unaffected', { reason: (err as Error).message });
+    return '';
+  }
 }
 
 /**
@@ -384,7 +507,7 @@ async function extractImageText(buffer: Buffer): Promise<string> {
  */
 export const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   '.pdf', '.docx', '.doc', '.xlsx', '.xlsm', '.xls', '.pptx', '.ppt',
-  '.csv', '.txt', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp',
+  '.csv', '.txt', '.eml', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp',
 ]);
 
 /** Accept when EITHER the declared type or the extension is one we support. */
@@ -417,6 +540,8 @@ export async function rawExtractionInputFromUpload(
   // Which scanned-document reader produced the text, when one did. Travels in
   // metadata so later stages (the agent-loop gate) know the text is OCR.
   let scannedBy: 'document_intelligence' | 'vision' | null = null;
+  // A digital PDF's pages that carry a picture (pdfPicturePages).
+  let picturePages: number[] = [];
 
   logger.info('Extracting uploaded file', {
     filename: file.originalname,
@@ -437,12 +562,24 @@ export async function rawExtractionInputFromUpload(
         filename: file.originalname, reason: (err as Error).message,
       });
     }
+    // Only a PDF with a text layer: a scan's every page is an image anyway.
+    if (rawText.trim().length >= MIN_TEXT_LAYER_CHARS) {
+      picturePages = await withTimeout(pdfPicturePages(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => []);
+    }
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     || ext === '.docx'
   ) {
     rawText = await withTimeout(extractDocxText(file.buffer), EXTRACTION_TIMEOUT_MS);
     markdown = await withTimeout(extractDocxMarkdown(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => '');
+    // Page headers and footers are part of what the document states (a form's
+    // number and revision date, a letter's registration number and directors);
+    // the body readers above leave them out.
+    const margins = await withTimeout(extractDocxHeadersAndFooters(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => '');
+    if (margins) {
+      rawText = [rawText.trimEnd(), margins].filter(Boolean).join('\n\n');
+      if (markdown) markdown = `${markdown.trimEnd()}\n\n${margins}`;
+    }
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     || file.mimetype === 'application/vnd.ms-excel'
@@ -466,6 +603,10 @@ export async function rawExtractionInputFromUpload(
   } else if (file.mimetype === 'text/plain' || ext === '.txt') {
     rawText = file.buffer.toString('utf8');
     markdown = rawText;
+  } else if (file.mimetype === 'message/rfc822' || ext === '.eml') {
+    const extracted = await withTimeout(extractEmailText(file.buffer), EXTRACTION_TIMEOUT_MS);
+    rawText = extracted.text;
+    markdown = extracted.markdown;
   } else if (file.mimetype.startsWith('image/')) {
     if (file.size > MAX_IMAGE_BYTES) {
       throw new Error(`Image exceeds maximum size of ${MAX_IMAGE_BYTES} bytes`);
@@ -584,6 +725,7 @@ export async function rawExtractionInputFromUpload(
       mime_type: file.mimetype,
       ...(scannedBy ? { scanned: true, text_source: scannedBy } : {}),
       ...(pdfColumns.length > 0 && !scannedBy ? { pdf_columns: pdfColumns } : {}),
+      ...(picturePages.length > 0 && !scannedBy ? { picture_pages: picturePages } : {}),
     },
   };
 }

@@ -109,7 +109,16 @@ export interface SkillField {
   /** Wordings the document uses for this value ("Basic Salary", "BASIC"). */
   labels: string[];
   description: string;
+  /**
+   * 'document' marks a fact about the document itself (its title, number,
+   * revision, statement date, author, a filing label, a printed history
+   * total): reported on the document, never resolved across the case as a
+   * rival answer and never offered to the calculator mapping. Default 'case'.
+   */
+  scope?: SkillFieldScope;
 }
+
+export type SkillFieldScope = 'case' | 'document';
 
 export interface SkillClassify {
   /** One sentence: what this document is. */
@@ -351,13 +360,19 @@ const ALLOWED_KEYS = new Set([
   'id', 'appliesTo', 'element', 'version', 'hard', 'classify', 'rowsField',
   'fields', 'newFields', 'dropFields', 'newType',
 ]);
-const FIELD_KEYS = new Set(['name', 'type', 'required', 'rowLevel', 'labels', 'description']);
+const FIELD_KEYS = new Set(['name', 'type', 'required', 'rowLevel', 'labels', 'description', 'scope']);
 const CLASSIFY_KEYS = new Set(['is', 'isNot', 'filenameHints', 'contentSignals']);
 
 function rejectUnknownKeys(mapping: Mapping, allowed: Set<string>, what: string, file: string): void {
   for (const key of Object.keys(mapping)) {
     if (!allowed.has(key)) throw new SkillLoadError(`unknown ${what} key "${key}"`, file);
   }
+}
+
+function scopeOf(value: FrontMatterValue | undefined, name: string, file: string): SkillFieldScope {
+  if (value === undefined || value === null) return 'case';
+  if (value !== 'case' && value !== 'document') throw new SkillLoadError(`field "${name}".scope must be case or document`, file);
+  return value;
 }
 
 function parseField(raw: FrontMatterValue, index: number, file: string): SkillField {
@@ -376,6 +391,7 @@ function parseField(raw: FrontMatterValue, index: number, file: string): SkillFi
     rowLevel: boolOf(raw.rowLevel, `field "${name}".rowLevel`, file, false),
     labels: stringList(raw.labels, `field "${name}".labels`, file),
     description: stringOf(raw.description, `field "${name}".description`, file),
+    scope: scopeOf(raw.scope, name, file),
   };
 }
 
