@@ -34,6 +34,8 @@ import { coerceYesNo } from "../src/lib/yesNoValue";
 import { tmpsHold } from "../src/lib/extractionMetaKeys";
 import { isBlackRace, isScoringDesignation, normalizeRace, normalizeDesignationForScoring } from "@toolkit/lib/calculators/shared";
 import { createChatCompletion } from "./openaiCompat";
+import { respondWithAiReview } from "./workbookAiReview";
+import { aiReviewLimiter } from "./rateLimit";
 import {
   suggestValueFingerprint,
   rememberDecision,
@@ -2043,6 +2045,25 @@ export function registerWorkbookRoutes(app: Express): void {
     "/api/internal/workbook-backsync",
     handleBackSync(process.env.INTERNAL_BACKSYNC_TOKEN),
   );
+
+  // ---------------------------------------------------------------------------
+  // POST /api/workbook/:companyId/ai-review
+  // The AI review's model pass: one call over the cells the rules could not
+  // settle, verified against this workbook before anything is returned.
+  // Writes nothing — accepted fills go through the section save above.
+  // ---------------------------------------------------------------------------
+  app.post("/api/workbook/:companyId/ai-review", requireAuth, aiReviewLimiter, async (req: Request, res: Response) => {
+    const wb = await authorizeWorkbookAccess(req, res);
+    if (!wb) return;
+    const userId: string = (req as any).user?.id || (req.session as any)?.userId;
+    const access = await resolveWorkbookPillarAccess(String(req.params.companyId), userId);
+    // A viewer could save none of the fills, so the paid call is not made.
+    if (access && access.mode === "readOnly") {
+      return res.status(403).json({ error: "You can view this workbook but not change it, so the AI review has nothing to fill." });
+    }
+    const sections = access && access.mode === "scoped" ? filterReadableSections(access, wb.sections ?? {}) : wb.sections;
+    await respondWithAiReview(sections ?? {}, res, { canWrite: (key) => canWriteSection(access, key) });
+  });
 
   // ---------------------------------------------------------------------------
   // POST /api/workbook/suggest-value

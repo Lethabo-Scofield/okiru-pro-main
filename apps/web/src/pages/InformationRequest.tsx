@@ -42,6 +42,15 @@ import { NewCompanyForm, EMPTY_NEW_COMPANY, type NewCompanyValues } from "@/comp
 import { validateNewClient } from "@shared/clientCreation";
 import { normalizeCellForColumn } from "@/lib/tabularNormalize";
 import { META_CONFLICTS_KEY } from "@/lib/parserToWorkbook";
+import { AiFillMarker } from "@/components/workbook/AiFillMarker";
+import {
+  activeMark,
+  applyFillProposals,
+  undoAiFill,
+  undoAllAiFills,
+  undoRowFill,
+  type SectionPatch,
+} from "@/lib/aiReviewFill";
 import { usePillarPermission } from "@/hooks/usePillarPermission";
 import {
   formatWorkbookValidationSummary,
@@ -1416,11 +1425,19 @@ function MetaForm({
       crossFieldErrors[f.key] ||
       (f.required && blank ? "Required" : f.validate ? f.validate(v) : null);
     const emphasized = Boolean(f.emphasis);
+    const aiMark = activeMark(value, f.key);
     return (
       <label key={f.key} className="block" data-testid={`meta-field-${f.key}`}>
         <div className={`text-[12px] mb-1.5 flex items-center gap-1 ${emphasized ? "text-sky-200 font-medium" : "text-[color:var(--body)]"}`}>
           {f.label}
           {f.required && <span className="text-status-error">*</span>}
+          {aiMark && (
+            <AiFillMarker
+              mark={aiMark}
+              testId={`ai-fill-marker-meta-${f.key}`}
+              onUndo={readOnly ? undefined : () => onChange(undoRowFill(value, f.key))}
+            />
+          )}
         </div>
         {f.type === "select" ? (
           <select
@@ -1859,6 +1876,17 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       }
     },
     [scheduleSave],
+  );
+
+  /** Save the AI review's fills or undos, section by section. */
+  const writeSectionPatches = useCallback(
+    (patches: SectionPatch[]) => {
+      for (const patch of patches) {
+        if (patch.rows) handleRowsChange(patch.section, patch.rows as Row[]);
+        if (patch.meta) handleMetaChange(patch.section, patch.meta);
+      }
+    },
+    [handleRowsChange, handleMetaChange],
   );
 
   const waitForInFlight = useCallback(async () => {
@@ -2528,7 +2556,18 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
       {workbook && (
         <ExtractionReviewModal
           sections={workbook.sections}
+          companyId={companyId}
           onNavigateToSection={selectSection}
+          // Fills and undos are computed against the workbook as it is NOW
+          // (the ref, not the render's copy), so a cell typed a moment ago is
+          // never overwritten, and saved through the ordinary section save.
+          onApplyFills={(proposals) => {
+            const result = applyFillProposals(workbookRef.current?.sections ?? {}, proposals);
+            writeSectionPatches(result.patches);
+            return { applied: result.applied, skipped: result.skipped };
+          }}
+          onUndoFill={(ref) => writeSectionPatches(undoAiFill(workbookRef.current?.sections ?? {}, ref))}
+          onUndoAllFills={() => writeSectionPatches(undoAllAiFills(workbookRef.current?.sections ?? {}))}
           onApplyMetaValue={(sectionKey: string, column: string, value: string) => {
             // Settle an entity-level figure the documents disagreed on.
             //
