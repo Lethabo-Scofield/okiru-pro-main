@@ -20,7 +20,7 @@
  * section save.
  */
 import { useMemo, useState, type ReactNode } from "react";
-import { Check, ChevronRight, CircleHelp, GitMerge, Info, Loader2, RotateCcw, Sparkles, X } from "lucide-react";
+import { Check, ChevronRight, CircleHelp, GitMerge, Info, Loader2, PanelRightClose, PanelRightOpen, RotateCcw, Sparkles, X } from "lucide-react";
 import {
   activeEsgFills,
   buildEsgRuleFills,
@@ -35,6 +35,7 @@ import {
 import { esgOpenCellCount } from "@/lib/esg/esgAiReviewModel";
 import { esgScoreChangingFills, esgScoreEffect, type EsgScoreSnapshot } from "@/lib/esg/esgAiReviewScore";
 import { API_BASE } from "@toolkit/lib/config";
+import { SidePaneHandle, useSidePaneWidth } from "@/components/review/SidePane";
 
 export interface EsgApplyFillsResult {
   applied: string[];
@@ -67,6 +68,8 @@ const SECTION_HEADING = "mb-2 flex items-center gap-1.5 text-[11.5px] font-semib
 const CARD = "rounded-xl border border-[var(--esg-glass-border)] bg-white/[0.02] px-3.5 py-3";
 const QUIET_BUTTON =
   "inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[var(--esg-glass-border-hover)] px-2.5 text-[11.5px] font-medium text-[var(--esg-text)] hover:bg-white/[0.06] disabled:opacity-50";
+/** The fills in as many columns as the width takes, none narrower than a card can read at. */
+const FILL_GRID = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr))]";
 const PRIMARY_BUTTON =
   "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-[var(--esg-acc-e)] px-3 text-[12px] font-semibold text-[#080e14] hover:opacity-90 disabled:opacity-50";
 
@@ -113,7 +116,7 @@ function FillCard({
   busy: boolean;
 }) {
   return (
-    <div className={CARD} data-testid={`esg-review-fill-${proposal.id}`}>
+    <div className={`${CARD} flex flex-col`} data-testid={`esg-review-fill-${proposal.id}`}>
       <p className="text-[11.5px] leading-snug text-[var(--esg-text2)]">{proposal.cellLabel}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <span className="break-words text-[14px] font-semibold tabular-nums text-[var(--esg-text)]">
@@ -127,7 +130,7 @@ function FillCard({
           {esgFillBadge(proposal.kind, proposal.rule)}
         </span>
         {changesScore ? (
-          <span className="text-[10.5px] font-medium text-amber-200/90" data-testid={`esg-review-fill-score-${proposal.id}`}>
+          <span className="text-[10.5px] font-medium text-[var(--esg-text)]" data-testid={`esg-review-fill-score-${proposal.id}`}>
             Changes your score
           </span>
         ) : null}
@@ -138,7 +141,7 @@ function FillCard({
           Converted: {proposal.conversion}
         </p>
       ) : null}
-      <div className="mt-2 flex items-center justify-between gap-3">
+      <div className="mt-auto flex items-start justify-between gap-3 pt-2">
         <details className="min-w-0 text-[11.5px] text-[var(--esg-text2)]">
           <summary className="cursor-pointer select-none hover:text-[var(--esg-text)]">Evidence ({proposal.evidence.length})</summary>
           <ul className="mt-1 space-y-0.5">
@@ -177,6 +180,8 @@ export function EsgAiReviewModal({
   const [confirming, setConfirming] = useState<EsgFillProposal[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sideOpen, setSideOpen] = useState(true);
+  const [sideWidth, setSideWidth] = useSidePaneWidth("okiru-esg-ai-review-side-width");
 
   const wb = workbook ?? { sections: {} };
   const rules = useMemo(() => buildEsgRuleFills(wb, { companyName }), [wb, companyName]);
@@ -209,6 +214,9 @@ export function EsgAiReviewModal({
   const confirmEffect = useMemo(() => (confirming ? esgScoreEffect(wb, confirming) : null), [confirming, wb]);
 
   const badge = proposals.length + questions.length;
+  // Once nothing is left to fill, what was filled takes the main pane.
+  const fillsInMain = proposals.length === 0;
+  const sideCount = questions.length + (fillsInMain ? 0 : fills.length);
   const canApply = !locked;
 
   const apply = async (list: EsgFillProposal[]) => {
@@ -289,6 +297,52 @@ export function EsgAiReviewModal({
     }
   };
 
+  /** What the review filled, each with its Undo: beside the fills, or in their place once none are left. */
+  const filledSection = (inMain: boolean) =>
+    fills.length > 0 ? (
+      <section data-testid="esg-review-ai-fills" data-placement={inMain ? "main" : "side"}>
+        <div className="mb-2 flex items-center justify-between">
+          <Heading icon={<Sparkles className="h-3.5 w-3.5" />}>Filled by AI review · {fills.length}</Heading>
+          {canApply ? (
+            <button
+              type="button"
+              onClick={() => void undo(onUndoAllFills)}
+              disabled={busy}
+              className="inline-flex items-center gap-1 text-[11.5px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+              data-testid="esg-review-undo-all"
+            >
+              <RotateCcw className="h-3 w-3" /> Undo all
+            </button>
+          ) : null}
+        </div>
+        <ul className={inMain ? FILL_GRID : "space-y-1"}>
+          {fills.map((f) => (
+            <li key={f.key} className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2" data-testid={`esg-review-ai-fill-${f.key}`}>
+              <span className="min-w-0 text-[12px] leading-snug">
+                <span className="block text-[11px] text-[var(--esg-text2)]">{f.label}</span>
+                <span>{esgDisplayValue(f.mark.v, f.unit)}</span>
+                <span className="text-[var(--esg-text2)]">
+                  {" "}
+                  · {esgFillBadge(f.mark.kind, f.mark.rule).toLowerCase()} — {f.mark.reason}
+                </span>
+              </span>
+              {canApply ? (
+                <button
+                  type="button"
+                  onClick={() => void undo(() => onUndoFill(f.key))}
+                  disabled={busy}
+                  className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
+                  data-testid={`esg-review-undo-${f.key}`}
+                >
+                  <RotateCcw className="h-3 w-3" /> Undo
+                </button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+    ) : null;
+
   return (
     <>
       <button
@@ -308,16 +362,20 @@ export function EsgAiReviewModal({
 
       {open && (
         <div
-          className="esg-theme fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="esg-theme fixed inset-0 z-50 flex items-stretch justify-center bg-black/60 p-3 sm:p-5"
           onClick={() => setOpen(false)}
           data-testid="esg-ai-review-modal"
         >
+          {/* The whole screen, like the document review: the fills fill it, and
+              the questions and what was filled sit beside them at the width the
+              reader drags them to. */}
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="esg-ai-review-title"
-            className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-[var(--esg-glass-border-hover)] bg-[var(--esg-section-bg)] text-[var(--esg-text)] shadow-2xl shadow-black/60"
+            className="flex h-full w-full max-w-[1760px] flex-col overflow-hidden rounded-2xl border border-[var(--esg-glass-border-hover)] bg-[var(--esg-section-bg)] text-[var(--esg-text)] shadow-2xl shadow-black/60"
             onClick={(e) => e.stopPropagation()}
+            data-testid="esg-ai-review-dialog"
           >
             <div className="border-b border-[var(--esg-glass-border)] px-5 py-4">
               <div className="flex items-start justify-between gap-3">
@@ -330,14 +388,26 @@ export function EsgAiReviewModal({
                     empty and you get a question.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="rounded-full p-1.5 text-[var(--esg-text2)] hover:bg-white/[0.06] hover:text-[var(--esg-text)]"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSideOpen((v) => !v)}
+                    aria-expanded={sideOpen}
+                    className="hidden items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[12px] font-medium text-[var(--esg-text2)] hover:bg-white/[0.05] hover:text-[var(--esg-text)] lg:inline-flex"
+                    data-testid="esg-review-toggle-side"
+                  >
+                    {sideOpen ? <PanelRightClose className="h-3.5 w-3.5" aria-hidden /> : <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />}
+                    {sideOpen ? "Hide the side" : `Show questions and fills (${sideCount})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="rounded-full p-1.5 text-[var(--esg-text2)] hover:bg-white/[0.06] hover:text-[var(--esg-text)]"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               {proposals.length > 0 && canApply && !confirming ? (
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] px-3.5 py-2.5">
@@ -390,7 +460,8 @@ export function EsgAiReviewModal({
               ) : null}
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden" style={{ ["--esg-review-side-w" as string]: `${sideWidth}px` }}>
+            <div className="min-w-0 flex-1 space-y-5 px-5 py-4 lg:min-h-0 lg:overflow-y-auto" data-testid="esg-review-main">
               {locked ? (
                 <p className={`${CARD} text-[12.5px] text-[var(--esg-text2)]`} data-testid="esg-review-locked">
                   This workbook is submitted, so the review can show its fills but not add or undo any.
@@ -400,7 +471,7 @@ export function EsgAiReviewModal({
               {proposals.length > 0 ? (
                 <section data-testid="esg-review-suggestions">
                   <Heading icon={<GitMerge className="h-3.5 w-3.5" />}>Ready to fill</Heading>
-                  <div className="space-y-1.5">
+                  <div className={FILL_GRID} data-testid="esg-review-fill-grid">
                     {proposals.map((p) => (
                       <FillCard
                         key={p.id}
@@ -414,6 +485,33 @@ export function EsgAiReviewModal({
                 </section>
               ) : null}
 
+              {fillsInMain ? filledSection(true) : null}
+
+              {badge === 0 && fills.length === 0 && openForModel === 0 && !modelResult ? (
+                <p className={`${CARD} text-[13px]`} data-testid="esg-review-all-clear">
+                  Nothing to fill from what the workbook already holds. Add documents to give the review more to read.
+                </p>
+              ) : proposals.length === 0 && fills.length === 0 && !locked ? (
+                <p className="text-[12.5px] text-[var(--esg-text2)]" data-testid="esg-review-nothing-ready">
+                  Nothing is ready to fill right now. What is left is beside this: the AI pass and the questions.
+                </p>
+              ) : null}
+            </div>
+
+            <SidePaneHandle
+              width={sideWidth}
+              onChange={setSideWidth}
+              label="Resize the questions and fills pane"
+              className={sideOpen ? "" : "lg:hidden"}
+              lineClassName="bg-[var(--esg-glass-border-hover)]"
+              testId="esg-review-resize"
+            />
+
+            <aside
+              className={`min-w-0 space-y-5 border-t border-[var(--esg-glass-border)] bg-white/[0.015] px-5 py-4 lg:min-h-0 lg:w-[var(--esg-review-side-w)] lg:max-w-[55%] lg:shrink-0 lg:overflow-y-auto lg:border-t-0 ${sideOpen ? "" : "lg:hidden"}`}
+              aria-label="Questions and fills"
+              data-testid="esg-review-side"
+            >
               {!locked && (openForModel > 0 || modelResult) ? (
                 <section className={CARD} data-testid="esg-review-ai-pass">
                   {modelResult ? (
@@ -495,55 +593,14 @@ export function EsgAiReviewModal({
                 </section>
               ) : null}
 
-              {fills.length > 0 ? (
-                <section data-testid="esg-review-ai-fills">
-                  <div className="mb-2 flex items-center justify-between">
-                    <Heading icon={<Sparkles className="h-3.5 w-3.5" />}>Filled by AI review · {fills.length}</Heading>
-                    {canApply ? (
-                      <button
-                        type="button"
-                        onClick={() => void undo(onUndoAllFills)}
-                        disabled={busy}
-                        className="inline-flex items-center gap-1 text-[11.5px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
-                        data-testid="esg-review-undo-all"
-                      >
-                        <RotateCcw className="h-3 w-3" /> Undo all
-                      </button>
-                    ) : null}
-                  </div>
-                  <ul className="space-y-1">
-                    {fills.map((f) => (
-                      <li key={f.key} className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2" data-testid={`esg-review-ai-fill-${f.key}`}>
-                        <span className="min-w-0 text-[12px] leading-snug">
-                          <span className="block text-[11px] text-[var(--esg-text2)]">{f.label}</span>
-                          <span>{esgDisplayValue(f.mark.v, f.unit)}</span>
-                          <span className="text-[var(--esg-text2)]">
-                            {" "}
-                            · {esgFillBadge(f.mark.kind, f.mark.rule).toLowerCase()} — {f.mark.reason}
-                          </span>
-                        </span>
-                        {canApply ? (
-                          <button
-                            type="button"
-                            onClick={() => void undo(() => onUndoFill(f.key))}
-                            disabled={busy}
-                            className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-[var(--esg-text2)] hover:text-[var(--esg-text)] disabled:opacity-50"
-                            data-testid={`esg-review-undo-${f.key}`}
-                          >
-                            <RotateCcw className="h-3 w-3" /> Undo
-                          </button>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ) : null}
+              {fillsInMain ? null : filledSection(false)}
 
-              {badge === 0 && fills.length === 0 && openForModel === 0 && !modelResult ? (
-                <p className={`${CARD} text-[13px]`} data-testid="esg-review-all-clear">
-                  Nothing to fill from what the workbook already holds. Add documents to give the review more to read.
+              {sideCount === 0 ? (
+                <p className="text-[12px] leading-snug text-[var(--esg-text2)]" data-testid="esg-review-side-empty">
+                  {fillsInMain ? "No questions." : "No questions, and nothing filled by the review yet."}
                 </p>
               ) : null}
+            </aside>
             </div>
           </div>
         </div>

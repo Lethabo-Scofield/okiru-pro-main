@@ -31,6 +31,8 @@ import {
   GitMerge,
   ListChecks,
   Loader2,
+  PanelRightClose,
+  PanelRightOpen,
   RotateCcw,
   Sparkles,
   TriangleAlert,
@@ -53,6 +55,7 @@ import {
 } from "@/lib/aiReviewFill";
 import { buildAiReviewGrounding } from "@/lib/aiReviewModel";
 import { API_BASE } from "@toolkit/lib/config";
+import { SidePaneHandle, useSidePaneWidth } from "@/components/review/SidePane";
 import type { WorkbookSectionsInput } from "./workbookValidation";
 
 export interface CellUpdate {
@@ -111,7 +114,7 @@ function DecisionRow({
             <select
               value={choice}
               onChange={(e) => setChoice(e.target.value)}
-              className="h-8 flex-1 rounded-lg border border-white/[0.10] bg-[color:var(--ink-3)] px-2 text-[12px] text-white outline-none"
+              className="h-8 min-w-0 max-w-md flex-1 rounded-lg border border-white/[0.10] bg-[color:var(--ink-3)] px-2 text-[12px] text-white outline-none"
               data-testid={`review-decision-select-${decision.column}`}
             >
               <option value="">Choose a value…</option>
@@ -145,7 +148,7 @@ function DecisionRow({
 
 function SectionHeading({ icon, children, tone = "muted" }: { icon: ReactNode; children: ReactNode; tone?: "muted" | "warn" }) {
   return (
-    <div className={`mb-2 flex items-center gap-1.5 text-[11.5px] font-medium uppercase tracking-wide ${tone === "warn" ? "text-amber-200/90" : "text-[color:var(--body)]"}`}>
+    <div className={`mb-2 flex items-center gap-1.5 text-[11.5px] font-medium uppercase tracking-wide ${tone === "warn" ? "text-[color:var(--hi)]" : "text-[color:var(--body)]"}`}>
       {icon} {children}
     </div>
   );
@@ -156,7 +159,7 @@ function KindBadge({ proposal }: { proposal: Pick<FillProposal, "id" | "kind" | 
   const derived = proposal.kind === "derived";
   return (
     <span
-      className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${derived ? "border-violet-300/30 text-violet-200" : "border-white/[0.14] text-[color:var(--body)]"}`}
+      className={`rounded-full border px-2 py-0.5 text-[10.5px] font-medium ${derived ? "border-dashed border-white/[0.22] text-white" : "border-white/[0.14] text-[color:var(--body)]"}`}
       data-testid={`review-fill-kind-${proposal.id}`}
       title={derived ? "Worked out from other figures — not stated in a document" : "Stated in your documents"}
     >
@@ -167,21 +170,21 @@ function KindBadge({ proposal }: { proposal: Pick<FillProposal, "id" | "kind" | 
 
 function FillCard({ proposal, onApply }: { proposal: FillProposal; onApply?: () => void }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[color:var(--ink-2)] px-3.5 py-3" data-testid={`review-fill-${proposal.id}`}>
+    <div className="flex flex-col rounded-xl border border-white/[0.06] bg-[color:var(--ink-2)] px-3.5 py-3" data-testid={`review-fill-${proposal.id}`}>
       <p className="text-[11px] text-[color:var(--body)]">{cellLabelOf(proposal.section, proposal.rowLabel, proposal.columnLabel)}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <span className="text-[14px] font-semibold tabular-nums text-white">{proposal.value}</span>
         <KindBadge proposal={proposal} />
-        {proposal.affectsScore && <span className="text-[10.5px] text-amber-200/80">Changes your score</span>}
+        {proposal.affectsScore && <span className="text-[10.5px] font-medium text-[color:var(--hi)]">Changes your score</span>}
         {proposal.replaces !== undefined && (
           <span className="text-[10.5px] text-[color:var(--body)]">replaces “{proposal.replaces}”</span>
         )}
       </div>
       <p className="mt-1.5 text-[12px] leading-snug text-[color:var(--body)]">{proposal.reasoning}</p>
       {proposal.conversion && (
-        <p className="mt-1 text-[11.5px] text-amber-200/80">Converted: {proposal.conversion}</p>
+        <p className="mt-1 text-[11.5px] text-white">Converted: {proposal.conversion}</p>
       )}
-      <div className="mt-2 flex items-center justify-between gap-3">
+      <div className="mt-auto flex items-start justify-between gap-3 pt-2">
         <details className="min-w-0 text-[11.5px] text-[color:var(--body)]">
           <summary className="cursor-pointer select-none text-[color:var(--body)] hover:text-white">
             Evidence ({proposal.evidence.length})
@@ -207,6 +210,9 @@ function FillCard({ proposal, onApply }: { proposal: FillProposal; onApply?: () 
   );
 }
 
+/** The fills in as many columns as the width takes, none narrower than a card can read at. */
+const FILL_GRID = "grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr))]";
+
 export function ExtractionReviewModal({
   sections,
   onApplyCellUpdates,
@@ -223,6 +229,8 @@ export function ExtractionReviewModal({
   const [modelError, setModelError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<FillProposal[] | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [sideOpen, setSideOpen] = useState(true);
+  const [sideWidth, setSideWidth] = useSidePaneWidth("okiru-ai-review-side-width");
 
   const review: ExtractionReview = useMemo(() => buildExtractionReview(sections), [sections]);
   const rules = useMemo(() => buildRuleFills(sections), [sections]);
@@ -259,6 +267,9 @@ export function ExtractionReviewModal({
 
   const badge = proposals.length + questions.length + review.conflicts.length + review.decisions.length + review.choices.length;
   const scoreChanging = proposals.filter((p) => p.affectsScore);
+  // Once nothing is left to fill, what was filled takes the main pane.
+  const fillsInMain = proposals.length === 0;
+  const sideCount = questions.length + (fillsInMain ? 0 : fills.length);
 
   const apply = async (list: FillProposal[]) => {
     setConfirming(null);
@@ -324,6 +335,50 @@ export function ExtractionReviewModal({
     onNavigateToSection(sectionKey);
   };
 
+  /** What the review filled, each with its Undo: beside the fills, or in their place once none are left. */
+  const filledSection = (inMain: boolean) =>
+    fills.length > 0 ? (
+      <section data-testid="review-ai-fills" data-placement={inMain ? "main" : "side"}>
+        <div className="mb-2 flex items-center justify-between">
+          <SectionHeading icon={<Sparkles className="h-3.5 w-3.5" />}>Filled by AI review · {fills.length}</SectionHeading>
+          {onUndoAllFills && (
+            <button
+              type="button"
+              onClick={() => void onUndoAllFills()}
+              className="inline-flex items-center gap-1 text-[11.5px] text-[color:var(--body)] hover:text-white"
+              data-testid="review-undo-all"
+            >
+              <RotateCcw className="h-3 w-3" /> Undo all
+            </button>
+          )}
+        </div>
+        <ul className={inMain ? FILL_GRID : "space-y-1"}>
+          {fills.map((f) => {
+            const key = `${f.section}-${f.rowId ?? "meta"}-${f.column}`;
+            return (
+              <li key={key} className="flex items-start justify-between gap-3 rounded-lg bg-[color:var(--ink-2)] px-3 py-2" data-testid={`review-ai-fill-${key}`}>
+                <span className="min-w-0 text-[12px] leading-snug">
+                  <span className="block text-[10.5px] text-[color:var(--body)]">{cellLabelOf(f.section, f.rowLabel, f.columnLabel)}</span>
+                  <span className="text-white">{f.mark.value}</span>
+                  <span className="text-[color:var(--body)]"> · {f.mark.kind === "derived" ? "derived" : "read"} — {f.mark.reasoning}</span>
+                </span>
+                {onUndoFill && (
+                  <button
+                    type="button"
+                    onClick={() => void onUndoFill({ section: f.section, rowId: f.rowId, column: f.column })}
+                    className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-[color:var(--body)] hover:text-white"
+                    data-testid={`review-undo-${key}`}
+                  >
+                    <RotateCcw className="h-3 w-3" /> Undo
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+    ) : null;
+
   return (
     <>
       {/* Floating entry point — always visible on a document-built workbook. */}
@@ -333,7 +388,7 @@ export function ExtractionReviewModal({
         className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full border border-white/[0.12] bg-[color:var(--ink-3)] px-4 py-2.5 text-[13px] font-medium text-white shadow-[0_8px_30px_rgba(0,0,0,0.45)] hover:border-white/[0.24]"
         data-testid="extraction-review-open"
       >
-        <Sparkles className="h-4 w-4 text-violet-300" />
+        <Sparkles className="h-4 w-4 text-white/80" />
         AI review
         {badge > 0 && (
           <span className="ml-0.5 rounded-full bg-white/[0.08] px-2 py-0.5 text-[11px] font-semibold text-white" data-testid="extraction-review-badge">
@@ -343,13 +398,17 @@ export function ExtractionReviewModal({
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[color:var(--ink)]/60 p-4" onClick={() => setOpen(false)} data-testid="extraction-review-modal">
+        <div className="fixed inset-0 z-50 flex items-stretch justify-center bg-[color:var(--ink)]/60 p-3 sm:p-5" onClick={() => setOpen(false)} data-testid="extraction-review-modal">
+          {/* The whole screen, like the document review: the fills fill it, and
+              the questions and what was filled sit beside them at the width the
+              reader drags them to. */}
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="extraction-review-title"
-            className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[color:var(--ink-3)]"
+            className="flex h-full w-full max-w-[1760px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[color:var(--ink-3)]"
             onClick={(e) => e.stopPropagation()}
+            data-testid="extraction-review-dialog"
           >
             <div className="border-b border-white/[0.06] px-5 py-4">
               <div className="flex items-start justify-between gap-3">
@@ -359,9 +418,21 @@ export function ExtractionReviewModal({
                     Fills it can back with your documents or your own figures. Where nothing backs a value, the cell stays empty and you get a question.
                   </p>
                 </div>
-                <button type="button" onClick={() => setOpen(false)} className="rounded-full p-1.5 text-[color:var(--body)] hover:bg-white/[0.06] hover:text-white" aria-label="Close">
-                  <X className="h-4 w-4" />
-                </button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setSideOpen((v) => !v)}
+                    aria-expanded={sideOpen}
+                    className="hidden items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1.5 text-[12px] font-medium text-[color:var(--body)] hover:bg-white/[0.05] hover:text-white lg:inline-flex"
+                    data-testid="review-toggle-side"
+                  >
+                    {sideOpen ? <PanelRightClose className="h-3.5 w-3.5" aria-hidden /> : <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />}
+                    {sideOpen ? "Hide the side" : `Show questions and fills (${sideCount})`}
+                  </button>
+                  <button type="button" onClick={() => setOpen(false)} className="rounded-full p-1.5 text-[color:var(--body)] hover:bg-white/[0.06] hover:text-white" aria-label="Close">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
               {proposals.length > 0 && onApplyFills && !confirming && (
                 <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-[color:var(--ink-2)] px-3.5 py-2.5">
@@ -417,7 +488,8 @@ export function ExtractionReviewModal({
               )}
             </div>
 
-            <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden" style={{ ["--review-side-w" as string]: `${sideWidth}px` }}>
+            <div className="min-w-0 flex-1 space-y-5 px-5 py-4 lg:min-h-0 lg:overflow-y-auto" data-testid="review-main">
               {/* Which did you mean? — FIRST. These are figures the scorecard
                   is currently missing because the documents disagreed, so
                   they are the only items here actively costing points. */}
@@ -465,68 +537,11 @@ export function ExtractionReviewModal({
               {proposals.length > 0 && (
                 <section data-testid="review-suggestions">
                   <SectionHeading icon={<GitMerge className="h-3.5 w-3.5" />}>Ready to fill</SectionHeading>
-                  <div className="space-y-1.5">
+                  <div className={FILL_GRID} data-testid="review-fill-grid">
                     {proposals.map((p) => (
                       <FillCard key={p.id} proposal={p} onApply={onApplyFills ? () => applyOne(p) : undefined} />
                     ))}
                   </div>
-                </section>
-              )}
-
-              {/* The model pass: only for what the rules left open. */}
-              {companyId && onApplyFills && (openForModel > 0 || modelResult) && (
-                <section className="rounded-xl border border-white/[0.06] px-3.5 py-3" data-testid="review-ai-pass">
-                  {modelResult ? (
-                    <p className="text-[12px] leading-snug text-[color:var(--body)]" data-testid="review-ai-summary">
-                      AI checked {modelResult.considered} cell{modelResult.considered === 1 ? "" : "s"}:{" "}
-                      {modelResult.proposals.length} fill{modelResult.proposals.length === 1 ? "" : "s"}, {modelResult.questions.length} question{modelResult.questions.length === 1 ? "" : "s"}
-                      {modelResult.rejected > 0 && `, ${modelResult.rejected} answer${modelResult.rejected === 1 ? "" : "s"} dropped because your workbook did not back ${modelResult.rejected === 1 ? "it" : "them"}`}.
-                      {modelResult.truncated > 0 && ` ${modelResult.truncated} more cell${modelResult.truncated === 1 ? "" : "s"} wait for the next pass.`}
-                    </p>
-                  ) : (
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[12px] leading-snug text-[color:var(--body)]">
-                        {openForModel} cell{openForModel === 1 ? "" : "s"} still need{openForModel === 1 ? "s" : ""} thought. One AI pass reads them with the rows around them; every answer is checked against your workbook before you see it.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => void runModel()}
-                        disabled={modelBusy}
-                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.14] px-3 text-[12px] font-medium text-white hover:bg-white/[0.06] disabled:opacity-60"
-                        data-testid="review-run-ai"
-                      >
-                        {modelBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 text-violet-300" />}
-                        {modelBusy ? "Working it out…" : "Work out the rest"}
-                      </button>
-                    </div>
-                  )}
-                  {modelError && (
-                    <p className="mt-1.5 text-[11.5px] text-amber-200/90" data-testid="review-ai-error">{modelError}</p>
-                  )}
-                </section>
-              )}
-
-              {/* Cells nothing backs — left empty, one line each. */}
-              {questions.length > 0 && (
-                <section data-testid="review-questions">
-                  <SectionHeading icon={<CircleHelp className="h-3.5 w-3.5" />}>Questions for you</SectionHeading>
-                  <ul className="space-y-1">
-                    {questions.map((q) => (
-                      <li key={q.id} className="flex items-start justify-between gap-3 rounded-lg bg-[color:var(--ink-2)] px-3 py-2" data-testid={`review-question-${q.id}`}>
-                        <span className="min-w-0 text-[12px] leading-snug">
-                          <span className="block text-[10.5px] text-[color:var(--body)]">{q.cellLabel}</span>
-                          <span className="text-white">{q.question}</span>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => goTo(q.section)}
-                          className="inline-flex shrink-0 items-center gap-0.5 text-[11.5px] text-[color:var(--body)] hover:text-white"
-                        >
-                          Open <ChevronRight className="h-3 w-3" />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
                 </section>
               )}
 
@@ -579,48 +594,87 @@ export function ExtractionReviewModal({
                 </section>
               )}
 
-              {/* What the review already filled — each one can be taken back. */}
-              {fills.length > 0 && (
-                <section data-testid="review-ai-fills">
-                  <div className="mb-2 flex items-center justify-between">
-                    <SectionHeading icon={<Sparkles className="h-3.5 w-3.5 text-violet-300" />}>Filled by AI review · {fills.length}</SectionHeading>
-                    {onUndoAllFills && (
+              {fillsInMain ? filledSection(true) : null}
+
+              {badge === 0 && (
+                <p className="rounded-xl border border-white/[0.08] bg-[color:var(--ink-2)] px-3.5 py-3 text-[13px] text-white" data-testid="review-all-clear">
+                  Everything read is placed, consistent and complete. Nothing needs your attention.
+                </p>
+              )}
+            </div>
+
+            <SidePaneHandle
+              width={sideWidth}
+              onChange={setSideWidth}
+              label="Resize the questions and fills pane"
+              className={sideOpen ? "" : "lg:hidden"}
+              testId="review-resize-side"
+            />
+
+            <aside
+              className={`min-w-0 space-y-5 border-t border-white/[0.06] bg-[color:var(--ink-2)]/40 px-5 py-4 lg:min-h-0 lg:w-[var(--review-side-w)] lg:max-w-[55%] lg:shrink-0 lg:overflow-y-auto lg:border-t-0 ${sideOpen ? "" : "lg:hidden"}`}
+              aria-label="Questions and fills"
+              data-testid="review-side"
+            >
+              {/* The model pass: only for what the rules left open. */}
+              {companyId && onApplyFills && (openForModel > 0 || modelResult) && (
+                <section className="rounded-xl border border-white/[0.06] px-3.5 py-3" data-testid="review-ai-pass">
+                  {modelResult ? (
+                    <p className="text-[12px] leading-snug text-[color:var(--body)]" data-testid="review-ai-summary">
+                      AI checked {modelResult.considered} cell{modelResult.considered === 1 ? "" : "s"}:{" "}
+                      {modelResult.proposals.length} fill{modelResult.proposals.length === 1 ? "" : "s"}, {modelResult.questions.length} question{modelResult.questions.length === 1 ? "" : "s"}
+                      {modelResult.rejected > 0 && `, ${modelResult.rejected} answer${modelResult.rejected === 1 ? "" : "s"} dropped because your workbook did not back ${modelResult.rejected === 1 ? "it" : "them"}`}.
+                      {modelResult.truncated > 0 && ` ${modelResult.truncated} more cell${modelResult.truncated === 1 ? "" : "s"} wait for the next pass.`}
+                    </p>
+                  ) : (
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-[12px] leading-snug text-[color:var(--body)]">
+                        {openForModel} cell{openForModel === 1 ? "" : "s"} still need{openForModel === 1 ? "s" : ""} thought. One AI pass reads them with the rows around them; every answer is checked against your workbook before you see it.
+                      </p>
                       <button
                         type="button"
-                        onClick={() => void onUndoAllFills()}
-                        className="inline-flex items-center gap-1 text-[11.5px] text-[color:var(--body)] hover:text-white"
-                        data-testid="review-undo-all"
+                        onClick={() => void runModel()}
+                        disabled={modelBusy}
+                        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.14] px-3 text-[12px] font-medium text-white hover:bg-white/[0.06] disabled:opacity-60"
+                        data-testid="review-run-ai"
                       >
-                        <RotateCcw className="h-3 w-3" /> Undo all
+                        {modelBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                        {modelBusy ? "Working it out…" : "Work out the rest"}
                       </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  {modelError && (
+                    <p className="mt-1.5 text-[11.5px] text-amber-200/90" data-testid="review-ai-error">{modelError}</p>
+                  )}
+                </section>
+              )}
+
+              {/* Cells nothing backs — left empty, one line each. */}
+              {questions.length > 0 && (
+                <section data-testid="review-questions">
+                  <SectionHeading icon={<CircleHelp className="h-3.5 w-3.5" />}>Questions for you</SectionHeading>
                   <ul className="space-y-1">
-                    {fills.map((f) => {
-                      const key = `${f.section}-${f.rowId ?? "meta"}-${f.column}`;
-                      return (
-                        <li key={key} className="flex items-start justify-between gap-3 rounded-lg bg-[color:var(--ink-2)] px-3 py-2" data-testid={`review-ai-fill-${key}`}>
-                          <span className="min-w-0 text-[12px] leading-snug">
-                            <span className="block text-[10.5px] text-[color:var(--body)]">{cellLabelOf(f.section, f.rowLabel, f.columnLabel)}</span>
-                            <span className="text-white">{f.mark.value}</span>
-                            <span className="text-[color:var(--body)]"> · {f.mark.kind === "derived" ? "derived" : "read"} — {f.mark.reasoning}</span>
-                          </span>
-                          {onUndoFill && (
-                            <button
-                              type="button"
-                              onClick={() => void onUndoFill({ section: f.section, rowId: f.rowId, column: f.column })}
-                              className="inline-flex shrink-0 items-center gap-1 text-[11.5px] text-[color:var(--body)] hover:text-white"
-                              data-testid={`review-undo-${key}`}
-                            >
-                              <RotateCcw className="h-3 w-3" /> Undo
-                            </button>
-                          )}
-                        </li>
-                      );
-                    })}
+                    {questions.map((q) => (
+                      <li key={q.id} className="flex items-start justify-between gap-3 rounded-lg bg-[color:var(--ink-2)] px-3 py-2" data-testid={`review-question-${q.id}`}>
+                        <span className="min-w-0 text-[12px] leading-snug">
+                          <span className="block text-[10.5px] text-[color:var(--body)]">{q.cellLabel}</span>
+                          <span className="text-white">{q.question}</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => goTo(q.section)}
+                          className="inline-flex shrink-0 items-center gap-0.5 text-[11.5px] text-[color:var(--body)] hover:text-white"
+                        >
+                          Open <ChevronRight className="h-3 w-3" />
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 </section>
               )}
+
+              {/* What the review already filled — each one can be taken back. */}
+              {fillsInMain ? null : filledSection(false)}
 
               {/* Confirmed by more than one document. Not an action — it marks
                   the figures nobody needs to re-check. */}
@@ -665,11 +719,7 @@ export function ExtractionReviewModal({
                 </details>
               )}
 
-              {badge === 0 && (
-                <p className="rounded-xl border border-white/[0.08] bg-[color:var(--ink-2)] px-3.5 py-3 text-[13px] text-white" data-testid="review-all-clear">
-                  Everything read is placed, consistent and complete. Nothing needs your attention.
-                </p>
-              )}
+            </aside>
             </div>
           </div>
         </div>
