@@ -600,15 +600,16 @@ export function esgQuarterColumn(startIso: unknown, endIso: unknown): string | n
  * Allowlist key → the H&S row it fills. The column is the quarter, resolved
  * from the report's own period.
  *
- * `hs.fatalities_count` is deliberately absent. `S_Data` row 28 exists and
- * `esgDeriveSummary` sums it into `G28` (8 points), but `S_DATA_HS_FIELDS`
- * exposes no field for it — so an injected fatality count would be a number the
- * user could neither see nor correct. Reported instead; add the row to the H&S
- * field group and this becomes one line.
+ * `hs.fatalities_count` → row 28. `S_DATA_HS_FIELDS` now exposes `C28:F28`
+ * ("Fatalities Q1".."Q4") and `esgDeriveSummary` sums them into `G28`, which
+ * "Zero fatalities" (S d18) reads, so a printed count is placed by the same
+ * quarter rule as every other row. An incident register's rows are counted
+ * into rows 28–30 by `esgIncidentCounts`.
  */
 export const ESG_HS_QUARTERLY_ROWS: Readonly<Record<string, { row: number; kind: EsgCellKind }>> = {
   "hs.employees_headcount": { row: 26, kind: "count" },
   "hs.hours_worked": { row: 27, kind: "number" },
+  "hs.fatalities_count": { row: 28, kind: "count" },
   "hs.lost_time_injuries_count": { row: 29, kind: "count" },
   "hs.medical_treatment_injuries_count": { row: 30, kind: "count" },
   "hs.first_aid_cases_count": { row: 31, kind: "count" },

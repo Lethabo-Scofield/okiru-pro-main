@@ -117,7 +117,7 @@ fields:
     rowLevel: true
     labels: []
     description: "Whose injury or incident it was, as printed: employee, contractor, labour broker worker, third party, member of the public."
-newFields: [incident_rows, incident_date, incident_site, incident_description, incident_classification, incident_lost_time, incident_days_lost, injured_party_category]
+newFields: [incident_rows, incident_description]
 ---
 ## What it is / is not
 

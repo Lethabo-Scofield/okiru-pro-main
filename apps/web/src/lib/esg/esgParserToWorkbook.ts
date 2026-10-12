@@ -24,6 +24,7 @@
  * mapping table names, cells a grid produced, and cells built from an axis alike.
  */
 import { writeEsgGridCells, type EsgGridRow } from "./esgGridRows";
+import { esgIncidentCounts, INCIDENT_ROWS_FIELD } from "./esgIncidentCounts";
 import { ESG_GRID_SECTIONS, type EsgGridSectionId } from "./esgGridSections";
 import {
   ESG_FALLBACK_REPORTING_AXES,
@@ -463,6 +464,10 @@ export function mapEsgCalculatorToWorkbook(
     }
     if (gridField === "ee_level_rows") {
       applyHeadcountRows(gridRows, builder, record);
+      continue;
+    }
+    if (gridField === INCIDENT_ROWS_FIELD) {
+      applyIncidentRows(gridRows, entries, axes, builder, record);
       continue;
     }
     const target = ESG_GRID_TARGETS[gridField];
@@ -2103,4 +2108,60 @@ function applyIsoEvidence(
     answered.add(approval.key);
   }
   return answered;
+}
+
+/* ------------------------------------------------------------------ *
+ * The incident register → quarterly injury counts
+ * ------------------------------------------------------------------ */
+
+/**
+ * Count an incident register's rows into S_Data's quarterly fatality, LTI and
+ * medical-treatment rows (`esgIncidentCounts`). A count is the code's, not the
+ * document's, so the outcome says what was counted and asks for confirmation;
+ * a printed count for the same quarter that disagrees is a conflict for the
+ * user, as any two readings of one cell are.
+ */
+function applyIncidentRows(
+  rows: readonly EsgCalculatorRowLike[],
+  entries: readonly EsgCalculatorEntryLike[],
+  axes: EsgReportingAxes,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): void {
+  // Each register's own stated period, by the file that states it.
+  const periods = new Map<string, { start: string | null; end: string | null }>();
+  for (const entry of entries) {
+    if (entry.key !== "hs.period_start" && entry.key !== "hs.period_end") continue;
+    for (const file of entry.sourceFiles ?? []) {
+      if (!file) continue;
+      const period = periods.get(file) ?? { start: null, end: null };
+      if (entry.key === "hs.period_start") period.start = String(entry.value ?? "");
+      else period.end = String(entry.value ?? "");
+      periods.set(file, period);
+    }
+  }
+  const counts = esgIncidentCounts(rows, axes, periods);
+  if (!counts || Object.keys(counts.cells).length === 0) {
+    record(INCIDENT_ROWS_FIELD, {
+      status: "unplaced",
+      cells: [],
+      rejection: "needs_context",
+      reason: counts
+        ? "None of the register's incidents falls in the reporting year, so nothing was counted."
+        : "The health-and-safety block is quarterly, and the workbook's reporting year is not set, so these incidents have no quarter to be counted in.",
+    });
+    return;
+  }
+  const sources = [...new Set(rows.flatMap((r) => r.sourceFiles ?? []).filter(Boolean))];
+  for (const [cellRef, value] of Object.entries(counts.cells)) {
+    builder.propose({
+      sectionId: "s-data",
+      cellRef,
+      value,
+      label: cellLabel("s-data", cellRef, INCIDENT_ROWS_FIELD),
+      field: INCIDENT_ROWS_FIELD,
+      sources,
+    });
+  }
+  record(INCIDENT_ROWS_FIELD, { status: "placed", cells: [], reason: counts.summary });
 }

@@ -305,6 +305,34 @@ describe('register grids expand to N rows', () => {
     expect(result.rows[0].droppedFields).toContain('chassis_number');
   });
 
+  it('an incident register reaches the workbook as rows, without its descriptions', () => {
+    // incident_rows used to have no grid at all, so the register was reported
+    // as evidence the scorecard does not consume and nothing counted it.
+    const result = mapEsgEntitiesToCalculator(
+      caseOf({
+        incident_rows: [
+          { incident_date: '14/08/2025', incident_site: 'Depot North', incident_description: 'Hand caught in a door', incident_classification: 'LTI', incident_lost_time: true, incident_days_lost: 4, injured_party_category: 'Employee' },
+          { incident_date: '02/10/2025', incident_classification: 'First aid', incident_lost_time: false },
+        ],
+      }),
+      elementsOf({}),
+    );
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0]).toMatchObject({
+      grid: 'incident_rows',
+      cells: {
+        'hs.incident_date': '2025-08-14',
+        'hs.incident_classification': 'LTI',
+        'hs.incident_lost_time': true,
+        'hs.incident_days_lost': 4,
+        'hs.injured_party_category': 'Employee',
+      },
+    });
+    expect(Object.values(result.rows[0].cells)).not.toContain('Hand caught in a door');
+    expect(result.rows[0].droppedFields).toContain('incident_description');
+    expect(result.rows[1].cells['hs.incident_lost_time']).toBe(false);
+  });
+
   it('drops a row that maps to nothing rather than emitting an empty line', () => {
     const result = mapEsgEntitiesToCalculator(
       caseOf({

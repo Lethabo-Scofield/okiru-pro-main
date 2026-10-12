@@ -274,6 +274,13 @@ export const ESG_CALCULATOR_KEY_ALLOWLIST: readonly EsgCalculatorKeySpec[] = [
   { key: 'hs.first_aiders_count', type: 'number', description: 'Certified first aiders' },
   { key: 'hs.safety_files_active', type: 'string', description: 'Supplier safety files active: Yes | No | Partial' },
   { key: 'hs.hira_register_present', type: 'boolean', description: 'Hazard identification and risk assessment register exists' },
+  // Incident register rows (incident_rows): the web counts them into the quarterly block.
+  { key: 'hs.incident_date', type: 'iso_date', description: 'Date of one incident in an incident register' },
+  { key: 'hs.incident_site', type: 'string', description: 'Where one incident happened, as printed' },
+  { key: 'hs.incident_classification', type: 'string', description: 'The register classification of one incident: LTI, medical treatment, first aid, near miss, fatality' },
+  { key: 'hs.incident_lost_time', type: 'boolean', description: 'The incident row states lost time' },
+  { key: 'hs.incident_days_lost', type: 'number', description: 'Days lost on one incident row' },
+  { key: 'hs.injured_party_category', type: 'string', description: 'Whose incident it was: employee, contractor, third party, member of the public' },
 
   // ── Training and skills (S_Data rows 41-67) ──
   { key: 'training.seta_name', type: 'string', description: 'SETA the WSP/ATR was submitted to' },
