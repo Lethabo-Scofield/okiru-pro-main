@@ -39,18 +39,26 @@ function present(value: unknown): boolean {
   return Number.isFinite(typeof value === "number" ? value : Number(value));
 }
 
-/** Coverage of the monthly grid `prefix` (s1a, s2, water, …), or null when it holds no figure at all. */
-export function esgGridCoverage(workbook: EsgWorkbookData, prefix: string): EsgGridCoverage | null {
-  const cells = (workbook.sections?.["e-data"]?.cells ?? {}) as Record<string, unknown>;
-  const axes = esgWorkbookAxes(cells);
-  const siteNames = axes.companyWide ? ["Company wide"] : axes.depots;
-  const sites = Math.max(1, siteNames.length);
-  const monthCount = Math.max(1, axes.months.length);
-  /*
-   * The app addresses every block from row 14; a workbook stored under its
-   * sheet's own rows (an import not yet re-saved) uses the sheet's first row
-   * for the block. Whichever the cells use is the base.
-   */
+/**
+ * The blocks the workbook keeps as ONE company-wide row whatever its sites
+ * (Scope 1C LPG, Scope 1D business cars — the placement's `perSite: false`):
+ * their coverage is months, not sites × months.
+ */
+export const ESG_ONE_ROW_BLOCKS: ReadonlySet<string> = new Set(["s1c", "s1d"]);
+
+/**
+ * The cell holding site row `row`, month `month` (both 0-based) of the
+ * monthly grid `prefix`.
+ *
+ * The app addresses every block from row 14; a workbook stored under its
+ * sheet's own rows (an import not yet re-saved) uses the sheet's first row
+ * for the block. Whichever the cells use is the base.
+ */
+export function esgGridAddress(
+  cells: Record<string, unknown>,
+  prefix: string,
+  sites: number,
+): (row: number, month: number) => string {
   const rowsUsed = new Set<number>();
   const pattern = new RegExp(`^${prefix}_[C-Z](\\d+)$`);
   for (const key of Object.keys(cells)) {
@@ -59,7 +67,17 @@ export function esgGridCoverage(workbook: EsgWorkbookData, prefix: string): EsgG
   }
   const appBase = Array.from(rowsUsed).some((r) => r >= FIRST_ROW && r < FIRST_ROW + sites);
   const base = appBase ? FIRST_ROW : (SHEET_FIRST_ROW[prefix] ?? FIRST_ROW);
-  const ref = (row: number, month: number) => `${prefix}_${String.fromCharCode(FIRST_MONTH_COLUMN + month)}${base + row}`;
+  return (row, month) => `${prefix}_${String.fromCharCode(FIRST_MONTH_COLUMN + month)}${base + row}`;
+}
+
+/** Coverage of the monthly grid `prefix` (s1a, s2, water, …), or null when it holds no figure at all. */
+export function esgGridCoverage(workbook: EsgWorkbookData, prefix: string): EsgGridCoverage | null {
+  const cells = (workbook.sections?.["e-data"]?.cells ?? {}) as Record<string, unknown>;
+  const axes = esgWorkbookAxes(cells);
+  const siteNames = axes.companyWide || ESG_ONE_ROW_BLOCKS.has(prefix) ? ["Company wide"] : axes.depots;
+  const sites = Math.max(1, siteNames.length);
+  const monthCount = Math.max(1, axes.months.length);
+  const ref = esgGridAddress(cells, prefix, sites);
 
   let lastMonth = -1;
   for (let row = 0; row < sites; row += 1) {

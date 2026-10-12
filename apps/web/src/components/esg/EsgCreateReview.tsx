@@ -21,9 +21,10 @@ import { primaryButton } from "@/components/upload/flow/buttonStyles";
 import { EsgImportAnalysisPanel } from "@/components/esg-workbook/EsgImportAnalysisPanel";
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
 import { esgCaseFileNames, type EsgInjectionResult, type EsgParserCaseLike } from "./esgParserInjection";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { DocumentReview } from "@/components/review/DocumentReview";
 import { buildEsgDocumentReview } from "./esgDocumentReview";
+import { buildEsgVerification, EsgVerificationPanel } from "./EsgVerificationPanel";
 
 /** The per-document review, folded away — for a run restored straight to this step. */
 function ReviewAgain({ injection, parserCase }: { injection: EsgInjectionResult; parserCase: EsgParserCaseLike }) {
@@ -103,6 +104,10 @@ export function EsgCreateReview({
   const trimmed = entityName.trim();
   const excelSections = Object.entries(excel?.preview.sections ?? {});
   const excelCells = excelSections.reduce((sum, [, section]) => sum + cellCount(section.cells), 0);
+  const verification = useMemo(
+    () => (route === "documents" && injection ? buildEsgVerification(injection, parserCase) : null),
+    [route, injection, parserCase],
+  );
 
   return (
     <div className="mx-auto w-full max-w-2xl" data-testid="esg-create-review">
@@ -161,6 +166,7 @@ export function EsgCreateReview({
             })()}
           </p>
           {parserCase ? <ReviewAgain injection={injection} parserCase={parserCase} /> : null}
+          <EsgVerificationPanel report={verification} />
         </div>
       ) : null}
 
