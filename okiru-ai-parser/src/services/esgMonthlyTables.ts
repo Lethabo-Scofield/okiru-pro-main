@@ -656,6 +656,19 @@ export function statedKind(...words: Array<string | undefined>): { kind: Reporte
   return { kind: 'other', unit: '' };
 }
 
+/** A unit of the measures this reader keeps, as a whole word: "kWh", "litre", "LT", "kL", "m3", "kg", "tonne", "km". */
+const UNIT_WORD = /(?:^|[^a-z0-9])(?:[kmg]wh|litres?|liters?|lt|ltrs?|kl|ml|m3|m³|kgs?|kilograms?|tonnes?|tons?|km|kms|kilometres?|kilometers?)(?:$|[^a-z0-9])/i;
+/** A unit cell on its own may be one letter ("L", "t"). */
+const UNIT_CELL = /^(?:l|t|[kmg]wh|litres?|liters?|lt|ltrs?|kl|ml|m3|m³|kgs?|tonnes?|tons?|km)$/i;
+
+/** Whether the table prints a unit for this line: its unit column, the units under the months, or a unit word beside it. */
+export function statesUnit(table: Pick<MonthTable, 'monthUnits' | 'title'>, line: Pick<MonthLine, 'unit' | 'qualifier' | 'label'>): boolean {
+  const cell = (line.unit ?? '').trim();
+  if (cell && (UNIT_CELL.test(cell) || UNIT_WORD.test(cell))) return true;
+  if (table.monthUnits.some((u) => UNIT_CELL.test(String(u).trim()) || UNIT_WORD.test(String(u)))) return true;
+  return [line.qualifier, line.label, ...table.title].some((text) => UNIT_WORD.test(text ?? ''));
+}
+
 /** An Excel day number in a date line is the date it shows. */
 function asDateValue(value: number): string | number {
   if (!Number.isInteger(value) || value < 36526 || value > 73051) return value;
@@ -668,16 +681,17 @@ const nothingStated = (values: Array<number | null> | undefined) => !values || v
 export function tableFacts(
   table: MonthTable,
   reading: TableReading,
-): { facts: EsgMonthlyFact[]; notes: string[]; reported: EsgReportedFact[] } {
+): { facts: EsgMonthlyFact[]; notes: string[]; reported: EsgReportedFact[]; heldForUnit: number } {
   const facts: EsgMonthlyFact[] = [];
+  let heldForUnit = 0;
   const notes: string[] = [];
   const reported: EsgReportedFact[] = [];
   // Lines that are vehicles or people are not this reader's to read.
-  if (reading.linesAre === 'other') return { facts, notes, reported };
+  if (reading.linesAre === 'other') return { facts, notes, reported, heldForUnit };
   const years = yearsOf(table, reading.firstMonthYear);
   if (years.some((y) => y === null)) {
     notes.push(`The year of the months in "${table.title.join(' / ') || 'a monthly table'}" could not be told, so its figures were not used.`);
-    return { facts, notes, reported };
+    return { facts, notes, reported, heldForUnit };
   }
   const periodEnds = table.months.map((month, i) => monthEnd(years[i] as number, month));
   const lastEnd = periodEnds[periodEnds.length - 1];
@@ -705,10 +719,12 @@ export function tableFacts(
     });
   };
 
+  const unitless = (line: MonthLine) => Boolean(line.long) && !statesUnit(table, line);
+
   // The measure (and unit as read) every read line of the table shares, if one.
   const readLines = table.lines.filter((line) => !line.isTotal)
     .map((line) => ({ line, read: reading.lines[lineKey(line)] }))
-    .filter((entry): entry is { line: MonthLine; read: LineReading } => Boolean(entry.read) && entry.read.measure !== 'none');
+    .filter((entry): entry is { line: MonthLine; read: LineReading } => Boolean(entry.read) && entry.read.measure !== 'none' && !unitless(entry.line));
   const shared = readLines.length > 0
     && readLines.every((entry) => entry.read.measure === readLines[0].read.measure && entry.read.unit === readLines[0].read.unit)
     ? readLines[0].read
@@ -740,7 +756,18 @@ export function tableFacts(
       continue;
     }
 
-    if (read && read.measure !== 'none') {
+    if (read && read.measure !== 'none' && unitless(line)) {
+      // A long table names each line's measure on the line itself, so it must
+      // name the unit there too. One that prints none (an emissions system's
+      // monthly page, laid out exactly like its consumption page) gives figures
+      // of unknown kind: the unit the answer gives is an assumption, and tonnes
+      // of CO2e read as litres of diesel. Reported as printed, never a reading.
+      if (!nothingStated(line.values)) {
+        heldForUnit += 1;
+        notes.push(`"${words(line)}" states no unit, so its figures were reported as printed, not read as ${read.measure}.`);
+        report(line, line.values, statedKind(line.qualifier, line.label, ...table.title), words(line));
+      }
+    } else if (read && read.measure !== 'none') {
       const stored = ESG_MONTHLY_MEASURES[read.measure].unit;
       const factor = UNIT_FACTORS[stored]?.[read.unit];
       if (factor === undefined) {
@@ -771,7 +798,7 @@ export function tableFacts(
       report(line, line.companion, statedKind(table.companionLabel), `${words(line)} › ${table.companionLabel}`);
     }
     if (typeof line.statedTotal === 'number') {
-      const measure = read && read.measure !== 'none' ? read.measure : undefined;
+      const measure = read && read.measure !== 'none' && !unitless(line) ? read.measure : undefined;
       report(line, [line.statedTotal], {
         kind: 'stated_total',
         unit: measure ? read!.unit : statedKind(line.unit, line.qualifier, line.label).unit,
@@ -784,7 +811,7 @@ export function tableFacts(
       }
     }
   }
-  return { facts, notes, reported };
+  return { facts, notes, reported, heldForUnit };
 }
 
 export interface EsgMonthlySheetInput {
@@ -812,6 +839,7 @@ export async function extractEsgMonthlyTables(
   const facts: EsgMonthlyFact[] = [];
   const reported: EsgReportedFact[] = [];
   const exceptions: string[] = [];
+  let heldForUnit = 0;
   let previous: { table: MonthTable; reading: TableReading } | null = null;
   for (const table of tables) {
     let reading: TableReading | null;
@@ -835,6 +863,7 @@ export async function extractEsgMonthlyTables(
     facts.push(...read.facts);
     reported.push(...read.reported);
     exceptions.push(...read.notes);
+    heldForUnit += read.heldForUnit;
     // A table's title is what the figures under it are; reported once.
     for (const line of table.continues ? [] : table.title) {
       if (!reported.some((r) => r.kind === 'title' && r.value === line)) {
@@ -901,8 +930,12 @@ export async function extractEsgMonthlyTables(
     exceptions,
   };
   READ_SPANS.set(extraction, tables.flatMap((table) => (table.span ? [table.span] : [])));
+  if (heldForUnit > 0) HELD_FOR_UNIT.add(extraction);
   return extraction;
 }
+
+/** Monthly reads that held measure lines for want of a stated unit. */
+const HELD_FOR_UNIT = new WeakSet<DocumentExtraction>();
 
 /** The rows of the sheet each monthly read covered: no other reader takes their cells as facts. */
 const READ_SPANS = new WeakMap<DocumentExtraction, Array<{ top: number; bottom: number }>>();
@@ -922,4 +955,15 @@ export const ESG_REPORTED_MONTHLY_FIELD = 'esg_reported_monthly_rows';
 /** Whether a monthly-table read holds any figure the workbook keeps (not only reported ones). */
 export function readsMonthlyMeasures(extraction: DocumentExtraction | null): boolean {
   return Boolean(extraction?.values.some((value) => value.field === 'esg_monthly_rows' && Array.isArray(value.value) && value.value.length > 0));
+}
+
+/**
+ * Whether a monthly-table read has read the sheet, so its other readers are
+ * not sent: it holds measures the workbook keeps, or lines it knew for
+ * measures and held because the table states no unit for them. A flat read of
+ * the latter could only guess the same figures' unit again. A table of nothing
+ * but money, tonnage or dates does not stand in.
+ */
+export function monthlyReadStandsIn(extraction: DocumentExtraction | null): boolean {
+  return readsMonthlyMeasures(extraction) || Boolean(extraction && HELD_FOR_UNIT.has(extraction));
 }

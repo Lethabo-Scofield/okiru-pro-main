@@ -64,7 +64,7 @@ import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAOther, proposeOpenMappings } from './openRead.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
-import { extractEsgMonthlyTables, monthlyReadSpans, readsMonthlyMeasures } from './esgMonthlyTables.js';
+import { extractEsgMonthlyTables, monthlyReadSpans, monthlyReadStandsIn } from './esgMonthlyTables.js';
 import { extractEsgPeriodSummary, fillsOfVehicle, periodReadSpan, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
 import {
   extractEsgSheetFacts,
@@ -518,10 +518,11 @@ export async function extractEsgCaseEntities(
       matrix,
       hidden: input.metadata?.sheet_hidden === true,
     });
-    // Only a table of the measures the workbook keeps reads the sheet. One
+    // Only a table of the measures the workbook keeps reads the sheet (or one
+    // whose measure lines were held because it states no unit for them). One
     // whose lines are all money, tonnage or dates is reported as printed, and
     // the sheet's other readers still read it exactly as they did before.
-    const monthly = readsMonthlyMeasures(monthlyTables) ? monthlyTables : null;
+    const monthly = monthlyReadStandsIn(monthlyTables) ? monthlyTables : null;
     const reportedOnly = monthly ? null : monthlyTables;
     // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
     // in the tab's name and title, and never on its rows.

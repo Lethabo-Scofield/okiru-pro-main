@@ -10,6 +10,7 @@ import {
   extractEsgMonthlyTables,
   findMonthTables,
   lineKey,
+  monthlyReadStandsIn,
   readMonthLabel,
   readsMonthlyMeasures,
   statedKind,
@@ -286,6 +287,61 @@ describe('a long table: one line per site and measure', () => {
       .toMatchObject({ reported_value: 7530, reported_period_end: '2025-09-30' });
   });
 
+  it('a long table that states no unit for its lines is reported, never read as activity', async () => {
+    // An emissions system's monthly page: the same layout as its consumption
+    // page, but its figures are emissions and no line states a unit. Asked what
+    // each line measures, a model names the activity ("Road Freight" is fleet
+    // diesel) and a unit it assumed. 3.1 tonnes of CO2e as 3.1 litres of
+    // diesel collided with every depot's real litres.
+    const EMISSIONS_SHEET: unknown[][] = [
+      ['Emissions detail'],
+      ['Node', 'Node Type', 'Datasource', 'Activity', 'Jul 2025', 'Aug 2025', 'Sep 2025', 'Total'],
+      ['Acme - North', 'Node', 'Electricity', 'Grid', 1.2, 1.3, 1.4, 3.9],
+      ['Acme - North', 'Node', 'Trucks', 'Road Freight', 3.1, 3.2, 3.3, 9.6],
+      ['Acme - South', 'Node', 'Electricity', 'Grid', 2.2, 2.3, 2.4, 6.9],
+      ['Acme - South', 'Node', 'Trucks', 'Road Freight', 4.1, 4.2, 4.3, 12.6],
+    ];
+    const model: ExtractionModel = {
+      name: 'fake',
+      async complete(_system: string, user: string) {
+        const lines = JSON.parse(/LINES: (.*)/.exec(user)![1]) as Array<{ key: string; qualifier?: string }>;
+        return JSON.stringify({
+          lines_are: 'sites', site: null, first_month_year: null,
+          lines: Object.fromEntries(lines.map((l) => [l.key, /Trucks/.test(l.qualifier ?? '')
+            ? { measure: 'fleet.diesel_litres', unit: 'L' }
+            : { measure: 'energy.electricity_kwh', unit: 'kWh' }])),
+        });
+      },
+    };
+    const [table] = findMonthTables(EMISSIONS_SHEET);
+    expect(table.long).toBe(true);
+    const extraction = await extractEsgMonthlyTables(model, {
+      filename: `System export ${Date.now()}.xls › Emissions`,
+      sheetName: 'Emissions',
+      matrix: EMISSIONS_SHEET,
+    });
+    const rows = (extraction?.values.find((v) => v.field === 'esg_monthly_rows')?.value ?? []) as Array<Record<string, unknown>>;
+    expect(rows).toEqual([]);
+    const reported = extraction?.values.find((v) => v.field === 'esg_reported_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(reported.filter((r) => r.reported_site === 'Acme - South' && r.reported_period_end === '2025-07-31').map((r) => r.reported_value).sort())
+      .toEqual([2.2, 4.1]);
+    expect(extraction?.exceptions.some((e) => /states no unit/.test(e))).toBe(true);
+    // The sheet was read: its lines are measures held for want of a unit, so no
+    // flat read is sent to guess at the same figures without one.
+    expect(readsMonthlyMeasures(extraction)).toBe(false);
+    expect(monthlyReadStandsIn(extraction)).toBe(true);
+  });
+
+  it('a long table whose unit column states each line\'s unit is still read as activity', async () => {
+    const asked: string[][] = [];
+    const extraction = await extractEsgMonthlyTables(longModel(asked), {
+      filename: `Export units ${Date.now()}.xls › Detail`,
+      sheetName: 'Detail',
+      matrix: LONG_SHEET,
+    });
+    expect(extraction?.exceptions.some((e) => /states no unit/.test(e))).toBe(false);
+  });
+
   it('asks about EVERY line of a long table, not the first sixteen', async () => {
     const depots = Array.from({ length: 24 }, (_, i) => [`Depot ${i + 1}`, '', 10 + i, 20 + i, 30 + i]);
     const asked: string[][] = [];
@@ -383,6 +439,7 @@ describe('what a monthly table prints beside its measures', () => {
     });
     expect(extraction?.values.map((v) => v.field)).toEqual(['esg_reported_monthly_rows']);
     expect(readsMonthlyMeasures(extraction)).toBe(false);
+    expect(monthlyReadStandsIn(extraction)).toBe(false);
   });
 });
 
@@ -475,5 +532,50 @@ describe('extractEsgMonthlyTables', () => {
 
   it('returns null for a sheet with no month run', async () => {
     expect(await extractEsgMonthlyTables(model, { filename: 'x.xlsx', matrix: [['Name', 'Value'], ['a', 1]] })).toBeNull();
+  });
+});
+
+describe('the case read of a sheet whose long table states no unit', () => {
+  const EMISSIONS_PAGE: unknown[][] = [
+    ['Emissions detail'],
+    ['Node', 'Node Type', 'Datasource', 'Activity', 'Jul 2025', 'Aug 2025', 'Sep 2025', 'Total'],
+    ['Acme - North', 'Node', 'Electricity', 'Grid', 1.2, 1.3, 1.4, 3.9],
+    ['Acme - North', 'Node', 'Trucks', 'Road Freight', 3.1, 3.2, 3.3, 9.6],
+    ['Acme - South', 'Node', 'Electricity', 'Grid', 2.2, 2.3, 2.4, 6.9],
+    ['Acme - South', 'Node', 'Trucks', 'Road Freight', 4.1, 4.2, 4.3, 12.6],
+  ];
+  const sheet = (name: string, matrix: unknown[][]) => ({
+    file_id: name,
+    filename: `System export.xls › ${name}`,
+    mime_type: 'application/vnd.ms-excel',
+    raw_text: '',
+    markdown: matrix.map((row) => `| ${row.join(' | ')} |`).join('\n'),
+    tables: [{ sheetName: name, rows: [], matrix }],
+    metadata: { sheet_name: name, parent_file: 'System export.xls' },
+  });
+
+  it('sends no flat read to guess the unit again: the monthly reader has read the sheet', async () => {
+    const { extractEsgCaseEntities } = await import('../../src/services/esgCaseExtraction.js');
+    const prompts: string[] = [];
+    const fake: ExtractionModel = {
+      name: 'fake',
+      async complete(system: string, user: string) {
+        prompts.push(`${system}\n${user}`);
+        if (/LINES: /.test(user)) {
+          const lines = JSON.parse(/LINES: (.*)/.exec(user)![1]) as Array<{ key: string; qualifier?: string }>;
+          return JSON.stringify({
+            lines_are: 'sites', site: null, first_month_year: null,
+            lines: Object.fromEntries(lines.map((l) => [l.key, /Trucks/.test(l.qualifier ?? '')
+              ? { measure: 'fleet.diesel_litres', unit: 'L' }
+              : { measure: 'energy.electricity_kwh', unit: 'kWh' }])),
+          });
+        }
+        return '{}';
+      },
+    };
+    const result = await extractEsgCaseEntities([sheet(`Emissions ${Date.now()}`, EMISSIONS_PAGE)] as never, fake);
+    expect(prompts.filter((p) => /ANALYST INSTRUCTION/.test(p))).toEqual([]);
+    const rows = result!.extractions.flatMap((e) => e.values).filter((v) => v.field === 'esg_monthly_rows');
+    expect(rows).toEqual([]);
   });
 });
