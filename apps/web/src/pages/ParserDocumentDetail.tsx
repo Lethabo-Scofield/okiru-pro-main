@@ -36,7 +36,7 @@ import { fieldLabel, formatParserValue, sheetOfSource, type ParserDocumentSummar
 
 /** One status word per document — the same five words the upload flow uses. */
 const STATUS_WORD: Record<ParserStatus, { label: string; tone: string; icon: ReactNode }> = {
-  passed: { label: "Read", tone: "text-emerald-300", icon: <Check className="h-3.5 w-3.5" aria-hidden /> },
+  passed: { label: "Read", tone: "text-[color:var(--body)]", icon: <Check className="h-3.5 w-3.5" aria-hidden /> },
   review_required: { label: "Needs a look", tone: "text-amber-300", icon: <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> },
   failed: { label: "Couldn't read", tone: "text-red-300", icon: <CircleSlash className="h-3.5 w-3.5" aria-hidden /> },
 };
@@ -417,11 +417,11 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
           const chosen = type === currentType;
           const evidence = [...(c.reasons ?? []), ...(c.matched_evidence ?? [])].slice(0, 4);
           return (
-            <div key={`${type}-${i}`} className={`rounded-xl border px-3.5 py-2.5 ${chosen ? "border-emerald-400/25 bg-emerald-400/[0.04]" : "border-white/[0.07] bg-[color:var(--ink-3)]"}`}>
+            <div key={`${type}-${i}`} className={`rounded-xl border px-3.5 py-2.5 ${chosen ? "border-white/[0.18] bg-white/[0.04]" : "border-white/[0.07] bg-[color:var(--ink-3)]"}`}>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[12.5px] text-white">{type}</span>
                 {chosen ? (
-                  <span className="text-[11px] text-emerald-300">current</span>
+                  <span className="text-[11px] text-[color:var(--body)]">current</span>
                 ) : (
                   <button
                     type="button"
@@ -686,7 +686,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
             <section data-testid="read-values">
               <div className="mb-1 flex items-center justify-between gap-3">
                 <h2 className="text-[14px] font-semibold text-white">What we read from it</h2>
-                <span className="text-[11px] text-[color:var(--muted)]">
+                <span className="text-[11px] text-[color:var(--body)]">
                   {valueCount} value{valueCount === 1 ? "" : "s"}{checkedCount > 0 ? ` · ${checkedCount} checked by your team` : ""}
                 </span>
               </div>
@@ -696,17 +696,19 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                   {readableKeys.map((key) => {
                     const field = (fields[key] ?? {}) as Record<string, any>;
                     const fix = corrections.get(key);
-                    const shown = formatParserValue(fix ? fix.value : field.normalized_value);
+                    const current = fix ? fix.value : field.normalized_value;
+                    const shown = formatParserValue(current);
                     const page = field.source?.page;
                     return (
                       <div key={key} className="grid gap-1 border-b border-[color:var(--rule)] py-3.5 sm:grid-cols-[180px_1fr] sm:gap-3" data-testid={`field-row-${key}`}>
                         <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div>
                         <div className="min-w-0">
                           <div className="text-[13px] text-white">
-                            <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+                            {/* A list is checked against the document, not retyped as one line of text. */}
+                            <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} disabled={Array.isArray(current)} />
                           </div>
                           {fix && (
-                            <p className="mt-1 text-[11px] text-violet-200/80" data-testid={`field-${key}-corrected`}>
+                            <p className="mt-1 text-[11px] text-[color:var(--body)]" data-testid={`field-${key}-corrected`}>
                               {fix.original != null
                                 ? `Corrected by your team. Originally read as “${formatParserValue(fix.original)}”`
                                 : "Added by your team. It wasn't found in the document."}
@@ -716,7 +718,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                             <button
                               type="button"
                               onClick={() => setFocus({ page: Number(page), sheet: null, nonce: Date.now() })}
-                              className="mt-1 inline-flex items-center gap-1 rounded px-0.5 text-[11px] text-violet-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                              className="mt-1 inline-flex items-center gap-1 rounded px-0.5 text-[11px] text-[color:var(--hi)] underline-offset-2 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                               data-testid={`field-${key}-show`}
                             >
                               <MapPin className="h-3 w-3" aria-hidden /> Show in document
@@ -754,7 +756,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
             <section data-testid="missing-fields">
               <div className="mb-1 flex items-center justify-between">
                 <h2 className="text-[14px] font-semibold text-white">Not found in this document</h2>
-                <span className="text-[11px] text-[color:var(--muted)]">{missingKeyList.length} expected</span>
+                <span className="text-[11px] text-[color:var(--body)]">{missingKeyList.length} expected</span>
               </div>
               {missingKeyList.length === 0 ? (
                 <p className="border-y border-[color:var(--rule)] py-4 text-[12px] text-[color:var(--body)]">Nothing expected is missing.</p>
@@ -830,16 +832,16 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
               <div className="mt-3 space-y-4">
                 {!typeInQuestion && candidatesSection}
                 <dl className="grid gap-3 border-y border-[color:var(--rule)] py-4 text-[12px] sm:grid-cols-2">
-                  <div><dt className="text-[color:var(--muted)]">How sure we are of the type</dt><dd className="mt-1 text-[color:var(--body)]">{confidenceWord(run.overallConfidence)} ({Math.round(run.overallConfidence * 100)}%)</dd></div>
-                  <div><dt className="text-[color:var(--muted)]">Needs a person</dt><dd className="mt-1 text-[color:var(--body)]">{run.requiresHumanReview ? "Yes" : "No"}</dd></div>
-                  <div><dt className="text-[color:var(--muted)]">Why this type</dt><dd className="mt-1 text-[color:var(--body)]">{audit.classification_reason || "No reason recorded"}</dd></div>
-                  <div><dt className="text-[color:var(--muted)]">Scorecard area</dt><dd className="mt-1 text-[color:var(--body)]">{String(run.parserOutput?.pillar || "Not attributed")}</dd></div>
-                  <div className="sm:col-span-2"><dt className="text-[color:var(--muted)]">Evidence matched</dt><dd className="mt-1 text-[color:var(--body)]">{audit.matched_patterns?.join(", ") || "None recorded"}</dd></div>
-                  {rulesApplied.length > 0 && <div className="sm:col-span-2"><dt className="text-[color:var(--muted)]">Rules applied</dt><dd className="mt-1 text-[color:var(--body)]">{rulesApplied.join(", ")}</dd></div>}
-                  <div><dt className="text-[color:var(--muted)]">Reader version</dt><dd className="mt-1 text-[color:var(--body)]">{run.graphVersion || "Not recorded"}</dd></div>
+                  <div><dt className="text-[color:var(--body)]">How sure we are of the type</dt><dd className="mt-1 text-[color:var(--body)]">{confidenceWord(run.overallConfidence)} ({Math.round(run.overallConfidence * 100)}%)</dd></div>
+                  <div><dt className="text-[color:var(--body)]">Needs a person</dt><dd className="mt-1 text-[color:var(--body)]">{run.requiresHumanReview ? "Yes" : "No"}</dd></div>
+                  <div><dt className="text-[color:var(--body)]">Why this type</dt><dd className="mt-1 text-[color:var(--body)]">{audit.classification_reason || "No reason recorded"}</dd></div>
+                  <div><dt className="text-[color:var(--body)]">Scorecard area</dt><dd className="mt-1 text-[color:var(--body)]">{String(run.parserOutput?.pillar || "Not attributed")}</dd></div>
+                  <div className="sm:col-span-2"><dt className="text-[color:var(--body)]">Evidence matched</dt><dd className="mt-1 text-[color:var(--body)]">{audit.matched_patterns?.join(", ") || "None recorded"}</dd></div>
+                  {rulesApplied.length > 0 && <div className="sm:col-span-2"><dt className="text-[color:var(--body)]">Rules applied</dt><dd className="mt-1 text-[color:var(--body)]">{rulesApplied.join(", ")}</dd></div>}
+                  <div><dt className="text-[color:var(--body)]">Reader version</dt><dd className="mt-1 text-[color:var(--body)]">{run.graphVersion || "Not recorded"}</dd></div>
                   {runs.length > 1 && (
                     <div>
-                      <dt className="text-[color:var(--muted)]">Earlier readings</dt>
+                      <dt className="text-[color:var(--body)]">Earlier readings</dt>
                       <dd className="mt-1">
                         <select
                           value={run.runId}

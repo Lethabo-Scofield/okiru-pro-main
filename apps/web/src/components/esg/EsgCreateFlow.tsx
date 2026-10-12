@@ -361,7 +361,7 @@ export function EsgCreateFlow() {
     // one of each, so the flow opened under two stacked headers.
     <div className="esg-theme flex flex-col text-white">
       <main
-        className="flex-1 w-full max-w-[900px] mx-auto px-4 sm:px-6 py-8"
+        className="flex-1 w-full max-w-[900px] mx-auto px-4 sm:px-6 py-8 has-[[data-wide-review]]:max-w-[1760px]"
         data-testid="esg-create-flow"
       >
         {step === "choose" ? (
@@ -381,7 +381,7 @@ export function EsgCreateFlow() {
         ) : null}
 
         {step === "provide" && work.route === "documents" ? (
-          <div className="mx-auto w-full max-w-2xl">
+          <div className="mx-auto w-full max-w-2xl has-[[data-wide-review]]:max-w-none">
             <EsgFlowSteps current={2} className="mb-6" />
             {/* No company yet, on purpose: the documents are what will name it.
                 The uploader only stamps a company id onto the case when it has

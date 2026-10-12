@@ -97,3 +97,36 @@ describe("buildEsgDocumentReview", () => {
     expect(docs[0].problems[0].headline).toBe("This looks like a scan or photo we couldn't read clearly.");
   });
 });
+
+describe("buildEsgDocumentReview — broken cells and lists", () => {
+  const docs = buildEsgDocumentReview({
+    parserCase: {
+      documents: [{ file_name: "Water log.xlsx" }],
+      ai_entities: {
+        extractions: [
+          {
+            sourceFile: "Water log.xlsx › Site A",
+            documentName: "Water consumption log",
+            element: "WATER",
+            values: [
+              { field: "water_kl", value: "#DIV/0!" },
+              { field: "months_reported", value: ["Mar 2026", "Apr 2026", "May 2026", "Jun 2026"] },
+            ],
+          },
+        ],
+      },
+    },
+    injection: { implemented: true, patches: {}, placed: [], unplaced: [], conflicts: [], valuesRead: 2 },
+    uploadNames: ["Water log.xlsx"],
+  });
+  const [water, months] = docs[0].values;
+
+  it("marks a workbook error code as a broken cell, not a figure", () => {
+    expect(water).toMatchObject({ label: "Water kl", cellError: "#DIV/0!" });
+  });
+
+  it("says what a list holds and keeps its entries to open", () => {
+    expect(months.value).toBe("4 entries: Mar 2026, Apr 2026, …");
+    expect(months.items).toEqual(["Mar 2026", "Apr 2026", "May 2026", "Jun 2026"]);
+  });
+});

@@ -6,7 +6,8 @@
  * it are the same gesture: look at the document, click the value, type.
  */
 import { useEffect, useRef, useState } from "react";
-import { Check, Loader2, Pencil, Plus, X } from "lucide-react";
+import { AlertTriangle, Check, Loader2, Pencil, Plus, X } from "lucide-react";
+import { brokenCellText, workbookCellError } from "@/lib/workbookCellError";
 
 export interface EditableValueProps {
   /** What is shown now. Null means nothing was read — the control offers "Add". */
@@ -69,7 +70,7 @@ export function EditableValue({ value, label, onSave, testId, disabled = false }
             }}
             aria-label={label}
             disabled={saving}
-            className="h-8 min-w-0 flex-1 rounded-lg border border-violet-500/40 bg-[color:var(--ink)] px-2.5 text-[12.5px] text-white outline-none focus:ring-2 focus:ring-violet-500/15"
+            className="h-8 min-w-0 flex-1 rounded-lg border border-white/[0.22] bg-[color:var(--ink)] px-2.5 text-[12.5px] text-white outline-none focus:border-white/40 focus:ring-2 focus:ring-white/10"
             data-testid={`${testId}-input`}
           />
           <button
@@ -97,13 +98,41 @@ export function EditableValue({ value, label, onSave, testId, disabled = false }
     );
   }
 
+  // A spreadsheet error code is never shown as if it were the figure: it says
+  // the cell is broken, and the way on is to enter the figure it should hold.
+  const broken = workbookCellError(value);
+  if (broken) {
+    return (
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1" data-testid={`${testId}-broken`}>
+        <span className="inline-flex min-w-0 items-start gap-1.5 text-amber-200">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" aria-hidden />
+          <span className="break-words">{brokenCellText(broken)}</span>
+        </span>
+        {!disabled && (
+          <button
+            type="button"
+            onClick={() => {
+              setDraft("");
+              setError(null);
+              setEditing(true);
+            }}
+            className="inline-flex items-center gap-1 rounded-md border border-white/[0.16] px-2 py-0.5 text-[11.5px] font-medium text-[color:var(--hi)] transition-colors duration-200 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            data-testid={`${testId}-fix`}
+          >
+            <Pencil className="h-3 w-3" aria-hidden /> Enter the right figure
+          </button>
+        )}
+      </span>
+    );
+  }
+
   if (disabled) return <span className="break-words">{value ?? "—"}</span>;
 
   return value == null ? (
     <button
       type="button"
       onClick={open}
-      className="inline-flex items-center gap-1 rounded-md border border-dashed border-amber-400/40 px-2 py-0.5 text-[11.5px] font-medium text-amber-200 hover:bg-amber-500/[0.08]"
+      className="inline-flex items-center gap-1 rounded-md border border-dashed border-white/[0.22] px-2 py-0.5 text-[11.5px] font-medium text-[color:var(--hi)] transition-colors duration-200 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
       data-testid={`${testId}-add`}
     >
       <Plus className="h-3 w-3" /> Add value

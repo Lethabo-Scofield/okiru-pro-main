@@ -1,3 +1,5 @@
+import { display } from "./documentReview";
+
 export type ParserStatus = "passed" | "review_required" | "failed";
 
 export interface ParserDocumentSummary {
@@ -118,6 +120,7 @@ export function fieldLabel(key: string): string {
 export function formatParserValue(value: unknown): string {
   if (value == null || value === "") return "Could not be read";
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") return JSON.stringify(value);
+  // Never raw JSON: a list says how many and begins it, a record is its values.
+  if (typeof value === "object") return display(value) ?? "Could not be read";
   return String(value);
 }

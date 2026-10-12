@@ -470,6 +470,14 @@ export interface ReconciliationFinding {
   message: string;
   /** The row the finding is about, when it is about one row. */
   rowId?: string;
+  /**
+   * Not a disagreement: how two readings were joined ("linked"), duplicates
+   * folded ("collapsed"), or a value worked out rather than stated
+   * ("worked-out"). Absent on a disagreement between documents.
+   */
+  kind?: "linked" | "collapsed" | "worked-out";
+  /** The two values a disagreement is between, as the documents stated them. */
+  values?: [unknown, unknown];
 }
 
 interface MergeDecision {
@@ -477,6 +485,8 @@ interface MergeDecision {
   finding?: string;
   /** The column the finding is about (it used to be reported as "spend" whatever it was). */
   findingColumn?: string;
+  /** The two stated values the finding is about. */
+  findingValues?: [unknown, unknown];
 }
 
 const ACCOUNTING_RECORD = /ledger|statement|accounts?\s*payable/i;
@@ -580,6 +590,7 @@ function keptOccupationalLevel(a: WorkbookRow, b: WorkbookRow, column: string): 
 function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookRow, entity: string): MergeDecision {
   let finding: string | undefined;
   let findingColumn: string | undefined;
+  let findingValues: [unknown, unknown] | undefined;
 
   const instanceColumns = INSTANCE_COLUMNS[section];
   if (instanceColumns) {
@@ -609,6 +620,7 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
       return {
         merge: false,
         findingColumn: column,
+        findingValues: [a[column], b[column]],
         finding: `${entity}: two readings of ${fileA} disagree on ${column} (${String(a[column])} vs ${String(b[column])}). Both rows are kept; check the document and remove the misread one.`,
       };
     }
@@ -626,6 +638,7 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
       const other = keepA ? right : left;
       finding = `${entity}: ${keptFile} states ${column} of ${keep.toLocaleString()} but ${otherFile} says ${other.toLocaleString()} — a difference of ${Math.abs(other - keep).toLocaleString()}. ${useLedger ? "The accounting record's figure is being used" : "The lower figure is being used"}; confirm which is in scope.`;
       findingColumn = column;
+      findingValues = [keep, other];
       setCellSources(a, column, cellSources(keepA ? a : b, column));
       a[column] = keep;
       if (!keepA && b._cellReaders?.[column]) {
@@ -657,6 +670,7 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
     for (const file of cellSources(a, column).length ? cellSources(a, column) : [fileNamedFor(a, column, "")]) recordConflict(a, column, a[column], file);
     for (const file of cellSources(b, column).length ? cellSources(b, column) : [fileNamedFor(b, column, "")]) recordConflict(a, column, b[column], file);
     findingColumn = column;
+    findingValues = [a[column], b[column]];
     if (section === "management-control" && column === "occupationalLevel") {
       const kept = keptOccupationalLevel(a, b, column) === "a" ? a : b;
       const other = kept === a ? b : a;
@@ -671,7 +685,7 @@ function mergeDecision(section: WorkbookSectionKey, a: WorkbookRow, b: WorkbookR
     finding = `${entity}: documents disagree on ${column} (${String(a[column])} vs ${String(b[column])}).`;
   }
 
-  return { merge: true, finding, findingColumn };
+  return { merge: true, finding, findingColumn, findingValues };
 }
 
 /** Add one stated value (and the file that stated it) to a row's conflict on a column. */
@@ -790,6 +804,7 @@ function linkGroupCertificates(rows: WorkbookRow[], reconciliation: Reconciliati
       section: "procurement",
       entity: String(supplier.supplierName),
       column: "supplierName",
+      kind: "linked",
       message: `${String(certificate.supplierName)} (${certificate._sourceFiles?.[0] ?? "a certificate"}) is taken as ${String(supplier.supplierName)}'s certificate: it is issued to the group, and its level and ${agree - 1 === 1 ? "one other certified figure" : `${agree - 1} other certified figures`} match that supplier's row. Check it covers this supplier.`,
     });
   }
@@ -836,7 +851,14 @@ export function linkWorkbookRows(
       for (const candidate of candidates) {
         const decision = mergeDecision(section, candidate, row, display);
         if (decision.finding) {
-          reconciliation.push({ section, entity: display, column: decision.findingColumn ?? "spend", message: decision.finding, rowId: candidate._id });
+          reconciliation.push({
+            section,
+            entity: display,
+            column: decision.findingColumn ?? "spend",
+            message: decision.finding,
+            rowId: candidate._id,
+            ...(decision.findingValues ? { values: decision.findingValues } : {}),
+          });
         }
         if (!decision.merge) continue;
         mergeInto(candidate, row);
@@ -1714,6 +1736,7 @@ function derivedFromFlagFindings(
         section,
         entity: names.length === 1 ? names[0] : `${names.length} rows`,
         column,
+        kind: "worked-out",
         message: fromTitle
           ? `${shown}: ${label} was worked out from the job title, not stated by any document`
             + `${names.length === 1 ? ` (${flag} reads as ${String(value)})` : ""}. `
@@ -1869,6 +1892,7 @@ function dedupeExactDuplicateRows(
         section,
         entity,
         column: nameColumn ?? "",
+        kind: "collapsed",
         message: `${entity}: ${dropped + 1} identical ${section} rows came out of ${row._sourceFiles?.[0] ?? "the same document"} — collapsed to one so the same evidence is not counted twice. If these are genuinely separate transactions, add a date or description to tell them apart.`,
       });
     }
@@ -2166,6 +2190,7 @@ function linkInitialsToPeople(rows: Partial<Record<WorkbookSectionKey, WorkbookR
       section: "management-control",
       entity: fullName,
       column: "name",
+      kind: "linked",
       message: `${shortName} (${short._sourceFiles?.[0] ?? "a document"}) is taken to be ${fullName}: the same surname, initials that fit only them, and nothing that contradicts it.${leftBehind.length > 0 ? ` What it also said (${leftBehind.join(", ")}) was not copied onto their row — add it there if it is right.` : ""}`,
     });
   }

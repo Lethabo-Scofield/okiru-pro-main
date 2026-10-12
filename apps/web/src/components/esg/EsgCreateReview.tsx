@@ -105,7 +105,7 @@ export function EsgCreateReview({
   const excelCells = excelSections.reduce((sum, [, section]) => sum + cellCount(section.cells), 0);
 
   return (
-    <div className="mx-auto w-full max-w-2xl" data-testid="esg-create-review">
+    <div className="mx-auto w-full max-w-2xl has-[[data-wide-review]]:max-w-none" data-testid="esg-create-review">
       <EsgFlowSteps current={3} className="mb-6" />
 
       {/* Left-aligned at document scale, like every other step in the flow. */}

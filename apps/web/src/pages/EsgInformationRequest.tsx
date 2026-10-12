@@ -474,7 +474,7 @@ export default function EsgInformationRequest() {
     <div className="esg-theme flex flex-col text-white">
 
       <main
-        className="flex-1 max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-6"
+        className="flex-1 max-w-[1400px] mx-auto w-full px-4 sm:px-6 py-6 has-[[data-wide-review]]:max-w-[1760px]"
         data-testid="esg-information-request"
       >
         <nav
@@ -617,7 +617,7 @@ export default function EsgInformationRequest() {
             onChooseManual={goToWorkbook}
           />
         ) : stage === "upload" ? (
-          <div className="mx-auto w-full max-w-2xl">
+          <div className="mx-auto w-full max-w-2xl has-[[data-wide-review]]:max-w-none">
             <EsgFlowSteps current={2} className="mb-6" />
             <EsgDocumentUploadStart
               companyId={companyId}

@@ -281,6 +281,8 @@ import { mergeParserCases } from "@/lib/parserCaseMerge";
 // side by side with what we took from it and why anything was not read.
 import { DocumentReview } from "@/components/review/DocumentReview";
 import { applyReviewEdit, buildDocumentReview, reviewListsFile } from "@/lib/documentReview";
+import type { ReconciliationFlag } from "@/lib/reconciliationNotes";
+import { ReconciliationFlagsSection } from "@/components/review/ReconciliationFlagsSection";
 
 /** workbook company-information meta value for each parser sector code. */
 
@@ -788,7 +790,7 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     const extractions = (parserCase as {
       ai_entities?: { extractions?: Array<{ documentId?: string; sourceFile?: string; exceptions?: unknown[] }> };
     } | null)?.ai_entities?.extractions ?? [];
-    const flags: Array<{ sourceFile: string; note: string }> = [];
+    const flags: ReconciliationFlag[] = [];
     for (const e of extractions) {
       const documentId = String(e.documentId ?? "");
       // The Finance-sheet reader raises one specific finding: a labelled total
@@ -805,7 +807,12 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
     // Cross-document disagreements found while linking — most usefully a
     // supplier's own ledger against the client's schedule.
     for (const finding of injected?.reconciliation ?? []) {
-      flags.push({ sourceFile: finding.entity, note: finding.message });
+      flags.push({
+        sourceFile: finding.entity,
+        note: finding.message,
+        ...(finding.kind ? { kind: finding.kind } : {}),
+        ...(finding.values ? { values: finding.values } : {}),
+      });
     }
     return flags;
   }, [parserCase, injected]);
@@ -2622,27 +2629,11 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
           <div className="space-y-1.5" data-testid="extraction-review">
             {/* Disagreements found while linking documents to each other — they
                 belong to no single document, so they are not in the review. */}
-            {(() => {
-              const crossDocument = reconciliationFlags.filter(
-                (f) => !reviewListsFile(reviewDocuments, f.sourceFile),
-              );
-              return crossDocument.length > 0 ? (
-                <ReviewSection
-                  title="Disagreements between documents"
-                  meta={`${crossDocument.length}`}
-                  summary="Where two documents describe the same thing differently, the lower figure is scored."
-                  testId="reconciliation-flags"
-                >
-                  <ul className="space-y-1">
-                    {crossDocument.map((flag, i) => (
-                      <li key={i} className="text-[11.5px] leading-5 text-[color:var(--body)]">
-                        <span className="text-[color:var(--hi)]">{flag.sourceFile}:</span> {flag.note}
-                      </li>
-                    ))}
-                  </ul>
-                </ReviewSection>
-              ) : null;
-            })()}
+            {/* Counted as only the real ones: rounding, one value written two
+                ways and notes on how readings were joined are folded inside. */}
+            <ReconciliationFlagsSection
+              flags={reconciliationFlags.filter((f) => !reviewListsFile(reviewDocuments, f.sourceFile))}
+            />
 
             {/* What the certificate registry added to Procurement — visible and
                 questionable, never a silent edit to the user's data. */}

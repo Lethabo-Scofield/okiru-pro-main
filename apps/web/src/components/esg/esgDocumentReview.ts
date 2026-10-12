@@ -15,6 +15,7 @@
 import {
   display,
   humanize,
+  listEntries,
   otherDetailsOf,
   whyNotRead,
   type ReviewDocument,
@@ -22,6 +23,7 @@ import {
   type ReviewQuestion,
   type ReviewValue,
 } from "@/lib/documentReview";
+import { workbookCellError } from "@/lib/workbookCellError";
 import type { EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
 import type { EsgPlacementChoice } from "@/lib/esg/esgParserToWorkbook";
 import {
@@ -122,7 +124,15 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
         const key = `${label}\u0000${shown}\u0000${sheet ?? ""}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        values.push(sheet ? { label, value: shown, source: `Sheet: ${sheet}` } : { label, value: shown });
+        const items = listEntries(v.value);
+        const cellError = workbookCellError(v.value);
+        values.push({
+          label,
+          value: shown,
+          ...(sheet ? { source: `Sheet: ${sheet}` } : {}),
+          ...(items && items.length > 0 ? { items } : {}),
+          ...(cellError ? { cellError } : {}),
+        });
       }
     }
 

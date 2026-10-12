@@ -164,7 +164,7 @@ export function DocumentPreview({
           <a
             href={downloadHref}
             download={name}
-            className="ml-auto inline-flex shrink-0 items-center gap-1 text-[12px] font-medium text-[#5e9bff] hover:underline"
+            className="ml-auto inline-flex shrink-0 items-center gap-1 rounded text-[12px] font-medium text-[color:var(--body)] underline-offset-2 transition-colors duration-200 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
           >
             <Download className="h-3.5 w-3.5" /> Download
           </a>
