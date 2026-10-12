@@ -124,11 +124,11 @@ export function esgIncidentCounts(
   let counted = 0;
 
   // Quarters wholly inside a period a register states.
-  for (const period of periods.values()) {
+  for (const period of Array.from(periods.values())) {
     const start = period.start ? parseEsgDate(period.start, "start") : null;
     const end = period.end ? parseEsgDate(period.end, "end") : null;
     if (!start || !end) continue;
-    for (const [column, ms] of monthsOf) {
+    for (const [column, ms] of Array.from(monthsOf)) {
       if (ms.length > 0 && ms.every((ym) => ym >= start.slice(0, 7) && ym <= end.slice(0, 7))) covered.add(column);
     }
   }
@@ -172,7 +172,7 @@ export function esgIncidentCounts(
   // A count in a quarter not covered cannot happen (listing an incident covers
   // its quarter) unless the register's stated period excludes the incident's
   // date; such a count is still the register's own row, so it is kept.
-  for (const [ref, n] of counts) if (!(ref in cells)) cells[ref] = n;
+  for (const [ref, n] of Array.from(counts)) if (!(ref in cells)) cells[ref] = n;
 
   const parts = [
     `${totals.lti} lost-time injur${totals.lti === 1 ? "y" : "ies"}`,

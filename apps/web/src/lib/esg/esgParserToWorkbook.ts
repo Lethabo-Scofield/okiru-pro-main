@@ -739,7 +739,7 @@ export function mapEsgCalculatorToWorkbook(
   const sourceOutcomes = monthly.outcomes;
   // A document whose waste rows were held answers for itself, even where
   // another document's rows reached the register.
-  for (const [source, held] of heldWaste) {
+  for (const [source, held] of Array.from(heldWaste)) {
     if (!source) continue;
     const bySource = sourceOutcomes[WASTE_ROWS_FIELD] ?? (sourceOutcomes[WASTE_ROWS_FIELD] = {});
     bySource[source] = {
@@ -2386,7 +2386,7 @@ function applyIncidentRows(
     });
     return;
   }
-  const sources = [...new Set(rows.flatMap((r) => r.sourceFiles ?? []).filter(Boolean))];
+  const sources = Array.from(new Set(rows.flatMap((r) => r.sourceFiles ?? []).filter(Boolean)));
   for (const [cellRef, value] of Object.entries(counts.cells)) {
     builder.propose({
       sectionId: "s-data",

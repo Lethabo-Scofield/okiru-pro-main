@@ -211,7 +211,7 @@ function checkPrintedTotals(reads: readonly MonthlyRead[]): EsgVerificationCheck
   const byDoc = new Map<string, MonthlyRead[]>();
   for (const r of reads) if (r.ym) push(byDoc, `${r.file}\u0000${r.measure}`, r);
   const checks: EsgVerificationCheck[] = [];
-  for (const [key, list] of byDoc) {
+  for (const [key, list] of Array.from(byDoc)) {
     const [file, measure] = key.split("\u0000");
     const months = new Map<string, { totals: Set<number>; parts: Map<string, Set<number>> }>();
     for (const r of list) {
@@ -226,13 +226,13 @@ function checkPrintedTotals(reads: readonly MonthlyRead[]): EsgVerificationCheck
       }
     }
     const compared: Array<{ ym: string; printed: number; sum: number; ok: boolean }> = [];
-    for (const [ym, m] of [...months].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const [ym, m] of Array.from(months).sort(([a], [b]) => a.localeCompare(b))) {
       // One printed figure for the month: a document printing several
       // company-wide lines for one measure has no single total to check.
       if (m.totals.size !== 1 || m.parts.size === 0) continue;
-      const printed = [...m.totals][0];
+      const printed = Array.from(m.totals)[0];
       // The same figure repeated for a site (two sheets of one book) counts once.
-      const sum = [...m.parts.values()].reduce((a, values) => a + [...values].reduce((x, y) => x + y, 0), 0);
+      const sum = Array.from(m.parts.values()).reduce((a, values) => a + Array.from(values).reduce((x, y) => x + y, 0), 0);
       compared.push({ ym, printed, sum, ok: esgFiguresAgree(printed, sum) });
     }
     if (compared.length === 0) continue;
@@ -294,9 +294,9 @@ function checkAcrossDocuments(reads: readonly MonthlyRead[], axes: EsgReportingA
   /** One check per measure and pair of documents. */
   type Finding = { ym: string; site: string; a: number; b: number; offset: boolean };
   const pairs = new Map<string, { measure: string; a: string; b: string; agree: number; findings: Finding[] }>();
-  for (const [key, bySource] of cells) {
+  for (const [key, bySource] of Array.from(cells)) {
     const [measure, siteIdx, ym] = key.split("|");
-    const sources = [...bySource.keys()].sort();
+    const sources = Array.from(bySource.keys()).sort();
     for (let i = 0; i < sources.length; i += 1) {
       for (let j = i + 1; j < sources.length; j += 1) {
         const a = single(bySource, sources[i]);
@@ -322,7 +322,7 @@ function checkAcrossDocuments(reads: readonly MonthlyRead[], axes: EsgReportingA
   }
 
   const checks: EsgVerificationCheck[] = [];
-  for (const [pairKey, pair] of pairs) {
+  for (const [pairKey, pair] of Array.from(pairs)) {
     const { measure, a, b } = pair;
     const unit = measureUnit(measure);
     const code: EsgCheckCode = MEASURES[measure]?.fuel ? "V3" : "V2";
@@ -590,7 +590,7 @@ function checkEmploymentEquity(entries: readonly EsgCalculatorEntryLike[], rows:
 function checkHeldOutOfPeriod(held: readonly EsgHeldFact[]): EsgVerificationCheck[] {
   const byFile = new Map<string, EsgHeldFact[]>();
   for (const h of held) if (h.rejection === "out_of_period" || h.rejection === "other_entity") push(byFile, `${h.rejection}\u0000${h.sourceFile}`, h);
-  return [...byFile].map(([key, facts]) => {
+  return Array.from(byFile).map(([key, facts]) => {
     const [rejection, file] = key.split("\u0000");
     return {
       id: `V6:${rejection}:${file}`,
@@ -742,15 +742,15 @@ function checkGhg(input: EsgVerificationInput, reads: readonly MonthlyRead[], wo
   const exportFiles = new Set(
     (input.extractions ?? []).filter((e): e is NonNullable<typeof e> => Boolean(e) && isExport(e!)).map((e) => fileOf(String(e.sourceFile ?? ""))),
   );
-  for (const file of exportFiles) {
+  for (const file of Array.from(exportFiles)) {
     const own = reads.filter((r) => r.file === file && r.ym && MEASURES[r.measure]?.prefix);
     if (own.length === 0) continue;
     const byMeasure = new Map<string, MonthlyRead[]>();
     for (const r of own) push(byMeasure, r.measure, r);
     const evidence: EsgCheckEvidence[] = [];
     const differ: string[] = [];
-    for (const [measure, list] of byMeasure) {
-      const months = [...new Set(list.map((r) => r.ym!))].sort();
+    for (const [measure, list] of Array.from(byMeasure)) {
+      const months = Array.from(new Set(list.map((r) => r.ym!))).sort();
       const theirs = list.reduce((a, r) => a + r.value, 0);
       const ours = gridSum(workbook, input.axes, MEASURES[measure].prefix!, months);
       if (ours.cells === 0) continue;
@@ -765,7 +765,7 @@ function checkGhg(input: EsgVerificationInput, reads: readonly MonthlyRead[], wo
     const outside = ghg.lines
       .filter((l) => l.activity > 0)
       .map((l) => l.label)
-      .filter((label) => ![...covered].some((m) => INVENTORY_LINE[m]?.test(label)));
+      .filter((label) => !Array.from(covered).some((m) => INVENTORY_LINE[m]?.test(label)));
     checks.push({
       id: `V8:export:${file}`,
       code: "V8",
@@ -842,7 +842,7 @@ function checkRegisters(entries: readonly EsgCalculatorEntryLike[], rows: readon
   const byGrid = new Map<string, EsgCalculatorRowLike[]>();
   for (const r of rows) if (r.grid !== "esg_monthly_rows") push(byGrid, r.grid, r);
   const checks: EsgVerificationCheck[] = [];
-  for (const [grid, list] of byGrid) {
+  for (const [grid, list] of Array.from(byGrid)) {
     const problems: string[] = [];
     const seen = new Set<string>();
     let duplicates = 0;
