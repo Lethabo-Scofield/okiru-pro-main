@@ -41,6 +41,22 @@ fields:
     type: number
     labels: ["Closing stock", "Closing dip", "Last dip"]
     description: "Litres in the tank at the end of the period, as printed."
+  - name: theoretical_stock_litres
+    type: number
+    labels: ["Theoretical stock", "Book stock", "Calculated stock"]
+    description: "The stock the reconciliation works out (opening plus deliveries less issues), as printed. Never computed."
+  - name: meter_reading_open
+    type: number
+    labels: ["Bowser meter reading open", "Meter reading open", "Opening meter reading", "Meter open"]
+    description: "The bowser pump's meter reading at the start of the period, as printed. A meter reading, not litres in the tank."
+  - name: meter_reading_close
+    type: number
+    labels: ["Bowser meter reading close", "Meter reading close", "Closing meter reading", "Meter close"]
+    description: "The bowser pump's meter reading at the end of the period, as printed."
+  - name: fuel_price_per_litre
+    type: number
+    labels: ["Diesel price", "Price per litre", "Rate per litre", "Rate/ liter", "Rate/litre"]
+    description: "The diesel price per litre the sheet prints (rand per litre), as printed. Never worked out from a value and litres."
   - name: issued_total_litres
     type: number
     labels: ["Total issued", "Issues", "Litres issued"]
@@ -73,7 +89,7 @@ fields:
     type: text
     labels: ["Delivery note", "DN number", "Delivery note no"]
     description: "Every delivery note number printed for the period, as written, separated by semicolons."
-newFields: [issued_to_external_litres, stock_variance_litres]
+newFields: [issued_to_external_litres, stock_variance_litres, theoretical_stock_litres, meter_reading_open, meter_reading_close, fuel_price_per_litre]
 ---
 ## What it is / is not
 
@@ -147,6 +163,7 @@ Theoretical stock 7 930   Closing dip 7 905   Variance -25
  "opening_stock_litres": "8 120", "deliveries_litres": "24 000", "closing_stock_litres": "7 905",
  "issued_total_litres": "24 190", "issued_to_fleet_litres": "23 650", "issued_to_external_litres": "540",
  "generator_diesel_litres": "0", "generator_run_hours": null, "stock_variance_litres": "-25",
+ "theoretical_stock_litres": "7 930", "meter_reading_open": "401 220", "meter_reading_close": "425 410", "fuel_price_per_litre": null,
  "fuel_supplier_name": "Example Fuels", "delivery_note_numbers": "55120; 55188",
  "exceptions": ["Only the month is printed.", "Theoretical stock 7 930 is printed; closing dip 7 905."]}
 ```

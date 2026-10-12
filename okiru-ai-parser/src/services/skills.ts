@@ -159,6 +159,13 @@ export interface Skill {
   element: string;
   version: number;
   hard: boolean;
+  /**
+   * The document prints summary tables worth keeping as they are (a system
+   * export's totals per site and category, a register's count per depot): the
+   * labelled-cell reader returns every summary cell no field takes as a row of
+   * `printed_summary_rows` (esgSheetFacts.ts). Default false.
+   */
+  summaryTables: boolean;
   classify: SkillClassify;
   /** Array field the rowLevel fields are returned under, when there are any. */
   rowsField: string | null;
@@ -358,7 +365,7 @@ function boolOf(value: FrontMatterValue | undefined, what: string, file: string,
 
 const ALLOWED_KEYS = new Set([
   'id', 'appliesTo', 'element', 'version', 'hard', 'classify', 'rowsField',
-  'fields', 'newFields', 'dropFields', 'newType',
+  'fields', 'newFields', 'dropFields', 'newType', 'summaryTables',
 ]);
 const FIELD_KEYS = new Set(['name', 'type', 'required', 'rowLevel', 'labels', 'description', 'scope']);
 const CLASSIFY_KEYS = new Set(['is', 'isNot', 'filenameHints', 'contentSignals']);
@@ -567,6 +574,7 @@ function parseSkillFile(
     element,
     version,
     hard: boolOf(meta.hard, 'hard', file, false),
+    summaryTables: boolOf(meta.summaryTables, 'summaryTables', file, false),
     classify,
     rowsField,
     fields,

@@ -52,8 +52,16 @@ fields:
     description: "The unit printed beside the consumption figure (kWh, MWh, units). Null when none is printed."
   - name: electricity_rand_excl_vat
     type: money
-    labels: ["Electricity charges", "Energy charge", "Consumption charge"]
+    labels: ["Electricity charges", "Electricity total"]
     description: "The Rand charged for electricity in this period, as printed. Copy the electricity section's own total when the account prints one; say in exceptions whether VAT, service or network charges are included, only when the account says so."
+  - name: electricity_consumption_charge_rand
+    type: money
+    labels: []
+    description: "The consumption (energy) charge LINE of the electricity section, as printed: the kWh times the rate line, not the section total. Null when the account prints only a total."
+  - name: electricity_service_charge_rand
+    type: money
+    labels: ["Service charge", "Network charge", "Fixed charge"]
+    description: "The electricity section's fixed service, network or capacity charge line, as printed. Not the consumption charge."
   - name: electricity_tariff_rand_per_kwh
     type: number
     labels: ["Tariff rate", "c/kWh", "R/kWh"]
@@ -182,7 +190,7 @@ fields:
     rowLevel: true
     labels: []
     description: "Actual or estimated for this line, when printed."
-newFields: [electricity_unit, electricity_period_rows, line_site, line_meter_number, line_period_start, line_period_end, line_electricity_kwh, line_electricity_rand, line_reading_type, generation_offset_credits, statement_date, document_title, tariff_name, daily_average_kwh, property_rates_rand, improvement_district_rand, history_total_kwh, history_total_rand, account_total_rand, history_account_total_rand, filing_label]
+newFields: [electricity_consumption_charge_rand, electricity_service_charge_rand, electricity_unit, electricity_period_rows, line_site, line_meter_number, line_period_start, line_period_end, line_electricity_kwh, line_electricity_rand, line_reading_type, generation_offset_credits, statement_date, document_title, tariff_name, daily_average_kwh, property_rates_rand, improvement_district_rand, history_total_kwh, history_total_rand, account_total_rand, history_account_total_rand, filing_label]
 ---
 ## What it is / is not
 
@@ -284,6 +292,7 @@ Total                 37 424.5   135 902.55
 {"municipality_or_supplier_name": "Example Estates Services", "site_name": "Unit 4, Depot A",
  "utility_account_number": "00412", "billing_period_start": "01/02/2026", "billing_period_end": "28/02/2026",
  "electricity_kwh": "18 420.5", "electricity_unit": null, "electricity_rand_excl_vat": "R 66 912.40",
+ "electricity_consumption_charge_rand": null, "electricity_service_charge_rand": null,
  "electricity_tariff_rand_per_kwh": null, "meter_number": null, "meter_reading_previous": null,
  "meter_reading_current": null, "reading_type": null, "max_demand_kva": null, "is_landlord_recovery": true,
  "solar_kwh_exported_to_grid": null, "generation_offset_credits": null, "statement_date": "03/03/2026",

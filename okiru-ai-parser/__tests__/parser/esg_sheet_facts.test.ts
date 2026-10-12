@@ -218,9 +218,11 @@ describe('extractEsgSheetFacts', () => {
     });
     const notes = reads!.flatMap((r) => r.open?.facts ?? []);
     expect(notes.map((f) => [f.label, f.value, f.cell])).toEqual(expect.arrayContaining([
-      ['Total Routes', '700', 'F2'],
       ['Total Stops', '1400', 'F3'],
     ]));
+    // "Total Routes" is the debrief skill's own wording: a value, citing its cell.
+    const routes = reads!.flatMap((r) => r.values).find((v) => v.field === 'total_routes');
+    expect(routes).toMatchObject({ value: 700, source: { cellRef: 'F2' } });
   });
 });
 

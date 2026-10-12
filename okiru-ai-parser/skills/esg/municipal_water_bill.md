@@ -190,6 +190,11 @@ certificate.
 - A history table's Total row is copied from that row into the history
   totals, never added up, and never taken as this period's figure.
 - Never compute a cost per kl or a total across meters.
+- A recovery statement that re-bills a tenant's electricity AND water side by
+  side, in one table, IS a water account for this read: its water columns
+  (water usage and value, each history line, and the Total row) are the water
+  figures. Never answer that it is "not a water bill" because electricity is
+  billed on it too.
 
 ## Worked example
 

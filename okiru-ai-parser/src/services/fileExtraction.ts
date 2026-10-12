@@ -774,6 +774,7 @@ export async function extractionInputsFromUpload(
       namedCells: options.domain !== 'esg',
       instructions: options.domain !== 'esg',
       statedTotals: options.domain !== 'esg',
+      partialTableGrid: options.domain === 'esg',
     });
     /** One sheet's table, with the workbook's Instructions profile when this sheet carries it. */
     const sheetTable = (sheet: (typeof sheets)[number]) => ({

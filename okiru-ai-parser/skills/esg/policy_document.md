@@ -84,12 +84,12 @@ fields:
     type: text
     rowLevel: true
     labels: []
-    description: "The rule's figure exactly as printed, with its sign or unit ('1%', 'at least 75%', 'R50 000')."
+    description: "The rule's figure ALONE, exactly as printed with its unit ('2%', '0.5%', '60%', 'R50 000'). The words around it go in rule_basis, never here."
   - name: rule_basis
     type: text
     rowLevel: true
     labels: []
-    description: "What the figure is measured against or bounded by, as printed ('of net profit after tax', 'maximum', 'per year'), or null."
+    description: "What the figure is measured against or bounded by, as printed ('of net profit after tax', 'maximum', 'at least', 'per year'), or null."
 newFields: [policy_issue_date, policy_author, policy_approved_by, policy_scope, policy_owners, policy_disclosure, policy_approach, policy_rule_rows, rule_subject, rule_figure, rule_basis]
 ---
 ## What it is / is not

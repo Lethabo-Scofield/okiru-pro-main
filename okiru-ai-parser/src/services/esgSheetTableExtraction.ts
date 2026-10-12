@@ -182,6 +182,12 @@ const ROW_FIELD_MEANINGS: Record<string, string> = {
   monthly_litres: 'ALL fuel the vehicle took in the month — the TOTAL column when the sheet splits internal and external',
   monthly_km: 'kilometres driven in the month',
   fuel_litres: 'litres in this transaction',
+  // A contractor's export prints the stream's code AND its description; the
+  // code column ("AB12 01") mapped as the stream named every stream by code.
+  waste_stream_type: 'the stream\'s NAME in words (a description or material column), never a column that holds only codes',
+  // A training register dates each line by its course or its invoice; left
+  // unmapped, two hundred lines carried no date at all.
+  training_start_date: 'the date the training took place or was invoiced (a "Date of training" or "Invoice date" column)',
 };
 
 /**
@@ -279,6 +285,51 @@ export function checkEsgColumnMeaning(
     kept[header] = field;
   }
   return { mapping: kept, perLitreFields, exceptions };
+}
+
+/**
+ * The route a waste sheet's TITLE gives every mass on it: a contractor's export
+ * splits its streams over a weights sheet, a "(Landfill)" sheet and a
+ * "(Diversion)" sheet of the same layout, and only the title says which is
+ * which. Null when the title names neither, or both.
+ */
+export function wasteRouteFromTitle(title: string | null | undefined): 'landfill' | 'recycled' | null {
+  const text = String(title ?? '');
+  const landfill = /\blandfill/i.test(text);
+  const diverted = /\b(diversion|diverted|recycl\w*)/i.test(text);
+  if (landfill === diverted) return null;
+  return landfill ? 'landfill' : 'recycled';
+}
+
+/**
+ * A waste register's stream masses, moved to the route its sheet's title
+ * names: on a "(Landfill)" sheet a stream's mass is its landfilled mass, on a
+ * "(Diversion)" sheet its diverted mass. The column mapping can only call the
+ * one weight column the stream's mass. A row that already carries a route of
+ * its own is left as read. Returns the number of rows moved.
+ */
+export function routeWasteRowsByTitle(extraction: DocumentExtraction, title: string | null | undefined): number {
+  const route = wasteRouteFromTitle(title);
+  if (!route || extraction.documentId !== 'waste__contractor_report_safe_disposal_certificate') return 0;
+  const target = route === 'landfill' ? 'waste_landfill_kg' : 'waste_recycled_kg';
+  let moved = 0;
+  for (const value of extraction.values) {
+    if (value.field !== 'waste_stream_rows' || !Array.isArray(value.value)) continue;
+    value.value = value.value.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const record = row as Record<string, unknown>;
+      const mass = record.waste_total_kg;
+      if (mass === undefined || mass === null || mass === ''
+        || (record.waste_landfill_kg ?? null) !== null || (record.waste_recycled_kg ?? null) !== null) return row;
+      moved += 1;
+      const { waste_total_kg: _total, ...rest } = record;
+      return { ...rest, [target]: mass };
+    });
+  }
+  if (moved > 0) {
+    extraction.exceptions.push(`The sheet's title ("${String(title).slice(0, 120)}") says its masses are ${route === 'landfill' ? 'landfilled' : 'diverted'}: ${moved} stream mass(es) were read as ${target}.`);
+  }
+  return moved;
 }
 
 /** Human phrasing of one row, for the column-mapping question. */

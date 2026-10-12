@@ -63,7 +63,8 @@ import {
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAOther, proposeOpenMappings } from './openRead.js';
 import { reviewCase } from './caseReview.js';
-import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
+import { extractEsgSheetTable, routeWasteRowsByTitle } from './esgSheetTableExtraction.js';
+import { surveyGridExtraction } from './esgSurveyGrid.js';
 import { extractEsgMonthlyTables, monthlyReadSpans, monthlyReadStandsIn } from './esgMonthlyTables.js';
 import { extractEsgPeriodSummary, fillsOfVehicle, periodReadSpan, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
 import {
@@ -186,6 +187,11 @@ function noteSaysAbsent(note: string, field: string): boolean {
 /** Months, for a filing label ("Depot A July 2025") read as an issuer. */
 const MONTH_AND_YEAR = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|maart|mei|junie|julie|oktober|desember)\b[\s'’.-]*(?:19|20)?\d{2}\b/i;
 
+/** Lower-case words only, single-spaced: how a name compares with a label. */
+function normalisedWords(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
 /** Fields that name who issued a document: never a filing label. */
 const ISSUER_FIELD = /(?:^|_)(?:supplier|issuer|issued_by|contractor|municipality|certification_body|provider|landlord)(?:_name)?$/;
 
@@ -212,6 +218,10 @@ export function unprintedValuesAsExceptions(extraction: DocumentExtraction): Doc
   // notes speak for that part), is not judged by them.
   const swept = new Set(extraction.sweptFields ?? []);
   const notesApply = (extraction.readInParts ?? 1) <= 1;
+  // The read's own filing label ("Depot A July 2025", handwritten on a scan):
+  // an issuer that is only a part of it is the label's place, not an issuer.
+  const label = extraction.values.find((value) => value.field === 'filing_label' && typeof value.value === 'string');
+  const labelWords = label ? normalisedWords(String(label.value)) : '';
   const values = extraction.values.filter((value) => {
     if (value.source?.method === 'agent' || Array.isArray(value.value) || value.value === null || typeof value.value === 'object') return true;
     const shown = String(value.value).trim();
@@ -230,6 +240,13 @@ export function unprintedValuesAsExceptions(extraction: DocumentExtraction): Doc
     if (ISSUER_FIELD.test(value.field) && typeof value.value === 'string' && MONTH_AND_YEAR.test(value.value)) {
       refused.push(`${value.field}: "${shown}" was not kept: a place with a month and year is a filing label, not who issued the document.`);
       return false;
+    }
+    if (ISSUER_FIELD.test(value.field) && labelWords && typeof value.value === 'string') {
+      const words = normalisedWords(value.value);
+      if (words && ` ${labelWords} `.includes(` ${words} `)) {
+        refused.push(`${value.field}: "${shown}" was not kept: it is the place in the document's filing label ("${String(label!.value).trim()}"), not who issued the document.`);
+        return false;
+      }
     }
     return true;
   });
@@ -435,6 +452,15 @@ function sheetLayoutOf(tables: unknown[] | undefined): {
   };
 }
 
+/** The words a sheet prints above its main table (its title lines), or null. */
+export function sheetTitleAbove(matrix: unknown[][] | undefined, region: MainRegion | undefined): string | null {
+  if (!matrix || !region) return null;
+  const words = matrix.slice(0, region.headerRow)
+    .flatMap((row) => (row ?? []).filter((cell) => typeof cell === 'string' && cell.trim() !== ''))
+    .map((cell) => String(cell).replace(/\s+/g, ' ').trim());
+  return words.length > 0 ? words.join(' / ').slice(0, 300) : null;
+}
+
 /** A main table longer than a summary block: a register, whoever reads it. */
 function mainTableIsRegister(matrix: unknown[][], region: MainRegion): boolean {
   const span = registerBodySpan(matrix, region);
@@ -445,6 +471,83 @@ function mainTableIsRegister(matrix: unknown[][], region: MainRegion): boolean {
 function sheetMatrixOf(tables: unknown[] | undefined): unknown[][] | undefined {
   const matrix = (tables?.[0] as { matrix?: unknown } | undefined)?.matrix;
   return Array.isArray(matrix) && matrix.every(Array.isArray) ? (matrix as unknown[][]) : undefined;
+}
+
+/** The skill a saved e-mail is read with (skills/esg/email_correspondence.md). */
+export const EMAIL_SPEC_ID = 'email_correspondence';
+
+/** A saved e-mail (emailMessage.ts sets `metadata.email` on the message it reads). */
+export function isEmailInput(input: RawExtractionInput): boolean {
+  const email = input.metadata?.email;
+  return Boolean(email) && typeof email === 'object';
+}
+
+/** The workbook a split sheet came from; null for a standalone document (a one-sheet workbook included). */
+export function workbookOf(input: RawExtractionInput): string | null {
+  const parent = input.metadata?.parent_file;
+  const sheet = input.metadata?.sheet_name;
+  return typeof parent === 'string' && typeof sheet === 'string' && input.metadata?.single_sheet !== true ? parent : null;
+}
+
+/** What one Pass A question about a whole workbook shows of it (classifyDocument reads 8 000 characters). */
+const WORKBOOK_OVERVIEW_CHARS = 7600;
+
+/**
+ * A workbook as ONE document for Pass A: its visible sheets, each by its name
+ * and the top of its content, in workbook order. Hidden sheets are left out:
+ * they are template copies and scratch work, never what the workbook is.
+ */
+export function workbookOverview(sheets: RawExtractionInput[]): string {
+  const visible = sheets.filter((sheet) => sheet.metadata?.sheet_hidden !== true);
+  const shown = visible.length > 0 ? visible : sheets;
+  const each = Math.max(300, Math.floor(WORKBOOK_OVERVIEW_CHARS / Math.max(1, shown.length)));
+  return shown
+    .map((sheet) => {
+      const name = String(sheet.metadata?.sheet_name ?? '');
+      const text = String(sheet.markdown?.trim() || sheet.raw_text || '').replace(/\n{3,}/g, '\n\n');
+      // The split's markdown already opens with the sheet's name.
+      const body = text.startsWith(`## ${name}`) ? text : `## ${name}\n${text}`;
+      return body.slice(0, each);
+    })
+    .join('\n\n')
+    .slice(0, WORKBOOK_OVERVIEW_CHARS);
+}
+
+/**
+ * Pass A for every workbook split into sheets, asked ONCE per workbook.
+ *
+ * A sheet of a workbook was never classified: Pass A runs on standalone
+ * documents only, and a sheet's own name ("Sheet1") rarely says what the
+ * workbook is. A greenhouse-gas system's export, a contractor's waste report or
+ * an events calendar arrives as a workbook of plain tabs, so its header block
+ * and summary tables were read under whatever keyword retrieval ranked first:
+ * never under the type's own skill. The workbook IS the document; Pass A now
+ * names its type the way it names a PDF's, and each sheet uses it:
+ *  - its labelled cells are mapped to that type's fields (always offered);
+ *  - a sheet no code reader read is read with that type's spec, as a
+ *    classified standalone document is (esgSkillSpecIds).
+ * A workbook Pass A cannot type (not confident, OTHER) is read exactly as before.
+ */
+export async function classifyWorkbooks(
+  model: ExtractionModel,
+  inputs: RawExtractionInput[],
+): Promise<Map<string, string[]>> {
+  const byWorkbook = new Map<string, RawExtractionInput[]>();
+  for (const input of inputs) {
+    const workbook = workbookOf(input);
+    if (workbook) byWorkbook.set(workbook, [...(byWorkbook.get(workbook) ?? []), input]);
+  }
+  const types = new Map<string, string[]>();
+  const settled = await concurrentMap([...byWorkbook.entries()], documentConcurrency(), async ([workbook, sheets]) => {
+    const overview = { filename: workbook, markdown: workbookOverview(sheets) };
+    const classification = await classifyDocument(model, overview, { domain: 'esg' });
+    return { workbook, specIds: esgSkillSpecIds(classification, overview) };
+  });
+  for (const result of settled) {
+    if (result.status === 'fulfilled' && result.value?.specIds) types.set(result.value.workbook, result.value.specIds);
+  }
+  if (types.size > 0) logger.info('Workbooks typed as one document', { workbooks: Object.fromEntries(types) });
+  return types;
 }
 
 export async function extractEsgCaseEntities(
@@ -466,6 +569,8 @@ export async function extractEsgCaseEntities(
   let done = 0;
   const total = inputs.length;
   const agentPass: AgentCasePass | null = agentCasePass(model, options.agent ? { ...options.agent, domain: 'esg' } : undefined);
+  // Each workbook split into sheets is typed once, as one document.
+  const workbookTypes = await classifyWorkbooks(model, inputs);
 
   // Documents are read in PARALLEL, bounded — the same shared helper, the same
   // input-order guarantee, because ESG conflicts also resolve first-document-wins
@@ -485,7 +590,12 @@ export async function extractEsgCaseEntities(
     // The ESG menu tells the model to report LOW confidence on a combined
     // municipal account, which drops the override — so a water-and-electricity
     // statement is never narrowed to one element here.
-    const classification = standalone
+    // A saved e-mail is an e-mail by its format: read with the e-mail skill,
+    // never typed by its content. A thread that discusses an ISO audit and
+    // attaches its summary is correspondence about the audit, not the audit's
+    // certificate (its attachment is a document of its own).
+    const email = isEmailInput(input);
+    const classification = standalone && !email
       ? await classifyDocument(model, {
           filename: input.filename,
           markdown: input.markdown,
@@ -498,7 +608,10 @@ export async function extractEsgCaseEntities(
     const elementOverride = routingElement(classification) ?? filedUnder ?? undefined;
     // Pass A named the document's type from the ESG skills menu: read it with
     // that type's spec, not with whatever keyword retrieval ranks first.
-    const skillSpecIds = esgSkillSpecIds(classification, input);
+    const skillSpecIds = email ? [EMAIL_SPEC_ID] : esgSkillSpecIds(classification, input);
+    // A sheet of a workbook Pass A typed as one document (classifyWorkbooks).
+    const workbook = workbookOf(input);
+    const workbookSpecIds = workbook ? workbookTypes.get(workbook) ?? null : null;
     // Pass A says the document is NONE of the listed ESG types: it is read for
     // what it is (the open read below), never under the spec retrieval ranks
     // first. Only with the open read on; with it off, nothing changes. The
@@ -566,6 +679,8 @@ export async function extractEsgCaseEntities(
         }
       }
     }
+    // A waste sheet titled "(Landfill)" or "(Diversion)": its masses take that route.
+    if (sheetTable) routeWasteRowsByTitle(sheetTable, sheetTitleAbove(matrix, sheetLayoutOf(input.tables).region));
     // A hidden sheet's register rows say so: scratch copies and old lists may
     // add to what is known about a record, never add a record of their own.
     if (sheetTable && input.metadata?.sheet_hidden === true) {
@@ -579,13 +694,21 @@ export async function extractEsgCaseEntities(
     // A sheet the code read in full is not read again by the model: the flat
     // pass could only return a truncated copy of the same rows (Super Group's
     // 132-vehicle fleet master came back as 15) at the price of a paid call.
-    const specResults = flatRead && !sheetTable && !otherByClassifier
+    // A sheet no code reader read is read as its workbook's type, as a typed
+    // standalone document is. A sheet the monthly reader reported (money,
+    // tonnage) keeps the read it had.
+    const readSpecIds = skillSpecIds ?? (reportedOnly ? null : workbookSpecIds);
+    // A survey grid (questions across, a site's answers per period down the
+    // side) is read cell by cell by the code, whatever Pass A called it; the
+    // flat read could only return nulls or a truncated copy of its answers.
+    const survey = flatRead && !sheetTable ? surveyGridExtraction(matrix, { filename: input.filename, sheetName }) : null;
+    const specResults = flatRead && !sheetTable && !survey && !otherByClassifier
       ? await extractDocument(model, {
         filename: input.filename,
         markdown: input.markdown,
         raw_text: input.raw_text,
         elementHint: sheetName,
-      }, skillSpecIds ? { specIds: skillSpecIds, domain: 'esg' } : { elementOverride, domain: 'esg' })
+      }, readSpecIds ? { specIds: readSpecIds, domain: 'esg' } : { elementOverride, domain: 'esg' })
       : ([] as DocumentExtraction[]);
 
     let results = [...specResults];
@@ -601,13 +724,15 @@ export async function extractEsgCaseEntities(
     if (readByCode) results.push(readByCode);
     if (reportedOnly) results.push(reportedOnly);
     if (sheetTable) results.push(sheetTable);
+    if (survey) results.push(survey);
 
     // The labelled cells the readers above leave: label/value pairs, small
     // summary blocks and pivots, a controlled document's header block, and —
     // on a sheet too large to carry its layout — the blocks above and beside
     // its table. The skill's wordings and one cached model question map their
     // labels; the code reads every value (esgSheetFacts.ts).
-    if (sheetName && sheetFactsEnabled()) {
+    // A survey grid read by the code holds no labelled cells of its own.
+    if (sheetName && sheetFactsEnabled() && !survey) {
       const layout = sheetLayoutOf(input.tables);
       const grid = matrix ?? (layout.outside ? sparseMatrix(layout.outside) : undefined);
       if (grid) {
@@ -625,10 +750,10 @@ export async function extractEsgCaseEntities(
           template: loggedVehicle ? 'Vehicle fuel log' : undefined,
           matrix: grid,
           read,
-          specIds: [...new Set(results.map((result) => result.documentId))],
+          specIds: [...new Set([...results.map((result) => result.documentId), ...(workbookSpecIds ?? [])])],
           hidden: input.metadata?.sheet_hidden === true,
         });
-        if (cellReads) results = mergeCellReads(results, cellReads, [readByCode, reportedOnly, sheetTable]);
+        if (cellReads) results = mergeCellReads(results, cellReads, [readByCode, reportedOnly, sheetTable, survey]);
       }
     }
     // Agent loop (off by default): a cited second read of a hard document —

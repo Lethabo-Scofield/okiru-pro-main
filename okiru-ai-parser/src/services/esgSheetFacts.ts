@@ -46,6 +46,9 @@ export interface SheetFact {
   cell: string;
   /** pair: caption beside or over a value; summary: a block's row × header; total: a block's total line. */
   kind: 'pair' | 'summary' | 'total';
+  /** A summary or total cell: its row's label and its column's header, as printed. */
+  row?: string;
+  column?: string;
 }
 
 /** Rows (inclusive, 0-based) another reader already read: their cells are not facts of this reader. */
@@ -140,7 +143,14 @@ export function findSheetFacts(matrix: unknown[][], read: ReadSpan[] = []): Shee
       for (const h of header.slice(1)) {
         const value = (matrix[d] ?? [])[h.c];
         if (!isNumber(value) || !free(d, h.c)) continue;
-        facts.push({ label: `${clean(rowLabel)} › ${clean(asText(h.value))}`, value: printed(value), cell: a1(d, h.c), kind: total ? 'total' : 'summary' });
+        facts.push({
+          label: `${clean(rowLabel)} › ${clean(asText(h.value))}`,
+          value: printed(value),
+          cell: a1(d, h.c),
+          kind: total ? 'total' : 'summary',
+          row: clean(rowLabel),
+          column: clean(asText(h.value)),
+        });
         used.add(`${d}:${h.c}`);
       }
       used.add(`${d}:${labelCol}`);
@@ -242,8 +252,12 @@ function fieldsOf(specId: string): CandidateField[] {
   const skill = domain.skillFor(specId);
   const skillFields = new Map((skill?.fields ?? []).filter((f) => !f.rowLevel).map((f) => [f.name, f]));
   const names = new Set([...spec.expectedFields, ...skillFields.keys()]);
+  // A row column is no document-level field, unless the skill declares it at
+  // document level too: a waste report's site total and a debrief's grand
+  // total of planned stops share their rows' names (skills.ts), and are
+  // exactly the figures a labelled cell prints.
   return [...names]
-    .filter((name) => !rowFields.has(name) && name !== skill?.rowsField && name !== 'exceptions')
+    .filter((name) => (!rowFields.has(name) || skillFields.has(name)) && name !== skill?.rowsField && name !== 'exceptions')
     .map((name) => ({
       specId,
       field: name,
@@ -344,6 +358,23 @@ function valueFor(field: string, value: string | number): string | number {
   return value;
 }
 
+/** The rows a skill with `summaryTables` keeps its printed summary cells under. */
+export const PRINTED_SUMMARY_FIELD = 'printed_summary_rows';
+
+/**
+ * A period printed as one range ("2025-07-01 - 2026-06-30", "1 July 2025 to
+ * 30 June 2026") under a field that names its start: the two ends, as printed.
+ * Null for anything else, a single date included (ISO dashes have no spaces
+ * around them, so they never split).
+ */
+export function rangeOf(field: string, value: string | number): [string, string] | null {
+  if (!/_start$/.test(field) || typeof value !== 'string') return null;
+  const parts = value.trim().split(/\s+(?:-|–|to)\s+/i);
+  if (parts.length !== 2) return null;
+  const dateLike = (part: string) => /\d/.test(part) && (/\b\d{4}\b/.test(part) || /\b\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}\b/.test(part));
+  return dateLike(parts[0]) && dateLike(parts[1]) ? [parts[0].trim(), parts[1].trim()] : null;
+}
+
 /**
  * Read a sheet's labelled cells. One extraction per document type a label
  * mapped to (its values, each citing its cell), plus the open facts no label
@@ -366,10 +397,14 @@ export async function extractEsgSheetFacts(
 
   // The skills' own wordings first: free and exact.
   const mapped = new Map<SheetFact, CandidateField>();
+  const byWording = new Set<SheetFact>();
   // A hidden sheet's cells are notes only: scratch copies and stale lists are no reading.
   for (const fact of input.hidden ? [] : facts) {
     const hit = fieldBySkillWording(fact.label, candidates);
-    if (hit) mapped.set(fact, hit);
+    if (hit) {
+      mapped.set(fact, hit);
+      byWording.add(fact);
+    }
   }
   // The model for the rest, once per set of labels. Never for a hidden sheet.
   if (model && !input.hidden) {
@@ -390,16 +425,9 @@ export async function extractEsgSheetFacts(
   const extractions = new Map<string, DocumentExtraction>();
   const exceptions: string[] = [];
   const unmapped = new Set(facts.filter((fact) => !mapped.has(fact)));
-  for (const { candidate, facts: cells } of byField.values()) {
-    const values = [...new Set(cells.map((fact) => String(fact.value)))];
-    if (values.length > 1) {
-      exceptions.push(`${candidate.field}: the sheet states ${cells.map((f) => `${f.value} (${f.cell}, "${f.label}")`).join(' and ')}; none was used.`);
-      cells.forEach((fact) => unmapped.add(fact));
-      continue;
-    }
-    const fact = cells[0];
-    const extraction = extractions.get(candidate.specId) ?? {
-      documentId: candidate.specId,
+  const extractionFor = (specId: string): DocumentExtraction => {
+    const extraction = extractions.get(specId) ?? {
+      documentId: specId,
       documentName: `${sheet} labelled cells`,
       sourceFile: input.filename,
       values: [],
@@ -407,14 +435,80 @@ export async function extractEsgSheetFacts(
       unexpectedFields: [],
       exceptions: [],
     };
+    extractions.set(specId, extraction);
+    return extraction;
+  };
+  const taken = new Set([...byField.values()].map(({ candidate }) => `${candidate.specId}/${candidate.field}`));
+  for (const { candidate, facts: all } of byField.values()) {
+    let cells = all;
+    // A label printed in the skill's own wording IS the field; a label the
+    // model guessed for the same field that disagrees with it ("Theoretical
+    // stock" taken for the closing dip) is left as a note, never allowed to
+    // cancel the exact one.
+    const exact = all.filter((fact) => byWording.has(fact));
+    if (exact.length > 0 && exact.length < all.length && new Set(exact.map((fact) => String(fact.value))).size === 1) {
+      const guessed = all.filter((fact) => !byWording.has(fact) && String(fact.value) !== String(exact[0].value));
+      if (guessed.length > 0) {
+        exceptions.push(`${candidate.field}: the sheet prints it as "${exact[0].label}" (${exact[0].value}, ${exact[0].cell}); `
+          + `${guessed.map((f) => `"${f.label}" (${f.value}, ${f.cell})`).join(' and ')} was not used for it.`);
+        guessed.forEach((fact) => unmapped.add(fact));
+        cells = all.filter((fact) => !guessed.includes(fact));
+      }
+    }
+    const values = [...new Set(cells.map((fact) => String(fact.value)))];
+    if (values.length > 1) {
+      exceptions.push(`${candidate.field}: the sheet states ${cells.map((f) => `${f.value} (${f.cell}, "${f.label}")`).join(' and ')}; none was used.`);
+      cells.forEach((fact) => unmapped.add(fact));
+      continue;
+    }
+    const fact = cells[0];
+    const extraction = extractionFor(candidate.specId);
+    const source = { method: 'cell' as const, cellRef: fact.cell, quote: `${fact.label}: ${fact.value}` };
+    // "2025-07-01 - 2026-06-30" under a period START is the whole range: its
+    // start is the start, and its end is the period's end when that field
+    // exists and no cell of its own states it.
+    const range = rangeOf(candidate.field, fact.value);
+    const endField = range ? candidate.field.replace(/_start$/, '_end') : null;
+    if (range && endField && candidates.some((c) => c.specId === candidate.specId && c.field === endField)
+      && !taken.has(`${candidate.specId}/${endField}`)) {
+      extraction.values.push({ field: candidate.field, value: range[0], sourceFile: input.filename, sourceDocumentId: candidate.specId, source });
+      extraction.values.push({ field: endField, value: range[1], sourceFile: input.filename, sourceDocumentId: candidate.specId, source });
+      continue;
+    }
     extraction.values.push({
       field: candidate.field,
       value: valueFor(candidate.field, fact.value),
       sourceFile: input.filename,
       sourceDocumentId: candidate.specId,
-      source: { method: 'cell', cellRef: fact.cell, quote: `${fact.label}: ${fact.value}` },
+      source,
     });
-    extractions.set(candidate.specId, extraction);
+  }
+
+  // A document type whose skill keeps its printed summary tables (a system
+  // export's totals per site and category, a register's count per depot) gets
+  // every summary cell no field took, as one row each: its row label, its
+  // column header and the figure, as printed. Never on a hidden sheet.
+  // Only a type the sheet IS (its reads, its workbook's type), never one
+  // keyword retrieval merely offered for its labels.
+  const summaryHolder = input.hidden ? null : (input.specIds ?? []).find((id) => extractionDomain('esg').skillFor(id)?.summaryTables);
+  if (summaryHolder) {
+    const cells = facts.filter((fact) => unmapped.has(fact) && (fact.kind === 'summary' || fact.kind === 'total') && fact.row && fact.column);
+    if (cells.length > 0) {
+      extractionFor(summaryHolder).values.push({
+        field: PRINTED_SUMMARY_FIELD,
+        value: cells.map((fact) => ({
+          summary_row_label: fact.row,
+          summary_column_label: fact.column,
+          summary_value: fact.value,
+          summary_is_total: fact.kind === 'total' || /^(grand\s+)?(sub-?)?totals?\b/i.test(fact.column ?? ''),
+          summary_cell: fact.cell,
+        })),
+        sourceFile: input.filename,
+        sourceDocumentId: summaryHolder,
+        source: { method: 'cell', cellRef: `${cells[0].cell}:${cells[cells.length - 1].cell}`, quote: `${sheet}: ${cells.length} summary cells` },
+      });
+      cells.forEach((fact) => unmapped.delete(fact));
+    }
   }
 
   const out = [...extractions.values()];

@@ -553,6 +553,52 @@ export interface SplitOptions {
    * they were recorded.
    */
   statedTotals?: boolean;
+  /**
+   * Show the model the cells outside the main table too, when the table holds
+   * less than half the sheet's filled cells (see partialTableMarkdown). Default
+   * off; the ESG reading turns it on.
+   */
+  partialTableGrid?: boolean;
+}
+
+/** Below this share of a sheet's filled cells, its main table is not the sheet. */
+const PARTIAL_TABLE_SHARE = 0.5;
+/** Cells listed after a partial table, at most. */
+const MAX_LISTED_OUTSIDE = 600;
+
+/**
+ * The cells a sheet prints outside its main table, as lines the model can
+ * read ("Row 5: A5 Example theme | C5 46108"), when that table holds less than
+ * half the sheet's filled cells. A calendar or a report laid out in blocks side
+ * by side has no one table: the header detection picks one block, and every
+ * other block (the other months, the other sections) never reached the flat
+ * read. Null when the table is most of the sheet, so every ordinary sheet's
+ * markdown is exactly what it was.
+ */
+export function partialTableMarkdown(matrix: unknown[][], region: SheetRegion | undefined): string | null {
+  if (!region) return null;
+  const filled = (c: unknown) => c !== null && c !== undefined && String(c).trim() !== '';
+  const inTable = (r: number, c: number) => r >= region.headerRow && c >= region.startCol && c <= region.endCol;
+  let all = 0;
+  let inside = 0;
+  matrix.forEach((row, r) => (row ?? []).forEach((value, c) => {
+    if (!filled(value)) return;
+    all += 1;
+    if (inTable(r, c)) inside += 1;
+  }));
+  if (all === 0 || inside / all >= PARTIAL_TABLE_SHARE) return null;
+  const lines: string[] = [];
+  let listed = 0;
+  for (let r = 0; r < matrix.length && listed < MAX_LISTED_OUTSIDE; r += 1) {
+    const cells: string[] = [];
+    (matrix[r] ?? []).forEach((value, c) => {
+      if (inTable(r, c) || !filled(value) || listed >= MAX_LISTED_OUTSIDE) return;
+      cells.push(`${XLSX.utils.encode_cell({ r, c })} ${String(value).replace(/\s+/g, ' ').trim()}`);
+      listed += 1;
+    });
+    if (cells.length > 0) lines.push(`Row ${r + 1}: ${cells.join(' | ')}`);
+  }
+  return ['### Cells outside the table above (cell, value as printed)', ...lines].join('\n');
 }
 
 /**
@@ -605,10 +651,11 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
       ? { headerRow: table.headerIdx, startCol: table.region.start, endCol: table.region.end }
       : undefined;
     const outside = !bounded && region ? cellsOutsideTable(matrix, region) : [];
+    const partial = options.partialTableGrid && bounded ? partialTableMarkdown(bounded, region) : null;
     documents.push({
       sheetName,
       rows,
-      markdown: sheetToMarkdown(sheetName, rows),
+      markdown: partial ? `${sheetToMarkdown(sheetName, rows)}\n\n${partial}` : sheetToMarkdown(sheetName, rows),
       text: sheetToText(sheetName, rows),
       matrix: bounded,
       hidden: visibility !== 0,
