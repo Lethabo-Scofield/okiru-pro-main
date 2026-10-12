@@ -562,6 +562,46 @@ describe('ESG: a document no listed type fits is read as an Other document', () 
     expect(Object.keys(result!.calculator.payload)).toEqual([]);
   });
 
+  it('a one-sheet workbook is a document of its own: Pass A types it and the open read reads a questionnaire no listed type fits', async () => {
+    // A customer's sustainability questionnaire arrives as a workbook with one
+    // sheet. It used to be treated as a sheet split out of a workbook — no
+    // Pass A, no open read — and nothing at all was read from it.
+    const rows = [
+      { Question: 'Do you hold a certified environmental management system?', Answer: 'Yes — certified 2024' },
+      { Question: 'Number of vehicles in your fleet', Answer: '48' },
+    ];
+    const questionnaire: RawExtractionInput = {
+      file_id: 'q',
+      filename: 'customer questionnaire.xlsx',
+      mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      raw_text: rows.map((r) => `${r.Question} ${r.Answer}`).join('\n'),
+      markdown: ['| Question | Answer |', '|---|---|', ...rows.map((r) => `| ${r.Question} | ${r.Answer} |`)].join('\n'),
+      tables: [{ sheetName: 'Sheet1', rows, matrix: [['Question', 'Answer'], ...rows.map((r) => [r.Question, r.Answer])] }],
+      metadata: { sheet_name: 'Sheet1', single_sheet: true },
+    } as unknown as RawExtractionInput;
+    const model = stubModel({
+      classify: { 'customer questionnaire.xlsx': { element: 'OTHER', document_type: 'Customer sustainability questionnaire', confidence: 0.9 } },
+      open: {
+        'customer questionnaire.xlsx': {
+          document_label: 'Customer sustainability questionnaire',
+          facts: [{ label: 'Vehicles in the fleet', value: '48', kind: 'figure', quote: 'Number of vehicles in your fleet 48' }],
+        },
+      },
+    });
+    const result = await extractEsgCaseEntities([questionnaire], model);
+    expect(model.calls.filter((c) => c.kind === 'classify')).toHaveLength(1);
+    const other = otherOf(result!.extractions, questionnaire.filename)!;
+    expect(other.documentName).toBe('Other document — Customer sustainability questionnaire');
+    expect(other.open?.facts.map((f) => f.label)).toEqual(['Vehicles in the fleet']);
+  });
+
+  it('a sheet split out of a workbook is still not read as a document of its own', async () => {
+    const sheet = { ...doc('pack.xlsx › Notes', 'Some notes'), metadata: { sheet_name: 'Notes', parent_file: 'pack.xlsx' } } as RawExtractionInput;
+    const model = stubModel({ classify: { 'pack.xlsx › Notes': { element: 'OTHER', document_type: 'Notes', confidence: 0.9 } } });
+    await extractEsgCaseEntities([sheet], model);
+    expect(model.calls.filter((c) => c.kind === 'classify' || c.kind === 'open')).toEqual([]);
+  });
+
   it('the element the person filed a document under beats Pass A\'s OTHER (C1): it is read under that element', async () => {
     const model = stubModel({
       classify: { 'policy-schedule.pdf': { element: 'OTHER', document_type: 'Insurance schedule', confidence: 0.9 } },

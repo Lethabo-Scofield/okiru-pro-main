@@ -54,5 +54,7 @@ describe('a single-sheet workbook still carries its parsed rows', () => {
     const table = inputs[0].tables[0] as { sheetName: string; rows: Array<Record<string, unknown>> };
     expect(table.rows).toHaveLength(1);
     expect(table.rows[0].DEBIT).toBeCloseTo(220965.42, 2);
+    // The whole upload, not a sheet split out of one: classified and open-read as a document.
+    expect(inputs[0].metadata).toMatchObject({ sheet_name: 'Sheet1', single_sheet: true });
   });
 });

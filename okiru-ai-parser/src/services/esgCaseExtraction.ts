@@ -261,6 +261,10 @@ export async function extractEsgCaseEntities(
   // runs on identical evidence.
   const settled = await concurrentMap(inputs, documentConcurrency(), async (input) => {
     const sheetName = typeof input.metadata?.sheet_name === 'string' ? input.metadata.sheet_name : undefined;
+    // A one-sheet workbook is the whole upload, not a sheet split out of one:
+    // a document in its own right for Pass A and the open read, while its rows
+    // and grid still go to the code readers below.
+    const standalone = !sheetName || input.metadata?.single_sheet === true;
 
     // Pass A — model classification against the ESG menu. Paid only for
     // ANONYMOUS documents, exactly as on the B-BBEE side: a named sheet already
@@ -269,7 +273,7 @@ export async function extractEsgCaseEntities(
     // The ESG menu tells the model to report LOW confidence on a combined
     // municipal account, which drops the override — so a water-and-electricity
     // statement is never narrowed to one element here.
-    const classification = !sheetName
+    const classification = standalone
       ? await classifyDocument(model, {
           filename: input.filename,
           markdown: input.markdown,
@@ -377,7 +381,7 @@ export async function extractEsgCaseEntities(
     // A standalone document no listed reader read anything from is an Other
     // document, read for its identity and facts (openRead.ts). Never a sheet.
     let otherDocument = false;
-    if (!sheetName) {
+    if (standalone) {
       const open = await addOtherDocumentRead(model, input, results, {
         domain: 'esg',
         classifierLabel: classification?.documentType ?? null,
