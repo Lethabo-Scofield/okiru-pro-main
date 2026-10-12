@@ -18,6 +18,9 @@ import { computeEsgScores } from "../src/lib/esg/esgCalculators";
 import { ESG_APPLICABILITY_SECTION } from "../EsgToolkit/src/lib/calculators/esgApplicability";
 import { computeEsgScorecard } from "../EsgToolkit/src/lib/calculators";
 import { ESG_PROVENANCE_SECTION } from "../src/lib/esg/esgProvenance";
+import { ESG_REVIEW_SIDECAR_SECTIONS } from "../src/lib/esg/esgAiReviewFill";
+import { loadEsgReviewLibrary, respondWithEsgAiReview } from "./esgWorkbookAiReview";
+import { aiReviewLimiter } from "./rateLimit";
 import {
   applyEsgWorkbookReopen,
   applyEsgWorkbookSubmit,
@@ -49,8 +52,15 @@ export type EsgWorkbookData = {
  */
 // `provenance` records which document placed each value (E4); it merges cell
 // by cell through the import confirm like any other section, under the same
-// payload bounds.
-const SECTION_KEYS = [...ESG_SECTION_IDS, ESG_APPLICABILITY_SECTION, "netzero", ESG_PROVENANCE_SECTION];
+// payload bounds. The AI review's sidecars (`ai-fills`, `ai-declined`,
+// `disputes`) are saved the same way: marks beside the figures, never figures.
+const SECTION_KEYS = [
+  ...ESG_SECTION_IDS,
+  ESG_APPLICABILITY_SECTION,
+  "netzero",
+  ESG_PROVENANCE_SECTION,
+  ...ESG_REVIEW_SIDECAR_SECTIONS,
+];
 
 const esgWorkbookSchema = new mongoose.Schema(
   {
@@ -666,6 +676,26 @@ export function registerEsgWorkbookRoutes(app: Express): void {
       logger.error("ESG assistant call failed", err);
       res.status(502).json({ error: "The assistant is unavailable right now" });
     }
+  });
+
+  /**
+   * The AI review's "Work out the rest": the free rules over the company's
+   * filed documents, then one model call over what is left, every answer
+   * checked before it is returned. Writes nothing — accepted fills go through
+   * the section save above. Grounded server-side only: the request body is
+   * ignored, so nothing the browser claims about the workbook reaches the
+   * prompt. Lives under /api/esg, so no new ingress entry is needed.
+   */
+  app.post("/api/esg/workbook/:companyId/ai-review", requireAuth, aiReviewLimiter, async (req, res) => {
+    const wb = await authorizeEsgWorkbook(req, res);
+    if (!wb) return;
+    if (wb.submittedAt) {
+      // A submitted workbook takes no fills, so the paid call is not made.
+      return res.status(423).json({ error: "Workbook is submitted and locked" });
+    }
+    normalizeLegacySections(wb);
+    const library = await loadEsgReviewLibrary(req, wb.companyId);
+    await respondWithEsgAiReview(scorable(wb) as never, library, res);
   });
 }
 
