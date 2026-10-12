@@ -83,7 +83,9 @@ function unplacedValue(u: EsgUnplacedValue, axes: EsgReportingAxes | undefined):
   const ask = u.choice ? esgPlacementQuestion(u.choice, axes) : undefined;
   if (u.choice && ask) return { label: u.choice.measure, value: figureText(u.choice), source: u.reason, ask };
   return {
-    label: humanize(u.field),
+    // Figures a reading held back are listed by what they are, not by the
+    // register they arrived in.
+    label: u.heldFigures ? "Not placed" : humanize(u.field),
     value: display(u.value) ?? "—",
     source: u.reason,
     ...(u.rejection && ESG_NO_CELL_REJECTIONS.has(u.rejection) ? { evidence: true } : {}),
@@ -161,6 +163,17 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
         replace: false,
       });
     }
+    // What placing this document's values noted: a register that kept only
+    // its first rows, documents that disagree about a total.
+    for (const note of Array.from(new Set(placed.map((p) => p.note?.trim()).filter((n): n is string => Boolean(n))))) {
+      if (problems.some((p) => p.detail === note)) continue;
+      problems.push({
+        headline: "A note on how this document was placed.",
+        detail: note,
+        fix: "Check the figures it names before you rely on them.",
+        replace: false,
+      });
+    }
     // Notes the extraction itself raised — a total the rows don't sum to, a
     // period outside the reporting year.
     for (const e of own) {
@@ -206,6 +219,10 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
     const notFound = Array.from(new Set(own.flatMap((e) => (e.missingFields ?? []).map((f) => humanize(String(f)))))).slice(0, 12);
     const documentType = other.otherDocument ?? own.map((e) => e.documentName).find(Boolean) ?? "";
     const kept = unplaced.filter((v) => v.evidence).length;
+    // Figures held back behind a placed reading, counted figure by figure.
+    const heldBack = injection.unplaced
+      .filter((u) => u.heldFigures && !u.choice && splitSource(u.sourceFile, uploadNames).upload === name)
+      .reduce((sum, u) => sum + (u.heldFigures ?? 0), 0);
     const summary =
       values.length === 0
         ? other.otherDocument && other.details.length > 0
@@ -215,6 +232,7 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
           `${placed.length} placed`,
           `${values.length} read`,
           toPlace > 0 ? `${toPlace} to place` : "",
+          heldBack > 0 ? `${heldBack} figure${heldBack === 1 ? "" : "s"} not placed` : "",
           kept > 0 ? `${kept} kept as evidence` : "",
           own.length > 1 ? `${own.length} sheets` : "",
         ].filter(Boolean).join(" · ");

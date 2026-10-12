@@ -21,7 +21,7 @@ import { primaryButton } from "@/components/upload/flow/buttonStyles";
 import { EsgImportAnalysisPanel } from "@/components/esg-workbook/EsgImportAnalysisPanel";
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
 import { esgCaseFileNames, type EsgInjectionResult, type EsgParserCaseLike } from "./esgParserInjection";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { DocumentReview } from "@/components/review/DocumentReview";
 import { buildEsgDocumentReview } from "./esgDocumentReview";
 
@@ -68,6 +68,8 @@ export interface EsgCreateReviewProps {
   parserCase?: EsgParserCaseLike | null;
   /** Excel route — the preview produced by the SAME parser the server uses. */
   excel?: { fileName: string; preview: EsgImportPreview } | null;
+  /** Documents route — the reporting year, sites and boundary to confirm (`EsgCreateFactsPanel`). */
+  facts?: ReactNode;
   creating?: boolean;
   onBack: () => void;
   onConfirm: () => void;
@@ -96,6 +98,7 @@ export function EsgCreateReview({
   injection,
   parserCase,
   excel,
+  facts,
   creating = false,
   onBack,
   onConfirm,
@@ -147,6 +150,8 @@ export function EsgCreateReview({
           </p>
         ) : null}
       </div>
+
+      {route === "documents" ? facts : null}
 
       {route === "documents" && injection ? (
         <div className="mt-4">

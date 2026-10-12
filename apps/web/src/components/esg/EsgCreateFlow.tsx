@@ -35,7 +35,7 @@
  *     `{confirm:true, sections}` endpoint, so there is one import path.
  *   - `persistEsgSectionPatches` — the one workbook write.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { API_BASE } from "@toolkit/lib/config";
@@ -52,7 +52,10 @@ import EsgDocumentUploadStart from "./EsgDocumentUploadStart";
 import EsgCreateReview, { type EsgCreateRoute, type EsgNameSource } from "./EsgCreateReview";
 import EsgFlowSteps from "./EsgFlowSteps";
 import { esgEntityNameFromSections, esgProposedEntityName } from "./esgEntityName";
+import EsgCreateFactsPanel from "./EsgCreateFactsPanel";
+import { esgCreateFactCells, esgCreateProposal, esgPriorYearBaseline } from "./esgCreateFacts";
 import {
+  applyEsgParserResult,
   esgPatchCellCount,
   persistEsgSectionPatches,
   type EsgInjectionResult,
@@ -121,6 +124,26 @@ export function EsgCreateFlow() {
   const [nameSource, setNameSource] = useState<EsgNameSource>("none");
   const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false);
+  /**
+   * The reporting year and sites the person changed on the review. Null while
+   * they keep what the documents propose — the documents' facts win until the
+   * person changes them, the B-BBEE year-end gate's rule.
+   */
+  const [confirmed, setConfirmed] = useState<{ months?: string[]; depots?: string[] } | null>(null);
+  const [boundary, setBoundary] = useState("");
+  const [useBaseline, setUseBaseline] = useState(false);
+
+  const proposal = useMemo(() => esgCreateProposal(work.parserCase), [work.parserCase]);
+  /** The figures re-placed on what the person confirmed; the upload's own placement until then. */
+  const placement = useMemo(
+    () =>
+      confirmed && work.parserCase && work.route === "documents"
+        ? applyEsgParserResult(work.parserCase, { confirmed })
+        : work.injection,
+    [confirmed, work.parserCase, work.injection, work.route],
+  );
+  const reportingMonths = confirmed?.months ?? proposal.year?.months ?? [];
+  const reportingSites = confirmed?.depots ?? proposal.sites;
   /** Set when this mount rehydrated a previous run's paid extraction. */
   const [restoredAt, setRestoredAt] = useState<string | null>(null);
 
@@ -152,6 +175,9 @@ export function EsgCreateFlow() {
   const backToChoose = () => {
     setStep("choose");
     setWork(EMPTY_WORK);
+    setConfirmed(null);
+    setBoundary("");
+    setUseBaseline(false);
     setEntityName("");
     setNameSource("none");
     // Going back is a deliberate discard — restoring the abandoned run on the
@@ -230,6 +256,8 @@ export function EsgCreateFlow() {
       excel: null,
     };
     setWork(nextWork);
+    setConfirmed(null);
+    setUseBaseline(false);
     setEntityName(proposed);
     setNameSource(proposed ? "documents" : "none");
     // Tokens have just been spent on this result — make it survive leaving
@@ -311,17 +339,24 @@ export function EsgCreateFlow() {
       // The confirmed name belongs on the cover sheet too — it is the value the
       // user just approved, written through the same import path as everything
       // else. Merged, never replacing what the parser placed there.
-      const cover = work.patches["company-reporting-setup"]?.cells ?? {};
+      // On the documents route the confirmed facts go with the figures: the
+      // reporting period, the boundary, and the baseline when it was taken.
+      const placed = work.route === "documents" && placement ? placement.patches : work.patches;
+      const withFacts =
+        work.route === "documents"
+          ? esgCreateFactCells({ months: reportingMonths, boundary, useBaseline }, placed, placement?.priorYear)
+          : placed;
+      const cover = withFacts["company-reporting-setup"]?.cells ?? {};
       const patches: EsgSectionPatches = {
-        ...work.patches,
+        ...withFacts,
         "company-reporting-setup": { cells: { ...cover, entity: name } },
       };
 
       let written = 0;
       try {
         // The document placements travel too, so each cell keeps its source (E4).
-        await persistEsgSectionPatches(companyId, patches, work.injection?.placed ?? []);
-        written = esgPatchCellCount(work.patches);
+        await persistEsgSectionPatches(companyId, patches, placement?.placed ?? work.injection?.placed ?? []);
+        written = esgPatchCellCount(placed);
       } catch (err) {
         toast({
           title: "Company created, but the values were not written",
@@ -490,9 +525,27 @@ export function EsgCreateFlow() {
             entityName={entityName}
             onEntityNameChange={setEntityName}
             nameSource={nameSource}
-            injection={work.injection}
+            injection={placement}
             parserCase={work.parserCase}
             excel={work.excel}
+            facts={
+              work.route === "documents" ? (
+                <EsgCreateFactsPanel
+                  proposal={proposal}
+                  months={reportingMonths}
+                  onMonthsChange={(months) => setConfirmed((prior) => ({ ...prior, months }))}
+                  sites={reportingSites}
+                  onSitesChange={(depots) => setConfirmed((prior) => ({ ...prior, depots }))}
+                  monthsWithFigures={Number(placement?.patches.assumptions?.cells?.B111) || undefined}
+                  boundary={boundary}
+                  onBoundaryChange={setBoundary}
+                  priorYear={placement?.priorYear}
+                  baseline={esgPriorYearBaseline(placement?.priorYear, placement?.patches ?? {})}
+                  useBaseline={useBaseline}
+                  onUseBaselineChange={setUseBaseline}
+                />
+              ) : null
+            }
             creating={creating}
             onBack={() => (work.route === "excel" ? backToChoose() : setStep("provide"))}
             onConfirm={() => void confirmAndCreate()}
