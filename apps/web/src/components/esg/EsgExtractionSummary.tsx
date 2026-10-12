@@ -312,11 +312,12 @@ export function EsgExtractionSummary({ injection, parserCase, compact = false, a
     ) : null;
 
   const kindsLine =
-    kinds.toPlace > 0 || kinds.evidence > 0 ? (
+    kinds.toPlace > 0 || kinds.evidence > 0 || kinds.held > 0 ? (
       <p className="text-[12px] leading-5 text-[color:var(--body)]" data-testid="esg-unplaced-kinds">
         {[
           kinds.toPlace > 0 ? `${kinds.toPlace} figure${kinds.toPlace === 1 ? "" : "s"} need${kinds.toPlace === 1 ? "s" : ""} you to say where ${kinds.toPlace === 1 ? "it goes" : "they go"}` : "",
           kinds.evidence > 0 ? `${kinds.evidence} value${kinds.evidence === 1 ? "" : "s"} kept with ${kinds.evidence === 1 ? "its document" : "their documents"} (not needed in the workbook)` : "",
+          kinds.held > 0 ? `${kinds.held} figure${kinds.held === 1 ? "" : "s"} held as context (another year, or no monthly cell)` : "",
         ].filter(Boolean).join(" · ")}
       </p>
     ) : null;

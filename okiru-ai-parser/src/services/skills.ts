@@ -109,7 +109,22 @@ export interface SkillField {
   /** Wordings the document uses for this value ("Basic Salary", "BASIC"). */
   labels: string[];
   description: string;
+  /**
+   * 'document' marks a fact about the document itself (its title, number,
+   * revision, statement date, author, a filing label, a printed history
+   * total): reported on the document, never resolved across the case as a
+   * rival answer and never offered to the calculator mapping. Default 'case'.
+   */
+  scope?: SkillFieldScope;
+  /**
+   * True for a field the skill asks for as several items in one string,
+   * separated by '; ' (every message date, every attachment, every credit
+   * line). The code splits it into a list, so each item is a value of its own.
+   */
+  list?: boolean;
 }
+
+export type SkillFieldScope = 'case' | 'document';
 
 export interface SkillClassify {
   /** One sentence: what this document is. */
@@ -150,6 +165,13 @@ export interface Skill {
   element: string;
   version: number;
   hard: boolean;
+  /**
+   * The document prints summary tables worth keeping as they are (a system
+   * export's totals per site and category, a register's count per depot): the
+   * labelled-cell reader returns every summary cell no field takes as a row of
+   * `printed_summary_rows` (esgSheetFacts.ts). Default false.
+   */
+  summaryTables: boolean;
   classify: SkillClassify;
   /** Array field the rowLevel fields are returned under, when there are any. */
   rowsField: string | null;
@@ -349,15 +371,21 @@ function boolOf(value: FrontMatterValue | undefined, what: string, file: string,
 
 const ALLOWED_KEYS = new Set([
   'id', 'appliesTo', 'element', 'version', 'hard', 'classify', 'rowsField',
-  'fields', 'newFields', 'dropFields', 'newType',
+  'fields', 'newFields', 'dropFields', 'newType', 'summaryTables',
 ]);
-const FIELD_KEYS = new Set(['name', 'type', 'required', 'rowLevel', 'labels', 'description']);
+const FIELD_KEYS = new Set(['name', 'type', 'required', 'rowLevel', 'labels', 'description', 'scope', 'list']);
 const CLASSIFY_KEYS = new Set(['is', 'isNot', 'filenameHints', 'contentSignals']);
 
 function rejectUnknownKeys(mapping: Mapping, allowed: Set<string>, what: string, file: string): void {
   for (const key of Object.keys(mapping)) {
     if (!allowed.has(key)) throw new SkillLoadError(`unknown ${what} key "${key}"`, file);
   }
+}
+
+function scopeOf(value: FrontMatterValue | undefined, name: string, file: string): SkillFieldScope {
+  if (value === undefined || value === null) return 'case';
+  if (value !== 'case' && value !== 'document') throw new SkillLoadError(`field "${name}".scope must be case or document`, file);
+  return value;
 }
 
 function parseField(raw: FrontMatterValue, index: number, file: string): SkillField {
@@ -376,6 +404,8 @@ function parseField(raw: FrontMatterValue, index: number, file: string): SkillFi
     rowLevel: boolOf(raw.rowLevel, `field "${name}".rowLevel`, file, false),
     labels: stringList(raw.labels, `field "${name}".labels`, file),
     description: stringOf(raw.description, `field "${name}".description`, file),
+    scope: scopeOf(raw.scope, name, file),
+    ...(boolOf(raw.list, `field "${name}".list`, file, false) ? { list: true } : {}),
   };
 }
 
@@ -551,6 +581,7 @@ function parseSkillFile(
     element,
     version,
     hard: boolOf(meta.hard, 'hard', file, false),
+    summaryTables: boolOf(meta.summaryTables, 'summaryTables', file, false),
     classify,
     rowsField,
     fields,

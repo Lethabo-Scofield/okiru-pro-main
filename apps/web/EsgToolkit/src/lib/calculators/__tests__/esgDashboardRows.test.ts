@@ -57,13 +57,15 @@ describe("computeEsgDashboard pillar rows derive from esgScorecardDefinitions", 
    * The corrected baseline (`docs/esg/ESG_SCORING_DELTA.md`). Was 36 / 33 /
    * 64.8529411765 while `S d18` and `G d25` still handed out points nobody had
    * earned, and Social 25 while `S d23` was banded against the template's 6
-   * initiatives — nobody's target (D5); the maxima projection is unchanged.
+   * initiatives — nobody's target (D5); E 36 and S 20 while water alone
+   * earned "Scope 3 tracking" (E d8) and a route register the "driver fatigue
+   * programme" (S d19). The maxima projection is unchanged.
    */
-  it("earned points match the corrected baseline (E=36, S=20, G=59.8529411765)", () => {
+  it("earned points match the corrected baseline (E=31, S=15, G=59.8529411765)", () => {
     const earned = (pillar: (typeof PILLARS)[number]) =>
       dash.pillarRows[pillar].reduce((a, r) => a + r.score, 0);
-    expect(earned("environmental")).toBeCloseTo(36, 6);
-    expect(earned("social")).toBeCloseTo(20, 6);
+    expect(earned("environmental")).toBeCloseTo(31, 6);
+    expect(earned("social")).toBeCloseTo(15, 6);
     expect(earned("governance")).toBeCloseTo(59.8529411765, 6);
   });
 });

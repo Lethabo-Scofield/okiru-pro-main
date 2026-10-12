@@ -87,6 +87,21 @@ fields:
     rowLevel: true
     labels: []
     description: "Whether the row is an internal fill from the depot's own tank or an external purchase, as the document labels it (\"Internal fuel\", \"External fuel\")."
+  - name: fuel_price_per_litre
+    type: number
+    rowLevel: true
+    labels: []
+    description: "The price per litre the line prints (a \"Rate\" or \"R/L\" column), as printed. Never worked out from the Rand and the litres."
+  - name: order_number
+    type: text
+    rowLevel: true
+    labels: []
+    description: "The order or purchase order number the line prints, as written."
+  - name: delivery_note_number
+    type: text
+    rowLevel: true
+    labels: []
+    description: "The delivery note number the line prints, as written."
 newFields: [fill_source]
 ---
 ## What it is / is not

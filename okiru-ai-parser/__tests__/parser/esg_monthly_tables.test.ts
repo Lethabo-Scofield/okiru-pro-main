@@ -10,7 +10,10 @@ import {
   extractEsgMonthlyTables,
   findMonthTables,
   lineKey,
+  monthlyReadStandsIn,
   readMonthLabel,
+  readsMonthlyMeasures,
+  statedKind,
   statedYearRange,
   tableFacts,
   yearsOf,
@@ -185,7 +188,7 @@ describe('tableFacts', () => {
     const { facts } = tableFacts(fuel, reading);
     const diesel = facts.filter((f) => f.measure === 'fleet.diesel_litres');
     expect(diesel).toHaveLength(18);
-    expect(diesel[0]).toEqual({ measure: 'fleet.diesel_litres', site: 'ACME FOODS - NORTHGATE', period_end: '2025-07-31', value: 100, unit: 'L' });
+    expect(diesel[0]).toEqual({ measure: 'fleet.diesel_litres', site: 'ACME FOODS - NORTHGATE', period_end: '2025-07-31', value: 100, unit: 'L', qualifier: 'LT' });
     expect(diesel.find((f) => f.site === 'ACME FOODS - SOUTHPORT' && f.period_end === '2026-03-31')?.value).toBe(280);
     // The broken "3" lives only in the total row, which is never read.
     expect(facts.some((f) => f.value === 3)).toBe(false);
@@ -206,13 +209,267 @@ describe('tableFacts', () => {
       },
     });
     expect(facts.map((f) => f.value)).toEqual([45.57, 45.57, 45.57]);
-    expect(notes[0]).toMatch(/gallons, which cannot be converted to kL/);
+    expect(notes.find((n) => /gallons/.test(n))).toMatch(/gallons, which cannot be converted to kL/);
+    // A conversion is never silent.
+    expect(notes.find((n) => /NORTHGATE/.test(n))).toMatch(/stated in L and was stored in kL \(x 0\.001\)/);
+  });
+
+  it('reads a unit the answer spells as the table prints it ("litre", "tonne") as that unit', () => {
+    const [table] = findMonthTables([
+      ['CONSUMPTION'],
+      ['', '', 'JUL', 'AUG', 'SEP'],
+      ['NORTHGATE', 'Trucks', 1500, 1510, 1520],
+      ['SOUTHPORT', 'Water', 45570, 46000, 47000],
+    ]);
+    const { facts, notes } = tableFacts(table, {
+      linesAre: 'sites', site: null, firstMonthYear: 2025,
+      lines: {
+        [lineKey({ label: 'NORTHGATE', qualifier: 'Trucks' })]: { measure: 'fleet.diesel_litres', unit: 'litre' },
+        [lineKey({ label: 'SOUTHPORT', qualifier: 'Water' })]: { measure: 'water.kl', unit: 'Litres' },
+      },
+    });
+    expect(facts.filter((f) => f.measure === 'fleet.diesel_litres').map((f) => f.value)).toEqual([1500, 1510, 1520]);
+    expect(facts.filter((f) => f.measure === 'water.kl').map((f) => f.value)).toEqual([45.57, 46, 47]);
+    expect(notes.some((n) => /cannot be converted/.test(n))).toBe(false);
   });
 
   it('uses nothing from a table whose year cannot be told', () => {
     const { facts, notes } = tableFacts(fuel, { ...reading, firstMonthYear: null });
     expect(facts).toHaveLength(0);
     expect(notes[0]).toMatch(/year of the months/);
+  });
+});
+
+/** A system export: one line per site AND measure, descriptor columns, a Total and a Units column after the months. */
+const LONG_SHEET: unknown[][] = [
+  ['Consumption detail'],
+  ['Node', 'Datasource', 'Activity', 'Jul 2025', 'Aug 2025', 'Sep 2025', 'Total', 'Units'],
+  ['Acme - North', 'Electricity', 'Grid', 1000, 1100, 1200, 3300, 'kWh'],
+  ['Acme - North', 'Trucks', 'Road Freight', 5000, 5100, 5200, 15300, 'km'],
+  ['Acme - North', 'Trucks', 'Road Freight', 1500, 1510, 1520, 4530, 'litre'],
+  ['Acme - North', 'Water', 'Withdrawal', 45500, 46500, 47500, 139500, 'litre'],
+  ['Acme - South', 'Electricity', 'Grid', 2000, 2100, 2200, 6300, 'kWh'],
+  ['Acme - South', 'Trucks', 'Road Freight', 7000, 7100, 7200, 21300, 'km'],
+  ['Acme - South', 'Trucks', 'Road Freight', 2500, 2510, 2520, 7530, 'litre'],
+  ['Acme - South', 'Water', 'Withdrawal', 0, 0, 0, 0, 'litre'],
+];
+
+/** Answers each line by the words of its qualifier, as a model reading the layout would. */
+function longModel(asked: string[][]): ExtractionModel {
+  return {
+    name: 'fake',
+    async complete(_system: string, user: string) {
+      const lines = JSON.parse(/LINES: (.*)/.exec(user)![1]) as Array<{ key: string; qualifier?: string }>;
+      asked.push(lines.map((l) => l.key));
+      const reading: Record<string, { measure: string; unit: string }> = {};
+      for (const line of lines) {
+        const q = line.qualifier ?? '';
+        reading[line.key] = /kWh/.test(q) ? { measure: 'energy.electricity_kwh', unit: 'kWh' }
+          : /Trucks.*km/.test(q) ? { measure: 'fleet.distance_km', unit: 'km' }
+            : /Trucks.*litre/.test(q) ? { measure: 'fleet.diesel_litres', unit: 'L' }
+              : /Water/.test(q) ? { measure: 'water.kl', unit: 'L' }
+                : { measure: 'none', unit: 'other' };
+      }
+      return JSON.stringify({ lines_are: 'sites', site: null, first_month_year: null, lines: reading });
+    },
+  };
+}
+
+describe('a long table: one line per site and measure', () => {
+  it('names every line by its site, descriptors and unit, so no two lines share an answer', () => {
+    const [table] = findMonthTables(LONG_SHEET);
+    expect(table.long).toBe(true);
+    const keys = table.lines.map(lineKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(table.lines[1]).toMatchObject({ label: 'Acme - North', qualifier: 'Trucks · Road Freight · km', unit: 'km', statedTotal: 15300 });
+    expect(table.lines[2].qualifier).toBe('Trucks · Road Freight · litre');
+  });
+
+  it('reads each line as its own measure, at its own site — never every line as one measure', async () => {
+    const asked: string[][] = [];
+    const extraction = await extractEsgMonthlyTables(longModel(asked), {
+      filename: `Export ${Date.now()}.xls › Detail`,
+      sheetName: 'Detail',
+      matrix: LONG_SHEET,
+    });
+    const rows = extraction?.values.find((v) => v.field === 'esg_monthly_rows')?.value as Array<Record<string, unknown>>;
+    const of = (site: string, measure: string) => rows.filter((r) => r.monthly_site === site && r.monthly_measure === measure).map((r) => r.monthly_value);
+    expect(of('Acme - South', 'energy.electricity_kwh')).toEqual([2000, 2100, 2200]);
+    expect(of('Acme - South', 'fleet.diesel_litres')).toEqual([2500, 2510, 2520]);
+    expect(of('Acme - North', 'fleet.distance_km')).toEqual([5000, 5100, 5200]);
+    // Litres of water are stored as kilolitres, and the conversion is said.
+    expect(of('Acme - North', 'water.kl')).toEqual([45.5, 46.5, 47.5]);
+    expect(extraction?.exceptions.some((e) => /stated in L and was stored in kL/.test(e))).toBe(true);
+    // The Total column is reported and checked, never read as a month.
+    const reported = extraction?.values.find((v) => v.field === 'esg_reported_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(reported.find((r) => r.reported_kind === 'stated_total' && r.reported_site === 'Acme - South' && r.reported_of_measure === 'fleet.diesel_litres'))
+      .toMatchObject({ reported_value: 7530, reported_period_end: '2025-09-30' });
+  });
+
+  it('a long table that states no unit for its lines is reported, never read as activity', async () => {
+    // An emissions system's monthly page: the same layout as its consumption
+    // page, but its figures are emissions and no line states a unit. Asked what
+    // each line measures, a model names the activity ("Road Freight" is fleet
+    // diesel) and a unit it assumed. 3.1 tonnes of CO2e as 3.1 litres of
+    // diesel collided with every depot's real litres.
+    const EMISSIONS_SHEET: unknown[][] = [
+      ['Emissions detail'],
+      ['Node', 'Node Type', 'Datasource', 'Activity', 'Jul 2025', 'Aug 2025', 'Sep 2025', 'Total'],
+      ['Acme - North', 'Node', 'Electricity', 'Grid', 1.2, 1.3, 1.4, 3.9],
+      ['Acme - North', 'Node', 'Trucks', 'Road Freight', 3.1, 3.2, 3.3, 9.6],
+      ['Acme - South', 'Node', 'Electricity', 'Grid', 2.2, 2.3, 2.4, 6.9],
+      ['Acme - South', 'Node', 'Trucks', 'Road Freight', 4.1, 4.2, 4.3, 12.6],
+    ];
+    const model: ExtractionModel = {
+      name: 'fake',
+      async complete(_system: string, user: string) {
+        const lines = JSON.parse(/LINES: (.*)/.exec(user)![1]) as Array<{ key: string; qualifier?: string }>;
+        return JSON.stringify({
+          lines_are: 'sites', site: null, first_month_year: null,
+          lines: Object.fromEntries(lines.map((l) => [l.key, /Trucks/.test(l.qualifier ?? '')
+            ? { measure: 'fleet.diesel_litres', unit: 'L' }
+            : { measure: 'energy.electricity_kwh', unit: 'kWh' }])),
+        });
+      },
+    };
+    const [table] = findMonthTables(EMISSIONS_SHEET);
+    expect(table.long).toBe(true);
+    const extraction = await extractEsgMonthlyTables(model, {
+      filename: `System export ${Date.now()}.xls › Emissions`,
+      sheetName: 'Emissions',
+      matrix: EMISSIONS_SHEET,
+    });
+    const rows = (extraction?.values.find((v) => v.field === 'esg_monthly_rows')?.value ?? []) as Array<Record<string, unknown>>;
+    expect(rows).toEqual([]);
+    const reported = extraction?.values.find((v) => v.field === 'esg_reported_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(reported.filter((r) => r.reported_site === 'Acme - South' && r.reported_period_end === '2025-07-31').map((r) => r.reported_value).sort())
+      .toEqual([2.2, 4.1]);
+    expect(extraction?.exceptions.some((e) => /states no unit/.test(e))).toBe(true);
+    // The sheet was read: its lines are measures held for want of a unit, so no
+    // flat read is sent to guess at the same figures without one.
+    expect(readsMonthlyMeasures(extraction)).toBe(false);
+    expect(monthlyReadStandsIn(extraction)).toBe(true);
+  });
+
+  it('a long table whose unit column states each line\'s unit is still read as activity', async () => {
+    const asked: string[][] = [];
+    const extraction = await extractEsgMonthlyTables(longModel(asked), {
+      filename: `Export units ${Date.now()}.xls › Detail`,
+      sheetName: 'Detail',
+      matrix: LONG_SHEET,
+    });
+    expect(extraction?.exceptions.some((e) => /states no unit/.test(e))).toBe(false);
+  });
+
+  it('asks about EVERY line of a long table, not the first sixteen', async () => {
+    const depots = Array.from({ length: 24 }, (_, i) => [`Depot ${i + 1}`, '', 10 + i, 20 + i, 30 + i]);
+    const asked: string[][] = [];
+    const model: ExtractionModel = {
+      name: 'fake',
+      async complete(_system: string, user: string) {
+        const lines = JSON.parse(/LINES: (.*)/.exec(user)![1]) as Array<{ key: string }>;
+        asked.push(lines.map((l) => l.key));
+        return JSON.stringify({
+          lines_are: 'sites', site: null, first_month_year: 2025,
+          lines: Object.fromEntries(lines.map((l) => [l.key, { measure: 'energy.electricity_kwh', unit: 'kWh' }])),
+        });
+      },
+    };
+    const extraction = await extractEsgMonthlyTables(model, {
+      filename: `Depots ${Date.now()}.xlsx › kWh`,
+      matrix: [['ELECTRICITY'], ['', '', 'JUL', 'AUG', 'SEP'], ...depots],
+    });
+    expect(asked.flat()).toHaveLength(24);
+    const rows = extraction?.values[0].value as Array<Record<string, unknown>>;
+    expect(rows.filter((r) => r.monthly_site === 'Depot 24').map((r) => r.monthly_value)).toEqual([33, 43, 53]);
+  });
+});
+
+describe('what a monthly table prints beside its measures', () => {
+  const answer = (lines: Record<string, { measure: string; unit: string }>, site: string | null = null): ExtractionModel => ({
+    name: 'fake',
+    async complete() {
+      return JSON.stringify({ lines_are: site ? 'measures' : 'sites', site, first_month_year: 2025, lines });
+    },
+  });
+
+  it('reports the AMOUNT beside each month as money, and keeps the landlord beside each figure', async () => {
+    const extraction = await extractEsgMonthlyTables(answer({
+      'ACME FOODS - NORTHGATE|LANDLORD A': { measure: 'energy.electricity_kwh', unit: 'kWh' },
+      'ACME FOODS - SOUTHPORT|LANDLORD B': { measure: 'energy.electricity_kwh', unit: 'kWh' },
+    }), { filename: `Dash ${Date.now()}.xlsx › electricity`, matrix: ELECTRICITY_SHEET });
+    const rows = extraction?.values.find((v) => v.field === 'esg_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(rows[0]).toMatchObject({ monthly_site: 'ACME FOODS - NORTHGATE', monthly_value: 1000, monthly_qualifier: 'LANDLORD A' });
+    const reported = extraction?.values.find((v) => v.field === 'esg_reported_monthly_rows')?.value as Array<Record<string, unknown>>;
+    const money = reported.filter((r) => r.reported_kind === 'money' && r.reported_site === 'ACME FOODS - SOUTHPORT');
+    expect(money.map((r) => r.reported_value)).toEqual([6000, 6300, 6600]);
+    expect(money[0].reported_unit).toBe('AMOUNT');
+    // The printed total row: reported, checked against the lines (it agrees).
+    expect(reported.filter((r) => r.reported_kind === 'stated_total' && r.reported_of_measure === 'energy.electricity_kwh').map((r) => r.reported_value))
+      .toEqual([3000, 3200, 3400]);
+    expect(extraction?.exceptions.some((e) => /does not equal its lines/.test(e))).toBe(false);
+  });
+
+  it('reports a cost line and a tonnage line as printed, in the unit printed, and drops nothing', async () => {
+    const extraction = await extractEsgMonthlyTables(answer({
+      'KM\'S|': { measure: 'fleet.distance_km', unit: 'km' },
+      'COST|': { measure: 'none', unit: 'other' },
+      'WEIGHT|TONNE': { measure: 'none', unit: 't' },
+    }, 'ACME FOODS - NORTHGATE'), {
+      filename: `Dash ${Date.now()}.xlsx › car`,
+      matrix: [
+        ['POOL CAR'],
+        ['ACME FOODS - NORTHGATE', '', 'JUL', 'AUG', 'SEP'],
+        ['KM\'S', '', 1700, 1500, 1300],
+        ['COST', '', 1234.5, 2345.75, 0],
+        ['WEIGHT', 'TONNE', 12.5, 13.25, 14],
+      ],
+    });
+    const reported = extraction?.values.find((v) => v.field === 'esg_reported_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(reported.filter((r) => r.reported_kind === 'money').map((r) => r.reported_value)).toEqual([1234.5, 2345.75, 0]);
+    expect(reported.filter((r) => r.reported_kind === 'mass')).toHaveLength(3);
+    expect(reported.find((r) => r.reported_kind === 'mass')).toMatchObject({ reported_unit: 'TONNE', reported_value: 12.5, reported_site: 'ACME FOODS - NORTHGATE' });
+    expect(reported.find((r) => r.reported_kind === 'title')?.reported_value).toBe('POOL CAR');
+  });
+
+  it('says when a printed total row does not add up, and never reads it', async () => {
+    const extraction = await extractEsgMonthlyTables(answer({
+      'ACME FOODS - NORTHGATE|LT': { measure: 'fleet.diesel_litres', unit: 'L' },
+      'ACME FOODS - SOUTHPORT|LT': { measure: 'fleet.diesel_litres', unit: 'L' },
+      'ACME FOODS|DIST KM': { measure: 'fleet.distance_km', unit: 'km' },
+    }), { filename: `Dash ${Date.now()}.xlsx › fuel`, matrix: FUEL_SHEET.slice(0, 6) });
+    // The lines read are two measures, so the total is reported without one and not checked.
+    const reported = extraction?.values.find((v) => v.field === 'esg_reported_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(reported.some((r) => r.reported_kind === 'stated_total' && r.reported_value === 3)).toBe(true);
+    const rows = extraction?.values.find((v) => v.field === 'esg_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(rows.some((r) => r.monthly_value === 3)).toBe(false);
+
+    const checked = await extractEsgMonthlyTables(answer({
+      'ACME FOODS - NORTHGATE|LT': { measure: 'fleet.diesel_litres', unit: 'L' },
+      'ACME FOODS - SOUTHPORT|LT': { measure: 'fleet.diesel_litres', unit: 'L' },
+    }), { filename: `Dash ${Date.now()}.xlsx › fuel`, matrix: FUEL_SHEET.slice(0, 5) });
+    expect(checked?.exceptions.find((e) => /does not equal its lines/.test(e))).toMatch(/jul \(total 3, lines 300\)/);
+  });
+
+  it('a table of nothing but money is reported, and does not stand in for the sheet\'s other readers', async () => {
+    const extraction = await extractEsgMonthlyTables(answer({ 'NORTHGATE|R': { measure: 'none', unit: 'other' } }), {
+      filename: `Dash ${Date.now()}.xlsx › rands`,
+      matrix: [['FUEL RANDS'], ['', '', 'JUL', 'AUG', 'SEP'], ['NORTHGATE', 'R', 100.5, 200.25, 300]],
+    });
+    expect(extraction?.values.map((v) => v.field)).toEqual(['esg_reported_monthly_rows']);
+    expect(readsMonthlyMeasures(extraction)).toBe(false);
+    expect(monthlyReadStandsIn(extraction)).toBe(false);
+  });
+});
+
+describe('statedKind', () => {
+  it('reads what a figure is from the words printed beside it, first word first', () => {
+    expect(statedKind('R')).toEqual({ kind: 'money', unit: 'R' });
+    expect(statedKind('', 'COST/AMOUNT')).toEqual({ kind: 'money', unit: 'COST/AMOUNT' });
+    expect(statedKind('WEIGHT', 'TONNE')).toEqual({ kind: 'mass', unit: 'WEIGHT' });
+    expect(statedKind('CASES')).toEqual({ kind: 'count', unit: 'CASES' });
+    expect(statedKind('SUBMITTED DATE')).toEqual({ kind: 'date', unit: 'SUBMITTED DATE' });
+    expect(statedKind('NORTHGATE', '')).toEqual({ kind: 'other', unit: '' });
   });
 });
 
@@ -249,6 +506,7 @@ describe('extractEsgMonthlyTables', () => {
       monthly_period_end: '2025-07-31',
       monthly_value: 100,
       monthly_unit: 'L',
+      monthly_qualifier: 'LT',
     });
     expect(extraction?.exceptions.some((e) => /HIDDEN sheet/.test(e))).toBe(true);
   });
@@ -294,4 +552,50 @@ describe('extractEsgMonthlyTables', () => {
   it('returns null for a sheet with no month run', async () => {
     expect(await extractEsgMonthlyTables(model, { filename: 'x.xlsx', matrix: [['Name', 'Value'], ['a', 1]] })).toBeNull();
   });
+});
+
+describe('the case read of a sheet whose long table states no unit', () => {
+  const EMISSIONS_PAGE: unknown[][] = [
+    ['Emissions detail'],
+    ['Node', 'Node Type', 'Datasource', 'Activity', 'Jul 2025', 'Aug 2025', 'Sep 2025', 'Total'],
+    ['Acme - North', 'Node', 'Electricity', 'Grid', 1.2, 1.3, 1.4, 3.9],
+    ['Acme - North', 'Node', 'Trucks', 'Road Freight', 3.1, 3.2, 3.3, 9.6],
+    ['Acme - South', 'Node', 'Electricity', 'Grid', 2.2, 2.3, 2.4, 6.9],
+    ['Acme - South', 'Node', 'Trucks', 'Road Freight', 4.1, 4.2, 4.3, 12.6],
+  ];
+  const sheet = (name: string, matrix: unknown[][]) => ({
+    file_id: name,
+    filename: `System export.xls › ${name}`,
+    mime_type: 'application/vnd.ms-excel',
+    raw_text: '',
+    markdown: matrix.map((row) => `| ${row.join(' | ')} |`).join('\n'),
+    tables: [{ sheetName: name, rows: [], matrix }],
+    metadata: { sheet_name: name, parent_file: 'System export.xls' },
+  });
+
+  it('sends no flat read to guess the unit again: the monthly reader has read the sheet', async () => {
+    const { extractEsgCaseEntities } = await import('../../src/services/esgCaseExtraction.js');
+    const prompts: string[] = [];
+    const fake: ExtractionModel = {
+      name: 'fake',
+      async complete(system: string, user: string) {
+        prompts.push(`${system}\n${user}`);
+        if (/LINES: /.test(user)) {
+          const lines = JSON.parse(/LINES: (.*)/.exec(user)![1]) as Array<{ key: string; qualifier?: string }>;
+          return JSON.stringify({
+            lines_are: 'sites', site: null, first_month_year: null,
+            lines: Object.fromEntries(lines.map((l) => [l.key, /Trucks/.test(l.qualifier ?? '')
+              ? { measure: 'fleet.diesel_litres', unit: 'L' }
+              : { measure: 'energy.electricity_kwh', unit: 'kWh' }])),
+          });
+        }
+        return '{}';
+      },
+    };
+    const result = await extractEsgCaseEntities([sheet(`Emissions ${Date.now()}`, EMISSIONS_PAGE)] as never, fake);
+    expect(prompts.filter((p) => /ANALYST INSTRUCTION/.test(p))).toEqual([]);
+    const rows = result!.extractions.flatMap((e) => e.values).filter((v) => v.field === 'esg_monthly_rows');
+    expect(rows).toEqual([]);
+  // The first import of the case reader loads every skill: seconds on a busy machine.
+  }, 30_000);
 });

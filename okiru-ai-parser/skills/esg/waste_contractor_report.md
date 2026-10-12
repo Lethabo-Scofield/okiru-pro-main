@@ -20,7 +20,17 @@ fields:
     type: text
     required: true
     labels: ["Contractor", "Service provider", "Collected by"]
-    description: "The waste company that issued the report, as printed in its letterhead, footer or company details. Null when the only trace is a logo image or the file name."
+    description: "The waste company that issued the report, as printed in its letterhead, footer or company details. A letterhead printed as a picture counts when you can see it on the page image. Null when the only trace is the file name."
+  - name: contractor_vat_number
+    type: text
+    scope: document
+    labels: ["VAT No", "VAT number", "VAT Reg No"]
+    description: "The waste company's VAT number from its letterhead or footer, as printed. Never the client's."
+  - name: contractor_registration_number
+    type: regno
+    scope: document
+    labels: ["Reg No", "Registration number", "Company registration"]
+    description: "The waste company's company registration number from its letterhead or footer, as printed. Never the client's."
   - name: site_name
     type: text
     required: true
@@ -36,7 +46,7 @@ fields:
     description: "Last day of the period, as printed in the document."
   - name: waste_total_kg
     type: number
-    labels: ["Total waste", "Total mass", "Grand total"]
+    labels: ["Total waste", "Total mass", "Grand total", "Weight in kgs", "Weight (kgs)", "Total weight"]
     description: "The site total mass the report prints, in the unit printed (see waste_mass_unit). Never the sum of the streams you add up."
   - name: waste_recycled_kg
     type: number
@@ -48,8 +58,28 @@ fields:
     description: "The site total the report prints as landfilled, in the printed unit."
   - name: waste_diversion_percent
     type: percent
-    labels: ["Diversion rate", "Diversion %", "Recycling rate"]
+    labels: ["Diversion rate", "Diversion %", "% Diversion", "Recycling rate"]
     description: "A diversion or recycling percentage only when the report prints one. Never computed from the masses."
+  - name: waste_landfill_percent
+    type: percent
+    labels: ["Landfill rate", "Landfill %", "% Landfill"]
+    description: "A landfill percentage only when the report prints one. Never computed from the masses."
+  - name: waste_total_charge_rand
+    type: money
+    labels: ["Total charge", "Total charges"]
+    description: "The contractor's total charge for the period, as printed (rand, not mass)."
+  - name: waste_rebate_rand
+    type: money
+    labels: []
+    description: "The amount the contractor pays back (credits) for recyclables, as printed, with its sign."
+  - name: waste_net_value_rand
+    type: money
+    labels: ["Net value", "Net amount"]
+    description: "The net value (charge less what is paid back), as printed."
+  - name: waste_report_notes
+    type: text
+    labels: []
+    description: "A warning or note the report itself prints about its data (rows cut off at a limit, \"data may be incomplete\"), as printed."
   - name: waste_mass_unit
     type: text
     required: true
@@ -102,7 +132,7 @@ fields:
     rowLevel: true
     labels: []
     description: "The stream's landfilled mass, when the report splits it, in the printed unit."
-newFields: [waste_stream_code, waste_treatment_route]
+newFields: [waste_stream_code, waste_treatment_route, contractor_vat_number, contractor_registration_number, waste_landfill_percent, waste_total_charge_rand, waste_rebate_rand, waste_net_value_rand, waste_report_notes]
 ---
 ## What it is / is not
 
@@ -119,13 +149,18 @@ masses, a licence on its own, or an aspects register.
 
 ## Where values sit
 
-- Header or letterhead: contractor, client, site, period. A system export may
-  print the site in a filter line and the period nowhere at all.
+- Header or letterhead: contractor, its VAT and registration numbers, client,
+  site, period. A system export may print the site in a filter line and the
+  period nowhere at all. A letterhead is often a picture: its words are not in
+  the text layer, only on the page image.
 - A table of streams: description, code, route, mass. Some exports split
   "landfill vs diversion" on separate sheets; each sheet's streams are rows.
 - Totals at the foot: total mass, total diverted, total landfilled, a
   diversion percentage. These are document-level fields.
-- Charges, rebates and net value are Rand, not mass.
+- Charges, credits and net value are Rand, not mass: each has its own field.
+- A "big numbers" or summary sheet prints the period's totals under captions
+  ("Weight in Kgs", "% Landfill", "% Diversion"): those are the
+  document-level totals, as printed.
 
 ## Traps
 
@@ -147,7 +182,9 @@ masses, a licence on its own, or an aspects register.
 - Hazardous only when the report says hazardous. General commercial waste
   sent to safe disposal is not hazardous because of its route.
 - An export that warns it hit a row limit or may be truncated: copy what is
-  there and say so in exceptions.
+  there, and copy the warning itself into waste_report_notes.
+- A weights sheet titled for one route ("... (Landfill)", "... (Diversion)")
+  holds that route's masses: the code reads them as landfilled or diverted.
 - Never add the streams, never compute landfill as total minus recycled, and
   never compute a percentage.
 
@@ -169,7 +206,9 @@ Total                                     2 430     Diversion 63.8%
  "reporting_period_start": "01/05/2026", "reporting_period_end": "31/05/2026",
  "waste_total_kg": "2 430", "waste_recycled_kg": null, "waste_landfill_kg": null,
  "waste_diversion_percent": "63.8%", "waste_mass_unit": "kg", "hazardous_waste_kg": null,
+ "waste_landfill_percent": null, "waste_total_charge_rand": null, "waste_rebate_rand": null, "waste_net_value_rand": null, "waste_report_notes": null,
  "disposal_facility_name": null, "disposal_permit_number": null, "safe_disposal_certificate_number": null,
+ "contractor_vat_number": null, "contractor_registration_number": null,
  "waste_stream_rows": [
    {"waste_stream_type": "Cardboard", "waste_stream_code": "R01", "waste_treatment_route": "Recycled", "waste_total_kg": "1 240"},
    {"waste_stream_type": "Plastic film", "waste_stream_code": "R04", "waste_treatment_route": "Recycled", "waste_total_kg": "310"},

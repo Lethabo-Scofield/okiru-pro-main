@@ -308,7 +308,8 @@ describe("registers — one array field, N rows", () => {
         {
           grid: "waste_stream_rows",
           index: 0,
-          cells: { "waste.stream_type": "Paper K4", "waste.total_kg": 22_470, "waste.recycled_kg": 20_470 },
+          // A waste row states its unit; one that does not is held (see the waste-unit tests).
+          cells: { "waste.stream_type": "Paper K4", "waste.total_kg": 22_470, "waste.recycled_kg": 20_470, "waste.mass_unit": "kg" },
         },
         {
           grid: "risk_register_rows",
@@ -446,6 +447,8 @@ describe("site and month context — exact, or reported", () => {
 
     expect(result.patches).toEqual({});
     expect(result.outcomes.energy_site_rows.reason).toMatch(/outside the workbook's reporting year/);
+    // Another year's figure is held as context: reported, never a check by hand.
+    expect(result.outcomes.energy_site_rows.rejection).toBe("held_context");
   });
 
   it("combines case-level readings ONLY when they came from one document", () => {
@@ -539,6 +542,31 @@ describe("conflict — two answers, one cell, nobody picks", () => {
 
     expect(cells(agreed, "e-data")).toEqual({ s2_E16: 41_002 });
     expect(agreed.conflicts).toEqual([]);
+  });
+
+  const twoBills = (a: number, b: number) =>
+    mapEsgCalculatorToWorkbook({
+      entries: [],
+      rows: [a, b].map((kwh, n) => ({
+        grid: "energy_site_rows",
+        index: n,
+        sourceFiles: [`statement-${n + 1}.pdf`],
+        cells: { "energy.site_name": "DBN", "energy.billing_period_end": "2025-09-30", "energy.electricity_kwh": kwh },
+      })),
+    });
+
+  it("one figure printed to two precisions is one figure: the more precise is written, and both documents stand behind it", () => {
+    // A system export prints whole kWh (41 002); the bill prints 41 001.88.
+    const result = twoBills(41_002, 41_001.88);
+    expect(result.conflicts).toEqual([]);
+    expect(cells(result, "e-data")).toEqual({ s2_E16: 41_001.88 });
+    expect(result.outcomes.energy_site_rows.status).toBe("placed");
+  });
+
+  it("figures that differ by more than the rounding of the less precise one are still a conflict", () => {
+    expect(twoBills(41_003, 41_001.88).conflicts).toHaveLength(1);
+    expect(twoBills(41_002, 41_002.5).conflicts).toHaveLength(1);
+    expect(twoBills(41_000, 41_002).conflicts).toHaveLength(1);
   });
 });
 

@@ -284,7 +284,12 @@ export async function proposeOpenMappings(
   if (!model) return 0;
   const refs: FactRef[] = [];
   for (const extraction of extractions) {
-    extraction.open?.facts.forEach((_, index) => refs.push({ extraction, index }));
+    // A sheet's labelled cells (method 'code') were already offered to their
+    // document's own fields, once per template (esgSheetFacts.ts); the ones
+    // left are the sheet's notes, not a second question per case.
+    extraction.open?.facts.forEach((fact, index) => {
+      if (fact.method !== 'code') refs.push({ extraction, index });
+    });
   }
   if (refs.length === 0) return 0;
 

@@ -59,6 +59,50 @@ export interface SheetDocument {
    * below should add up to. Omitted when it states none.
    */
   statedTotals?: StatedTotal[];
+  /**
+   * Where the sheet's main table sits in `matrix` (0-based): its header row
+   * and its first and last column. Omitted for a sheet with no table.
+   */
+  region?: SheetRegion;
+  /**
+   * The cells OUTSIDE the main table — the rows above its header, the columns
+   * beside it — for a sheet too large to carry its matrix. A report's title and
+   * run date, a block of grand totals to the right of a route list: the rows
+   * and the markdown hold only the table, so without these they are lost.
+   * Bounded; omitted when the matrix is carried (it holds them) or there are none.
+   */
+  outside?: SheetCell[];
+}
+
+/** Where a sheet's main table sits. */
+export interface SheetRegion {
+  headerRow: number;
+  startCol: number;
+  endCol: number;
+}
+
+/** One cell, where it sits. */
+export interface SheetCell {
+  r: number;
+  c: number;
+  value: unknown;
+}
+
+/** Cells carried from outside the main table of a sheet too large to carry its matrix. */
+const MAX_OUTSIDE_CELLS = 400;
+
+/** The non-blank cells above a table's header and beside its columns, in reading order. */
+export function cellsOutsideTable(matrix: unknown[][], region: SheetRegion, limit = MAX_OUTSIDE_CELLS): SheetCell[] {
+  const cells: SheetCell[] = [];
+  const filled = (c: unknown) => c !== null && c !== undefined && String(c).trim() !== '';
+  for (let r = 0; r < matrix.length && cells.length < limit; r += 1) {
+    const row = matrix[r] ?? [];
+    for (let c = 0; c < row.length && cells.length < limit; c += 1) {
+      const inside = r >= region.headerRow && c >= region.startCol && c <= region.endCol;
+      if (!inside && filled(row[c])) cells.push({ r, c, value: row[c] });
+    }
+  }
+  return cells;
 }
 
 /** One labelled total from a sheet's summary block. */
@@ -310,6 +354,18 @@ const HEADER_VOCABULARY = /name\s*&?\s*surname|\bid\s*number\b|supplier\s*name|b
  * row is scored by fill PLUS a strong bonus per known header label ("Name &
  * Surname", "ID Number", "Race"…) — vocabulary a legend row never carries.
  */
+/**
+ * A cell holding only a spreadsheet tool's placeholder column name: Excel's
+ * "Column1" (a table converted from a query), "col_3", pandas' "Unnamed: 2",
+ * "Field4". A row of nothing but these is no header a person wrote.
+ */
+const PLACEHOLDER_HEADER = /^(?:column|col|field|unnamed:?)[\s_]*\d+$/i;
+
+export function isPlaceholderHeaderRow(cells: unknown[]): boolean {
+  const filled = cells.filter((c) => c !== null && c !== undefined && String(c).trim() !== '');
+  return filled.length >= 2 && filled.every((c) => typeof c === 'string' && PLACEHOLDER_HEADER.test(c.trim()));
+}
+
 function findHeaderRow(matrix: unknown[][]): number {
   let bestIdx = 0;
   let bestScore = 0;
@@ -317,6 +373,10 @@ function findHeaderRow(matrix: unknown[][]): number {
   // register, pushing the register's header past row 15.
   for (let i = 0; i < Math.min(matrix.length, 25); i += 1) {
     const cells = matrix[i] ?? [];
+    // An exported table's "Column1 … Column12" row sits above the real title
+    // and header; as wide as the real header and earlier, it won every tie and
+    // keyed every incident by "Column3". It is never the header.
+    if (isPlaceholderHeaderRow(cells)) continue;
     const fill = filledCount(cells);
     const vocabulary = cells.filter((c) => typeof c === 'string' && HEADER_VOCABULARY.test(c)).length;
     // Two or more recognised labels together mark a register header; each then
@@ -509,6 +569,52 @@ export interface SplitOptions {
    * they were recorded.
    */
   statedTotals?: boolean;
+  /**
+   * Show the model the cells outside the main table too, when the table holds
+   * less than half the sheet's filled cells (see partialTableMarkdown). Default
+   * off; the ESG reading turns it on.
+   */
+  partialTableGrid?: boolean;
+}
+
+/** Below this share of a sheet's filled cells, its main table is not the sheet. */
+const PARTIAL_TABLE_SHARE = 0.5;
+/** Cells listed after a partial table, at most. */
+const MAX_LISTED_OUTSIDE = 600;
+
+/**
+ * The cells a sheet prints outside its main table, as lines the model can
+ * read ("Row 5: A5 Example theme | C5 46108"), when that table holds less than
+ * half the sheet's filled cells. A calendar or a report laid out in blocks side
+ * by side has no one table: the header detection picks one block, and every
+ * other block (the other months, the other sections) never reached the flat
+ * read. Null when the table is most of the sheet, so every ordinary sheet's
+ * markdown is exactly what it was.
+ */
+export function partialTableMarkdown(matrix: unknown[][], region: SheetRegion | undefined): string | null {
+  if (!region) return null;
+  const filled = (c: unknown) => c !== null && c !== undefined && String(c).trim() !== '';
+  const inTable = (r: number, c: number) => r >= region.headerRow && c >= region.startCol && c <= region.endCol;
+  let all = 0;
+  let inside = 0;
+  matrix.forEach((row, r) => (row ?? []).forEach((value, c) => {
+    if (!filled(value)) return;
+    all += 1;
+    if (inTable(r, c)) inside += 1;
+  }));
+  if (all === 0 || inside / all >= PARTIAL_TABLE_SHARE) return null;
+  const lines: string[] = [];
+  let listed = 0;
+  for (let r = 0; r < matrix.length && listed < MAX_LISTED_OUTSIDE; r += 1) {
+    const cells: string[] = [];
+    (matrix[r] ?? []).forEach((value, c) => {
+      if (inTable(r, c) || !filled(value) || listed >= MAX_LISTED_OUTSIDE) return;
+      cells.push(`${XLSX.utils.encode_cell({ r, c })} ${String(value).replace(/\s+/g, ' ').trim()}`);
+      listed += 1;
+    });
+    if (cells.length > 0) lines.push(`Row ${r + 1}: ${cells.join(' | ')}`);
+  }
+  return ['### Cells outside the table above (cell, value as printed)', ...lines].join('\n');
 }
 
 /**
@@ -556,15 +662,23 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
     const namedCells = options.namedCells === false ? {} : namedSheetCells(workbook, sheetName, options.cells);
     const origin = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s : { r: 0, c: 0 };
     const statedTotals = options.statedTotals === false ? [] : statedTotalsAbove(matrix, table, origin);
+    const bounded = boundedMatrix(matrix);
+    const region: SheetRegion | undefined = table.headerIdx >= 0
+      ? { headerRow: table.headerIdx, startCol: table.region.start, endCol: table.region.end }
+      : undefined;
+    const outside = !bounded && region ? cellsOutsideTable(matrix, region) : [];
+    const partial = options.partialTableGrid && bounded ? partialTableMarkdown(bounded, region) : null;
     documents.push({
       sheetName,
       rows,
-      markdown: sheetToMarkdown(sheetName, rows),
+      markdown: partial ? `${sheetToMarkdown(sheetName, rows)}\n\n${partial}` : sheetToMarkdown(sheetName, rows),
       text: sheetToText(sheetName, rows),
-      matrix: boundedMatrix(matrix),
+      matrix: bounded,
       hidden: visibility !== 0,
       ...(Object.keys(namedCells).length > 0 ? { namedCells } : {}),
       ...(statedTotals.length > 0 ? { statedTotals } : {}),
+      ...(region ? { region } : {}),
+      ...(outside.length > 0 ? { outside } : {}),
     });
   }
 

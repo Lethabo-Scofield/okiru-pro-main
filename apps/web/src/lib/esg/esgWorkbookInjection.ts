@@ -65,8 +65,20 @@ export type EsgRejectionReason =
   | "no_workbook_home"
   /** A real cell exists but which one depends on context we do not have. */
   | "needs_context"
+  /**
+   * Held as context, nothing to answer: another year's month, last year's
+   * figure, a measure with no monthly grid, a company-wide total the sites'
+   * own figures replace. Reported with its document.
+   */
+  | "held_context"
   /** Its cell is in a section other than the one the documents were added for (C1). */
-  | "outside_focus";
+  | "outside_focus"
+  /** A quantity whose unit is not stated, or is not one its cell records: held, never scored. */
+  | "unit_unresolved"
+  /** Its own document covers an earlier period than the reporting year: held until a person accepts it. */
+  | "out_of_period"
+  /** Its own document is about another entity than the one this workbook reports on. */
+  | "other_entity";
 
 export type EsgNormaliseResult =
   | { ok: true; value: EsgCellValue }

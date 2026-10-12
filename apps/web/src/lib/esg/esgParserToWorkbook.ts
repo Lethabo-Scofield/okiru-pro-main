@@ -24,9 +24,11 @@
  * mapping table names, cells a grid produced, and cells built from an axis alike.
  */
 import { writeEsgGridCells, type EsgGridRow } from "./esgGridRows";
+import { esgIncidentCounts, INCIDENT_ROWS_FIELD } from "./esgIncidentCounts";
 import { ESG_GRID_SECTIONS, type EsgGridSectionId } from "./esgGridSections";
 import {
   ESG_FALLBACK_REPORTING_AXES,
+  buildEsgReportingMonths,
   type EsgReportingAxes,
 } from "@/components/esg-workbook/esgDefaults";
 import {
@@ -45,7 +47,9 @@ import {
   ESG_MONTHLY_PREFIXES,
   ESG_SAQ_ROW_TARGET,
   ESG_SCALAR_TARGETS,
+  esgCompanyLeads,
   esgDepotRowIndex,
+  esgIsCompanyLabel,
   esgSiteKey,
   esgSiteMatch,
   esgHeadcountRowIndex,
@@ -147,6 +151,56 @@ export interface EsgWorkbookMappingResult {
    * cells; this is what lets each of those cells name its document.
    */
   cellSources?: Record<string, string[]>;
+  /** Monthly figures held back that their reading's outcome does not show, one by one. */
+  heldFigures?: EsgHeldFigure[];
+  /**
+   * The year before the reporting year, as the documents state it: kept OUT
+   * of this year's grids (never merged into it) and offered as the baseline.
+   * Absent when no figure falls in it.
+   */
+  priorYear?: EsgPriorYear;
+}
+
+/** Last year's figures, settled the way this year's are, and kept out of this year. */
+export interface EsgPriorYear {
+  /** The prior year's months, as axis labels ("Jul-24" … "Jun-25"). */
+  months: string[];
+  measures: Array<{
+    /** The E_Data grid the figure would have gone in ("s2"). */
+    prefix: string;
+    /** "Electricity". */
+    label: string;
+    unit: string;
+    total: number;
+    /** Months of the prior year with a figure. */
+    monthsCovered: number;
+    sources: string[];
+  }>;
+  /** The prior year's figures as monthly cells — what a baseline is worked out from. */
+  cells: Record<string, number>;
+  /** Cells left out because two documents disagree about last year's figure. */
+  disputed: number;
+}
+
+/** The company's own words on its site labels and its name — see `esgCompanyLeads`. */
+interface SiteContext {
+  leads: string[];
+  entityNames: string[];
+}
+
+/**
+ * The twelve months before a twelve-month reporting year. None for any other
+ * year: a short or long axis is the user's own, and what came before it is
+ * not "last year".
+ */
+function priorYearMonths(axes: EsgReportingAxes): string[] | null {
+  if (axes.months.length !== 12) return null;
+  const first = /^([A-Za-z]{3})-(\d{2})$/.exec(axes.months[0] ?? "");
+  if (!first) return null;
+  const start = `${first[1]}-${String((Number(first[2]) + 99) % 100).padStart(2, "0")}`;
+  const prior = buildEsgReportingMonths(start, 12);
+  // An unreadable start falls back to the default axis, which is not last year.
+  return prior[0]?.toLowerCase() === start.toLowerCase() ? prior : null;
 }
 
 /* ------------------------------------------------------------------ *
@@ -335,6 +389,11 @@ class PatchBuilder {
         cells.set(id, group[0]);
         continue;
       }
+      const rounded = sameFigureRounded(Array.from(distinct.values()));
+      if (rounded) {
+        cells.set(id, rounded);
+        continue;
+      }
       // Two documents, two answers, one cell. The user picks — we do not.
       const first = group[0];
       conflicts.push({
@@ -351,6 +410,36 @@ class PatchBuilder {
     }
     return { cells, conflicts, contestedFields };
   }
+}
+
+/** Decimal places a number shows (41001.88 → 2, 41002 → 0). */
+function decimalsShown(n: number): number {
+  const text = String(n);
+  if (/e/i.test(text)) return 0;
+  const dot = text.indexOf(".");
+  return dot < 0 ? 0 : text.length - dot - 1;
+}
+
+/**
+ * One figure printed to two precisions is one figure. A system export prints
+ * whole kWh (41 002) where the bill prints 41 001.88: rounded to the places
+ * the less precise one shows, they are the same, so it is no conflict. The
+ * most precise figure is written, with every document that states it behind
+ * it. Figures that still differ after that rounding are a conflict, as ever.
+ */
+function sameFigureRounded(buckets: Proposal[][]): Proposal | null {
+  const values = buckets.map((bucket) => bucket[0].value);
+  if (!values.every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+  const numbers = values as number[];
+  const order = numbers.map((n, i) => i).sort((a, b) => decimalsShown(numbers[b]) - decimalsShown(numbers[a]));
+  const precise = numbers[order[0]];
+  const agrees = numbers.every((n) => {
+    const factor = 10 ** Math.min(decimalsShown(n), decimalsShown(precise));
+    return Math.round(precise * factor) === Math.round(n * factor);
+  });
+  if (!agrees) return null;
+  const keep = buckets[order[0]][0];
+  return { ...keep, sources: Array.from(new Set(buckets.flat().flatMap((p) => p.sources))).filter(Boolean) };
 }
 
 function entryIndex(entries: readonly EsgCalculatorEntryLike[]): Map<string, EsgCalculatorEntryLike> {
@@ -446,7 +535,19 @@ export function mapEsgCalculatorToWorkbook(
   // pass: in a one-row grid two documents' different sites add up, which they
   // could not do if each reader settled its own figures.
   const monthlyFacts: MonthlyFact[] = [];
-  for (const [gridField, gridRows] of rowsByGrid) {
+  // Waste rows whose mass has no unit the register can hold, by source file.
+  let heldWaste: Map<string, { rows: number; stated: Set<string> }> = new Map();
+  for (const [gridField, initialRows] of rowsByGrid) {
+    let gridRows = initialRows;
+    if (gridField === WASTE_ROWS_FIELD) {
+      const units = wasteRowsWithUnits(gridRows, entries);
+      gridRows = units.kept;
+      heldWaste = units.held;
+      if (gridRows.length === 0) {
+        record(gridField, { status: "unplaced", cells: [], rejection: "unit_unresolved", reason: wasteUnitReason(units.held) });
+        continue;
+      }
+    }
     if (gridField === ESG_MONTHLY_FACTS_FIELD) {
       monthlyFacts.push(...monthlyFactsFromRows(gridRows));
       continue;
@@ -457,6 +558,10 @@ export function mapEsgCalculatorToWorkbook(
     }
     if (gridField === "ee_level_rows") {
       applyHeadcountRows(gridRows, builder, record);
+      continue;
+    }
+    if (gridField === INCIDENT_ROWS_FIELD) {
+      applyIncidentRows(gridRows, entries, axes, builder, record);
       continue;
     }
     const target = ESG_GRID_TARGETS[gridField];
@@ -474,11 +579,36 @@ export function mapEsgCalculatorToWorkbook(
     if (gridField === "fleet_vehicle_rows" && fillRollup) recordFills(fillRollup, fleet, record);
   }
   if (fillRollup && !rowsByGrid.has("fleet_vehicle_rows")) recordFills(fillRollup, undefined, record);
-  const monthlyFates = monthlyFacts.length > 0 ? applyMonthlyFacts(monthlyFacts, axes, builder, record) : [];
+
+  // The company's own words on its site labels, and its own name: a label that
+  // is only those is the company, and a depot never matches through them.
+  const siteLabels = monthlyFacts.map((fact) => String(fact.site ?? "").trim()).filter(Boolean);
+  for (const entry of entries) {
+    if (/\.site_name$/.test(entry.key) && String(entry.value ?? "").trim()) siteLabels.push(String(entry.value).trim());
+  }
+  const sites: SiteContext = {
+    leads: esgCompanyLeads(siteLabels),
+    entityNames: entries.filter((e) => e.key === "entity.name").map((e) => String(e.value ?? "").trim()).filter(Boolean),
+  };
+  const priorMonths = priorYearMonths(axes);
+  const monthlyFates =
+    monthlyFacts.length > 0 ? applyMonthlyFacts(monthlyFacts, axes, builder, record, sites, priorMonths) : [];
+  // A bill just before the year is a question on this year, not last year's figure.
+  const priorYear = priorMonths
+    ? priorYearFigures(
+      monthlyFacts.filter((fact) => fact.field === ESG_MONTHLY_FACTS_FIELD || !adjacentToYear(fact.periodEnd, axes)),
+      { ...axes, months: priorMonths },
+      sites,
+    )
+    : null;
 
   /* ---------------- Supplier questionnaire ---------------- */
 
   applySaqRow(byKey, gridCells, record);
+
+  /* ---------------- ISO certification and the environmental policy ---------------- */
+
+  const answered = applyIsoEvidence(byKey, gridCells, builder, record);
 
   /* ---------------- Scalars ---------------- */
 
@@ -488,6 +618,7 @@ export function mapEsgCalculatorToWorkbook(
     const key = entry.key;
     const field = entry.sourceField || key;
     if (saqKeys.has(key)) continue; // already handled as the SAQ row
+    if (answered.has(key)) continue; // already placed as the row it answers
 
     const derived = ESG_DERIVED_KEY_HOMES[key];
     if (derived) {
@@ -538,7 +669,7 @@ export function mapEsgCalculatorToWorkbook(
 
     const monthly = ESG_MONTHLY_TARGETS[key];
     if (monthly) {
-      applyMonthlyScalar(key, field, entry, monthly, byKey, axes, builder, record);
+      applyMonthlyScalar(key, field, entry, monthly, byKey, axes, builder, record, sites);
       continue;
     }
 
@@ -599,9 +730,9 @@ export function mapEsgCalculatorToWorkbook(
   }
 
   const patches: EsgSectionPatchMap = {};
-  const addCell = (sectionId: string, cellRef: string, value: EsgCellValue): boolean => {
+  const addCell = (sectionId: string, cellRef: string, value: EsgCellValue, sectionCells?: Record<string, unknown>): boolean => {
     // THE GATE. Every cell — table, grid or axis — passes here.
-    if (isEsgDerivedCell(sectionId, cellRef)) return false;
+    if (isEsgDerivedCell(sectionId, cellRef, sectionCells)) return false;
     const section = patches[sectionId] ?? (patches[sectionId] = { cells: {} });
     section.cells[cellRef] = value;
     return true;
@@ -641,14 +772,117 @@ export function mapEsgCalculatorToWorkbook(
         section.cells[cellRef] = value;
         continue;
       }
-      addCell(sectionId, cellRef, value);
+      // A register's own cells are judged against the register: a long waste
+      // register's row 16 is a stream, and its depot is not the summary B16.
+      addCell(sectionId, cellRef, value, cells);
     }
   }
 
   const contestedCells = new Set(conflicts.filter((c) => c.sectionId === "e-data").map((c) => c.cellRef));
-  const sourceOutcomes = monthlyFactOutcomes(monthlyFacts, monthlyFates, contestedCells, patches);
+  const monthly = monthlyFactOutcomes(monthlyFacts, monthlyFates, contestedCells, patches);
+  const sourceOutcomes = monthly.outcomes;
+  // A document whose waste rows were held answers for itself, even where
+  // another document's rows reached the register.
+  for (const [source, held] of Array.from(heldWaste)) {
+    if (!source) continue;
+    const bySource = sourceOutcomes[WASTE_ROWS_FIELD] ?? (sourceOutcomes[WASTE_ROWS_FIELD] = {});
+    bySource[source] = {
+      status: "unplaced",
+      cells: [],
+      rejection: "unit_unresolved",
+      reason: wasteUnitReason(new Map([[source, held]])),
+    };
+  }
 
-  return { patches, outcomes, sourceOutcomes, conflicts, cellSources };
+  return {
+    patches,
+    outcomes,
+    sourceOutcomes,
+    conflicts,
+    cellSources,
+    ...(monthly.held.length > 0 ? { heldFigures: monthly.held } : {}),
+    ...(priorYear && priorYear.measures.length > 0 ? { priorYear } : {}),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Waste rows need a unit
+ * ------------------------------------------------------------------ */
+
+const WASTE_ROWS_FIELD = "waste_stream_rows";
+const WASTE_QUANTITY_KEYS = ["waste.total_kg", "waste.recycled_kg", "waste.landfill_kg"] as const;
+const WASTE_UNIT_KEYS = ["waste.mass_unit", "waste.unit"] as const;
+
+/** A stated mass unit → kilograms per unit; null when it is no mass unit the register can hold. */
+function kilogramsPer(unit: string): number | null {
+  const u = unit.trim().toLowerCase().replace(/\.$/, "");
+  if (/^(kg|kgs|kilo(gram)?s?)$/.test(u)) return 1;
+  if (/^(t|ton|tons|tonne|tonnes|metric tons?)$/.test(u)) return 1000;
+  return null;
+}
+
+/**
+ * Waste rows whose quantities carry a unit, in kilograms; the rest held.
+ *
+ * The parser's row columns are NAMED in kilograms (`waste_total_kg`) but hold
+ * the figure "in the unit printed" — the waste skill says so, and reports the
+ * unit separately. A row with no stated unit (a dashboard's monthly series
+ * whose figures are a few kilograms a month for five warehouses, or "UNITS")
+ * is not kilograms by assumption: added to a contractor's 13,910 kg it made a
+ * register no total or diversion rate could be read from. Such a row is held
+ * and said so — never written, never scored. A unit is the row's own, or the
+ * one its document states when that document is the row's only source.
+ * Tonnes are converted to kilograms, the register's unit.
+ */
+function wasteRowsWithUnits(
+  rows: EsgCalculatorRowLike[],
+  entries: readonly EsgCalculatorEntryLike[],
+): { kept: EsgCalculatorRowLike[]; held: Map<string, { rows: number; stated: Set<string> }> } {
+  const documentUnit = new Map<string, string>();
+  for (const entry of entries) {
+    if (!(WASTE_UNIT_KEYS as readonly string[]).includes(entry.key)) continue;
+    const files = (entry.sourceFiles ?? []).filter(Boolean);
+    if (files.length === 1 && typeof entry.value === "string") documentUnit.set(files[0], entry.value);
+  }
+  const kept: EsgCalculatorRowLike[] = [];
+  const held = new Map<string, { rows: number; stated: Set<string> }>();
+  for (const row of rows) {
+    const files = (row.sourceFiles ?? []).filter(Boolean);
+    const own = WASTE_UNIT_KEYS.map((key) => row.cells[key]).find((v) => typeof v === "string" && v.trim() !== "");
+    const unit = typeof own === "string" ? own : files.length === 1 ? documentUnit.get(files[0]) : undefined;
+    const factor = unit ? kilogramsPer(unit) : null;
+    if (factor === null) {
+      const source = files[0] ?? "";
+      const entry = held.get(source) ?? { rows: 0, stated: new Set<string>() };
+      entry.rows += 1;
+      if (unit) entry.stated.add(unit);
+      held.set(source, entry);
+      continue;
+    }
+    if (factor === 1) {
+      kept.push(row);
+      continue;
+    }
+    const cells = { ...row.cells };
+    for (const key of WASTE_QUANTITY_KEYS) {
+      const n = typeof cells[key] === "number" ? (cells[key] as number) : Number(cells[key]);
+      if (cells[key] !== undefined && cells[key] !== null && cells[key] !== "" && Number.isFinite(n)) cells[key] = n * factor;
+    }
+    kept.push({ ...row, cells });
+  }
+  return { kept, held };
+}
+
+function wasteUnitReason(held: Map<string, { rows: number; stated: Set<string> }>): string {
+  const rows = Array.from(held.values()).reduce((a, h) => a + h.rows, 0);
+  const stated = Array.from(new Set(Array.from(held.values()).flatMap((h) => Array.from(h.stated))));
+  const unit = stated.length > 0
+    ? `in "${stated.join('", "')}", which is not a mass the waste register records`
+    : "with no unit stated";
+  return (
+    `${rows} waste row(s) give their quantities ${unit}, so they were held back and not scored. ` +
+    "The register records kilograms: confirm the unit (kilograms or tonnes) and add the rows, or enter the contractor's totals."
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -1312,6 +1546,15 @@ interface MonthlyFactFate {
   reason?: string;
   /** Held for want of a site or a month a person can supply. */
   choice?: EsgPlacementChoice;
+  /** Last year's figure, kept out of the reporting year. */
+  priorYear?: boolean;
+  /**
+   * Held as context, not as a question: another year's month, last year's
+   * figure, a measure the workbook keeps no monthly grid for, or a
+   * company-wide total the sites' own figures replace. Reported with its
+   * document; nothing for a person to answer.
+   */
+  context?: boolean;
 }
 
 const uniq = (items: string[]): string[] => Array.from(new Set(items.filter(Boolean)));
@@ -1353,10 +1596,21 @@ function applyMonthlyFacts(
   axes: EsgReportingAxes,
   builder: PatchBuilder,
   record: (field: string, outcome: EsgFieldOutcome) => void,
+  sites: SiteContext = { leads: [], entityNames: [] },
+  /** The year before the reporting year: its figures are last year's, kept out of this one. */
+  priorMonths: string[] | null = null,
 ): MonthlyFactFate[] {
   const fates: MonthlyFactFate[] = facts.map(() => ({ status: "unplaced", reason: "Not placed." }));
-  const hold = (ids: number[], reason: string, choice?: EsgPlacementChoice): void => {
-    for (const id of ids) fates[id] = { status: "unplaced", reason, ...(choice ? { choice } : {}) };
+  const hold = (ids: number[], reason: string, choice?: EsgPlacementChoice, lastYear = false, context = false): void => {
+    for (const id of ids) {
+      fates[id] = {
+        status: "unplaced",
+        reason,
+        ...(choice ? { choice } : {}),
+        ...(lastYear ? { priorYear: true } : {}),
+        ...((context || lastYear) && !choice ? { context: true } : {}),
+      };
+    }
   };
   // The question that places a held figure: its grid and value are known,
   // its site or month is what the document did not settle.
@@ -1389,6 +1643,7 @@ function applyMonthlyFacts(
   const cells = new Map<string, Cell>();
   const unknownSites = new Set<string>();
   const outsideYear = new Set<string>();
+  const priorYear = new Set<string>();
   const noGrid = new Set<string>();
   /**
    * Diesel issued to vehicles outside the fleet, by document AND part-month.
@@ -1412,10 +1667,13 @@ function applyMonthlyFacts(
     site: unknown,
     perSite: boolean,
   ): { rowIndex: number; part: string; label: string } | "siteless" | "unknown" => {
-    const named = String(site ?? "").trim();
+    // A label that is only the company ("ACME RETAIL" beside "ACME RETAIL
+    // - DEPOT NORTH", or the entity's own name) states the company's total.
+    const stated = String(site ?? "").trim();
+    const named = stated && !esgIsCompanyLabel(stated, sites.leads, sites.entityNames) ? stated : "";
     const oneRow = axes.companyWide === true || !perSite;
     if (!named) return oneRow ? { rowIndex: 0, part: "", label: "the company" } : "siteless";
-    const match = esgSiteMatch(named, axes.depots);
+    const match = esgSiteMatch(named, axes.depots, sites.leads);
     if (typeof match === "number") return { rowIndex: oneRow ? 0 : match, part: `#${match}`, label: axes.depots[match] };
     if (oneRow) return { rowIndex: 0, part: `~${esgSiteKey(named)}`, label: named };
     return "unknown";
@@ -1449,7 +1707,7 @@ function applyMonthlyFacts(
     const grid = MONTHLY_MEASURE_GRIDS[fact.measure];
     if (!grid) {
       if (fact.measure) noGrid.add(fact.measure);
-      hold([factId], `${fact.measure || "This figure"} is read and reported; the workbook has no monthly grid for it.`);
+      hold([factId], `${fact.measure || "This figure"} is read and reported; the workbook has no monthly grid for it.`, undefined, false, true);
       return;
     }
     if (!Number.isFinite(fact.value)) {
@@ -1457,18 +1715,42 @@ function applyMonthlyFacts(
       return;
     }
 
+    // Last year's figure: kept as last year's — offered as the baseline —
+    // and never merged into this reporting year. A single bill whose period
+    // ends just before the year is asked about instead (below): the company
+    // may book it in the year's first month.
+    const factMonth = String(fact.periodEnd ?? "").slice(0, 7);
+    const aBill = fact.field !== ESG_MONTHLY_FACTS_FIELD;
+    if (
+      priorMonths &&
+      !esgMonthColumnFor(fact.periodEnd, axes) &&
+      esgMonthColumnFor(fact.periodEnd, { ...axes, months: priorMonths }) &&
+      !(aBill && adjacentToYear(fact.periodEnd, axes))
+    ) {
+      priorYear.add(factMonth);
+      hold(
+        [factId],
+        `Last year's figure (${priorMonths[0]} to ${priorMonths[priorMonths.length - 1]}): kept out of this reporting year and offered as your baseline.`,
+        undefined,
+        true,
+      );
+      return;
+    }
+
     const where = locate(fact.site, grid.perSite);
     if (where === "siteless") {
       siteless += 1;
-      hold([factId], "This is a company-wide total and the workbook records this per site, so the sites' own figures are used instead.");
+      hold([factId], "This is a company-wide total and the workbook records this per site, so the sites' own figures are used instead.", undefined, false, true);
       return;
     }
     const month = esgMonthColumnFor(fact.periodEnd, axes);
     // A month the document does not state is a question for the user, and so
-    // is one just outside the year (a bill booked a month late); one further
-    // out is another year's figure.
+    // is a bill's just outside the year (a bill booked a month late); one
+    // further out is another year's figure. A table states its months in its
+    // own columns, so its figure for the month before the year is that
+    // month's, not a question.
     const statedMonth = String(fact.periodEnd ?? "").slice(0, 7);
-    const nearYear = !month && Boolean(statedMonth) && adjacentToYear(fact.periodEnd, axes);
+    const nearYear = aBill && !month && Boolean(statedMonth) && adjacentToYear(fact.periodEnd, axes);
     const year = `${axes.months[0]} to ${axes.months[axes.months.length - 1]}`;
     if (where === "unknown") {
       unknownSites.add(String(fact.site));
@@ -1492,6 +1774,9 @@ function applyMonthlyFacts(
             ? `${statedMonth} falls just outside the workbook's reporting year (${year}). If your company books it in a month of this year, say which.`
             : `${statedMonth} falls outside the workbook's reporting year (${year}).`,
         fact.value !== 0 && (!statedMonth || nearYear) ? ask(fact, grid, ["month"], null, where.rowIndex) : undefined,
+        false,
+        // Another year's month is context; a month the document never stated is a question.
+        Boolean(statedMonth),
       );
       return;
     }
@@ -1615,6 +1900,11 @@ function applyMonthlyFacts(
       `${named.slice(0, 4).map((site) => `site "${site}"`).join(", ")}${named.length > 4 ? ` and ${named.length - 4} more` : ""} ${one ? "is not a site" : "are not sites"} this workbook reports on (${axes.depots.join(", ")}), so ${one ? "its" : "their"} figures were left for you. Add ${one ? "it" : "them"} to the workbook's sites to place ${one ? "it" : "them"}.`,
     );
   }
+  if (priorYear.size && priorMonths) {
+    notes.push(
+      `Figures for ${priorYear.size} month${priorYear.size === 1 ? "" : "s"} of the year before (${priorMonths[0]} to ${priorMonths[priorMonths.length - 1]}) are kept as last year's figures and offered as your baseline; they are not added to this year.`,
+    );
+  }
   if (outsideYear.size) {
     notes.push(`Figures for ${Array.from(outsideYear).sort().slice(0, 3).join(", ")}${outsideYear.size > 3 ? "…" : ""} fall outside the workbook's reporting year.`);
   }
@@ -1622,16 +1912,60 @@ function applyMonthlyFacts(
   if (noGrid.size) notes.push(`Read but not recorded on a grid: ${Array.from(noGrid).join(", ")}.`);
 
   for (const field of Array.from(fieldsSeen)) {
+    // Every figure of the field held as context (another year, no grid): so is the field.
+    const own = facts.map((fact, i) => (fact.field === field ? fates[i] : null)).filter((fate): fate is MonthlyFactFate => fate !== null);
+    const context = own.length > 0 && own.every((fate) => fate.context);
     record(field, fieldsProposed.has(field)
       ? { status: "placed", cells: [], reason: notes.length ? notes.join(" ") : undefined }
       : {
         status: "unplaced",
         cells: [],
-        rejection: "needs_context",
+        rejection: context ? "held_context" : "needs_context",
         reason: notes.join(" ") || "These monthly figures had no grid, site or month in this workbook to go in.",
       });
   }
   return fates;
+}
+
+/**
+ * Last year's figures, settled exactly as this year's are — the same sites,
+ * the same agreement rule between documents — on last year's months, and
+ * totalled per grid. Nothing here reaches the workbook unless a person takes
+ * it as the baseline.
+ */
+function priorYearFigures(facts: MonthlyFact[], priorAxes: EsgReportingAxes, sites: SiteContext): EsgPriorYear {
+  const inPrior = facts.filter((fact) => esgMonthColumnFor(fact.periodEnd, priorAxes) !== null);
+  const builder = new PatchBuilder();
+  if (inPrior.length > 0) applyMonthlyFacts(inPrior, priorAxes, builder, () => undefined, sites, null);
+  const settled = builder.settle();
+  const byPrefix = new Map<string, { total: number; months: Set<string>; sources: Set<string> }>();
+  const cells: Record<string, number> = {};
+  for (const [, proposal] of Array.from(settled.cells.entries())) {
+    const ref = /^([a-z0-9]+)_([C-Z])\d+$/i.exec(proposal.cellRef);
+    if (!ref || typeof proposal.value !== "number") continue;
+    cells[proposal.cellRef] = proposal.value;
+    const entry = byPrefix.get(ref[1]) ?? { total: 0, months: new Set<string>(), sources: new Set<string>() };
+    entry.total += proposal.value;
+    entry.months.add(ref[2]);
+    for (const source of proposal.sources) entry.sources.add(source);
+    byPrefix.set(ref[1], entry);
+  }
+  const grids = Object.values(MONTHLY_MEASURE_GRIDS);
+  const measures = Array.from(byPrefix.entries())
+    .map(([prefix, entry]) => {
+      const grid = grids.find((g) => g.prefix === prefix);
+      return {
+        prefix,
+        label: grid?.label ?? prefix,
+        unit: grid?.unit ?? "",
+        total: Math.round(entry.total * 100) / 100,
+        monthsCovered: entry.months.size,
+        sources: Array.from(entry.sources),
+      };
+    })
+    .filter((measure) => measure.total !== 0)
+    .sort((a, b) => grids.findIndex((g) => g.prefix === a.prefix) - grids.findIndex((g) => g.prefix === b.prefix));
+  return { months: priorAxes.months, measures, cells, disputed: settled.conflicts.length };
 }
 
 /**
@@ -1646,9 +1980,11 @@ function monthlyFactOutcomes(
   fates: MonthlyFactFate[],
   contested: ReadonlySet<string>,
   patches: EsgSectionPatchMap,
-): Record<string, Record<string, EsgFieldOutcome>> {
+): { outcomes: Record<string, Record<string, EsgFieldOutcome>>; held: EsgHeldFigure[] } {
   const rank = { placed: 2, conflict: 1, unplaced: 0 } as const;
   const out: Record<string, Record<string, EsgFieldOutcome>> = {};
+  /** Per field and document: the held figures, and whether the reading's own outcome already shows one. */
+  const heldBy = new Map<string, number[]>();
   facts.forEach((fact, i) => {
     const fate = fates[i];
     let outcome: EsgFieldOutcome;
@@ -1658,7 +1994,7 @@ function monthlyFactOutcomes(
     } else if (fate?.status === "placed" && fate.cellRef && written !== undefined) {
       outcome = { status: "placed", cells: [{ sectionId: "e-data", cellRef: fate.cellRef, value: written }] };
     } else {
-      outcome = { status: "unplaced", cells: [], rejection: "needs_context", reason: fate?.reason ?? "Not placed." };
+      outcome = { status: "unplaced", cells: [], rejection: fate?.context ? "held_context" : "needs_context", reason: fate?.reason ?? "Not placed." };
     }
     const source = fact.sources[0] ?? "";
     for (const field of [fact.field, ...fact.context]) {
@@ -1672,8 +2008,79 @@ function monthlyFactOutcomes(
       const prior = bySource[source];
       if (!prior || rank[own.status] > rank[prior.status]) bySource[source] = own;
     }
+    if (outcome.status === "unplaced") {
+      const key = `${fact.field}\u0000${source}`;
+      heldBy.set(key, [...(heldBy.get(key) ?? []), i]);
+    }
   });
-  return out;
+
+  // A reading holds every figure its document states for it; its outcome
+  // shows one. The rest — a dashboard's held figures behind its placed ones,
+  // or the second and later held figures of a reading placed nowhere — are
+  // listed figure by figure, each with its own reason and question.
+  const held: EsgHeldFigure[] = [];
+  for (const [key, ids] of Array.from(heldBy.entries())) {
+    const [field, source] = key.split("\u0000");
+    const shown = out[field]?.[source];
+    const hidden = shown?.status === "unplaced" ? ids.slice(1) : ids;
+    for (const i of hidden) {
+      const fact = facts[i];
+      const named = measureName(fact.measure);
+      held.push({
+        field,
+        sourceFile: source,
+        measure: named.label,
+        unit: named.unit,
+        value: fact.value,
+        ...(fates[i]?.priorYear ? { priorYear: true } : {}),
+        ...(fates[i]?.context ? { context: true } : {}),
+        ...(String(fact.site ?? "").trim() ? { site: String(fact.site).trim() } : {}),
+        ...(/^\d{4}-\d{2}/.test(String(fact.periodEnd ?? "")) ? { month: String(fact.periodEnd).slice(0, 7) } : {}),
+        reason: fates[i]?.reason ?? "Not placed.",
+        ...(fates[i]?.choice ? { choice: fates[i].choice } : {}),
+      });
+    }
+  }
+  return { outcomes: out, held };
+}
+
+/**
+ * One monthly figure kept out of the workbook that its reading's outcome does
+ * not show: a dashboard reports "placed" when any of its figures were, and
+ * every figure it held went unseen.
+ */
+export interface EsgHeldFigure {
+  /** The parser field the figure was read under. */
+  field: string;
+  sourceFile: string;
+  /** "Electricity". */
+  measure: string;
+  unit: string;
+  value: number;
+  /** The site as the document names it. */
+  site?: string;
+  /** "YYYY-MM", as the document states it. */
+  month?: string;
+  reason: string;
+  /** The question that places it, when a person can answer one. */
+  choice?: EsgPlacementChoice;
+  /** Last year's figure, kept out of the reporting year and offered as the baseline. */
+  priorYear?: boolean;
+  /** Held as context (another year, no monthly grid, a replaced total): nothing to answer. */
+  context?: boolean;
+}
+
+const UNIT_WORDS: Record<string, string> = { km: "km", kwh: "kWh", kl: "kL", kg: "kg", litres: "litres", l: "litres", tco2e: "tCO₂e" };
+
+/** A measure as a person reads it: "fleet.distance_km" → { "Fleet distance", "km" }. */
+function measureName(measure: string): { label: string; unit: string } {
+  const grid = MONTHLY_MEASURE_GRIDS[measure];
+  if (grid) return { label: grid.label, unit: grid.unit };
+  const [namespace, rest = ""] = measure.split(".");
+  const words = rest.split("_").filter(Boolean);
+  const unit = UNIT_WORDS[words[words.length - 1]?.toLowerCase() ?? ""];
+  const text = [namespace, ...(unit ? words.slice(0, -1) : words)].join(" ").trim();
+  return { label: text ? text[0].toUpperCase() + text.slice(1) : "A figure", unit: unit ?? "" };
 }
 
 function applyMonthlyScalar(
@@ -1685,6 +2092,7 @@ function applyMonthlyScalar(
   axes: EsgReportingAxes,
   builder: PatchBuilder,
   record: (field: string, outcome: EsgFieldOutcome) => void,
+  sites: SiteContext = { leads: [], entityNames: [] },
 ): void {
   // The month and the site, each settled from the figure's own document — or
   // left to the one question a person can answer.
@@ -1706,7 +2114,7 @@ function applyMonthlyScalar(
       rowIndex = null;
       siteProblem = "We could not tell which site this figure belongs to: the site name and the figure did not come from the same single document.";
     } else {
-      rowIndex = esgDepotRowIndex(siteEntry?.value, axes);
+      rowIndex = esgDepotRowIndex(siteEntry?.value, axes, sites.leads);
       if (rowIndex === null) {
         siteProblem = `"${String(siteEntry?.value ?? "")}" is not one of the sites this workbook reports on (${axes.depots.join(", ")}), and we do not file it under the nearest one.`;
       }
@@ -1905,4 +2313,156 @@ function applySaqRow(
   const existing = gridCells.get("saq");
   gridCells.set("saq", existing ? { ...existing, ...cells } : cells);
   void failures;
+}
+
+/* ------------------------------------------------------------------ *
+ * ISO 14001 status and the environmental policy's board approval
+ * ------------------------------------------------------------------ */
+
+/**
+ * Where an ISO 14001 process stands, from what an audit report or a
+ * certificate says. ISO 14001 has three real states: certified, genuinely in
+ * progress (a stage 1 or stage 2 audit under way or passed, a recommendation
+ * to certify), and neither. The tracker's own vocabulary already says them:
+ * Fully Compliant, Partially Compliant, Gap. Anything this cannot read is not
+ * guessed — the status stays evidence.
+ */
+export function iso14001TrackerStatus(raw: unknown): "Fully Compliant" | "Partially Compliant" | null {
+  const text = String(raw ?? "").toLowerCase();
+  if (!text.trim()) return null;
+  if (/\b(suspended|withdrawn|expired|revoked|not recommended|not certified|uncertified|failed)\b/.test(text)) return null;
+  if (/\bstage\s*(1|2|one|two|i{1,2})\b|\bin progress\b|\bproceed to\b|\brecommended for certification\b|\bgap analysis\b/.test(text)) {
+    return "Partially Compliant";
+  }
+  if (/\b(certified|certificate (issued|granted|valid)|certification (granted|awarded|confirmed))\b/.test(text)) return "Fully Compliant";
+  return null;
+}
+
+/** The ISO tracker row the certification indicator reads (`esgDeriveSummary` matches "certification"). */
+const ISO_CERTIFICATION_REQUIREMENT = "ISO 14001 certification";
+
+/**
+ * Two document facts that answer a workbook row, rather than a cell of their own:
+ *
+ *   - `iso.iso14001_status` → the ISO tracker's certification row: certified,
+ *     or in progress. E d26 stays gated exactly as before — a certification
+ *     row earns nothing until EMS clauses besides it are assessed.
+ *   - `iso.environmental_policy_approval_date` → `G_Data!B27`, "Environmental
+ *     policy approved by the board": a minuted approval date is the evidence
+ *     the row asks for. Partial where the same policy states no net-zero
+ *     commitment, as the row's own guidance says. E d28 still takes the
+ *     stricter of this and the ISO clause-5.2 assessment.
+ *
+ * Returns the keys it answered, so the scalar pass does not report them again.
+ */
+function applyIsoEvidence(
+  byKey: Map<string, EsgCalculatorEntryLike>,
+  gridCells: Map<string, Record<string, EsgCellValue>>,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): Set<string> {
+  const answered = new Set<string>();
+
+  const status = byKey.get("iso.iso14001_status");
+  const trackerStatus = status ? iso14001TrackerStatus(status.value) : null;
+  if (status && trackerStatus) {
+    const scope = byKey.get("iso.iso14001_scope");
+    const evidence = [String(status.value ?? "").trim(), scope ? `Scope: ${String(scope.value ?? "").trim()}` : ""]
+      .filter(Boolean)
+      .join(" ");
+    const cells = writeEsgGridCells("iso-tracker", [
+      { _id: "esg_parser_iso_certification", requirement: ISO_CERTIFICATION_REQUIREMENT, status: trackerStatus, evidence },
+    ]) as Record<string, EsgCellValue>;
+    const existing = gridCells.get("iso-tracker");
+    gridCells.set("iso-tracker", existing ? { ...existing, ...cells } : cells);
+    record(status.sourceField || status.key, {
+      status: "placed",
+      cells: [{ sectionId: "iso-tracker", cellRef: String(ESG_GRID_SECTIONS["iso-tracker"].startRow), value: trackerStatus }],
+      reason:
+        trackerStatus === "Partially Compliant"
+          ? "Recorded on the ISO tracker as certification in progress. It scores once the EMS clauses behind it are assessed."
+          : "Recorded on the ISO tracker as certified. It scores once the EMS clauses behind it are assessed.",
+    });
+    answered.add(status.key);
+  }
+
+  const approval = byKey.get("iso.environmental_policy_approval_date");
+  if (approval && String(approval.value ?? "").trim()) {
+    const netZero = byKey.get("iso.net_zero_commitment_present");
+    const value = netZero?.value === false ? "Partial" : "Yes";
+    builder.propose({
+      sectionId: "g-data",
+      cellRef: "B27",
+      value,
+      label: cellLabel("g-data", "B27", approval.key),
+      field: approval.sourceField || approval.key,
+      sources: approval.sourceFiles ?? [],
+    });
+    record(approval.sourceField || approval.key, {
+      status: "placed",
+      cells: [],
+      reason:
+        value === "Partial"
+          ? `The policy records a board approval date (${String(approval.value)}) but no net-zero commitment, so the board-approved environmental policy row reads Partial.`
+          : `The policy records a board approval date (${String(approval.value)}).`,
+    });
+    answered.add(approval.key);
+  }
+  return answered;
+}
+
+/* ------------------------------------------------------------------ *
+ * The incident register → quarterly injury counts
+ * ------------------------------------------------------------------ */
+
+/**
+ * Count an incident register's rows into S_Data's quarterly fatality, LTI and
+ * medical-treatment rows (`esgIncidentCounts`). A count is the code's, not the
+ * document's, so the outcome says what was counted and asks for confirmation;
+ * a printed count for the same quarter that disagrees is a conflict for the
+ * user, as any two readings of one cell are.
+ */
+function applyIncidentRows(
+  rows: readonly EsgCalculatorRowLike[],
+  entries: readonly EsgCalculatorEntryLike[],
+  axes: EsgReportingAxes,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): void {
+  // Each register's own stated period, by the file that states it.
+  const periods = new Map<string, { start: string | null; end: string | null }>();
+  for (const entry of entries) {
+    if (entry.key !== "hs.period_start" && entry.key !== "hs.period_end") continue;
+    for (const file of entry.sourceFiles ?? []) {
+      if (!file) continue;
+      const period = periods.get(file) ?? { start: null, end: null };
+      if (entry.key === "hs.period_start") period.start = String(entry.value ?? "");
+      else period.end = String(entry.value ?? "");
+      periods.set(file, period);
+    }
+  }
+  const counts = esgIncidentCounts(rows, axes, periods);
+  if (!counts || Object.keys(counts.cells).length === 0) {
+    record(INCIDENT_ROWS_FIELD, {
+      status: "unplaced",
+      cells: [],
+      rejection: "needs_context",
+      reason: counts
+        ? "None of the register's incidents falls in the reporting year, so nothing was counted."
+        : "The health-and-safety block is quarterly, and the workbook's reporting year is not set, so these incidents have no quarter to be counted in.",
+    });
+    return;
+  }
+  const sources = Array.from(new Set(rows.flatMap((r) => r.sourceFiles ?? []).filter(Boolean)));
+  for (const [cellRef, value] of Object.entries(counts.cells)) {
+    builder.propose({
+      sectionId: "s-data",
+      cellRef,
+      value,
+      label: cellLabel("s-data", cellRef, INCIDENT_ROWS_FIELD),
+      field: INCIDENT_ROWS_FIELD,
+      sources,
+    });
+  }
+  record(INCIDENT_ROWS_FIELD, { status: "placed", cells: [], reason: counts.summary });
 }

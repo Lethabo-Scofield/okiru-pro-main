@@ -17,6 +17,7 @@
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { readEsgCell } from "@/lib/esgWorkbookStorage";
 import { deriveEsgSummaryCells } from "./esgDeriveSummary";
+import { readEsgWasteSummary, type EsgWasteSummaryItem } from "./esgWasteSummary";
 import { readEsgGridRows } from "./esgGridRows";
 import { SCORECARD_INDICATORS, esgIndicatorLabel, type EsgScorecardPillar } from "./esgScorecardDefinitions";
 import { ESG_TOOLKIT_PILLAR_NAV } from "./esgToolkitNav";
@@ -83,6 +84,8 @@ type Ctx = {
   text: (section: string, cell: string) => string;
   grid: (prefix: string) => boolean;
   rows: (section: Parameters<typeof readEsgGridRows>[1]) => Array<Record<string, unknown>>;
+  /** A waste summary figure, wherever this workbook keeps it. */
+  waste: (item: EsgWasteSummaryItem) => number | null;
   hasInventory: boolean;
 };
 
@@ -100,7 +103,7 @@ const PRO_RATA =
 const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
   environmental: {
     d5: {
-      meaning: "Awarded when the company records its fleet diesel — the activity a Scope 1 baseline is built from.",
+      meaning: "Fleet diesel — the activity a Scope 1 baseline is built from — recorded for every site and month: points in proportion to the sites × months that hold a figure.",
       needs: [need("Monthly fleet diesel (litres), Scope 1A", (c) => c.grid("s1a"))],
     },
     d6: {
@@ -118,7 +121,7 @@ const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
       ],
     },
     d8: {
-      meaning: "Awarded when water consumption is recorded — the Scope 3 water line.",
+      meaning: "Scope 3 tracking, assessed against a materiality screen of the Scope 3 categories. The workbook records only water, which on its own does not show it, so this is left out of the score.",
       needs: [need("Monthly municipal water (kL)", (c) => c.grid("water"))],
     },
     d9: {
@@ -126,7 +129,7 @@ const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
       needs: [need("The net-zero target year", positive("assumptions", "B107"))],
     },
     d11: {
-      meaning: "Awarded when electricity consumption is recorded.",
+      meaning: "Electricity recorded for every site and month: points in proportion to the sites × months that hold a figure.",
       needs: [need("Monthly grid electricity (kWh)", (c) => c.grid("s2"))],
     },
     d12: {
@@ -144,7 +147,7 @@ const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
       ],
     },
     d15: {
-      meaning: "The share of vehicles whose measured fuel consumption (L/100 km) is within their norm, plus the tolerance on Assumptions.",
+      meaning: "The share of the fleet shown to run within its fuel-consumption norm (L/100 km, plus the tolerance on Assumptions). A vehicle with no measured rate is not shown to, so measuring more of the fleet raises it.",
       needs: [
         need("Vehicles with litres and kilometres (measured L/100 km)", positive("fleet", "_l100_positive")),
         need("Each vehicle's L/100 km norm", (c) => c.rows("fleet").some((r) => Number(r.l100Norm) > 0)),
@@ -163,18 +166,18 @@ const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
     },
     d19: {
       meaning: `Waste diverted from landfill as a share of all waste, against the diversion target. ${PRO_RATA}`,
-      needs: [need("The waste diversion rate (waste register or contractor report)", (c) => c.num("waste", "B16") !== null)],
+      needs: [need("The waste diversion rate (recycled or landfill kilograms in the waste register, or the contractor's rate)", (c) => c.waste("diversion") !== null)],
     },
     d20: {
       meaning: "Awarded when monthly recycling (the % recycled in the waste contractor's report) is tracked.",
-      needs: [need("Monthly % recycled (waste contractor's report)", positive("waste", "B17"))],
+      needs: [need("Monthly % recycled (waste contractor's report)", (c) => (c.waste("recycledMonthly") ?? 0) > 0)],
     },
     d21: {
       meaning: "Awarded when landfill waste is measured, so its emissions can be stated.",
-      needs: [need("Landfill waste (kg) in the waste register", positive("waste", "B18"))],
+      needs: [need("Landfill waste (kg) in the waste register", (c) => (c.waste("landfillTco2e") ?? 0) > 0)],
     },
     d23: {
-      meaning: "Awarded when water consumption is recorded.",
+      meaning: "Water recorded for every site and month: points in proportion to the sites × months that hold a figure.",
       needs: [need("Monthly municipal water (kL)", (c) => c.grid("water"))],
     },
     d24: {
@@ -266,10 +269,11 @@ const SPECS: Record<EsgScorecardPillar, Record<string, Spec>> = {
       needs: [need("Fatalities each quarter (enter 0 for none)", (c) => c.num("s-data", "G28") !== null)],
     },
     d19: {
-      meaning: "A driver fatigue programme: learners on the fatigue programme, or a driver debrief register in use.",
+      meaning: "A driver fatigue programme: learners on a fatigue programme, or driver-fatigue incidents recorded. A route register on its own is not one.",
       needs: [
-        need("Driver fatigue programme (OFO learners or the driver debrief register)", (c) =>
-          (c.num("driver-debrief", "_active") ?? 0) > 0 || (c.num("s-data", "C59") ?? 0) > 0),
+        need("Learners on a fatigue programme (OFO training register), or driver-fatigue incidents recorded each quarter", (c) =>
+          c.rows("s-data-ofo").some((r) => /\bfatigue\b/i.test(`${r.programme ?? ""} ${r.occupation ?? ""}`) && Number(r.learners) > 0) ||
+          ["C34", "D34", "E34", "F34"].some((ref) => c.num("s-data", ref) !== null)),
       ],
     },
     d20: {
@@ -410,6 +414,7 @@ export function computeEsgIndicatorCoverage(rawWorkbook: EsgWorkbookData): EsgCo
       return Object.entries(eData).some(([ref, v]) => re.test(ref) && Number(v) > 0);
     },
     rows: (section) => readEsgGridRows(workbook.sections?.[section]?.cells as Record<string, unknown> | undefined, section),
+    waste: (item) => readEsgWasteSummary(workbook, item),
     hasInventory: computeGhgInventory(workbook).hasData,
   };
 

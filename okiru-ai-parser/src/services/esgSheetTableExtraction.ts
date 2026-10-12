@@ -182,6 +182,12 @@ const ROW_FIELD_MEANINGS: Record<string, string> = {
   monthly_litres: 'ALL fuel the vehicle took in the month — the TOTAL column when the sheet splits internal and external',
   monthly_km: 'kilometres driven in the month',
   fuel_litres: 'litres in this transaction',
+  // A contractor's export prints the stream's code AND its description; the
+  // code column ("AB12 01") mapped as the stream named every stream by code.
+  waste_stream_type: 'the stream\'s NAME in words (a description or material column), never a column that holds only codes',
+  // A training register dates each line by its course or its invoice; left
+  // unmapped, two hundred lines carried no date at all.
+  training_start_date: 'the date the training took place or was invoiced (a "Date of training" or "Invoice date" column)',
 };
 
 /**
@@ -281,6 +287,51 @@ export function checkEsgColumnMeaning(
   return { mapping: kept, perLitreFields, exceptions };
 }
 
+/**
+ * The route a waste sheet's TITLE gives every mass on it: a contractor's export
+ * splits its streams over a weights sheet, a "(Landfill)" sheet and a
+ * "(Diversion)" sheet of the same layout, and only the title says which is
+ * which. Null when the title names neither, or both.
+ */
+export function wasteRouteFromTitle(title: string | null | undefined): 'landfill' | 'recycled' | null {
+  const text = String(title ?? '');
+  const landfill = /\blandfill/i.test(text);
+  const diverted = /\b(diversion|diverted|recycl\w*)/i.test(text);
+  if (landfill === diverted) return null;
+  return landfill ? 'landfill' : 'recycled';
+}
+
+/**
+ * A waste register's stream masses, moved to the route its sheet's title
+ * names: on a "(Landfill)" sheet a stream's mass is its landfilled mass, on a
+ * "(Diversion)" sheet its diverted mass. The column mapping can only call the
+ * one weight column the stream's mass. A row that already carries a route of
+ * its own is left as read. Returns the number of rows moved.
+ */
+export function routeWasteRowsByTitle(extraction: DocumentExtraction, title: string | null | undefined): number {
+  const route = wasteRouteFromTitle(title);
+  if (!route || extraction.documentId !== 'waste__contractor_report_safe_disposal_certificate') return 0;
+  const target = route === 'landfill' ? 'waste_landfill_kg' : 'waste_recycled_kg';
+  let moved = 0;
+  for (const value of extraction.values) {
+    if (value.field !== 'waste_stream_rows' || !Array.isArray(value.value)) continue;
+    value.value = value.value.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const record = row as Record<string, unknown>;
+      const mass = record.waste_total_kg;
+      if (mass === undefined || mass === null || mass === ''
+        || (record.waste_landfill_kg ?? null) !== null || (record.waste_recycled_kg ?? null) !== null) return row;
+      moved += 1;
+      const { waste_total_kg: _total, ...rest } = record;
+      return { ...rest, [target]: mass };
+    });
+  }
+  if (moved > 0) {
+    extraction.exceptions.push(`The sheet's title ("${String(title).slice(0, 120)}") says its masses are ${route === 'landfill' ? 'landfilled' : 'diverted'}: ${moved} stream mass(es) were read as ${target}.`);
+  }
+  return moved;
+}
+
 /** Human phrasing of one row, for the column-mapping question. */
 function whatOneRowIs(documentId: string, grid: DocumentGrid): string {
   const subject = documentId.split('__')[1]?.replace(/_/g, ' ') ?? 'record';
@@ -289,6 +340,46 @@ function whatOneRowIs(documentId: string, grid: DocumentGrid): string {
     .map((field) => `${field} = ${ROW_FIELD_MEANINGS[field]}`);
   return `one ${subject} row. Columns wanted: ${grid.rowFields.join(', ')}${meanings.length ? `. Where it matters: ${meanings.join('; ')}` : ''}`;
 }
+
+/**
+ * The column that keys a register's rows: the first of the register's
+ * identity fields (its first row field when it names none) that the column
+ * mapping found. Null when the mapping found none of them.
+ */
+export function rowIdentityField(grid: DocumentGrid, mapping: Record<string, string>): string | null {
+  const mapped = new Set(Object.values(mapping));
+  const identities = grid.identityFields ?? [grid.rowFields[0]];
+  return identities.find((field) => mapped.has(field)) ?? null;
+}
+
+/** A key column that holds dates: a cell with no digit in it is no date. */
+const DATE_KEY = /(_date|_month)$/;
+
+/**
+ * Whether a mapped row is a sheet's LABEL LINE rather than a record: the
+ * register is keyed by a date, and the row's key cell is a caption with no
+ * digit in it ("Opening stock", "Fuel issued" read as transaction dates,
+ * whatever figure sits beside them). Those lines are the labelled-cell
+ * reader's (esgSheetFacts.ts), which reads them under their own captions.
+ *
+ * Nothing else marks a row: a detail export prints a route's line once per
+ * drop, a daily log fills its unused days down with the same date and 0, a
+ * date with nothing beside it is a template's empty day, and a name or a
+ * registration may be any words. All of those stay records.
+ */
+export function isLabelLine(row: Record<string, unknown>, keyField: string): boolean {
+  if (!DATE_KEY.test(keyField)) return false;
+  const key = row[keyField];
+  if (typeof key !== 'string' || key.trim() === '') return false;
+  if (!/\d/.test(key)) return true;
+  // A caption that carries a figure ("Allowed variance -200 liters") opens
+  // with a word; a date opens with its day or year, or with its month's name.
+  const first = /^\s*([A-Za-z]{2,})\b/.exec(key)?.[1];
+  return Boolean(first) && !MONTH_NAME.test(first!);
+}
+
+/** A month's name or its short form, as a date may open with one ("March 3, 2026", "Mar-26"). */
+const MONTH_NAME = /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i;
 
 /**
  * Read a workbook sheet as an ESG register.
@@ -318,11 +409,15 @@ export async function extractEsgSheetTable(
   // What the model read a column AS, checked against what the column holds.
   const checked = mapped ? checkEsgColumnMeaning(rows, mapped) : null;
   const mapping = checked?.mapping ?? null;
-  // The FIRST column is the row's identity (vehicle_registration, driver_name).
-  // Without it every row is anonymous and `applyColumnMapping` drops them all,
-  // so an unmapped key field means "not this register" rather than "no rows" —
-  // hand it back to the spec pass instead of reporting an empty table.
-  if (!mapping || !Object.values(mapping).includes(shape.columns[0])) {
+  // A row needs an identity (vehicle_registration, learner_name). Without one
+  // every row is anonymous and `applyColumnMapping` drops them all, so a
+  // mapping that names no identity column means "not this register" rather
+  // than "no rows" — hand it back to the spec pass instead of reporting an
+  // empty table. Which columns identify a row is the register's own
+  // statement (`identityFields`): a training register that prints no OFO code
+  // is still a training register, keyed by its learners.
+  const identity = mapping ? rowIdentityField(grid, mapping) : null;
+  if (!mapping || !identity) {
     logger.info('ESG sheet columns did not map to the chosen register', {
       sheet: sheetName,
       documentId,
@@ -332,9 +427,25 @@ export async function extractEsgSheetTable(
   }
 
   // The B-BBEE echo-row skip stays off here: ESG registers keep the reading
-  // they were checked against the ESG answer key with.
-  const table = applyColumnMapping(rows, mapping, shape, { skipEchoRows: false });
-  if (table.rows.length === 0) return null;
+  // they were checked against the ESG answer key with. The mapping question
+  // above keeps the register's own column order; the rows are keyed by the
+  // identity column the mapping found.
+  const keyedShape: TableShape = { ...shape, columns: [identity, ...shape.columns.filter((c) => c !== identity)] };
+  const table = applyColumnMapping(rows, mapping, keyedShape, { skipEchoRows: false });
+  // A stock reconciliation's "Opening stock | 2 000" lines, under its one
+  // delivery line, map onto a transaction register's date column: they are
+  // no transactions. The register keeps its records; the label lines are the
+  // labelled-cell reader's.
+  // A sheet of nothing but label lines (an unused log tab: its "Totals" line)
+  // is still this register, read and holding no record: it is not handed to
+  // a paid flat read that could only guess at what it holds.
+  const labelLines = table.rows.filter((row) => isLabelLine(row, identity)).length;
+  if (labelLines > 0) {
+    table.rows = table.rows.filter((row) => !isLabelLine(row, identity));
+    table.exceptions.push(`${labelLines} line(s) whose ${identity} is a caption, not a date, were left to the sheet's labelled cells.`);
+    logger.info('ESG register label lines left to the labelled-cell reader', { sheet: sheetName, documentId, labelLines });
+  }
+  if (table.rows.length === 0 && labelLines === 0) return null;
   for (const field of checked?.perLitreFields ?? []) {
     for (const row of table.rows) {
       const kmPerLitre = numeric(row[field]);

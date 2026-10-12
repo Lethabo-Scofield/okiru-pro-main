@@ -638,6 +638,23 @@ describe('wave 3: the skills final contract under the key', () => {
     expect(scorePack(rowCase, rowKey).perField.map((f) => f.ai.status)).toEqual(['correct', 'correct', 'correct']);
     expect(scorePack(rowCase, rowKey, { aliases: false }).perField.map((f) => f.ai.status)).toEqual(['missing', 'missing', 'missing']);
   });
+
+  it('reads an electricity account\'s printed history lines as the site rows\' kWh (ESG)', () => {
+    const historyKey: AnswerKey = { version: 1, domain: 'esg', documents: [
+      { file: 'Invented account.pdf', path: 'parser', type: 'municipal electricity bill', typeAccepts: [], fields: [
+        field({ label: 'History, newest first (kWh)', keys: ['energy_site_rows.electricity_kwh'], value: [1200, 1100, 1300], kind: 'list', itemKind: 'number' }),
+      ] },
+    ] } as AnswerKey;
+    const historyCase: PackCase = { ai_entities: { extractions: [
+      { documentId: 'b', sourceFile: 'Invented account.pdf', values: [{ field: 'electricity_period_rows', value: [
+        { line_period_end: '2026-03-31', line_electricity_kwh: '1 200' },
+        { line_period_end: '2026-02-28', line_electricity_kwh: '1100' },
+        { line_period_end: '2026-01-31', line_electricity_kwh: '1300' },
+      ] }] },
+    ] } };
+    expect(scorePack(historyCase, historyKey).perField[0].ai.status).toBe('correct');
+    expect(scorePack(historyCase, historyKey, { aliases: false }).perField[0].ai.status).toBe('missing');
+  });
   it('a narrower type is accepted only where its umbrella type is', () => {
     const narrower = [{ names: ['Beneficial interest register'], narrows: 'Ownership Confirmation' }];
     expect(acceptedTypes(['Ownership Confirmation'], narrower).has('beneficial interest register')).toBe(true);

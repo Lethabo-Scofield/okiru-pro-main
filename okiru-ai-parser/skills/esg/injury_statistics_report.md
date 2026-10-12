@@ -117,7 +117,27 @@ fields:
     rowLevel: true
     labels: []
     description: "Whose injury or incident it was, as printed: employee, contractor, labour broker worker, third party, member of the public."
-newFields: [incident_rows, incident_date, incident_site, incident_description, incident_classification, incident_lost_time, incident_days_lost, injured_party_category]
+  - name: incident_person_injured
+    type: bool
+    rowLevel: true
+    labels: []
+    description: "True when the row says a person was hurt (its injury column says Yes), false when it says no one was; null otherwise."
+  - name: incident_fatality
+    type: bool
+    rowLevel: true
+    labels: []
+    description: "True only when the row records a death (a \"Fatality\" column: Yes); false when it says No; null otherwise."
+  - name: incident_property_damage
+    type: text
+    rowLevel: true
+    labels: []
+    description: "The row's damage-to-property entry, as printed (\"Yes\", \"No\", \"Yes (a gate)\")."
+  - name: incident_coid_claim_lodged
+    type: text
+    rowLevel: true
+    labels: []
+    description: "The row's compensation (COID / COIDA) claim entry, as printed (\"Yes\", \"No\", \"Delayed\")."
+newFields: []
 ---
 ## What it is / is not
 

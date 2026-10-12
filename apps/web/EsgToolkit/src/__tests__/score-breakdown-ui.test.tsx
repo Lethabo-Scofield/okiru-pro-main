@@ -34,7 +34,8 @@ describe("EsgScoreBreakdown", () => {
     // A company that has set its own reduction target: without one the
     // reduction indicator is excluded, not waiting for a baseline (D5).
     seed({
-      "e-data": { cells: { s1a_C14: 1_000 } },
+      // Every site's fleet diesel for the month: "established & tracked" is paid by coverage.
+      "e-data": { cells: { s1a_C14: 1_000, s1a_C15: 900, s1a_C16: 800, s1a_C17: 700, s1a_C18: 600 } },
       assumptions: { cells: { _targetBasis: "Company's own targets", B43: 0.1 } },
     });
     render(<EsgScoreBreakdown />);

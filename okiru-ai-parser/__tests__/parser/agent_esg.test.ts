@@ -254,6 +254,35 @@ describe('a field whose name carries a unit', () => {
     expect(bill.exceptions.some((e) => e.includes('electricity_kwh') && e.includes('35.75') && /mwh/i.test(e))).toBe(true);
   });
 
+  it("a cited non-zero charge replaces the first pass's zero; a zero quantity stays", () => {
+    // The first pass read the water section's consumption line (0.00) as the
+    // water charge; the cited second read found the fixed basic charge. A zero
+    // consumption is a reading and stays. Invented figures.
+    const first: DocumentExtraction = {
+      documentId: WATER, documentName: 'Water', element: 'WATER', sourceFile: 'bill.pdf',
+      values: [
+        { field: 'water_rand_excl_vat', value: '0.00', sourceFile: 'bill.pdf', sourceDocumentId: WATER },
+        { field: 'water_kl', value: '0.000', sourceFile: 'bill.pdf', sourceDocumentId: WATER },
+      ],
+      missingFields: [], unexpectedFields: [], exceptions: [],
+    };
+    const merged = mergeAgentValues([first], water, 'bill.pdf', {
+      values: [
+        { field: 'water_rand_excl_vat', value: '1 234.56', page: 1, quote: 'Fixed Basic Charge R 1 234.56' },
+        { field: 'water_kl', value: '12', page: 1, quote: 'Meter 12' },
+      ],
+      rejected: [], turns: 2, tokens: 0, toolCalls: 2, stopReason: 'submitted',
+    });
+    const bill = merged.extractions.find((e) => e.documentId === WATER)!;
+    const charge = bill.values.find((v) => v.field === 'water_rand_excl_vat')!;
+    expect(charge.value).toBe('1 234.56');
+    expect(charge.source?.method).toBe('agent');
+    expect(bill.values.filter((v) => v.field === 'water_rand_excl_vat')).toHaveLength(1);
+    expect(bill.values.find((v) => v.field === 'water_kl')?.value).toBe('0.000');
+    expect(bill.exceptions.some((e) => e.includes('water_rand_excl_vat') && e.includes('0.00') && e.includes('1 234.56'))).toBe(true);
+    expect(bill.exceptions.some((e) => e.includes('water_kl') && /first-pass value was kept/.test(e))).toBe(true);
+  });
+
   it('a kept figure is stored without its unit: the field name already says it', () => {
     const doc = agentDocumentFrom(input({ filename: 'bill.pdf', raw_text: 'Water consumption 85 m3' }));
     const kept = validateSubmission({ field: 'water_kl', value: '85 m3', page: 1, quote: 'Water consumption 85 m3' }, water, doc);
@@ -337,6 +366,29 @@ describe('ESG case extraction: skill routing and the agent pass', () => {
     expect(esgSkillSpecIds(cls('policy_document'), both)).toEqual(['policy_document']);
     expect(esgSkillSpecIds(cls('municipal_electricity_bill', 0.3), both)).toBeNull();
     expect(esgSkillSpecIds(null, both)).toBeNull();
+  });
+
+  it('reads both bills on a recovery statement whose utilities are only its columns', () => {
+    // A landlord's reconciliation prints no "kWh" and no "kL": its electricity
+    // and its water are columns of one table. Invented figures.
+    const recovery = {
+      filename: 'Depot A reconciliation.pdf',
+      markdown: [
+        'RECONCILIATION ADVICE',
+        'From 02/03/26 to 31/03/26',
+        '| Date | Days | Electricity Tenants Usage | Electricity Value | Water Tenants Usage | Water Value | Total Recovery Value |',
+        '| --- | --- | --- | --- | --- | --- | --- |',
+        '| 31/03/26 | 29 | 12345 | 45678.90 | 210 | 9876.54 | 55555.44 |',
+      ].join('\n'),
+      raw_text: '',
+    };
+    expect(esgSkillSpecIds(cls('municipal_electricity_bill'), recovery)).toEqual([ELECTRICITY, WATER]);
+    // One utility's columns are an ordinary statement; words outside a table's
+    // headings ("water usage" in a policy's prose) pin nothing.
+    const electricityOnly = { ...recovery, markdown: recovery.markdown.replace(/Water Tenants Usage \| Water Value \| /, '').replace(/210 \| 9876.54 \| /, '') };
+    expect(esgSkillSpecIds(cls('municipal_electricity_bill'), electricityOnly)).toEqual([ELECTRICITY]);
+    const prose = { filename: 'Policy.pdf', markdown: 'We monitor electricity usage and water usage at every depot.', raw_text: '' };
+    expect(esgSkillSpecIds(cls('municipal_electricity_bill'), prose)).toEqual([ELECTRICITY]);
   });
 
   it('reads both EE specs when one file prints the workforce analysis AND the EE plan forms', () => {

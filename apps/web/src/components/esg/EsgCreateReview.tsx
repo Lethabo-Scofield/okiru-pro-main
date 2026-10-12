@@ -22,9 +22,10 @@ import { EsgImportAnalysisPanel } from "@/components/esg-workbook/EsgImportAnaly
 import { analyseEsgImport } from "@/lib/esg/esgImportAnalysis";
 import { type EsgInjectionResult, type EsgParserCaseLike } from "./esgParserInjection";
 import { esgCaseUploadNames } from "./esgCaseUploads";
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { DocumentReview } from "@/components/review/DocumentReview";
 import { buildEsgDocumentReview } from "./esgDocumentReview";
+import { buildEsgVerification, EsgVerificationPanel } from "./EsgVerificationPanel";
 
 /**
  * The per-document review, folded away — for a run restored straight to this
@@ -74,6 +75,8 @@ export interface EsgCreateReviewProps {
   excel?: { fileName: string; preview: EsgImportPreview } | null;
   /** Documents route — the library id of each upload, so the review previews it. */
   documentIdFor?: (filename: string) => string | null;
+  /** Documents route — the reporting year, sites and boundary to confirm (`EsgCreateFactsPanel`). */
+  facts?: ReactNode;
   creating?: boolean;
   onBack: () => void;
   onConfirm: () => void;
@@ -103,6 +106,7 @@ export function EsgCreateReview({
   parserCase,
   excel,
   documentIdFor = () => null,
+  facts,
   creating = false,
   onBack,
   onConfirm,
@@ -111,6 +115,10 @@ export function EsgCreateReview({
   const excelSections = Object.entries(excel?.preview.sections ?? {});
   const excelCells = excelSections.reduce((sum, [, section]) => sum + cellCount(section.cells), 0);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const verification = useMemo(
+    () => (route === "documents" && injection ? buildEsgVerification(injection, parserCase) : null),
+    [route, injection, parserCase],
+  );
 
   return (
     // The form keeps its column; only the review, when opened, takes the width
@@ -159,6 +167,8 @@ export function EsgCreateReview({
         ) : null}
       </div>
 
+      {route === "documents" ? facts : null}
+
       {route === "documents" && injection ? (
         <div className="mt-4">
           {/* One line — the summary and the per-document review were the step
@@ -183,6 +193,7 @@ export function EsgCreateReview({
               {reviewOpen ? "Hide the document review" : "Review each document"}
             </button>
           ) : null}
+          <EsgVerificationPanel report={verification} />
         </div>
       ) : null}
 

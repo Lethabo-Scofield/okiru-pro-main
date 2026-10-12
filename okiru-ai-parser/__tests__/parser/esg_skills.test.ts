@@ -52,6 +52,11 @@ const ESG_SKILLS = [
   'hs_training_register',
   'environmental_data_dashboard',
   'emissions_system_export',
+  'privacy_compliance',
+  'email_correspondence',
+  'data_source_inventory',
+  'event_calendar',
+  'customer_sustainability_survey',
 ];
 
 /**
@@ -121,7 +126,15 @@ describe('ESG skills loader — the shipped skills', () => {
   it('registers the types the ESG matrix has no spec for, narrowing nothing', () => {
     const reg = registry();
     const byName = new Map(reg.newTypes.map((t) => [t.name, t]));
-    expect([...byName.keys()].sort()).toEqual(['Client environmental data dashboard', 'Emissions inventory system export', 'Group policy document']);
+    expect([...byName.keys()].sort()).toEqual([
+      'Client environmental data dashboard',
+      'Customer sustainability survey answered by the client',
+      'E-mail correspondence',
+      'ESG data source inventory',
+      'Emissions inventory system export',
+      'Employee wellbeing and community events calendar',
+      'Group policy document',
+    ]);
     for (const t of reg.newTypes) expect(t.narrows).toBeNull();
     expect(reg.skillFor('Client environmental data dashboard')?.id).toBe('environmental_data_dashboard');
     expect(reg.skillFor('Group policy document')?.id).toBe('policy_document');
@@ -491,6 +504,7 @@ const ESG_GENERIC_WORDS = new Set([
   'bills', 'blank', 'cardboard', 'closed', 'correct', 'depots', 'distribution', 'diversity', 'emission', 'estimate',
   'holding', 'human', 'input', 'legend', 'location', 'pollution', 'power', 'prepared', 'professionally', 'purposes',
   'question', 'revised', 'sewerage', 'socio', 'south', 'stale', 'stationary', 'taken', 'units', 'values', 'weight',
+  'divisional', 'protection',
 ]);
 
 describe.skipIf(!esgDocKeyPath())('ESG skills carry no client data (ESG document-level answer key)', () => {

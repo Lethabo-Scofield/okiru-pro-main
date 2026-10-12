@@ -15,13 +15,13 @@
  */
 export const READABLE_EXTENSIONS: readonly string[] = [
   ".pdf", ".docx", ".doc", ".xlsx", ".xlsm", ".xls", ".pptx", ".ppt",
-  ".csv", ".txt", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".webp",
+  ".csv", ".txt", ".eml", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".webp",
 ];
 
 const READABLE = new Set(READABLE_EXTENSIONS);
 
 /** The plain-English list the drop zone shows. */
-export const READABLE_SUMMARY = "Any document: PDF, Word, Excel, PowerPoint, scans, photos, CSV or text.";
+export const READABLE_SUMMARY = "Any document: PDF, Word, Excel, PowerPoint, scans, photos, CSV, text or a saved e-mail.";
 
 /** The base name of a picked path ("folder/sub/file.pdf" → "file.pdf"). */
 export function baseName(name: string): string {

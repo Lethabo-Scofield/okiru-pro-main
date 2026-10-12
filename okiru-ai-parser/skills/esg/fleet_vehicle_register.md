@@ -5,6 +5,7 @@ appliesTo:
 element: FLEET
 version: 1
 hard: false
+summaryTables: true
 classify:
   is: "A list of the vehicles (and trailers) a business operates: a fleet list or vehicle asset register with one row per unit, often with a summary pivot of units per depot or type, a sold-vehicles tab and a new-vehicles tab."
   isNot:

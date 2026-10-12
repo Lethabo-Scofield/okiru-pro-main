@@ -19,9 +19,11 @@ import type { TokenCost, TokenCostFile } from "../tokenCost";
 const file = (name: string, size = 10) => ({ name, size });
 
 describe("readableFiles", () => {
-  it("mirrors the parser's sixteen readable extensions", () => {
-    expect(READABLE_EXTENSIONS).toHaveLength(16);
-    for (const ext of [".ppt", ".tif", ".tiff", ".webp", ".xlsm"]) expect(READABLE_EXTENSIONS).toContain(ext);
+  it("mirrors the parser's seventeen readable extensions", () => {
+    expect(READABLE_EXTENSIONS).toHaveLength(17);
+    // A saved e-mail (a data request and its replies) is evidence too.
+    for (const ext of [".ppt", ".tif", ".tiff", ".webp", ".xlsm", ".eml"]) expect(READABLE_EXTENSIONS).toContain(ext);
+    expect(sortPickedFiles([file("Data request.eml")]).usable).toHaveLength(1);
   });
 
   it("sorts a pick into readable, temporary and unreadable — and drops OS bookkeeping silently", () => {

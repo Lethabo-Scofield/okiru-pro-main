@@ -63,17 +63,28 @@ import type { EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
 import {
   mapEsgCalculatorToWorkbook,
   type EsgCalculatorResultLike,
+  type EsgHeldFigure,
   type EsgPlacementChoice,
+  type EsgPriorYear,
 } from "@/lib/esg/esgParserToWorkbook";
 import type { EsgRejectionReason } from "@/lib/esg/esgWorkbookInjection";
-import { esgMonthlyCellRef } from "@/lib/esg/esgParserFieldBridge";
+import { esgMonthlyCellRef, esgSiteKey } from "@/lib/esg/esgParserFieldBridge";
 import { ESG_PROVENANCE_SECTION, conflictCells, provenanceForRun } from "@/lib/esg/esgProvenance";
+import { esgDocumentPeriod, esgOutOfPeriodReason, esgReportingYear } from "@/lib/esg/esgFactPeriod";
 import {
+  esgMonthsWithFigures,
   esgPlacementAxes,
   esgWorkbookAxisState,
   isEsgAxisCell,
   type EsgWorkbookAxisState,
 } from "@/lib/esg/esgCaseAxes";
+
+/** A site's identity for grouping held figures; "" for the company as a whole. */
+const esgSiteKeyOf = (site: string | undefined): string => (site ? esgSiteKey(site) : "");
+
+/** 1234567.891 → "1 234 567,89", the way the review shows figures. */
+const formatFigure = (value: number): string =>
+  new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(value);
 
 /** One field the parser read out of one document. */
 export interface EsgParserValue {
@@ -160,6 +171,11 @@ export interface EsgParserCaseLike {
   } | null;
   /** Figures a person placed in the review — see `EsgManualPlacement`. Never set by the parser. */
   manual_placements?: EsgManualPlacement[];
+  /**
+   * Documents a person accepted as evidence for this reporting year although
+   * they cover an earlier period (`esgDocumentKey`). Never set by the parser.
+   */
+  accepted_out_of_period?: string[];
   [key: string]: unknown;
 }
 
@@ -255,6 +271,12 @@ export interface EsgPlacedValue {
   value: EsgCellValue;
   sourceFile: string;
   documentId: string;
+  /**
+   * What placing this reading noted for the person: figures the register
+   * dropped past its limit, documents that disagree about a total, last
+   * year's figures kept out. Shown on the document's review.
+   */
+  note?: string;
 }
 
 /** A parser value that was NOT bound to a workbook cell, and why. */
@@ -272,6 +294,12 @@ export interface EsgUnplacedValue {
   choice?: EsgPlacementChoice;
   /** This reading is the site or period of the figure with this choice id. */
   partOf?: string;
+  /**
+   * Monthly figures this entry stands for, held back from a reading whose
+   * own outcome does not show them (a dashboard placed in part). Absent on a
+   * reading's own entry.
+   */
+  heldFigures?: number;
 }
 
 /**
@@ -342,6 +370,8 @@ export interface EsgInjectionResult {
    * only each reading's first — keeps its source in the workbook (E4).
    */
   cellSources?: Record<string, string[]>;
+  /** Last year's figures: kept out of this year, offered as the baseline. */
+  priorYear?: EsgPriorYear;
 }
 
 /**
@@ -439,6 +469,8 @@ export function applyEsgParserResult(
      * figures. Absent — a company being created — everything is.
      */
     workbook?: EsgWorkbookAxisState | null;
+    /** The reporting year and sites the person confirmed on the create form. */
+    confirmed?: { months?: string[]; depots?: string[] } | null;
   } = {},
 ): EsgInjectionResult {
   const readings = collectEsgExtractedValues(caseResult);
@@ -461,13 +493,20 @@ export function applyEsgParserResult(
 
   const placement = options.axes
     ? { axes: options.axes, cells: {} as Record<string, string | number> }
-    : esgPlacementAxes(caseResult, options.workbook);
-  const mapped = mapEsgCalculatorToWorkbook(calculator, { axes: placement.axes });
+    : esgPlacementAxes(caseResult, options.workbook, options.confirmed);
+  // Facts whose own document covers an earlier period are held, not placed.
+  const periods = holdOutOfPeriodFacts(caseResult, calculator, placement.axes);
+  const mapped = mapEsgCalculatorToWorkbook(periods.calculator, { axes: placement.axes });
 
   const placed: EsgPlacedValue[] = [];
   const unplaced: EsgUnplacedValue[] = [];
 
   for (const reading of readings) {
+    const outOfPeriod = periods.held.get(heldKey(reading.field, reading.sourceFile));
+    if (outOfPeriod) {
+      unplaced.push({ ...reading, reason: outOfPeriod, rejection: "out_of_period" });
+      continue;
+    }
     // A reading whose fate is known for its own document (a bill's figure, the
     // site and period that placed it) answers for itself; the rest share their
     // field's fate.
@@ -492,6 +531,7 @@ export function applyEsgParserResult(
         value: (cell?.value ?? null) as EsgCellValue,
         sourceFile: reading.sourceFile,
         documentId: reading.documentId,
+        ...(outcome.reason ? { note: outcome.reason } : {}),
       });
       continue;
     }
@@ -504,6 +544,59 @@ export function applyEsgParserResult(
       ...(outcome?.choice ? { choice: outcome.choice } : {}),
       ...(outcome?.partOf ? { partOf: outcome.partOf } : {}),
     });
+  }
+
+  // The monthly figures a reading held back that its own outcome does not
+  // show — a dashboard said "placed" while hundreds of its figures went
+  // nowhere. Each is now a value of its own: one with a question stands
+  // alone so it can be answered; the rest are listed per document, site and
+  // reason, with their count, total and months.
+  const elements = new Map<string, string>(readings.map((r) => [`${r.field}\u0000${r.sourceFile}`, r.element]));
+  const documentIds = new Map<string, string>(readings.map((r) => [`${r.field}\u0000${r.sourceFile}`, r.documentId]));
+  const groups = new Map<string, { figures: EsgHeldFigure[] }>();
+  let heldValues = 0;
+  for (const figure of mapped.heldFigures ?? []) {
+    const key = `${figure.field}\u0000${figure.sourceFile}`;
+    const base = {
+      field: figure.field,
+      sourceFile: figure.sourceFile,
+      documentId: documentIds.get(key) ?? "",
+      element: elements.get(key) ?? "",
+      rejection: "needs_context" as const,
+    };
+    if (figure.choice) {
+      // The same figure read twice is one question, already listed.
+      if (unplaced.some((u) => u.choice?.id === figure.choice!.id)) continue;
+      unplaced.push({ ...base, value: figure.value, reason: figure.reason, choice: figure.choice, heldFigures: 1 });
+      heldValues += 1;
+      continue;
+    }
+    // Last year's figures are one line per document and measure: which site
+    // they were for changes nothing about why they were kept out.
+    const site = figure.priorYear ? "" : esgSiteKeyOf(figure.site);
+    const groupKey = [key, figure.measure, site, figure.context ? "context" : "", figure.reason.replace(/\b\d{4}-\d{2}\b/g, "")].join("\u0000");
+    const group = groups.get(groupKey) ?? { figures: [] };
+    group.figures.push(figure);
+    groups.set(groupKey, group);
+  }
+  for (const { figures } of Array.from(groups.values())) {
+    const first = figures[0];
+    const months = figures.map((f) => f.month).filter((m): m is string => Boolean(m)).sort();
+    const total = figures.reduce((sum, f) => sum + (Number.isFinite(f.value) ? f.value : 0), 0);
+    const span = months.length ? (months[0] === months[months.length - 1] ? months[0] : `${months[0]} to ${months[months.length - 1]}`) : "";
+    const count = figures.length;
+    unplaced.push({
+      field: first.field,
+      sourceFile: first.sourceFile,
+      documentId: documentIds.get(`${first.field}\u0000${first.sourceFile}`) ?? "",
+      element: elements.get(`${first.field}\u0000${first.sourceFile}`) ?? "",
+      // Another year's figures, a measure with no monthly grid: folded, not checked.
+      rejection: first.context ? "held_context" : "needs_context",
+      value: `${first.measure}${first.site && !first.priorYear ? `, ${first.site}` : ""}: ${count} figure${count === 1 ? "" : "s"}${span ? ` (${span})` : ""}, ${formatFigure(total)}${first.unit ? ` ${first.unit}` : ""} in all`,
+      reason: first.reason,
+      heldFigures: count,
+    });
+    heldValues += 1;
   }
 
   // What a person answered in the review: each placed figure moves, with its
@@ -540,6 +633,13 @@ export function applyEsgParserResult(
   if (placedMonthly && Object.keys(placement.cells).length > 0) {
     const eData = mapped.patches["e-data"] ?? (mapped.patches["e-data"] = { cells: {} });
     eData.cells = { ...placement.cells, ...eData.cells };
+    // The months of actual data go with the year they count: without them the
+    // year's figures are never annualised (Assumptions!B111).
+    const months = esgMonthsWithFigures(eData.cells);
+    if (months > 0) {
+      const assumptions = mapped.patches.assumptions ?? (mapped.patches.assumptions = { cells: {} });
+      if (assumptions.cells.B111 === undefined) assumptions.cells.B111 = months;
+    }
   }
 
   return {
@@ -555,9 +655,93 @@ export function applyEsgParserResult(
       label: conflict.label,
       candidates: conflict.candidates,
     })),
-    valuesRead: readings.length,
+    // Held figures are values read too: each listed one is counted, so the
+    // reconciliation still holds — placed + not placed + disputed = read.
+    valuesRead: readings.length + heldValues,
     figuresPlaced: esgFigureCount(mapped.patches),
     cellSources: mapped.cellSources,
+    ...(mapped.priorYear ? { priorYear: mapped.priorYear } : {}),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Out-of-period facts
+ * ------------------------------------------------------------------ */
+
+/** A document, as the review names it: its file and the reader that read it. */
+export function esgDocumentKey(sourceFile: string, documentId: string): string {
+  return `${sourceFile}|${documentId}`;
+}
+
+function heldKey(field: string, sourceFile: string): string {
+  return `${field}|${sourceFile}`;
+}
+
+/**
+ * Take out of the calculator every fact whose own document covers an earlier
+ * period than the reporting year (`esgFactPeriod.ts`) — unless a person
+ * accepted that document (`accepted_out_of_period` on the case, by
+ * `esgDocumentKey`). A fact stays when ANY document behind it is in period, or
+ * states no period: it is held only when every reading of it is out of date.
+ *
+ * Returns the calculator to place, and each held reading (field + file) with
+ * its reason.
+ */
+export function holdOutOfPeriodFacts(
+  caseResult: EsgParserCaseLike | null,
+  calculator: EsgCalculatorResultLike,
+  axes: EsgReportingAxes,
+): { calculator: EsgCalculatorResultLike; held: Map<string, string> } {
+  const held = new Map<string, string>();
+  const year = esgReportingYear(axes);
+  if (!year) return { calculator, held };
+  const accepted = new Set(
+    Array.isArray(caseResult?.accepted_out_of_period)
+      ? (caseResult!.accepted_out_of_period as unknown[]).map((k) => String(k))
+      : [],
+  );
+
+  // Each document's own period verdict, and the fields it read.
+  const documents = (caseResult?.ai_entities?.extractions ?? []).map((extraction) => {
+    const sourceFile = String(extraction.sourceFile ?? "");
+    const documentId = String(extraction.documentId ?? "");
+    const reason = accepted.has(esgDocumentKey(sourceFile, documentId))
+      ? null
+      : esgOutOfPeriodReason(esgDocumentPeriod(extraction.values ?? []), year);
+    return { sourceFile, fields: new Set((extraction.values ?? []).map((v) => String(v?.field ?? ""))), reason };
+  });
+  if (!documents.some((d) => d.reason)) return { calculator, held };
+
+  /** The out-of-period reason when every document behind (field, files) is out of period. */
+  const verdict = (field: string, files: readonly string[] | undefined): string | null => {
+    const sources = (files ?? []).filter(Boolean);
+    if (!field || sources.length === 0) return null;
+    const behind = documents.filter((d) => sources.includes(d.sourceFile) && d.fields.has(field));
+    if (behind.length === 0 || behind.some((d) => !d.reason)) return null;
+    return behind[0].reason;
+  };
+
+  const entries = (calculator.entries ?? []).filter((entry) => {
+    const reason = verdict(entry.sourceField || entry.key, entry.sourceFiles);
+    if (!reason) return true;
+    for (const file of entry.sourceFiles ?? []) held.set(heldKey(entry.sourceField || entry.key, file), reason);
+    return false;
+  });
+  const rows = (calculator.rows ?? []).filter((row) => {
+    const reason = verdict(row.grid, row.sourceFiles);
+    if (!reason) return true;
+    for (const file of row.sourceFiles ?? []) held.set(heldKey(row.grid, file), reason);
+    return false;
+  });
+  if (held.size === 0) return { calculator, held };
+  return {
+    calculator: {
+      ...calculator,
+      entries,
+      rows,
+      payload: Object.fromEntries(entries.map((entry) => [entry.key, entry.value])),
+    },
+    held,
   };
 }
 
@@ -636,17 +820,21 @@ export const ESG_NO_CELL_REJECTIONS: ReadonlySet<string> = new Set(["no_workbook
  * question, values to check or enter by hand, and evidence no cell needs.
  * A figure's site and period travel with it, and a figure read twice is one.
  */
-export function esgUnplacedKinds(unplaced: EsgUnplacedValue[]): { toPlace: number; toCheck: number; evidence: number } {
+export function esgUnplacedKinds(unplaced: EsgUnplacedValue[]): { toPlace: number; toCheck: number; evidence: number; held: number } {
   const questions = new Set<string>();
   let toCheck = 0;
   let evidence = 0;
+  let held = 0;
   for (const u of unplaced) {
     if (u.partOf) continue;
     if (u.choice) questions.add(u.choice.id);
     else if (u.rejection && ESG_NO_CELL_REJECTIONS.has(u.rejection)) evidence += 1;
+    // Another year's month, last year's figure, a measure with no monthly
+    // grid: kept and reported, folded into one line, never a check by hand.
+    else if (u.rejection === "held_context") held += 1;
     else toCheck += 1;
   }
-  return { toPlace: questions.size, toCheck, evidence };
+  return { toPlace: questions.size, toCheck, evidence, held };
 }
 
 /** The placements a person made in the review, as the case carries them. */
@@ -697,20 +885,25 @@ export function withEsgManualPlacement(
 export function esgFigureCount(patches: EsgSectionPatches): number {
   return Object.entries(patches).reduce(
     (sum, [sectionId, section]) =>
-      sum +
-      Object.keys(section?.cells ?? {}).filter(
-        (ref) => !ref.startsWith("_") && (sectionId !== "e-data" || !isEsgAxisCell(ref)),
-      ).length,
+      sum + Object.keys(section?.cells ?? {}).filter((ref) => !ref.startsWith("_") && !isRecordedSetting(sectionId, ref)).length,
     0,
   );
 }
 
+/**
+ * The sites and months recorded with the figures, and the count of months
+ * they hold (`Assumptions!B111`): settings that travel with the figures, not
+ * values a document stated.
+ */
+function isRecordedSetting(sectionId: string, ref: string): boolean {
+  return (sectionId === "e-data" && isEsgAxisCell(ref)) || (sectionId === "assumptions" && ref === "B111");
+}
+
 /** How many cells a patch set would write. Used for honest UI counts. */
 export function esgPatchCellCount(patches: EsgSectionPatches): number {
-  // The sites and months recorded with the figures are settings, not values.
   return Object.entries(patches).reduce(
     (sum, [sectionId, section]) =>
-      sum + Object.keys(section?.cells ?? {}).filter((ref) => sectionId !== "e-data" || !isEsgAxisCell(ref)).length,
+      sum + Object.keys(section?.cells ?? {}).filter((ref) => !isRecordedSetting(sectionId, ref)).length,
     0,
   );
 }

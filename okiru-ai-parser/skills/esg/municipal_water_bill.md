@@ -20,7 +20,7 @@ fields:
     type: text
     required: true
     labels: ["Issued by", "Supplier", "Municipality"]
-    description: "Who issued the account (municipality, water board, or the landlord / utility manager re-billing a tenant). Only a name printed on THIS document; never inferred from the address or account format."
+    description: "Who issued the account (municipality, water board, or the landlord / utility manager re-billing a tenant). Only a name printed on THIS document as its issuer (letterhead, logo text); never inferred from the address or account format, and never a place in a footer or a handwritten note (that is the filing label)."
   - name: site_name
     type: text
     required: true
@@ -52,7 +52,7 @@ fields:
   - name: water_rand_excl_vat
     type: money
     labels: ["Water charges", "Water consumption charge"]
-    description: "The Rand charged for water in this period, as printed (the water section's own total when printed). Sewerage, sanitation and basic charges are left out unless the account's own water total includes them; say so in exceptions."
+    description: "The Rand the WATER section charges in this period, its fixed or basic charge included: the section's own total when printed. With no section total, the one non-zero water charge line as printed (a fixed basic charge beside a 0.00 consumption line is the charge, not the 0.00); with several non-zero lines and no total, null, the lines listed in exceptions. Sewerage and sanitation are their own sections, never included."
   - name: water_meter_number
     type: text
     labels: ["Meter No", "Meter Number", "Water meter"]
@@ -81,6 +81,31 @@ fields:
     type: bool
     labels: []
     description: "True when the document is a landlord's or utility manager's recovery statement re-billing a tenant from a sub-meter."
+  - name: statement_date
+    type: date
+    scope: document
+    labels: ["Account details as at", "Statement date", "Date of account", "Invoice date"]
+    description: "The date the account or statement was issued (its 'as at' date), as printed. Never a reading or period date."
+  - name: document_title
+    type: text
+    scope: document
+    labels: ["Tax invoice", "Statement of account", "Recovery statement"]
+    description: "The document's own title or heading, as printed (with a printed qualifier such as 'FOR RECORD PURPOSES ONLY')."
+  - name: history_total_kl
+    type: number
+    scope: document
+    labels: []
+    description: "The water volume in the Total row a consumption history table PRINTS, as printed. Never added up, and never this period's consumption."
+  - name: history_water_rand
+    type: money
+    scope: document
+    labels: []
+    description: "The water Rand in the Total row a consumption history table prints, as printed."
+  - name: filing_label
+    type: text
+    scope: document
+    labels: []
+    description: "A handwritten or typed note naming the place and month the client filed the account under ('Depot A June 2025'), as written. It is never a date, the period, the site or the issuer."
   - name: line_site
     type: text
     rowLevel: true
@@ -117,7 +142,7 @@ fields:
     rowLevel: true
     labels: []
     description: "Actual or estimated for this line, when printed."
-newFields: [water_unit, water_period_rows, line_site, line_meter_number, line_period_start, line_period_end, line_water_kl, line_water_rand, line_reading_type]
+newFields: [water_unit, water_period_rows, line_site, line_meter_number, line_period_start, line_period_end, line_water_kl, line_water_rand, line_reading_type, statement_date, document_title, history_total_kl, history_water_rand, filing_label]
 ---
 ## What it is / is not
 
@@ -159,25 +184,38 @@ certificate.
 - Sewerage and sanitation volumes are never added to water.
 - An estimated or averaged reading is still copied, with its reading type.
 - A handwritten month on the scan is the client's filing label, not the
-  period.
+  period: copy it to `filing_label`, never to a date, site or issuer field.
+- A zero consumption line is not the water charge when the section also bills
+  a fixed or basic charge: the section's charges are the water Rand.
+- A history table's Total row is copied from that row into the history
+  totals, never added up, and never taken as this period's figure.
 - Never compute a cost per kl or a total across meters.
+- A recovery statement that re-bills a tenant's electricity AND water side by
+  side, in one table, IS a water account for this read: its water columns
+  (water usage and value, each history line, and the Total row) are the water
+  figures. Never answer that it is "not a water bill" because electricity is
+  billed on it too.
 
 ## Worked example
 
 Invented, the water section of a combined municipal account:
 
 ```
-RIVERSIDE LOCAL MUNICIPALITY        Account 4100 2233 9   Erf 1187, Depot B
+RIVERSIDE LOCAL MUNICIPALITY   Account details as at 10/06/2025   Account 4100 2233 9   Erf 1187, Depot B
 WATER   Meter W7731   Prev 06/05/2025 12 418   Curr 04/06/2025 12 503   Actual   Consumption 85 kl   R 3 412.77
+        Fixed basic charge                                                                       R 1 187.35
+        WATER TOTAL                                                                              R 4 600.12
 SEWERAGE  70% of water                                                                           R 1 702.10
 ```
 
 ```json
 {"municipality_or_supplier_name": "RIVERSIDE LOCAL MUNICIPALITY", "site_name": "Erf 1187, Depot B",
  "utility_account_number": "4100 2233 9", "billing_period_start": "06/05/2025", "billing_period_end": "04/06/2025",
- "water_kl": "85", "water_unit": "kl", "water_rand_excl_vat": "R 3 412.77", "water_meter_number": "W7731",
+ "water_kl": "85", "water_unit": "kl", "water_rand_excl_vat": "R 4 600.12", "water_meter_number": "W7731",
  "water_meter_reading_previous": "12 418", "water_meter_reading_current": "12 503", "reading_type": "Actual",
  "sanitation_kl": null, "borehole_or_alternative_source_kl": null, "is_landlord_recovery": false,
+ "statement_date": "10/06/2025", "document_title": null, "history_total_kl": null, "history_water_rand": null,
+ "filing_label": null,
  "water_period_rows": [
    {"line_site": "Erf 1187, Depot B", "line_meter_number": "W7731", "line_period_start": "06/05/2025", "line_period_end": "04/06/2025", "line_water_kl": "85", "line_water_rand": "3 412.77", "line_reading_type": "Actual"}
  ],

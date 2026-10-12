@@ -52,12 +52,77 @@ fields:
     type: count
     labels: ["Total people with disabilities", "Employees with disabilities"]
     description: "The total of the people-with-disabilities table, as printed. Zero when the table prints zero."
+  - name: employer_ceo_name
+    type: text
+    scope: document
+    labels: ["CEO", "Chief Executive Officer", "Accounting officer"]
+    description: "The employer's CEO or accounting officer as printed in the employer details or the declaration, nothing added."
+  - name: employer_sars_reference
+    type: text
+    scope: document
+    labels: ["PAYE number", "SARS reference number", "SARS PAYE reference"]
+    description: "The employer's SARS PAYE reference as printed in the employer details. Never a person's ID number or a bank account."
+  - name: employer_industry
+    type: text
+    scope: document
+    labels: ["Industry", "Sector", "Industry/Sector"]
+    description: "The industry or sector the employer details print, as written."
+  - name: total_permanent_african_male
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's AM column (African men), as printed. Never the sum of the level rows."
+  - name: total_permanent_coloured_male
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's CM column (Coloured men), as printed. Never the sum of the level rows."
+  - name: total_permanent_indian_male
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's IM column (Indian men), as printed. Never the sum of the level rows."
+  - name: total_permanent_white_male
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's WM column (White men), as printed. Never the sum of the level rows."
+  - name: total_permanent_african_female
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's AF column (African women), as printed. Never the sum of the level rows."
+  - name: total_permanent_coloured_female
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's CF column (Coloured women), as printed. Never the sum of the level rows."
+  - name: total_permanent_indian_female
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's IF column (Indian women), as printed. Never the sum of the level rows."
+  - name: total_permanent_white_female
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's WF column (White women), as printed. Never the sum of the level rows."
+  - name: total_permanent_foreign_male
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's FM column (foreign national men), as printed. Never the sum of the level rows."
+  - name: total_permanent_foreign_female
+    type: count
+    scope: document
+    labels: []
+    description: "The TOTAL PERMANENT row's FF column (foreign national women), as printed. Never the sum of the level rows."
   - name: occupational_level
     type: text
     required: true
     rowLevel: true
     labels: []
-    description: "One row per occupational level, named as printed (Top management, Senior management, Professionally qualified, Skilled technical, Semi-skilled, Unskilled). The TOTAL PERMANENT, Temporary and Grand total rows are not levels: they go to the document-level fields."
+    description: "One row per occupational level, named as printed (Top management, Senior management, Professionally qualified, Skilled technical, Semi-skilled, Unskilled). The TOTAL PERMANENT, Temporary and Grand total rows are not levels: they go to the document-level fields (TOTAL PERMANENT's columns to the total_permanent_* fields)."
   - name: headcount_african_male
     type: count
     rowLevel: true
@@ -118,6 +183,7 @@ fields:
     rowLevel: true
     labels: []
     description: "The level's printed Total column."
+newFields: [employer_ceo_name, employer_sars_reference, employer_industry, total_permanent_african_male, total_permanent_coloured_male, total_permanent_indian_male, total_permanent_white_male, total_permanent_african_female, total_permanent_coloured_female, total_permanent_indian_female, total_permanent_white_female, total_permanent_foreign_male, total_permanent_foreign_female]
 ---
 ## What it is / is not
 
@@ -145,6 +211,12 @@ EEA1 employee declaration, an EE policy or a payroll report.
   order.
 - The disability table repeats the levels; its row for a level gives that
   level's `headcount_disabled`.
+- The TOTAL PERMANENT row under the levels prints a figure per column too:
+  copy each into its `total_permanent_*` field as printed. It is the form's
+  own total, which the code checks the levels against.
+- The CEO (or accounting officer), the SARS PAYE reference and the industry
+  are in the employer details on the first page; the CEO also signs the
+  declaration at the end.
 - The submission reference and date, when present, are on an acknowledgement
   page or footer printed by EE Online.
 
@@ -190,6 +262,10 @@ People with disabilities: Semi-skilled 1 (total 1)
 {"entity_name": "ACME DISTRIBUTION", "ee_reporting_period_start": null, "ee_reporting_period_end": "30/09/2025",
  "ee_submission_date": null, "ee_submission_reference": null,
  "headcount_total_all_levels": 115, "non_permanent_headcount": 3, "headcount_disabled_total": 1,
+ "employer_ceo_name": null, "employer_sars_reference": null, "employer_industry": null,
+ "total_permanent_african_male": 43, "total_permanent_coloured_male": 13, "total_permanent_indian_male": 2, "total_permanent_white_male": 9,
+ "total_permanent_african_female": 30, "total_permanent_coloured_female": 9, "total_permanent_indian_female": 2, "total_permanent_white_female": 4,
+ "total_permanent_foreign_male": 2, "total_permanent_foreign_female": 1,
  "ee_level_rows": [
    {"occupational_level": "Senior management", "headcount_african_male": 2, "headcount_coloured_male": 1, "headcount_indian_male": 0, "headcount_white_male": 4, "headcount_african_female": 2, "headcount_coloured_female": 0, "headcount_indian_female": 1, "headcount_white_female": 1, "headcount_foreign_male": 0, "headcount_foreign_female": 0, "headcount_disabled": 0, "headcount_level_total": 11},
    {"occupational_level": "Semi-skilled", "headcount_african_male": 41, "headcount_coloured_male": 12, "headcount_indian_male": 2, "headcount_white_male": 5, "headcount_african_female": 28, "headcount_coloured_female": 9, "headcount_indian_female": 1, "headcount_white_female": 3, "headcount_foreign_male": 2, "headcount_foreign_female": 1, "headcount_disabled": 1, "headcount_level_total": 104}

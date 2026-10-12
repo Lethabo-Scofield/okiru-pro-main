@@ -37,7 +37,7 @@ import {
 } from './aiExtraction.js';
 import { getExtractionModel, duplicateWorkbookException, type ResolveProgress } from './caseExtraction.js';
 import { ROW_HIDDEN_KEY, resolveCaseEntities, type CaseEntities } from './entityResolution.js';
-import { billAsMonthlyRows } from './esgBillFacts.js';
+import { billAsMonthlyRows, ESG_MONTHLY_ROWS_FIELD } from './esgBillFacts.js';
 import {
   CONFIDENCE_FLOOR,
   classifyDocument,
@@ -46,12 +46,15 @@ import {
   type DocumentClassificationResult,
 } from './documentClassification.js';
 import { focusForInput } from './esgFocus.js';
+import { extractionDomain } from './extractionDomain.js';
 import { concurrentMap, documentConcurrency } from './concurrentMap.js';
 import { combinedFormSpecIds, elementFromHint, pinnedSpecIds } from './specRetrieval.js';
 import {
   agentCasePass,
   agentPassForDocument,
   unitAgainstFieldName,
+  unitFamilyOfField,
+  unitFamilyOfUnit,
   unitsNamedByField,
   type AgentCaseContext,
   type AgentCasePass,
@@ -60,9 +63,24 @@ import {
 import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAOther, proposeOpenMappings } from './openRead.js';
 import { reviewCase } from './caseReview.js';
-import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
-import { extractEsgMonthlyTables } from './esgMonthlyTables.js';
-import { extractEsgPeriodSummary, fillsOfVehicle, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
+import { extractEsgSheetTable, routeWasteRowsByTitle } from './esgSheetTableExtraction.js';
+import { surveyGridExtraction } from './esgSurveyGrid.js';
+import { isDerivedValue, registerCountsFor } from './esgRegisterDerivations.js';
+import { extractEsgMonthlyTables, monthlyReadSpans, monthlyReadStandsIn } from './esgMonthlyTables.js';
+import { extractEsgPeriodSummary, fillsOfVehicle, periodReadSpan, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
+import {
+  extractEsgSheetFacts,
+  mergeCellReads,
+  PRINTED_DOCUMENT_FIELDS,
+  PRINTED_NOTES_FIELD,
+  PRINTED_TITLE_FIELD,
+  printedDateIso,
+  registerBodySpan,
+  sheetFactsEnabled,
+  sparseMatrix,
+  type MainRegion,
+  type ReadSpan,
+} from './esgSheetFacts.js';
 import {
   ESG_REGISTER_FIELDS,
   esgFieldElementIndex,
@@ -146,6 +164,382 @@ export function namedUnitFiguresAsExceptions(extraction: DocumentExtraction): Do
   return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
 }
 
+/** Notes the code writes itself; only the reader's own notes speak for the reader. */
+const CODE_NOTE = /^(?:Values not found in the source document|Second read|Analyst (?:review|note)|Read as an Other document|Every quantity this sheet prints)|failed its checksum/i;
+
+/** A note about one part of a chunked document: another part may print the value. */
+const PART_NOTE = /\b(?:this|that|other|another) part\b|\bpart \d+ of \d+\b|\bchunk\b/i;
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The reader's own note says the field is not printed: a clause that OPENS
+ * with the field ("<field> not present on the pages provided"), or "no
+ * <field>". A clause that only mentions the field ("VAT treatment of <field>
+ * is not stated") is about something else and never refuses it.
+ */
+function noteSaysAbsent(note: string, field: string): boolean {
+  const name = escapeRegExp(field);
+  const absent = new RegExp(
+    `^[\\s"'“‘(-]*${name}\\b["'”’)]?\\s*(?:\\(|:|-|–|—|is|was|are|were)?\\s*`
+      + '(?:not\\s+(?:present|printed|stated|shown|given|provided|available|visible|legible|on\\s+(?:this|the)\\s+(?:page|pages|document))|absent|missing|(?:left\\s+|returned\\s+as\\s+|set\\s+to\\s+)null)\\b'
+      + `|\\bno\\s+${name}\\b`,
+    'i',
+  );
+  return absent.test(note);
+}
+
+/** Months, for a filing label ("Depot A July 2025") read as an issuer. */
+const MONTH_AND_YEAR = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|maart|mei|junie|julie|oktober|desember)\b[\s'’.-]*(?:19|20)?\d{2}\b/i;
+
+/** Lower-case words only, single-spaced: how a name compares with a label. */
+function normalisedWords(text: string): string {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+/** Fields that name who issued a document: never a filing label. */
+const ISSUER_FIELD = /(?:^|_)(?:supplier|issuer|issued_by|contractor|municipality|certification_body|provider|landlord)(?:_name)?$/;
+
+/**
+ * The first pass fills a field its own notes say the document does not print
+ * ("municipality_or_supplier_name not present on provided pages", yet a name
+ * was returned), fills a unit field with a word that is no unit ("UNITS" from a
+ * column heading, as a mass unit), or takes a filing label ("Depot A July
+ * 2025", handwritten on a scan) as the issuer. Each such value is the read
+ * contradicting itself or the vocabulary: it goes to the reviewer as an
+ * exception, never as a value. The agent's cited fills are not judged here:
+ * their citations were checked against the page. Notes about one part of a
+ * long document, and notes the code wrote, are not the read's own word.
+ */
+export function unprintedValuesAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const notes = extraction.exceptions
+    .map((note) => String(note ?? '').trim())
+    .filter((note) => note && !CODE_NOTE.test(note))
+    .flatMap((note) => note.split(/;\s+|\.\s+/))
+    .filter((clause) => !PART_NOTE.test(clause));
+  const refused: string[] = [];
+  // The first answer's notes speak for the first answer: a field the sweep
+  // filled afterwards, or any field of a document read in parts (each part's
+  // notes speak for that part), is not judged by them.
+  const swept = new Set(extraction.sweptFields ?? []);
+  const notesApply = (extraction.readInParts ?? 1) <= 1;
+  // The read's own filing label ("Depot A July 2025", handwritten on a scan):
+  // an issuer that is only a part of it is the label's place, not an issuer.
+  const label = extraction.values.find((value) => value.field === 'filing_label' && typeof value.value === 'string');
+  const labelWords = label ? normalisedWords(String(label.value)) : '';
+  const values = extraction.values.filter((value) => {
+    if (value.source?.method === 'agent' || Array.isArray(value.value) || value.value === null || typeof value.value === 'object') return true;
+    const shown = String(value.value).trim();
+    if (notesApply && !swept.has(value.field) && notes.some((note) => noteSaysAbsent(note, value.field))) {
+      refused.push(`${value.field}: "${shown}" was not kept: the read's own note says the document does not print it.`);
+      return false;
+    }
+    if (/_unit$/.test(value.field)) {
+      const family = unitFamilyOfUnit(value.value);
+      const expected = unitFamilyOfField(value.field.replace(/_unit$/, ''));
+      if (!family || (expected && family !== expected)) {
+        refused.push(`${value.field}: "${shown}" was not kept: it is not a unit${expected ? ` of ${expected}` : ''} (kg, t, L, kL, kWh...).`);
+        return false;
+      }
+    }
+    if (ISSUER_FIELD.test(value.field) && typeof value.value === 'string' && MONTH_AND_YEAR.test(value.value)) {
+      refused.push(`${value.field}: "${shown}" was not kept: a place with a month and year is a filing label, not who issued the document.`);
+      return false;
+    }
+    if (ISSUER_FIELD.test(value.field) && labelWords && typeof value.value === 'string') {
+      const words = normalisedWords(value.value);
+      if (words && ` ${labelWords} `.includes(` ${words} `)) {
+        refused.push(`${value.field}: "${shown}" was not kept: it is the place in the document's filing label ("${String(label!.value).trim()}"), not who issued the document.`);
+        return false;
+      }
+    }
+    return true;
+  });
+  if (refused.length === 0) return extraction;
+  return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
+}
+
+/** A figure as a number ("2836.1961", "1 204", 7); null when it is no plain figure. */
+function plainFigure(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const text = value.trim().replace(/[\s,](?=\d{3}\b)/g, '');
+  return /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null;
+}
+
+/**
+ * A count is a whole number. A "count" holding a fraction is some other
+ * figure read into the count's place: a debrief's pivot prints "Max of" and
+ * "Average of" columns, and one of them (2 836.1961) was filed as the total of
+ * fatigue events, an event the report does not record at all. Every field the
+ * skill types as a count, at document level and in a row, is held to it: a
+ * fraction goes to the reviewer as an exception, never as a count. Agent fills
+ * are held to it too: a citation shows where a figure is, not that it counts.
+ */
+export function fractionalCountsAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const counts = new Set((skill?.fields ?? []).filter((field) => field.type === 'count').map((field) => field.name));
+  if (counts.size === 0) return extraction;
+  const isFraction = (value: unknown): boolean => {
+    const n = plainFigure(value);
+    return n !== null && !Number.isInteger(n);
+  };
+  const refused: string[] = [];
+  const values = extraction.values.flatMap((value) => {
+    if (Array.isArray(value.value)) {
+      let changed = false;
+      const rows = value.value.map((row) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+        const record = row as Record<string, unknown>;
+        const bad = Object.keys(record).filter((column) => counts.has(column) && isFraction(record[column]));
+        if (bad.length === 0) return row;
+        changed = true;
+        const next = { ...record };
+        for (const column of bad) {
+          refused.push(`${column}: "${String(record[column])}" on a row was not kept: a count is a whole number.`);
+          next[column] = null;
+        }
+        return next;
+      });
+      return changed ? [{ ...value, value: rows }] : [value];
+    }
+    if (counts.has(value.field) && isFraction(value.value)) {
+      refused.push(`${value.field}: "${String(value.value)}" was not kept: a count is a whole number, so this is some other figure.`);
+      return [];
+    }
+    return [value];
+  });
+  if (refused.length === 0) return extraction;
+  return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
+}
+
+/**
+ * The extraction as the case resolution sees it: without the facts its skill
+ * marks `scope: document` (a statement date, a document number, a revision, an
+ * author, a filing label, a printed twelve-month total). Those describe their
+ * own document. Resolved across the case, every bill's statement date would
+ * be a rival answer to every other's, and the semantic mapping would be
+ * offered a twelve-month total as if it were the year's figure. They stay on
+ * the extraction the user reads per document.
+ */
+export function withoutDocumentFacts(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const documentOnly = new Set((skill?.fields ?? []).filter((field) => field.scope === 'document' && !field.rowLevel).map((field) => field.name));
+  const own = (value: DocumentExtraction['values'][number]) => documentOnly.has(value.field) || isDocumentOwnValue(value);
+  if (!extraction.values.some(own)) return extraction;
+  return { ...extraction, values: extraction.values.filter((value) => !own(value)) };
+}
+
+/**
+ * Values the CODE states about one document, never a rival answer to another's:
+ *  - a count it derived from the document's own rows (esgRegisterDerivations.ts);
+ *  - the printed summary cells, title lines and notes it kept as printed
+ *    (esgSheetFacts.ts);
+ *  - a document's own table of lines that is no register the workbook keeps
+ *    (a bill's history lines, a policy's rules, a form's items): resolved
+ *    across the case, every policy's rules were a rival answer to every other's.
+ */
+export function isDocumentOwnValue(value: DocumentExtraction['values'][number]): boolean {
+  if (isDerivedValue(value)) return true;
+  if (PRINTED_DOCUMENT_FIELDS.has(value.field)) return true;
+  return Array.isArray(value.value) && /_rows$/.test(value.field)
+    && !ESG_REGISTER_FIELDS.has(value.field) && value.field !== ESG_MONTHLY_ROWS_FIELD;
+}
+
+/**
+ * A field the skill asks for as several items in one string ("2026-08-03;
+ * 2026-08-11", "12.50-; 3.10-") is a LIST, and is kept as one: each item a
+ * value of its own. Read as one string, a thread's three message dates were one
+ * date (the first) and two credits were no amount at all. Only fields the skill
+ * marks `list: true`; an item is never re-worded, only split from its
+ * neighbours. A value already returned as an array stays as it is.
+ */
+export function listFieldsAsArrays(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const lists = new Set((skill?.fields ?? []).filter((field) => field.list && !field.rowLevel).map((field) => field.name));
+  if (lists.size === 0) return extraction;
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (!lists.has(value.field) || typeof value.value !== 'string') return value;
+    const items = value.value.split(/\s*[;\n]\s*/).map((item) => item.trim()).filter(Boolean);
+    if (items.length === 0) return value;
+    changed = true;
+    return { ...value, value: items };
+  });
+  return changed ? { ...extraction, values } : extraction;
+}
+
+/**
+ * A value that opens with ANOTHER field's printed caption is that caption run
+ * into the value: a cover page's header table, flattened by the text layer,
+ * reads "Policy Title Revision 2" where the revision cell says "Revision 2".
+ * The caption (one of the skill's own wordings for another field) is taken
+ * off, and the reviewer told. A value that is only the caption is left alone,
+ * and so is one opening with its own field's wording.
+ */
+export function runInCaptionsRemoved(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const fields = (skill?.fields ?? []).filter((field) => !field.rowLevel);
+  if (fields.length === 0) return extraction;
+  const notes: string[] = [];
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (typeof value.value !== 'string' || value.source?.method === 'agent') return value;
+    const own = fields.find((field) => field.name === value.field);
+    if (!own) return value;
+    const text = value.value.trim();
+    const lower = text.toLowerCase();
+    if (own.labels.some((wording) => lower.startsWith(wording.toLowerCase()))) return value;
+    for (const other of fields) {
+      if (other.name === own.name) continue;
+      for (const wording of other.labels) {
+        const caption = wording.toLowerCase();
+        if (caption.length < 5 || !lower.startsWith(caption)) continue;
+        const rest = text.slice(caption.length).replace(/^[\s:–—-]+/, '').trim();
+        if (!rest || !/^[\s:–—-]/.test(text.slice(caption.length))) continue;
+        changed = true;
+        notes.push(`${value.field}: "${text}" opens with "${wording}", another field's caption; it was read as "${rest}".`);
+        return { ...value, value: rest };
+      }
+    }
+    return value;
+  });
+  return changed ? { ...extraction, values, exceptions: [...extraction.exceptions, ...notes] } : extraction;
+}
+
+/** A limit word a rule's figure is printed with ("Maximum of 0.25%", "at least 2%"). */
+const RULE_LIMIT = /^\s*(maximum|minimum|max\.?|min\.?|at\s+least|at\s+most|up\s+to|not\s+(?:more|less)\s+than|no\s+(?:more|less)\s+than)\s*(?:of\s+)?(?=[R\d(.-])/i;
+
+/**
+ * A policy rule's figure ALONE ("0.25%"), its limit word with its basis
+ * ("maximum of NPAT"): the skill asks for exactly that, and a figure read with
+ * its words ("Maximum of 0.25%") is no figure anything can compare. Only the
+ * words before the figure move; the figure is never changed.
+ */
+export function ruleFiguresAlone(extraction: DocumentExtraction): DocumentExtraction {
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (!Array.isArray(value.value)) return value;
+    let rowsChanged = false;
+    const rows = value.value.map((row) => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+      const record = row as Record<string, unknown>;
+      const figure = record.rule_figure;
+      if (typeof figure !== 'string') return row;
+      const m = RULE_LIMIT.exec(figure);
+      if (!m) return row;
+      rowsChanged = true;
+      const limit = m[1].replace(/\.$/, '').replace(/\s+/g, ' ').toLowerCase();
+      const basis = typeof record.rule_basis === 'string' ? record.rule_basis.trim() : '';
+      return { ...record, rule_figure: figure.slice(m[0].length).trim(), rule_basis: basis ? `${limit} ${basis}` : limit };
+    });
+    if (!rowsChanged) return value;
+    changed = true;
+    return { ...value, value: rows };
+  });
+  return changed ? { ...extraction, values } : extraction;
+}
+
+/**
+ * A date field's printed date in one spelling, yyyy-mm-dd: "23-Sep-2026",
+ * "06-Aug-2026 09:41:12 PM", "4 Sep 2026", "16/09/2026" (day first, as South
+ * African documents print it). The skills tell the model to copy dates as
+ * printed because the CODE converts them; this is that conversion, for the
+ * fields the skill types as dates, at document level and in rows. A month
+ * ("Mar 2026"), a range, a year or anything unreadable stays as printed.
+ */
+export function printedDatesAsIso(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const dates = new Set((skill?.fields ?? []).filter((field) => field.type === 'date').map((field) => field.name));
+  if (dates.size === 0) return extraction;
+  const iso = (value: unknown): unknown => (typeof value === 'string' ? printedDateIso(value) ?? value : value);
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (Array.isArray(value.value)) {
+      let rowsChanged = false;
+      const rows = value.value.map((row) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+        const record = row as Record<string, unknown>;
+        const columns = Object.keys(record).filter((column) => dates.has(column) && iso(record[column]) !== record[column]);
+        if (columns.length === 0) return row;
+        rowsChanged = true;
+        return { ...record, ...Object.fromEntries(columns.map((column) => [column, iso(record[column])])) };
+      });
+      if (!rowsChanged) return value;
+      changed = true;
+      return { ...value, value: rows };
+    }
+    if (!dates.has(value.field)) return value;
+    const next = iso(value.value);
+    if (next === value.value) return value;
+    changed = true;
+    return { ...value, value: next };
+  });
+  return changed ? { ...extraction, values } : extraction;
+}
+
+/** A field that holds money: a rand amount, a charge, a cost, a credit. */
+const MONEY_FIELD = /(?:^|_)(?:rand|zar|amount|cost|costs|charge|charges|credit|credits|spend|vat)(?:_|$)/;
+
+/** "20.25-", "R 1 250.00 -": a figure whose minus is printed AFTER it. */
+const TRAILING_MINUS = /^\s*((?:r|zar)?\s*\d[\d\s,]*(?:[.,]\d+)?)\s*-\s*$/i;
+
+/** A rate is per something, and a rate is never a credit. */
+const isRate = (field: string): boolean => /(?:^|_)per(?:_|$)/.test(field);
+
+function creditAsNegative(field: string, value: unknown): unknown {
+  if (typeof value !== 'string' || !MONEY_FIELD.test(field) || isRate(field)) return value;
+  const m = TRAILING_MINUS.exec(value);
+  return m ? `-${m[1].trim()}` : value;
+}
+
+/**
+ * A credit printed in the accounting style — the minus AFTER the figure
+ * ("20.25-", the way a municipal account prints a generation-offset credit) —
+ * is a negative amount. Stored as printed, nothing downstream could read it:
+ * every number parser here, and the web's, reads "20.25-" as no number at all,
+ * so the credit silently vanished from the bill's charges. Normalised to the
+ * leading-minus form ("-20.25") on money fields only, in scalars and in the
+ * columns of a document's rows. The figure itself is never changed; a
+ * quantity (kWh, litres) keeps whatever the document printed, because a
+ * negative quantity is a meaning (an export), not a typography.
+ */
+export function trailingMinusCreditsAsNegative(extraction: DocumentExtraction): DocumentExtraction {
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (Array.isArray(value.value)) {
+      let rowsChanged = false;
+      const rows = value.value.map((row) => {
+        // A list of amounts (a bill's credit lines): each item is the field's.
+        if (typeof row === 'string') {
+          const item = creditAsNegative(value.field, row);
+          if (item !== row) rowsChanged = true;
+          return item;
+        }
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+        let rowChanged = false;
+        const next: Record<string, unknown> = {};
+        for (const [column, cell] of Object.entries(row as Record<string, unknown>)) {
+          const normal = creditAsNegative(column, cell);
+          if (normal !== cell) rowChanged = true;
+          next[column] = normal;
+        }
+        if (!rowChanged) return row;
+        rowsChanged = true;
+        return next;
+      });
+      if (!rowsChanged) return value;
+      changed = true;
+      return { ...value, value: rows };
+    }
+    const normal = creditAsNegative(value.field, value.value);
+    if (normal === value.value) return value;
+    changed = true;
+    return { ...value, value: normal };
+  });
+  return changed ? { ...extraction, values } : extraction;
+}
+
 /** How many zero quantities, and nothing else, make a sheet an unfilled template. */
 const TEMPLATE_ZERO_QUANTITIES = 3;
 
@@ -211,6 +605,37 @@ export function esgSkillSpecIds(
   return [spec.id];
 }
 
+/** The generic policy reader (skills/esg/policy_document.md): a policy's header and control facts. */
+export const POLICY_HEADER_SPEC_ID = 'policy_document';
+
+/** A policy, a code or a charter, by what Pass A called it, its file name, or its own header table. */
+const POLICY_WORDS = /\b(?:polic(?:y|ies)|code of (?:conduct|ethics|business)|charter)\b/i;
+
+/**
+ * Is this standalone document a policy, a code or a charter that NONE of its
+ * reads read as one? A group's employment-equity policy is typed by Pass A
+ * as employment-equity evidence (an EE plan), whose reader rightly finds no
+ * plan in it; a policy read by the policy, ethics, supplier-code or
+ * environmental-policy readers is already read as a policy. When true, the
+ * document is also read with the generic policy reader, so its title,
+ * revision, dates, author, approver, scope and owners are never lost to the
+ * element it was filed under.
+ */
+export function needsPolicyHeaderRead(
+  input: { filename: string; markdown?: string; raw_text?: string },
+  classification: DocumentClassificationResult | null,
+  results: DocumentExtraction[],
+): boolean {
+  const opening = (input.markdown?.trim() || input.raw_text || '').slice(0, 2000);
+  const named = POLICY_WORDS.test(classification?.documentType ?? '')
+    || POLICY_WORDS.test(input.filename)
+    || /\bpolicy\s+title\b/i.test(opening);
+  if (!named) return false;
+  const definition = extractionDomain('esg');
+  return !results.some((result) => result.values.some((value) => value.field !== 'exceptions')
+    && (definition.skillFor(result.documentId)?.fields ?? []).some((field) => field.name === 'policy_title'));
+}
+
 /**
  * What the agent gate knows about an ESG document's type. ESG has no
  * rule-based reader: the type is the skill Pass A named (only when it was
@@ -229,10 +654,137 @@ export function esgAgentTyping(
   };
 }
 
+/** Where a split sheet's main table sits, and the cells outside it a large sheet carries. */
+function sheetLayoutOf(tables: unknown[] | undefined): {
+  region?: MainRegion;
+  outside?: Array<{ r: number; c: number; value: unknown }>;
+} {
+  const table = tables?.[0] as { region?: MainRegion; outside?: Array<{ r: number; c: number; value: unknown }> } | undefined;
+  return {
+    region: table?.region && Number.isInteger(table.region.headerRow) ? table.region : undefined,
+    outside: Array.isArray(table?.outside) ? table.outside : undefined,
+  };
+}
+
+/** The words a sheet prints above its main table (its title lines), or null. */
+export function sheetTitleAbove(matrix: unknown[][] | undefined, region: MainRegion | undefined): string | null {
+  if (!matrix || !region) return null;
+  const words = matrix.slice(0, region.headerRow)
+    .flatMap((row) => (row ?? []).filter((cell) => typeof cell === 'string' && cell.trim() !== ''))
+    .map((cell) => String(cell).replace(/\s+/g, ' ').trim());
+  return words.length > 0 ? words.join(' / ').slice(0, 300) : null;
+}
+
+/** A main table longer than a summary block: a register, whoever reads it. */
+function mainTableIsRegister(matrix: unknown[][], region: MainRegion): boolean {
+  const span = registerBodySpan(matrix, region);
+  return span.bottom - span.top > 25;
+}
+
 /** The raw cell layout a split workbook sheet carries, when it carries one. */
 function sheetMatrixOf(tables: unknown[] | undefined): unknown[][] | undefined {
   const matrix = (tables?.[0] as { matrix?: unknown } | undefined)?.matrix;
   return Array.isArray(matrix) && matrix.every(Array.isArray) ? (matrix as unknown[][]) : undefined;
+}
+
+/** At most this many records, a register is short enough that a model read of its page drops none. */
+export const SHORT_REGISTER_ROWS = 40;
+
+/**
+ * Is this code-read register the WHOLE upload and short? A one-sheet workbook
+ * (not a sheet split out of a larger one) whose register holds at most
+ * SHORT_REGISTER_ROWS records. Its title lines ("Site X - Reporting period 1
+ * July to 30 June") are read by the first pass as well; a long register's
+ * flat read could only return a truncated copy, so it never gets one.
+ */
+export function wholeShortRegister(input: RawExtractionInput, register: DocumentExtraction | null): boolean {
+  if (!register || input.metadata?.single_sheet !== true) return false;
+  const rows = register.values.find((value) => Array.isArray(value.value))?.value as unknown[] | undefined;
+  return Array.isArray(rows) && rows.length > 0 && rows.length <= SHORT_REGISTER_ROWS;
+}
+
+/** A first-pass read without the rows the code already read from the same register. */
+export function withoutRegisterRows(read: DocumentExtraction, register: DocumentExtraction): DocumentExtraction {
+  const codeRows = new Set(register.values.filter((value) => Array.isArray(value.value)).map((value) => value.field));
+  if (!read.values.some((value) => codeRows.has(value.field))) return read;
+  return { ...read, values: read.values.filter((value) => !codeRows.has(value.field)) };
+}
+
+/** The skill a saved e-mail is read with (skills/esg/email_correspondence.md). */
+export const EMAIL_SPEC_ID = 'email_correspondence';
+
+/** A saved e-mail (emailMessage.ts sets `metadata.email` on the message it reads). */
+export function isEmailInput(input: RawExtractionInput): boolean {
+  const email = input.metadata?.email;
+  return Boolean(email) && typeof email === 'object';
+}
+
+/** The workbook a split sheet came from; null for a standalone document (a one-sheet workbook included). */
+export function workbookOf(input: RawExtractionInput): string | null {
+  const parent = input.metadata?.parent_file;
+  const sheet = input.metadata?.sheet_name;
+  return typeof parent === 'string' && typeof sheet === 'string' && input.metadata?.single_sheet !== true ? parent : null;
+}
+
+/** What one Pass A question about a whole workbook shows of it (classifyDocument reads 8 000 characters). */
+const WORKBOOK_OVERVIEW_CHARS = 7600;
+
+/**
+ * A workbook as ONE document for Pass A: its visible sheets, each by its name
+ * and the top of its content, in workbook order. Hidden sheets are left out:
+ * they are template copies and scratch work, never what the workbook is.
+ */
+export function workbookOverview(sheets: RawExtractionInput[]): string {
+  const visible = sheets.filter((sheet) => sheet.metadata?.sheet_hidden !== true);
+  const shown = visible.length > 0 ? visible : sheets;
+  const each = Math.max(300, Math.floor(WORKBOOK_OVERVIEW_CHARS / Math.max(1, shown.length)));
+  return shown
+    .map((sheet) => {
+      const name = String(sheet.metadata?.sheet_name ?? '');
+      const text = String(sheet.markdown?.trim() || sheet.raw_text || '').replace(/\n{3,}/g, '\n\n');
+      // The split's markdown already opens with the sheet's name.
+      const body = text.startsWith(`## ${name}`) ? text : `## ${name}\n${text}`;
+      return body.slice(0, each);
+    })
+    .join('\n\n')
+    .slice(0, WORKBOOK_OVERVIEW_CHARS);
+}
+
+/**
+ * Pass A for every workbook split into sheets, asked ONCE per workbook.
+ *
+ * A sheet of a workbook was never classified: Pass A runs on standalone
+ * documents only, and a sheet's own name ("Sheet1") rarely says what the
+ * workbook is. A greenhouse-gas system's export, a contractor's waste report or
+ * an events calendar arrives as a workbook of plain tabs, so its header block
+ * and summary tables were read under whatever keyword retrieval ranked first:
+ * never under the type's own skill. The workbook IS the document; Pass A now
+ * names its type the way it names a PDF's, and each sheet uses it:
+ *  - its labelled cells are mapped to that type's fields (always offered);
+ *  - a sheet no code reader read is read with that type's spec, as a
+ *    classified standalone document is (esgSkillSpecIds).
+ * A workbook Pass A cannot type (not confident, OTHER) is read exactly as before.
+ */
+export async function classifyWorkbooks(
+  model: ExtractionModel,
+  inputs: RawExtractionInput[],
+): Promise<Map<string, string[]>> {
+  const byWorkbook = new Map<string, RawExtractionInput[]>();
+  for (const input of inputs) {
+    const workbook = workbookOf(input);
+    if (workbook) byWorkbook.set(workbook, [...(byWorkbook.get(workbook) ?? []), input]);
+  }
+  const types = new Map<string, string[]>();
+  const settled = await concurrentMap([...byWorkbook.entries()], documentConcurrency(), async ([workbook, sheets]) => {
+    const overview = { filename: workbook, markdown: workbookOverview(sheets) };
+    const classification = await classifyDocument(model, overview, { domain: 'esg' });
+    return { workbook, specIds: esgSkillSpecIds(classification, overview) };
+  });
+  for (const result of settled) {
+    if (result.status === 'fulfilled' && result.value?.specIds) types.set(result.value.workbook, result.value.specIds);
+  }
+  if (types.size > 0) logger.info('Workbooks typed as one document', { workbooks: Object.fromEntries(types) });
+  return types;
 }
 
 export async function extractEsgCaseEntities(
@@ -254,6 +806,8 @@ export async function extractEsgCaseEntities(
   let done = 0;
   const total = inputs.length;
   const agentPass: AgentCasePass | null = agentCasePass(model, options.agent ? { ...options.agent, domain: 'esg' } : undefined);
+  // Each workbook split into sheets is typed once, as one document.
+  const workbookTypes = await classifyWorkbooks(model, inputs);
 
   // Documents are read in PARALLEL, bounded — the same shared helper, the same
   // input-order guarantee, because ESG conflicts also resolve first-document-wins
@@ -261,6 +815,10 @@ export async function extractEsgCaseEntities(
   // runs on identical evidence.
   const settled = await concurrentMap(inputs, documentConcurrency(), async (input) => {
     const sheetName = typeof input.metadata?.sheet_name === 'string' ? input.metadata.sheet_name : undefined;
+    // A one-sheet workbook is the whole upload, not a sheet split out of one:
+    // a document in its own right for Pass A and the open read, while its rows
+    // and grid still go to the code readers below.
+    const standalone = !sheetName || input.metadata?.single_sheet === true;
 
     // Pass A — model classification against the ESG menu. Paid only for
     // ANONYMOUS documents, exactly as on the B-BBEE side: a named sheet already
@@ -269,7 +827,12 @@ export async function extractEsgCaseEntities(
     // The ESG menu tells the model to report LOW confidence on a combined
     // municipal account, which drops the override — so a water-and-electricity
     // statement is never narrowed to one element here.
-    const classification = !sheetName
+    // A saved e-mail is an e-mail by its format: read with the e-mail skill,
+    // never typed by its content. A thread that discusses an ISO audit and
+    // attaches its summary is correspondence about the audit, not the audit's
+    // certificate (its attachment is a document of its own).
+    const email = isEmailInput(input);
+    const classification = standalone && !email
       ? await classifyDocument(model, {
           filename: input.filename,
           markdown: input.markdown,
@@ -282,7 +845,10 @@ export async function extractEsgCaseEntities(
     const elementOverride = routingElement(classification) ?? filedUnder ?? undefined;
     // Pass A named the document's type from the ESG skills menu: read it with
     // that type's spec, not with whatever keyword retrieval ranks first.
-    const skillSpecIds = esgSkillSpecIds(classification, input);
+    const skillSpecIds = email ? [EMAIL_SPEC_ID] : esgSkillSpecIds(classification, input);
+    // A sheet of a workbook Pass A typed as one document (classifyWorkbooks).
+    const workbook = workbookOf(input);
+    const workbookSpecIds = workbook ? workbookTypes.get(workbook) ?? null : null;
     // Pass A says the document is NONE of the listed ESG types: it is read for
     // what it is (the open read below), never under the spec retrieval ranks
     // first. Only with the open read on; with it off, nothing changes. The
@@ -296,12 +862,18 @@ export async function extractEsgCaseEntities(
     // forty-five, and those single answers were what turned a dashboard into a
     // wall of false "your documents disagree" conflicts.
     const matrix = sheetMatrixOf(input.tables);
-    const monthly = await extractEsgMonthlyTables(model, {
+    const monthlyTables = await extractEsgMonthlyTables(model, {
       filename: input.filename,
       sheetName,
       matrix,
       hidden: input.metadata?.sheet_hidden === true,
     });
+    // Only a table of the measures the workbook keeps reads the sheet (or one
+    // whose measure lines were held because it states no unit for them). One
+    // whose lines are all money, tonnage or dates is reported as printed, and
+    // the sheet's other readers still read it exactly as they did before.
+    const monthly = monthlyReadStandsIn(monthlyTables) ? monthlyTables : null;
+    const reportedOnly = monthly ? null : monthlyTables;
     // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
     // in the tab's name and title, and never on its rows.
     const loggedVehicle = vehicleOfSheet(sheetName, matrix);
@@ -344,6 +916,8 @@ export async function extractEsgCaseEntities(
         }
       }
     }
+    // A waste sheet titled "(Landfill)" or "(Diversion)": its masses take that route.
+    if (sheetTable) routeWasteRowsByTitle(sheetTable, sheetTitleAbove(matrix, sheetLayoutOf(input.tables).region));
     // A hidden sheet's register rows say so: scratch copies and old lists may
     // add to what is known about a record, never add a record of their own.
     if (sheetTable && input.metadata?.sheet_hidden === true) {
@@ -357,18 +931,79 @@ export async function extractEsgCaseEntities(
     // A sheet the code read in full is not read again by the model: the flat
     // pass could only return a truncated copy of the same rows (Super Group's
     // 132-vehicle fleet master came back as 15) at the price of a paid call.
-    const specResults = flatRead && !sheetTable && !otherByClassifier
-      ? await extractDocument(model, {
+    // A sheet no code reader read is read as its workbook's type, as a typed
+    // standalone document is. A sheet the monthly reader reported (money,
+    // tonnage) keeps the read it had.
+    const readSpecIds = skillSpecIds ?? (reportedOnly ? null : workbookSpecIds);
+    // A survey grid (questions across, a site's answers per period down the
+    // side) is read cell by cell by the code, whatever Pass A called it; the
+    // flat read could only return nulls or a truncated copy of its answers.
+    const survey = flatRead && !sheetTable ? surveyGridExtraction(matrix, { filename: input.filename, sheetName }) : null;
+    // A short register that is the whole upload (an incident register on one
+    // sheet): the code reads its rows, and the first pass still reads what it
+    // states about itself (its period, its site), which sits in title lines no
+    // register column holds. Its rows are the code's: the model's copy is dropped.
+    const headerOfRegister = Boolean(sheetTable) && wholeShortRegister(input, sheetTable);
+    const specResults = flatRead && (!sheetTable || headerOfRegister) && !survey && !otherByClassifier
+      ? (await extractDocument(model, {
         filename: input.filename,
         markdown: input.markdown,
         raw_text: input.raw_text,
         elementHint: sheetName,
-      }, skillSpecIds ? { specIds: skillSpecIds, domain: 'esg' } : { elementOverride, domain: 'esg' })
+      }, readSpecIds ? { specIds: readSpecIds, domain: 'esg' } : { elementOverride, domain: 'esg' }))
+        .map((read) => (headerOfRegister ? withoutRegisterRows(read, sheetTable!) : read))
       : ([] as DocumentExtraction[]);
 
     let results = [...specResults];
+    // A policy typed under another element (an EE policy as an EE plan) that
+    // no read took as a policy is read for its policy header as well.
+    if (flatRead && !sheetName && !otherByClassifier && needsPolicyHeaderRead(input, classification, specResults)) {
+      results.push(...await extractDocument(model, {
+        filename: input.filename,
+        markdown: input.markdown,
+        raw_text: input.raw_text,
+      }, { specIds: [POLICY_HEADER_SPEC_ID], domain: 'esg' }));
+    }
     if (readByCode) results.push(readByCode);
+    if (reportedOnly) results.push(reportedOnly);
     if (sheetTable) results.push(sheetTable);
+    if (survey) results.push(survey);
+
+    // The labelled cells the readers above leave: label/value pairs, small
+    // summary blocks and pivots, a controlled document's header block, and —
+    // on a sheet too large to carry its layout — the blocks above and beside
+    // its table. The skill's wordings and one cached model question map their
+    // labels; the code reads every value (esgSheetFacts.ts).
+    // A survey grid read by the code holds no labelled cells of its own.
+    if (sheetName && sheetFactsEnabled()) {
+      const layout = sheetLayoutOf(input.tables);
+      const grid = matrix ?? (layout.outside ? sparseMatrix(layout.outside) : undefined);
+      if (grid) {
+        // A register's rows are the register's (read by code or by the flat pass).
+        const registerSpan = matrix && layout.region && (sheetTable || mainTableIsRegister(matrix, layout.region))
+          ? registerBodySpan(matrix, layout.region)
+          : null;
+        const read: ReadSpan[] = [
+          ...monthlyReadSpans(monthlyTables),
+          ...(period ? [periodReadSpan(period)].filter((span): span is ReadSpan => span !== null) : []),
+          ...(registerSpan ? [registerSpan] : []),
+          // A survey grid read by the code holds no labelled cell of its own:
+          // only its tab's name and title lines are read here.
+          ...(survey ? [{ top: 0, bottom: grid.length }] : []),
+        ];
+        const cellReads = await extractEsgSheetFacts(model, {
+          filename: input.filename,
+          sheetName,
+          template: loggedVehicle ? 'Vehicle fuel log' : undefined,
+          matrix: grid,
+          read,
+          specIds: [...new Set([...results.map((result) => result.documentId), ...(workbookSpecIds ?? [])])],
+          hidden: input.metadata?.sheet_hidden === true,
+          ...(registerSpan && sheetTable && layout.region ? { register: { ...registerSpan, headerRow: layout.region.headerRow } } : {}),
+        });
+        if (cellReads) results = mergeCellReads(results, cellReads, [readByCode, reportedOnly, sheetTable, survey]);
+      }
+    }
     // Agent loop (off by default): a cited second read of a hard document —
     // a scan, a skill's hard type, a low-confidence type, or one whose first
     // read missed a third of its required fields. It only fills gaps;
@@ -377,15 +1012,22 @@ export async function extractEsgCaseEntities(
     // A standalone document no listed reader read anything from is an Other
     // document, read for its identity and facts (openRead.ts). Never a sheet.
     let otherDocument = false;
-    if (!sheetName) {
-      const open = await addOtherDocumentRead(model, input, results, {
+    if (standalone) {
+      // The lines the code keeps as printed (titles, notes) and the counts it
+      // derives are no listed READ of the document: they never decide that a
+      // listed type read it.
+      const listedReads = results.map((result) => ({
+        ...result,
+        values: result.values.filter((value) => !isDerivedValue(value) && value.field !== PRINTED_TITLE_FIELD && value.field !== PRINTED_NOTES_FIELD),
+      }));
+      const open = await addOtherDocumentRead(model, input, listedReads, {
         domain: 'esg',
         classifierLabel: classification?.documentType ?? null,
         byClassifier: otherByClassifier,
         // Pass A named a listed ESG type: it stays that type (the agent reads it).
         typed: Boolean(skillSpecIds),
       });
-      results = open.results;
+      if (open.other) results = [...results, ...open.results.slice(listedReads.length)];
       otherDocument = open.other;
     }
     const typedPass = agentPass
@@ -401,6 +1043,9 @@ export async function extractEsgCaseEntities(
 
     // A workbook sheet's formula zeros are a template's, not readings.
     if (sheetName) results = results.map(templateZerosAsExceptions);
+    // The counts its registers imply (lost-time injuries, learners by race,
+    // trailers), worked out by the code from the rows and labelled derived.
+    results.push(...registerCountsFor(results));
 
     done += 1;
     onProgress?.({ done, total, fileName: input.filename });
@@ -410,7 +1055,18 @@ export async function extractEsgCaseEntities(
   const extractions: DocumentExtraction[] = [];
   for (const result of settled) {
     if (result.status === 'fulfilled' && result.value) {
-      extractions.push(...result.value.map(notesAsExceptions).map(namedUnitFiguresAsExceptions));
+      extractions.push(
+        ...result.value
+          .map(notesAsExceptions)
+          .map(namedUnitFiguresAsExceptions)
+          .map(listFieldsAsArrays)
+          .map(runInCaptionsRemoved)
+          .map(ruleFiguresAlone)
+          .map(printedDatesAsIso)
+          .map(trailingMinusCreditsAsNegative)
+          .map(unprintedValuesAsExceptions)
+          .map(fractionalCountsAsExceptions),
+      );
     } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they
       // have already paid to extract.
@@ -444,7 +1100,7 @@ export async function extractEsgCaseEntities(
   // Each bill is its own site × month figure, never a rival answer to every
   // other bill. Only the resolution sees the rows; the extractions handed back
   // keep the bill's own fields, which is what the user reads per document.
-  const forResolution = extractions.map(billAsMonthlyRows);
+  const forResolution = extractions.map(withoutDocumentFacts).map(billAsMonthlyRows);
   const resolved = resolveCaseEntities(forResolution, {
     allFiles: inputs.map((input) => input.filename),
     // Registers from different sheets are halves of one record, not rival answers.

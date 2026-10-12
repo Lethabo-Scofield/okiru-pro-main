@@ -118,7 +118,7 @@ fields:
     rowLevel: true
     labels: []
     description: "Whether the learner has a disability, only as the register states it."
-newFields: [learner_race, learner_gender, learner_disability]
+newFields: [learner_disability]
 ---
 ## What it is / is not
 

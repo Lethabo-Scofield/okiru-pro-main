@@ -6,6 +6,7 @@ newType:
 element: GHG_ENERGY
 version: 1
 hard: true
+summaryTables: true
 classify:
   is: "An export from the client's own greenhouse gas or carbon accounting software: activity data (kWh, litres, km, kg) and calculated emissions by category, site and month, with the report's run date, organisation node, date range and calculation settings."
   isNot:
@@ -19,17 +20,25 @@ rowsField: esg_monthly_rows
 fields:
   - name: report_title
     type: text
+    scope: document
     labels: ["Report", "Report name"]
     description: "The export's report name as printed."
   - name: report_run_date
     type: date
+    scope: document
     labels: ["Date run", "Run date", "Generated on"]
     description: "When the export was run, as printed."
   - name: organisation_node
     type: text
     required: true
-    labels: ["View", "Node", "Organisation", "Reporting entity"]
+    scope: document
+    labels: ["Node", "Organisation", "Reporting entity"]
     description: "The organisation unit or node the export is for, as printed."
+  - name: organisation_view
+    type: text
+    scope: document
+    labels: ["View", "Reporting view"]
+    description: "The view or sub-unit the export was filtered to, as printed (a division under the node). Null when none is printed."
   - name: reporting_period_start
     type: date
     labels: ["Date range from", "Date range"]
@@ -40,8 +49,28 @@ fields:
     description: "End of the export's date range, as printed (it may run past the last month with data)."
   - name: scope2_method
     type: text
-    labels: ["Scope 2 methodology", "Scope 2 method"]
+    scope: document
+    labels: ["Scope 2 methodology", "Scope 2 method", "Methodology"]
     description: "Location-based or market-based, as printed."
+  - name: emission_type
+    type: text
+    scope: document
+    labels: ["Emission type", "Emissions type"]
+    description: "The emission type the export was run for, as printed."
+  - name: scopes_included
+    type: text
+    labels: ["Scope(s)", "Scopes"]
+    description: "The scopes the export includes, as printed."
+  - name: include_modelled_data
+    type: text
+    scope: document
+    labels: ["Modelled data", "Modelled"]
+    description: "Whether modelled (estimated) data is included, as printed (\"Yes\" / \"No\")."
+  - name: convert_fuel_setting
+    type: text
+    scope: document
+    labels: ["Convert fuel"]
+    description: "The export's fuel-conversion setting, as printed."
   - name: monthly_measure
     type: text
     required: true
@@ -69,7 +98,7 @@ fields:
     rowLevel: true
     labels: []
     description: "The unit printed for the figure (kWh, L, km, t, tCO2e). Null when the export prints none: never assumed, even for an emissions table."
-newFields: [report_run_date, organisation_node, scope2_method]
+newFields: [report_run_date, organisation_node, organisation_view, scope2_method, emission_type, scopes_included, include_modelled_data, convert_fuel_setting]
 ---
 ## What it is / is not
 
@@ -89,7 +118,9 @@ workbook, a carbon tax return, or a bill or statement.
   method, settings.
 - Tables per category: sites down the side, months across, or one row per
   site, month and category, with activity and emission columns.
-- Category totals and a grand total.
+- Category totals and a grand total, and summary tables (sites down the
+  side, categories across): the code keeps every summary cell as printed
+  (printed_summary_rows), with its site, its category and its figure.
 
 ## Traps
 
@@ -126,7 +157,8 @@ Purchased electricity - emissions          Jul-25     Aug-25
 ```
 
 ```json
-{"report_title": "Emissions Summary Export", "report_run_date": "2026-04-08", "organisation_node": "Example Logistics > Region North",
+{"report_title": "Emissions Summary Export", "report_run_date": "2026-04-08", "organisation_node": "Example Logistics > Region North", "organisation_view": null,
+ "emission_type": null, "scopes_included": null, "include_modelled_data": null, "convert_fuel_setting": null,
  "reporting_period_start": "2025-07-01", "reporting_period_end": "2026-06-30", "scope2_method": "Location-based",
  "esg_monthly_rows": [
    {"monthly_measure": "Purchased electricity - consumption", "monthly_site": "Depot G", "monthly_period_end": "Jul-25", "monthly_value": "22 410", "monthly_unit": null},

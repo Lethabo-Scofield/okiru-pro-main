@@ -54,7 +54,6 @@ function restoreARead() {
     filedBatchByFile: {},
     documentIds: [],
     parserCase: {
-      case_id: "case-1",
       documents_detected: [{ filename: FILE, document_type: "Share register", status: "passed" }],
       ai_entities: {
         extractions: [

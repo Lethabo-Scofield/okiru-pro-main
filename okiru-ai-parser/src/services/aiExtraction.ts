@@ -94,9 +94,11 @@ export interface ExtractedValueSource {
   /**
    * 'agent': read by the agent loop, with a citation. 'derived': worked out in
    * code from other extracted values (skillDerivations.ts) — `quote` then says
-   * what it was derived from, and the value is never a printed one.
+   * what it was derived from, and the value is never a printed one. 'cell':
+   * read by the code from a sheet cell whose printed label names the field
+   * (esgSheetFacts.ts) — `cellRef` is the cell, `quote` its label and value.
    */
-  method: 'agent' | 'derived';
+  method: 'agent' | 'derived' | 'cell';
   page?: number;
   cellRef?: string;
   quote: string;
@@ -120,6 +122,14 @@ export interface DocumentExtraction {
    * never dropped — a grounding miss is evidence for a reviewer, not proof.
    */
   ungroundedFields?: string[];
+  /**
+   * Fields the first answer left empty and the sweep (a second, narrower ask)
+   * filled. The first answer's notes ("<field> set to null") speak for the
+   * first answer only, never against these.
+   */
+  sweptFields?: string[];
+  /** How many parts a long document was read in, when more than one: each part's notes speak for that part. */
+  readInParts?: number;
   /** Exceptions the expert's prompt asked the model to raise. */
   exceptions: string[];
   error?: string;
@@ -322,10 +332,10 @@ export function wrongTypeStatement(
       .flatMap(typeWords)
       .filter((word) => !TYPE_QUALIFIERS.has(word)),
   );
-  // The first word that names a kind of document: "a spreadsheet report of
-  // fuel" is named by "fuel", never by a word any document type could carry.
-  const firstTypeWord = (text: string | undefined) =>
-    text ? typeWords(text).find((word) => !TYPE_QUALIFIERS.has(word) && !GENERIC_DOCUMENT_WORDS.has(word)) : undefined;
+  // The words that name a kind of document: "a spreadsheet report of fuel" is
+  // named by "fuel", never by a word any document type could carry.
+  const typeNamingWords = (text: string | undefined) =>
+    text ? typeWords(text).filter((word) => !TYPE_QUALIFIERS.has(word) && !GENERIC_DOCUMENT_WORDS.has(word) && !/^\d/.test(word)) : [];
   for (const exception of exceptions) {
     const named = exception.trim().match(WRONG_TYPE_STATEMENT)?.[1];
     const first = named ? typeWords(named)[0] : undefined;
@@ -333,10 +343,12 @@ export function wrongTypeStatement(
     // What the document IS, when it says so: "Document is a code of conduct
     // (not an incident register)" names a part of a spec that covers the code,
     // the policy AND the register. A document that is this type, lacking one
-    // part of it, keeps its values.
+    // part of it, keeps its values. Any naming word counts, not only the
+    // first: "a Stage 1 audit report, not a certificate" is named by "audit",
+    // which the skill reading it covers (an ISO skill for an audit OR a
+    // certificate), whatever qualifies it ("Stage 1").
     const is = /\b(?:is|appears to be|looks like)\s+(?:a|an|the)?\s*(.*?)\s*[,(;:–-]*\s*\bnot\s+(?:a|an|the)\b/i.exec(exception)?.[1];
-    const isFirst = firstTypeWord(is);
-    if (isFirst && identity.has(isFirst)) continue;
+    if (typeNamingWords(is).some((word) => identity.has(word))) continue;
     return exception.trim();
   }
   return null;
@@ -856,6 +868,7 @@ export async function extractWithSpec(
   // remaining fields are not in the document (the prompt forbids inventing
   // them), so looping further would only spend money re-proving absence. A
   // round that DID recover something earns one more look at what remains.
+  const sweptFields: string[] = [];
   if (foundSomething && sweepEnabled()) {
     const maxRounds = Math.max(1, Number(process.env.PARSER_SWEEP_ROUNDS) || 2);
     for (let round = 0; round < maxRounds; round++) {
@@ -868,6 +881,7 @@ export async function extractWithSpec(
         // pass found — a second opinion must not silently replace a first answer.
         if (isEmptyValue(parsed[field]) && !isEmptyValue(value)) {
           parsed[field] = value;
+          sweptFields.push(field);
           recovered += 1;
         }
       }
@@ -962,6 +976,8 @@ export async function extractWithSpec(
     missingFields,
     unexpectedFields,
     ungroundedFields,
+    ...(sweptFields.length > 0 ? { sweptFields } : {}),
+    ...(chunks.length > 1 ? { readInParts: chunks.length } : {}),
     exceptions: [
       ...toExceptions(parsed.exceptions),
       ...wrapperExceptions,

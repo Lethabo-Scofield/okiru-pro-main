@@ -79,10 +79,17 @@ describe("esgMonthsFromEvidence — the reporting year the figures fall in", () 
     expect(months[11]).toBe("Jun-26");
   });
 
-  it("runs longer when the figures do, and keeps the latest year when they run past two", () => {
-    expect(esgMonthsFromEvidence(["2025-01", "2026-02"])).toHaveLength(14);
+  it("figures that run past a year are two years, not one long one: the newest year is the reporting year", () => {
+    // Two consecutive years' dashboards used to become a 24-month "year" and
+    // last year's figures were merged into this one's totals.
+    expect(esgMonthsFromEvidence(["2024-07", "2025-06", "2025-07", "2026-03"])).toEqual([
+      "Jul-25", "Aug-25", "Sep-25", "Oct-25", "Nov-25", "Dec-25", "Jan-26", "Feb-26", "Mar-26", "Apr-26", "May-26", "Jun-26",
+    ]);
+    const months = esgMonthsFromEvidence(["2025-01", "2026-02"]);
+    expect(months[0]).toBe("Jan-26");
+    expect(months).toHaveLength(12);
     const long = esgMonthsFromEvidence(["2022-01", "2026-06"]);
-    expect(long[0]).toBe("Jul-25");
+    expect(long[0]).toBe("Jan-26");
     expect(long).toHaveLength(12);
   });
 

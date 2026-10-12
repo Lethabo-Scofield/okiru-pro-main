@@ -16,7 +16,8 @@ describe("esgWorkbookExport", () => {
     expect(eSheet).toBeDefined();
     const d30 = eSheet.D30?.v;
     expect(typeof d30).toBe("number");
-    expect(d30).toBeCloseTo(36, 0);
+    // The corrected Environmental total: 36 less E d8, which water alone no longer earns.
+    expect(d30).toBeCloseTo(31, 0);
   });
 
   it("round-trips what a person entered under names, not cells: the company setup and the headcount matrix", () => {

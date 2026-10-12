@@ -39,8 +39,24 @@ fields:
     description: "The grand total of actual stops a summary prints, from the same summary. Never add the rows."
   - name: total_distance_km
     type: number
+    scope: document
     labels: ["Total km", "Total distance", "Total plan km"]
     description: "A total distance the summary prints, with whether it is planned or actual kilometres noted in exceptions. Never added up."
+  - name: total_routes
+    type: count
+    scope: document
+    labels: ["Total routes", "Routes total"]
+    description: "The grand total of routes a summary prints, as printed. Never counted from the rows."
+  - name: total_planned_cases
+    type: number
+    scope: document
+    labels: ["Total planned cases", "Planned cases total"]
+    description: "The grand total of planned cases a summary prints, as printed."
+  - name: total_planned_weight
+    type: number
+    scope: document
+    labels: ["Total planned weight", "Planned weight total"]
+    description: "The grand total of planned weight a summary prints, as printed, with its unit in exceptions when it prints one."
   - name: total_fatigue_events_count
     type: count
     labels: ["Total fatigue events", "Fatigue alerts"]
@@ -116,6 +132,7 @@ fields:
     rowLevel: true
     labels: []
     description: "Fatigue events on the row, when printed. Null when the report has no such column."
+newFields: [total_routes, total_planned_cases, total_planned_weight]
 ---
 ## What it is / is not
 
@@ -152,6 +169,10 @@ client's monthly data workbook.
 - Planned kilometres are not actual kilometres. Copy each from its own
   column, and say which one a total is.
 - Never add rows, never compute a hit rate, km per stop or any total.
+- A pivot's "Max of" (or "Average of", "Count of") columns are not sums: a
+  "Grand Total" row under "Max of Plan Stops" is one route's own figure, not the
+  period's stops. Take grand totals only from a block that labels them as
+  totals ("Total Plan Stops"), never from a "Max of" pivot.
 - The report's run date is not its period, and the file name's period is not
   printed evidence.
 - Weight and volume columns may print no unit: copy the figure and leave the
@@ -174,6 +195,7 @@ Grand Total  798  3 519        3 295          119 224.5
 ```json
 {"report_date": "05-Jul-2026", "reporting_period_start": "01/07/2025", "reporting_period_end": "30/06/2026",
  "planned_stops": 3519, "actual_stops": 3295, "total_distance_km": "119 224.5", "total_fatigue_events_count": null,
+ "total_routes": 798, "total_planned_cases": null, "total_planned_weight": null,
  "fleet_debrief_rows": [
    {"report_date": null, "depot_name": "DEP-A", "planned_stops": 1805, "actual_stops": 1640, "distance_km": "58 220.5"},
    {"report_date": null, "depot_name": "DEP-B", "planned_stops": 1714, "actual_stops": 1655, "distance_km": "61 004.0"}

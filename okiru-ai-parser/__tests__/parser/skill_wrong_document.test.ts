@@ -17,6 +17,7 @@ import { ESG_DOCUMENT_MATRIX } from '../../schemas/esg_document_matrix.js';
 const CIPC = VERIFICATION_DOCUMENT_MATRIX.find((d) => d.id === 'ownership__cipc_registration_documents_cor14_1_cor14_3')!;
 const SHARE_REGISTER = VERIFICATION_DOCUMENT_MATRIX.find((d) => d.id === 'ownership__securities_share_register')!;
 const ETHICS = ESG_DOCUMENT_MATRIX.find((d) => d.id === 'ethics_compliance__ethics_whistleblower_policy_and_register')!;
+const ISO = ESG_DOCUMENT_MATRIX.find((d) => d.id === 'iso_environmental__iso14001_certificate')!;
 const MOI = VERIFICATION_DOCUMENT_MATRIX.find((d) => d.id === 'ownership__memorandum_of_incorporation_moi')!;
 
 const ENV_KEYS = ['AI_EXTRACTION_SWEEP', 'AI_EXTRACTION_CACHE', 'PARSER_SKILLS'] as const;
@@ -94,6 +95,23 @@ describe('values stay when the exception is not a wrong-type statement about thi
       exceptions: ['Document is a code of conduct (not an incident register); incident counts are not given.'],
     }), ETHICS, code, { domain: 'esg' });
     expect(result.values.map((v) => v.field)).toEqual(expect.arrayContaining(['policy_title', 'policy_version', 'whistleblower_hotline_provider']));
+  });
+
+  it('a qualified kind the skill covers ("a Stage 1 audit report, not a certificate") keeps its values', async () => {
+    // The ISO skill reads an audit OR a certificate. "Stage 1" qualifies the
+    // audit; it does not make the document another type.
+    const audit = {
+      filename: 'Audit summary.pdf',
+      raw_text: 'AUDIT SUMMARY\nAudit Activity: Stage 1\nAudit Criteria: ISO 14001:2015\nExample Certification Ltd',
+      markdown: 'AUDIT SUMMARY\nAudit Activity: Stage 1\nAudit Criteria: ISO 14001:2015\nExample Certification Ltd',
+    };
+    const result = await extractWithSpec(replying({
+      iso14001_certification_body: 'Example Certification Ltd',
+      iso14001_standard_version: 'ISO 14001:2015',
+      audit_type: 'Stage 1',
+      exceptions: ['Document is a Stage 1 audit report, not a certificate: certification is in progress.'],
+    }), ISO, audit, { domain: 'esg' });
+    expect(result.values.map((v) => v.field)).toEqual(expect.arrayContaining(['iso14001_certification_body', 'audit_type']));
   });
 
   it('a generic word ("a report of fuel issues") never makes another document this type', async () => {

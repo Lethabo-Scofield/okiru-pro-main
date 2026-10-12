@@ -6,6 +6,7 @@ import { ESG_D9_PILLAR_DIVISOR } from "@/lib/esgScoringDefaults";
  * workbook are catalogued in `docs/esg/ESG_SCORING_DELTA.md`.
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
+import { readEsgGridRows } from "@/lib/esg/esgGridRows";
 import { PILLAR_MAX_SOCIAL } from "../esgConfig/consumer-goods";
 import { esgSectorConfigForWorkbook } from "../esgConfig";
 import {
@@ -52,6 +53,10 @@ const BLACK_FEMALE_MGMT_CELLS = ["F5", "F6", "G5", "G6", "H5", "H6"] as const;
 const MGMT_HEADCOUNT_CELLS = ["L5", "L6"] as const;
 /** `S_Data!G29:G33` — LTI / MTI / near-miss / vehicle / property incident totals. */
 const INCIDENT_ROWS = ["G29", "G30", "G31", "G32", "G33"] as const;
+/** A training programme or occupation the register names as fatigue training. */
+const FATIGUE = /\bfatigue\b/i;
+/** `S_Data!C34:F34` — driver-fatigue incidents, by quarter. */
+const FATIGUE_QUARTERS = ["C34", "D34", "E34", "F34"] as const;
 
 function num(wb: EsgWorkbookData, ref: string, section = "s-data"): number {
   return readEsgCell(wb, section, ref) ?? 0;
@@ -202,8 +207,24 @@ export function scoreSocial(
    * to 1 only when the register has rows with a driver or date — so this is
    * evidence, not a default.
    */
+  /*
+   * CORRECTED (corrected mode): a fatigue programme needs a FATIGUE fact.
+   * The superset above let any driver-debrief row — a route summary of stops
+   * and kilometres — earn "Driver fatigue programme active", and `C59` is the
+   * first row of the OFO register whatever its programme. Corrected mode asks
+   * for learners on a programme the register names as fatigue training, or a
+   * driver-fatigue incident count the company records (S_Data row 34, the
+   * monitoring such a programme runs on). Parity keeps the superset.
+   */
+  const fatigueLearners = readEsgGridRows(
+    workbook.sections?.["s-data-ofo"]?.cells as Record<string, unknown> | undefined,
+    "s-data-ofo",
+  ).filter((r) => FATIGUE.test(`${r.programme ?? ""} ${r.occupation ?? ""}`) && Number(r.learners) > 0).length;
+  const fatigueMonitored = FATIGUE_QUARTERS.some((ref) => readEsgCell(workbook, "s-data", ref) !== null);
   const driverActive =
-    (readEsgCell(workbook, "driver-debrief", "_active") ?? 0) > 0 || num(workbook, "C59") > 0;
+    mode === "workbook-parity"
+      ? (readEsgCell(workbook, "driver-debrief", "_active") ?? 0) > 0 || num(workbook, "C59") > 0
+      : fatigueLearners > 0 || fatigueMonitored;
   const d19 = driverActive ? 5 : 0;
 
   /*
@@ -465,11 +486,18 @@ export function scoreSocial(
       key: "d19",
       measured: { value: driverActive, unit: "answer", label: "Driver fatigue programme in place" },
       target: null,
-      inputs: [
-        traceCell("Driver_Debrief", "rows", "Driver debrief register in use", readEsgCell(workbook, "driver-debrief", "_active") ?? 0),
-        traceCell("S_Data", "C59", "OFO learners on the fatigue programme", num(workbook, "C59")),
-      ],
-      rule: "5 points when the driver debrief register is in use or learners are on the fatigue programme; nothing otherwise.",
+      inputs: parity
+        ? [
+            traceCell("Driver_Debrief", "rows", "Driver debrief register in use", readEsgCell(workbook, "driver-debrief", "_active") ?? 0),
+            traceCell("S_Data", "C59", "OFO learners on the fatigue programme", num(workbook, "C59")),
+          ]
+        : [
+            traceCell("S_Data", "OFO register", "Training rows naming a fatigue programme, with learners", fatigueLearners),
+            traceCell("S_Data", "C34:F34", "Driver fatigue incidents recorded (any quarter)", fatigueMonitored ? "Yes" : null),
+          ],
+      rule: parity
+        ? "5 points when the driver debrief register is in use or learners are on the fatigue programme; nothing otherwise."
+        : "5 points when learners are on a fatigue programme or the company records driver-fatigue incidents; a route register alone is not a fatigue programme.",
     });
     record({
       key: "d20",

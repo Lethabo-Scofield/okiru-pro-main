@@ -177,6 +177,12 @@ export interface AgentDocument {
   tables: AgentTable[];
   /** The text came from OCR (Document Intelligence, vision or an image). */
   scanned: boolean;
+  /**
+   * A digital document's pages that paint a picture (a letterhead, a logo, a
+   * stamp): words in a picture are not in the text layer, only on the page
+   * image. Empty for a scan, whose every page is offered as an image anyway.
+   */
+  picturePages?: number[];
 }
 
 const PAGE_HEADING = /^##\s+Page\s+(\d+)\s*$/gm;
@@ -256,12 +262,22 @@ export function isScannedInput(input: Pick<RawExtractionInput, 'metadata' | 'tab
   return (input.tables ?? []).some(isTableGrid);
 }
 
+/** The pages the file reader found pictures on (metadata.picture_pages), for a digital document only. */
+export function picturePagesOf(input: Pick<RawExtractionInput, 'metadata' | 'tables' | 'mime_type'>): number[] {
+  if (isScannedInput(input)) return [];
+  const listed = (input.metadata ?? {}).picture_pages;
+  if (!Array.isArray(listed)) return [];
+  return [...new Set(listed.filter((page): page is number => Number.isInteger(page) && (page as number) >= 1))].sort((a, b) => a - b);
+}
+
 export function agentDocumentFrom(input: RawExtractionInput): AgentDocument {
+  const picturePages = picturePagesOf(input);
   return {
     filename: input.filename,
     pages: documentPages(input),
     tables: documentTables(input),
     scanned: isScannedInput(input),
+    ...(picturePages.length > 0 ? { picturePages } : {}),
   };
 }
 
@@ -1219,7 +1235,7 @@ export interface ValueCheck {
 
 // ─── ESG checks: units, meters and accounts, periods ────────────────────────
 
-type UnitFamily = 'energy' | 'demand' | 'volume' | 'mass' | 'distance' | 'time' | 'emissions';
+export type UnitFamily = 'energy' | 'demand' | 'volume' | 'mass' | 'distance' | 'time' | 'emissions';
 
 /** The units an ESG document prints, by what they measure (lower case, spaces removed). */
 const UNIT_FAMILIES: Record<UnitFamily, string[]> = {
@@ -1255,6 +1271,25 @@ export function unitFamilyOfField(name: string): UnitFamily | null {
 /** A unit as printed, normalised for lookup ("kWh" → "kwh", "m³" → "m3", "Litres" → "litres"). */
 function unitKey(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, '').replace(/³/g, '3').replace(/\.$/, '');
+}
+
+/**
+ * What a unit field's value measures, when it is a unit at all: "kWh" is
+ * energy, "Kilolitres (kl)" a volume, "kg" a mass. Null for anything that is
+ * not a unit from the vocabulary ("UNITS" is energy: an electricity account's
+ * units are kWh), or that mixes units of two kinds. The words of one value
+ * are each looked up, so a unit printed twice ("Kilolitres (kl)") is one unit.
+ */
+export function unitFamilyOfUnit(raw: unknown): UnitFamily | null {
+  if (typeof raw !== 'string') return null;
+  const words = raw.normalize('NFKC').split(/[\s()[\]/,;]+/).map(unitKey).filter(Boolean);
+  if (words.length === 0) return null;
+  const families = new Set(words.map((word) => UNIT_FAMILY_OF.get(word) ?? null));
+  if (families.size !== 1 || families.has(null)) {
+    const joined = UNIT_FAMILY_OF.get(unitKey(raw.normalize('NFKC')));
+    return joined ?? null;
+  }
+  return [...families][0];
 }
 
 /**
@@ -1557,7 +1592,7 @@ function tool(name: string, description: string, properties: Record<string, unkn
   };
 }
 
-export function agentTools(options: { images: boolean; rows?: AgentTarget['rows']; domain?: ExtractionDomain }): AgentTool[] {
+export function agentTools(options: { images: boolean; rows?: AgentTarget['rows']; domain?: ExtractionDomain; pictures?: number[] }): AgentTool[] {
   const esg = options.domain === 'esg';
   const tools: AgentTool[] = [
     tool('list_pages', 'The page index: page count, each page\'s length and opening line, and the pages where each target field\'s label is printed.', {}),
@@ -1581,6 +1616,10 @@ export function agentTools(options: { images: boolean; rows?: AgentTarget['rows'
   ];
   if (options.images) {
     tools.push(tool('get_page_image', 'See a scanned page as an image, to read what the OCR text garbled (stamps, handwriting, tick boxes). Use sparingly.', {
+      page: { type: 'integer', description: '1-based page number' },
+    }, ['page']));
+  } else if (options.pictures && options.pictures.length > 0) {
+    tools.push(tool('get_page_image', `See a page as an image, to read words printed inside a picture (a letterhead, logo or stamp) that the page text does not have. Only pages ${options.pictures.join(', ')} carry pictures. Use sparingly.`, {
       page: { type: 'integer', description: '1-based page number' },
     }, ['page']));
   }
@@ -1646,6 +1685,8 @@ export interface AgentValue {
   page?: number;
   cellRef?: string;
   quote: string;
+  /** Quoted from a picture on a digital page (its image was shown): the text layer does not hold it. */
+  fromPicture?: true;
 }
 
 export interface AgentRejection {
@@ -1669,6 +1710,7 @@ export function validateSubmission(
   raw: unknown,
   target: AgentTarget,
   doc: AgentDocument,
+  pagesShown: ReadonlySet<number> = new Set(),
 ): { ok: true; value: AgentValue } | { ok: false; rejection: AgentRejection } {
   const reject = (reason: string, field?: string) => ({ ok: false as const, rejection: { field, reason } });
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return reject('each value must be an object');
@@ -1706,6 +1748,7 @@ export function validateSubmission(
   }
   let pageOk = false;
   let cellOk = false;
+  let fromPicture = false;
   // Where a cited cell's label can be, for the label check: the row up to and
   // including the cell (row label first), and the cell's column heading.
   let rowToCell = '';
@@ -1716,6 +1759,12 @@ export function validateSubmission(
       problems.push(`page ${String(item.page)} does not exist (the document has ${doc.pages.length})`);
     } else if (quoteOccursIn(quote, doc.pages[page - 1])) {
       pageOk = true;
+    } else if (!doc.scanned && (doc.picturePages ?? []).includes(page) && pagesShown.has(page)) {
+      // Words inside a picture (a letterhead, a logo) are on the page image
+      // the run was shown, never in the text layer. The quote is the
+      // picture's words; the value must still be in it.
+      pageOk = true;
+      fromPicture = true;
     } else {
       problems.push(`the quote does not occur on page ${page}`);
     }
@@ -1798,6 +1847,7 @@ export function validateSubmission(
       ...(pageOk ? { page } : {}),
       ...(cellOk ? { cellRef } : {}),
       quote,
+      ...(fromPicture && !cellOk ? { fromPicture: true as const } : {}),
     },
   };
 }
@@ -1985,6 +2035,8 @@ interface ToolContext {
   limits: AgentLimits;
   pageImage?: (page: number) => Promise<string | null>;
   imagesShown: number;
+  /** Pages whose image this run was shown: a digital page's picture can be quoted from them. */
+  pagesShown: Set<number>;
   /** Rows accepted so far in this run (one key per row): the per-document cap, and no row twice. */
   rowKeys: Set<string>;
 }
@@ -2074,7 +2126,11 @@ async function runTool(call: AgentToolCall, ctx: ToolContext): Promise<ToolOutco
       return out({ cellRef: cellRefOf(table.index, row, column), content });
     }
     case 'get_page_image': {
-      if (!doc.scanned || !ctx.pageImage) return out({ error: 'page images are only available for scanned documents' });
+      const pictures = doc.scanned ? [] : doc.picturePages ?? [];
+      if ((!doc.scanned && pictures.length === 0) || !ctx.pageImage) return out({ error: 'page images are only available for scanned documents' });
+      if (!doc.scanned && !pictures.includes(Number(args.page))) {
+        return out({ error: `page ${String(args.page)} carries no picture: its words are all in get_page_text. Pages with pictures: ${pictures.join(', ')}` });
+      }
       if (ctx.imagesShown >= limits.maxImages) return out({ error: `image limit reached (${limits.maxImages}); use the page text` });
       const page = Number(args.page);
       if (!Number.isInteger(page) || page < 1 || page > Math.max(doc.pages.length, 1)) return out({ error: 'no such page' });
@@ -2083,6 +2139,7 @@ async function runTool(call: AgentToolCall, ctx: ToolContext): Promise<ToolOutco
       ctx.imagesShown += 1;
       const url = await ctx.pageImage(page).catch(() => null);
       if (!url) return out({ error: 'the page could not be rendered' });
+      ctx.pagesShown.add(page);
       return { content: JSON.stringify({ page, note: 'The page image follows in the next message.' }), image: { page, url } };
     }
     case 'check_value':
@@ -2094,7 +2151,7 @@ async function runTool(call: AgentToolCall, ctx: ToolContext): Promise<ToolOutco
       const rows: AgentRow[] = [];
       const rejected: AgentRejection[] = [];
       for (const item of items) {
-        const result = validateSubmission(item, ctx.target, doc);
+        const result = validateSubmission(item, ctx.target, doc, ctx.pagesShown);
         if (result.ok) accepted.push(result.value);
         else rejected.push(result.rejection);
       }
@@ -2189,15 +2246,19 @@ function domainPromptLines(domain: ExtractionDomain | undefined): { role: string
   };
 }
 
-export function agentSystemPrompt(target: AgentTarget, limits: AgentLimits, images: boolean, turns: number = limits.maxTurns): string {
+export function agentSystemPrompt(target: AgentTarget, limits: AgentLimits, images: boolean, turns: number = limits.maxTurns, pictures: number[] = []): string {
   const rows = target.rows;
   const lines = domainPromptLines(target.domain);
+  const pictureTool = !images && pictures.length > 0
+    ? `, and get_page_image to read words inside a picture on pages ${pictures.join(', ')} (a letterhead, logo or stamp the page text does not have)`
+    : '';
   return [
     lines.role,
     '',
     'HOW TO WORK',
-    `- Look before you answer: search_text, get_page_text, list_tables / get_table / get_cell${images ? ', and get_page_image when the OCR text of a scanned page is unreadable' : ''}.`,
+    `- Look before you answer: search_text, get_page_text, list_tables / get_table / get_cell${images ? ', and get_page_image when the OCR text of a scanned page is unreadable' : pictureTool}.`,
     '- Every value needs a citation: the page number, or the cell reference get_table shows (like T1!B4), and a short quote copied exactly from that page or cell that contains the value.',
+    ...(pictureTool ? ['- A value read inside a picture: cite the page you saw, and quote the words exactly as the picture prints them.'] : []),
     '- Copy values as printed. Never invent, infer, estimate, convert or compute a value. A field the document does not state is left out.',
     lines.shortValue,
     lines.figureAlone,
@@ -2348,13 +2409,19 @@ export async function runAgentExtraction(
   const limits: AgentLimits = { ...DEFAULT_AGENT_LIMITS, ...options.limits };
   const doc = agentDocumentFrom(input);
   const images = doc.scanned && Boolean(options.pageImage);
-  const tools = agentTools({ images, rows: target.rows, ...(target.domain ? { domain: target.domain } : {}) });
+  // A digital page with a picture: only that page's image, for words the text layer lacks.
+  const pictures = !doc.scanned && options.pageImage ? doc.picturePages ?? [] : [];
+  const tools = agentTools({
+    images, rows: target.rows, ...(target.domain ? { domain: target.domain } : {}), ...(pictures.length > 0 ? { pictures } : {}),
+  });
   const budget = turnBudget(doc.pages.length, limits);
-  const ctx: ToolContext = { doc, target, limits, pageImage: images ? options.pageImage : undefined, imagesShown: 0, rowKeys: new Set() };
+  const ctx: ToolContext = {
+    doc, target, limits, pageImage: images || pictures.length > 0 ? options.pageImage : undefined, imagesShown: 0, pagesShown: new Set(), rowKeys: new Set(),
+  };
   const indexCall: AgentToolCall = { id: PAGE_INDEX_CALL_ID, type: 'function', function: { name: 'list_pages', arguments: '{}' } };
   const index = await runTool(indexCall, ctx);
   const messages: AgentMessage[] = [
-    { role: 'system', content: agentSystemPrompt(target, limits, images, budget) },
+    { role: 'system', content: agentSystemPrompt(target, limits, images, budget, pictures) },
     { role: 'user', content: agentUserPrompt(doc, target, options.firstPass ?? { found: [], missing: [] }) },
     { role: 'assistant', content: null, tool_calls: [indexCall] },
     { role: 'tool', tool_call_id: PAGE_INDEX_CALL_ID, content: index.content },
@@ -2538,6 +2605,12 @@ export function sameReading(a: unknown, b: unknown): boolean {
   return ta.replace(/[^a-z0-9]/g, '') === tb.replace(/[^a-z0-9]/g, '');
 }
 
+/** A Rand amount of nothing: 0, "0.00", "R 0,00". */
+function isZeroAmount(value: unknown): boolean {
+  if (typeof value === 'number') return value === 0;
+  return typeof value === 'string' && /^\s*(?:R\s*)?-?\s*0+(?:[.,]0+)?\s*-?\s*$/i.test(value);
+}
+
 function citation(value: AgentValue): string {
   const where = [value.page ? `page ${value.page}` : '', value.cellRef ?? ''].filter(Boolean).join(', ');
   return `${where}: "${value.quote}"`;
@@ -2629,6 +2702,7 @@ export function mergeAgentValues(
 
   const filled: string[] = [];
   const conflicts: string[] = [];
+  const moneyFields = new Set(target.fields.filter((f) => f.type === 'money').map((f) => f.name));
   for (const value of run.values) {
     const existing = firstPass.get(value.field);
     if (existing === undefined) {
@@ -2659,6 +2733,11 @@ export function mergeAgentValues(
           + `the second read gives ${String(value.value)} (${citation(value)}).`,
         );
       }
+      if (value.fromPicture) {
+        home.exceptions.push(
+          `${value.field} was read from a picture on page ${value.page} (a letterhead, logo or stamp), not from the page text: "${value.quote}". Check it against the document.`,
+        );
+      }
       home.values.push(extracted);
       home.missingFields = home.missingFields.filter((f) => f !== value.field);
       filled.push(value.field);
@@ -2666,6 +2745,26 @@ export function mergeAgentValues(
     }
     if (typeof existing === 'object' || sameReading(existing, value.value)) continue;
     conflicts.push(value.field);
+    // A Rand amount the first pass read as zero is usually the wrong line of
+    // the section (a consumption line charging 0.00 beside a fixed basic
+    // charge). The agent's cited non-zero amount for the same field replaces
+    // it; both readings still reach the reviewer.
+    if (moneyFields.has(value.field) && isZeroAmount(existing) && !isZeroAmount(value.value) && !isEmpty(value.value)) {
+      for (const copy of copies) {
+        copy.values = copy.values.map((v) => (v.field === value.field && sameReading(v.value, existing)
+          ? {
+            ...v,
+            value: value.value,
+            source: { method: 'agent', ...(value.page ? { page: value.page } : {}), ...(value.cellRef ? { cellRef: value.cellRef } : {}), quote: value.quote },
+          }
+          : v));
+      }
+      home.exceptions.push(
+        `Second read disagrees on ${value.field}: the first pass read "${String(existing)}"; the agent read "${String(value.value)}" (${citation(value)}). `
+        + 'A zero charge is usually another line of the section, so the cited amount was kept; check the document.',
+      );
+      continue;
+    }
     home.exceptions.push(
       `Second read disagrees on ${value.field}: the agent read "${String(value.value)}" (${citation(value)}); `
       + `the first pass read "${String(existing)}". The first-pass value was kept; check the document.`,

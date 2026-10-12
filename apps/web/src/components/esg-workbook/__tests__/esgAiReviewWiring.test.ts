@@ -36,6 +36,6 @@ describe("EsgInformationRequest wires the AI review", () => {
 
   it("records the documents' disagreements beside the figures on both write paths", () => {
     expect(PAGE).toMatch(/withEsgDisputes\(injection\.patches, injection\.conflicts\)/);
-    expect(read("src/components/esg/EsgCreateFlow.tsx")).toMatch(/withEsgDisputes\(patches, work\.injection\?\.conflicts\)/);
+    expect(read("src/components/esg/EsgCreateFlow.tsx")).toMatch(/withEsgDisputes\(patches, run\?\.conflicts\)/);
   });
 });

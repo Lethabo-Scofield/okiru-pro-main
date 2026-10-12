@@ -80,7 +80,35 @@ fields:
     type: percent
     labels: ["Acknowledged %"]
     description: "A printed percentage only. Never computed."
-newFields: [policy_approved_by]
+  - name: policy_issue_date
+    type: date
+    labels: ["Date issued", "Issue date", "First issued"]
+    description: "The date the code was first issued, as printed."
+  - name: policy_author
+    type: text
+    scope: document
+    labels: ["Author", "Prepared by", "Compiled by"]
+    description: "Who wrote the code, as printed."
+  - name: policy_disclosure
+    type: text
+    scope: document
+    labels: ["Disclosure", "Classification", "Confidentiality"]
+    description: "The document's disclosure class as printed (Public, Internal, Confidential)."
+  - name: whistleblower_hotline_number
+    type: text
+    labels: ["Hotline number", "Toll-free number", "Ethics line"]
+    description: "The telephone number the code gives suppliers for reporting breaches, as printed, spaces kept."
+  - name: supplier_bbbee_requirement
+    type: text
+    scope: document
+    labels: ["B-BBEE requirement", "Transformation requirement"]
+    description: "What the code requires of suppliers on B-BBEE, as the few printed words that name the evidence or level asked for (\"a current B-BBEE certificate\", \"at least Level 4\"), not the whole sentence around them. A requirement, never a supplier's level."
+  - name: code_environmental_areas
+    type: text
+    scope: document
+    labels: ["Environmental management areas"]
+    description: "The environmental areas or headings the code sets for suppliers, each as printed, separated by '; '."
+newFields: [policy_approved_by, policy_issue_date, policy_author, policy_disclosure, supplier_bbbee_requirement, code_environmental_areas]
 ---
 ## What it is / is not
 
@@ -95,7 +123,17 @@ questionnaire or evaluation, a B-BBEE certificate, or a contract.
 
 ## Where values sit
 
-- Cover or document-control table: title, revision, dates, approver.
+- Cover or document-control table: title, revision, issue and revision
+  dates, author, approver, disclosure class.
+- A document-control table's cells can reach you interleaved: a title that
+  wraps over two lines is split around its "Policy Title" label, and the
+  page's running heading sits just above the table. Rebuild the title from
+  the value cells around the label. The same table is often printed again
+  whole in a later page's footer: prefer that complete copy. A running page
+  heading is never the title.
+- A reporting section: the hotline number suppliers may call.
+- The code's own requirements, kept with this document: what it asks of
+  suppliers on B-BBEE, and the environmental areas it lists.
 - Body: sections per topic; a section heading is enough to mark a clause
   present.
 - An acknowledgement form (often the last page): supplier name, signatory,
@@ -117,8 +155,11 @@ questionnaire or evaluation, a B-BBEE certificate, or a contract.
 Invented, a code with a blank acknowledgement page:
 
 ```
-EXAMPLE GROUP SUPPLIER CODE OF CONDUCT  Revision 2  Date revised 10/10/2024  Approved by: Board
-1 Labour practices ... 2 Anti-bribery and corruption ... 3 Health and safety ... 4 Environmental management ...
+EXAMPLE GROUP SUPPLIER CODE OF CONDUCT  Revision 2  Date issued 01/02/2020  Date revised 10/10/2024  Approved by: Board
+Author: Procurement Manager   Disclosure: Public
+1 Labour practices ... 2 Anti-bribery and corruption ... 3 Health and safety ...
+4 Environmental management: WASTE HANDLING, WATER USE, ENERGY USE
+5 Transformation: suppliers must provide a valid B-BBEE certificate.   Report breaches to 0800 000 222.
 Acknowledgement: Supplier name ____________  Signed ____________  Date ________
 ```
 
@@ -128,5 +169,8 @@ Acknowledgement: Supplier name ____________  Signed ____________  Date ________
  "environmental_clause_present": true, "health_safety_clause_present": true, "supplier_name": null,
  "code_acknowledged": null, "acknowledgement_date": null, "signatory_name": null, "signatory_role": null,
  "suppliers_acknowledged_count": null, "suppliers_total_count": null, "suppliers_acknowledged_percent": null,
+ "policy_issue_date": "01/02/2020", "policy_author": "Procurement Manager", "policy_disclosure": "Public",
+ "whistleblower_hotline_number": "0800 000 222", "supplier_bbbee_requirement": "a valid B-BBEE certificate",
+ "code_environmental_areas": "WASTE HANDLING; WATER USE; ENERGY USE",
  "exceptions": ["The acknowledgement page is blank: the code itself, not a supplier's acknowledgement."]}
 ```
