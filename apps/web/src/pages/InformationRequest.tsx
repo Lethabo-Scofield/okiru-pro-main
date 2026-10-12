@@ -74,6 +74,14 @@ import { useBbeeStore } from "@toolkit/lib/store";
 import { invalidateClientData } from "@toolkit/lib/api";
 import { WorkbookScoreSummary } from "@/pages/WorkbookScoreSummary";
 import { mergeWorkbookSectionSaveBody } from "@/lib/workbookSectionSave";
+import {
+  SETUP_CARD_CLASS,
+  SETUP_SHELL_CLASS,
+  WORKBOOK_COLUMNS_CLASS,
+  WORKBOOK_TOOLBAR_CLASS,
+  informationRequestMainClass,
+  informationRequestView,
+} from "@/pages/informationRequestLayout";
 
 type Row = Record<string, unknown> & { _id: string };
 
@@ -315,7 +323,7 @@ function SetupShell({
   onBack: () => void;
 }) {
   return (
-    <div className="mx-auto max-w-[980px] px-4 py-8 sm:py-12 has-[[data-wide-review]]:max-w-[1760px]">
+    <div className={SETUP_SHELL_CLASS} data-testid="setup-shell">
       <style>{`
         @keyframes setupReveal {
           from { opacity: 0; transform: translateY(-6px); }
@@ -323,7 +331,7 @@ function SetupShell({
         }
         .setup-reveal { animation: setupReveal 220ms ease-out both; }
       `}</style>
-      <div className="rounded-[28px] border border-white/[0.08] bg-[color:var(--ink-3)] px-5 py-6 shadow-[0_24px_80px_rgba(0,0,0,0.30)] sm:px-8 sm:py-8">
+      <div className={SETUP_CARD_CLASS} data-testid="setup-card">
           <div className="mb-8 flex items-center justify-between">
             <span className="text-[12px] font-medium text-[color:var(--body)]">{step}</span>
             {showBack && (
@@ -2428,7 +2436,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className={WORKBOOK_TOOLBAR_CLASS} data-testid="workbook-toolbar">
           <span
             className={`text-[11px] ${saveError ? "text-status-error" : "text-[color:var(--muted)]"}`}
             data-testid="save-status"
@@ -2620,7 +2628,7 @@ function WorkbookView({ company, onBack }: { company: Company; onBack: () => voi
         />
       )}
 
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className={WORKBOOK_COLUMNS_CLASS}>
         <div className="lg:hidden w-full space-y-3">
           {workbook && (
             <WorkbookValidationPanel
@@ -2917,7 +2925,11 @@ export default function InformationRequest() {
   return (
     <div className="text-white">
 
-      <main className={isCreateScorecardFlow && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10 has-[[data-wide-review]]:max-w-[1760px]"}>
+      <main
+        className={informationRequestMainClass(
+          informationRequestView({ isCreateScorecardFlow, picked: Boolean(picked), isSummaryStep, isEstimateStep }),
+        )}
+      >
         {/* The flow states its own step ("Add your documents"). A second,
             larger title above it competed with that and said something else
             again. It survives only on the retired /information-request path. */}
