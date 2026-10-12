@@ -97,6 +97,16 @@ export interface DocumentGrid {
    * read, and the rows are additional evidence rather than a replacement.
    */
   suppressRowScalars: boolean;
+  /**
+   * The row columns any ONE of which makes a row a record of this register
+   * (a learner's name, a programme's name), most specific first. Absent:
+   * the first row field alone. A sheet register is read only when its column
+   * mapping names one of them; the first one mapped keys the rows. Registers
+   * that open with a code most companies never print (an OFO code, a risk id)
+   * list the columns that DO identify a row, so a register without the code
+   * is still read rather than handed back unread.
+   */
+  identityFields?: string[];
 }
 
 /**
@@ -168,6 +178,7 @@ const ESG_GRIDS: Record<string, DocumentGrid> = {
       'significance_rating', 'is_significant_aspect', 'control_measure', 'responsible_owner',
     ],
     suppressRowScalars: true,
+    identityFields: ['activity_or_process', 'aspect_description'],
   },
   iso_environmental__environmental_legal_register: {
     rowsField: 'iso_legal_obligation_rows',
@@ -178,6 +189,7 @@ const ESG_GRIDS: Record<string, DocumentGrid> = {
       'issuing_authority', 'responsible_owner',
     ],
     suppressRowScalars: true,
+    identityFields: ['legislation_name', 'applicable_requirement'],
   },
   // The one genuinely two-dimensional table in the ESG set: race x gender per
   // occupational level, one row per level.
@@ -203,6 +215,8 @@ const ESG_GRIDS: Record<string, DocumentGrid> = {
       'training_duration', 'training_status', 'training_cost_rand',
     ],
     suppressRowScalars: true,
+    // A training register lists learners against courses; few print an OFO code.
+    identityFields: ['learner_name', 'programme_name', 'ofo_code', 'occupation_title'],
   },
   community_csi__csi_sed_spend_records: {
     rowsField: 'csi_initiative_rows',
@@ -213,6 +227,7 @@ const ESG_GRIDS: Record<string, DocumentGrid> = {
       'beneficiaries_reached_count', 'black_beneficiary_percent',
     ],
     suppressRowScalars: true,
+    identityFields: ['initiative_name', 'beneficiary_name'],
   },
   board_governance__board_charter_and_composition: {
     rowsField: 'board_director_rows',
@@ -260,6 +275,8 @@ const ESG_GRIDS: Record<string, DocumentGrid> = {
       'mitigation_action',
     ],
     suppressRowScalars: true,
+    // Many risk registers number nothing: the description is the record.
+    identityFields: ['risk_id', 'risk_description'],
   },
   risk_assurance__ifrs_s1_s2_readiness_assessment: {
     rowsField: 'risk_ifrs_requirement_rows',

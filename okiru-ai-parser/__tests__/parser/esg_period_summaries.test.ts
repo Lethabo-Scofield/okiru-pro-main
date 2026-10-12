@@ -133,8 +133,11 @@ describe('extractEsgPeriodSummary', () => {
       { vehicle_registration: 'AB34EFGP', monthly_litres: 1718, monthly_km: 5290, vehicle_make_model: 'Hino 500', depot_name: 'Northgate', [ROW_PERIOD_KEY]: '2026-03' },
       { vehicle_registration: 'AB56GHGP', monthly_litres: 0, monthly_km: 0, vehicle_make_model: 'Hino 500', depot_name: 'Northgate', [ROW_PERIOD_KEY]: '2026-03' },
     ]);
-    // The depot's figure is unchanged by it.
-    expect(extraction?.values[0]).toMatchObject({ field: 'esg_monthly_rows', value: [{ monthly_value: 3339 }] });
+    // The depot's figure is unchanged by it; its kilometres are its vehicles'.
+    expect(extraction?.values[0]).toMatchObject({
+      field: 'esg_monthly_rows',
+      value: [{ monthly_value: 3339 }, { monthly_measure: 'fleet.distance_km', monthly_value: 11630, monthly_site: 'Northgate' }],
+    });
     expect(extraction?.exceptions.some((e) => /3 vehicle\(s\) read with their own 2026-03 figures, 3 with both/.test(e))).toBe(true);
   });
 
@@ -165,6 +168,53 @@ describe('extractEsgPeriodSummary', () => {
     expect(norms(await read({ norm_column: 'L/100km', rate_column: 'L/100km' }))).toEqual([undefined, undefined]);
   });
 
+  it('reads each vehicle\'s measured rate, the depot\'s kilometres, and what the total row and the lines under it print', async () => {
+    const matrix: unknown[][] = [
+      ['Monthly diesel control Southport', '', '', '', '', '', '', 46113],
+      ['', '', 'Km', 'Own', 'Bought', '', 'Rate', 'Own'],
+      ['Fleet no', 'Model', 'this month', 'Fuel', 'Fuel', 'Total L', 'L/100km', 'Cost'],
+      ['ZZ11AAGP', 'Truck 8T', 4000, 1000, 0, 1000, 25, 18000],
+      ['ZZ22BBGP', 'Truck 8T', 2000, 400, 100, 500, 25, 7200],
+      ['ZZ33CCGP', 'Truck 8T', 0, 0, 0, 0, 0, 0],
+      ['', '', 6000, 1400, 100, 1500, 25, 25200],
+      ['Contractors', '', '', 250, '', '', '', 4500],
+      ['Site total', '', '', 1650, '', 1500, '', 29700],
+      [],
+      ['Lookup', 'Truck 8T'],
+      [1, 2, 3, 4, 5, 6],
+    ];
+    const rows = [
+      { 'Fleet no': 'ZZ11AAGP', 'this month': 4000, 'Total L': 1000, 'L/100km': 25 },
+      { 'Fleet no': 'ZZ22BBGP', 'this month': 2000, 'Total L': 500 },
+      { 'Fleet no': 'ZZ33CCGP', 'this month': 0, 'Total L': 0 },
+    ];
+    const extraction = await extractEsgPeriodSummary(answer({
+      site: 'Southport', period_month: '2026-04', label_column: 'Fleet no', quantity_column: 'Total L',
+      distance_column: 'this month', rate_column: 'L/100km',
+    }), { filename: 'Fuel.xlsx › Summary', sheetName: `Summary ${Date.now()}`, matrix, rows });
+
+    const vehicles = extraction?.values.find((v) => v.field === 'fleet_vehicle_rows')?.value as Array<Record<string, unknown>>;
+    // The measured rate of a vehicle that ran; none for one that did not.
+    expect(vehicles.map((v) => v.l_per_100km_actual)).toEqual([25, 25, undefined]);
+    const monthly = extraction?.values.find((v) => v.field === 'esg_monthly_rows')?.value as Array<Record<string, unknown>>;
+    expect(monthly.find((m) => m.monthly_measure === 'fleet.distance_km')).toMatchObject({ monthly_value: 6000, monthly_period_end: '2026-04-30' });
+
+    const printed = extraction?.values.find((v) => v.field === 'esg_reported_monthly_rows')?.value as Array<Record<string, unknown>>;
+    const at = (label: string) => printed.find((p) => p.reported_label === label)?.reported_value;
+    // The total row, column by column, under each column's two-row header.
+    expect(at('Total › Own Fuel')).toBe(1400);
+    expect(at('Total › Bought Fuel')).toBe(100);
+    expect(at('Total › Own Cost')).toBe(25200);
+    expect(at('Total › Rate L/100km')).toBe(25);
+    // The labelled lines under it; never the lookup table further down.
+    expect(at('Contractors › Own Fuel')).toBe(250);
+    expect(at('Site total › Own Cost')).toBe(29700);
+    expect(printed.find((p) => p.reported_label === 'Site total › Own Cost')?.reported_kind).toBe('stated_total');
+    expect(printed.some((p) => String(p.reported_label).startsWith('Lookup'))).toBe(false);
+    // None of it is a reading: the depot's diesel is still its rows' 1,500 L.
+    expect(monthly[0]).toMatchObject({ monthly_measure: 'fleet.diesel_litres', monthly_value: 1500 });
+  });
+
   it('never reads an odometer column as the kilometres driven in the month', async () => {
     const odometer = REPORT_MATRIX.map((row) => (typeof row[2] === 'number' && row[0] ? [...row.slice(0, 2), 217_515 + Number(row[2]), ...row.slice(3)] : row));
     const extraction = await extractEsgPeriodSummary(answer({ distance_column: 'this month' }), {
@@ -183,7 +233,7 @@ describe('extractEsgPeriodSummary', () => {
     const extraction = await extractEsgPeriodSummary(answer({ measure: 'energy.electricity_kwh', unit: 'kWh', quantity_column: 'Total liters' }), {
       filename: 'meters.xlsx › March', sheetName: `meters ${Date.now()}`, matrix: REPORT_MATRIX, rows: REPORT_ROWS,
     });
-    expect(extraction?.values.map((v) => v.field)).toEqual(['esg_monthly_rows']);
+    expect(extraction?.values.some((v) => v.field === 'fleet_vehicle_rows')).toBe(false);
   });
 
   it("reads nothing from one vehicle's own log — that is the vehicle's month, not the depot's", async () => {

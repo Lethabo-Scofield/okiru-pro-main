@@ -61,8 +61,17 @@ import type { EsgElement } from '../../schemas/esg_document_matrix.js';
 import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAOther, proposeOpenMappings } from './openRead.js';
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable } from './esgSheetTableExtraction.js';
-import { extractEsgMonthlyTables } from './esgMonthlyTables.js';
-import { extractEsgPeriodSummary, fillsOfVehicle, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
+import { extractEsgMonthlyTables, monthlyReadSpans, readsMonthlyMeasures } from './esgMonthlyTables.js';
+import { extractEsgPeriodSummary, fillsOfVehicle, periodReadSpan, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
+import {
+  extractEsgSheetFacts,
+  mergeCellReads,
+  registerBodySpan,
+  sheetFactsEnabled,
+  sparseMatrix,
+  type MainRegion,
+  type ReadSpan,
+} from './esgSheetFacts.js';
 import {
   ESG_REGISTER_FIELDS,
   esgFieldElementIndex,
@@ -229,6 +238,24 @@ export function esgAgentTyping(
   };
 }
 
+/** Where a split sheet's main table sits, and the cells outside it a large sheet carries. */
+function sheetLayoutOf(tables: unknown[] | undefined): {
+  region?: MainRegion;
+  outside?: Array<{ r: number; c: number; value: unknown }>;
+} {
+  const table = tables?.[0] as { region?: MainRegion; outside?: Array<{ r: number; c: number; value: unknown }> } | undefined;
+  return {
+    region: table?.region && Number.isInteger(table.region.headerRow) ? table.region : undefined,
+    outside: Array.isArray(table?.outside) ? table.outside : undefined,
+  };
+}
+
+/** A main table longer than a summary block: a register, whoever reads it. */
+function mainTableIsRegister(matrix: unknown[][], region: MainRegion): boolean {
+  const span = registerBodySpan(matrix, region);
+  return span.bottom - span.top > 25;
+}
+
 /** The raw cell layout a split workbook sheet carries, when it carries one. */
 function sheetMatrixOf(tables: unknown[] | undefined): unknown[][] | undefined {
   const matrix = (tables?.[0] as { matrix?: unknown } | undefined)?.matrix;
@@ -296,12 +323,17 @@ export async function extractEsgCaseEntities(
     // forty-five, and those single answers were what turned a dashboard into a
     // wall of false "your documents disagree" conflicts.
     const matrix = sheetMatrixOf(input.tables);
-    const monthly = await extractEsgMonthlyTables(model, {
+    const monthlyTables = await extractEsgMonthlyTables(model, {
       filename: input.filename,
       sheetName,
       matrix,
       hidden: input.metadata?.sheet_hidden === true,
     });
+    // Only a table of the measures the workbook keeps reads the sheet. One
+    // whose lines are all money, tonnage or dates is reported as printed, and
+    // the sheet's other readers still read it exactly as they did before.
+    const monthly = readsMonthlyMeasures(monthlyTables) ? monthlyTables : null;
+    const reportedOnly = monthly ? null : monthlyTables;
     // A vehicle's own fuel log — one tab per vehicle — names the vehicle once,
     // in the tab's name and title, and never on its rows.
     const loggedVehicle = vehicleOfSheet(sheetName, matrix);
@@ -368,7 +400,38 @@ export async function extractEsgCaseEntities(
 
     let results = [...specResults];
     if (readByCode) results.push(readByCode);
+    if (reportedOnly) results.push(reportedOnly);
     if (sheetTable) results.push(sheetTable);
+
+    // The labelled cells the readers above leave: label/value pairs, small
+    // summary blocks and pivots, a controlled document's header block, and —
+    // on a sheet too large to carry its layout — the blocks above and beside
+    // its table. The skill's wordings and one cached model question map their
+    // labels; the code reads every value (esgSheetFacts.ts).
+    if (sheetName && sheetFactsEnabled()) {
+      const layout = sheetLayoutOf(input.tables);
+      const grid = matrix ?? (layout.outside ? sparseMatrix(layout.outside) : undefined);
+      if (grid) {
+        const read: ReadSpan[] = [
+          ...monthlyReadSpans(monthlyTables),
+          ...(period ? [periodReadSpan(period)].filter((span): span is ReadSpan => span !== null) : []),
+          // A register's rows are the register's (read by code or by the flat pass).
+          ...(matrix && layout.region && (sheetTable || mainTableIsRegister(matrix, layout.region))
+            ? [registerBodySpan(matrix, layout.region)]
+            : []),
+        ];
+        const cellReads = await extractEsgSheetFacts(model, {
+          filename: input.filename,
+          sheetName,
+          template: loggedVehicle ? 'Vehicle fuel log' : undefined,
+          matrix: grid,
+          read,
+          specIds: [...new Set(results.map((result) => result.documentId))],
+          hidden: input.metadata?.sheet_hidden === true,
+        });
+        if (cellReads) results = mergeCellReads(results, cellReads, [readByCode, reportedOnly, sheetTable]);
+      }
+    }
     // Agent loop (off by default): a cited second read of a hard document —
     // a scan, a skill's hard type, a low-confidence type, or one whose first
     // read missed a third of its required fields. It only fills gaps;

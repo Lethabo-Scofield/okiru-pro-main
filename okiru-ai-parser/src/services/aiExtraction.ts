@@ -94,9 +94,11 @@ export interface ExtractedValueSource {
   /**
    * 'agent': read by the agent loop, with a citation. 'derived': worked out in
    * code from other extracted values (skillDerivations.ts) — `quote` then says
-   * what it was derived from, and the value is never a printed one.
+   * what it was derived from, and the value is never a printed one. 'cell':
+   * read by the code from a sheet cell whose printed label names the field
+   * (esgSheetFacts.ts) — `cellRef` is the cell, `quote` its label and value.
    */
-  method: 'agent' | 'derived';
+  method: 'agent' | 'derived' | 'cell';
   page?: number;
   cellRef?: string;
   quote: string;

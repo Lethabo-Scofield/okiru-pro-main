@@ -291,6 +291,38 @@ function whatOneRowIs(documentId: string, grid: DocumentGrid): string {
 }
 
 /**
+ * The column that keys a register's rows: the first of the register's
+ * identity fields (its first row field when it names none) that the column
+ * mapping found. Null when the mapping found none of them.
+ */
+export function rowIdentityField(grid: DocumentGrid, mapping: Record<string, string>): string | null {
+  const mapped = new Set(Object.values(mapping));
+  const identities = grid.identityFields ?? [grid.rowFields[0]];
+  return identities.find((field) => mapped.has(field)) ?? null;
+}
+
+/** A key column that holds dates: a cell with no digit in it is no date. */
+const DATE_KEY = /(_date|_month)$/;
+
+/**
+ * Whether a mapped row is a sheet's LABEL LINE rather than a record: the
+ * register is keyed by a date, and the row's key cell is a caption with no
+ * digit in it ("Opening stock", "Fuel issued" read as transaction dates,
+ * whatever figure sits beside them). Those lines are the labelled-cell
+ * reader's (esgSheetFacts.ts), which reads them under their own captions.
+ *
+ * Nothing else marks a row: a detail export prints a route's line once per
+ * drop, a daily log fills its unused days down with the same date and 0, a
+ * date with nothing beside it is a template's empty day, and a name or a
+ * registration may be any words. All of those stay records.
+ */
+export function isLabelLine(row: Record<string, unknown>, keyField: string): boolean {
+  if (!DATE_KEY.test(keyField)) return false;
+  const key = row[keyField];
+  return typeof key === 'string' && key.trim() !== '' && !/\d/.test(key);
+}
+
+/**
  * Read a workbook sheet as an ESG register.
  *
  * Returns null — never a partial guess — when the sheet is not a register, has
@@ -318,11 +350,15 @@ export async function extractEsgSheetTable(
   // What the model read a column AS, checked against what the column holds.
   const checked = mapped ? checkEsgColumnMeaning(rows, mapped) : null;
   const mapping = checked?.mapping ?? null;
-  // The FIRST column is the row's identity (vehicle_registration, driver_name).
-  // Without it every row is anonymous and `applyColumnMapping` drops them all,
-  // so an unmapped key field means "not this register" rather than "no rows" —
-  // hand it back to the spec pass instead of reporting an empty table.
-  if (!mapping || !Object.values(mapping).includes(shape.columns[0])) {
+  // A row needs an identity (vehicle_registration, learner_name). Without one
+  // every row is anonymous and `applyColumnMapping` drops them all, so a
+  // mapping that names no identity column means "not this register" rather
+  // than "no rows" — hand it back to the spec pass instead of reporting an
+  // empty table. Which columns identify a row is the register's own
+  // statement (`identityFields`): a training register that prints no OFO code
+  // is still a training register, keyed by its learners.
+  const identity = mapping ? rowIdentityField(grid, mapping) : null;
+  if (!mapping || !identity) {
     logger.info('ESG sheet columns did not map to the chosen register', {
       sheet: sheetName,
       documentId,
@@ -332,9 +368,25 @@ export async function extractEsgSheetTable(
   }
 
   // The B-BBEE echo-row skip stays off here: ESG registers keep the reading
-  // they were checked against the ESG answer key with.
-  const table = applyColumnMapping(rows, mapping, shape, { skipEchoRows: false });
-  if (table.rows.length === 0) return null;
+  // they were checked against the ESG answer key with. The mapping question
+  // above keeps the register's own column order; the rows are keyed by the
+  // identity column the mapping found.
+  const keyedShape: TableShape = { ...shape, columns: [identity, ...shape.columns.filter((c) => c !== identity)] };
+  const table = applyColumnMapping(rows, mapping, keyedShape, { skipEchoRows: false });
+  // A stock reconciliation's "Opening stock | 2 000" lines, under its one
+  // delivery line, map onto a transaction register's date column: they are
+  // no transactions. The register keeps its records; the label lines are the
+  // labelled-cell reader's.
+  // A sheet of nothing but label lines (an unused log tab: its "Totals" line)
+  // is still this register, read and holding no record: it is not handed to
+  // a paid flat read that could only guess at what it holds.
+  const labelLines = table.rows.filter((row) => isLabelLine(row, identity)).length;
+  if (labelLines > 0) {
+    table.rows = table.rows.filter((row) => !isLabelLine(row, identity));
+    table.exceptions.push(`${labelLines} line(s) whose ${identity} is a caption, not a date, were left to the sheet's labelled cells.`);
+    logger.info('ESG register label lines left to the labelled-cell reader', { sheet: sheetName, documentId, labelLines });
+  }
+  if (table.rows.length === 0 && labelLines === 0) return null;
   for (const field of checked?.perLitreFields ?? []) {
     for (const row of table.rows) {
       const kmPerLitre = numeric(row[field]);

@@ -104,8 +104,8 @@ export interface OpenFact {
   cell: string | null;
   /** The printed line or cell the value is in; checked to occur in the document. */
   quote: string;
-  /** Who read it: the open read / the listed read's other details ('ai'), or the agent's cited read. */
-  method: 'ai' | 'agent';
+  /** Who read it: the open read / the listed read's other details ('ai'), the agent's cited read, or the code reading a sheet's labelled cell ('code'). */
+  method: 'ai' | 'agent' | 'code';
 }
 
 export interface OpenIdentity {

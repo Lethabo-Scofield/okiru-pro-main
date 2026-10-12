@@ -18,6 +18,7 @@ import {
   chooseEsgSheetGrid,
   esgSheetNameOf,
   extractEsgSheetTable,
+  isLabelLine,
 } from '../../src/services/esgSheetTableExtraction.js';
 import { resetDecisionCacheForTest } from '../../src/services/semanticDecisionCache.js';
 
@@ -118,6 +119,85 @@ describe('extractEsgSheetTable', () => {
     const model = mappingModel({ Depot: 'depot_name' });
     const result = await extractEsgSheetTable(model, {
       filename: 'SG.xlsx › Fleet_Register', rows: fleetRows(10), sheetName: 'Fleet_Register',
+    });
+    expect(result).toBeNull();
+  });
+
+  it('reads a training register that prints no OFO code, keyed by its learners', async () => {
+    // The register's first row field is ofo_code, and most training registers
+    // never print one. Requiring it handed a whole learner register back unread.
+    const rows = Array.from({ length: 12 }, (_, i) => ({
+      'Course': i < 6 ? 'SAFETY INDUCTION' : 'LADDER WORK',
+      'Provider': i < 6 ? 'Acme Safety' : 'Lift Co',
+      'Learner': `LEARNER ${i + 1}`,
+      'Cost (R)': i % 3 === 0 ? undefined : 1000 + i,
+    }));
+    const model = mappingModel({
+      'Course': 'programme_name',
+      'Provider': 'training_provider_name',
+      'Learner': 'learner_name',
+      'Cost (R)': 'training_cost_rand',
+    });
+    const result = await extractEsgSheetTable(model, {
+      filename: 'Training register.xlsx › Learners', rows, sheetName: 'Learners',
+      // The model chooses the register; here the test pins it.
+      template: 'OFO codes',
+    });
+    expect(result?.documentId).toBe('training__ofo_intervention_register');
+    const out = result!.values[0].value as Array<Record<string, unknown>>;
+    expect(out).toHaveLength(12);
+    expect(out[11]).toMatchObject({ learner_name: 'LEARNER 12', programme_name: 'LADDER WORK', training_cost_rand: 1011 });
+    // Twelve learners, not two rows inheriting the first learner's name.
+    expect(new Set(out.map((row) => row.learner_name)).size).toBe(12);
+  });
+
+  it('keeps a sheet\'s records and leaves its label lines to the labelled-cell reader', async () => {
+    // A report with its records and then caption lines with their figures.
+    // Mapped onto a register keyed by date, each caption became a "record"
+    // dated "Opening stock".
+    const rows: Array<Record<string, unknown>> = [
+      { Date: 46100, Route: 'R-001', Km: 410 },
+      { Date: '46101', Route: 'R-002', Km: 380 },
+      ...['Reconciliation', 'Meter open', 'Difference', 'Opening stock', 'Purchased', 'Closing stock']
+        .map((caption, i) => ({ Date: caption, Km: i * 10 })),
+      { Date: 46102, Route: 'R-003' },
+    ];
+    const model = mappingModel({ Date: 'report_date', Route: 'route_name', Km: 'distance_km' });
+    const result = await extractEsgSheetTable(model, {
+      filename: 'Routes.xlsx › Summary', rows, sheetName: 'Summary', template: 'Debrief summary',
+    });
+    const out = result!.values[0].value as Array<Record<string, unknown>>;
+    expect(out.map((row) => row.route_name)).toEqual(['R-001', 'R-002', 'R-003']);
+    expect(result!.exceptions.some((e) => /6 line\(s\) whose report_date is a caption/.test(e))).toBe(true);
+  });
+
+  it('reads a sheet of nothing but label lines as the register with no record, not as unread', async () => {
+    const model = mappingModel({ Date: 'report_date', Route: 'route_name', Km: 'distance_km' });
+    const result = await extractEsgSheetTable(model, {
+      filename: 'Routes.xlsx › Unused', sheetName: 'Unused', template: 'Debrief summary',
+      rows: [{ Date: 'Totals', Km: 0 }, { Date: 'Checked by', Route: 'R-001' }],
+    });
+    expect(result?.documentId).toBe('fleet__telematics_driver_debrief_report');
+    expect(result!.values[0].value).toEqual([]);
+  });
+
+  it('takes only a caption in a date column for a label line', () => {
+    expect(isLabelLine({ transaction_date: 'Opening stock', fuel_litres: 2000 }, 'transaction_date')).toBe(true);
+    // A date, written any way, or a template's empty day, is a record.
+    expect(isLabelLine({ transaction_date: '05-03-2026' }, 'transaction_date')).toBe(false);
+    expect(isLabelLine({ transaction_date: 46100 }, 'transaction_date')).toBe(false);
+    // A name or a registration may be any words.
+    expect(isLabelLine({ learner_name: 'Opening Stock' }, 'learner_name')).toBe(false);
+    expect(isLabelLine({ vehicle_registration: 'UNREGISTERED', depot_name: 'North' }, 'vehicle_registration')).toBe(false);
+  });
+
+  it('still requires an identity column: a training sheet mapped to costs alone is not read', async () => {
+    const model = mappingModel({ 'Cost (R)': 'training_cost_rand' });
+    const result = await extractEsgSheetTable(model, {
+      filename: 'Training register.xlsx › Costs',
+      rows: [{ 'Cost (R)': 100 }, { 'Cost (R)': 200 }],
+      sheetName: 'Costs',
+      template: 'OFO codes',
     });
     expect(result).toBeNull();
   });

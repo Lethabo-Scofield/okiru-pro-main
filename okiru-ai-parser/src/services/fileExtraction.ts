@@ -630,6 +630,8 @@ export async function extractionInputsFromUpload(
       ...(sheet.namedCells ? { namedCells: sheet.namedCells } : {}),
       ...(sheet.instructions ? { instructions: sheet.instructions } : {}),
       ...(sheet.statedTotals ? { statedTotals: sheet.statedTotals } : {}),
+      ...(sheet.region ? { region: sheet.region } : {}),
+      ...(sheet.outside ? { outside: sheet.outside } : {}),
     });
 
     // A SINGLE-sheet workbook is not worth splitting into one document, but it
