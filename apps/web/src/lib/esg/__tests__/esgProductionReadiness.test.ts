@@ -22,6 +22,8 @@ const USER_FACING_FILES = [
   "EsgToolkit/src/components/EsgReportScopePanel.tsx",
   "src/components/esg-workbook/EsgWorkbookSectionEditor.tsx",
   "src/components/esg-workbook/EsgRegisterGrid.tsx",
+  "src/components/esg-workbook/EsgAiReviewModal.tsx",
+  "src/components/esg-workbook/EsgCellMark.tsx",
 ];
 
 /** Every user-visible label/description string that ships with the ESG flow. */

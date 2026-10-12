@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { parseClipboardMatrix } from "@/lib/workbookGridParse";
 import { applyPasteToCells, sumRow } from "@/lib/esg/esgGridPaste";
 import { ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
+import { EsgCellMark } from "./EsgCellMark";
 
 // Moved to lib so the data layer (grid dropdowns, import translation) can use
 // them without depending on a component; re-exported here for existing callers.
@@ -96,18 +97,21 @@ export function EsgMonthlyGrid({
                   const ref = `${cellPrefix}_${monthColLetter(mi)}${14 + ri}`;
                   return (
                     <td key={ref} className={ESG_TABLE_CELL}>
-                      <input
-                        type="number"
-                        disabled={readOnly}
-                        value={values[ref] ?? ""}
-                        onChange={(e) => {
-                          onTouch?.(ref);
-                          onChange({
-                            [ref]: e.target.value === "" ? "" : Number(e.target.value),
-                          });
-                        }}
-                        className={ESG_TABLE_INPUT}
-                      />
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          disabled={readOnly}
+                          value={values[ref] ?? ""}
+                          onChange={(e) => {
+                            onTouch?.(ref);
+                            onChange({
+                              [ref]: e.target.value === "" ? "" : Number(e.target.value),
+                            });
+                          }}
+                          className={ESG_TABLE_INPUT}
+                        />
+                        <EsgCellMark cell={ref} current={values[ref]} />
+                      </div>
                     </td>
                   );
                 })}
@@ -118,16 +122,19 @@ export function EsgMonthlyGrid({
                   {tco2.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                 </td>
                 <td className={ESG_TABLE_CELL}>
-                  <input
-                    type="text"
-                    disabled={readOnly}
-                    value={String(values[`${cellPrefix}_src_${ri}`] ?? "")}
-                    onChange={(e) => {
-                      onTouch?.(`${cellPrefix}_src_${ri}`);
-                      onChange({ [`${cellPrefix}_src_${ri}`]: e.target.value });
-                    }}
-                    className={ESG_TABLE_INPUT}
-                  />
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      disabled={readOnly}
+                      value={String(values[`${cellPrefix}_src_${ri}`] ?? "")}
+                      onChange={(e) => {
+                        onTouch?.(`${cellPrefix}_src_${ri}`);
+                        onChange({ [`${cellPrefix}_src_${ri}`]: e.target.value });
+                      }}
+                      className={ESG_TABLE_INPUT}
+                    />
+                    <EsgCellMark cell={`${cellPrefix}_src_${ri}`} current={values[`${cellPrefix}_src_${ri}`]} />
+                  </div>
                 </td>
               </tr>
             );

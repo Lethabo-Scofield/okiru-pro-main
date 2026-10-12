@@ -21,6 +21,7 @@ import { EsgHeadcountGrid } from "./EsgHeadcountGrid";
 import { EsgMaturityGrid } from "./EsgMaturityGrid";
 import { EsgSubtabContainer } from "./EsgSubtabContainer";
 import { EsgRegisterGrid } from "./EsgRegisterGrid";
+import { EsgCellSectionContext } from "./EsgCellMark";
 import { ESG_PANEL_HEADER, ESG_SAVE_BTN } from "./esgEditorChrome";
 import {
   ASSUMPTIONS_FIELDS,
@@ -543,7 +544,10 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         data-testid={`esg-workbook-section-${sectionId}`}
       >
         {!toolkitMode ? header : null}
-        <div className={toolkitMode ? "p-3" : "p-5"}>{body}</div>
+        {/* Each cell's marker (AI fill, document, disagreement) knows its section from here. */}
+        <EsgCellSectionContext.Provider value={sectionId}>
+          <div className={toolkitMode ? "p-3" : "p-5"}>{body}</div>
+        </EsgCellSectionContext.Provider>
         {!toolkitMode ? (
           <div className="px-5 pb-5">
             <button

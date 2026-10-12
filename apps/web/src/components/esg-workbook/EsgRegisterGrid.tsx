@@ -14,7 +14,8 @@ import {
   type EsgGridSectionId,
 } from "@/lib/esgGridSections";
 import { ESG_INPUT_SECTIONS } from "@/lib/esgSections";
-import { mergeEsgSectionCells, readEsgGridRows, type EsgGridRow } from "@/lib/esgGridRows";
+import { mergeEsgSectionCells, readEsgGridRows, refFor, type EsgGridRow } from "@/lib/esgGridRows";
+import { EsgCellMark } from "./EsgCellMark";
 import { useEsgStore } from "../../../EsgToolkit/src/lib/esgStore";
 import { ESG_PANEL, ESG_PANEL_HEADER, ESG_SAVE_BTN } from "./esgEditorChrome";
 import { esgWorkbookAxes } from "./esgDefaults";
@@ -126,6 +127,19 @@ export const EsgRegisterGrid = forwardRef<EsgRegisterGridHandle, Props>(function
           readOnly={locked}
           canAddRows={!locked && addRows}
           canDeleteRows={!locked && delRows}
+          // The register's cells are stored by sheet address: row i is startRow + i.
+          cellAdornment={(row, rowIndex, column) => {
+            const idx = def.columns.findIndex((c) => c.key === column.key);
+            if (idx < 0) return null;
+            return (
+              <EsgCellMark
+                section={sectionId}
+                cell={`${refFor(def, def.columns[idx], idx)}${def.startRow + rowIndex}`}
+                current={row[column.key]}
+                className="ml-1"
+              />
+            );
+          }}
         />
       </div>
       {!toolkitMode ? (
