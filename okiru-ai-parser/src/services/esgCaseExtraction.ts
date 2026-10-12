@@ -253,6 +253,62 @@ export function withoutDocumentFacts(extraction: DocumentExtraction): DocumentEx
   return { ...extraction, values: extraction.values.filter((value) => !documentOnly.has(value.field)) };
 }
 
+/** A field that holds money: a rand amount, a charge, a cost, a credit. */
+const MONEY_FIELD = /(?:^|_)(?:rand|zar|amount|cost|costs|charge|charges|credit|spend|vat)(?:_|$)/;
+
+/** "20.25-", "R 1 250.00 -": a figure whose minus is printed AFTER it. */
+const TRAILING_MINUS = /^\s*((?:r|zar)?\s*\d[\d\s,]*(?:[.,]\d+)?)\s*-\s*$/i;
+
+/** A rate is per something, and a rate is never a credit. */
+const isRate = (field: string): boolean => /(?:^|_)per(?:_|$)/.test(field);
+
+function creditAsNegative(field: string, value: unknown): unknown {
+  if (typeof value !== 'string' || !MONEY_FIELD.test(field) || isRate(field)) return value;
+  const m = TRAILING_MINUS.exec(value);
+  return m ? `-${m[1].trim()}` : value;
+}
+
+/**
+ * A credit printed in the accounting style — the minus AFTER the figure
+ * ("20.25-", the way a municipal account prints a generation-offset credit) —
+ * is a negative amount. Stored as printed, nothing downstream could read it:
+ * every number parser here, and the web's, reads "20.25-" as no number at all,
+ * so the credit silently vanished from the bill's charges. Normalised to the
+ * leading-minus form ("-20.25") on money fields only, in scalars and in the
+ * columns of a document's rows. The figure itself is never changed; a
+ * quantity (kWh, litres) keeps whatever the document printed, because a
+ * negative quantity is a meaning (an export), not a typography.
+ */
+export function trailingMinusCreditsAsNegative(extraction: DocumentExtraction): DocumentExtraction {
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (Array.isArray(value.value)) {
+      let rowsChanged = false;
+      const rows = value.value.map((row) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+        let rowChanged = false;
+        const next: Record<string, unknown> = {};
+        for (const [column, cell] of Object.entries(row as Record<string, unknown>)) {
+          const normal = creditAsNegative(column, cell);
+          if (normal !== cell) rowChanged = true;
+          next[column] = normal;
+        }
+        if (!rowChanged) return row;
+        rowsChanged = true;
+        return next;
+      });
+      if (!rowsChanged) return value;
+      changed = true;
+      return { ...value, value: rows };
+    }
+    const normal = creditAsNegative(value.field, value.value);
+    if (normal === value.value) return value;
+    changed = true;
+    return { ...value, value: normal };
+  });
+  return changed ? { ...extraction, values } : extraction;
+}
+
 /** How many zero quantities, and nothing else, make a sheet an unfilled template. */
 const TEMPLATE_ZERO_QUANTITIES = 3;
 
@@ -615,7 +671,13 @@ export async function extractEsgCaseEntities(
   const extractions: DocumentExtraction[] = [];
   for (const result of settled) {
     if (result.status === 'fulfilled' && result.value) {
-      extractions.push(...result.value.map(notesAsExceptions).map(namedUnitFiguresAsExceptions).map(unprintedValuesAsExceptions));
+      extractions.push(
+        ...result.value
+          .map(notesAsExceptions)
+          .map(namedUnitFiguresAsExceptions)
+          .map(trailingMinusCreditsAsNegative)
+          .map(unprintedValuesAsExceptions),
+      );
     } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they
       // have already paid to extract.

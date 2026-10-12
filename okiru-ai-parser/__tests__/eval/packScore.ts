@@ -633,6 +633,10 @@ export const KEY_NAME_ALIASES: Readonly<Record<string, readonly string[]>> = {
   // evidenced total, and the leviable amount as SDL x 100 (the key's own label).
   amount_paid: ['derived_amount_paid_total'],
   sum_of_leviable_amount: ['derived_leviable_amount'],
+  // ESG: the electricity bill skill returns an account's lines (one per
+  // meter, or one per month of a printed history) under its own rows field.
+  // A line's kWh is the same quantity the grid calls a site row's kWh.
+  'energy_site_rows.electricity_kwh': ['electricity_period_rows.line_electricity_kwh'],
 };
 
 export interface ScoreOptions {

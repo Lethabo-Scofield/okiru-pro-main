@@ -57,7 +57,12 @@ describe("computeEsgIndicatorCoverage", () => {
   });
 
   it("moves an indicator from missing to scored as its inputs arrive", () => {
-    const fuel = computeEsgIndicatorCoverage(wb({ "e-data": { s1a_C14: 1_000 }, assumptions: OWN_TARGETS }));
+    // One site of five is a fifth of "established & tracked"; every site's month is all of it.
+    const oneSite = computeEsgIndicatorCoverage(wb({ "e-data": { s1a_C14: 1_000 }, assumptions: OWN_TARGETS }));
+    expect(find(oneSite, "environmental", "d5")).toMatchObject({ status: "partial", points: 1 });
+    const fuel = computeEsgIndicatorCoverage(
+      wb({ "e-data": { s1a_C14: 1_000, s1a_C15: 900, s1a_C16: 800, s1a_C17: 700, s1a_C18: 600 }, assumptions: OWN_TARGETS }),
+    );
     expect(find(fuel, "environmental", "d5")).toMatchObject({ status: "full", points: 5, missing: [] });
     // A baseline is still needed for the reduction indicator.
     expect(find(fuel, "environmental", "d6")).toMatchObject({ status: "missing", missing: ["A Scope 1 + 2 baseline in tCO₂e"] });

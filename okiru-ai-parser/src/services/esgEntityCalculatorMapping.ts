@@ -310,6 +310,14 @@ const FIELD_MAPPINGS: EsgFieldMapping[] = [
   { field: 'safety_representatives_appointed_count', calculatorKey: 'hs.safety_representatives_count', elements: ['HEALTH_SAFETY'], coerce: 'number' },
   { field: 'first_aiders_certified_count', calculatorKey: 'hs.first_aiders_count', elements: ['HEALTH_SAFETY'], coerce: 'number' },
   { field: 'hira_register_present', calculatorKey: 'hs.hira_register_present', elements: ['HEALTH_SAFETY'], coerce: 'boolean' },
+  // Incident register rows (incident_rows). incident_description is not mapped: the counts need
+  // only the date, the classification and who it was, and a description can carry personal detail.
+  { field: 'incident_date', calculatorKey: 'hs.incident_date', elements: ['HEALTH_SAFETY'], coerce: 'iso_date' },
+  { field: 'incident_site', calculatorKey: 'hs.incident_site', elements: ['HEALTH_SAFETY'], coerce: 'text' },
+  { field: 'incident_classification', calculatorKey: 'hs.incident_classification', elements: ['HEALTH_SAFETY'], coerce: 'text' },
+  { field: 'incident_lost_time', calculatorKey: 'hs.incident_lost_time', elements: ['HEALTH_SAFETY'], coerce: 'boolean' },
+  { field: 'incident_days_lost', calculatorKey: 'hs.incident_days_lost', elements: ['HEALTH_SAFETY'], coerce: 'number' },
+  { field: 'injured_party_category', calculatorKey: 'hs.injured_party_category', elements: ['HEALTH_SAFETY'], coerce: 'text' },
 
   // ── Training / skills ──────────────────────────────────────────────────
   { field: 'seta_name', calculatorKey: 'training.seta_name', elements: ['TRAINING'], coerce: 'text' },
@@ -531,6 +539,7 @@ const GRID_ELEMENTS: Record<string, EsgElement> = {
   board_committee_rows: 'BOARD_GOVERNANCE',
   board_king_principle_rows: 'BOARD_GOVERNANCE',
   ethics_penalty_rows: 'ETHICS_COMPLIANCE',
+  incident_rows: 'HEALTH_SAFETY',
   risk_register_rows: 'RISK_ASSURANCE',
   risk_ifrs_requirement_rows: 'RISK_ASSURANCE',
 };

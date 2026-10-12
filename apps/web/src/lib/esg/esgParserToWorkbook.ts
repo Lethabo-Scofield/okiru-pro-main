@@ -24,6 +24,7 @@
  * mapping table names, cells a grid produced, and cells built from an axis alike.
  */
 import { writeEsgGridCells, type EsgGridRow } from "./esgGridRows";
+import { esgIncidentCounts, INCIDENT_ROWS_FIELD } from "./esgIncidentCounts";
 import { ESG_GRID_SECTIONS, type EsgGridSectionId } from "./esgGridSections";
 import {
   ESG_FALLBACK_REPORTING_AXES,
@@ -493,7 +494,19 @@ export function mapEsgCalculatorToWorkbook(
   // pass: in a one-row grid two documents' different sites add up, which they
   // could not do if each reader settled its own figures.
   const monthlyFacts: MonthlyFact[] = [];
-  for (const [gridField, gridRows] of rowsByGrid) {
+  // Waste rows whose mass has no unit the register can hold, by source file.
+  let heldWaste: Map<string, { rows: number; stated: Set<string> }> = new Map();
+  for (const [gridField, initialRows] of rowsByGrid) {
+    let gridRows = initialRows;
+    if (gridField === WASTE_ROWS_FIELD) {
+      const units = wasteRowsWithUnits(gridRows, entries);
+      gridRows = units.kept;
+      heldWaste = units.held;
+      if (gridRows.length === 0) {
+        record(gridField, { status: "unplaced", cells: [], rejection: "unit_unresolved", reason: wasteUnitReason(units.held) });
+        continue;
+      }
+    }
     if (gridField === ESG_MONTHLY_FACTS_FIELD) {
       monthlyFacts.push(...monthlyFactsFromRows(gridRows));
       continue;
@@ -504,6 +517,10 @@ export function mapEsgCalculatorToWorkbook(
     }
     if (gridField === "ee_level_rows") {
       applyHeadcountRows(gridRows, builder, record);
+      continue;
+    }
+    if (gridField === INCIDENT_ROWS_FIELD) {
+      applyIncidentRows(gridRows, entries, axes, builder, record);
       continue;
     }
     const target = ESG_GRID_TARGETS[gridField];
@@ -548,6 +565,10 @@ export function mapEsgCalculatorToWorkbook(
 
   applySaqRow(byKey, gridCells, record);
 
+  /* ---------------- ISO certification and the environmental policy ---------------- */
+
+  const answered = applyIsoEvidence(byKey, gridCells, builder, record);
+
   /* ---------------- Scalars ---------------- */
 
   const saqKeys = new Set(Object.keys(ESG_SAQ_ROW_TARGET.columns));
@@ -556,6 +577,7 @@ export function mapEsgCalculatorToWorkbook(
     const key = entry.key;
     const field = entry.sourceField || key;
     if (saqKeys.has(key)) continue; // already handled as the SAQ row
+    if (answered.has(key)) continue; // already placed as the row it answers
 
     const derived = ESG_DERIVED_KEY_HOMES[key];
     if (derived) {
@@ -667,9 +689,9 @@ export function mapEsgCalculatorToWorkbook(
   }
 
   const patches: EsgSectionPatchMap = {};
-  const addCell = (sectionId: string, cellRef: string, value: EsgCellValue): boolean => {
+  const addCell = (sectionId: string, cellRef: string, value: EsgCellValue, sectionCells?: Record<string, unknown>): boolean => {
     // THE GATE. Every cell — table, grid or axis — passes here.
-    if (isEsgDerivedCell(sectionId, cellRef)) return false;
+    if (isEsgDerivedCell(sectionId, cellRef, sectionCells)) return false;
     const section = patches[sectionId] ?? (patches[sectionId] = { cells: {} });
     section.cells[cellRef] = value;
     return true;
@@ -706,21 +728,116 @@ export function mapEsgCalculatorToWorkbook(
         section.cells[cellRef] = value;
         continue;
       }
-      addCell(sectionId, cellRef, value);
+      // A register's own cells are judged against the register: a long waste
+      // register's row 16 is a stream, and its depot is not the summary B16.
+      addCell(sectionId, cellRef, value, cells);
     }
   }
 
   const contestedCells = new Set(conflicts.filter((c) => c.sectionId === "e-data").map((c) => c.cellRef));
   const monthly = monthlyFactOutcomes(monthlyFacts, monthlyFates, contestedCells, patches);
+  const sourceOutcomes = monthly.outcomes;
+  // A document whose waste rows were held answers for itself, even where
+  // another document's rows reached the register.
+  for (const [source, held] of heldWaste) {
+    if (!source) continue;
+    const bySource = sourceOutcomes[WASTE_ROWS_FIELD] ?? (sourceOutcomes[WASTE_ROWS_FIELD] = {});
+    bySource[source] = {
+      status: "unplaced",
+      cells: [],
+      rejection: "unit_unresolved",
+      reason: wasteUnitReason(new Map([[source, held]])),
+    };
+  }
 
   return {
     patches,
     outcomes,
-    sourceOutcomes: monthly.outcomes,
+    sourceOutcomes,
     conflicts,
     ...(monthly.held.length > 0 ? { heldFigures: monthly.held } : {}),
     ...(priorYear && priorYear.measures.length > 0 ? { priorYear } : {}),
   };
+}
+
+/* ------------------------------------------------------------------ *
+ * Waste rows need a unit
+ * ------------------------------------------------------------------ */
+
+const WASTE_ROWS_FIELD = "waste_stream_rows";
+const WASTE_QUANTITY_KEYS = ["waste.total_kg", "waste.recycled_kg", "waste.landfill_kg"] as const;
+const WASTE_UNIT_KEYS = ["waste.mass_unit", "waste.unit"] as const;
+
+/** A stated mass unit → kilograms per unit; null when it is no mass unit the register can hold. */
+function kilogramsPer(unit: string): number | null {
+  const u = unit.trim().toLowerCase().replace(/\.$/, "");
+  if (/^(kg|kgs|kilo(gram)?s?)$/.test(u)) return 1;
+  if (/^(t|ton|tons|tonne|tonnes|metric tons?)$/.test(u)) return 1000;
+  return null;
+}
+
+/**
+ * Waste rows whose quantities carry a unit, in kilograms; the rest held.
+ *
+ * The parser's row columns are NAMED in kilograms (`waste_total_kg`) but hold
+ * the figure "in the unit printed" — the waste skill says so, and reports the
+ * unit separately. A row with no stated unit (a dashboard's monthly series
+ * whose figures are a few kilograms a month for five warehouses, or "UNITS")
+ * is not kilograms by assumption: added to a contractor's 13,910 kg it made a
+ * register no total or diversion rate could be read from. Such a row is held
+ * and said so — never written, never scored. A unit is the row's own, or the
+ * one its document states when that document is the row's only source.
+ * Tonnes are converted to kilograms, the register's unit.
+ */
+function wasteRowsWithUnits(
+  rows: EsgCalculatorRowLike[],
+  entries: readonly EsgCalculatorEntryLike[],
+): { kept: EsgCalculatorRowLike[]; held: Map<string, { rows: number; stated: Set<string> }> } {
+  const documentUnit = new Map<string, string>();
+  for (const entry of entries) {
+    if (!(WASTE_UNIT_KEYS as readonly string[]).includes(entry.key)) continue;
+    const files = (entry.sourceFiles ?? []).filter(Boolean);
+    if (files.length === 1 && typeof entry.value === "string") documentUnit.set(files[0], entry.value);
+  }
+  const kept: EsgCalculatorRowLike[] = [];
+  const held = new Map<string, { rows: number; stated: Set<string> }>();
+  for (const row of rows) {
+    const files = (row.sourceFiles ?? []).filter(Boolean);
+    const own = WASTE_UNIT_KEYS.map((key) => row.cells[key]).find((v) => typeof v === "string" && v.trim() !== "");
+    const unit = typeof own === "string" ? own : files.length === 1 ? documentUnit.get(files[0]) : undefined;
+    const factor = unit ? kilogramsPer(unit) : null;
+    if (factor === null) {
+      const source = files[0] ?? "";
+      const entry = held.get(source) ?? { rows: 0, stated: new Set<string>() };
+      entry.rows += 1;
+      if (unit) entry.stated.add(unit);
+      held.set(source, entry);
+      continue;
+    }
+    if (factor === 1) {
+      kept.push(row);
+      continue;
+    }
+    const cells = { ...row.cells };
+    for (const key of WASTE_QUANTITY_KEYS) {
+      const n = typeof cells[key] === "number" ? (cells[key] as number) : Number(cells[key]);
+      if (cells[key] !== undefined && cells[key] !== null && cells[key] !== "" && Number.isFinite(n)) cells[key] = n * factor;
+    }
+    kept.push({ ...row, cells });
+  }
+  return { kept, held };
+}
+
+function wasteUnitReason(held: Map<string, { rows: number; stated: Set<string> }>): string {
+  const rows = Array.from(held.values()).reduce((a, h) => a + h.rows, 0);
+  const stated = Array.from(new Set(Array.from(held.values()).flatMap((h) => Array.from(h.stated))));
+  const unit = stated.length > 0
+    ? `in "${stated.join('", "')}", which is not a mass the waste register records`
+    : "with no unit stated";
+  return (
+    `${rows} waste row(s) give their quantities ${unit}, so they were held back and not scored. ` +
+    "The register records kilograms: confirm the unit (kilograms or tonnes) and add the rows, or enter the contractor's totals."
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -2129,4 +2246,156 @@ function applySaqRow(
   const existing = gridCells.get("saq");
   gridCells.set("saq", existing ? { ...existing, ...cells } : cells);
   void failures;
+}
+
+/* ------------------------------------------------------------------ *
+ * ISO 14001 status and the environmental policy's board approval
+ * ------------------------------------------------------------------ */
+
+/**
+ * Where an ISO 14001 process stands, from what an audit report or a
+ * certificate says. ISO 14001 has three real states: certified, genuinely in
+ * progress (a stage 1 or stage 2 audit under way or passed, a recommendation
+ * to certify), and neither. The tracker's own vocabulary already says them:
+ * Fully Compliant, Partially Compliant, Gap. Anything this cannot read is not
+ * guessed — the status stays evidence.
+ */
+export function iso14001TrackerStatus(raw: unknown): "Fully Compliant" | "Partially Compliant" | null {
+  const text = String(raw ?? "").toLowerCase();
+  if (!text.trim()) return null;
+  if (/\b(suspended|withdrawn|expired|revoked|not recommended|not certified|uncertified|failed)\b/.test(text)) return null;
+  if (/\bstage\s*(1|2|one|two|i{1,2})\b|\bin progress\b|\bproceed to\b|\brecommended for certification\b|\bgap analysis\b/.test(text)) {
+    return "Partially Compliant";
+  }
+  if (/\b(certified|certificate (issued|granted|valid)|certification (granted|awarded|confirmed))\b/.test(text)) return "Fully Compliant";
+  return null;
+}
+
+/** The ISO tracker row the certification indicator reads (`esgDeriveSummary` matches "certification"). */
+const ISO_CERTIFICATION_REQUIREMENT = "ISO 14001 certification";
+
+/**
+ * Two document facts that answer a workbook row, rather than a cell of their own:
+ *
+ *   - `iso.iso14001_status` → the ISO tracker's certification row: certified,
+ *     or in progress. E d26 stays gated exactly as before — a certification
+ *     row earns nothing until EMS clauses besides it are assessed.
+ *   - `iso.environmental_policy_approval_date` → `G_Data!B27`, "Environmental
+ *     policy approved by the board": a minuted approval date is the evidence
+ *     the row asks for. Partial where the same policy states no net-zero
+ *     commitment, as the row's own guidance says. E d28 still takes the
+ *     stricter of this and the ISO clause-5.2 assessment.
+ *
+ * Returns the keys it answered, so the scalar pass does not report them again.
+ */
+function applyIsoEvidence(
+  byKey: Map<string, EsgCalculatorEntryLike>,
+  gridCells: Map<string, Record<string, EsgCellValue>>,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): Set<string> {
+  const answered = new Set<string>();
+
+  const status = byKey.get("iso.iso14001_status");
+  const trackerStatus = status ? iso14001TrackerStatus(status.value) : null;
+  if (status && trackerStatus) {
+    const scope = byKey.get("iso.iso14001_scope");
+    const evidence = [String(status.value ?? "").trim(), scope ? `Scope: ${String(scope.value ?? "").trim()}` : ""]
+      .filter(Boolean)
+      .join(" ");
+    const cells = writeEsgGridCells("iso-tracker", [
+      { _id: "esg_parser_iso_certification", requirement: ISO_CERTIFICATION_REQUIREMENT, status: trackerStatus, evidence },
+    ]) as Record<string, EsgCellValue>;
+    const existing = gridCells.get("iso-tracker");
+    gridCells.set("iso-tracker", existing ? { ...existing, ...cells } : cells);
+    record(status.sourceField || status.key, {
+      status: "placed",
+      cells: [{ sectionId: "iso-tracker", cellRef: String(ESG_GRID_SECTIONS["iso-tracker"].startRow), value: trackerStatus }],
+      reason:
+        trackerStatus === "Partially Compliant"
+          ? "Recorded on the ISO tracker as certification in progress. It scores once the EMS clauses behind it are assessed."
+          : "Recorded on the ISO tracker as certified. It scores once the EMS clauses behind it are assessed.",
+    });
+    answered.add(status.key);
+  }
+
+  const approval = byKey.get("iso.environmental_policy_approval_date");
+  if (approval && String(approval.value ?? "").trim()) {
+    const netZero = byKey.get("iso.net_zero_commitment_present");
+    const value = netZero?.value === false ? "Partial" : "Yes";
+    builder.propose({
+      sectionId: "g-data",
+      cellRef: "B27",
+      value,
+      label: cellLabel("g-data", "B27", approval.key),
+      field: approval.sourceField || approval.key,
+      sources: approval.sourceFiles ?? [],
+    });
+    record(approval.sourceField || approval.key, {
+      status: "placed",
+      cells: [],
+      reason:
+        value === "Partial"
+          ? `The policy records a board approval date (${String(approval.value)}) but no net-zero commitment, so the board-approved environmental policy row reads Partial.`
+          : `The policy records a board approval date (${String(approval.value)}).`,
+    });
+    answered.add(approval.key);
+  }
+  return answered;
+}
+
+/* ------------------------------------------------------------------ *
+ * The incident register → quarterly injury counts
+ * ------------------------------------------------------------------ */
+
+/**
+ * Count an incident register's rows into S_Data's quarterly fatality, LTI and
+ * medical-treatment rows (`esgIncidentCounts`). A count is the code's, not the
+ * document's, so the outcome says what was counted and asks for confirmation;
+ * a printed count for the same quarter that disagrees is a conflict for the
+ * user, as any two readings of one cell are.
+ */
+function applyIncidentRows(
+  rows: readonly EsgCalculatorRowLike[],
+  entries: readonly EsgCalculatorEntryLike[],
+  axes: EsgReportingAxes,
+  builder: PatchBuilder,
+  record: (field: string, outcome: EsgFieldOutcome) => void,
+): void {
+  // Each register's own stated period, by the file that states it.
+  const periods = new Map<string, { start: string | null; end: string | null }>();
+  for (const entry of entries) {
+    if (entry.key !== "hs.period_start" && entry.key !== "hs.period_end") continue;
+    for (const file of entry.sourceFiles ?? []) {
+      if (!file) continue;
+      const period = periods.get(file) ?? { start: null, end: null };
+      if (entry.key === "hs.period_start") period.start = String(entry.value ?? "");
+      else period.end = String(entry.value ?? "");
+      periods.set(file, period);
+    }
+  }
+  const counts = esgIncidentCounts(rows, axes, periods);
+  if (!counts || Object.keys(counts.cells).length === 0) {
+    record(INCIDENT_ROWS_FIELD, {
+      status: "unplaced",
+      cells: [],
+      rejection: "needs_context",
+      reason: counts
+        ? "None of the register's incidents falls in the reporting year, so nothing was counted."
+        : "The health-and-safety block is quarterly, and the workbook's reporting year is not set, so these incidents have no quarter to be counted in.",
+    });
+    return;
+  }
+  const sources = [...new Set(rows.flatMap((r) => r.sourceFiles ?? []).filter(Boolean))];
+  for (const [cellRef, value] of Object.entries(counts.cells)) {
+    builder.propose({
+      sectionId: "s-data",
+      cellRef,
+      value,
+      label: cellLabel("s-data", cellRef, INCIDENT_ROWS_FIELD),
+      field: INCIDENT_ROWS_FIELD,
+      sources,
+    });
+  }
+  record(INCIDENT_ROWS_FIELD, { status: "placed", cells: [], reason: counts.summary });
 }

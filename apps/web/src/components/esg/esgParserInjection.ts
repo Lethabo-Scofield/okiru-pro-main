@@ -70,6 +70,7 @@ import {
 import type { EsgRejectionReason } from "@/lib/esg/esgWorkbookInjection";
 import { esgMonthlyCellRef, esgSiteKey } from "@/lib/esg/esgParserFieldBridge";
 import { ESG_PROVENANCE_SECTION, provenanceCells } from "@/lib/esg/esgProvenance";
+import { esgDocumentPeriod, esgOutOfPeriodReason, esgReportingYear } from "@/lib/esg/esgFactPeriod";
 import {
   esgMonthsWithFigures,
   esgPlacementAxes,
@@ -170,6 +171,11 @@ export interface EsgParserCaseLike {
   } | null;
   /** Figures a person placed in the review — see `EsgManualPlacement`. Never set by the parser. */
   manual_placements?: EsgManualPlacement[];
+  /**
+   * Documents a person accepted as evidence for this reporting year although
+   * they cover an earlier period (`esgDocumentKey`). Never set by the parser.
+   */
+  accepted_out_of_period?: string[];
   [key: string]: unknown;
 }
 
@@ -483,12 +489,19 @@ export function applyEsgParserResult(
   const placement = options.axes
     ? { axes: options.axes, cells: {} as Record<string, string | number> }
     : esgPlacementAxes(caseResult, options.workbook, options.confirmed);
-  const mapped = mapEsgCalculatorToWorkbook(calculator, { axes: placement.axes });
+  // Facts whose own document covers an earlier period are held, not placed.
+  const periods = holdOutOfPeriodFacts(caseResult, calculator, placement.axes);
+  const mapped = mapEsgCalculatorToWorkbook(periods.calculator, { axes: placement.axes });
 
   const placed: EsgPlacedValue[] = [];
   const unplaced: EsgUnplacedValue[] = [];
 
   for (const reading of readings) {
+    const outOfPeriod = periods.held.get(heldKey(reading.field, reading.sourceFile));
+    if (outOfPeriod) {
+      unplaced.push({ ...reading, reason: outOfPeriod, rejection: "out_of_period" });
+      continue;
+    }
     // A reading whose fate is known for its own document (a bill's figure, the
     // site and period that placed it) answers for itself; the rest share their
     // field's fate.
@@ -641,6 +654,87 @@ export function applyEsgParserResult(
     valuesRead: readings.length + heldValues,
     figuresPlaced: esgFigureCount(mapped.patches),
     ...(mapped.priorYear ? { priorYear: mapped.priorYear } : {}),
+  };
+}
+
+/* ------------------------------------------------------------------ *
+ * Out-of-period facts
+ * ------------------------------------------------------------------ */
+
+/** A document, as the review names it: its file and the reader that read it. */
+export function esgDocumentKey(sourceFile: string, documentId: string): string {
+  return `${sourceFile}|${documentId}`;
+}
+
+function heldKey(field: string, sourceFile: string): string {
+  return `${field}|${sourceFile}`;
+}
+
+/**
+ * Take out of the calculator every fact whose own document covers an earlier
+ * period than the reporting year (`esgFactPeriod.ts`) — unless a person
+ * accepted that document (`accepted_out_of_period` on the case, by
+ * `esgDocumentKey`). A fact stays when ANY document behind it is in period, or
+ * states no period: it is held only when every reading of it is out of date.
+ *
+ * Returns the calculator to place, and each held reading (field + file) with
+ * its reason.
+ */
+export function holdOutOfPeriodFacts(
+  caseResult: EsgParserCaseLike | null,
+  calculator: EsgCalculatorResultLike,
+  axes: EsgReportingAxes,
+): { calculator: EsgCalculatorResultLike; held: Map<string, string> } {
+  const held = new Map<string, string>();
+  const year = esgReportingYear(axes);
+  if (!year) return { calculator, held };
+  const accepted = new Set(
+    Array.isArray(caseResult?.accepted_out_of_period)
+      ? (caseResult!.accepted_out_of_period as unknown[]).map((k) => String(k))
+      : [],
+  );
+
+  // Each document's own period verdict, and the fields it read.
+  const documents = (caseResult?.ai_entities?.extractions ?? []).map((extraction) => {
+    const sourceFile = String(extraction.sourceFile ?? "");
+    const documentId = String(extraction.documentId ?? "");
+    const reason = accepted.has(esgDocumentKey(sourceFile, documentId))
+      ? null
+      : esgOutOfPeriodReason(esgDocumentPeriod(extraction.values ?? []), year);
+    return { sourceFile, fields: new Set((extraction.values ?? []).map((v) => String(v?.field ?? ""))), reason };
+  });
+  if (!documents.some((d) => d.reason)) return { calculator, held };
+
+  /** The out-of-period reason when every document behind (field, files) is out of period. */
+  const verdict = (field: string, files: readonly string[] | undefined): string | null => {
+    const sources = (files ?? []).filter(Boolean);
+    if (!field || sources.length === 0) return null;
+    const behind = documents.filter((d) => sources.includes(d.sourceFile) && d.fields.has(field));
+    if (behind.length === 0 || behind.some((d) => !d.reason)) return null;
+    return behind[0].reason;
+  };
+
+  const entries = (calculator.entries ?? []).filter((entry) => {
+    const reason = verdict(entry.sourceField || entry.key, entry.sourceFiles);
+    if (!reason) return true;
+    for (const file of entry.sourceFiles ?? []) held.set(heldKey(entry.sourceField || entry.key, file), reason);
+    return false;
+  });
+  const rows = (calculator.rows ?? []).filter((row) => {
+    const reason = verdict(row.grid, row.sourceFiles);
+    if (!reason) return true;
+    for (const file of row.sourceFiles ?? []) held.set(heldKey(row.grid, file), reason);
+    return false;
+  });
+  if (held.size === 0) return { calculator, held };
+  return {
+    calculator: {
+      ...calculator,
+      entries,
+      rows,
+      payload: Object.fromEntries(entries.map((entry) => [entry.key, entry.value])),
+    },
+    held,
   };
 }
 

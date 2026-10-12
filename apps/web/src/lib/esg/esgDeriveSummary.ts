@@ -39,6 +39,13 @@ import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { ESG_GRID_SECTIONS, type EsgGridSectionId } from "@/lib/esg/esgGridSections";
 import { king5Weight, refFor } from "@/lib/esg/esgGridRows";
 import { hydrateEsgWorkbookSections } from "@/lib/esg/esgSheetStructure";
+import {
+  ESG_WASTE_CORITY_ROW,
+  ESG_WASTE_DIVERSION_REASON_KEY,
+  wasteRegisterLastRow,
+  wasteRegisterOwnsRow,
+  wasteSummaryRef,
+} from "@/lib/esg/esgWasteSummary";
 import { toFractionOrZero } from "../../../../api/pipeline/units/percentage";
 
 type CellValue = string | number | boolean | null;
@@ -510,7 +517,21 @@ function deriveEData(d: Draft): void {
  * looked up in `waste` first, then `e-data`.
  */
 function deriveWasteRegister(d: Draft): void {
-  const rows = gridRows(d.cells("waste"), "waste");
+  const wasteCells = d.cells("waste");
+  /*
+   * A register long enough to reach the scorecard rows owns them: its row 13
+   * is a stream, not the contractor's "% recycled" row, and its B16:B18 are
+   * streams' depot cells. The summary then lives under private keys
+   * (`esgWasteSummary.ts`), and only the register's own rows are streams.
+   */
+  const lastRegisterRow = wasteRegisterLastRow(wasteCells);
+  const stamped = wasteCells._row_count !== undefined && wasteCells._row_count !== null;
+  const rows = gridRows(wasteCells, "waste").filter(
+    (r) => !stamped || (lastRegisterRow !== null && r.rowNum <= lastRegisterRow),
+  );
+  const diversionRef = wasteSummaryRef(wasteCells, "diversion");
+  const recycledRef = wasteSummaryRef(wasteCells, "recycledMonthly");
+  const landfillRef = wasteSummaryRef(wasteCells, "landfillTco2e");
   const isTotalRow = (r: NumberedRow) => /\btotals?\b/i.test(text(r.values.wasteType));
   const totalRows = rows.filter(isTotalRow);
   const streamRows = rows.filter((r) => !isTotalRow(r));
@@ -530,16 +551,32 @@ function deriveWasteRegister(d: Draft): void {
    * reproduces the workbook's 0.911 from real data instead of hardcoding it.
    * Falls back to the Oricol `% Diversion` scalar (`E_Data!L70`, entered as
    * 91.1) when no register rows exist.
+   *
+   * A DIVERSION RATE NEEDS A DISPOSAL ROUTE. Only rows that say where the waste
+   * went — a recycled figure, or a landfill figure beside the total — count,
+   * on both sides of the division. A register of stream totals alone (115
+   * streams with a quantity and nothing else) used to divide 0 recycled by
+   * their sum and publish 0.0 % as a measured rate; it now publishes nothing,
+   * and says why, so the dashboard shows "—" rather than a rate nobody measured.
    */
-  if (!d.has("waste", "B16")) {
-    const basis = totalRows.length > 0 ? totalRows : streamRows;
+  if (!d.has("waste", diversionRef)) {
+    const basis = (totalRows.length > 0 ? totalRows : streamRows).filter(statesDisposal);
     const totalKg = sumColumn(basis, "totalKg");
-    const recycledKg = sumColumn(basis, "recycledKg");
+    const divertedKg = basis.reduce((a, r) => a + divertedKgOf(r), 0);
     if (totalKg > 0) {
-      d.fill("waste", "B16", clamp01(safeDiv(recycledKg, totalKg)));
+      d.fill("waste", diversionRef, clamp01(safeDiv(divertedKg, totalKg)));
     } else {
       const scalar = firstPresentNumber(d, "L70", ["waste", "e-data"]);
-      if (scalar != null) d.fill("waste", "B16", clamp01(asFraction(scalar)));
+      if (scalar != null) {
+        d.fill("waste", diversionRef, clamp01(asFraction(scalar)));
+      } else if (streamRows.length > 0 || totalRows.length > 0) {
+        d.fill(
+          "waste",
+          ESG_WASTE_DIVERSION_REASON_KEY,
+          `The waste register lists ${rows.length} row(s), but none says how much was recycled or sent to landfill, ` +
+            "so the diversion rate is unknown. Add the recycled or landfill kilograms, or the contractor's diversion rate.",
+        );
+      }
     }
   }
 
@@ -549,11 +586,11 @@ function deriveWasteRegister(d: Draft): void {
    * percentages on `E_Data!C67:K67` (10.65…), and the app's monthly grid writes
    * whichever the user types, so the mean is normalised to a fraction.
    */
-  if (!d.has("waste", "B17")) {
+  if (!d.has("waste", recycledRef)) {
     const monthly = corityMonthlyValues(d);
     if (monthly.length > 0) {
       const mean = monthly.reduce((a, b) => a + b, 0) / monthly.length;
-      d.fill("waste", "B17", asFraction(mean));
+      d.fill("waste", recycledRef, asFraction(mean));
     }
   }
 
@@ -565,14 +602,14 @@ function deriveWasteRegister(d: Draft): void {
    * landfill tonnage — which is why the live value is 2.320153236 rather than
    * 2.32. Derived here from the register's `Landfill kg` column only.
    */
-  if (!d.has("waste", "B18")) {
+  if (!d.has("waste", landfillRef)) {
     const landfillKg = rows.reduce((a, r) => {
       const v = toNum(r.values.landfillKg) ?? 0;
       return v > 0 ? a + v : a;
     }, 0);
     if (landfillKg > 0) {
       const ef = firstPresentNumber(d, "B10", ["e-data"]) ?? WASTE_LANDFILL_EF;
-      d.fill("waste", "B18", (landfillKg * ef) / 1000);
+      d.fill("waste", landfillRef, (landfillKg * ef) / 1000);
     }
   }
 
@@ -592,16 +629,38 @@ function deriveWasteRegister(d: Draft): void {
   }
 }
 
-/** Cority monthly % values — `e-data!waste_C14…` (form) or `waste!B13:J13` (import). */
+/**
+ * Cority monthly % values — `e-data!waste_C14…` (form) or `waste!B13:J13` (import).
+ *
+ * `B13:J13` is the legacy sheet's own row only while the register stops short
+ * of it. Once the register owns row 13 those cells are a stream's depot, type
+ * and kilograms — a 14.38 kg cardboard line is not a 14.38 % recycling rate.
+ */
 function corityMonthlyValues(d: Draft): number[] {
   const fromForm = readMonthlyBlock(d.cells("e-data"), "waste");
   if (fromForm.cellCount > 0) return fromForm.values;
+  if (wasteRegisterOwnsRow(d.cells("waste"), ESG_WASTE_CORITY_ROW)) return [];
   const out: number[] = [];
   for (const col of ["B", "C", "D", "E", "F", "G", "H", "I", "J"]) {
-    const n = toNum(d.raw("waste", `${col}13`));
+    const n = toNum(d.raw("waste", `${col}${ESG_WASTE_CORITY_ROW}`));
     if (n != null) out.push(n);
   }
   return out;
+}
+
+/** A row says where its waste went: a recycled figure, or a landfill figure beside the total. */
+function statesDisposal(r: NumberedRow): boolean {
+  if (toNum(r.values.recycledKg) != null) return true;
+  return toNum(r.values.landfillKg) != null && toNum(r.values.totalKg) != null;
+}
+
+/** Kilograms kept out of landfill: the recycled figure, else the total less the landfill. */
+function divertedKgOf(r: NumberedRow): number {
+  const recycled = toNum(r.values.recycledKg);
+  if (recycled != null) return recycled;
+  const total = toNum(r.values.totalKg);
+  const landfill = toNum(r.values.landfillKg);
+  return total != null && landfill != null ? Math.max(0, total - landfill) : 0;
 }
 
 function sumColumn(rows: NumberedRow[], key: string): number {

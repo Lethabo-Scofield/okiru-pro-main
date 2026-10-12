@@ -42,6 +42,7 @@ import {
 import { ESG_TOOLKIT_PILLAR_NAV } from "@/lib/esg/esgToolkitNav";
 import { readReportScopeFromCells, type EsgReportScope } from "@/lib/esg/esgTopicScope";
 import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
+import { readEsgWasteSummary } from "@/lib/esg/esgWasteSummary";
 import { esgWorkbookAxes } from "@/components/esg-workbook/esgDefaults";
 import {
   computeEsgScorecard,
@@ -709,7 +710,7 @@ export function buildEsgReportModel(input: BuildReportInput): EsgReportModel {
   const electricityKwh = ghg.lines.find((l: GhgLine) => l.label.includes("grid electricity"))?.activity ?? 0;
   const solarKwh = ghg.lines.find((l: GhgLine) => l.label.includes("solar"))?.activity ?? 0;
   const waterKl = ghg.lines.find((l: GhgLine) => l.scope === 3)?.activity ?? 0;
-  const wasteDiversion = readEsgCell(workbook, "waste", "B16");
+  const wasteDiversion = readEsgWasteSummary(workbook, "diversion");
 
   const simple = (
     prefix: string,

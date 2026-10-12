@@ -37,6 +37,7 @@
 import { ESG_FALLBACK_REPORTING_AXES, type EsgReportingAxes } from "@/components/esg-workbook/esgDefaults";
 import type { EsgCellKind } from "./esgWorkbookInjection";
 import type { EsgGridSectionId } from "./esgGridSections";
+import { isWasteSummaryCell } from "./esgWasteSummary";
 
 /** One workbook cell an allowlist key writes to. */
 export interface EsgScalarTarget {
@@ -690,15 +691,16 @@ export function esgQuarterColumn(startIso: unknown, endIso: unknown): string | n
  * Allowlist key → the H&S row it fills. The column is the quarter, resolved
  * from the report's own period.
  *
- * `hs.fatalities_count` is deliberately absent. `S_Data` row 28 exists and
- * `esgDeriveSummary` sums it into `G28` (8 points), but `S_DATA_HS_FIELDS`
- * exposes no field for it — so an injected fatality count would be a number the
- * user could neither see nor correct. Reported instead; add the row to the H&S
- * field group and this becomes one line.
+ * `hs.fatalities_count` → row 28. `S_DATA_HS_FIELDS` now exposes `C28:F28`
+ * ("Fatalities Q1".."Q4") and `esgDeriveSummary` sums them into `G28`, which
+ * "Zero fatalities" (S d18) reads, so a printed count is placed by the same
+ * quarter rule as every other row. An incident register's rows are counted
+ * into rows 28–30 by `esgIncidentCounts`.
  */
 export const ESG_HS_QUARTERLY_ROWS: Readonly<Record<string, { row: number; kind: EsgCellKind }>> = {
   "hs.employees_headcount": { row: 26, kind: "count" },
   "hs.hours_worked": { row: 27, kind: "number" },
+  "hs.fatalities_count": { row: 28, kind: "count" },
   "hs.lost_time_injuries_count": { row: 29, kind: "count" },
   "hs.medical_treatment_injuries_count": { row: 30, kind: "count" },
   "hs.first_aid_cases_count": { row: 31, kind: "count" },
@@ -724,7 +726,16 @@ export const ESG_HS_QUARTERLY_ROWS: Readonly<Record<string, { row: number; kind:
  * Sources: `esgDeriveSummary.ts` (`fill`/`force` targets), the `Score /5`
  * columns the ISO and IFRS sheets compute, and `esgGridRows.syncDerivedFields`.
  */
-export function isEsgDerivedCell(sectionId: string, cell: string): boolean {
+export function isEsgDerivedCell(
+  sectionId: string,
+  cell: string,
+  /**
+   * The section's cells being written, where known. The waste summary cells
+   * sit inside the register's row range; once the register itself reaches
+   * rows 16–18, `B16:B18` are its streams' depot cells, not the summary.
+   */
+  sectionCells?: Record<string, unknown>,
+): boolean {
   const ref = cell.trim();
   switch (sectionId) {
     case "assumptions":
@@ -766,8 +777,9 @@ export function isEsgDerivedCell(sectionId: string, cell: string): boolean {
       // The fleet-summary totals (B28 vehicles, H28 EVs).
       return ref === "B28" || ref === "H28";
     case "waste":
-      // The diversion rate, the Cority monthly mean and landfill tCO₂e.
-      return ref === "B16" || ref === "B17" || ref === "B18";
+      // The diversion rate, the Cority monthly mean and landfill tCO₂e — at
+      // their sheet address only while the register stops short of it.
+      return sectionCells ? isWasteSummaryCell(sectionCells, ref) : ref === "B16" || ref === "B17" || ref === "B18";
     case "king5":
       // E21 raw total (forced), F21 weighted total, E22 ratio.
       return ref === "E21" || ref === "F21" || ref === "E22";
