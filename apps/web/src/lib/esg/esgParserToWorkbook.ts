@@ -383,6 +383,11 @@ class PatchBuilder {
         cells.set(id, group[0]);
         continue;
       }
+      const rounded = sameFigureRounded(Array.from(distinct.values()));
+      if (rounded) {
+        cells.set(id, rounded);
+        continue;
+      }
       // Two documents, two answers, one cell. The user picks — we do not.
       const first = group[0];
       conflicts.push({
@@ -399,6 +404,36 @@ class PatchBuilder {
     }
     return { cells, conflicts, contestedFields };
   }
+}
+
+/** Decimal places a number shows (41001.88 → 2, 41002 → 0). */
+function decimalsShown(n: number): number {
+  const text = String(n);
+  if (/e/i.test(text)) return 0;
+  const dot = text.indexOf(".");
+  return dot < 0 ? 0 : text.length - dot - 1;
+}
+
+/**
+ * One figure printed to two precisions is one figure. A system export prints
+ * whole kWh (41 002) where the bill prints 41 001.88: rounded to the places
+ * the less precise one shows, they are the same, so it is no conflict. The
+ * most precise figure is written, with every document that states it behind
+ * it. Figures that still differ after that rounding are a conflict, as ever.
+ */
+function sameFigureRounded(buckets: Proposal[][]): Proposal | null {
+  const values = buckets.map((bucket) => bucket[0].value);
+  if (!values.every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+  const numbers = values as number[];
+  const order = numbers.map((n, i) => i).sort((a, b) => decimalsShown(numbers[b]) - decimalsShown(numbers[a]));
+  const precise = numbers[order[0]];
+  const agrees = numbers.every((n) => {
+    const factor = 10 ** Math.min(decimalsShown(n), decimalsShown(precise));
+    return Math.round(precise * factor) === Math.round(n * factor);
+  });
+  if (!agrees) return null;
+  const keep = buckets[order[0]][0];
+  return { ...keep, sources: Array.from(new Set(buckets.flat().flatMap((p) => p.sources))).filter(Boolean) };
 }
 
 function entryIndex(entries: readonly EsgCalculatorEntryLike[]): Map<string, EsgCalculatorEntryLike> {
