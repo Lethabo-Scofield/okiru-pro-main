@@ -57,6 +57,23 @@ export interface ReviewSuggestion {
   statement: string;
   /** The evidence this rests on — shown beside the apply button. */
   basis: string;
+  /**
+   * "read" — a document states this value (on another row of the same person);
+   * "derived" — worked out by a rule (the SA ID's gender digits). The AI review
+   * labels the two differently and never presents a derived value as read.
+   */
+  kind: "read" | "derived";
+  /** Where the value came from, structured for the AI review's evidence list. */
+  evidence: {
+    section: string;
+    sectionLabel: string;
+    rowLabel: string;
+    column: string;
+    columnLabel: string;
+    /** The cell's value as shown — an ID number is masked to its last four digits. */
+    value: string;
+    files: string[];
+  };
 }
 
 export interface ReviewConflict {
@@ -138,7 +155,7 @@ const PEOPLE_SECTIONS: Array<{ key: string; nameCols: string[] }> = [
 
 const BLACK_RACES = new Set(["african", "coloured", "indian", "chinese"]);
 
-function rowLabel(section: string, row: Row): string {
+export function rowLabel(section: string, row: Row): string {
   for (const spec of PEOPLE_SECTIONS) {
     if (spec.key === section) {
       const name = spec.nameCols.map((c) => str(row[c])).filter(Boolean).join(" ");
@@ -182,6 +199,7 @@ interface IdentityFact {
   label: string;
   race?: string;
   gender?: string;
+  files: string[];
 }
 
 /** idNumber → every row that carries it, across the people sections. */
@@ -198,6 +216,7 @@ function identityIndex(sections: WorkbookSectionsInput): Map<string, IdentityFac
         label: rowLabel(spec.key, row),
         race: str(row.race) || undefined,
         gender: str(row.gender) || undefined,
+        files: Array.isArray(row._sourceFiles) ? row._sourceFiles.map(String) : [],
       };
       const list = byId.get(id) ?? [];
       list.push(fact);
@@ -368,6 +387,16 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
             value: distinct[0],
             statement: `Fill ${attr} "${distinct[0]}" for ${f.label} in ${sectionLabelOf(f.section)}.`,
             basis: `Same ID number (…${idNumber.slice(-4)}) in ${sectionLabelOf(from.section)} states ${attr} = ${distinct[0]}.`,
+            kind: "read",
+            evidence: {
+              section: from.section,
+              sectionLabel: sectionLabelOf(from.section),
+              rowLabel: from.label,
+              column: attr,
+              columnLabel: attr === "race" ? "Race" : "Gender",
+              value: distinct[0],
+              files: from.files,
+            },
           });
         }
       }
@@ -399,6 +428,16 @@ export function buildExtractionReview(sections: WorkbookSectionsInput): Extracti
             value: derived,
             statement: `Fill gender "${derived}" for ${label}.`,
             basis: `SA ID numbers encode gender in digits 7–10; this ID (checksum-valid) states ${derived.toLowerCase()}.`,
+            kind: "derived",
+            evidence: {
+              section: spec.key,
+              sectionLabel: sectionLabelOf(spec.key),
+              rowLabel: label,
+              column: "idNumber",
+              columnLabel: "ID number",
+              value: `…${str(row.idNumber).replace(/\s+/g, "").slice(-4)}`,
+              files: Array.isArray(row._sourceFiles) ? row._sourceFiles.map(String) : [],
+            },
           });
         }
       } else if (stated.toLowerCase() !== derived.toLowerCase()) {

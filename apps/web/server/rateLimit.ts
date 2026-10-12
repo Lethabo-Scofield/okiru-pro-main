@@ -279,6 +279,23 @@ export const apiCeilingLimiter = makeLimiter({
   message: "Too many requests. Please slow down.",
 });
 
+/**
+ * The workbook AI review. Each request is one paid model call, so a person
+ * clicking "Work out the rest" over and over must not run up the bill.
+ * Keyed on the signed-in user, falling back to the address.
+ */
+export const aiReviewLimiter = makeLimiter({
+  prefix: "ai-review",
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  message: "The AI review has run a lot this hour. Please try again a little later.",
+  keyGenerator: (req) => {
+    const userId = (req as Request & { user?: { id?: string } }).user?.id
+      ?? (req.session as { userId?: string } | undefined)?.userId;
+    return userId ? `user:${userId}` : clientIp(req);
+  },
+});
+
 /* ------------------------------------------------------------------ *
  * Per-account lockout
  *

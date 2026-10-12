@@ -14,6 +14,8 @@ import { suggestSelectOption, FUZZY_SELECT_HINT } from "@/lib/selectOptionMatch"
 import { MappingConfirmModal } from "./MappingConfirmModal";
 import { CellValidationPopup, FIELD_LEARN_MORE } from "./CellValidationPopup";
 import { API_BASE } from "@toolkit/lib/config";
+import { activeMark, undoRowFill } from "@/lib/aiReviewFill";
+import { AiFillMarker } from "./AiFillMarker";
 
 type Row = Record<string, unknown> & { _id: string };
 type CellRef = { row: number; col: number };
@@ -892,6 +894,8 @@ export function SpreadsheetGrid({
     const selected = isCellSelected(rIdx, cIdx);
     const active = isActiveCell(rIdx, cIdx);
     const isEditing = editingCell?.row === rIdx && editingCell?.col === cIdx;
+    // A cell the AI review filled, while it still holds the filled value.
+    const aiMark = activeMark(row, col.key);
 
     return (
       <td
@@ -900,7 +904,10 @@ export function SpreadsheetGrid({
         style={{ width: colWidths[col.key] || DEFAULT_COL_WIDTH, minWidth: colWidths[col.key] || DEFAULT_COL_WIDTH }}
         className={`border-b border-r border-[color:var(--rule)] p-0 relative select-none ${
           selected ? "bg-blue-500/10" : ""
-        } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""} ${err ? "bg-status-error-bg/30" : ""}`}
+        } ${active ? "ring-2 ring-inset ring-blue-500 z-[2]" : ""} ${err ? "bg-status-error-bg/30" : ""} ${
+          aiMark && !selected && !err ? "bg-violet-400/[0.05]" : ""
+        }`}
+        data-ai-filled={aiMark ? "true" : undefined}
         onMouseDown={(e) => handleCellMouseDown(rIdx, cIdx, e)}
         onMouseEnter={() => handleCellMouseEnter(rIdx, cIdx)}
         onDoubleClick={() => startEdit({ row: rIdx, col: cIdx })}
@@ -954,8 +961,25 @@ export function SpreadsheetGrid({
             className="px-3 py-2 text-[13px] text-white truncate min-h-[36px] flex items-center"
             data-testid={`cell-${rIdx}-${col.key}`}
           >
-            {formatCellDisplay(v, col) || (
-              <span className="text-[color:var(--muted)]">{col.required ? "Required" : ""}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {formatCellDisplay(v, col) || (
+                <span className="text-[color:var(--muted)]">{col.required ? "Required" : ""}</span>
+              )}
+            </span>
+            {aiMark && (
+              <AiFillMarker
+                mark={aiMark}
+                className="ml-1"
+                testId={`ai-fill-marker-${rIdx}-${col.key}`}
+                onUndo={
+                  readOnly
+                    ? undefined
+                    : () => {
+                        pushUndo(rows);
+                        onChange(rows.map((r) => (r._id === row._id ? undoRowFill(r, col.key) : r)));
+                      }
+                }
+              />
             )}
           </div>
         )}
