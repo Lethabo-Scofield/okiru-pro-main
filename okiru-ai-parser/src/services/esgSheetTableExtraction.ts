@@ -370,8 +370,16 @@ const DATE_KEY = /(_date|_month)$/;
 export function isLabelLine(row: Record<string, unknown>, keyField: string): boolean {
   if (!DATE_KEY.test(keyField)) return false;
   const key = row[keyField];
-  return typeof key === 'string' && key.trim() !== '' && !/\d/.test(key);
+  if (typeof key !== 'string' || key.trim() === '') return false;
+  if (!/\d/.test(key)) return true;
+  // A caption that carries a figure ("Allowed variance -200 liters") opens
+  // with a word; a date opens with its day or year, or with its month's name.
+  const first = /^\s*([A-Za-z]{2,})\b/.exec(key)?.[1];
+  return Boolean(first) && !MONTH_NAME.test(first!);
 }
+
+/** A month's name or its short form, as a date may open with one ("March 3, 2026", "Mar-26"). */
+const MONTH_NAME = /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)$/i;
 
 /**
  * Read a workbook sheet as an ESG register.

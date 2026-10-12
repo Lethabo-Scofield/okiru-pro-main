@@ -7,7 +7,7 @@ element: OTHER
 version: 1
 hard: false
 classify:
-  is: "A list of where the client's ESG figures come from: each activity group (linehaul fuel, standby power, electricity, water, waste), the measures kept for it (consumption, distance, weight, cost) and the source of each (a spreadsheet capture, supplier invoices, a contractor statement, a system)."
+  is: "A short list, usually two columns and no figures, of where the client's ESG figures come from: each activity group (linehaul fuel, standby power, company cars, electricity, water, waste) as a heading, the measures kept for it under it (consumption, distance, weight, cost) and the source of each (a spreadsheet capture, supplier invoices, a contractor statement, a system). It holds no data itself; it says where the data comes from."
   isNot:
     - "the data itself (a monthly data workbook, a bill, a fuel report)"
     - "a GHG emissions system export"
@@ -18,6 +18,7 @@ rowsField: data_source_rows
 fields:
   - name: inventory_title
     type: text
+    scope: document
     labels: ["Title", "Data source"]
     description: "The list's own heading, as printed."
   - name: source_indicator

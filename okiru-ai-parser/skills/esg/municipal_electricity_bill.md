@@ -96,6 +96,7 @@ fields:
     description: "kWh the site EXPORTED to the grid and was credited for (a generation offset or SSEG credit line), as printed. Never put it in a generated or consumed field: the account does not show how much the panels produced."
   - name: generation_offset_credits
     type: text
+    list: true
     scope: document
     labels: []
     description: "The Rand credited for exported electricity, each credit line's amount as printed with its sign, separated by '; ' ('12.50-; 3.10-')."

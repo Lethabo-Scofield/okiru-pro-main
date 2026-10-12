@@ -7,25 +7,28 @@ element: COMMUNITY_CSI
 version: 1
 hard: false
 classify:
-  is: "A year planner of the client's own staff and community events: a monthly theme (a wellbeing, health or sustainability month), the event's date, what happens, its cost or entry fee, a donation drive for a charity, and the person or team who runs it."
+  is: "A year planner of the client's own staff and community events, laid out as one block per month: the month's name, a day number or date, the month's theme (a health, wellbeing or environment month), a line naming what the month is about, the activity, a cost or entry fee, a drive to gather goods for people in need, and the person or team who runs it, often under one theme for the year. It is a calendar of events, not a record of spend."
   isNot:
     - "a CSI or SED spend register with rand amounts per beneficiary"
     - "a training schedule or training register"
     - "a public holiday list on its own"
   filenameHints: ["social calendar", "events calendar", "wellbeing calendar", "year planner"]
-  contentSignals: ["Calendar", "Month", "Theme", "Focus", "Wellbeing", "Health", "Sustainability", "Event", "Donation", "Cost", "Entry fee", "Day"]
+  contentSignals: ["Calendar", "Theme", "Month", "Wellbeing", "Health", "Sustainability", "Event", "Donation", "Cost", "Entry fee", "Day"]
 rowsField: event_rows
 fields:
   - name: calendar_title
     type: text
+    scope: document
     labels: ["Title"]
     description: "The calendar's own title, as printed."
   - name: calendar_theme
     type: text
+    scope: document
     labels: ["Theme", "Our pillars"]
     description: "The calendar's overall theme or pillars when it prints one for the whole year (\"MOVE • NOURISH • CONSERVE\"), as printed."
   - name: calendar_year
     type: text
+    scope: document
     labels: ["Year"]
     description: "The year the calendar plans, as printed."
   - name: event_month

@@ -136,8 +136,25 @@ const ESG_GRIDS: Record<string, DocumentGrid> = {
     rowFields: [
       'transaction_date', 'vehicle_registration', 'fuel_type', 'fuel_litres',
       'fuel_rand_excl_vat', 'odometer_reading', 'transaction_site',
+      // The paper trail a fuel issue or delivery line prints beside its litres.
+      'fuel_price_per_litre', 'order_number', 'delivery_note_number',
     ],
     suppressRowScalars: true,
+  },
+  // An incident register read a row at a time, every yes/no column kept: the
+  // counts (lost time, fatalities, injuries, property damage, claims) are the
+  // code's, from these columns (esgRegisterDerivations.ts).
+  health_safety__injury_statistics_report: {
+    rowsField: 'incident_rows',
+    containerKeys: ['incidents'],
+    rowFields: [
+      'incident_date', 'incident_site', 'incident_description', 'incident_classification',
+      'injured_party_category', 'incident_person_injured', 'incident_lost_time',
+      'incident_fatality', 'incident_property_damage', 'incident_coid_claim_lodged',
+      'incident_days_lost',
+    ],
+    suppressRowScalars: true,
+    identityFields: ['incident_date', 'incident_description'],
   },
   fleet__vehicle_register: {
     rowsField: 'fleet_vehicle_rows',
@@ -213,6 +230,9 @@ const ESG_GRIDS: Record<string, DocumentGrid> = {
       'learners_count', 'learner_name', 'training_provider_name', 'is_accredited_provider',
       'seta_name', 'nqf_level', 'training_start_date', 'training_end_date',
       'training_duration', 'training_status', 'training_cost_rand',
+      // An ATR lists each learner's race and gender: the lines per group are
+      // counted from them (esgRegisterDerivations.ts), never by the model.
+      'learner_race', 'learner_gender',
     ],
     suppressRowScalars: true,
     // A training register lists learners against courses; few print an OFO code.

@@ -214,6 +214,25 @@ describe('tableFacts', () => {
     expect(notes.find((n) => /NORTHGATE/.test(n))).toMatch(/stated in L and was stored in kL \(x 0\.001\)/);
   });
 
+  it('reads a unit the answer spells as the table prints it ("litre", "tonne") as that unit', () => {
+    const [table] = findMonthTables([
+      ['CONSUMPTION'],
+      ['', '', 'JUL', 'AUG', 'SEP'],
+      ['NORTHGATE', 'Trucks', 1500, 1510, 1520],
+      ['SOUTHPORT', 'Water', 45570, 46000, 47000],
+    ]);
+    const { facts, notes } = tableFacts(table, {
+      linesAre: 'sites', site: null, firstMonthYear: 2025,
+      lines: {
+        [lineKey({ label: 'NORTHGATE', qualifier: 'Trucks' })]: { measure: 'fleet.diesel_litres', unit: 'litre' },
+        [lineKey({ label: 'SOUTHPORT', qualifier: 'Water' })]: { measure: 'water.kl', unit: 'Litres' },
+      },
+    });
+    expect(facts.filter((f) => f.measure === 'fleet.diesel_litres').map((f) => f.value)).toEqual([1500, 1510, 1520]);
+    expect(facts.filter((f) => f.measure === 'water.kl').map((f) => f.value)).toEqual([45.57, 46, 47]);
+    expect(notes.some((n) => /cannot be converted/.test(n))).toBe(false);
+  });
+
   it('uses nothing from a table whose year cannot be told', () => {
     const { facts, notes } = tableFacts(fuel, { ...reading, firstMonthYear: null });
     expect(facts).toHaveLength(0);
@@ -577,5 +596,6 @@ describe('the case read of a sheet whose long table states no unit', () => {
     expect(prompts.filter((p) => /ANALYST INSTRUCTION/.test(p))).toEqual([]);
     const rows = result!.extractions.flatMap((e) => e.values).filter((v) => v.field === 'esg_monthly_rows');
     expect(rows).toEqual([]);
-  });
+  // The first import of the case reader loads every skill: seconds on a busy machine.
+  }, 30_000);
 });

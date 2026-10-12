@@ -116,6 +116,12 @@ export interface SkillField {
    * rival answer and never offered to the calculator mapping. Default 'case'.
    */
   scope?: SkillFieldScope;
+  /**
+   * True for a field the skill asks for as several items in one string,
+   * separated by '; ' (every message date, every attachment, every credit
+   * line). The code splits it into a list, so each item is a value of its own.
+   */
+  list?: boolean;
 }
 
 export type SkillFieldScope = 'case' | 'document';
@@ -367,7 +373,7 @@ const ALLOWED_KEYS = new Set([
   'id', 'appliesTo', 'element', 'version', 'hard', 'classify', 'rowsField',
   'fields', 'newFields', 'dropFields', 'newType', 'summaryTables',
 ]);
-const FIELD_KEYS = new Set(['name', 'type', 'required', 'rowLevel', 'labels', 'description', 'scope']);
+const FIELD_KEYS = new Set(['name', 'type', 'required', 'rowLevel', 'labels', 'description', 'scope', 'list']);
 const CLASSIFY_KEYS = new Set(['is', 'isNot', 'filenameHints', 'contentSignals']);
 
 function rejectUnknownKeys(mapping: Mapping, allowed: Set<string>, what: string, file: string): void {
@@ -399,6 +405,7 @@ function parseField(raw: FrontMatterValue, index: number, file: string): SkillFi
     labels: stringList(raw.labels, `field "${name}".labels`, file),
     description: stringOf(raw.description, `field "${name}".description`, file),
     scope: scopeOf(raw.scope, name, file),
+    ...(boolOf(raw.list, `field "${name}".list`, file, false) ? { list: true } : {}),
   };
 }
 

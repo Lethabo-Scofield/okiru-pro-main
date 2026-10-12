@@ -22,6 +22,7 @@ fields:
     description: "The questionnaire's or form's own reference as printed (a document control number)."
   - name: form_revision_date
     type: date
+    scope: document
     labels: ["Revised", "Revision date", "Date revised"]
     description: "The form's revision date from its header or footer, as printed. Not a completion date."
   - name: supplier_name

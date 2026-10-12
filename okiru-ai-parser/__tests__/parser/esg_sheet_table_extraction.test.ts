@@ -191,6 +191,13 @@ describe('extractEsgSheetTable', () => {
     expect(isLabelLine({ vehicle_registration: 'UNREGISTERED', depot_name: 'North' }, 'vehicle_registration')).toBe(false);
   });
 
+  it('takes a caption that carries a figure for a label line, never a date that opens with its month', () => {
+    expect(isLabelLine({ transaction_date: 'Allowed variance -150 litres' }, 'transaction_date')).toBe(true);
+    expect(isLabelLine({ transaction_date: 'March 3, 2026' }, 'transaction_date')).toBe(false);
+    expect(isLabelLine({ transaction_date: 'Mar-26' }, 'transaction_date')).toBe(false);
+    expect(isLabelLine({ training_start_date: '1 - 31 JULY 2025' }, 'training_start_date')).toBe(false);
+  });
+
   it('still requires an identity column: a training sheet mapped to costs alone is not read', async () => {
     const model = mappingModel({ 'Cost (R)': 'training_cost_rand' });
     const result = await extractEsgSheetTable(model, {

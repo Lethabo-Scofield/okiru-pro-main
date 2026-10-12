@@ -19,30 +19,40 @@ fields:
   - name: email_subject
     type: text
     required: true
+    scope: document
     labels: ["Subject"]
     description: "The thread's subject line, as printed (with its RE:/FW: prefix)."
   - name: email_message_dates
     type: text
+    list: true
+    scope: document
     labels: []
     description: "The date of EVERY message in the thread, oldest first, each as yyyy-mm-dd, separated by '; '. Count a message that is only quoted inside a reply (its own From/Date block) too."
   - name: email_requested_period
     type: text
+    scope: document
     labels: ["Financial period", "Data period"]
     description: "The period the e-mail asks data for, copied as printed (\"1 April 2025 - end January 2026\"). Null when no period is asked for."
   - name: email_response_deadline
     type: date
+    scope: document
     labels: ["Deadline", "Due date"]
     description: "The date replies or data are due, as yyyy-mm-dd. A date printed without a year (\"Friday 13/03\") takes the year of the message that sets it. Null when none is set."
   - name: email_attachments
     type: text
+    list: true
+    scope: document
     labels: ["Attachments", "Attached"]
     description: "Every file the messages say they carry, as printed (file names or titles), separated by '; '. A signature picture is not one of them."
   - name: sender_certifications
     type: text
+    list: true
+    scope: document
     labels: []
     description: "Certifications a sender's signature or footer states for the company (\"ISO 27001:2022\", \"ISO 50001:2018\"), each as printed, separated by '; '. A claim in a signature is not a certificate: it is copied, never treated as evidence."
   - name: sender_bbbee_level
     type: text
+    scope: document
     labels: []
     description: "A B-BBEE level a sender's signature states, as \"Level N\" (\"Level 4\"). A claim, not a certificate."
   - name: email_item
@@ -105,6 +115,12 @@ never the certificate itself.
 - A figure stated in a message ("currently 12 of 40 loaded", "only has 35
   trucks") is a fact row whose value is the figure alone ("12 of 40", "35"),
   never the whole sentence.
+- A figure stated INSIDE an ask, or in the reply written after an ask, is a
+  fact row of its OWN as well, beside the ask row: an ask that says how many
+  are loaded so far ("(currently 12 of 40 loaded)"), an ask that names how
+  many items to cover ("status on the 9 reporting principles"), a reply that
+  says how many there are ("the depot only has 35 trucks"). The ask row keeps
+  the ask; the fact row names what is counted and holds the figure alone.
 - A date without a year takes the year of the message it is in. Message dates
   are each message's own Date line, quoted messages counted.
 - A signature picture or logo is not a file sent with the message.
@@ -133,6 +149,7 @@ Please send the following for the period 1 April 2025 - 31 January 2026 by Frida
 Priority 2 — Energy
 • Site electricity bills, last two years Lindi
 • Generator diesel litres Musa
+• Status on the 9 reporting principles Musa: the depot only has 35 trucks, no generator.
 ```
 
 ```json
@@ -145,6 +162,9 @@ Priority 2 — Energy
  "email_item_rows": [
    {"email_item": "Site electricity bills, last two years", "email_item_kind": "ask", "email_item_value": null, "email_item_owner": "Lindi", "email_item_section": "Priority 2 — Energy"},
    {"email_item": "Generator diesel litres", "email_item_kind": "ask", "email_item_value": null, "email_item_owner": "Musa", "email_item_section": "Priority 2 — Energy"},
+   {"email_item": "Status on the reporting principles", "email_item_kind": "ask", "email_item_value": null, "email_item_owner": "Musa", "email_item_section": "Priority 2 — Energy"},
+   {"email_item": "Reporting principles to give a status on", "email_item_kind": "fact", "email_item_value": "9", "email_item_owner": "Pat", "email_item_section": "Priority 2 — Energy"},
+   {"email_item": "Trucks in the depot", "email_item_kind": "fact", "email_item_value": "35", "email_item_owner": "Musa", "email_item_section": "Priority 2 — Energy"},
    {"email_item": "Sites loaded", "email_item_kind": "fact", "email_item_value": "12 of 40", "email_item_owner": "Lindi", "email_item_section": null}
  ],
  "exceptions": ["The certification and B-BBEE level are claims in a signature, not certificates."]}

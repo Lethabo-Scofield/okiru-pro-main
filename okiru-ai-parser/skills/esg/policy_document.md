@@ -58,9 +58,10 @@ fields:
     description: "Who or what the policy applies to, quoted briefly as printed (the group, its subsidiaries, employees)."
   - name: policy_owners
     type: text
+    list: true
     scope: document
     labels: ["Policy owner", "Responsible", "Custodian"]
-    description: "The roles or people the policy names as owning or reviewing it, as printed, separated by semicolons."
+    description: "The roles or people the policy names as owning or reviewing THE POLICY ITSELF, as printed, separated by semicolons: usually in its monitoring, review or ownership section (\"X and Y are responsible for reviewing this policy\"). Not the roles that carry out what the policy requires."
   - name: review_frequency
     type: text
     labels: ["Review frequency", "Reviewed every", "Next review"]

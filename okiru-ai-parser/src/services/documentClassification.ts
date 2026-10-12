@@ -184,6 +184,7 @@ const ESG_SYSTEM_PROMPT = [
   'Rules:',
   '- Choose the SINGLE best element. If the document genuinely carries several, pick the one it is MOST about and set confidence below 0.5.',
   '- A COMBINED municipal account billing both electricity and water is two elements at once: set confidence below 0.5 so neither is discarded.',
+  '- A document that is clearly one of the DOCUMENT TYPES listed below is that type even when no ELEMENT above fits it (a list of where the data comes from, a staff events calendar): return its id, with the element its type belongs to, and OTHER only when none does.',
   '- confidence is how sure you are (0..1). Ambiguous or mixed → below 0.5.',
   '- Never invent content; classify only from what the document shows.',
 ].join('\n');

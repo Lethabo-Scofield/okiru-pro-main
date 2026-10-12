@@ -102,7 +102,7 @@ fields:
     type: text
     scope: document
     labels: ["B-BBEE requirement", "Transformation requirement"]
-    description: "What the code requires of suppliers on B-BBEE, quoted briefly as printed (the evidence asked for, a minimum level). A requirement, never a supplier's level."
+    description: "What the code requires of suppliers on B-BBEE, as the few printed words that name the evidence or level asked for (\"a current B-BBEE certificate\", \"at least Level 4\"), not the whole sentence around them. A requirement, never a supplier's level."
   - name: code_environmental_areas
     type: text
     scope: document

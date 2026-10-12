@@ -64,6 +64,31 @@ const UNIT_FACTORS: Record<string, Record<string, number>> = {
   km: { km: 1 },
 };
 
+/**
+ * The unit an answer names, in the spelling UNIT_FACTORS keys it by. The
+ * question lists "L, kL, m3, ML, kWh, MWh, kg, t, km", but an answer copies the
+ * unit the table prints: a system export's unit column says "litre", "tonne",
+ * "kWh". Read literally, "litre" matched no factor, so every litre line of a
+ * consumption page (road-freight diesel, stationary diesel, a car's petrol,
+ * water) was dropped as "cannot be converted to L". A spelling is not a unit:
+ * the same unit under another name is that unit. Anything else is returned
+ * unchanged and still finds no factor.
+ */
+export function canonicalUnit(unit: string): string {
+  const text = String(unit ?? '').trim();
+  const word = text.toLowerCase().replace(/\.$/, '');
+  if (/^(?:l|lt|lts|ltr|ltrs|litres?|liters?)$/.test(word)) return 'L';
+  if (/^(?:kl|kilolitres?|kiloliters?)$/.test(word)) return 'kL';
+  if (/^(?:ml|megalitres?|megaliters?)$/.test(word) && text !== 'ml') return 'ML';
+  if (/^(?:m3|m³|cubic\s+met(?:re|er)s?)$/.test(word)) return 'm3';
+  if (/^kwh$/.test(word)) return 'kWh';
+  if (/^mwh$/.test(word)) return 'MWh';
+  if (/^(?:kg|kgs|kilograms?)$/.test(word)) return 'kg';
+  if (/^(?:t|tons?|tonnes?)$/.test(word)) return 't';
+  if (/^(?:km|kms|kilomet(?:re|er)s?)$/.test(word)) return 'km';
+  return text;
+}
+
 export interface EsgMonthlyFact {
   measure: EsgMonthlyMeasure;
   /** The site exactly as the document names it; null for a company-wide line. */
@@ -769,7 +794,7 @@ export function tableFacts(
       }
     } else if (read && read.measure !== 'none') {
       const stored = ESG_MONTHLY_MEASURES[read.measure].unit;
-      const factor = UNIT_FACTORS[stored]?.[read.unit];
+      const factor = UNIT_FACTORS[stored]?.[canonicalUnit(read.unit)];
       if (factor === undefined) {
         notes.push(`"${line.label}" is stated in ${read.unit}, which cannot be converted to ${stored}; it was not used.`);
       } else {

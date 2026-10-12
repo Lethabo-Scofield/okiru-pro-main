@@ -34,6 +34,7 @@ import { extractionDomain } from './extractionDomain.js';
 import { emptyIdentity, MAX_OPEN_FACTS, type OpenFact } from './openFacts.js';
 import { decisionFingerprint, rememberDecision } from './semanticDecisionCache.js';
 import { rankSpecsForDocument } from './specRetrieval.js';
+import { dateOf } from './skillDerivations.js';
 
 const logger = createLogger('EsgSheetFacts');
 
@@ -45,7 +46,9 @@ export interface SheetFact {
   /** A1 reference of the value. */
   cell: string;
   /** pair: caption beside or over a value; summary: a block's row × header; total: a block's total line. */
-  kind: 'pair' | 'summary' | 'total';
+  kind: 'pair' | 'summary' | 'total' | 'title';
+  /** A pair's caption cell (0-based), to tell two captions of the same words apart. */
+  at?: { r: number; c: number };
   /** A summary or total cell: its row's label and its column's header, as printed. */
   row?: string;
   column?: string;
@@ -113,6 +116,11 @@ const printed = (value: unknown): string | number => (isNumber(value) ? Math.rou
  * readers already read; their cells are left to them.
  */
 export function findSheetFacts(matrix: unknown[][], read: ReadSpan[] = []): SheetFact[] {
+  return findSheetFactsAndCells(matrix, read).facts.map(({ at: _at, ...fact }) => fact);
+}
+
+/** The labelled cells, and every cell ("r:c") they used: their captions, headers and values. */
+function findSheetFactsAndCells(matrix: unknown[][], read: ReadSpan[] = []): { facts: SheetFact[]; used: Set<string> } {
   const taken = (r: number, c: number) => read.some((span) => r >= span.top && r <= span.bottom
     && (span.left === undefined || c >= span.left) && (span.right === undefined || c <= span.right));
   const used = new Set<string>();
@@ -177,7 +185,7 @@ export function findSheetFacts(matrix: unknown[][], read: ReadSpan[] = []): Shee
     const after = cellsOf(r + 2);
     if (top.every((cell) => isCaption(under[cell.c])) && after.length >= top.length && after.some((cell) => isNumber(cell.value))) continue;
     for (const cell of top) {
-      facts.push({ label: clean(asText(cell.value)), value: printed(under[cell.c]), cell: a1(r + 1, cell.c), kind: 'pair' });
+      facts.push({ label: clean(asText(cell.value)), value: printed(under[cell.c]), cell: a1(r + 1, cell.c), kind: 'pair', at: { r, c: cell.c } });
       used.add(`${r}:${cell.c}`);
       used.add(`${r + 1}:${cell.c}`);
     }
@@ -204,7 +212,7 @@ export function findSheetFacts(matrix: unknown[][], read: ReadSpan[] = []): Shee
       if (!next || next.c - caption.c > PAIR_REACH) continue;
       const label = asText(caption.value);
       if (!isNumber(next.value) && !textValueFor(label, next.value)) continue;
-      facts.push({ label: clean(label), value: printed(next.value), cell: a1(r, next.c), kind: 'pair' });
+      facts.push({ label: clean(label), value: printed(next.value), cell: a1(r, next.c), kind: 'pair', at: { r, c: caption.c } });
       used.add(`${r}:${caption.c}`);
       used.add(`${r}:${next.c}`);
       i += 1;
@@ -218,11 +226,218 @@ export function findSheetFacts(matrix: unknown[][], read: ReadSpan[] = []): Shee
     const { c } = cells[0];
     const below = (matrix[r + 1] ?? [])[c];
     if (!isNumber(below) || !free(r + 1, c)) continue;
-    facts.push({ label: clean(asText(cells[0].value)), value: printed(below), cell: a1(r + 1, c), kind: 'pair' });
+    facts.push({ label: clean(asText(cells[0].value)), value: printed(below), cell: a1(r + 1, c), kind: 'pair', at: { r, c } });
     used.add(`${r}:${c}`);
     used.add(`${r + 1}:${c}`);
   }
+  qualifyRepeatedCaptions(matrix, facts);
+  return { facts, used };
+}
+
+/**
+ * A caption printed twice with different figures (a reconciliation's two
+ * "Difference" lines: meter against issues, and dip against book stock) is two
+ * facts the same words cannot tell apart, and one field given both used
+ * neither. Each is named by the caption it follows: the nearest caption above
+ * it in the same column, within a few rows ("Theoretical stock › Difference").
+ * A caption printed twice with the same figure is one fact and keeps its words.
+ */
+function qualifyRepeatedCaptions(matrix: unknown[][], facts: SheetFact[]): void {
+  const byLabel = new Map<string, SheetFact[]>();
+  for (const fact of facts) {
+    if (fact.kind !== 'pair' || !fact.at) continue;
+    byLabel.set(fact.label, [...(byLabel.get(fact.label) ?? []), fact]);
+  }
+  for (const [label, same] of byLabel) {
+    if (same.length < 2 || new Set(same.map((fact) => String(fact.value))).size < 2) continue;
+    const named = same.map((fact) => {
+      const { r, c } = fact.at!;
+      for (let up = r - 1; up >= Math.max(0, r - 4); up -= 1) {
+        const above = asText((matrix[up] ?? [])[c]);
+        if (isCaption(above) && clean(above) !== label) return `${clean(above)} › ${label}`;
+      }
+      return null;
+    });
+    // Only when every one of them is told apart: otherwise they keep their words.
+    if (named.some((name) => name === null) || new Set(named).size < named.length) continue;
+    same.forEach((fact, i) => { fact.label = named[i]!; });
+  }
+}
+
+/** A register's body (the rows its reader read) and its header row. */
+export interface RegisterSpan extends ReadSpan {
+  headerRow: number;
+}
+
+/** A line that totals a register: "TOTAL", "Grand Total", "TOTAL TO BE INVOICED:-". */
+const TOTAL_LINE = /^\s*(?:grand\s+)?(?:sub-?)?totals?\b/i;
+
+/**
+ * A register's own TOTAL line ("TOTAL TO BE INVOICED:- | 597 | 10 906.77"
+ * under the LITERS and AMOUNT columns): no record, and the register reader
+ * skips it, but it is the figure the document states for the whole register.
+ * Each of its figures is a labelled cell named by the line's caption and its
+ * column's header ("TOTAL TO BE INVOICED › LITERS"), mapped like any other.
+ */
+export function registerTotalFacts(matrix: unknown[][], register: RegisterSpan): SheetFact[] {
+  const header = matrix[register.headerRow] ?? [];
+  const left = register.left ?? 0;
+  const facts: SheetFact[] = [];
+  for (let r = register.headerRow + 1; r <= register.bottom && r < matrix.length; r += 1) {
+    const row = matrix[r] ?? [];
+    const right = register.right ?? row.length - 1;
+    let caption = '';
+    for (let c = left; c <= right; c += 1) {
+      const text = asText(row[c]);
+      if (text && !isNumber(row[c])) {
+        caption = text;
+        break;
+      }
+    }
+    if (!caption || !TOTAL_LINE.test(caption)) continue;
+    for (let c = left; c <= right; c += 1) {
+      const value = row[c];
+      const column = clean(asText(header[c]));
+      if (!isNumber(value) || !column) continue;
+      facts.push({
+        label: `${clean(caption)} › ${column}`,
+        value: printed(value),
+        cell: a1(r, c),
+        kind: 'total',
+        row: clean(caption),
+        column,
+      });
+    }
+  }
   return facts;
+}
+
+/* ------------------------------------------------------------------ *
+ * The words a sheet prints that are no labelled figure: titles and notes
+ * ------------------------------------------------------------------ */
+
+/** A sheet's title lines, as printed: kept on its read (never a value of any field). */
+export const PRINTED_TITLE_FIELD = 'printed_title_lines';
+/** A sheet's notes (annotations, legends, warnings), as printed. */
+export const PRINTED_NOTES_FIELD = 'printed_notes';
+
+/** A tab name that says nothing about the document ("Sheet1", "Detail3", "Table 2"). */
+const GENERIC_SHEET_NAME = /^(?:sheet|detail|table|page|tab|blad|pivot|chart|query|data|copy)\s*\d*$/i;
+/** A cell's words: text with a letter in it, never a figure. */
+const wordsOf = (c: unknown): string => {
+  const text = asText(c);
+  return text && /\p{L}/u.test(text) && !/^[-\d\s.,%R()]+$/.test(text) ? text : '';
+};
+/** A month's name and nothing else ("AUGUST", "Mar 2026"). */
+const MONTH_ONLY = /^\s*(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?(?:\s*'?(?:19|20)?\d{2})?\s*$/i;
+/** Lines kept per sheet, and the longest kept. */
+const MAX_LINES = 40;
+const MAX_LINE = 200;
+
+/**
+ * The words a sheet prints that no labelled cell, register or month grid
+ * reads, kept exactly as printed:
+ *  - TITLE LINES: the lone lines over the sheet's first table or block ("DASHBOARD
+ *    2025/2026", a contractor's name over its export, "Driver Debrief Summary
+ *    Report" and its run date), and the tab's own name when it says something
+ *    ("Jul 25 - Apr 26", a department), never "Sheet1";
+ *  - NOTES: a line of one or two words-cells below that ("estimated", a
+ *    legend's "X (date) | Completed", a warning that the export was truncated),
+ *    and the remark a table carries at the end of a row of figures ("no invoice
+ *    received for Dec - used Nov figures").
+ * They are the document's own words about itself: reported on its read, never a
+ * value of a field, never a rival answer to another document.
+ */
+/** A date as a file name writes one: "01 July 2025", "JUNE 2026", "Jul 25", "31.03.2026". */
+const NAME_DATE = String.raw`(?:\d{1,2}\s*)?(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s*'?(?:19|20)?\d{2}|\d{1,2}[./-]\d{1,2}[./-](?:19|20)?\d{2}`;
+const NAME_PERIOD = new RegExp(String.raw`(?<![\p{L}\d])(?:${NAME_DATE})\s*(?:to|until|till|-|–|—)\s*(?:${NAME_DATE})(?![\p{L}\d])`, 'iu');
+
+/**
+ * The period a file's own name states, as written ("01 July 2025 to JUNE
+ * 2026", "Jul 25- Apr 26"): two dates joined by "to" or a dash. Only the
+ * workbook's name counts (a sheet's part after " › " is its tab). Null when the
+ * name states no period: one month alone is no period.
+ */
+export function periodInFileName(fileName?: string): string | null {
+  const base = String(fileName ?? '').split(' › ')[0].replace(/^.*[\\/]/, '').replace(/\.[a-z0-9]{2,5}$/i, '');
+  const m = NAME_PERIOD.exec(base.replace(/_/g, ' '));
+  return m ? m[0].replace(/\s+/g, ' ').trim() : null;
+}
+
+export function findSheetText(
+  matrix: unknown[][],
+  used: ReadonlySet<string> = new Set(),
+  sheetName?: string,
+  read: ReadSpan[] = [],
+  fileName?: string,
+): { titles: string[]; notes: string[] } {
+  // A register's or a month grid's own rows are its reader's; only the remark
+  // at the end of a row of figures is read from inside them.
+  const inRead = (r: number, c: number) => read.some((span) => r >= span.top && r <= span.bottom
+    && (span.left === undefined || c >= span.left) && (span.right === undefined || c <= span.right));
+  const titles: string[] = [];
+  const notes: string[] = [];
+  const keep = (list: string[], text: string) => {
+    const line = text.replace(/\s+/g, ' ').trim().slice(0, MAX_LINE);
+    if (line && !titles.includes(line) && !notes.includes(line) && list.length < MAX_LINES) list.push(line);
+  };
+  const tab = String(sheetName ?? '').replace(/\s+/g, ' ').trim();
+  if (tab && /\p{L}|\d/u.test(tab) && !GENERIC_SHEET_NAME.test(tab)) keep(titles, tab);
+  // The period the FILE's name states ("... 01 July 2025 to JUNE 2026.xlsx"):
+  // often the only place a report says what it covers.
+  const named = periodInFileName(fileName);
+  if (named) keep(titles, named);
+
+  // An exported table's "Column1 … Column12" row is no line the sheet's author wrote.
+  const placeholderRow = (r: number) => {
+    const cells = (matrix[r] ?? []).filter((value) => !isBlank(value));
+    return cells.length >= 2 && cells.every((value) => /^(?:column|col|field|unnamed:?)[\s_]*\d+$/i.test(asText(value)));
+  };
+  const filled = (r: number) => (placeholderRow(r) ? [] : (matrix[r] ?? []).map((value, c) => ({ c, value })).filter(({ value }) => !isBlank(value)));
+  // The figures and words a column holds, for telling a remark from a column of text.
+  const textInColumn = (c: number) => matrix.filter((row) => wordsOf((row ?? [])[c])).length;
+  const rowsWithFigures = matrix.filter((row) => (row ?? []).some(isNumber)).length;
+  // The title area ends at the first row that is not a lone line: a table's
+  // header, a block, a caption and its value.
+  let body = matrix.length;
+  for (let r = 0; r < matrix.length; r += 1) {
+    const cells = filled(r);
+    if (cells.length >= 2) {
+      body = r;
+      break;
+    }
+  }
+  for (let r = 0; r < matrix.length; r += 1) {
+    const cells = filled(r);
+    const free = cells.filter(({ c }) => !used.has(`${r}:${c}`));
+    if (r < body) {
+      for (const cell of free) {
+        const text = wordsOf(cell.value);
+        if (text) keep(titles, text);
+        // A date printed alone over the table is the sheet's date, as printed.
+        else if (typeof cell.value === 'number' && Number.isInteger(cell.value) && cell.value > 36526 && cell.value < 73051) {
+          keep(titles, new Date(Math.round((cell.value - 25569) * 86400 * 1000)).toISOString().slice(0, 10));
+        }
+      }
+      continue;
+    }
+    // A line of one or two word cells: a note, a legend line, a warning.
+    if (cells.length >= 1 && cells.length <= 2 && free.length === cells.length && cells.every((cell) => wordsOf(cell.value))
+      && !cells.some((cell) => inRead(r, cell.c))) {
+      const line = cells.map((cell) => wordsOf(cell.value)).join(': ');
+      // A month's name on its own heads the rows under it; it says nothing of its own.
+      if (!MONTH_ONLY.test(line)) keep(notes, line);
+      continue;
+    }
+    // A remark at the end of a row of figures, in a column that holds remarks
+    // only now and then (a column of text on most rows is a register's column).
+    const last = cells[cells.length - 1];
+    if (last && free.includes(last) && cells.length >= 3 && cells.slice(0, -1).some((cell) => typeof cell.value === 'number')) {
+      const text = wordsOf(last.value);
+      if (text && text.split(/\s+/).length >= 3 && textInColumn(last.c) * 3 <= Math.max(3, rowsWithFigures)) keep(notes, text);
+    }
+  }
+  return { titles, notes };
 }
 
 /* ------------------------------------------------------------------ *
@@ -235,6 +450,8 @@ interface CandidateField {
   description: string;
   /** The wordings the skill says the field is printed under. */
   labels: string[];
+  /** The skill's type for the field (date, count, text...), when it has one. */
+  type?: string;
 }
 
 /** A label as compared with a skill's wordings: lower case, no punctuation, no bracketed aside. */
@@ -263,7 +480,36 @@ function fieldsOf(specId: string): CandidateField[] {
       field: name,
       description: skillFields.get(name)?.description ?? '',
       labels: skillFields.get(name)?.labels ?? [],
+      ...(skillFields.get(name)?.type ? { type: skillFields.get(name)!.type } : {}),
     }));
+}
+
+/** A printed date, written any of the ways a sheet prints one ("06-Aug-2026 09:41:12 PM", "12/06/2026"), as yyyy-mm-dd; null otherwise. */
+export function printedDateIso(text: string): string | null {
+  const bare = text.trim().replace(/[\sT]+\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?\s*(?:[AP]M)?$/i, '');
+  return dateOf(bare);
+}
+
+/** A month and a year the line names ("SUMMARY FEBRUARY 2026", "Mar 2026"). */
+const MONTH_AND_YEAR_IN = /\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b\.?\s*(?:19|20)\d{2}\b/i;
+
+/**
+ * What a title line gives a field it was mapped to: the line itself for a
+ * name or a text, its date (yyyy-mm-dd) for a date field when it is one date,
+ * the line as printed for a date field when it names a month and a year
+ * ("SUMMARY FEBRUARY 2026" for a list current at February 2026). Never a
+ * figure: a count, an amount or a quantity is no title. Null when the line
+ * cannot be that field's value.
+ */
+export function titleValueFor(candidate: { field: string; type?: string }, line: string): string | null {
+  const type = candidate.type ?? (/(?:_date|_start|_end)$/.test(candidate.field) ? 'date' : 'text');
+  if (['count', 'number', 'money', 'percent', 'level', 'bool', 'idno'].includes(type)) return null;
+  if (type === 'date') {
+    const iso = printedDateIso(line);
+    if (iso) return iso;
+    return MONTH_AND_YEAR_IN.test(line) ? line : null;
+  }
+  return line;
 }
 
 /**
@@ -282,6 +528,10 @@ const MAP_SYSTEM = [
   'You map the labelled cells of a spreadsheet sheet to the fields of an ESG document type.',
   'Map a label only when the cell beside it IS that field\'s value for the whole document (not one',
   'site\'s or one row\'s share, unless the field is per site). Leave out every label that is no listed field.',
+  'A label of kind "title line" is a line the sheet prints on its own above its tables: it is its own',
+  'value. Map it only when the WHOLE line is that field\'s value (a site or depot\'s name, the date the',
+  'report was run, the month a list is current at, the company that issued the report), never a field',
+  'it only mentions.',
   'Reply with JSON only: {"mapping": {"<label>": "<spec id>/<field>"}}.',
 ].join(' ');
 
@@ -340,6 +590,8 @@ export interface EsgSheetFactsInput {
   specIds?: string[];
   /** A hidden sheet: its facts are kept as open facts only, and nothing is asked of the model. */
   hidden?: boolean;
+  /** The register the sheet's register reader read: its total line is read here. */
+  register?: RegisterSpan;
 }
 
 /** How many specs retrieval offers when the sheet's other reads named none. */
@@ -361,6 +613,9 @@ function valueFor(field: string, value: string | number): string | number {
 /** The rows a skill with `summaryTables` keeps its printed summary cells under. */
 export const PRINTED_SUMMARY_FIELD = 'printed_summary_rows';
 
+/** What the code keeps of a sheet as printed: its summary cells, title lines and notes. Each describes its own document. */
+export const PRINTED_DOCUMENT_FIELDS: ReadonlySet<string> = new Set([PRINTED_SUMMARY_FIELD, PRINTED_TITLE_FIELD, PRINTED_NOTES_FIELD]);
+
 /**
  * A period printed as one range ("2025-07-01 - 2026-06-30", "1 July 2025 to
  * 30 June 2026") under a field that names its start: the two ends, as printed.
@@ -375,6 +630,38 @@ export function rangeOf(field: string, value: string | number): [string, string]
   return dateLike(parts[0]) && dateLike(parts[1]) ? [parts[0].trim(), parts[1].trim()] : null;
 }
 
+const MONTH_WORDS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+/**
+ * A period field's cell whose caption says it is a MONTH ("for the month of:",
+ * "Month") is that whole month: a sheet prints the month as its first day
+ * (2026-03-01, a day number) or as "March 2026". Under a period's start or end
+ * it gives both ends, first and last day. Null for anything else: a caption
+ * that names no month, or a value that is no date or month.
+ */
+export function wholeMonthOf(field: string, label: string, value: string | number): [string, string] | null {
+  if (!/_(?:start|end)$/.test(field) || !/\bmonth\b/i.test(label)) return null;
+  let year: number | null = null;
+  let month: number | null = null;
+  const text = String(value).trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (iso) {
+    year = Number(iso[1]);
+    month = Number(iso[2]);
+  } else {
+    const named = /^([A-Za-z]{3,9})\.?[\s\-/]+(\d{4})$/.exec(text);
+    const index = named ? MONTH_WORDS.indexOf(named[1].slice(0, 3).toLowerCase()) : -1;
+    if (named && index >= 0) {
+      year = Number(named[2]);
+      month = index + 1;
+    }
+  }
+  if (!year || !month || month < 1 || month > 12) return null;
+  const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const mm = String(month).padStart(2, '0');
+  return [`${year}-${mm}-01`, `${year}-${mm}-${String(last).padStart(2, '0')}`];
+}
+
 /**
  * Read a sheet's labelled cells. One extraction per document type a label
  * mapped to (its values, each citing its cell), plus the open facts no label
@@ -384,8 +671,18 @@ export async function extractEsgSheetFacts(
   model: ExtractionModel | null,
   input: EsgSheetFactsInput,
 ): Promise<DocumentExtraction[] | null> {
-  const facts = findSheetFacts(input.matrix, input.read ?? []);
-  if (facts.length === 0) return null;
+  const found = findSheetFactsAndCells(input.matrix, input.read ?? []);
+  const used = found.used;
+  // A hidden sheet's words are scratch work, never the document's.
+  const text = input.hidden ? { titles: [], notes: [] } : findSheetText(input.matrix, used, input.sheetName, input.read ?? [], input.filename);
+  // A register's own total line, inside the rows the register reader read.
+  const totals = input.hidden || !input.register ? [] : registerTotalFacts(input.matrix, input.register);
+  // Title lines are offered to the mapping as labels that are their own value.
+  // A tab of a template (one per vehicle) shares one question with its
+  // siblings, so its own lines are never part of it.
+  const titleFacts: SheetFact[] = input.template ? [] : text.titles.map((line) => ({ label: line, value: line, cell: 'title', kind: 'title' as const }));
+  const facts = [...found.facts, ...totals, ...titleFacts];
+  if (facts.length === 0 && text.titles.length === 0 && text.notes.length === 0) return null;
   const sheet = input.sheetName ?? input.filename;
 
   const specIds = [...new Set([
@@ -400,6 +697,8 @@ export async function extractEsgSheetFacts(
   const byWording = new Set<SheetFact>();
   // A hidden sheet's cells are notes only: scratch copies and stale lists are no reading.
   for (const fact of input.hidden ? [] : facts) {
+    // A title line is its own value: never taken for a field by a wording it shares (a sheet titled "Generator").
+    if (fact.kind === 'title') continue;
     const hit = fieldBySkillWording(fact.label, candidates);
     if (hit) {
       mapped.set(fact, hit);
@@ -409,7 +708,7 @@ export async function extractEsgSheetFacts(
   // The model for the rest, once per set of labels. Never for a hidden sheet.
   if (model && !input.hidden) {
     const rest = facts.filter((fact) => !mapped.has(fact));
-    const labels = [...new Map(rest.map((fact) => [fact.label, { label: fact.label, kind: kindOfValue(fact.value) }])).values()];
+    const labels = [...new Map(rest.map((fact) => [fact.label, { label: fact.label, kind: fact.kind === 'title' ? 'title line' : kindOfValue(fact.value) }])).values()];
     const byModel = await mapLabelsByModel(model, labels, candidates, { template: input.template ?? sheet });
     for (const fact of rest) if (byModel[fact.label]) mapped.set(fact, byModel[fact.label]);
   }
@@ -439,7 +738,15 @@ export async function extractEsgSheetFacts(
     return extraction;
   };
   const taken = new Set([...byField.values()].map(({ candidate }) => `${candidate.specId}/${candidate.field}`));
-  for (const { candidate, facts: all } of byField.values()) {
+  for (const { candidate, facts: mappedHere } of byField.values()) {
+    // A title line yields to a labelled cell for the same field; alone, it must
+    // be a value the field can hold (a date field takes a printed date or month).
+    const labelled = mappedHere.filter((fact) => fact.kind !== 'title');
+    const all = labelled.length > 0 ? labelled : mappedHere.flatMap((fact) => {
+      const value = titleValueFor(candidate, String(fact.value));
+      return value === null ? [] : [{ ...fact, value }];
+    });
+    if (all.length === 0) continue;
     let cells = all;
     // A label printed in the skill's own wording IS the field; a label the
     // model guessed for the same field that disagrees with it ("Theoretical
@@ -473,6 +780,17 @@ export async function extractEsgSheetFacts(
       && !taken.has(`${candidate.specId}/${endField}`)) {
       extraction.values.push({ field: candidate.field, value: range[0], sourceFile: input.filename, sourceDocumentId: candidate.specId, source });
       extraction.values.push({ field: endField, value: range[1], sourceFile: input.filename, sourceDocumentId: candidate.specId, source });
+      continue;
+    }
+    // "for the month of: 2026-03-01" is the whole month: its first and last day.
+    const month = wholeMonthOf(candidate.field, fact.label, valueFor(candidate.field, fact.value));
+    const otherEnd = month ? candidate.field.replace(/_(start|end)$/, (_m, end: string) => (end === 'start' ? '_end' : '_start')) : null;
+    if (month && otherEnd && candidates.some((c) => c.specId === candidate.specId && c.field === otherEnd)
+      && !taken.has(`${candidate.specId}/${otherEnd}`)) {
+      const startField = /_start$/.test(candidate.field) ? candidate.field : otherEnd;
+      const endField2 = startField === candidate.field ? otherEnd : candidate.field;
+      extraction.values.push({ field: startField, value: month[0], sourceFile: input.filename, sourceDocumentId: candidate.specId, source });
+      extraction.values.push({ field: endField2, value: month[1], sourceFile: input.filename, sourceDocumentId: candidate.specId, source });
       continue;
     }
     extraction.values.push({
@@ -511,8 +829,26 @@ export async function extractEsgSheetFacts(
     }
   }
 
+  // The sheet's title lines and notes, as printed, on the read of the type the
+  // sheet is (a listed skill's spec), or on the sheet's own labelled-cell read.
+  if (text.titles.length > 0 || text.notes.length > 0) {
+    const domain = extractionDomain('esg');
+    const typed = (input.specIds ?? []).find((id) => domain.skillFor(id) !== null);
+    const holder = typed ? extractionFor(typed) : extractionFor('esg_sheet_facts');
+    for (const [field, lines] of [[PRINTED_TITLE_FIELD, text.titles], [PRINTED_NOTES_FIELD, text.notes]] as const) {
+      if (lines.length === 0) continue;
+      holder.values.push({
+        field,
+        value: [...lines],
+        sourceFile: input.filename,
+        sourceDocumentId: holder.documentId,
+        source: { method: 'cell', quote: `${sheet}: ${lines.length} line(s) as printed` },
+      });
+    }
+  }
+
   const out = [...extractions.values()];
-  const open: OpenFact[] = [...unmapped].slice(0, MAX_OPEN_FACTS).map((fact) => ({
+  const open: OpenFact[] = [...unmapped].filter((fact) => fact.kind !== 'title').slice(0, MAX_OPEN_FACTS).map((fact) => ({
     label: fact.label,
     value: String(fact.value),
     unit: null,

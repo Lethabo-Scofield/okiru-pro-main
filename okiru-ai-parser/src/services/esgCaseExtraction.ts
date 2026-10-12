@@ -37,7 +37,7 @@ import {
 } from './aiExtraction.js';
 import { getExtractionModel, duplicateWorkbookException, type ResolveProgress } from './caseExtraction.js';
 import { ROW_HIDDEN_KEY, resolveCaseEntities, type CaseEntities } from './entityResolution.js';
-import { billAsMonthlyRows } from './esgBillFacts.js';
+import { billAsMonthlyRows, ESG_MONTHLY_ROWS_FIELD } from './esgBillFacts.js';
 import {
   CONFIDENCE_FLOOR,
   classifyDocument,
@@ -65,11 +65,16 @@ import { addOtherDocumentRead, agentOnOtherDocument, otherByClassifier as passAO
 import { reviewCase } from './caseReview.js';
 import { extractEsgSheetTable, routeWasteRowsByTitle } from './esgSheetTableExtraction.js';
 import { surveyGridExtraction } from './esgSurveyGrid.js';
+import { isDerivedValue, registerCountsFor } from './esgRegisterDerivations.js';
 import { extractEsgMonthlyTables, monthlyReadSpans, monthlyReadStandsIn } from './esgMonthlyTables.js';
 import { extractEsgPeriodSummary, fillsOfVehicle, periodReadSpan, topOfSheetIsDated, vehicleOfSheet } from './esgPeriodSummaries.js';
 import {
   extractEsgSheetFacts,
   mergeCellReads,
+  PRINTED_DOCUMENT_FIELDS,
+  PRINTED_NOTES_FIELD,
+  PRINTED_TITLE_FIELD,
+  printedDateIso,
   registerBodySpan,
   sheetFactsEnabled,
   sparseMatrix,
@@ -254,6 +259,60 @@ export function unprintedValuesAsExceptions(extraction: DocumentExtraction): Doc
   return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
 }
 
+/** A figure as a number ("2836.1961", "1 204", 7); null when it is no plain figure. */
+function plainFigure(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string') return null;
+  const text = value.trim().replace(/[\s,](?=\d{3}\b)/g, '');
+  return /^-?\d+(?:\.\d+)?$/.test(text) ? Number(text) : null;
+}
+
+/**
+ * A count is a whole number. A "count" holding a fraction is some other
+ * figure read into the count's place: a debrief's pivot prints "Max of" and
+ * "Average of" columns, and one of them (2 836.1961) was filed as the total of
+ * fatigue events, an event the report does not record at all. Every field the
+ * skill types as a count, at document level and in a row, is held to it: a
+ * fraction goes to the reviewer as an exception, never as a count. Agent fills
+ * are held to it too: a citation shows where a figure is, not that it counts.
+ */
+export function fractionalCountsAsExceptions(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const counts = new Set((skill?.fields ?? []).filter((field) => field.type === 'count').map((field) => field.name));
+  if (counts.size === 0) return extraction;
+  const isFraction = (value: unknown): boolean => {
+    const n = plainFigure(value);
+    return n !== null && !Number.isInteger(n);
+  };
+  const refused: string[] = [];
+  const values = extraction.values.flatMap((value) => {
+    if (Array.isArray(value.value)) {
+      let changed = false;
+      const rows = value.value.map((row) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+        const record = row as Record<string, unknown>;
+        const bad = Object.keys(record).filter((column) => counts.has(column) && isFraction(record[column]));
+        if (bad.length === 0) return row;
+        changed = true;
+        const next = { ...record };
+        for (const column of bad) {
+          refused.push(`${column}: "${String(record[column])}" on a row was not kept: a count is a whole number.`);
+          next[column] = null;
+        }
+        return next;
+      });
+      return changed ? [{ ...value, value: rows }] : [value];
+    }
+    if (counts.has(value.field) && isFraction(value.value)) {
+      refused.push(`${value.field}: "${String(value.value)}" was not kept: a count is a whole number, so this is some other figure.`);
+      return [];
+    }
+    return [value];
+  });
+  if (refused.length === 0) return extraction;
+  return { ...extraction, values, exceptions: [...extraction.exceptions, ...refused] };
+}
+
 /**
  * The extraction as the case resolution sees it: without the facts its skill
  * marks `scope: document` (a statement date, a document number, a revision, an
@@ -266,12 +325,161 @@ export function unprintedValuesAsExceptions(extraction: DocumentExtraction): Doc
 export function withoutDocumentFacts(extraction: DocumentExtraction): DocumentExtraction {
   const skill = extractionDomain('esg').skillFor(extraction.documentId);
   const documentOnly = new Set((skill?.fields ?? []).filter((field) => field.scope === 'document' && !field.rowLevel).map((field) => field.name));
-  if (documentOnly.size === 0 || !extraction.values.some((value) => documentOnly.has(value.field))) return extraction;
-  return { ...extraction, values: extraction.values.filter((value) => !documentOnly.has(value.field)) };
+  const own = (value: DocumentExtraction['values'][number]) => documentOnly.has(value.field) || isDocumentOwnValue(value);
+  if (!extraction.values.some(own)) return extraction;
+  return { ...extraction, values: extraction.values.filter((value) => !own(value)) };
+}
+
+/**
+ * Values the CODE states about one document, never a rival answer to another's:
+ *  - a count it derived from the document's own rows (esgRegisterDerivations.ts);
+ *  - the printed summary cells, title lines and notes it kept as printed
+ *    (esgSheetFacts.ts);
+ *  - a document's own table of lines that is no register the workbook keeps
+ *    (a bill's history lines, a policy's rules, a form's items): resolved
+ *    across the case, every policy's rules were a rival answer to every other's.
+ */
+export function isDocumentOwnValue(value: DocumentExtraction['values'][number]): boolean {
+  if (isDerivedValue(value)) return true;
+  if (PRINTED_DOCUMENT_FIELDS.has(value.field)) return true;
+  return Array.isArray(value.value) && /_rows$/.test(value.field)
+    && !ESG_REGISTER_FIELDS.has(value.field) && value.field !== ESG_MONTHLY_ROWS_FIELD;
+}
+
+/**
+ * A field the skill asks for as several items in one string ("2026-08-03;
+ * 2026-08-11", "12.50-; 3.10-") is a LIST, and is kept as one: each item a
+ * value of its own. Read as one string, a thread's three message dates were one
+ * date (the first) and two credits were no amount at all. Only fields the skill
+ * marks `list: true`; an item is never re-worded, only split from its
+ * neighbours. A value already returned as an array stays as it is.
+ */
+export function listFieldsAsArrays(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const lists = new Set((skill?.fields ?? []).filter((field) => field.list && !field.rowLevel).map((field) => field.name));
+  if (lists.size === 0) return extraction;
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (!lists.has(value.field) || typeof value.value !== 'string') return value;
+    const items = value.value.split(/\s*[;\n]\s*/).map((item) => item.trim()).filter(Boolean);
+    if (items.length === 0) return value;
+    changed = true;
+    return { ...value, value: items };
+  });
+  return changed ? { ...extraction, values } : extraction;
+}
+
+/**
+ * A value that opens with ANOTHER field's printed caption is that caption run
+ * into the value: a cover page's header table, flattened by the text layer,
+ * reads "Policy Title Revision 2" where the revision cell says "Revision 2".
+ * The caption (one of the skill's own wordings for another field) is taken
+ * off, and the reviewer told. A value that is only the caption is left alone,
+ * and so is one opening with its own field's wording.
+ */
+export function runInCaptionsRemoved(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const fields = (skill?.fields ?? []).filter((field) => !field.rowLevel);
+  if (fields.length === 0) return extraction;
+  const notes: string[] = [];
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (typeof value.value !== 'string' || value.source?.method === 'agent') return value;
+    const own = fields.find((field) => field.name === value.field);
+    if (!own) return value;
+    const text = value.value.trim();
+    const lower = text.toLowerCase();
+    if (own.labels.some((wording) => lower.startsWith(wording.toLowerCase()))) return value;
+    for (const other of fields) {
+      if (other.name === own.name) continue;
+      for (const wording of other.labels) {
+        const caption = wording.toLowerCase();
+        if (caption.length < 5 || !lower.startsWith(caption)) continue;
+        const rest = text.slice(caption.length).replace(/^[\s:–—-]+/, '').trim();
+        if (!rest || !/^[\s:–—-]/.test(text.slice(caption.length))) continue;
+        changed = true;
+        notes.push(`${value.field}: "${text}" opens with "${wording}", another field's caption; it was read as "${rest}".`);
+        return { ...value, value: rest };
+      }
+    }
+    return value;
+  });
+  return changed ? { ...extraction, values, exceptions: [...extraction.exceptions, ...notes] } : extraction;
+}
+
+/** A limit word a rule's figure is printed with ("Maximum of 0.25%", "at least 2%"). */
+const RULE_LIMIT = /^\s*(maximum|minimum|max\.?|min\.?|at\s+least|at\s+most|up\s+to|not\s+(?:more|less)\s+than|no\s+(?:more|less)\s+than)\s*(?:of\s+)?(?=[R\d(.-])/i;
+
+/**
+ * A policy rule's figure ALONE ("0.25%"), its limit word with its basis
+ * ("maximum of NPAT"): the skill asks for exactly that, and a figure read with
+ * its words ("Maximum of 0.25%") is no figure anything can compare. Only the
+ * words before the figure move; the figure is never changed.
+ */
+export function ruleFiguresAlone(extraction: DocumentExtraction): DocumentExtraction {
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (!Array.isArray(value.value)) return value;
+    let rowsChanged = false;
+    const rows = value.value.map((row) => {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+      const record = row as Record<string, unknown>;
+      const figure = record.rule_figure;
+      if (typeof figure !== 'string') return row;
+      const m = RULE_LIMIT.exec(figure);
+      if (!m) return row;
+      rowsChanged = true;
+      const limit = m[1].replace(/\.$/, '').replace(/\s+/g, ' ').toLowerCase();
+      const basis = typeof record.rule_basis === 'string' ? record.rule_basis.trim() : '';
+      return { ...record, rule_figure: figure.slice(m[0].length).trim(), rule_basis: basis ? `${limit} ${basis}` : limit };
+    });
+    if (!rowsChanged) return value;
+    changed = true;
+    return { ...value, value: rows };
+  });
+  return changed ? { ...extraction, values } : extraction;
+}
+
+/**
+ * A date field's printed date in one spelling, yyyy-mm-dd: "23-Sep-2026",
+ * "06-Aug-2026 09:41:12 PM", "4 Sep 2026", "16/09/2026" (day first, as South
+ * African documents print it). The skills tell the model to copy dates as
+ * printed because the CODE converts them; this is that conversion, for the
+ * fields the skill types as dates, at document level and in rows. A month
+ * ("Mar 2026"), a range, a year or anything unreadable stays as printed.
+ */
+export function printedDatesAsIso(extraction: DocumentExtraction): DocumentExtraction {
+  const skill = extractionDomain('esg').skillFor(extraction.documentId);
+  const dates = new Set((skill?.fields ?? []).filter((field) => field.type === 'date').map((field) => field.name));
+  if (dates.size === 0) return extraction;
+  const iso = (value: unknown): unknown => (typeof value === 'string' ? printedDateIso(value) ?? value : value);
+  let changed = false;
+  const values = extraction.values.map((value) => {
+    if (Array.isArray(value.value)) {
+      let rowsChanged = false;
+      const rows = value.value.map((row) => {
+        if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
+        const record = row as Record<string, unknown>;
+        const columns = Object.keys(record).filter((column) => dates.has(column) && iso(record[column]) !== record[column]);
+        if (columns.length === 0) return row;
+        rowsChanged = true;
+        return { ...record, ...Object.fromEntries(columns.map((column) => [column, iso(record[column])])) };
+      });
+      if (!rowsChanged) return value;
+      changed = true;
+      return { ...value, value: rows };
+    }
+    if (!dates.has(value.field)) return value;
+    const next = iso(value.value);
+    if (next === value.value) return value;
+    changed = true;
+    return { ...value, value: next };
+  });
+  return changed ? { ...extraction, values } : extraction;
 }
 
 /** A field that holds money: a rand amount, a charge, a cost, a credit. */
-const MONEY_FIELD = /(?:^|_)(?:rand|zar|amount|cost|costs|charge|charges|credit|spend|vat)(?:_|$)/;
+const MONEY_FIELD = /(?:^|_)(?:rand|zar|amount|cost|costs|charge|charges|credit|credits|spend|vat)(?:_|$)/;
 
 /** "20.25-", "R 1 250.00 -": a figure whose minus is printed AFTER it. */
 const TRAILING_MINUS = /^\s*((?:r|zar)?\s*\d[\d\s,]*(?:[.,]\d+)?)\s*-\s*$/i;
@@ -302,6 +510,12 @@ export function trailingMinusCreditsAsNegative(extraction: DocumentExtraction): 
     if (Array.isArray(value.value)) {
       let rowsChanged = false;
       const rows = value.value.map((row) => {
+        // A list of amounts (a bill's credit lines): each item is the field's.
+        if (typeof row === 'string') {
+          const item = creditAsNegative(value.field, row);
+          if (item !== row) rowsChanged = true;
+          return item;
+        }
         if (!row || typeof row !== 'object' || Array.isArray(row)) return row;
         let rowChanged = false;
         const next: Record<string, unknown> = {};
@@ -471,6 +685,29 @@ function mainTableIsRegister(matrix: unknown[][], region: MainRegion): boolean {
 function sheetMatrixOf(tables: unknown[] | undefined): unknown[][] | undefined {
   const matrix = (tables?.[0] as { matrix?: unknown } | undefined)?.matrix;
   return Array.isArray(matrix) && matrix.every(Array.isArray) ? (matrix as unknown[][]) : undefined;
+}
+
+/** At most this many records, a register is short enough that a model read of its page drops none. */
+export const SHORT_REGISTER_ROWS = 40;
+
+/**
+ * Is this code-read register the WHOLE upload and short? A one-sheet workbook
+ * (not a sheet split out of a larger one) whose register holds at most
+ * SHORT_REGISTER_ROWS records. Its title lines ("Site X - Reporting period 1
+ * July to 30 June") are read by the first pass as well; a long register's
+ * flat read could only return a truncated copy, so it never gets one.
+ */
+export function wholeShortRegister(input: RawExtractionInput, register: DocumentExtraction | null): boolean {
+  if (!register || input.metadata?.single_sheet !== true) return false;
+  const rows = register.values.find((value) => Array.isArray(value.value))?.value as unknown[] | undefined;
+  return Array.isArray(rows) && rows.length > 0 && rows.length <= SHORT_REGISTER_ROWS;
+}
+
+/** A first-pass read without the rows the code already read from the same register. */
+export function withoutRegisterRows(read: DocumentExtraction, register: DocumentExtraction): DocumentExtraction {
+  const codeRows = new Set(register.values.filter((value) => Array.isArray(value.value)).map((value) => value.field));
+  if (!read.values.some((value) => codeRows.has(value.field))) return read;
+  return { ...read, values: read.values.filter((value) => !codeRows.has(value.field)) };
 }
 
 /** The skill a saved e-mail is read with (skills/esg/email_correspondence.md). */
@@ -702,13 +939,19 @@ export async function extractEsgCaseEntities(
     // side) is read cell by cell by the code, whatever Pass A called it; the
     // flat read could only return nulls or a truncated copy of its answers.
     const survey = flatRead && !sheetTable ? surveyGridExtraction(matrix, { filename: input.filename, sheetName }) : null;
-    const specResults = flatRead && !sheetTable && !survey && !otherByClassifier
-      ? await extractDocument(model, {
+    // A short register that is the whole upload (an incident register on one
+    // sheet): the code reads its rows, and the first pass still reads what it
+    // states about itself (its period, its site), which sits in title lines no
+    // register column holds. Its rows are the code's: the model's copy is dropped.
+    const headerOfRegister = Boolean(sheetTable) && wholeShortRegister(input, sheetTable);
+    const specResults = flatRead && (!sheetTable || headerOfRegister) && !survey && !otherByClassifier
+      ? (await extractDocument(model, {
         filename: input.filename,
         markdown: input.markdown,
         raw_text: input.raw_text,
         elementHint: sheetName,
-      }, readSpecIds ? { specIds: readSpecIds, domain: 'esg' } : { elementOverride, domain: 'esg' })
+      }, readSpecIds ? { specIds: readSpecIds, domain: 'esg' } : { elementOverride, domain: 'esg' }))
+        .map((read) => (headerOfRegister ? withoutRegisterRows(read, sheetTable!) : read))
       : ([] as DocumentExtraction[]);
 
     let results = [...specResults];
@@ -732,17 +975,21 @@ export async function extractEsgCaseEntities(
     // its table. The skill's wordings and one cached model question map their
     // labels; the code reads every value (esgSheetFacts.ts).
     // A survey grid read by the code holds no labelled cells of its own.
-    if (sheetName && sheetFactsEnabled() && !survey) {
+    if (sheetName && sheetFactsEnabled()) {
       const layout = sheetLayoutOf(input.tables);
       const grid = matrix ?? (layout.outside ? sparseMatrix(layout.outside) : undefined);
       if (grid) {
+        // A register's rows are the register's (read by code or by the flat pass).
+        const registerSpan = matrix && layout.region && (sheetTable || mainTableIsRegister(matrix, layout.region))
+          ? registerBodySpan(matrix, layout.region)
+          : null;
         const read: ReadSpan[] = [
           ...monthlyReadSpans(monthlyTables),
           ...(period ? [periodReadSpan(period)].filter((span): span is ReadSpan => span !== null) : []),
-          // A register's rows are the register's (read by code or by the flat pass).
-          ...(matrix && layout.region && (sheetTable || mainTableIsRegister(matrix, layout.region))
-            ? [registerBodySpan(matrix, layout.region)]
-            : []),
+          ...(registerSpan ? [registerSpan] : []),
+          // A survey grid read by the code holds no labelled cell of its own:
+          // only its tab's name and title lines are read here.
+          ...(survey ? [{ top: 0, bottom: grid.length }] : []),
         ];
         const cellReads = await extractEsgSheetFacts(model, {
           filename: input.filename,
@@ -752,6 +999,7 @@ export async function extractEsgCaseEntities(
           read,
           specIds: [...new Set([...results.map((result) => result.documentId), ...(workbookSpecIds ?? [])])],
           hidden: input.metadata?.sheet_hidden === true,
+          ...(registerSpan && sheetTable && layout.region ? { register: { ...registerSpan, headerRow: layout.region.headerRow } } : {}),
         });
         if (cellReads) results = mergeCellReads(results, cellReads, [readByCode, reportedOnly, sheetTable, survey]);
       }
@@ -765,14 +1013,21 @@ export async function extractEsgCaseEntities(
     // document, read for its identity and facts (openRead.ts). Never a sheet.
     let otherDocument = false;
     if (standalone) {
-      const open = await addOtherDocumentRead(model, input, results, {
+      // The lines the code keeps as printed (titles, notes) and the counts it
+      // derives are no listed READ of the document: they never decide that a
+      // listed type read it.
+      const listedReads = results.map((result) => ({
+        ...result,
+        values: result.values.filter((value) => !isDerivedValue(value) && value.field !== PRINTED_TITLE_FIELD && value.field !== PRINTED_NOTES_FIELD),
+      }));
+      const open = await addOtherDocumentRead(model, input, listedReads, {
         domain: 'esg',
         classifierLabel: classification?.documentType ?? null,
         byClassifier: otherByClassifier,
         // Pass A named a listed ESG type: it stays that type (the agent reads it).
         typed: Boolean(skillSpecIds),
       });
-      results = open.results;
+      if (open.other) results = [...results, ...open.results.slice(listedReads.length)];
       otherDocument = open.other;
     }
     const typedPass = agentPass
@@ -788,6 +1043,9 @@ export async function extractEsgCaseEntities(
 
     // A workbook sheet's formula zeros are a template's, not readings.
     if (sheetName) results = results.map(templateZerosAsExceptions);
+    // The counts its registers imply (lost-time injuries, learners by race,
+    // trailers), worked out by the code from the rows and labelled derived.
+    results.push(...registerCountsFor(results));
 
     done += 1;
     onProgress?.({ done, total, fileName: input.filename });
@@ -801,8 +1059,13 @@ export async function extractEsgCaseEntities(
         ...result.value
           .map(notesAsExceptions)
           .map(namedUnitFiguresAsExceptions)
+          .map(listFieldsAsArrays)
+          .map(runInCaptionsRemoved)
+          .map(ruleFiguresAlone)
+          .map(printedDatesAsIso)
           .map(trailingMinusCreditsAsNegative)
-          .map(unprintedValuesAsExceptions),
+          .map(unprintedValuesAsExceptions)
+          .map(fractionalCountsAsExceptions),
       );
     } else if (result.status === 'rejected') {
       // One unreadable file must not cost the user the rest of the case they

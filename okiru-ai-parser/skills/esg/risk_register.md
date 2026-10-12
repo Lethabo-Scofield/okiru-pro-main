@@ -139,7 +139,10 @@ assessment, an IFRS readiness assessment or a policy.
   extreme weather or drought is a physical risk; one that names pressure to
   reduce carbon emissions or customers' sustainability demands is a
   transition risk. When a row names both, both are Yes. "Partial" is only for
-  a register that mentions climate without saying what the risk is.
+  a register that mentions climate without saying what the risk is. Words of
+  such a risk count even when the text layer breaks its row apart ("pressure to
+  reduce carbon" on one line, "emissions" or "climate regulations" on the next):
+  the risk is named, so the answer is Yes.
 - A PDF text layer can interleave a landscape table's cells (the factor, its
   rating and its controls mixed together). Read the row from the page; when the
   rating cannot be tied to its row, leave it null and say so.

@@ -20,19 +20,23 @@ rowsField: esg_monthly_rows
 fields:
   - name: report_title
     type: text
+    scope: document
     labels: ["Report", "Report name"]
     description: "The export's report name as printed."
   - name: report_run_date
     type: date
+    scope: document
     labels: ["Date run", "Run date", "Generated on"]
     description: "When the export was run, as printed."
   - name: organisation_node
     type: text
     required: true
+    scope: document
     labels: ["Node", "Organisation", "Reporting entity"]
     description: "The organisation unit or node the export is for, as printed."
   - name: organisation_view
     type: text
+    scope: document
     labels: ["View", "Reporting view"]
     description: "The view or sub-unit the export was filtered to, as printed (a division under the node). Null when none is printed."
   - name: reporting_period_start
@@ -45,10 +49,12 @@ fields:
     description: "End of the export's date range, as printed (it may run past the last month with data)."
   - name: scope2_method
     type: text
+    scope: document
     labels: ["Scope 2 methodology", "Scope 2 method", "Methodology"]
     description: "Location-based or market-based, as printed."
   - name: emission_type
     type: text
+    scope: document
     labels: ["Emission type", "Emissions type"]
     description: "The emission type the export was run for, as printed."
   - name: scopes_included
@@ -57,10 +63,12 @@ fields:
     description: "The scopes the export includes, as printed."
   - name: include_modelled_data
     type: text
+    scope: document
     labels: ["Modelled data", "Modelled"]
     description: "Whether modelled (estimated) data is included, as printed (\"Yes\" / \"No\")."
   - name: convert_fuel_setting
     type: text
+    scope: document
     labels: ["Convert fuel"]
     description: "The export's fuel-conversion setting, as printed."
   - name: monthly_measure

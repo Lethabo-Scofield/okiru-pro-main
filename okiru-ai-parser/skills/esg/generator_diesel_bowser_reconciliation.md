@@ -84,12 +84,13 @@ fields:
   - name: fuel_supplier_name
     type: text
     labels: ["Supplier", "Fuel supplier", "Delivered by"]
-    description: "The company that delivered the bulk diesel, as printed."
+    description: "The company that delivered the bulk diesel, as printed. A sheet often names it only in a column heading or caption over its delivery or invoice numbers (\"<Company> Delivery Note\", \"<Company> Invoice number\"): that company is the supplier."
   - name: delivery_note_numbers
     type: text
+    list: true
     labels: ["Delivery note", "DN number", "Delivery note no"]
     description: "Every delivery note number printed for the period, as written, separated by semicolons."
-newFields: [issued_to_external_litres, stock_variance_litres, theoretical_stock_litres, meter_reading_open, meter_reading_close, fuel_price_per_litre]
+newFields: [issued_to_external_litres, stock_variance_litres, theoretical_stock_litres, meter_reading_open, meter_reading_close]
 ---
 ## What it is / is not
 

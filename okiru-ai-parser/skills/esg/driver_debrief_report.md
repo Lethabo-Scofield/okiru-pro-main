@@ -39,18 +39,22 @@ fields:
     description: "The grand total of actual stops a summary prints, from the same summary. Never add the rows."
   - name: total_distance_km
     type: number
+    scope: document
     labels: ["Total km", "Total distance", "Total plan km"]
     description: "A total distance the summary prints, with whether it is planned or actual kilometres noted in exceptions. Never added up."
   - name: total_routes
     type: count
+    scope: document
     labels: ["Total routes", "Routes total"]
     description: "The grand total of routes a summary prints, as printed. Never counted from the rows."
   - name: total_planned_cases
     type: number
+    scope: document
     labels: ["Total planned cases", "Planned cases total"]
     description: "The grand total of planned cases a summary prints, as printed."
   - name: total_planned_weight
     type: number
+    scope: document
     labels: ["Total planned weight", "Planned weight total"]
     description: "The grand total of planned weight a summary prints, as printed, with its unit in exceptions when it prints one."
   - name: total_fatigue_events_count

@@ -354,6 +354,18 @@ const HEADER_VOCABULARY = /name\s*&?\s*surname|\bid\s*number\b|supplier\s*name|b
  * row is scored by fill PLUS a strong bonus per known header label ("Name &
  * Surname", "ID Number", "Race"…) — vocabulary a legend row never carries.
  */
+/**
+ * A cell holding only a spreadsheet tool's placeholder column name: Excel's
+ * "Column1" (a table converted from a query), "col_3", pandas' "Unnamed: 2",
+ * "Field4". A row of nothing but these is no header a person wrote.
+ */
+const PLACEHOLDER_HEADER = /^(?:column|col|field|unnamed:?)[\s_]*\d+$/i;
+
+export function isPlaceholderHeaderRow(cells: unknown[]): boolean {
+  const filled = cells.filter((c) => c !== null && c !== undefined && String(c).trim() !== '');
+  return filled.length >= 2 && filled.every((c) => typeof c === 'string' && PLACEHOLDER_HEADER.test(c.trim()));
+}
+
 function findHeaderRow(matrix: unknown[][]): number {
   let bestIdx = 0;
   let bestScore = 0;
@@ -361,6 +373,10 @@ function findHeaderRow(matrix: unknown[][]): number {
   // register, pushing the register's header past row 15.
   for (let i = 0; i < Math.min(matrix.length, 25); i += 1) {
     const cells = matrix[i] ?? [];
+    // An exported table's "Column1 … Column12" row sits above the real title
+    // and header; as wide as the real header and earlier, it won every tie and
+    // keyed every incident by "Column3". It is never the header.
+    if (isPlaceholderHeaderRow(cells)) continue;
     const fill = filledCount(cells);
     const vocabulary = cells.filter((c) => typeof c === 'string' && HEADER_VOCABULARY.test(c)).length;
     // Two or more recognised labels together mark a register header; each then
