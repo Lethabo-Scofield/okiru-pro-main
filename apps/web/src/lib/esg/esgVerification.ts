@@ -93,7 +93,15 @@ export interface EsgHeldFact {
 export interface EsgVerificationInput {
   calculator: { entries?: EsgCalculatorEntryLike[]; rows?: EsgCalculatorRowLike[] } | null | undefined;
   /** Each document read, by the reader that read it: tells a bill or an emissions export from a dashboard. */
-  extractions?: ReadonlyArray<{ documentId?: unknown; documentName?: unknown; sourceFile?: unknown } | null> | null;
+  extractions?: ReadonlyArray<{
+    documentId?: unknown;
+    documentName?: unknown;
+    sourceFile?: unknown;
+    /** The read's values: an export's header block is recognised by them too. */
+    values?: ReadonlyArray<{ field?: unknown; value?: unknown } | null> | null;
+    /** The labelled cells no field took (the parser's open facts). */
+    open?: { facts?: ReadonlyArray<{ label?: unknown; value?: unknown } | null> | null } | null;
+  } | null> | null;
   axes: EsgReportingAxes;
   /** The workbook the figures were placed in. Derived cells are derived here. */
   workbook: EsgWorkbookData;
@@ -688,9 +696,28 @@ function checkIncidents(
  * V8 — the GHG factor basis, and a client emissions-system export
  * ------------------------------------------------------------------ */
 
-const isExport = (e: { documentId?: unknown; documentName?: unknown }): boolean => {
+/** A header-block caption an emissions system prints over its run settings. */
+const EXPORT_SETTING = /\b(?:scope\s*\(s\)|scopes?\s+included|scopes?|emission\s*type|methodology|scope2\s*method|include\s*modelled|modelled\s*data)\b/i;
+/** A value only such a setting holds. */
+const EXPORT_SETTING_VALUE = /\b(?:location|market)[- ]based\b|\bscope\s*[123]\b|\bgeneral emissions\b/i;
+
+/**
+ * Is this read a client emissions-system export? By its type (documentId or
+ * name), or, when the sheets were never typed (a workbook of plain tabs), by
+ * its header block: two run settings only such an export prints ("Scope(s):
+ * Scope 1, Scope 2", "Methodology: Location-based"), read as values or kept
+ * as the sheet's labelled cells.
+ */
+export const isExport = (e: NonNullable<NonNullable<EsgVerificationInput["extractions"]>[number]>): boolean => {
   const text = `${String(e.documentId ?? "")} ${String(e.documentName ?? "")}`.toLowerCase();
-  return /emission|carbon|ghg/.test(text) && /export|system|inventory/.test(text);
+  if (/emission|carbon|ghg/.test(text) && /export|system|inventory/.test(text)) return true;
+  const pairs: Array<[unknown, unknown]> = [
+    ...(e.values ?? []).filter(Boolean).map((v) => [v!.field, v!.value] as [unknown, unknown]),
+    ...(e.open?.facts ?? []).filter(Boolean).map((f) => [f!.label, f!.value] as [unknown, unknown]),
+  ];
+  const settings = pairs.filter(([label, value]) =>
+    EXPORT_SETTING.test(String(label ?? "").replace(/_/g, " ")) && EXPORT_SETTING_VALUE.test(String(value ?? "")));
+  return settings.length >= 2;
 };
 
 function gridSum(workbook: EsgWorkbookData, axes: EsgReportingAxes, prefix: string, months: readonly string[]): { sum: number; cells: number } {
@@ -715,10 +742,10 @@ function gridSum(workbook: EsgWorkbookData, axes: EsgReportingAxes, prefix: stri
 
 /** Which inventory line (`computeGhgInventory`'s labels) each monthly measure is the activity of. */
 const INVENTORY_LINE: Record<string, RegExp> = {
-  "fleet.diesel_litres": /^Scope 1A/,
-  "energy.generator_diesel_litres": /^Scope 1B/,
-  "energy.lpg_kg": /^Scope 1C/,
-  "fleet.business_car_petrol_litres": /^Scope 1D/,
+  "fleet.diesel_litres": /^Scope 1A\b/,
+  "energy.generator_diesel_litres": /^Scope 1B\b/,
+  "energy.lpg_kg": /^Scope 1C\b/,
+  "fleet.business_car_petrol_litres": /^Scope 1D\b/,
   "energy.electricity_kwh": /^Scope 2 — Purchased/,
   "energy.solar_kwh_generated": /^Scope 2 — On-site solar/,
   "water.kl": /^Scope 3 — Municipal water/,

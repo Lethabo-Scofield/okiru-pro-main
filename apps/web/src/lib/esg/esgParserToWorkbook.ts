@@ -1538,6 +1538,13 @@ interface MonthlyFactFate {
   choice?: EsgPlacementChoice;
   /** Last year's figure, kept out of the reporting year. */
   priorYear?: boolean;
+  /**
+   * Held as context, not as a question: another year's month, last year's
+   * figure, a measure the workbook keeps no monthly grid for, or a
+   * company-wide total the sites' own figures replace. Reported with its
+   * document; nothing for a person to answer.
+   */
+  context?: boolean;
 }
 
 const uniq = (items: string[]): string[] => Array.from(new Set(items.filter(Boolean)));
@@ -1584,9 +1591,15 @@ function applyMonthlyFacts(
   priorMonths: string[] | null = null,
 ): MonthlyFactFate[] {
   const fates: MonthlyFactFate[] = facts.map(() => ({ status: "unplaced", reason: "Not placed." }));
-  const hold = (ids: number[], reason: string, choice?: EsgPlacementChoice, lastYear = false): void => {
+  const hold = (ids: number[], reason: string, choice?: EsgPlacementChoice, lastYear = false, context = false): void => {
     for (const id of ids) {
-      fates[id] = { status: "unplaced", reason, ...(choice ? { choice } : {}), ...(lastYear ? { priorYear: true } : {}) };
+      fates[id] = {
+        status: "unplaced",
+        reason,
+        ...(choice ? { choice } : {}),
+        ...(lastYear ? { priorYear: true } : {}),
+        ...((context || lastYear) && !choice ? { context: true } : {}),
+      };
     }
   };
   // The question that places a held figure: its grid and value are known,
@@ -1684,7 +1697,7 @@ function applyMonthlyFacts(
     const grid = MONTHLY_MEASURE_GRIDS[fact.measure];
     if (!grid) {
       if (fact.measure) noGrid.add(fact.measure);
-      hold([factId], `${fact.measure || "This figure"} is read and reported; the workbook has no monthly grid for it.`);
+      hold([factId], `${fact.measure || "This figure"} is read and reported; the workbook has no monthly grid for it.`, undefined, false, true);
       return;
     }
     if (!Number.isFinite(fact.value)) {
@@ -1717,7 +1730,7 @@ function applyMonthlyFacts(
     const where = locate(fact.site, grid.perSite);
     if (where === "siteless") {
       siteless += 1;
-      hold([factId], "This is a company-wide total and the workbook records this per site, so the sites' own figures are used instead.");
+      hold([factId], "This is a company-wide total and the workbook records this per site, so the sites' own figures are used instead.", undefined, false, true);
       return;
     }
     const month = esgMonthColumnFor(fact.periodEnd, axes);
@@ -1751,6 +1764,9 @@ function applyMonthlyFacts(
             ? `${statedMonth} falls just outside the workbook's reporting year (${year}). If your company books it in a month of this year, say which.`
             : `${statedMonth} falls outside the workbook's reporting year (${year}).`,
         fact.value !== 0 && (!statedMonth || nearYear) ? ask(fact, grid, ["month"], null, where.rowIndex) : undefined,
+        false,
+        // Another year's month is context; a month the document never stated is a question.
+        Boolean(statedMonth),
       );
       return;
     }
@@ -1886,12 +1902,15 @@ function applyMonthlyFacts(
   if (noGrid.size) notes.push(`Read but not recorded on a grid: ${Array.from(noGrid).join(", ")}.`);
 
   for (const field of Array.from(fieldsSeen)) {
+    // Every figure of the field held as context (another year, no grid): so is the field.
+    const own = facts.map((fact, i) => (fact.field === field ? fates[i] : null)).filter((fate): fate is MonthlyFactFate => fate !== null);
+    const context = own.length > 0 && own.every((fate) => fate.context);
     record(field, fieldsProposed.has(field)
       ? { status: "placed", cells: [], reason: notes.length ? notes.join(" ") : undefined }
       : {
         status: "unplaced",
         cells: [],
-        rejection: "needs_context",
+        rejection: context ? "held_context" : "needs_context",
         reason: notes.join(" ") || "These monthly figures had no grid, site or month in this workbook to go in.",
       });
   }
@@ -1965,7 +1984,7 @@ function monthlyFactOutcomes(
     } else if (fate?.status === "placed" && fate.cellRef && written !== undefined) {
       outcome = { status: "placed", cells: [{ sectionId: "e-data", cellRef: fate.cellRef, value: written }] };
     } else {
-      outcome = { status: "unplaced", cells: [], rejection: "needs_context", reason: fate?.reason ?? "Not placed." };
+      outcome = { status: "unplaced", cells: [], rejection: fate?.context ? "held_context" : "needs_context", reason: fate?.reason ?? "Not placed." };
     }
     const source = fact.sources[0] ?? "";
     for (const field of [fact.field, ...fact.context]) {
@@ -2004,6 +2023,7 @@ function monthlyFactOutcomes(
         unit: named.unit,
         value: fact.value,
         ...(fates[i]?.priorYear ? { priorYear: true } : {}),
+        ...(fates[i]?.context ? { context: true } : {}),
         ...(String(fact.site ?? "").trim() ? { site: String(fact.site).trim() } : {}),
         ...(/^\d{4}-\d{2}/.test(String(fact.periodEnd ?? "")) ? { month: String(fact.periodEnd).slice(0, 7) } : {}),
         reason: fates[i]?.reason ?? "Not placed.",
@@ -2036,6 +2056,8 @@ export interface EsgHeldFigure {
   choice?: EsgPlacementChoice;
   /** Last year's figure, kept out of the reporting year and offered as the baseline. */
   priorYear?: boolean;
+  /** Held as context (another year, no monthly grid, a replaced total): nothing to answer. */
+  context?: boolean;
 }
 
 const UNIT_WORDS: Record<string, string> = { km: "km", kwh: "kWh", kl: "kL", kg: "kg", litres: "litres", l: "litres", tco2e: "tCO₂e" };

@@ -65,6 +65,12 @@ export type EsgRejectionReason =
   | "no_workbook_home"
   /** A real cell exists but which one depends on context we do not have. */
   | "needs_context"
+  /**
+   * Held as context, nothing to answer: another year's month, last year's
+   * figure, a measure with no monthly grid, a company-wide total the sites'
+   * own figures replace. Reported with its document.
+   */
+  | "held_context"
   /** Its cell is in a section other than the one the documents were added for (C1). */
   | "outside_focus"
   /** A quantity whose unit is not stated, or is not one its cell records: held, never scored. */

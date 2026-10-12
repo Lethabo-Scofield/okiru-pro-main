@@ -569,7 +569,7 @@ export function applyEsgParserResult(
     // Last year's figures are one line per document and measure: which site
     // they were for changes nothing about why they were kept out.
     const site = figure.priorYear ? "" : esgSiteKeyOf(figure.site);
-    const groupKey = [key, figure.measure, site, figure.reason.replace(/\b\d{4}-\d{2}\b/g, "")].join("\u0000");
+    const groupKey = [key, figure.measure, site, figure.context ? "context" : "", figure.reason.replace(/\b\d{4}-\d{2}\b/g, "")].join("\u0000");
     const group = groups.get(groupKey) ?? { figures: [] };
     group.figures.push(figure);
     groups.set(groupKey, group);
@@ -585,7 +585,8 @@ export function applyEsgParserResult(
       sourceFile: first.sourceFile,
       documentId: documentIds.get(`${first.field}\u0000${first.sourceFile}`) ?? "",
       element: elements.get(`${first.field}\u0000${first.sourceFile}`) ?? "",
-      rejection: "needs_context",
+      // Another year's figures, a measure with no monthly grid: folded, not checked.
+      rejection: first.context ? "held_context" : "needs_context",
       value: `${first.measure}${first.site && !first.priorYear ? `, ${first.site}` : ""}: ${count} figure${count === 1 ? "" : "s"}${span ? ` (${span})` : ""}, ${formatFigure(total)}${first.unit ? ` ${first.unit}` : ""} in all`,
       reason: first.reason,
       heldFigures: count,
@@ -809,17 +810,21 @@ export const ESG_NO_CELL_REJECTIONS: ReadonlySet<string> = new Set(["no_workbook
  * question, values to check or enter by hand, and evidence no cell needs.
  * A figure's site and period travel with it, and a figure read twice is one.
  */
-export function esgUnplacedKinds(unplaced: EsgUnplacedValue[]): { toPlace: number; toCheck: number; evidence: number } {
+export function esgUnplacedKinds(unplaced: EsgUnplacedValue[]): { toPlace: number; toCheck: number; evidence: number; held: number } {
   const questions = new Set<string>();
   let toCheck = 0;
   let evidence = 0;
+  let held = 0;
   for (const u of unplaced) {
     if (u.partOf) continue;
     if (u.choice) questions.add(u.choice.id);
     else if (u.rejection && ESG_NO_CELL_REJECTIONS.has(u.rejection)) evidence += 1;
+    // Another year's month, last year's figure, a measure with no monthly
+    // grid: kept and reported, folded into one line, never a check by hand.
+    else if (u.rejection === "held_context") held += 1;
     else toCheck += 1;
   }
-  return { toPlace: questions.size, toCheck, evidence };
+  return { toPlace: questions.size, toCheck, evidence, held };
 }
 
 /** The placements a person made in the review, as the case carries them. */

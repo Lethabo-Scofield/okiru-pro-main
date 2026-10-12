@@ -447,6 +447,8 @@ describe("site and month context — exact, or reported", () => {
 
     expect(result.patches).toEqual({});
     expect(result.outcomes.energy_site_rows.reason).toMatch(/outside the workbook's reporting year/);
+    // Another year's figure is held as context: reported, never a check by hand.
+    expect(result.outcomes.energy_site_rows.rejection).toBe("held_context");
   });
 
   it("combines case-level readings ONLY when they came from one document", () => {

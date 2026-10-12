@@ -48,6 +48,7 @@ describe.skipIf(!CASE || !KEY)("ESG answer-key gate", () => {
       "… of which a person places by answering": kinds.toPlace,
       "… of which to check by hand": kinds.toCheck,
       "… of which kept as evidence (no cell)": kinds.evidence,
+      "… of which held as context (another year, no monthly cell)": kinds.held,
       Conflicts: injection.conflicts.length,
     };
 

@@ -259,6 +259,38 @@ describe("V8: the factor basis and a client emissions export", () => {
   });
 });
 
+describe("V8: an export whose sheets were never typed", () => {
+  const EXPORT = "Plain tabs export.xls";
+  const wb = workbook({ "e-data": { s2_C14: 1000, s1a_C14: 400 } });
+  const rows = [
+    monthly(EXPORT, "energy.electricity_kwh", "Depot North", "2025-07", 1000),
+    monthly(EXPORT, "fleet.diesel_litres", "Depot North", "2025-07", 400),
+  ];
+
+  it("is recognised by its header block: two run settings only such an export prints", () => {
+    const header = [{
+      documentId: "esg_sheet_facts", documentName: "Sheet1 labelled cells", sourceFile: `${EXPORT} › Sheet1`,
+      open: { facts: [
+        { label: "Report", value: "Data Audit Report" },
+        { label: "Scope(s)", value: "Scope 1, Scope 2, Scope 3" },
+        { label: "Methodology", value: "Location-based" },
+      ] },
+    }];
+    const report = run({ rows, workbook: wb, extractions: header });
+    const check = report.checks.find((c) => c.id === `V8:export:${EXPORT}`)!;
+    expect(check.status).toBe("pass");
+    // The export covers the fleet diesel: Scope 1A is inside its boundary.
+    expect(check.statement).not.toMatch(/outside the export's boundary: Scope 1A/);
+  });
+
+  it("is not recognised from one setting, or from an ordinary sheet's labels", () => {
+    const one = [{ documentId: "esg_sheet_facts", sourceFile: EXPORT, open: { facts: [{ label: "Methodology", value: "Location-based" }] } }];
+    expect(run({ rows, workbook: wb, extractions: one }).checks.some((c) => c.id === `V8:export:${EXPORT}`)).toBe(false);
+    const plain = [{ documentId: "esg_sheet_facts", sourceFile: EXPORT, open: { facts: [{ label: "Opening stock", value: "2000" }, { label: "Scope", value: "Depot" }] } }];
+    expect(run({ rows, workbook: wb, extractions: plain }).checks.some((c) => c.id === `V8:export:${EXPORT}`)).toBe(false);
+  });
+});
+
 describe("V9: coverage", () => {
   it("flags sites with no figure and a months-of-actuals count the grids contradict", () => {
     const wb = workbook({ "e-data": { s2_C14: 1000, s2_D14: 1000 }, assumptions: { B111: 6 } });

@@ -128,9 +128,17 @@ describe("restrictEsgInjection — documents added from inside a section", () =>
     expect(kept.unplaced.find((u) => u.field === "policy_title")!.rejection).toBe("no_workbook_home");
   });
 
+  it("folds figures held as context into their own count, never into the checks", () => {
+    const value = (rejection: "held_context" | "needs_context") => ({
+      field: "esg_monthly_rows", value: 1, sourceFile: "f.xlsx", documentId: "d", element: "GHG_ENERGY", reason: "r", rejection,
+    });
+    expect(esgUnplacedKinds([value("held_context"), value("held_context"), value("needs_context")]))
+      .toEqual({ toPlace: 0, toCheck: 1, evidence: 0, held: 2 });
+  });
+
   it("reads held-back figures as evidence, not as values a person must check", () => {
     const kept = restrictEsgInjection(read(), new Set(["waste"]), label);
-    expect(esgUnplacedKinds(kept.unplaced)).toEqual({ toPlace: 0, toCheck: 0, evidence: 5 });
+    expect(esgUnplacedKinds(kept.unplaced)).toEqual({ toPlace: 0, toCheck: 0, evidence: 5, held: 0 });
   });
 
   it("changes nothing when no section was chosen", () => {
