@@ -50,12 +50,16 @@ describe("onlyRounding", () => {
   it("never mixes a percentage with a plain figure", () => {
     expect(onlyRounding("50%", 50.4)).toBe(false);
   });
+
+  it("never calls two percentages rounding", () => {
+    expect(onlyRounding("51%", "50.5%")).toBe(false);
+  });
 });
 
 describe("sortReconciliationFlags", () => {
   it("counts only real disagreements; folds rounding, same-value, blanks and joining notes", () => {
     const sorted = sortReconciliationFlags([
-      flag("spend 12,500 vs 12,500.40", { values: [12500, 12500.4] }),
+      flag("spend 12,500 vs 12,500.40", { values: [12500, 12500.4], column: "spend" }),
       flag("share 51% vs 0.51", { values: ["51%", 0.51] }),
       flag("date blank vs filled", { values: ["", "2025-03-31"] }),
       flag("spend 1,200,000 vs 400,000", { values: [1200000, 400000] }),
@@ -73,6 +77,31 @@ describe("sortReconciliationFlags", () => {
     expect(sorted.rounding).toHaveLength(1);
     expect(sorted.sameValue).toHaveLength(2);
     expect(sorted.notes).toHaveLength(3);
+  });
+
+  it("applies the R1 tolerance only to Rand columns", () => {
+    const sorted = sortReconciliationFlags([
+      flag("shareholding 51 vs 50.5", { values: [51, 50.5], column: "shareholding" }),
+      flag("fraction 0.51 vs 0.26", { values: [0.51, 0.26], column: "economicInterest" }),
+      flag("level 1 vs 1.5", { values: [1, 1.5], column: "bbbeeLevel" }),
+      flag("spend with no column 100 vs 100.4", { values: [100, 100.4] }),
+      flag("salary 30,000 vs 30,000.20", { values: [30000, 30000.2], column: "salary" }),
+    ]);
+    expect(sorted.disagreements.map((f) => f.note)).toEqual([
+      "shareholding 51 vs 50.5",
+      "fraction 0.51 vs 0.26",
+      "level 1 vs 1.5",
+      "spend with no column 100 vs 100.4",
+    ]);
+    expect(sorted.rounding.map((f) => f.note)).toEqual(["salary 30,000 vs 30,000.20"]);
+  });
+
+  it("never folds a finding where both rows were kept", () => {
+    const sorted = sortReconciliationFlags([
+      flag("two readings disagree on spend. Both rows are kept", { values: [12500, 12500.4], column: "spend", rowsKept: true }),
+    ]);
+    expect(sorted.disagreements).toHaveLength(1);
+    expect(sorted.rounding).toHaveLength(0);
   });
 
   it("says a repeated note once", () => {
@@ -98,10 +127,25 @@ describe("the linking step's findings carry what the sorting needs", () => {
     for (const finding of spend) expect(finding.values).toHaveLength(2);
 
     const sorted = sortReconciliationFlags(
-      result.reconciliation.map((f) => ({ sourceFile: f.entity, note: f.message, kind: f.kind, values: f.values })),
+      result.reconciliation.map((f) => ({ sourceFile: f.entity, note: f.message, kind: f.kind, values: f.values, column: f.column })),
     );
     expect(sorted.disagreements.map((f) => f.sourceFile)).toEqual(["Heron Fuel"]);
     expect(sorted.rounding.map((f) => f.sourceFile)).toEqual(["Kestrel Brakes"]);
+  });
+
+  it("two readings of one document that differ by cents keep both rows and stay a disagreement", () => {
+    const result = parserExtractionsToWorkbook([
+      supplierTable("Spend schedule.xlsx › Procurement", [{ supplier_name: "Kestrel Brakes", claimed_spend_ex_vat: 12500 }]),
+      supplierTable("Spend schedule.xlsx › Procurement", [{ supplier_name: "Kestrel Brakes", claimed_spend_ex_vat: 12500.4 }]),
+    ]);
+    const kept = result.reconciliation.filter((f) => /Both rows are kept/.test(f.message));
+    expect(kept.length).toBeGreaterThan(0);
+    for (const finding of kept) expect(finding.rowsKept).toBe(true);
+    const sorted = sortReconciliationFlags(
+      result.reconciliation.map((f) => ({ sourceFile: f.entity, note: f.message, kind: f.kind, values: f.values, column: f.column, rowsKept: f.rowsKept })),
+    );
+    expect(sorted.rounding).toHaveLength(0);
+    expect(sorted.disagreements.some((f) => /Both rows are kept/.test(f.note))).toBe(true);
   });
 
   it("marks identical rows folded into one as a note, not a disagreement", () => {

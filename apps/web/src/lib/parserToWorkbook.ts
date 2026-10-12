@@ -478,6 +478,8 @@ export interface ReconciliationFinding {
   kind?: "linked" | "collapsed" | "worked-out";
   /** The two values a disagreement is between, as the documents stated them. */
   values?: [unknown, unknown];
+  /** Both rows were kept: no figure was chosen, and both count until one is removed. */
+  rowsKept?: boolean;
 }
 
 interface MergeDecision {
@@ -858,6 +860,8 @@ export function linkWorkbookRows(
             message: decision.finding,
             rowId: candidate._id,
             ...(decision.findingValues ? { values: decision.findingValues } : {}),
+            // A finding on a pair that is NOT merged keeps both rows.
+            ...(decision.merge ? {} : { rowsKept: true }),
           });
         }
         if (!decision.merge) continue;

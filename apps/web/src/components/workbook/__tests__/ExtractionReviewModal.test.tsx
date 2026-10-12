@@ -73,6 +73,19 @@ describe("ExtractionReviewModal", () => {
     expect(await screen.findByTestId("review-apply-notice")).toHaveTextContent("Filled 2 cells.");
   });
 
+  it("confirms a single score-changing fill before writing it; a fill that does not change the score applies at once", async () => {
+    const { onApplyFills } = renderModal();
+    fireEvent.click(screen.getByTestId("review-fill-apply-fill_skills-development_s1_totalCost"));
+    expect(onApplyFills).not.toHaveBeenCalled();
+    const summary = screen.getByTestId("review-score-summary");
+    expect(summary).toHaveTextContent(/This changes your score/);
+    expect(summary).toHaveTextContent(/Total Cost \(R\) → 1500/);
+    expect(screen.getByTestId("review-confirm-apply")).toHaveTextContent(/^Apply$/);
+    fireEvent.click(screen.getByTestId("review-confirm-apply"));
+    await waitFor(() => expect(onApplyFills).toHaveBeenCalledTimes(1));
+    expect(onApplyFills.mock.calls[0][0].map((p: FillProposal) => p.column)).toEqual(["totalCost"]);
+  });
+
   it("asks instead of filling what nothing backs", () => {
     renderModal();
     expect(screen.getByTestId("review-questions")).toHaveTextContent(/full 12-month financial year, starting 01\/03\/2024/);

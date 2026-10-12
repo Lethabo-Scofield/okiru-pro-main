@@ -168,13 +168,13 @@ function KindBadge({ proposal }: { proposal: Pick<FillProposal, "id" | "kind" | 
 function FillCard({ proposal, onApply }: { proposal: FillProposal; onApply?: () => void }) {
   return (
     <div className="rounded-xl border border-white/[0.06] bg-[color:var(--ink-2)] px-3.5 py-3" data-testid={`review-fill-${proposal.id}`}>
-      <p className="text-[11px] text-[color:var(--muted)]">{cellLabelOf(proposal.section, proposal.rowLabel, proposal.columnLabel)}</p>
+      <p className="text-[11px] text-[color:var(--body)]">{cellLabelOf(proposal.section, proposal.rowLabel, proposal.columnLabel)}</p>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <span className="text-[14px] font-semibold tabular-nums text-white">{proposal.value}</span>
         <KindBadge proposal={proposal} />
         {proposal.affectsScore && <span className="text-[10.5px] text-amber-200/80">Changes your score</span>}
         {proposal.replaces !== undefined && (
-          <span className="text-[10.5px] text-[color:var(--muted)]">replaces “{proposal.replaces}”</span>
+          <span className="text-[10.5px] text-[color:var(--body)]">replaces “{proposal.replaces}”</span>
         )}
       </div>
       <p className="mt-1.5 text-[12px] leading-snug text-[color:var(--body)]">{proposal.reasoning}</p>
@@ -183,7 +183,7 @@ function FillCard({ proposal, onApply }: { proposal: FillProposal; onApply?: () 
       )}
       <div className="mt-2 flex items-center justify-between gap-3">
         <details className="min-w-0 text-[11.5px] text-[color:var(--body)]">
-          <summary className="cursor-pointer select-none text-[color:var(--muted)] hover:text-[color:var(--body)]">
+          <summary className="cursor-pointer select-none text-[color:var(--body)] hover:text-white">
             Evidence ({proposal.evidence.length})
           </summary>
           <ul className="mt-1 space-y-0.5">
@@ -274,6 +274,12 @@ export function ExtractionReviewModal({
   const applyAll = () => {
     if (scoreChanging.length > 0) setConfirming(proposals);
     else void apply(proposals);
+  };
+
+  /** One card's Apply: a fill that changes the score is confirmed first, like Apply all. */
+  const applyOne = (p: FillProposal) => {
+    if (p.affectsScore) setConfirming([p]);
+    else void apply([p]);
   };
 
   const runModel = async () => {
@@ -377,12 +383,12 @@ export function ExtractionReviewModal({
               )}
               {confirming && (
                 <div className="mt-3 rounded-xl border border-white/[0.10] bg-[color:var(--ink-2)] px-3.5 py-3" data-testid="review-score-summary">
-                  <p className="text-[12.5px] font-medium text-white">These change your score</p>
+                  <p className="text-[12.5px] font-medium text-white">{confirming.length === 1 ? "This changes your score" : "These change your score"}</p>
                   <ul className="mt-1.5 max-h-40 space-y-0.5 overflow-y-auto">
                     {confirming.filter((p) => p.affectsScore).map((p) => (
                       <li key={p.id} className="text-[11.5px] text-[color:var(--body)]">
                         {cellLabelOf(p.section, p.rowLabel, p.columnLabel)} → <span className="text-white">{p.value}</span>
-                        <span className="text-[color:var(--muted)]"> ({p.kind === "derived" ? "derived" : "read"})</span>
+                        <span className="text-[color:var(--body)]"> ({p.kind === "derived" ? "derived" : "read"})</span>
                       </li>
                     ))}
                   </ul>
@@ -393,7 +399,7 @@ export function ExtractionReviewModal({
                       className="h-8 rounded-lg bg-white px-3 text-[12px] font-semibold text-black hover:bg-white/90"
                       data-testid="review-confirm-apply"
                     >
-                      Apply all {confirming.length}
+                      {confirming.length === 1 ? "Apply" : `Apply all ${confirming.length}`}
                     </button>
                     <button
                       type="button"
@@ -461,7 +467,7 @@ export function ExtractionReviewModal({
                   <SectionHeading icon={<GitMerge className="h-3.5 w-3.5" />}>Ready to fill</SectionHeading>
                   <div className="space-y-1.5">
                     {proposals.map((p) => (
-                      <FillCard key={p.id} proposal={p} onApply={onApplyFills ? () => void apply([p]) : undefined} />
+                      <FillCard key={p.id} proposal={p} onApply={onApplyFills ? () => applyOne(p) : undefined} />
                     ))}
                   </div>
                 </section>
@@ -508,7 +514,7 @@ export function ExtractionReviewModal({
                     {questions.map((q) => (
                       <li key={q.id} className="flex items-start justify-between gap-3 rounded-lg bg-[color:var(--ink-2)] px-3 py-2" data-testid={`review-question-${q.id}`}>
                         <span className="min-w-0 text-[12px] leading-snug">
-                          <span className="block text-[10.5px] text-[color:var(--muted)]">{q.cellLabel}</span>
+                          <span className="block text-[10.5px] text-[color:var(--body)]">{q.cellLabel}</span>
                           <span className="text-white">{q.question}</span>
                         </span>
                         <button
@@ -595,9 +601,9 @@ export function ExtractionReviewModal({
                       return (
                         <li key={key} className="flex items-start justify-between gap-3 rounded-lg bg-[color:var(--ink-2)] px-3 py-2" data-testid={`review-ai-fill-${key}`}>
                           <span className="min-w-0 text-[12px] leading-snug">
-                            <span className="block text-[10.5px] text-[color:var(--muted)]">{cellLabelOf(f.section, f.rowLabel, f.columnLabel)}</span>
+                            <span className="block text-[10.5px] text-[color:var(--body)]">{cellLabelOf(f.section, f.rowLabel, f.columnLabel)}</span>
                             <span className="text-white">{f.mark.value}</span>
-                            <span className="text-[color:var(--muted)]"> · {f.mark.kind === "derived" ? "derived" : "read"} — {f.mark.reasoning}</span>
+                            <span className="text-[color:var(--body)]"> · {f.mark.kind === "derived" ? "derived" : "read"} — {f.mark.reasoning}</span>
                           </span>
                           {onUndoFill && (
                             <button
@@ -628,7 +634,7 @@ export function ExtractionReviewModal({
                           {c.columnLabel} — <span className="tabular-nums">{c.value}</span>
                         </span>
                         <span className="ml-2 text-[11px] text-[color:var(--body)]">{c.agreementCount} documents agree</span>
-                        <span className="mt-0.5 block text-[10.5px] text-[color:var(--muted)]">{c.sources.join(", ")}</span>
+                        <span className="mt-0.5 block text-[10.5px] text-[color:var(--body)]">{c.sources.join(", ")}</span>
                       </div>
                     ))}
                   </div>

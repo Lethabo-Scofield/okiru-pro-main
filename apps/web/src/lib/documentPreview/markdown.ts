@@ -15,6 +15,32 @@ type Style = Omit<InlineText, "text">;
 
 const ESCAPABLE = /[\\`*_{}[\]()#+\-.!|~<>]/;
 
+/**
+ * Inline parsing must stay near-linear: it runs on the main thread, on up to
+ * MAX_TEXT_BYTES of text that may be one long line. Three things keep it so:
+ *  - regexes look at a bounded window from the cursor, never `src.slice(i)`;
+ *  - a closer search remembers its last answer (a later opener asks from
+ *    further on, so the answer holds until the cursor passes it);
+ *  - emphasis nests at most MAX_INLINE_DEPTH deep, and a line longer than
+ *    MAX_INLINE_CHARS is shown as plain text past that point.
+ */
+export const MAX_INLINE_CHARS = 20_000;
+const MAX_INLINE_DEPTH = 6;
+/** A link, image or autolink longer than this is read as text. */
+const MAX_LINK_CHARS = 2_048;
+
+const IMAGE = /^!\[([^\]]*)\]\(([^)]*)\)/;
+const LINK = /^\[((?:[^[\]]|\[[^\]]*\])+)\]\(\s*<?([^)\s>]*)>?(?:\s+["'][^"']*["'])?\s*\)/;
+const AUTOLINK = /^<((?:https?:\/\/|mailto:)[^>\s]+)>/i;
+
+const EMPHASIS: Array<[string, Style]> = [
+  ["**", { bold: true }],
+  ["__", { bold: true }],
+  ["~~", { strike: true }],
+  ["*", { italic: true }],
+  ["_", { italic: true }],
+];
+
 /** Is this a run of `marker` that can open emphasis at `i`? */
 function canOpen(src: string, i: number, marker: string): boolean {
   const after = src[i + marker.length];
@@ -24,31 +50,54 @@ function canOpen(src: string, i: number, marker: string): boolean {
   return true;
 }
 
-function findClose(src: string, from: number, marker: string): number {
-  let j = src.indexOf(marker, from);
-  while (j !== -1) {
-    const before = src[j - 1];
-    const after = src[j + marker.length];
-    const closes = before && !/\s/.test(before) && !(marker[0] === "_" && after && /[A-Za-z0-9]/.test(after));
-    // "**" must not be read as two "*" closers.
-    const sameRun = marker.length === 1 && (src[j + 1] === marker || src[j - 1] === marker);
-    if (closes && !sameRun) return j;
-    j = src.indexOf(marker, j + 1);
-  }
-  return -1;
+/** Is the `marker` at `j` a closer? Depends on `j` alone, not on where the search began. */
+function closesAt(src: string, j: number, marker: string): boolean {
+  const before = src[j - 1];
+  const after = src[j + marker.length];
+  const closes = before && !/\s/.test(before) && !(marker[0] === "_" && after && /[A-Za-z0-9]/.test(after));
+  // "**" must not be read as two "*" closers.
+  const sameRun = marker.length === 1 && (src[j + 1] === marker || src[j - 1] === marker);
+  return Boolean(closes) && !sameRun;
 }
 
-export function parseInline(src: string, style: Style = {}): Inline[] {
+/**
+ * The first closer at or after `from`, remembering the answer: within one
+ * string, a query from anywhere between the last start and the closer it found
+ * has that same answer, so each stretch of the string is scanned once.
+ */
+function closerFinder(src: string) {
+  const memo = new Map<string, { from: number; at: number }>();
+  return (from: number, marker: string): number => {
+    const last = memo.get(marker);
+    if (last && from >= last.from && (last.at === -1 || from <= last.at)) return last.at;
+    let j = src.indexOf(marker, from);
+    while (j !== -1 && !closesAt(src, j, marker)) j = src.indexOf(marker, j + 1);
+    memo.set(marker, { from, at: j });
+    return j;
+  };
+}
+
+export function parseInline(src: string, style: Style = {}, depth = 0): Inline[] {
   const out: Inline[] = [];
   let buf = "";
   const flush = () => {
     if (buf) out.push({ text: buf, ...style });
     buf = "";
   };
+  // Past this point the line is plain text: still all there, never parsed.
+  let tail = "";
+  if (src.length > MAX_INLINE_CHARS) {
+    tail = src.slice(MAX_INLINE_CHARS);
+    src = src.slice(0, MAX_INLINE_CHARS);
+  }
+  const findClose = closerFinder(src);
+  /** Code spans with no closer, by run: a later search from further on fails too. */
+  const noCodeClose = new Map<string, number>();
+  const windowAt = (i: number) => src.slice(i, i + MAX_LINK_CHARS);
+
   let i = 0;
   while (i < src.length) {
     const ch = src[i];
-    const rest = src.slice(i);
 
     if (ch === "\\" && i + 1 < src.length && ESCAPABLE.test(src[i + 1])) {
       buf += src[i + 1];
@@ -56,17 +105,24 @@ export function parseInline(src: string, style: Style = {}): Inline[] {
       continue;
     }
     if (ch === "`") {
-      const run = /^`+/.exec(rest)![0];
-      const end = src.indexOf(run, i + run.length);
+      let n = 1;
+      while (src[i + n] === "`") n += 1;
+      const run = "`".repeat(n);
+      const failedFrom = noCodeClose.get(run);
+      const end = failedFrom !== undefined && i + n >= failedFrom ? -1 : src.indexOf(run, i + n);
       if (end > i) {
         flush();
-        out.push({ ...style, text: src.slice(i + run.length, end).trim() || src.slice(i + run.length, end), code: true });
-        i = end + run.length;
+        out.push({ ...style, text: src.slice(i + n, end).trim() || src.slice(i + n, end), code: true });
+        i = end + n;
         continue;
       }
+      if (failedFrom === undefined) noCodeClose.set(run, i + n);
+      buf += run;
+      i += n;
+      continue;
     }
     if (ch === "!" && src[i + 1] === "[") {
-      const m = /^!\[([^\]]*)\]\(([^)]*)\)/.exec(rest);
+      const m = IMAGE.exec(windowAt(i));
       if (m) {
         flush();
         out.push({ ...style, text: m[1] ? `[Image: ${m[1]}]` : "[Image]", italic: true });
@@ -75,18 +131,18 @@ export function parseInline(src: string, style: Style = {}): Inline[] {
       }
     }
     if (ch === "[") {
-      const m = /^\[((?:[^[\]]|\[[^\]]*\])+)\]\(\s*<?([^)\s>]*)>?(?:\s+["'][^"']*["'])?\s*\)/.exec(rest);
+      const m = LINK.exec(windowAt(i));
       if (m) {
         flush();
         const href = safeHref(m[2]);
-        const inner = parseInline(m[1], style);
-        out.push(...(href ? inner.map((n) => ("br" in n ? n : { ...n, href })) : inner));
+        const inner = depth < MAX_INLINE_DEPTH ? parseInline(m[1], style, depth + 1) : [{ ...style, text: m[1] }];
+        out.push(...(href ? inner.map((node) => ("br" in node ? node : { ...node, href })) : inner));
         i += m[0].length;
         continue;
       }
     }
     if (ch === "<") {
-      const m = /^<((?:https?:\/\/|mailto:)[^>\s]+)>/i.exec(rest);
+      const m = AUTOLINK.exec(windowAt(i));
       if (m) {
         flush();
         const href = safeHref(m[1]);
@@ -96,26 +152,23 @@ export function parseInline(src: string, style: Style = {}): Inline[] {
       }
     }
     let matched = false;
-    for (const [marker, extra] of [
-      ["**", { bold: true }],
-      ["__", { bold: true }],
-      ["~~", { strike: true }],
-      ["*", { italic: true }],
-      ["_", { italic: true }],
-    ] as Array<[string, Style]>) {
-      if (!rest.startsWith(marker) || !canOpen(src, i, marker)) continue;
-      const close = findClose(src, i + marker.length + 1, marker);
-      if (close === -1) continue;
-      flush();
-      out.push(...parseInline(src.slice(i + marker.length, close), { ...style, ...extra }));
-      i = close + marker.length;
-      matched = true;
-      break;
+    if (depth < MAX_INLINE_DEPTH && (ch === "*" || ch === "_" || ch === "~")) {
+      for (const [marker, extra] of EMPHASIS) {
+        if (!src.startsWith(marker, i) || !canOpen(src, i, marker)) continue;
+        const close = findClose(i + marker.length + 1, marker);
+        if (close === -1) continue;
+        flush();
+        out.push(...parseInline(src.slice(i + marker.length, close), { ...style, ...extra }, depth + 1));
+        i = close + marker.length;
+        matched = true;
+        break;
+      }
     }
     if (matched) continue;
     buf += ch;
     i += 1;
   }
+  buf += tail;
   flush();
   return out;
 }

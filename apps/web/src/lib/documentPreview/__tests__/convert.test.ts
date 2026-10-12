@@ -5,7 +5,7 @@
  * Word (new and old), PowerPoint, Markdown, e-mail, web pages, CSV and text.
  */
 import { describe, expect, it } from "vitest";
-import { convertDocument, previewKind, isRichKind } from "..";
+import { convertDocument, previewKind, isRichKind, rasterImageType } from "..";
 import { csvToDoc, parseCsv } from "../csv";
 import { docxToDoc } from "../docx";
 import { decodeHeader, emlToDoc } from "../eml";
@@ -38,6 +38,13 @@ describe("previewKind", () => {
     expect(previewKind("book.xlsm")).toBe("spreadsheet");
     expect(previewKind("cert.pdf")).toBe("pdf");
     expect(previewKind("drawing.dwg")).toBe("other");
+    // SVG can carry script: never an inline picture, by name or by type.
+    expect(previewKind("logo.svg")).toBe("other");
+    expect(previewKind("logo.SVGZ")).toBe("other");
+    expect(previewKind("upload", "image/svg+xml")).toBe("other");
+    expect(previewKind("upload", "image/png")).toBe("image");
+    expect(rasterImageType("photo.JPG")).toBe("image/jpeg");
+    expect(rasterImageType("logo.svg")).toBe("application/octet-stream");
   });
 
   it("falls back to the file's type when the name has no extension", () => {
@@ -173,6 +180,33 @@ describe("Markdown", () => {
   it("does not read snake_case names or lone asterisks as emphasis", () => {
     const nodes = parseInline("total_spend_value is 5 * 3 and file_name");
     expect(nodes).toEqual([{ text: "total_spend_value is 5 * 3 and file_name" }]);
+  });
+
+  it("stays fast on a long line full of emphasis openers that never close", () => {
+    // These took 2 s, 18 s and 106 s before the closer search was memoised.
+    for (const line of ["*a ".repeat(8000), "**a ".repeat(8000), "_a ".repeat(8000), "~~a ".repeat(8000), "`` a ".repeat(8000), "[a ".repeat(8000)]) {
+      const started = performance.now();
+      const doc = markdownToDoc(line);
+      expect(performance.now() - started).toBeLessThan(1500);
+      // Nothing is lost: the first MAX_INLINE_CHARS are parsed, the rest kept as text.
+      if (!line.startsWith("`")) expect(text((doc.blocks[0] as any).content)).toBe(line.trim());
+    }
+  });
+
+  it("stays fast on a whole budget of text in one line, and on deeply nested emphasis", () => {
+    const huge = "**a *b _c_ d* e** ".repeat(30_000);
+    let started = performance.now();
+    markdownToDoc(huge);
+    expect(performance.now() - started).toBeLessThan(1500);
+    const nested = `${"*a **b ".repeat(2000)}c${"** d*".repeat(2000)}`;
+    started = performance.now();
+    markdownToDoc(nested);
+    expect(performance.now() - started).toBeLessThan(1500);
+  });
+
+  it("still reads emphasis after a run of openers that never close", () => {
+    const nodes = parseInline(`${"*a ".repeat(50)}and **bold** end`);
+    expect(nodes.find((n) => (n as any).text === "bold")).toMatchObject({ bold: true });
   });
 
   it("keeps raw HTML as visible text and turns pictures into notes", () => {

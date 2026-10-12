@@ -163,7 +163,7 @@ describe("EditableValue", () => {
 
 describe("Disagreements between documents", () => {
   const FLAGS = [
-    { sourceFile: "Kestrel Brakes", note: "states spend of 14,000 but the schedule says 14,000.35", values: [14000, 14000.35] as [unknown, unknown] },
+    { sourceFile: "Kestrel Brakes", note: "states spend of 14,000 but the schedule says 14,000.35", values: [14000, 14000.35] as [unknown, unknown], column: "spend" },
     { sourceFile: "Heron Fuel", note: "states spend of 1,200,000 but the schedule says 400,000", values: [1200000, 400000] as [unknown, unknown] },
     { sourceFile: "Plover Insurance", note: "share 51% vs 0.51", values: ["51%", 0.51] as [unknown, unknown] },
     { sourceFile: "Plover Group", note: "is taken as Plover Insurance's certificate", kind: "linked" as const },
@@ -194,6 +194,23 @@ describe("Disagreements between documents", () => {
     const panel = screen.getByTestId("reconciliation-flags");
     expect(within(panel).getByText("none")).toBeInTheDocument();
     expect(panel).toHaveTextContent("Nothing your documents disagree on.");
+  });
+
+  it("never folds a share, fraction, level or kept-both finding under rounding", () => {
+    render(
+      <ReconciliationFlagsSection
+        flags={[
+          { sourceFile: "Plover Holdings", note: "shareholding 51 vs 50.5", values: [51, 50.5], column: "shareholding" },
+          { sourceFile: "Plover Holdings", note: "economic interest 0.51 vs 0.26", values: [0.51, 0.26], column: "economicInterest" },
+          { sourceFile: "Kestrel Brakes", note: "level 1 vs 1.5", values: [1, 1.5], column: "bbbeeLevel" },
+          { sourceFile: "Heron Fuel", note: "two readings disagree on spend (12500 vs 12500.4). Both rows are kept", values: [12500, 12500.4], column: "spend", rowsKept: true },
+        ]}
+      />,
+    );
+    const panel = screen.getByTestId("reconciliation-flags");
+    expect(within(panel).getByText("4")).toBeInTheDocument();
+    expect(screen.queryByTestId("reconciliation-rounding")).toBeNull();
+    expect(panel).not.toHaveTextContent("the lower one is scored");
   });
 
   it("shows nothing when there are no findings", () => {

@@ -811,7 +811,8 @@ export function DocumentUploadStart({ onCreate, creating, focused = false, exist
         sourceFile: finding.entity,
         note: finding.message,
         ...(finding.kind ? { kind: finding.kind } : {}),
-        ...(finding.values ? { values: finding.values } : {}),
+        ...(finding.values ? { values: finding.values, column: finding.column } : {}),
+        ...(finding.rowsKept ? { rowsKept: true } : {}),
       });
     }
     return flags;

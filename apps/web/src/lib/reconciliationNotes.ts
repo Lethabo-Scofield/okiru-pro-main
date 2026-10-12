@@ -27,6 +27,14 @@ export interface ReconciliationFlag {
   kind?: "linked" | "collapsed" | "worked-out";
   /** The two values the documents stated, when the finding knows them. */
   values?: [unknown, unknown];
+  /** The workbook column the two values are for ("spend", "shareholding"). */
+  column?: string;
+  /**
+   * Both rows were kept rather than one figure chosen (two readings of one
+   * document disagree). Always a disagreement: nothing was settled, and both
+   * figures count until a person removes one.
+   */
+  rowsKept?: boolean;
 }
 
 export interface SortedReconciliationFlags {
@@ -40,8 +48,16 @@ export interface SortedReconciliationFlags {
   notes: ReconciliationFlag[];
 }
 
-/** Below this, two figures for one thing are the same figure, rounded. */
+/** Below this, two Rand figures for one thing are the same figure, rounded. */
 export const ROUNDING_TOLERANCE = 1;
+
+/**
+ * The columns that hold Rand amounts — the only ones where R1 of rounding
+ * means anything. A share (51 vs 50.5 crosses the 51% line), a fraction
+ * (every difference between two is under 1), a level or a share count is
+ * never "only rounding".
+ */
+export const RAND_COLUMNS: ReadonlySet<string> = new Set(["spend", "amount", "totalCost", "courseCost", "salary"]);
 
 const blank = (value: unknown) => value == null || String(value).trim() === "";
 
@@ -97,11 +113,11 @@ export function sameValue(a: unknown, b: unknown): boolean {
   return t !== "" && t === asText(b);
 }
 
-/** Two figures that differ only by rounding. */
+/** Two Rand figures that differ only by rounding (a percentage never does). */
 export function onlyRounding(a: unknown, b: unknown): boolean {
   const x = asNumber(a);
   const y = asNumber(b);
-  return Boolean(x && y && x.percent === y.percent && Math.abs(x.n - y.n) < ROUNDING_TOLERANCE);
+  return Boolean(x && y && !x.percent && !y.percent && Math.abs(x.n - y.n) < ROUNDING_TOLERANCE);
 }
 
 /** Sort the results screen's findings into real disagreements and the rest. */
@@ -116,9 +132,16 @@ export function sortReconciliationFlags(flags: ReconciliationFlag[]): SortedReco
       out.notes.push(flag);
       continue;
     }
+    // Both rows were kept: nothing was chosen, so this is never folded away.
+    if (flag.rowsKept) {
+      out.disagreements.push(flag);
+      continue;
+    }
     const [a, b] = flag.values ?? [undefined, undefined];
     if (flag.values && (blank(a) || blank(b) || sameValue(a, b))) out.sameValue.push(flag);
-    else if (flag.values && onlyRounding(a, b)) out.rounding.push(flag);
+    // R1 of rounding means something only for a Rand column; one with no
+    // known column is a disagreement.
+    else if (flag.values && flag.column && RAND_COLUMNS.has(flag.column) && onlyRounding(a, b)) out.rounding.push(flag);
     else out.disagreements.push(flag);
   }
   return out;

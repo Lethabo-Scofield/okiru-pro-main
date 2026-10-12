@@ -35,9 +35,15 @@ export type PreviewKind =
   | "html"
   | "other";
 
+/**
+ * SVG is never an inline "image": it is a document that can carry script, and
+ * an <img> of a blob: URL opened in a new tab runs that script in this app's
+ * origin. It is offered for download only.
+ */
 const BY_EXTENSION: Array<[RegExp, PreviewKind]> = [
   [/\.pdf$/i, "pdf"],
-  [/\.(png|jpe?g|gif|webp|bmp|avif|ico|svg|tiff?)$/i, "image"],
+  [/\.svgz?$/i, "other"],
+  [/\.(png|jpe?g|gif|webp|bmp|avif|ico|tiff?)$/i, "image"],
   [/\.(xlsx|xlsm|xlsb|xls|ods)$/i, "spreadsheet"],
   [/\.(csv|tsv)$/i, "csv"],
   [/\.(md|markdown|mdown|mkd)$/i, "markdown"],
@@ -52,6 +58,7 @@ const BY_EXTENSION: Array<[RegExp, PreviewKind]> = [
 
 const BY_TYPE: Array<[RegExp, PreviewKind]> = [
   [/^application\/pdf$/i, "pdf"],
+  [/^image\/svg/i, "other"],
   [/^image\//i, "image"],
   [/spreadsheetml|ms-excel/i, "spreadsheet"],
   [/^text\/(csv|tab-separated-values)/i, "csv"],
@@ -70,6 +77,17 @@ export function previewKind(name: string, mimeType?: string | null): PreviewKind
   for (const [re, kind] of BY_EXTENSION) if (re.test(name)) return kind;
   if (mimeType) for (const [re, kind] of BY_TYPE) if (re.test(mimeType)) return kind;
   return "other";
+}
+
+/** The raster type an inline picture is shown as, from its name; never SVG. */
+export function rasterImageType(name: string): string {
+  const ext = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() ?? "";
+  const types: Record<string, string> = {
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+    bmp: "image/bmp", avif: "image/avif", ico: "image/x-icon", tif: "image/tiff", tiff: "image/tiff",
+  };
+  // Unknown: an <img> still sniffs a raster picture; a document never renders.
+  return types[ext] ?? "application/octet-stream";
 }
 
 /** The kinds converted into a RichDoc (the rest have viewers of their own, or none). */

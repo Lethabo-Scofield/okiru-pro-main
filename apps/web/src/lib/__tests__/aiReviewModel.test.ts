@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 import type { WorkbookSectionsInput } from "@/components/workbook/workbookValidation";
-import { buildAiReviewGrounding, parseAiReviewReply, verifyAiReviewReply } from "../aiReviewModel";
+import { buildAiReviewGrounding, parseAiReviewReply, unitOf, verifyAiReviewReply, type ContextCell, type ReviewGrounding, type ReviewTarget } from "../aiReviewModel";
+import { getSection } from "@/components/workbook/sections";
 
 const ID = ["800101", "5009", "087"].join("");
 
@@ -115,6 +116,20 @@ describe("verifyAiReviewReply", () => {
     expect(out.questions[0]).toMatchObject({ section: "sed", rowId: "d1", column: "contributionType" });
   });
 
+  it("refuses a quote that is only a fragment of the cited words", () => {
+    const sections = workbook();
+    const g = buildAiReviewGrounding(sections);
+    const t = target(g, "sed", "contributionType", "d1");
+    const desc = ctx(g, "sed", "descriptionOfSpend");
+    for (const quote of ["for", "two", "ursar", "Bursary fo"]) {
+      const out = verifyAiReviewReply(sections, g, {
+        fills: [{ target: t.id, value: t.options![0], kind: "derived", rule: "classify", evidence: [desc.id], quote, reasoning: "r" }],
+        questions: [],
+      });
+      expect(out.proposals).toEqual([]);
+    }
+  });
+
   it("refuses an option that is not on the cell's list", () => {
     const sections = workbook();
     const g = buildAiReviewGrounding(sections);
@@ -185,8 +200,54 @@ describe("verifyAiReviewReply", () => {
       fills: [{ target: t.id, value: "102", kind: "derived", rule: "sum", evidence: [bo.id, bo.id], reasoning: "sum" }],
       questions: [],
     });
-    // Cited twice it is one cell — still a recomputed sum, still labelled derived.
-    expect(sum.proposals[0]).toMatchObject({ value: "102", kind: "derived", rule: "sum" });
+    // One cell cited twice is not two figures, and a Rand amount is never
+    // built from a percentage: the arithmetic comes out, and means nothing.
+    expect(sum.proposals).toEqual([]);
+    expect(sum.rejected).toBe(1);
+  });
+
+  it("never reads a value the build worked out from a flag, nor an earlier derived fill", () => {
+    const flagged: WorkbookSectionsInput = {
+      "company-information": { meta: { companyName: "Example Co" } },
+      procurement: { rows: [{ _id: "p1", supplierName: "Flag Co", currentBlackOwnership: 51, spend: 900, _derivedFromFlag: { currentBlackOwnership: "51% or more black owned: Yes" } }] },
+      esd: { rows: [{ _id: "e1", supplierName: "Flag Co", currentSize: "EME", contributionDescription: "Grant", contributionType: "Grant", amount: 500 }] },
+    };
+    const derivedFill: WorkbookSectionsInput = {
+      ...flagged,
+      procurement: { rows: [{
+        _id: "p1", supplierName: "Flag Co", currentBlackOwnership: 51, spend: 900,
+        _aiFills: { currentBlackOwnership: { value: "51", kind: "derived", rule: "percent", reasoning: "r", evidence: [], origin: "model", at: "2026-01-01T00:00:00Z" } },
+      }] },
+    };
+    for (const sections of [flagged, derivedFill]) {
+      const g = buildAiReviewGrounding(sections);
+      const t = target(g, "esd", "currentBlackOwnership", "e1");
+      const c = ctx(g, "procurement", "currentBlackOwnership");
+      expect(c.derived).toBe(true);
+      expect(g.text).toContain("worked out, not stated");
+      const out = verifyAiReviewReply(sections, g, {
+        fills: [{ target: t.id, value: "51", kind: "read", evidence: [c.id], reasoning: "Same supplier on procurement." }],
+        questions: [],
+      });
+      expect(out.proposals).toEqual([]);
+      expect(out.rejected).toBe(1);
+    }
+  });
+
+  it("refuses a disputed cell once the user has typed a value none of the documents gave", () => {
+    const sections = workbook();
+    (sections["management-control"]!.rows![0] as Record<string, unknown>).designation = "Executive Director";
+    const g = buildAiReviewGrounding(sections);
+    expect(g.targets.some((t) => t.section === "management-control" && t.column === "designation")).toBe(false);
+    // A grounding built before the user typed: the reply cannot overwrite them either.
+    const before = buildAiReviewGrounding(workbook());
+    const t = target(before, "management-control", "designation", "m1");
+    const stale = { ...t, current: "Executive Director" };
+    const out = verifyAiReviewReply(sections, { ...before, targets: before.targets.map((x) => (x.id === t.id ? stale : x)) }, {
+      fills: [{ target: t.id, value: "Middle Manager", kind: "read", document: "ee-report.pdf", reasoning: "r" }],
+      questions: [],
+    });
+    expect(out.proposals).toEqual([]);
   });
 
   it("does not let a fill land on a cell the user has since typed into", () => {
@@ -208,6 +269,61 @@ describe("verifyAiReviewReply", () => {
     const t = target(g, "sed", "contributionType", "d1");
     const out = verifyAiReviewReply(sections, g, { fills: [], questions: [{ target: t.id, question: "Is this a bursary\nor a donation?" }] });
     expect(out.questions[0].question).toBe("Is this a bursary or a donation?");
+  });
+
+  describe("arithmetic stays within one unit", () => {
+    const sections: WorkbookSectionsInput = {
+      "company-information": { meta: { companyName: "Example Co" } },
+      esd: { rows: [{ _id: "e9", supplierName: "Calc Co", currentSize: "EME", contributionType: "Grant" }] },
+      sed: { rows: [{ _id: "d9", beneficiaryName: "Calc Trust", amount: 100 }] },
+    };
+    const cell = (id: string, section: string, column: string, value: string): ContextCell => {
+      const def = getSection(section)!.columns.find((c) => c.key === column)!;
+      return { id, section, sectionLabel: section, rowId: "x", column, columnLabel: def.label, type: def.type, unit: unitOf(def), value, files: [] };
+    };
+    const tgt = (section: string, rowId: string, column: string, context: string[]): ReviewTarget => {
+      const def = getSection(section)!.columns.find((c) => c.key === column)!;
+      return { id: "T1", section, sectionLabel: section, rowId, column, columnLabel: def.label, type: def.type, unit: unitOf(def), context, affectsScore: true };
+    };
+    const context = [
+      cell("C1", "procurement", "spend", "300"),
+      cell("C2", "skills-development", "courseCost", "200"),
+      cell("C3", "procurement", "currentBlackOwnership", "51"),
+      cell("C4", "sed", "amount", "1000"),
+    ];
+    const grounding = (t: ReviewTarget): ReviewGrounding => ({ targets: [t], context, truncated: 0, text: "" });
+
+    it("knows Rand, percent and count columns", () => {
+      const col = (s: string, k: string) => getSection(s)!.columns.find((c) => c.key === k);
+      expect(unitOf(col("esd", "amount"))).toBe("rand");
+      expect(unitOf(col("procurement", "currentBlackOwnership"))).toBe("percent");
+      expect(unitOf(col("skills-development", "manHours"))).toBe("count");
+      expect(unitOf(col("esd", "supplierName"))).toBe("other");
+    });
+
+    it("accepts a Rand sum of distinct Rand cells", () => {
+      const g = grounding(tgt("esd", "e9", "amount", ["C1", "C2", "C3"]));
+      const out = verifyAiReviewReply(sections, g, { fills: [{ target: "T1", value: "500", kind: "derived", rule: "sum", evidence: ["C1", "C2"], reasoning: "r" }], questions: [] });
+      expect(out.proposals[0]).toMatchObject({ value: "500", kind: "derived", rule: "sum" });
+    });
+
+    it("refuses a Rand sum or difference that takes in a percentage", () => {
+      const g = grounding(tgt("esd", "e9", "amount", ["C1", "C2", "C3"]));
+      const sum = verifyAiReviewReply(sections, g, { fills: [{ target: "T1", value: "351", kind: "derived", rule: "sum", evidence: ["C1", "C3"], reasoning: "r" }], questions: [] });
+      expect(sum.proposals).toEqual([]);
+      const diff = verifyAiReviewReply(sections, g, { fills: [{ target: "T1", value: "249", kind: "derived", rule: "difference", evidence: ["C1", "C3"], reasoning: "r" }], questions: [] });
+      expect(diff.proposals).toEqual([]);
+    });
+
+    it("takes a percentage only as Rand of Rand (or count of count), into a percent cell", () => {
+      const pct = grounding(tgt("sed", "d9", "percentBenefitingBlack", ["C1", "C3", "C4"]));
+      const ok = verifyAiReviewReply(sections, pct, { fills: [{ target: "T1", value: "30", kind: "derived", rule: "percent", evidence: ["C1", "C4"], reasoning: "r" }], questions: [] });
+      expect(ok.proposals[0]).toMatchObject({ value: "30", rule: "percent" });
+      const mixed = verifyAiReviewReply(sections, pct, { fills: [{ target: "T1", value: "5.1", kind: "derived", rule: "percent", evidence: ["C3", "C4"], reasoning: "r" }], questions: [] });
+      expect(mixed.proposals).toEqual([]);
+      const intoRand = verifyAiReviewReply(sections, grounding(tgt("esd", "e9", "amount", ["C1", "C4"])), { fills: [{ target: "T1", value: "30", kind: "derived", rule: "percent", evidence: ["C1", "C4"], reasoning: "r" }], questions: [] });
+      expect(intoRand.proposals).toEqual([]);
+    });
   });
 
   it("parses a reply wrapped in prose or code fences, and survives garbage", () => {

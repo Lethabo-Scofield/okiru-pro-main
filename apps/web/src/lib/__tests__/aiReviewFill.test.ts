@@ -98,6 +98,18 @@ describe("buildRuleFills — proposes with evidence", () => {
     expect(find(buildRuleFills(sections).proposals, "esd", "currentBlackOwnership")).toBeUndefined();
   });
 
+  it("does not read an earlier derived AI fill as a statement either", () => {
+    const sections: WorkbookSectionsInput = {
+      ...company(),
+      procurement: { rows: [{
+        _id: "p1", supplierName: "Worked Co", currentBlackOwnership: 40,
+        [AI_FILLS_KEY]: { currentBlackOwnership: { value: "40", kind: "derived", rule: "percent", reasoning: "r", evidence: [], origin: "model", at: "2026-01-01T00:00:00Z" } },
+      }] },
+      esd: { rows: [{ _id: "e1", supplierName: "Worked Co" }] },
+    };
+    expect(find(buildRuleFills(sections).proposals, "esd", "currentBlackOwnership")).toBeUndefined();
+  });
+
   it("asks rather than picks when the same supplier's rows disagree", () => {
     const sections: WorkbookSectionsInput = {
       ...company(),
@@ -236,6 +248,26 @@ describe("applyFillProposals — applies and marks", () => {
 });
 
 describe("never overwrites what the user typed", () => {
+  it("leaves a disputed cell alone once the user has typed a value none of the documents gave", () => {
+    const sections: WorkbookSectionsInput = {
+      ...company(),
+      "management-control": { rows: [{
+        _id: "m1", name: "Person", surname: "One", designation: "Executive Director",
+        // Editing the cell does not clear the documents' dispute.
+        _conflicts: { designation: [{ value: "Junior Manager", sources: ["payroll.pdf"] }, { value: "Middle Manager", sources: ["ee-report.pdf"] }] },
+      }] },
+    };
+    const proposal: FillProposal = {
+      id: "fill_mc", section: "management-control", sectionLabel: "", rowId: "m1", column: "designation", columnLabel: "Designation",
+      value: "Middle Manager", kind: "read", reasoning: "r", evidence: [{ type: "document", file: "ee-report.pdf" }],
+      replaces: "Executive Director", affectsScore: true, origin: "model",
+    };
+    const result = applyFillProposals(sections, [proposal]);
+    expect(result.applied).toEqual([]);
+    expect(result.skipped[0].reason).toMatch(/your own value/);
+    expect(result.patches).toEqual([]);
+  });
+
   it("skips a cell the user filled after the proposal was made", () => {
     const sections = training({ courseCost: 1200 });
     const { proposals } = buildRuleFills(sections);

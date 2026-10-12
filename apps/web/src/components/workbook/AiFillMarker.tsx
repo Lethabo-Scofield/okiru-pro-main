@@ -78,14 +78,14 @@ export function AiFillMarker({ mark, onUndo, testId, className = "" }: Props) {
               Filled by AI review
               <span className="ml-1.5 font-normal text-[color:var(--body)]">· {derived ? "derived" : "read from your documents"}</span>
             </p>
-            <button type="button" onClick={() => setAnchor(null)} aria-label="Close" className="rounded p-0.5 text-[color:var(--muted)] hover:text-white">
+            <button type="button" onClick={() => setAnchor(null)} aria-label="Close" className="rounded p-0.5 text-[color:var(--body)] hover:text-white">
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
           <p className="mt-1.5 text-[12px] leading-snug text-[color:var(--body)]">{mark.reasoning}</p>
           {mark.conversion && <p className="mt-1 text-[11.5px] text-amber-200/80">Converted: {mark.conversion}</p>}
           {mark.evidence.length > 0 && (
-            <ul className="mt-2 max-h-32 space-y-0.5 overflow-y-auto text-[11px] text-[color:var(--muted)]">
+            <ul className="mt-2 max-h-32 space-y-0.5 overflow-y-auto text-[11px] text-[color:var(--body)]">
               {mark.evidence.map((e, i) => (
                 <li key={i} className="break-words">{describeEvidence(e)}</li>
               ))}

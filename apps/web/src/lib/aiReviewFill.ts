@@ -287,8 +287,15 @@ export function canFill(
   }
   if (replaces !== undefined) {
     const conflicts = (container[ROW_CONFLICTS_KEY] ?? {}) as Record<string, unknown>;
-    if (!Array.isArray(conflicts[column])) return { ok: false, reason: "The disagreement on this cell is settled." };
+    const rivals = conflicts[column];
+    if (!Array.isArray(rivals)) return { ok: false, reason: "The disagreement on this cell is settled." };
     if (!sameCellValue(current, replaces)) return { ok: false, reason: "The cell holds a different value now." };
+    // Editing the cell does not clear the documents' dispute, so a value that
+    // is none of the documents' own is one the user typed: theirs, never replaced.
+    const stated = rivals.map((c) => (c && typeof c === "object" && "value" in c ? (c as { value?: unknown }).value : c));
+    if (!isBlankCell(current) && !stated.some((v) => sameCellValue(current, v))) {
+      return { ok: false, reason: "You entered your own value here." };
+    }
     return { ok: true };
   }
   if (!isBlankCell(current)) return { ok: false, reason: "The cell holds a value now." };
@@ -528,7 +535,8 @@ export function buildRuleFills(sections: WorkbookSectionsInput): {
   };
   const stated = (row: Row, column: string) => {
     const flagged = (row._derivedFromFlag ?? {}) as Record<string, unknown>;
-    return !isBlankCell(row[column]) && !(column in flagged);
+    // An earlier derived AI fill is worked out too, not stated.
+    return !isBlankCell(row[column]) && !(column in flagged) && activeMark(row, column)?.kind !== "derived";
   };
   for (const [fromKey, toKey, from, to] of [
     ["procurement", "esd", procurement, esd],

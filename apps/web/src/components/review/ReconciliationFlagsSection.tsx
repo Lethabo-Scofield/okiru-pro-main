@@ -57,7 +57,7 @@ export function ReconciliationFlagsSection({ flags }: { flags: ReconciliationFla
       meta={real > 0 ? `${real}` : "none"}
       summary={
         real > 0
-          ? `Where two documents state different figures, the lower one is scored until you confirm which is right.${noiseLine}`
+          ? `Each line says which figure is scored until you confirm which is right.${noiseLine}`
           : `Nothing your documents disagree on.${noiseLine}`
       }
       testId="reconciliation-flags"

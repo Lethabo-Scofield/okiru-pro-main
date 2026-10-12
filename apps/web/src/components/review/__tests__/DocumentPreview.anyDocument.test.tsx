@@ -106,6 +106,29 @@ describe("DocumentPreview — any document", () => {
     expect(await screen.findByRole("img", { name: "photo.jpg" })).toHaveAttribute("src", "blob:local-preview");
   });
 
+  it("never shows an SVG inline, and never types a blob URL as SVG or HTML", async () => {
+    const made: Blob[] = [];
+    URL.createObjectURL = vi.fn((b: Blob) => {
+      made.push(b);
+      return "blob:local-preview";
+    }) as typeof URL.createObjectURL;
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><script>window.__pwned="svg"</script></svg>';
+    render(<DocumentPreview name="logo.svg" file={fileOf([svg], "logo.svg", "image/svg+xml")} />);
+    const box = await screen.findByTestId("document-preview-unavailable");
+    expect(screen.getByTestId("document-preview")).toHaveAttribute("data-preview-kind", "other");
+    expect(screen.queryByRole("img")).toBeNull();
+    expect(within(box).getByRole("link", { name: "Download" })).toHaveAttribute("download", "logo.svg");
+    expect(made.length).toBeGreaterThan(0);
+    expect(made.every((b) => b.type === "application/octet-stream")).toBe(true);
+    cleanup();
+
+    // A picture named .png whose bytes claim to be SVG is shown typed as a PNG.
+    made.length = 0;
+    render(<DocumentPreview name="photo.png" file={fileOf([svg], "photo.png", "image/svg+xml")} />);
+    await screen.findByRole("img", { name: "photo.png" });
+    expect(made.map((b) => b.type).sort()).toEqual(["application/octet-stream", "image/png"]);
+  });
+
   it("says plainly when a file type can't be previewed, and offers the download", async () => {
     render(<DocumentPreview name="site-plan.dwg" file={fileOf([new Uint8Array([1, 2, 3])], "site-plan.dwg")} showDownload={false} />);
     const box = await screen.findByTestId("document-preview-unavailable");

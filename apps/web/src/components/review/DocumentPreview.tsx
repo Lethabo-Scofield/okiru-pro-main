@@ -20,6 +20,7 @@ import { RichDocument } from "./RichDocument";
 import {
   convertDocument,
   isRichKind,
+  rasterImageType,
   previewKind as kindOf,
   readBytes,
   TooLargeToPreview,
@@ -137,12 +138,14 @@ export function DocumentPreview({
   }, [file, documentId]);
 
   // Typed URL for inline display: a library download of a PDF arrives as
-  // application/pdf, but re-wrap so the iframe/img never guesses.
+  // application/pdf, but re-wrap so the iframe/img never guesses. A picture
+  // takes a raster type from its name, never the blob's own: a blob typed
+  // image/svg+xml opened in a new tab would run its script in this origin.
   const url = useMemo(() => {
     if (!blob || (kind !== "pdf" && kind !== "image")) return null;
-    const typed = kind === "pdf" ? new Blob([blob], { type: "application/pdf" }) : blob;
+    const typed = new Blob([blob], { type: kind === "pdf" ? "application/pdf" : rasterImageType(name) });
     return URL.createObjectURL(typed);
-  }, [blob, kind]);
+  }, [blob, kind, name]);
   useEffect(() => () => {
     if (url) URL.revokeObjectURL(url);
   }, [url]);
@@ -166,7 +169,12 @@ export function DocumentPreview({
     };
   }, [blob, kind, name]);
 
-  const downloadHref = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
+  // Downloads are bytes, never a page: "Open link in new tab" on an uploaded
+  // .html or .svg must not render it in this origin.
+  const downloadHref = useMemo(
+    () => (blob ? URL.createObjectURL(new Blob([blob], { type: "application/octet-stream" })) : null),
+    [blob],
+  );
   useEffect(() => () => {
     if (downloadHref) URL.revokeObjectURL(downloadHref);
   }, [downloadHref]);
