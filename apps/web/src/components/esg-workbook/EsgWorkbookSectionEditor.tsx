@@ -21,8 +21,8 @@ import { EsgHeadcountGrid } from "./EsgHeadcountGrid";
 import { EsgMaturityGrid } from "./EsgMaturityGrid";
 import { EsgSubtabContainer } from "./EsgSubtabContainer";
 import { EsgRegisterGrid } from "./EsgRegisterGrid";
+import { EsgCellMarksFromWorkbook, EsgCellSectionContext } from "./EsgCellMark";
 import { ESG_PANEL_HEADER, ESG_SAVE_BTN } from "./esgEditorChrome";
-import { EsgCellSourcesProvider } from "./EsgCellSourceMark";
 import {
   ASSUMPTIONS_FIELDS,
   COVER_FIELDS,
@@ -544,10 +544,14 @@ const ScalarSectionRouter = forwardRef<EsgWorkbookSectionEditorHandle, Props>(
         data-testid={`esg-workbook-section-${sectionId}`}
       >
         {!toolkitMode ? header : null}
-        {/* Each cell a document filled names it; each one documents disagree on says so. */}
-        <EsgCellSourcesProvider workbook={workbook} sectionId={sectionId}>
-          <div className={toolkitMode ? "p-3" : "p-5"}>{body}</div>
-        </EsgCellSourcesProvider>
+        {/* Each cell's marker (AI fill, document, disagreement) knows its section from here.
+            Outside the workbook page (the toolkit's inline editor) the marks come from this
+            workbook, so a document-filled cell names its file there too. */}
+        <EsgCellMarksFromWorkbook workbook={workbook}>
+          <EsgCellSectionContext.Provider value={sectionId}>
+            <div className={toolkitMode ? "p-3" : "p-5"}>{body}</div>
+          </EsgCellSectionContext.Provider>
+        </EsgCellMarksFromWorkbook>
         {!toolkitMode ? (
           <div className="px-5 pb-5">
             <button

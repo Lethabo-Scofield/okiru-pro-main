@@ -47,6 +47,7 @@ import {
   setEsgActiveCompany,
 } from "@/lib/esgRoutes";
 import { esgImportHandover, parseEsgWorkbookXlsx, type EsgImportPreview } from "@/lib/esg/esgWorkbookImport";
+import { withEsgDisputes } from "@/lib/esg/esgAiReviewFill";
 import EsgCreateStartChoice from "./EsgCreateStartChoice";
 import EsgDocumentUploadStart from "./EsgDocumentUploadStart";
 import EsgCreateReview, { type EsgCreateRoute, type EsgNameSource } from "./EsgCreateReview";
@@ -324,8 +325,9 @@ export function EsgCreateFlow() {
 
       let written = 0;
       try {
-        // The document placements travel too, so each cell keeps its source (E4).
-        await persistEsgSectionPatches(companyId, patches, work.injection?.placed ?? [], work.injection);
+        // The document placements travel too, so each cell keeps its source (E4),
+        // and so do the cells the documents disagreed on (left blank).
+        await persistEsgSectionPatches(companyId, withEsgDisputes(patches, work.injection?.conflicts), work.injection?.placed ?? [], work.injection);
         written = esgPatchCellCount(work.patches);
       } catch (err) {
         toast({

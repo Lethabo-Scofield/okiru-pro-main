@@ -3,7 +3,7 @@ import { parseClipboardMatrix } from "@/lib/workbookGridParse";
 import { applyPasteToCells, sumRow } from "@/lib/esg/esgGridPaste";
 import { formatEsgNumber } from "@/lib/esg/esgFormat";
 import { ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
-import { EsgCellMark, useEsgCellFiles } from "./EsgCellSourceMark";
+import { EsgCellMark, useEsgCellFiles } from "./EsgCellMark";
 
 // Moved to lib so the data layer (grid dropdowns, import translation) can use
 // them without depending on a component; re-exported here for existing callers.
@@ -81,7 +81,7 @@ function MonthlyGridRow({
             }}
             className={MONTH_INPUT}
           />
-          <EsgCellMark cellRef={ref} value={values[ref]} className="absolute right-0.5 top-0.5" />
+          <EsgCellMark cell={ref} current={values[ref]} className="absolute right-0.5 top-0.5" />
         </td>
       ))}
       <td className={`${ESG_TABLE_CELL} text-right tabular-nums text-[color:var(--body)]`} data-testid={`ytd-${ri}`}>
@@ -90,7 +90,7 @@ function MonthlyGridRow({
       <td className={`${ESG_TABLE_CELL} text-right tabular-nums text-[color:var(--body)]`} data-testid={`tco2-${ri}`}>
         {formatEsgNumber(tco2)}
       </td>
-      <td className={ESG_TABLE_CELL}>
+      <td className={`${ESG_TABLE_CELL} relative`}>
         <input
           type="text"
           disabled={readOnly}
@@ -104,6 +104,8 @@ function MonthlyGridRow({
           className={`${ESG_TABLE_INPUT} min-w-[9rem] placeholder:text-[color:var(--body)] placeholder:opacity-80`}
           data-testid={`esg-monthly-src-${cellPrefix}-${ri}`}
         />
+        {/* The AI review may fill a Source from provenance: the same marker says so. */}
+        <EsgCellMark cell={srcRef} current={values[srcRef]} className="absolute right-0.5 top-0.5" />
       </td>
     </tr>
   );

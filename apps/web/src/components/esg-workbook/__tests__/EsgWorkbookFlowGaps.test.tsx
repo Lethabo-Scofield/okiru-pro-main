@@ -16,6 +16,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { EsgCellSourcesProvider, EsgCellMark, describeCellSource } from "../EsgCellSourceMark";
 import { EsgMonthlyGrid } from "../EsgMonthlyGrid";
+import { EsgCellMarksFromWorkbook, EsgCellSectionContext } from "../EsgCellMark";
 import { EsgValidationPanel } from "../EsgValidationPanel";
 import { EsgWorkbookMoreMenu, ESG_MORE_ITEM } from "../EsgWorkbookMoreMenu";
 import { EsgDocumentWriteConfirm, describeEsgWrite, esgWriteCounts } from "../EsgDocumentWriteConfirm";
@@ -101,7 +102,8 @@ describe("the monthly grid", () => {
   const months = ["Jul-25", "Aug-25", "Sep-25"];
   const renderGrid = () =>
     render(
-      <EsgCellSourcesProvider workbook={workbook} sectionId="e-data">
+      <EsgCellMarksFromWorkbook workbook={workbook}>
+        <EsgCellSectionContext.Provider value="e-data">
         <EsgMonthlyGrid
           rows={[{ depot: "Site A", months: [] }, { depot: "Site B", months: [] }]}
           months={months}
@@ -111,7 +113,8 @@ describe("the monthly grid", () => {
           values={{ s1a_C14: 800, s1a_D14: 425, s1a_E14: 405 }}
           onChange={vi.fn()}
         />
-      </EsgCellSourcesProvider>,
+        </EsgCellSectionContext.Provider>
+      </EsgCellMarksFromWorkbook>,
     );
 
   it("gives every month room for its figure, and widens the page while it is shown", () => {
@@ -133,7 +136,8 @@ describe("the monthly grid", () => {
     renderGrid();
     expect(screen.getByTestId("esg-monthly-src-s1a-0")).toHaveAttribute("placeholder", "Fills.xlsx › Fills");
     expect(screen.getByTestId("esg-monthly-src-s1a-1")).toHaveAttribute("placeholder", "");
-    expect(screen.getByTestId("esg-cell-mark-s1a_D15")).toHaveAttribute("data-state", "conflict");
+    // The grid's marker reads the disagreement recorded beside the placements.
+    expect(screen.getByTestId("esg-cell-mark-e-data!s1a_D15")).toHaveAttribute("data-mark-kind", "dispute");
   });
 });
 

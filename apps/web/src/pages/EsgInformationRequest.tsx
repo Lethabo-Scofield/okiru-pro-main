@@ -52,6 +52,19 @@ import {
   type EsgInjectionResult,
 } from "@/components/esg/esgParserInjection";
 import { esgUploadFocus, type EsgUploadFocus } from "@/lib/esg/esgSectionElements";
+import { EsgAiReviewModal } from "@/components/esg-workbook/EsgAiReviewModal";
+import { EsgCellMarkContext, type EsgCellMarkContextValue } from "@/components/esg-workbook/EsgCellMark";
+import {
+  applyEsgFillProposals,
+  buildEsgCellMarkIndex,
+  saveEsgReviewPatches,
+  undoAllEsgFills,
+  undoEsgFill,
+  withEsgDisputes,
+  type EsgFillProposal,
+  type EsgSectionPatches,
+  type EsgWorkbookLike,
+} from "@/lib/esg/esgAiReviewFill";
 import "@/styles/esg-glass.css";
 
 const DEFAULT_SECTION = ESG_INPUT_SECTIONS[0]?.id ?? "company-reporting-setup";
@@ -71,6 +84,9 @@ function sectionFromQuery(): string | null {
  */
 type EsgStartStage = "deciding" | "choose" | "upload" | "workbook";
 
+/** The workbook as saved this moment — the AI review re-checks every write against it. */
+const latestWorkbook = (): EsgWorkbookLike => useEsgStore.getState().workbook ?? { sections: {} };
+
 export default function EsgInformationRequest() {
   const params = useParams<{ companyId: string }>();
   const companyId = params.companyId ?? "";
@@ -88,6 +104,8 @@ export default function EsgInformationRequest() {
   const unlockWorkbook = useEsgStore((s) => s.unlockWorkbook);
   const setSubmitAttempted = useEsgStore((s) => s.setSubmitAttempted);
   const touched = useEsgStore((s) => s.touched);
+  const updateSectionCells = useEsgStore((s) => s.updateSectionCells);
+  const recalculate = useEsgStore((s) => s.recalculate);
 
   const [activeSectionId, setActiveSectionId] = useState(DEFAULT_SECTION);
   const [reopening, setReopening] = useState(false);
@@ -297,6 +315,65 @@ export default function EsgInformationRequest() {
     setStage("upload");
   };
 
+  /*
+   * The AI review's writes. Every one goes through the ordinary section save,
+   * after the open section's own edits are saved (so a draft is never lost to
+   * the reload that follows), and is re-checked against the workbook as it is
+   * at that moment — a cell typed into since the review was opened is skipped.
+   * Marks are saved before the figures they explain; an undo restores the
+   * figure before it drops the mark.
+   */
+  const saveReviewPatches = useCallback(
+    async (patches: EsgSectionPatches, marksFirst: boolean) => {
+      await saveEsgReviewPatches(patches, marksFirst, updateSectionCells);
+      recalculate();
+    },
+    [recalculate, updateSectionCells],
+  );
+
+  const flushOpenSection = useCallback(async () => {
+    const ok = (await editorRef.current?.flush()) ?? true;
+    if (!ok) throw new Error("Could not save the open section first.");
+  }, []);
+
+  const applyReviewFills = useCallback(
+    async (proposals: EsgFillProposal[]) => {
+      await flushOpenSection();
+      const result = applyEsgFillProposals(latestWorkbook(), proposals);
+      await saveReviewPatches(result.patches, true);
+      return { applied: result.applied, skipped: result.skipped };
+    },
+    [flushOpenSection, saveReviewPatches],
+  );
+
+  const undoReviewFill = useCallback(
+    async (key: string) => {
+      await flushOpenSection();
+      await saveReviewPatches(undoEsgFill(latestWorkbook(), key), false);
+    },
+    [flushOpenSection, saveReviewPatches],
+  );
+
+  const undoAllReviewFills = useCallback(async () => {
+    await flushOpenSection();
+    await saveReviewPatches(undoAllEsgFills(latestWorkbook()), false);
+  }, [flushOpenSection, saveReviewPatches]);
+
+  /** What each cell's marker shows: the review's fills, the documents behind values, disagreements. */
+  const cellMarks = useMemo<EsgCellMarkContextValue>(
+    () => ({
+      index: buildEsgCellMarkIndex(workbook),
+      onUndo: submittedAt
+        ? undefined
+        : (key: string) => {
+            undoReviewFill(key).catch(() =>
+              toast({ title: "Undo failed", description: "Check your connection and try again.", variant: "destructive" }),
+            );
+          },
+    }),
+    [submittedAt, toast, undoReviewFill, workbook],
+  );
+
   const cellCount = useCallback(
     (sectionId: string) => Object.keys(workbook?.sections?.[sectionId]?.cells ?? {}).length,
     [workbook],
@@ -432,7 +509,9 @@ export default function EsgInformationRequest() {
           : "";
       if (cells > 0) {
         // The placements travel too, so each cell keeps the document it came from (E4).
-        await persistEsgSectionPatches(companyId, injection.patches, injection.placed, injection);
+        // Cells the documents disagreed on stay blank; the disagreement is kept
+        // beside them so the workbook and its AI review can show and ask about it.
+        await persistEsgSectionPatches(companyId, withEsgDisputes(injection.patches, injection.conflicts), injection.placed, injection);
         await load(companyId, companyName, { force: true });
         toast({
           title: uploadFocus ? `Values added to ${uploadFocus.title}` : "Values added to your workbook",
@@ -573,6 +652,16 @@ export default function EsgInformationRequest() {
             >
               <Save className="h-3.5 w-3.5" /> Save
             </button>
+            <EsgAiReviewModal
+              companyId={companyId}
+              companyName={companyName}
+              workbook={workbook}
+              locked={Boolean(submittedAt)}
+              onApplyFills={applyReviewFills}
+              onUndoFill={undoReviewFill}
+              onUndoAllFills={undoAllReviewFills}
+              onOpenSection={(sectionId) => void changeSection(sectionId)}
+            />
             <input
               ref={fileInputRef}
               type="file"
@@ -836,12 +925,14 @@ export default function EsgInformationRequest() {
                     </button>
                   </div>
                 ) : null}
-                <EsgWorkbookSectionEditor
-                  key={activeSection.id}
-                  ref={editorRef}
-                  sectionId={activeSection.id}
-                  title={activeSection.title}
-                />
+                <EsgCellMarkContext.Provider value={cellMarks}>
+                  <EsgWorkbookSectionEditor
+                    key={activeSection.id}
+                    ref={editorRef}
+                    sectionId={activeSection.id}
+                    title={activeSection.title}
+                  />
+                </EsgCellMarkContext.Provider>
                 {submittedAt ? (
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <p className="text-[12px] text-[var(--esg-acc-s)]">

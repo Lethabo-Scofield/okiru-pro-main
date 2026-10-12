@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Trash2, AlertCircle, Maximize2, Minimize2, X, Undo2 } from "lucide-react";
@@ -42,6 +42,11 @@ interface Props {
   readOnly?: boolean;
   canDeleteRows?: boolean;
   canAddRows?: boolean;
+  /**
+   * Extra marker shown at the end of a cell (the ESG workbook's source and
+   * AI-fill marks). Presentational only; absent, nothing changes.
+   */
+  cellAdornment?: (row: Row, rowIndex: number, column: ColumnDef) => ReactNode;
 }
 
 function isYesNoColumn(col: ColumnDef): boolean {
@@ -151,6 +156,7 @@ export function SpreadsheetGrid({
   readOnly = false,
   canDeleteRows = true,
   canAddRows = true,
+  cellAdornment,
 }: Props) {
   const [activeCell, setActiveCell] = useState<CellRef | null>(null);
   const [selectionEnd, setSelectionEnd] = useState<CellRef | null>(null);
@@ -981,6 +987,7 @@ export function SpreadsheetGrid({
                 }
               />
             )}
+            {cellAdornment?.(row, rIdx, col)}
           </div>
         )}
         {active && showFillHandle && cIdx === selectionRange!.maxC && (
