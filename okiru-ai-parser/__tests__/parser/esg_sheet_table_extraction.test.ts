@@ -18,6 +18,7 @@ import {
   chooseEsgSheetGrid,
   esgSheetNameOf,
   extractEsgSheetTable,
+  isLabelLine,
 } from '../../src/services/esgSheetTableExtraction.js';
 import { resetDecisionCacheForTest } from '../../src/services/semanticDecisionCache.js';
 
@@ -148,6 +149,36 @@ describe('extractEsgSheetTable', () => {
     expect(out[11]).toMatchObject({ learner_name: 'LEARNER 12', programme_name: 'LADDER WORK', training_cost_rand: 1011 });
     // Twelve learners, not two rows inheriting the first learner's name.
     expect(new Set(out.map((row) => row.learner_name)).size).toBe(12);
+  });
+
+  it('keeps a sheet\'s records and leaves its label lines to the labelled-cell reader', async () => {
+    // A report with its records and then caption lines with their figures.
+    // Mapped onto a register keyed by date, each caption became a "record"
+    // dated "Opening stock".
+    const rows: Array<Record<string, unknown>> = [
+      { Date: 46100, Route: 'R-001', Km: 410 },
+      { Date: '46101', Route: 'R-002', Km: 380 },
+      ...['Reconciliation', 'Meter open', 'Difference', 'Opening stock', 'Purchased', 'Closing stock']
+        .map((caption, i) => ({ Date: caption, Km: i * 10 })),
+      { Date: 46102, Route: 'R-003' },
+    ];
+    const model = mappingModel({ Date: 'report_date', Route: 'route_name', Km: 'distance_km' });
+    const result = await extractEsgSheetTable(model, {
+      filename: 'Routes.xlsx › Summary', rows, sheetName: 'Summary', template: 'Debrief summary',
+    });
+    const out = result!.values[0].value as Array<Record<string, unknown>>;
+    expect(out.map((row) => row.route_name)).toEqual(['R-001', 'R-002', 'R-003']);
+    expect(result!.exceptions.some((e) => /6 line\(s\) whose report_date is a caption/.test(e))).toBe(true);
+  });
+
+  it('takes only a caption in a date column for a label line', () => {
+    expect(isLabelLine({ transaction_date: 'Opening stock', fuel_litres: 2000 }, 'transaction_date')).toBe(true);
+    // A date, written any way, or a template's empty day, is a record.
+    expect(isLabelLine({ transaction_date: '05-03-2026' }, 'transaction_date')).toBe(false);
+    expect(isLabelLine({ transaction_date: 46100 }, 'transaction_date')).toBe(false);
+    // A name or a registration may be any words.
+    expect(isLabelLine({ learner_name: 'Opening Stock' }, 'learner_name')).toBe(false);
+    expect(isLabelLine({ vehicle_registration: 'UNREGISTERED', depot_name: 'North' }, 'vehicle_registration')).toBe(false);
   });
 
   it('still requires an identity column: a training sheet mapped to costs alone is not read', async () => {
