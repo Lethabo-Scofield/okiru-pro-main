@@ -52,6 +52,7 @@ const ESG_SKILLS = [
   'hs_training_register',
   'environmental_data_dashboard',
   'emissions_system_export',
+  'privacy_compliance',
 ];
 
 /**
@@ -491,6 +492,7 @@ const ESG_GENERIC_WORDS = new Set([
   'bills', 'blank', 'cardboard', 'closed', 'correct', 'depots', 'distribution', 'diversity', 'emission', 'estimate',
   'holding', 'human', 'input', 'legend', 'location', 'pollution', 'power', 'prepared', 'professionally', 'purposes',
   'question', 'revised', 'sewerage', 'socio', 'south', 'stale', 'stationary', 'taken', 'units', 'values', 'weight',
+  'divisional', 'protection',
 ]);
 
 describe.skipIf(!esgDocKeyPath())('ESG skills carry no client data (ESG document-level answer key)', () => {

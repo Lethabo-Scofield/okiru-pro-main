@@ -76,8 +76,13 @@ fields:
     description: "Yes, No or Partial, as the document states whether monitoring and reporting procedures exist."
   - name: ee_manager_assigned_name
     type: text
-    labels: ["Senior manager assigned", "Assigned manager", "EE manager"]
-    description: "The senior manager assigned to the plan, as printed."
+    labels: ["Senior manager assigned", "Senior managers assigned", "Assigned manager", "EE manager"]
+    description: "EVERY senior manager the plan assigns, each as printed with the role printed beside it, separated by '; ' (\"A. Name - Chief Operating Officer; B. Name - Chief Financial Officer\"). Never only the first of a list."
+  - name: ee_plan_signed_date
+    type: date
+    scope: document
+    labels: ["Date signed", "Signed on", "Declaration date"]
+    description: "The date printed beside the CEO's signature on the plan's declaration, as printed. Not a submission date, and not an e-signature audit-trail date."
   - name: goal_year_or_date
     type: text
     required: true
@@ -134,7 +139,7 @@ fields:
     rowLevel: true
     labels: []
     description: "The goal row's printed Total."
-newFields: [numerical_goal_rows, goal_year_or_date, goal_occupational_level, goal_african_male, goal_coloured_male, goal_indian_male, goal_white_male, goal_african_female, goal_coloured_female, goal_indian_female, goal_white_female, goal_total]
+newFields: [ee_plan_signed_date, numerical_goal_rows, goal_year_or_date, goal_occupational_level, goal_african_male, goal_coloured_male, goal_indian_male, goal_white_male, goal_african_female, goal_coloured_female, goal_indian_female, goal_white_female, goal_total]
 ---
 ## What it is / is not
 
@@ -152,10 +157,16 @@ NOT an EEA4 or a payroll report.
 ## Where values sit
 
 - Duration ("from ... to ...") is near the top of the plan or in its first
-  section. The senior manager assigned and the signature block are at the end.
+  section. The senior managers assigned and the signature block are at the end:
+  a plan often assigns several managers, one per line or table row; copy them
+  all into `ee_manager_assigned_name`.
 - The numerical goals table has the workforce-profile shape: levels down the
   side, AM to WF across, a Total column. Annual target tables repeat it per
-  year. Copy each printed row into `numerical_goal_rows` with its year or date.
+  year ("Year 1", "Year 2"), and the disability goals and targets repeat it
+  again. Copy each printed row of EVERY one of these tables into
+  `numerical_goal_rows` with its year or date: the end-of-plan goals, each
+  year's targets and the disability tables (say "disability" in the year or
+  date, as "Year 1 disability"), including their TOTAL PERMANENT rows.
 - Consultation: a list of meeting dates, the forum's composition, or minutes
   with attendance.
 
@@ -195,7 +206,7 @@ Signed 21/02/2025
  "ee_plan_submission_date": null, "ee_forum_established": "Yes", "ee_forum_meeting_dates": "12/02/2025; 19/02/2025",
  "ee_forum_consulted": "Yes", "numerical_targets_set": "Yes", "target_black_percent": null,
  "target_black_female_percent": null, "target_disability_percent": null, "barriers_analysis_done": null,
- "affirmative_measures_implemented": null, "ee_monitoring_and_reporting": null, "ee_manager_assigned_name": "T. Mokoena",
+ "affirmative_measures_implemented": null, "ee_monitoring_and_reporting": null, "ee_manager_assigned_name": "T. Mokoena - HR Executive", "ee_plan_signed_date": "21/02/2025",
  "numerical_goal_rows": [
    {"goal_year_or_date": "end of plan", "goal_occupational_level": "Skilled technical", "goal_african_male": 30, "goal_coloured_male": 6, "goal_indian_male": 2, "goal_white_male": 4, "goal_african_female": 25, "goal_coloured_female": 5, "goal_indian_female": 1, "goal_white_female": 2, "goal_total": 75}
  ],

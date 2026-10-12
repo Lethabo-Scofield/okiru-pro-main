@@ -20,7 +20,17 @@ fields:
     type: text
     required: true
     labels: ["Contractor", "Service provider", "Collected by"]
-    description: "The waste company that issued the report, as printed in its letterhead, footer or company details. Null when the only trace is a logo image or the file name."
+    description: "The waste company that issued the report, as printed in its letterhead, footer or company details. A letterhead printed as a picture counts when you can see it on the page image. Null when the only trace is the file name."
+  - name: contractor_vat_number
+    type: text
+    scope: document
+    labels: ["VAT No", "VAT number", "VAT Reg No"]
+    description: "The waste company's VAT number from its letterhead or footer, as printed. Never the client's."
+  - name: contractor_registration_number
+    type: regno
+    scope: document
+    labels: ["Reg No", "Registration number", "Company registration"]
+    description: "The waste company's company registration number from its letterhead or footer, as printed. Never the client's."
   - name: site_name
     type: text
     required: true
@@ -102,7 +112,7 @@ fields:
     rowLevel: true
     labels: []
     description: "The stream's landfilled mass, when the report splits it, in the printed unit."
-newFields: [waste_stream_code, waste_treatment_route]
+newFields: [waste_stream_code, waste_treatment_route, contractor_vat_number, contractor_registration_number]
 ---
 ## What it is / is not
 
@@ -119,8 +129,10 @@ masses, a licence on its own, or an aspects register.
 
 ## Where values sit
 
-- Header or letterhead: contractor, client, site, period. A system export may
-  print the site in a filter line and the period nowhere at all.
+- Header or letterhead: contractor, its VAT and registration numbers, client,
+  site, period. A system export may print the site in a filter line and the
+  period nowhere at all. A letterhead is often a picture: its words are not in
+  the text layer, only on the page image.
 - A table of streams: description, code, route, mass. Some exports split
   "landfill vs diversion" on separate sheets; each sheet's streams are rows.
 - Totals at the foot: total mass, total diverted, total landfilled, a
@@ -170,6 +182,7 @@ Total                                     2 430     Diversion 63.8%
  "waste_total_kg": "2 430", "waste_recycled_kg": null, "waste_landfill_kg": null,
  "waste_diversion_percent": "63.8%", "waste_mass_unit": "kg", "hazardous_waste_kg": null,
  "disposal_facility_name": null, "disposal_permit_number": null, "safe_disposal_certificate_number": null,
+ "contractor_vat_number": null, "contractor_registration_number": null,
  "waste_stream_rows": [
    {"waste_stream_type": "Cardboard", "waste_stream_code": "R01", "waste_treatment_route": "Recycled", "waste_total_kg": "1 240"},
    {"waste_stream_type": "Plastic film", "waste_stream_code": "R04", "waste_treatment_route": "Recycled", "waste_total_kg": "310"},

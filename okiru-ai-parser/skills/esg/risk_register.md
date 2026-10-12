@@ -25,6 +25,11 @@ fields:
     required: true
     labels: ["Revised", "Last reviewed", "Revision date", "Date reviewed"]
     description: "The register's revision or last review date, as printed in its header or footer."
+  - name: register_prepared_by
+    type: text
+    scope: document
+    labels: ["Prepared by", "Compiled by", "Author", "Document owner"]
+    description: "Who prepared or owns the register, as its header or footer prints it (a role or a name). Not a row's risk owner."
   - name: review_frequency
     type: text
     labels: ["Review frequency", "Reviewed every"]
@@ -101,7 +106,7 @@ fields:
     rowLevel: true
     labels: []
     description: "The controls or actions the row lists, briefly."
-newFields: [risk_rating_as_printed]
+newFields: [risk_rating_as_printed, register_prepared_by]
 ---
 ## What it is / is not
 
@@ -116,7 +121,8 @@ assessment, an IFRS readiness assessment or a policy.
 
 ## Where values sit
 
-- Header or footer: document number, revision, revision date, scope.
+- Header or footer: document number, revision, revision date, scope, and
+  who prepared it ("Prepared by", often in the footer of every page).
 - One row per risk or factor: number, description, category, rating, controls.
   Landscape tables often wrap a row over several lines or pages.
 - Climate usually appears as one factor (adverse weather, climate change)
@@ -153,7 +159,7 @@ No  Factor                                                      Type      Rankin
 ```
 
 ```json
-{"register_version": "EX-R-004 Rev 02", "register_last_review_date": "14/01/2026", "review_frequency": null,
+{"register_version": "EX-R-004 Rev 02", "register_last_review_date": "14/01/2026", "register_prepared_by": null, "review_frequency": null,
  "total_risks_count": null, "material_risks_count": null, "climate_risk_in_register": "Yes",
  "physical_climate_risks_identified": "Yes", "transition_climate_risks_identified": "Yes",
  "risk_register_rows": [

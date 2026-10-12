@@ -56,6 +56,32 @@ describe('a skill field scope', () => {
     ]));
     expect(scoped('water__municipal_water_bill')).toEqual(expect.arrayContaining(['statement_date', 'history_total_kl', 'filing_label']));
   });
+
+  it('the EE, supplier-form, risk-register, waste and privacy skills name the facts their documents print', () => {
+    const esg = loadSkills('esg');
+    const skill = (spec: string) => esg.skillFor(spec);
+    const scoped = (spec: string) => (skill(spec)?.fields ?? []).filter((f) => f.scope === 'document').map((f) => f.name);
+    // The workforce profile's TOTAL PERMANENT row, column by column, and the employer details.
+    expect(scoped('employment_equity__eea2_eea4_report')).toEqual(expect.arrayContaining([
+      'total_permanent_african_male', 'total_permanent_white_female', 'total_permanent_foreign_female',
+      'employer_ceo_name', 'employer_sars_reference', 'employer_industry',
+    ]));
+    // A plan that assigns several senior managers: all of them, not the first.
+    const plan = skill('employment_equity__ee_plan_and_forum_minutes');
+    expect(plan?.fields.find((f) => f.name === 'ee_manager_assigned_name')?.description).toMatch(/EVERY senior manager/);
+    expect(scoped('employment_equity__ee_plan_and_forum_minutes')).toContain('ee_plan_signed_date');
+    // What a supplier form asks (questions, criteria, certifications, bands), blank or filled.
+    const form = skill('supplier_esg__self_assessment_questionnaire');
+    expect(form?.rowsField).toBe('form_item_rows');
+    expect(form?.fields.filter((f) => f.rowLevel).map((f) => f.name)).toEqual(['form_item', 'form_item_kind', 'form_section', 'form_item_band']);
+    expect(scoped('risk_assurance__risk_register_including_climate')).toContain('register_prepared_by');
+    expect(scoped('waste__contractor_report_safe_disposal_certificate')).toEqual(expect.arrayContaining(['contractor_vat_number', 'contractor_registration_number']));
+    // A POPIA document, a consent letter included, has a skill, with its letterhead's facts.
+    expect(scoped('ethics_compliance__popia_information_officer_and_pia')).toEqual(expect.arrayContaining([
+      'document_date', 'act_cited', 'issuing_entity', 'issuer_registration_number', 'issuer_directors',
+      'issuer_company_secretary', 'issuer_executives',
+    ]));
+  });
 });
 
 function bill(values: Record<string, unknown>): DocumentExtraction {
@@ -82,6 +108,21 @@ describe('withoutDocumentFacts', () => {
       filing_label: 'Depot North Feb',
     }));
     expect(out.values.map((v) => v.field)).toEqual(['site_name', 'billing_period_end', 'electricity_kwh']);
+  });
+
+  it("keeps a letterhead's directors and registration number off the case", () => {
+    const letter: DocumentExtraction = {
+      ...bill({}),
+      documentId: 'ethics_compliance__popia_information_officer_and_pia',
+      documentName: 'POPIA',
+      element: 'ETHICS_COMPLIANCE',
+      values: [
+        { field: 'information_officer_name', value: 'A Person', sourceFile: 'invented-letter.docx', sourceDocumentId: 'x' },
+        { field: 'issuer_directors', value: 'A Director; B Director', sourceFile: 'invented-letter.docx', sourceDocumentId: 'x' },
+        { field: 'issuer_registration_number', value: '2001/123456/07', sourceFile: 'invented-letter.docx', sourceDocumentId: 'x' },
+      ],
+    };
+    expect(withoutDocumentFacts(letter).values.map((v) => v.field)).toEqual(['information_officer_name']);
   });
 
   it('returns a read with no document facts unchanged', () => {
