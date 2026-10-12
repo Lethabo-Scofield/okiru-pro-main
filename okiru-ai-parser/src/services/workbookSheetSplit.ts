@@ -59,6 +59,50 @@ export interface SheetDocument {
    * below should add up to. Omitted when it states none.
    */
   statedTotals?: StatedTotal[];
+  /**
+   * Where the sheet's main table sits in `matrix` (0-based): its header row
+   * and its first and last column. Omitted for a sheet with no table.
+   */
+  region?: SheetRegion;
+  /**
+   * The cells OUTSIDE the main table — the rows above its header, the columns
+   * beside it — for a sheet too large to carry its matrix. A report's title and
+   * run date, a block of grand totals to the right of a route list: the rows
+   * and the markdown hold only the table, so without these they are lost.
+   * Bounded; omitted when the matrix is carried (it holds them) or there are none.
+   */
+  outside?: SheetCell[];
+}
+
+/** Where a sheet's main table sits. */
+export interface SheetRegion {
+  headerRow: number;
+  startCol: number;
+  endCol: number;
+}
+
+/** One cell, where it sits. */
+export interface SheetCell {
+  r: number;
+  c: number;
+  value: unknown;
+}
+
+/** Cells carried from outside the main table of a sheet too large to carry its matrix. */
+const MAX_OUTSIDE_CELLS = 400;
+
+/** The non-blank cells above a table's header and beside its columns, in reading order. */
+export function cellsOutsideTable(matrix: unknown[][], region: SheetRegion, limit = MAX_OUTSIDE_CELLS): SheetCell[] {
+  const cells: SheetCell[] = [];
+  const filled = (c: unknown) => c !== null && c !== undefined && String(c).trim() !== '';
+  for (let r = 0; r < matrix.length && cells.length < limit; r += 1) {
+    const row = matrix[r] ?? [];
+    for (let c = 0; c < row.length && cells.length < limit; c += 1) {
+      const inside = r >= region.headerRow && c >= region.startCol && c <= region.endCol;
+      if (!inside && filled(row[c])) cells.push({ r, c, value: row[c] });
+    }
+  }
+  return cells;
 }
 
 /** One labelled total from a sheet's summary block. */
@@ -556,15 +600,22 @@ export function splitWorkbookIntoSheets(buffer: Buffer, options: SplitOptions = 
     const namedCells = options.namedCells === false ? {} : namedSheetCells(workbook, sheetName, options.cells);
     const origin = sheet['!ref'] ? XLSX.utils.decode_range(sheet['!ref']).s : { r: 0, c: 0 };
     const statedTotals = options.statedTotals === false ? [] : statedTotalsAbove(matrix, table, origin);
+    const bounded = boundedMatrix(matrix);
+    const region: SheetRegion | undefined = table.headerIdx >= 0
+      ? { headerRow: table.headerIdx, startCol: table.region.start, endCol: table.region.end }
+      : undefined;
+    const outside = !bounded && region ? cellsOutsideTable(matrix, region) : [];
     documents.push({
       sheetName,
       rows,
       markdown: sheetToMarkdown(sheetName, rows),
       text: sheetToText(sheetName, rows),
-      matrix: boundedMatrix(matrix),
+      matrix: bounded,
       hidden: visibility !== 0,
       ...(Object.keys(namedCells).length > 0 ? { namedCells } : {}),
       ...(statedTotals.length > 0 ? { statedTotals } : {}),
+      ...(region ? { region } : {}),
+      ...(outside.length > 0 ? { outside } : {}),
     });
   }
 

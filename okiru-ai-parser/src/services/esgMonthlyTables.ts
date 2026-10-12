@@ -891,7 +891,7 @@ export async function extractEsgMonthlyTables(
     });
   }
 
-  return {
+  const extraction: DocumentExtraction = {
     documentId: 'esg_monthly_tables',
     documentName: `${input.sheetName ?? input.filename} monthly figures`,
     sourceFile: input.filename,
@@ -900,6 +900,16 @@ export async function extractEsgMonthlyTables(
     unexpectedFields: [],
     exceptions,
   };
+  READ_SPANS.set(extraction, tables.flatMap((table) => (table.span ? [table.span] : [])));
+  return extraction;
+}
+
+/** The rows of the sheet each monthly read covered: no other reader takes their cells as facts. */
+const READ_SPANS = new WeakMap<DocumentExtraction, Array<{ top: number; bottom: number }>>();
+
+/** The rows (0-based, inclusive) the tables of a monthly read occupy. */
+export function monthlyReadSpans(extraction: DocumentExtraction | null): Array<{ top: number; bottom: number }> {
+  return extraction ? READ_SPANS.get(extraction) ?? [] : [];
 }
 
 /**

@@ -410,6 +410,36 @@ function headerAt(matrix: unknown[][], row: number, col: number): string {
   return [text(row - 1), text(row)].filter(Boolean).join(' ');
 }
 
+/** The row of a period's closing total (the walk's own rule, walkPeriodRows), or -1. */
+function closingTotalRow(matrix: unknown[][], label: { row: number; col: number }, quantity: { col: number }): number {
+  let counted = 0;
+  for (let r = label.row + 1; r < matrix.length; r += 1) {
+    const row = matrix[r] ?? [];
+    const amount = asNumber(row[quantity.col]);
+    const name = String(row[label.col] ?? '').replace(/\s+/g, ' ').trim();
+    if (!name || /^(grand\s+)?(sub-?)?totals?\b/i.test(name)) {
+      if (amount === null) continue;
+      if (counted > 0) return r;
+      continue;
+    }
+    if (amount !== null) counted += 1;
+  }
+  return -1;
+}
+
+/**
+ * The rows a period read covered (0-based, inclusive): its header (two rows)
+ * to its closing total, or to the end of the sheet when it has none.
+ */
+export function periodTableSpan(matrix: unknown[][], reading: PeriodSummaryReading): { top: number; bottom: number } | null {
+  if (!reading.labelColumn || !reading.quantityColumn) return null;
+  const label = findColumn(matrix, reading.labelColumn);
+  const quantity = findColumn(matrix, reading.quantityColumn);
+  if (!label || !quantity || label.row !== quantity.row) return null;
+  const total = closingTotalRow(matrix, label, quantity);
+  return { top: Math.max(0, label.row - 1), bottom: total >= 0 ? total : matrix.length - 1 };
+}
+
 /** How many rows under a period's closing total are read as its labelled lines ("Depot total", "External Vehicles"). */
 const LINES_UNDER_TOTAL = 12;
 
@@ -427,23 +457,7 @@ export function periodPrintedLines(matrix: unknown[][], reading: PeriodSummaryRe
   if (!label || !quantity || label.row !== quantity.row) return [];
   const text = (cell: unknown) => String(cell ?? '').replace(/\s+/g, ' ').trim();
 
-  // The closing total: the walk's own rule (walkPeriodRows).
-  let counted = 0;
-  let totalAt = -1;
-  for (let r = label.row + 1; r < matrix.length; r += 1) {
-    const row = matrix[r] ?? [];
-    const amount = asNumber(row[quantity.col]);
-    const name = text(row[label.col]);
-    if (!name || /^(grand\s+)?(sub-?)?totals?\b/i.test(name)) {
-      if (amount === null) continue;
-      if (counted > 0) {
-        totalAt = r;
-        break;
-      }
-      continue;
-    }
-    if (amount !== null) counted += 1;
-  }
+  const totalAt = closingTotalRow(matrix, label, quantity);
   if (totalAt < 0) return [];
 
   const reported: EsgReportedFact[] = [];
@@ -563,7 +577,7 @@ export async function extractEsgPeriodSummary(
     vehicles: vehicles.rows.length,
   });
 
-  return {
+  const extraction: DocumentExtraction = {
     documentId: 'esg_period_summary',
     documentName: `${input.sheetName ?? input.filename} period summary`,
     sourceFile: input.filename,
@@ -597,4 +611,15 @@ export async function extractEsgPeriodSummary(
     unexpectedFields: [],
     exceptions,
   };
+  const span = periodTableSpan(matrix, reading);
+  if (span) READ_SPANS.set(extraction, span);
+  return extraction;
+}
+
+/** The rows each period read covered: no other reader takes their cells as facts. */
+const READ_SPANS = new WeakMap<DocumentExtraction, { top: number; bottom: number }>();
+
+/** The rows (0-based, inclusive) a period read covered, when it read any. */
+export function periodReadSpan(extraction: DocumentExtraction | null): { top: number; bottom: number } | null {
+  return extraction ? READ_SPANS.get(extraction) ?? null : null;
 }
