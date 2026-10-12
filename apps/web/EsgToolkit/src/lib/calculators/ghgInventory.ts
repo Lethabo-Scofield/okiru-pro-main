@@ -43,6 +43,8 @@
  */
 import { readEsgCell, type EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { getEsgSectorConfig } from "../esgConfig";
+import { ESG_BASE_VALUES } from "../esgConfig/base";
+import type { EsgEmissionFactors } from "../esgConfig/types";
 
 /**
  * How a line is treated under the Carbon Tax Act's Schedule 2.
@@ -102,7 +104,74 @@ export type GhgInventoryResult = {
   dataMonths: number | null;
   /** True when any activity at all was found. */
   hasData: boolean;
+  /** Where each factor comes from, and whether an expert has signed it off. */
+  factorBasis: EsgFactorBasis;
 };
+
+export type EsgFactorSource = {
+  factor: keyof EsgEmissionFactors;
+  value: number;
+  unit: string;
+  /** The citation, as the factor's source states it. */
+  source: string;
+  /** An ESG expert has signed this factor off for the reporting year. */
+  signedOff: boolean;
+};
+
+export type EsgFactorBasis = {
+  sources: EsgFactorSource[];
+  /** Every factor the Scope 1 + 2 figure uses is signed off for the year. */
+  signedOff: boolean;
+  /** One plain sentence to show beside the Scope 1 + 2 figure. */
+  statement: string;
+};
+
+/**
+ * The citations the base factors carry (the reference workbook's
+ * `Assumptions!B30:B35`). NONE is signed off: the grid factor in particular is
+ * the workbook's "Eskom NERSA 2024" 0.82 kgCO₂e/kWh, which the expert ruling
+ * says must come from DFFE's published factor, and which a client's own GHG
+ * system may replace with another (one such system used ≈1.12, stating a
+ * total about a quarter higher on identical activity). Until an expert signs a
+ * factor off per reporting year, the figure says so beside itself — it is not
+ * changed here.
+ */
+const BASE_FACTOR_SOURCES: Record<keyof EsgEmissionFactors, string> = {
+  dieselScope1: "DEFRA 2024, HGV diesel",
+  petrolBusinessCars: "DEFRA 2024, passenger-car petrol",
+  lpg: "DEFRA 2024, LPG",
+  electricityScope2: "\"Eskom NERSA 2024\", as the reference workbook cites it — not yet reconciled with DFFE's published grid factor for the reporting year",
+  solarOnsite: "IEA / GHG Protocol solar PV lifecycle",
+  waterTco2ePerKl: "GHG Protocol, water supply and treatment",
+  wasteToLandfillTco2ePerTonne: "DEFRA 2024, landfilled commercial waste",
+};
+
+/** Factors signed off by an ESG expert, per reporting year. None yet. */
+const SIGNED_OFF_FACTORS: ReadonlySet<keyof EsgEmissionFactors> = new Set();
+
+function factorBasisOf(ef: EsgEmissionFactors, used: Array<{ factor: keyof EsgEmissionFactors; unit: string }>): EsgFactorBasis {
+  const sources: EsgFactorSource[] = used.map(({ factor, unit }) => ({
+    factor,
+    value: ef[factor],
+    unit,
+    source: ef[factor] === ESG_BASE_VALUES.emissionFactors[factor]
+      ? BASE_FACTOR_SOURCES[factor]
+      : "this sector's configuration — its source is not recorded",
+    signedOff: SIGNED_OFF_FACTORS.has(factor),
+  }));
+  const signedOff = sources.every((s) => s.signedOff);
+  const grid = sources.find((s) => s.factor === "electricityScope2");
+  const diesel = sources.find((s) => s.factor === "dieselScope1");
+  const named = [grid, diesel]
+    .filter((s): s is EsgFactorSource => Boolean(s))
+    .map((s) => `${s.factor === "electricityScope2" ? "grid electricity" : "diesel"} ${s.value} ${s.unit} (${s.source})`);
+  const statement =
+    `Factor basis: ${named.join("; ")}.` +
+    (signedOff
+      ? " Signed off by an ESG expert for this reporting year."
+      : " Not yet signed off by an ESG expert for this reporting year: a system using other factors will state a different total on the same activity.");
+  return { sources, signedOff, statement };
+}
 
 /**
  * Sum a monthly input block. The grids write `"<prefix>_<col><row>"` per cell
@@ -224,5 +293,12 @@ export function computeGhgInventory(workbook: EsgWorkbookData): GhgInventoryResu
     total: scope1 + scope2 + scope3,
     dataMonths: readEsgCell(workbook, "assumptions", "B111"),
     hasData: lines.some((l) => l.activity > 0),
+    factorBasis: factorBasisOf(ef, [
+      { factor: "dieselScope1", unit: "kgCO₂e/L" },
+      { factor: "petrolBusinessCars", unit: "kgCO₂e/L" },
+      { factor: "lpg", unit: "kgCO₂e/kg" },
+      { factor: "electricityScope2", unit: "kgCO₂e/kWh" },
+      ...(solar > 0 ? [{ factor: "solarOnsite" as const, unit: "kgCO₂e/kWh" }] : []),
+    ]),
   };
 }

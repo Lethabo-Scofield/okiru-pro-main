@@ -58,6 +58,9 @@ export default function EsgEmissions() {
                   a year-to-date actual, not a full-year figure.
                 </div>
               ) : null}
+              <div className="text-[11px] text-[var(--esg-text3)] mt-1" data-testid="esg-emissions-factor-basis">
+                {ghg.factorBasis.statement}
+              </div>
             </div>
             <div>
               <div className="text-[10px] uppercase text-[var(--esg-text3)]">Scope 1</div>
