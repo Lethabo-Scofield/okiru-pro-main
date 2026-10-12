@@ -377,13 +377,16 @@ export async function extractEsgSheetTable(
   // delivery line, map onto a transaction register's date column: they are
   // no transactions. The register keeps its records; the label lines are the
   // labelled-cell reader's.
+  // A sheet of nothing but label lines (an unused log tab: its "Totals" line)
+  // is still this register, read and holding no record: it is not handed to
+  // a paid flat read that could only guess at what it holds.
   const labelLines = table.rows.filter((row) => isLabelLine(row, identity)).length;
   if (labelLines > 0) {
     table.rows = table.rows.filter((row) => !isLabelLine(row, identity));
     table.exceptions.push(`${labelLines} line(s) whose ${identity} is a caption, not a date, were left to the sheet's labelled cells.`);
     logger.info('ESG register label lines left to the labelled-cell reader', { sheet: sheetName, documentId, labelLines });
   }
-  if (table.rows.length === 0) return null;
+  if (table.rows.length === 0 && labelLines === 0) return null;
   for (const field of checked?.perLitreFields ?? []) {
     for (const row of table.rows) {
       const kmPerLitre = numeric(row[field]);

@@ -171,6 +171,16 @@ describe('extractEsgSheetTable', () => {
     expect(result!.exceptions.some((e) => /6 line\(s\) whose report_date is a caption/.test(e))).toBe(true);
   });
 
+  it('reads a sheet of nothing but label lines as the register with no record, not as unread', async () => {
+    const model = mappingModel({ Date: 'report_date', Route: 'route_name', Km: 'distance_km' });
+    const result = await extractEsgSheetTable(model, {
+      filename: 'Routes.xlsx › Unused', sheetName: 'Unused', template: 'Debrief summary',
+      rows: [{ Date: 'Totals', Km: 0 }, { Date: 'Checked by', Route: 'R-001' }],
+    });
+    expect(result?.documentId).toBe('fleet__telematics_driver_debrief_report');
+    expect(result!.values[0].value).toEqual([]);
+  });
+
   it('takes only a caption in a date column for a label line', () => {
     expect(isLabelLine({ transaction_date: 'Opening stock', fuel_litres: 2000 }, 'transaction_date')).toBe(true);
     // A date, written any way, or a template's empty day, is a record.
