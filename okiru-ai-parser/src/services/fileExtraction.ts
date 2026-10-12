@@ -145,6 +145,55 @@ async function pdfPageItems(buffer: Buffer): Promise<PdfTextItem[][]> {
   return pages;
 }
 
+/** How many leading pages are looked at for pictures: letterheads and logos sit on the first pages. */
+const PICTURE_SCAN_PAGES = 3;
+/** Smaller than this (in image pixels, either side) is a rule, a bullet or a spacer, not a picture with words. */
+const MIN_PICTURE_SIDE = 24;
+
+/**
+ * The pages (1-based, among the first {@link PICTURE_SCAN_PAGES}) of a digital
+ * PDF that paint a raster picture: a letterhead, a logo, a stamp. Words inside
+ * a picture are not in the text layer, so a contractor's name, VAT number or
+ * registration number printed in its letterhead image never reached the
+ * reader. Knowing which pages carry one lets the agent look at just those
+ * page images. Empty when there are none or the PDF cannot be read; never
+ * throws.
+ */
+export async function pdfPicturePages(buffer: Buffer, maxPages = PICTURE_SCAN_PAGES): Promise<number[]> {
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const loadingTask = pdfjs.getDocument({ data: new Uint8Array(buffer) });
+    const pdf = await loadingTask.promise;
+    const paints = new Set<number>([
+      pdfjs.OPS.paintImageXObject,
+      pdfjs.OPS.paintInlineImageXObject,
+      pdfjs.OPS.paintImageXObjectRepeat,
+      pdfjs.OPS.paintInlineImageXObjectGroup,
+    ]);
+    const pages: number[] = [];
+    for (let pageNumber = 1; pageNumber <= Math.min(pdf.numPages, maxPages); pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const ops = await page.getOperatorList();
+      const hasPicture = ops.fnArray.some((fn: number, i: number) => {
+        if (!paints.has(fn)) return false;
+        const args = ops.argsArray[i] as unknown[] | undefined;
+        // paintImageXObject: [id, width, height]; an inline image: [{ width, height, ... }].
+        const inline = args?.[0] && typeof args[0] === 'object' ? (args[0] as { width?: number; height?: number }) : null;
+        const width = Number(inline ? inline.width : args?.[1]);
+        const height = Number(inline ? inline.height : args?.[2]);
+        if (!Number.isFinite(width) || !Number.isFinite(height)) return true;
+        return width >= MIN_PICTURE_SIDE && height >= MIN_PICTURE_SIDE;
+      });
+      if (hasPicture) pages.push(pageNumber);
+    }
+    await loadingTask.destroy().catch(() => undefined);
+    return pages;
+  } catch (err) {
+    logger.warn('Could not look for pictures in the PDF; the text is unaffected', { reason: (err as Error).message });
+    return [];
+  }
+}
+
 /**
  * Both readings of a PDF from ONE pdfjs pass: the plain text and the markdown,
  * built from each page's reading-order LINES (pdfjs items grouped by vertical
@@ -491,6 +540,8 @@ export async function rawExtractionInputFromUpload(
   // Which scanned-document reader produced the text, when one did. Travels in
   // metadata so later stages (the agent-loop gate) know the text is OCR.
   let scannedBy: 'document_intelligence' | 'vision' | null = null;
+  // A digital PDF's pages that carry a picture (pdfPicturePages).
+  let picturePages: number[] = [];
 
   logger.info('Extracting uploaded file', {
     filename: file.originalname,
@@ -510,6 +561,10 @@ export async function rawExtractionInputFromUpload(
       logger.warn('Could not read the PDF\'s captioned columns; the text is unaffected', {
         filename: file.originalname, reason: (err as Error).message,
       });
+    }
+    // Only a PDF with a text layer: a scan's every page is an image anyway.
+    if (rawText.trim().length >= MIN_TEXT_LAYER_CHARS) {
+      picturePages = await withTimeout(pdfPicturePages(file.buffer), EXTRACTION_TIMEOUT_MS).catch(() => []);
     }
   } else if (
     file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -670,6 +725,7 @@ export async function rawExtractionInputFromUpload(
       mime_type: file.mimetype,
       ...(scannedBy ? { scanned: true, text_source: scannedBy } : {}),
       ...(pdfColumns.length > 0 && !scannedBy ? { pdf_columns: pdfColumns } : {}),
+      ...(picturePages.length > 0 && !scannedBy ? { picture_pages: picturePages } : {}),
     },
   };
 }
