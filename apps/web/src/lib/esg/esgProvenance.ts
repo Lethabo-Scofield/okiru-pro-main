@@ -68,6 +68,113 @@ export function provenanceCells(
   return out;
 }
 
+/**
+ * Provenance for EVERY cell a document run wrote, not only the first cell of
+ * each reading.
+ *
+ * `placed` holds one entry per reading, against the first cell it filled —
+ * right for counting readings, but a monthly grid or a dashboard is ONE
+ * reading behind many cells, so its other cells were written with no record
+ * and showed no source. `cellSources` (from the mapper: `section!cell` → the
+ * files that proposed that cell's value) fills in the rest. A cell `placed`
+ * already covers keeps that record; the patches say what value was written.
+ */
+export function provenanceForRun(
+  placed: Parameters<typeof provenanceCells>[0],
+  patches: Record<string, { cells: Record<string, string | number | boolean | null> }>,
+  cellSources: Record<string, string[]> | undefined,
+  now: Date = new Date(),
+): Record<string, string> {
+  const out = provenanceCells(placed, now);
+  if (!cellSources) return out;
+  // The document id a file was read as, from the readings that carry one.
+  const docOfFile = new Map<string, string>();
+  for (const p of placed) if (p.sourceFile && p.documentId && !docOfFile.has(p.sourceFile)) docOfFile.set(p.sourceFile, p.documentId);
+  const day = now.toISOString().slice(0, 10);
+  for (const [key, sources] of Object.entries(cellSources)) {
+    if (out[key]) continue;
+    const bang = key.indexOf("!");
+    if (bang <= 0) continue;
+    const sectionId = key.slice(0, bang);
+    const cellRef = key.slice(bang + 1);
+    if (sectionId === ESG_PROVENANCE_SECTION) continue;
+    const value = patches[sectionId]?.cells?.[cellRef];
+    if (value === undefined) continue; // not written (a derived cell, or held back by a section's focus)
+    const file = (sources ?? []).find(Boolean) ?? "";
+    if (!file) continue;
+    const record: StoredRecord = { f: file.slice(0, MAX_FILE_NAME), d: docOfFile.get(file) ?? "", t: day, v: value ?? null };
+    out[key] = JSON.stringify(record);
+  }
+  return out;
+}
+
+/**
+ * A cell the documents disagree about. Nothing is written to the cell itself
+ * — it is left blank rather than guessed — so the disagreement is recorded
+ * beside it, under the same `section!cell` key a placement would use. A later
+ * document that settles the cell replaces this record with its own.
+ */
+export interface EsgConflictRecord {
+  sectionId: string;
+  cellRef: string;
+  /** ISO date the disagreement was found. */
+  foundAt: string;
+  candidates: Array<{ value: string | number | boolean | null; sources: string[] }>;
+}
+
+interface StoredConflict {
+  k: "conflict";
+  t: string;
+  c: Array<{ v: string | number | boolean | null; f: string[] }>;
+}
+
+/** The provenance cells recording cells the documents disagree about. Only real cells: a field-level dispute has nowhere to sit. */
+export function conflictCells(
+  conflicts: ReadonlyArray<{ sectionId: string; cellRef: string; candidates: ReadonlyArray<{ value: unknown; sources: string[] }> }>,
+  now: Date = new Date(),
+): Record<string, string> {
+  const day = now.toISOString().slice(0, 10);
+  const out: Record<string, string> = {};
+  for (const conflict of conflicts) {
+    if (!conflict.sectionId || !conflict.cellRef || conflict.sectionId === ESG_PROVENANCE_SECTION) continue;
+    const record: StoredConflict = {
+      k: "conflict",
+      t: day,
+      c: conflict.candidates.slice(0, 6).map((candidate) => ({
+        v: candidate.value == null || typeof candidate.value === "object" ? null : (candidate.value as string | number | boolean),
+        f: candidate.sources.slice(0, 4).map((s) => s.slice(0, MAX_FILE_NAME)),
+      })),
+    };
+    out[`${conflict.sectionId}!${conflict.cellRef}`] = JSON.stringify(record);
+  }
+  return out;
+}
+
+/** Every cell the documents disagreed about, as recorded beside the workbook. */
+export function readConflicts(
+  workbook: { sections?: Record<string, { cells?: Record<string, unknown> } | undefined> } | null | undefined,
+): EsgConflictRecord[] {
+  const cells = workbook?.sections?.[ESG_PROVENANCE_SECTION]?.cells ?? {};
+  const out: EsgConflictRecord[] = [];
+  for (const [key, raw] of Object.entries(cells)) {
+    const bang = key.indexOf("!");
+    if (bang <= 0 || typeof raw !== "string") continue;
+    try {
+      const r = JSON.parse(raw) as Partial<StoredConflict>;
+      if (r?.k !== "conflict" || !Array.isArray(r.c)) continue;
+      out.push({
+        sectionId: key.slice(0, bang),
+        cellRef: key.slice(bang + 1),
+        foundAt: String(r.t ?? ""),
+        candidates: r.c.map((c) => ({ value: (c?.v ?? null) as EsgConflictRecord["candidates"][number]["value"], sources: Array.isArray(c?.f) ? c.f.map(String) : [] })),
+      });
+    } catch {
+      // not a record
+    }
+  }
+  return out;
+}
+
 /** Every provenance record the workbook holds. */
 export function readProvenance(
   workbook: { sections?: Record<string, { cells?: Record<string, unknown> } | undefined> } | null | undefined,
@@ -78,7 +185,9 @@ export function readProvenance(
     const bang = key.indexOf("!");
     if (bang <= 0 || typeof raw !== "string") continue;
     try {
-      const r = JSON.parse(raw) as Partial<StoredRecord>;
+      const r = JSON.parse(raw) as Partial<StoredRecord> & { k?: string };
+      // A disagreement is not a placement: no document stands behind the cell.
+      if (r?.k === "conflict") continue;
       out.push({
         sectionId: key.slice(0, bang),
         cellRef: key.slice(bang + 1),

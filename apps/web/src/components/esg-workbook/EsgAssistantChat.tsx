@@ -84,7 +84,8 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink-3)] px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text,#f2f2f7)] shadow-lg shadow-black/40 hover:bg-[color:var(--ink-3)]"
+        className="fixed bottom-[4.75rem] right-5 z-40 inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink-3)] px-4 py-2.5 text-[13px] font-medium text-[var(--esg-text,#f2f2f7)] shadow-lg shadow-black/40 hover:bg-white/[0.06]"
+        aria-label="Ask about this workbook"
         data-testid="esg-assistant-open"
       >
         <Sparkles className="h-4 w-4 text-[var(--esg-acc-e,#1de9a0)]" />
@@ -95,7 +96,7 @@ export function EsgAssistantChat({ companyId, activeSectionId }: Props) {
 
   return (
     <div
-      className="fixed bottom-5 right-5 z-40 flex h-[520px] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink-3)] shadow-2xl shadow-black/60"
+      className="fixed bottom-[4.75rem] right-5 z-40 flex h-[min(520px,calc(100vh-7rem))] w-[380px] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-[var(--esg-glass-border,rgba(255,255,255,0.07))] bg-[color:var(--ink-3)] shadow-2xl shadow-black/60"
       data-testid="esg-assistant-panel"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.06] px-4 py-3">

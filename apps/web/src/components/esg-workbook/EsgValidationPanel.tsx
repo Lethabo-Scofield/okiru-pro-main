@@ -1,19 +1,22 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, Circle, XCircle } from "lucide-react";
 import { validateEsgWorkbook } from "@/lib/esgValidation";
 import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { useEsgStore } from "../../../EsgToolkit/src/lib/esgStore";
 
 type Props = {
   workbook?: EsgWorkbookData | null;
+  /** The open section (kept for callers; the panel no longer prints its id). */
   activeSectionId?: string;
   onSelectSection?: (sectionId: string) => void;
+  /** Open on arrival — off by default: the count in the summary says when to look. */
+  defaultOpen?: boolean;
 };
 
 export function EsgValidationPanel({
   workbook = null,
-  activeSectionId,
   onSelectSection,
+  defaultOpen = false,
 }: Props) {
   const touched = useEsgStore((s) => s.touched);
   const submitAttempted = useEsgStore((s) => s.submitAttempted);
@@ -35,23 +38,34 @@ export function EsgValidationPanel({
   const hasWarnings = warnings > 0 || blockers > 0;
   const allPass = issues.length > 0 && blockers === 0 && warnings === 0;
 
+  // Folded behind its count: thirty rules, most of them waiting for input
+  // nobody has typed yet, stacked under the section list was a wall on every
+  // visit. The count says whether there is anything to open it for.
   return (
     <aside
-      className={`p-4 text-[12px] rounded-xl border ${
-        allPass
-          ? "border-emerald-500/20 bg-emerald-500/[0.06]"
-          : hasWarnings
-            ? "border-amber-500/20 bg-amber-500/[0.06]"
-            : "border-[var(--esg-glass-border)] bg-white/[0.02]"
+      className={`text-[12px] rounded-xl border ${
+        blockers > 0
+          ? "border-amber-500/20 bg-amber-500/[0.06]"
+          : "border-[var(--esg-glass-border)] bg-white/[0.02]"
       }`}
       data-testid="esg-validation-panel"
+      data-all-pass={allPass ? "" : undefined}
+      data-has-warnings={hasWarnings ? "" : undefined}
     >
-      <div className="flex items-center gap-2 text-[var(--esg-text)] font-semibold text-[11px] uppercase tracking-wider mb-2">
-        Validation
+      <details className="group" open={defaultOpen}>
+      <summary
+        className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[var(--esg-text)] font-semibold text-[11px] uppercase tracking-wider [&::-webkit-details-marker]:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 rounded-xl"
+        data-testid="esg-validation-summary"
+      >
+        <ChevronRight className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden />
+        Checks
         <span className="ml-auto text-[10px] font-normal normal-case text-[var(--esg-text3)]">
-          {passing} of {issues.length} passing · {warnings} warnings · {blockers} blockers
+          {passing} of {issues.length} passing
+          {warnings > 0 ? ` · ${warnings} warning${warnings === 1 ? "" : "s"}` : ""}
+          {blockers > 0 ? ` · ${blockers} blocker${blockers === 1 ? "" : "s"}` : ""}
         </span>
-      </div>
+      </summary>
+      <div className="px-4 pb-4">
       <input
         type="search"
         placeholder="Filter rules…"
@@ -78,9 +92,8 @@ export function EsgValidationPanel({
           </li>
         ))}
       </ul>
-      {activeSectionId ? (
-        <p className="text-[10px] text-[var(--esg-text3)] mt-3">Active: {activeSectionId}</p>
-      ) : null}
+      </div>
+      </details>
     </aside>
   );
 }

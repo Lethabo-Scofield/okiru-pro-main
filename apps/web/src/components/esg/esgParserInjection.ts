@@ -67,7 +67,7 @@ import {
 } from "@/lib/esg/esgParserToWorkbook";
 import type { EsgRejectionReason } from "@/lib/esg/esgWorkbookInjection";
 import { esgMonthlyCellRef } from "@/lib/esg/esgParserFieldBridge";
-import { ESG_PROVENANCE_SECTION, provenanceCells } from "@/lib/esg/esgProvenance";
+import { ESG_PROVENANCE_SECTION, conflictCells, provenanceForRun } from "@/lib/esg/esgProvenance";
 import {
   esgPlacementAxes,
   esgWorkbookAxisState,
@@ -337,6 +337,11 @@ export interface EsgInjectionResult {
    * so this — not the unplaced list — is the count of what was not written.
    */
   outsideFocus?: Array<{ sectionId: string; figures: number }>;
+  /**
+   * `section!cell` → the files behind each written cell, so every cell — not
+   * only each reading's first — keeps its source in the workbook (E4).
+   */
+  cellSources?: Record<string, string[]>;
 }
 
 /**
@@ -552,6 +557,7 @@ export function applyEsgParserResult(
     })),
     valuesRead: readings.length,
     figuresPlaced: esgFigureCount(mapped.patches),
+    cellSources: mapped.cellSources,
   };
 }
 
@@ -604,6 +610,9 @@ export function restrictEsgInjection(
     .filter(([sectionId]) => !allowed.has(sectionId))
     .map(([sectionId, patch]) => ({ sectionId, figures: esgFigureCount({ [sectionId]: patch }) }))
     .filter((held) => held.figures > 0);
+  const cellSources = result.cellSources
+    ? Object.fromEntries(Object.entries(result.cellSources).filter(([key]) => allowed.has(key.slice(0, key.indexOf("!")))))
+    : undefined;
   return {
     ...result,
     patches,
@@ -611,6 +620,7 @@ export function restrictEsgInjection(
     unplaced: [...unplaced, ...movedOut],
     figuresPlaced: esgFigureCount(patches),
     outsideFocus,
+    ...(cellSources ? { cellSources } : {}),
   };
 }
 
@@ -718,9 +728,20 @@ export async function persistEsgSectionPatches(
   patches: EsgSectionPatches,
   /** The placements behind these patches: recorded so each cell keeps its source document (E4). */
   placed: ReadonlyArray<EsgPlacedValue> = [],
+  /**
+   * The rest of the run's record: the files behind every other written cell,
+   * and the cells the documents disagreed about — kept beside the workbook so
+   * the grid can mark them.
+   */
+  run: Pick<EsgInjectionResult, "cellSources" | "conflicts"> | null = null,
 ): Promise<boolean> {
   if (!companyId || esgPatchCellCount(patches) === 0) return false;
-  const provenance = provenanceCells(placed);
+  // A disagreement is recorded first, so a cell this run did write (and so
+  // settled) keeps its placement record instead.
+  const provenance = {
+    ...conflictCells((run?.conflicts ?? []).filter((c) => patches[c.sectionId]?.cells?.[c.cellRef] === undefined)),
+    ...provenanceForRun(placed, patches, run?.cellSources),
+  };
   const sections: Record<string, { cells: Record<string, EsgCellValue> }> =
     Object.keys(provenance).length > 0
       ? { ...patches, [ESG_PROVENANCE_SECTION]: { cells: provenance } }

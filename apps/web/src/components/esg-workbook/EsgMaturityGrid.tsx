@@ -1,4 +1,5 @@
 import { ESG_SELECT, ESG_TABLE_CELL, ESG_TABLE_HEAD, ESG_TABLE_INPUT } from "./esgEditorChrome";
+import { EsgCellMark } from "./EsgCellSourceMark";
 
 /** Points a Yes / Partial / No answer is worth. `No` and blank are always 0. */
 export type MaturityYnPoints = { yes: number; partial: number };
@@ -126,7 +127,8 @@ export function EsgMaturityGrid({ rows, values, onChange, onTouch, readOnly }: P
                     </p>
                   ) : null}
                 </td>
-                <td className={ESG_TABLE_CELL}>
+                <td className={`${ESG_TABLE_CELL} relative`}>
+                  <EsgCellMark cellRef={row.cell} value={raw} className="absolute right-0.5 top-0.5" />
                   {row.kind === "yn" ? (
                     <select
                       disabled={readOnly}
