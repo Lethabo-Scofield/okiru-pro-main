@@ -19,9 +19,15 @@ export interface EditableValueProps {
   testId: string;
   /** Read-only viewers see the value without the control. */
   disabled?: boolean;
+  /**
+   * How the value reads when not being edited ("14 820", "31 Jul 2025"). The
+   * editor still opens on `value`, so a correction starts from what was stored.
+   */
+  display?: string | null;
 }
 
-export function EditableValue({ value, label, onSave, testId, disabled = false }: EditableValueProps) {
+export function EditableValue({ value, label, onSave, testId, disabled = false, display }: EditableValueProps) {
+  const shown = display ?? value;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? "");
   const [saving, setSaving] = useState(false);
@@ -126,7 +132,7 @@ export function EditableValue({ value, label, onSave, testId, disabled = false }
     );
   }
 
-  if (disabled) return <span className="break-words">{value ?? "—"}</span>;
+  if (disabled) return <span className="break-words">{shown ?? "—"}</span>;
 
   return value == null ? (
     <button
@@ -145,7 +151,7 @@ export function EditableValue({ value, label, onSave, testId, disabled = false }
       className="group inline-flex max-w-full items-start gap-1.5 rounded-md text-left hover:bg-white/[0.05]"
       data-testid={`${testId}-edit`}
     >
-      <span className="break-words">{value}</span>
+      <span className="break-words">{shown}</span>
       <Pencil className="mt-0.5 h-3 w-3 shrink-0 text-[color:var(--muted)] opacity-60 group-hover:opacity-100" aria-hidden />
       <span className="sr-only">Edit {label}</span>
     </button>

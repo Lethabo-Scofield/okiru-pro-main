@@ -13,6 +13,7 @@ import type { EsgWorkbookData } from "@/lib/esgWorkbookStorage";
 import { deriveEsgSummaryCells } from "@/lib/esg/esgDeriveSummary";
 import { readEsgCell } from "@/lib/esgWorkbookStorage";
 import { sourcesFor, type EsgSourceDocument } from "@/lib/esg/esgProvenance";
+import { formatEsgNumber } from "@/lib/esg/esgFormat";
 import { computeEsgDashboard } from "./dashboard";
 import { computeGhgInventory } from "./ghgInventory";
 import { computeEsgIntensity } from "./esgIntensity";
@@ -39,7 +40,8 @@ const SCOPE2: Match[] = ["s2_", "solar_"].map((prefix) => ({ section: "e-data", 
 const WATER: Match[] = [{ section: "e-data", prefix: "water_" }];
 const INJURIES: Match[] = [{ section: "s-data", cells: ["C27", "D27", "E27", "F27", "C29", "D29", "E29", "F29"] }];
 
-const za = (n: number, digits = 1) => n.toLocaleString("en-ZA", { maximumFractionDigits: digits });
+// The one ESG number rule ("1 630", "8.6") — "8,6" beside a grid's "1,630" read two ways.
+const za = (n: number, digits = 1) => formatEsgNumber(n, digits);
 
 export function computeEsgCoreValues(rawWorkbook: EsgWorkbookData): EsgCoreValue[] {
   const workbook = deriveEsgSummaryCells(rawWorkbook);

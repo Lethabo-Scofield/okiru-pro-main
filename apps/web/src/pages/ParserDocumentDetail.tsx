@@ -33,6 +33,7 @@ import { EditableValue } from "@/components/review/EditableValue";
 import type { PreviewFocus } from "@/components/review/DocumentPreview";
 import { AiValuesSection, HowWeRead, LayerBadge, READER_WORDS, confidenceWord } from "@/components/review/AiValuesSection";
 import { fieldLabel, formatParserValue, sheetOfSource, type ParserDocumentSummary, type ParserRunDetail, type ParserStatus } from "@/lib/parserDocuments";
+import { esgFieldLabel, formatEsgScalar, isEsgParserOutput } from "@/lib/esg/esgFormat";
 
 /** One status word per document — the same five words the upload flow uses. */
 const STATUS_WORD: Record<ParserStatus, { label: string; tone: string; icon: ReactNode }> = {
@@ -152,6 +153,12 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
   // a run stored before the library kept it.
   const aiValues = Array.isArray(run?.aiValues) ? run!.aiValues : [];
   const audit = (run?.parserOutput?.audit_trail ?? {}) as Record<string, any>;
+  // An ESG document is named and written the way every ESG screen writes it —
+  // "Electricity kWh", "14 820", "31 Jul 2025" — not "Electricity Kwh", "14820".
+  const esgRun = isEsgParserOutput(run?.parserOutput);
+  const labelOf = (key: string) => (esgRun ? esgFieldLabel(key) : fieldLabel(key));
+  const displayOf = (value: unknown, key: string) =>
+    esgRun ? formatEsgScalar(value, { field: key }) ?? formatParserValue(value) : formatParserValue(value);
   const missingKeys = useMemo(() => new Set([
     ...(run?.missingFields ?? []),
     ...Object.entries(fields).filter(([, field]) => field?.raw_value == null && field?.normalized_value == null).map(([key]) => key),
@@ -190,7 +197,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
     if (!res.ok) throw new Error(res.status === 403 ? "You can view this company's documents but not change them." : body?.message ?? "Could not save that value");
     setRun((current) => (current ? { ...current, reviewHistory: body.reviewHistory ?? current.reviewHistory } : current));
     const aiField = aiValues.find((value) => value.key === key)?.field;
-    setNotice(`Saved ${fieldLabel(aiField ?? key)}.`);
+    setNotice(`Saved ${labelOf(aiField ?? key)}.`);
   };
 
   const candidates: ClassificationCandidate[] = Array.isArray(audit.classification_candidates) ? audit.classification_candidates : [];
@@ -701,16 +708,16 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                     const page = field.source?.page;
                     return (
                       <div key={key} className="grid gap-1 border-b border-[color:var(--rule)] py-3.5 sm:grid-cols-[180px_1fr] sm:gap-3" data-testid={`field-row-${key}`}>
-                        <div className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</div>
+                        <div className="text-[12px] text-[color:var(--body)]">{labelOf(key)}</div>
                         <div className="min-w-0">
                           <div className="text-[13px] text-white">
                             {/* A list is checked against the document, not retyped as one line of text. */}
-                            <EditableValue value={shown} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} disabled={Array.isArray(current)} />
+                            <EditableValue value={shown} display={Array.isArray(current) ? undefined : displayOf(current, key)} label={labelOf(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} disabled={Array.isArray(current)} />
                           </div>
                           {fix && (
                             <p className="mt-1 text-[11px] text-[color:var(--body)]" data-testid={`field-${key}-corrected`}>
                               {fix.original != null
-                                ? `Corrected by your team. Originally read as “${formatParserValue(fix.original)}”`
+                                ? `Corrected by your team. Originally read as “${displayOf(fix.original, key)}”`
                                 : "Added by your team. It wasn't found in the document."}
                             </p>
                           )}
@@ -746,6 +753,8 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                     corrections={corrections}
                     onSave={saveField}
                     onShow={(value) => setFocus({ page: value.page, sheet: sheetOfSource(value.sourceFile), nonce: Date.now() })}
+                    labelOf={labelOf}
+                    displayOf={esgRun ? displayOf : undefined}
                   />
                 )}
                 {valueCount === 0 && <p className="py-4 text-[12px] text-[color:var(--body)]">Nothing was read from this document yet.</p>}
@@ -766,9 +775,9 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                   <div className="divide-y divide-[color:var(--rule)] border-y border-amber-400/20">
                     {missingKeyList.map((key) => (
                       <div key={key} className="flex items-center justify-between gap-4 py-3" data-testid={`missing-row-${key}`}>
-                        <span className="text-[12px] text-[color:var(--body)]">{fieldLabel(key)}</span>
+                        <span className="text-[12px] text-[color:var(--body)]">{labelOf(key)}</span>
                         <div className="min-w-0 max-w-[60%] text-[12.5px] text-white">
-                          <EditableValue value={null} label={fieldLabel(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
+                          <EditableValue value={null} label={labelOf(key)} onSave={(next) => saveField(key, next)} testId={`field-${key}`} />
                         </div>
                       </div>
                     ))}
@@ -812,7 +821,7 @@ export default function ParserDocumentDetail({ id }: { id: string }) {
                       <div className="divide-y divide-[color:var(--rule)] border-y border-[color:var(--rule)]">
                         {rejectedKeys.map((r, i) => (
                           <div key={`${r.key}-${i}`} className="flex items-start justify-between gap-4 py-2.5">
-                            <span className="text-[12px] text-[color:var(--body)]">{fieldLabel(String(r.key ?? "unknown"))}</span>
+                            <span className="text-[12px] text-[color:var(--body)]">{labelOf(String(r.key ?? "unknown"))}</span>
                             <span className="text-right text-[11px] text-[color:var(--body)]">{plainReason(r.reason)}</span>
                           </div>
                         ))}

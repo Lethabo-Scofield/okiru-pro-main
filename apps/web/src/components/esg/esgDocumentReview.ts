@@ -12,9 +12,10 @@
  *  - placement is decided by `applyEsgParserResult`, so "placed", "unplaced"
  *    and "conflicts" come from the injection result, never re-derived here.
  */
+import { esgFieldLabel, formatEsgNumber, formatEsgScalar } from "@/lib/esg/esgFormat";
+import { esgConflictLabel } from "@/lib/esg/esgCellLabel";
 import {
   display,
-  humanize,
   listEntries,
   otherDetailsOf,
   whyNotRead,
@@ -49,9 +50,18 @@ export interface EsgReviewInputs {
   failedFiles?: string[];
 }
 
-/** A held figure, as a person reads it: "95 949,25 kWh". */
+/**
+ * A value as every ESG screen writes it: "14 820", "31 Jul 2025", "Yes" —
+ * never "14820" beside "14 820", nor a raw ISO date. Lists and records are
+ * described by the shared review rule.
+ */
+function esgDisplay(value: unknown, field?: string): string | null {
+  return formatEsgScalar(value, { field }) ?? display(value);
+}
+
+/** A held figure, as a person reads it: "95 949.25 kWh". */
 function figureText(choice: EsgPlacementChoice): string {
-  return `${new Intl.NumberFormat("en-ZA", { maximumFractionDigits: 2 }).format(choice.value)} ${choice.unit}`;
+  return `${formatEsgNumber(choice.value)} ${choice.unit}`;
 }
 
 /**
@@ -85,8 +95,8 @@ function unplacedValue(u: EsgUnplacedValue, axes: EsgReportingAxes | undefined):
   const ask = u.choice ? esgPlacementQuestion(u.choice, axes) : undefined;
   if (u.choice && ask) return { label: u.choice.measure, value: figureText(u.choice), source: u.reason, ask };
   return {
-    label: humanize(u.field),
-    value: display(u.value) ?? "—",
+    label: esgFieldLabel(u.field),
+    value: esgDisplay(u.value, u.field) ?? "—",
     source: u.reason,
     ...(u.rejection && ESG_NO_CELL_REJECTIONS.has(u.rejection) ? { evidence: true } : {}),
   };
@@ -118,9 +128,9 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
     for (const e of own) {
       const { sheet } = splitSource(e.sourceFile, uploadNames);
       for (const v of e.values ?? []) {
-        const shown = display(v.value);
+        const shown = esgDisplay(v.value, String(v.field ?? ""));
         if (!shown || values.length >= MAX_VALUES) continue;
-        const label = humanize(String(v.field ?? ""));
+        const label = esgFieldLabel(String(v.field ?? ""));
         const key = `${label}\u0000${shown}\u0000${sheet ?? ""}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -165,8 +175,8 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
       if (!mine) continue;
       const others = conflict.candidates.filter((c) => c !== mine);
       problems.push({
-        headline: `Your documents disagree on ${conflict.label}.`,
-        detail: `This one says ${String(mine.value)}${others.length ? `; ${others.map((o) => `${o.sources.join(", ")} says ${String(o.value)}`).join("; ")}` : ""}.`,
+        headline: `Your documents disagree on ${esgConflictLabel(conflict, injection.axes)}.`,
+        detail: `This one says ${esgDisplay(mine.value) ?? String(mine.value)}${others.length ? `; ${others.map((o) => `${o.sources.join(", ")} says ${esgDisplay(o.value) ?? String(o.value)}`).join("; ")}` : ""}.`,
         fix: "Left blank rather than guessed — enter the right figure in the workbook.",
         replace: false,
       });
@@ -213,7 +223,7 @@ export function buildEsgDocumentReview({ parserCase, injection, uploadNames, fai
       state = problems.length > 0 || toPlace > 0 ? "needs-look" : "read";
     }
 
-    const notFound = Array.from(new Set(own.flatMap((e) => (e.missingFields ?? []).map((f) => humanize(String(f)))))).slice(0, 12);
+    const notFound = Array.from(new Set(own.flatMap((e) => (e.missingFields ?? []).map((f) => esgFieldLabel(String(f)))))).slice(0, 12);
     const documentType = other.otherDocument ?? own.map((e) => e.documentName).find(Boolean) ?? "";
     const kept = unplaced.filter((v) => v.evidence).length;
     const summary =
