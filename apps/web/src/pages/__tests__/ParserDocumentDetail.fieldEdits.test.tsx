@@ -22,7 +22,13 @@ const DOCUMENT = {
 const RUN = {
   runId: "run-1", status: "review_required", documentType: "B-BBEE Certificate", missingFields: ["expiry_date"],
   lowConfidenceFields: [], warnings: [], errors: [], reviewReasons: [], requiresHumanReview: true,
-  parserOutput: { extracted_fields: { bee_level: { normalized_value: 4, raw_value: "Level 4", confidence: 0.6 } } },
+  parserOutput: {
+    extracted_fields: {
+      bee_level: { normalized_value: 4, raw_value: "Level 4", confidence: 0.6 },
+      procurement_spend: { normalized_value: "#REF!", raw_value: "#REF!", confidence: 0.4 },
+      months_submitted: { normalized_value: ["Mar 2025", "Apr 2025", "May 2025", "Jun 2025"], raw_value: null, confidence: 0.9 },
+    },
+  },
   reviewHistory: [] as unknown[],
 };
 
@@ -76,5 +82,22 @@ describe("ParserDocumentDetail — correcting and filling in values", () => {
     expect(screen.queryByTestId("missing-row-expiry_date")).not.toBeInTheDocument();
     expect(screen.getByTestId("field-expiry_date-corrected")).toHaveTextContent("Added by your team. It wasn't found in the document.");
     expect(patches).toEqual([{ fields: { expiry_date: "2026-12-31" } }]);
+  });
+
+  it("says a broken workbook cell is broken, and lets the figure be entered", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    expect(await screen.findByTestId("field-procurement_spend-broken")).toHaveTextContent("Broken cell in the workbook (#REF!)");
+    fireEvent.click(screen.getByTestId("field-procurement_spend-fix"));
+    fireEvent.change(screen.getByTestId("field-procurement_spend-input"), { target: { value: "125000" } });
+    fireEvent.click(screen.getByTestId("field-procurement_spend-save"));
+    await waitFor(() => expect(patches).toEqual([{ fields: { procurement_spend: "125000" } }]));
+  });
+
+  it("shows a list as its entries, not as JSON, and does not offer to retype it", async () => {
+    render(<ParserDocumentDetail id="doc-1" />);
+    const row = await screen.findByTestId("field-row-months_submitted");
+    expect(row).toHaveTextContent("4 entries: Mar 2025, Apr 2025, …");
+    expect(row.textContent).not.toContain("[");
+    expect(screen.queryByTestId("field-months_submitted-edit")).toBeNull();
   });
 });

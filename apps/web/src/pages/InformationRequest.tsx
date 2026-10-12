@@ -306,7 +306,7 @@ function SetupShell({
   onBack: () => void;
 }) {
   return (
-    <div className="mx-auto max-w-[980px] px-4 py-8 sm:py-12">
+    <div className="mx-auto max-w-[980px] px-4 py-8 sm:py-12 has-[[data-wide-review]]:max-w-[1760px]">
       <style>{`
         @keyframes setupReveal {
           from { opacity: 0; transform: translateY(-6px); }
@@ -923,7 +923,7 @@ export function CompanyPicker({
     }
 
     return (
-      <div className="max-w-5xl mx-auto py-5">
+      <div className="max-w-5xl mx-auto py-5 has-[[data-wide-review]]:max-w-[1760px]">
         <div className="rounded-[28px] bg-[color:var(--ink-2)] border border-white/[0.10] overflow-hidden shadow-[0_22px_70px_rgba(0,0,0,0.28)]">
           <div className="px-5 sm:px-7 pt-6 pb-5 border-b border-white/[0.07]">
             <h2
@@ -2878,7 +2878,7 @@ export default function InformationRequest() {
   return (
     <div className="text-white">
 
-      <main className={isCreateScorecardFlow && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10"}>
+      <main className={isCreateScorecardFlow && !picked ? "mx-auto px-4 sm:px-6 py-8" : "max-w-[1400px] mx-auto px-4 sm:px-6 py-10 has-[[data-wide-review]]:max-w-[1760px]"}>
         {/* The flow states its own step ("Add your documents"). A second,
             larger title above it competed with that and said something else
             again. It survives only on the retired /information-request path. */}

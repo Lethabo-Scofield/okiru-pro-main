@@ -21,6 +21,7 @@ import {
   type SectionPatchLike,
 } from "./documentVerdicts";
 import type { ParserCaseLike } from "./parserWorkbookMap";
+import { workbookCellError } from "./workbookCellError";
 
 export type ReviewState = "read" | "needs-look" | "not-read";
 
@@ -53,6 +54,13 @@ export interface ReviewValue {
    * a suggestion: nothing is placed until a person enters it.
    */
   suggested?: string;
+  /**
+   * The workbook cell held an error code ("#REF!"), not a figure. The value is
+   * the code; the review says "broken cell" and asks for the right figure.
+   */
+  cellError?: string;
+  /** A list value's entries, in words — what "12 entries" stands for. */
+  items?: string[];
 }
 
 /** One sheet of a workbook the parser read sheet by sheet. */
@@ -203,12 +211,42 @@ export function humanize(field: string): string {
     .replace(/^\w/, (c) => c.toUpperCase());
 }
 
+/** One entry of a list a document gave: "Fuel · 12 500", or the entry itself. */
+function describeEntry(entry: unknown): string | null {
+  if (entry == null) return null;
+  if (typeof entry !== "object" || Array.isArray(entry)) return display(entry);
+  const parts = Object.entries(entry as Record<string, unknown>)
+    .filter(([key, v]) => !key.startsWith("_") && v != null && typeof v !== "object" && String(v).trim() !== "")
+    .slice(0, 4)
+    .map(([, v]) => display(v))
+    .filter((v): v is string => Boolean(v));
+  return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * The entries of a list value, each in words — so "12 items" can be opened
+ * into the twelve months it stands for. Null for anything that is not a list.
+ */
+export function listEntries(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.map(describeEntry).filter((v): v is string => Boolean(v));
+}
+
 export function display(value: unknown): string | null {
   if (value == null) return null;
   if (typeof value === "number") return Number.isFinite(value) ? value.toLocaleString("en-ZA") : null;
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (Array.isArray(value)) return value.length ? `${value.length} item${value.length === 1 ? "" : "s"}` : null;
-  if (typeof value === "object") return null;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null;
+    // A count alone ("6 items") says nothing about what was counted. A short
+    // list is shown whole; a longer one says how many and begins it.
+    const entries = listEntries(value) ?? [];
+    const whole = entries.join(", ");
+    if (entries.length === value.length && entries.length <= 3 && whole.length <= 48) return whole;
+    const lead = entries.slice(0, 2).join(", ");
+    return `${value.length} ${value.length === 1 ? "entry" : "entries"}${lead ? `: ${lead}${value.length > 2 ? ", …" : ""}` : ""}`;
+  }
+  if (typeof value === "object") return describeEntry(value);
   const s = String(value).trim();
   return s ? s : null;
 }
@@ -231,30 +269,35 @@ const extractionsOf = (parserCase: ParserCaseLike): Extraction[] =>
 function valuesFor(parserCase: ParserCaseLike, filename: string): ReviewValue[] {
   const out: ReviewValue[] = [];
   const seen = new Set<string>();
-  const push = (label: string, value: string, source: string | undefined, edit?: ReviewEdit, entered = false) => {
+  const push = (label: string, raw: unknown, source: string | undefined, edit?: ReviewEdit, entered = false) => {
+    const value = display(raw);
+    if (!value) return;
     const key = `${label}\u0000${value}`;
     if (seen.has(key) || out.length >= MAX_VALUES) return;
     seen.add(key);
+    const items = listEntries(raw);
+    const cellError = workbookCellError(raw);
     out.push({
       label,
       value,
       ...(entered ? { source: "Entered by you", entered: true } : source ? { source } : {}),
-      ...(edit ? { edit } : {}),
+      // A list is not one figure to retype; it is checked against the document.
+      ...(edit && !items ? { edit } : {}),
+      ...(items && items.length > 0 ? { items } : {}),
+      ...(cellError ? { cellError } : {}),
     });
   };
 
   extractionsOf(parserCase).forEach((e, extraction) => {
     if (String(e.sourceFile ?? "") !== filename) return;
     (e.values ?? []).forEach((v, index) => {
-      const shown = display(v.value);
-      if (shown) push(humanize(String(v.field ?? "")), shown, sourceText(v), { kind: "entity", extraction, index }, v.entered_by_user === true);
+      push(humanize(String(v.field ?? "")), v.value, sourceText(v), { kind: "entity", extraction, index }, v.entered_by_user === true);
     });
   });
 
   const fields = (parserCase.fields_extracted?.[filename] ?? {}) as Record<string, Record<string, unknown>>;
   for (const [field, f] of Object.entries(fields)) {
-    const shown = display(f?.normalized_value ?? f?.raw_value);
-    if (shown) push(humanize(field), shown, sourceText(f ?? {}), { kind: "field", field }, f?.entered_by_user === true);
+    push(humanize(field), f?.normalized_value ?? f?.raw_value, sourceText(f ?? {}), { kind: "field", field }, f?.entered_by_user === true);
   }
 
   const suppliers = (parserCase.supplier_rows ?? []).filter((r) => r.source_file === filename);
@@ -594,7 +637,9 @@ function squash(s: string): string {
  * everywhere else — an ID or registration number must keep its leading zeros.
  */
 function coerceTyped(raw: string, parserValue: unknown): unknown {
-  if (typeof parserValue !== "number") return raw;
+  // A broken cell ("#REF!") stood where a figure belongs: the figure typed in
+  // its place is a number, as the cell's formula would have produced.
+  if (typeof parserValue !== "number" && !workbookCellError(parserValue)) return raw;
   const n = Number(raw.replace(/[R\s,%]/g, ""));
   return Number.isFinite(n) ? n : raw;
 }

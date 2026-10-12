@@ -82,11 +82,11 @@ function RowsPreview({ rows, rowCount, testId }: { rows: unknown[]; rowCount?: n
       <p className="text-[13px] text-white">{total.toLocaleString("en-ZA")} row{total === 1 ? "" : "s"}</p>
       {columns.length > 0 ? (
         <details className="mt-1">
-          <summary className="cursor-pointer text-[11px] text-[color:var(--muted)]">Show the first rows</summary>
+          <summary className="cursor-pointer text-[11px] text-[color:var(--body)]">Show the first rows</summary>
           <div className="mt-2 max-w-full overflow-x-auto">
             <table className="w-max border-collapse text-[11px]">
               <thead>
-                <tr>{columns.map((column) => <th key={column} className="px-2 py-1 text-left font-medium text-[color:var(--muted)]">{fieldLabel(column)}</th>)}</tr>
+                <tr>{columns.map((column) => <th key={column} className="px-2 py-1 text-left font-medium text-[color:var(--body)]">{fieldLabel(column)}</th>)}</tr>
               </thead>
               <tbody>
                 {objects.slice(0, 5).map((row, index) => (
@@ -98,7 +98,7 @@ function RowsPreview({ rows, rowCount, testId }: { rows: unknown[]; rowCount?: n
             </table>
           </div>
           {total > Math.min(5, objects.length) && (
-            <p className="mt-1 text-[10.5px] text-[color:var(--muted)]">
+            <p className="mt-1 text-[10.5px] text-[color:var(--body)]">
               {rowCount && rowCount > rows.length
                 ? `The library keeps the first ${rows.length.toLocaleString("en-ZA")} of ${rowCount.toLocaleString("en-ZA")} rows; the case holds them all.`
                 : `Showing 5 of ${total.toLocaleString("en-ZA")}.`}
@@ -153,7 +153,7 @@ export function AiValuesSection({ values, corrections, onSave, onShow, disabled 
                 </div>
               )}
               {fix && (
-                <p className="mt-1 text-[11px] text-violet-200/80" data-testid={`field-${value.key}-corrected`}>
+                <p className="mt-1 text-[11px] text-[color:var(--body)]" data-testid={`field-${value.key}-corrected`}>
                   Corrected by your team. Originally {value.layer === "derived" ? "worked out" : "read"} as “{formatParserValue(fix.original ?? value.value)}”
                 </p>
               )}
@@ -166,7 +166,7 @@ export function AiValuesSection({ values, corrections, onSave, onShow, disabled 
                 <button
                   type="button"
                   onClick={() => onShow?.(value)}
-                  className="mt-1 inline-flex items-center gap-1 rounded px-0.5 text-[11px] text-violet-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                  className="mt-1 inline-flex items-center gap-1 rounded px-0.5 text-[11px] text-[color:var(--hi)] underline-offset-2 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
                   data-testid={`ai-value-${value.key}-show`}
                 >
                   <MapPin className="h-3 w-3" aria-hidden /> Show in document
