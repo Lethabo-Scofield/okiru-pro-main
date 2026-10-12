@@ -24,7 +24,7 @@ import {
 import { splitWorkbookIntoSheets, shouldSplitWorkbook } from './workbookSheetSplit.js';
 import { extractScannedPdfWithVision } from './visionExtraction.js';
 import { pdfCaptionedColumns, type CaptionedColumn } from './pdfColumns.js';
-import { extractEmailText } from './emailExtraction.js';
+import { readEmailThread } from './emailMessage.js';
 
 /**
  * Below this many characters a PDF/DOCX is treated as a scan, not a document
@@ -52,7 +52,8 @@ export const SUPPORTED_UPLOAD_MIME_TYPES = new Set([
   'application/vnd.ms-powerpoint',
   'text/csv',
   'text/plain',
-  // A saved e-mail (.eml): a client's request or reply thread is evidence too.
+  // An e-mail saved from the mail client (.eml): a data request and its
+  // replies state periods, deadlines and who owns which figures.
   'message/rfc822',
   'image/png',
   'image/jpeg',
@@ -507,7 +508,7 @@ async function extractImageText(buffer: Buffer): Promise<string> {
  */
 export const SUPPORTED_UPLOAD_EXTENSIONS = new Set([
   '.pdf', '.docx', '.doc', '.xlsx', '.xlsm', '.xls', '.pptx', '.ppt',
-  '.csv', '.txt', '.eml', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp',
+  '.csv', '.txt', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.webp', '.eml',
 ]);
 
 /** Accept when EITHER the declared type or the extension is one we support. */
@@ -542,6 +543,8 @@ export async function rawExtractionInputFromUpload(
   let scannedBy: 'document_intelligence' | 'vision' | null = null;
   // A digital PDF's pages that carry a picture (pdfPicturePages).
   let picturePages: number[] = [];
+  // An e-mail's subject, message count and attachment names, for the review.
+  let email: { subject: string; messages: number; attachments: string[] } | null = null;
 
   logger.info('Extracting uploaded file', {
     filename: file.originalname,
@@ -600,13 +603,20 @@ export async function rawExtractionInputFromUpload(
     const extracted = await withTimeout(pptxToMarkdown(file.buffer), EXTRACTION_TIMEOUT_MS);
     rawText = extracted.text;
     markdown = extracted.markdown;
+  } else if (file.mimetype === 'message/rfc822' || ext === '.eml') {
+    // Before text/plain: some clients send an .eml as text/plain, and its
+    // raw MIME (base64 bodies, boundaries) would be read as the letter.
+    const thread = readEmailThread(file.buffer);
+    rawText = thread.text;
+    markdown = thread.markdown;
+    email = {
+      subject: thread.subject,
+      messages: thread.messages.length,
+      attachments: thread.attachments.map((a) => a.filename),
+    };
   } else if (file.mimetype === 'text/plain' || ext === '.txt') {
     rawText = file.buffer.toString('utf8');
     markdown = rawText;
-  } else if (file.mimetype === 'message/rfc822' || ext === '.eml') {
-    const extracted = await withTimeout(extractEmailText(file.buffer), EXTRACTION_TIMEOUT_MS);
-    rawText = extracted.text;
-    markdown = extracted.markdown;
   } else if (file.mimetype.startsWith('image/')) {
     if (file.size > MAX_IMAGE_BYTES) {
       throw new Error(`Image exceeds maximum size of ${MAX_IMAGE_BYTES} bytes`);
@@ -726,6 +736,7 @@ export async function rawExtractionInputFromUpload(
       ...(scannedBy ? { scanned: true, text_source: scannedBy } : {}),
       ...(pdfColumns.length > 0 && !scannedBy ? { pdf_columns: pdfColumns } : {}),
       ...(picturePages.length > 0 && !scannedBy ? { picture_pages: picturePages } : {}),
+      ...(email ? { email } : {}),
     },
   };
 }
@@ -781,13 +792,19 @@ export async function extractionInputsFromUpload(
     // ledgers, spend schedules) need exactly those. Without this they saw only
     // markdown and every single-sheet supplier ledger — which is how ledgers
     // are always filed — extracted nothing.
+    //
+    // It is still the WHOLE upload, not a sheet split out of one: `single_sheet`
+    // says so, so the readers that only ever ran on a standalone document —
+    // classification, the open read of a document none of the listed types
+    // fits — run on it too. A one-sheet questionnaire or legend used to be
+    // treated as a workbook's sheet and got no read at all.
     if (sheets.length === 1) {
       const [sheet] = sheets;
       const input = await rawExtractionInputFromUpload(file, options);
       return [{
         ...input,
         tables: [sheetTable(sheet)],
-        metadata: { ...input.metadata, sheet_name: sheet.sheetName, sheet_hidden: Boolean(sheet.hidden) },
+        metadata: { ...input.metadata, sheet_name: sheet.sheetName, sheet_hidden: Boolean(sheet.hidden), single_sheet: true },
       }];
     }
 

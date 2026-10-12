@@ -489,29 +489,116 @@ export function esgMonthColumnFor(
 export function esgDepotRowIndex(
   siteName: unknown,
   axes: EsgReportingAxes = ESG_FALLBACK_REPORTING_AXES,
+  companyLeads: readonly string[] = [],
 ): number | null {
-  const match = esgSiteMatch(siteName, axes.depots);
+  const match = esgSiteMatch(siteName, axes.depots, companyLeads);
   return typeof match === "number" ? match : null;
 }
 
 /**
  * Which of `sites` a document's site label names: its index, null when it
  * names none, "ambiguous" when it names two or more.
+ *
+ * `companyLeads` are the company's own words at the front of its site labels
+ * ({@link esgCompanyLeads}: "ACME RETAIL" in "Acme Retail - Depot North").
+ * They are taken off the label AND the depot before matching: a depot that
+ * matched only through the company's word ("RETAIL" inside every "ACME
+ * RETAIL - …" label) named no site at all, and a label that is nothing but
+ * the company names none either.
  */
-export function esgSiteMatch(siteName: unknown, sites: readonly string[]): number | null | "ambiguous" {
-  const label = String(siteName ?? "").trim();
-  if (!label) return null;
+export function esgSiteMatch(
+  siteName: unknown,
+  sites: readonly string[],
+  companyLeads: readonly string[] = [],
+): number | null | "ambiguous" {
+  const label = withoutLead(siteWords(String(siteName ?? "")), companyLeads);
+  if (label.length === 0) return null;
   // Strongest evidence first; at the first kind of evidence that names any
   // depot, exactly one must be named — two candidates is a guess, and a guess
   // here credits one depot with another's consumption.
   for (const matches of SITE_MATCH_RULES) {
     const hits = sites
       .map((depot, index) => ({ depot, index }))
-      .filter(({ depot }) => matches(siteWords(label), siteWords(depot)));
+      .filter(({ depot }) => {
+        const words = siteWords(depot);
+        const own = withoutLead(words, companyLeads);
+        return matches(label, own.length > 0 ? own : words);
+      });
     if (hits.length === 1) return hits[0].index;
     if (hits.length > 1) return "ambiguous";
   }
   return null;
+}
+
+/** `words` with the longest company lead they start with taken off ("ACME RETAIL DEPOT NORTH" → "DEPOT NORTH"). */
+function withoutLead(words: string[], leads: readonly string[]): string[] {
+  const joined = words.join(" ");
+  const lead = [...leads]
+    .map((l) => esgSiteKey(l))
+    .filter((l) => l && (joined === l || joined.startsWith(`${l} `)))
+    .sort((a, b) => b.length - a.length)[0];
+  return lead ? words.slice(lead.split(" ").length) : words;
+}
+
+/**
+ * The label names the company itself, not one of its sites: it is nothing but
+ * the company's shared lead ("ACME RETAIL" beside "ACME RETAIL - DEPOT
+ * NORTH"), or the entity's own name. Its figures are the company's total.
+ */
+export function esgIsCompanyLabel(
+  siteName: unknown,
+  companyLeads: readonly string[] = [],
+  entityNames: readonly string[] = [],
+): boolean {
+  const words = siteWords(String(siteName ?? ""));
+  if (words.length === 0) return false;
+  if (withoutLead(words, companyLeads).length === 0) return true;
+  const key = entityKey(words.join(" "));
+  return Boolean(key) && entityNames.some((name) => entityKey(name) === key);
+}
+
+/** An entity's name without its legal form: "Acme Trading (Pty) Ltd" → "ACME TRADING". */
+function entityKey(name: string): string {
+  return siteWords(name)
+    .join(" ")
+    .replace(/\b(PTY|LTD|LIMITED|PROPRIETARY|INC|CC|NPC|SOC|RF|HOLDINGS|GROUP)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * The company's own lead on its site labels: "ACME RETAIL" when the labels
+ * read "Acme Retail - Depot North", "Acme Retail - East London". A lead
+ * counts as the company's when three different labels carry it, or two do and
+ * set it off with a dash, colon or slash — two sites that merely share a first
+ * word ("EAST LONDON", "EAST RAND") keep it. Longest first.
+ */
+export function esgCompanyLeads(labels: readonly string[]): string[] {
+  // Counted over DIFFERENT labels: twelve bills naming one site are one label.
+  const unique = new Map<string, string>();
+  for (const raw of labels) {
+    const label = String(raw ?? "").trim();
+    const key = esgSiteKey(label);
+    if (key && !unique.has(key)) unique.set(key, label);
+  }
+  const counts = new Map<string, { labels: number; setOff: number }>();
+  for (const [key, label] of Array.from(unique.entries())) {
+    const w = key.split(" ");
+    // "ACME RETAIL - RIVERSIDE" → ["", "ACME", " ", "RETAIL", " - ", "RIVERSIDE", ""]:
+    // the text after the n-th word is element 2n.
+    const pieces = label.toUpperCase().split(/([A-Z0-9]+)/);
+    for (let n = 1; n < w.length; n += 1) {
+      const lead = w.slice(0, n).join(" ");
+      const count = counts.get(lead) ?? { labels: 0, setOff: 0 };
+      count.labels += 1;
+      if (/[-–—:|/]/.test(pieces[2 * n] ?? "")) count.setOff += 1;
+      counts.set(lead, count);
+    }
+  }
+  return Array.from(counts.entries())
+    .filter(([, count]) => count.labels >= 3 || count.setOff >= 2)
+    .map(([lead]) => lead)
+    .sort((a, b) => b.length - a.length);
 }
 
 /** A site label's identity regardless of case and punctuation: "Cape-Town " → "CAPE TOWN". */
@@ -542,9 +629,13 @@ const SITE_MATCH_RULES: Array<(label: string[], depot: string[]) => boolean> = [
   // The same name.
   (label, depot) => label.join("") === depot.join(""),
   // The depot is a word of the label, or the start of one long enough to mean
-  // it: BLOEM → BLOEMFONTEIN; ISANDO → "SG CONSUMER - ISANDO".
+  // it: NORTH → NORTHFIELD; RIVERSIDE → "ACME RETAIL - RIVERSIDE". A depot of
+  // several words is every one of them, in order, side by side: EAST LONDON →
+  // "ACME RETAIL - EAST LONDON", MOSSEL BAY → "MOSSEL BAY DEPOT".
   (label, depot) =>
-    depot.length === 1 && label.some((word) => word === depot[0] || (depot[0].length >= 4 && word.startsWith(depot[0]))),
+    depot.length === 1
+      ? label.some((word) => word === depot[0] || (depot[0].length >= 4 && word.startsWith(depot[0])))
+      : label.some((_, i) => i + depot.length <= label.length && depot.every((word, k) => label[i + k] === word)),
   // Initials of consecutive words: PE → PORT ELIZABETH.
   (label, depot) => {
     const initials = (words: string[]) => words.map((w) => w[0]).join("");
